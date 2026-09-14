@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background-color: #000000;
+  color: #f4f4f5;
+  font-family: 'Outfit', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, .font-chakra {
+  font-family: 'Chakra Petch', sans-serif;
+}
+
+/* Custom scrollbar for high density ERP */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #09090b;
+}
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #f3aa18;
+}
+
+/* Accessible focus outline */
+*:focus-visible {
+  outline: 2px solid #f3aa18 !important;
+  outline-offset: 2px !important;
+}
