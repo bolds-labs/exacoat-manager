@@ -12,7 +12,8 @@ const fs = require('fs');
 const path = require('path');
 
 const SUPABASE_URL = 'https://vamdbdbbltxjfcrsbgsq.supabase.co';
-const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+
 const WP_API_URL = 'https://artmatter.co/wp-json/artmatter-core/v1/artwork/recrop-standard';
 const WP_API_FALLBACK = 'https://artmatter.co/wp-json/artmatter-core/v1/artwork/recrop-iso-a';
 

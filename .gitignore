@@ -28,9 +28,14 @@ dist-ssr
 
 # Environment secrets
 .env
-.env*.local
-.env.*.bak
+.env.*
+!.env.example
+
+# Supabase CLI temp cache
+supabase/.temp/
 
 # Vite cache & scratch
 .vite
 scratch/
+*.backup
+

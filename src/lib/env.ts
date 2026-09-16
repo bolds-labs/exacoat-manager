@@ -38,7 +38,8 @@ export const getWordPressBaseUrl = (): string => {
 
 export const getWcCredentials = () => {
   return {
-    key: getEnv('VITE_WC_CONSUMER_KEY', 'ck_your_consumer_key_here'),
-    secret: getEnv('VITE_WC_CONSUMER_SECRET', 'cs_your_consumer_secret_here'),
+    key: getEnv('VITE_WC_CONSUMER_KEY', ''),
+    secret: getEnv('VITE_WC_CONSUMER_SECRET', ''),
   };
 };
+
