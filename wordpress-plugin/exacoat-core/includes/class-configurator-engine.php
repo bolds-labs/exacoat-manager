@@ -390,6 +390,20 @@ class Exacoat_Configurator_Engine {
 			'callback'            => [ __CLASS__, 'rest_batch_migrate' ],
 			'permission_callback' => [ __CLASS__, 'verify_permission' ],
 		] );
+
+		// 8. POST /configurator/set-price: Set WooCommerce product price and sync profile base_price
+		$register( '/configurator/set-price', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_set_product_price' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+		] );
+
+		// 9. POST /configurator/duplicate-product: Duplicate product and its configurator profile
+		$register( '/configurator/duplicate-product', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_duplicate_product' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+		] );
 	}
 
 	public static function verify_permission( WP_REST_Request $request ): bool {
@@ -950,6 +964,19 @@ class Exacoat_Configurator_Engine {
 
 		update_post_meta( $product_id, self::PROFILE_META_KEY, wp_json_encode( $profile ) );
 
+		// Sync WooCommerce product price with configurator base_price
+		if ( isset( $params['base_price'] ) && (float) $params['base_price'] >= 0 ) {
+			$product = wc_get_product( $product_id );
+			if ( $product ) {
+				$new_price = (float) $params['base_price'];
+				$product->set_regular_price( $new_price );
+				$product->set_price( $new_price );
+				$product->save();
+				update_post_meta( $product_id, '_regular_price', $new_price );
+				update_post_meta( $product_id, '_price', $new_price );
+			}
+		}
+
 		if ( class_exists( 'Exacoat_Logger' ) ) {
 			Exacoat_Logger::log( 'info', 'configurator', "Configurator profile updated for Product #{$product_id} ({$profile['device_name']})" );
 		}
@@ -997,6 +1024,172 @@ class Exacoat_Configurator_Engine {
 			'migrated_count' => $migrated_count,
 			'skipped_count'  => $skipped_count,
 			'total_scanned'  => count( $product_ids ),
+		] );
+	}
+
+	/**
+	 * Enriches WooCommerce Product REST responses with configurator data
+	 */
+	/**
+	 * REST Endpoint: Set WooCommerce product price and sync configurator profile base_price
+	 */
+	public static function rest_set_product_price( WP_REST_Request $request ): WP_REST_Response {
+		$params = $request->get_json_params() ?: $request->get_params();
+		$product_id = (int) ( $params['product_id'] ?? 0 );
+		$price = isset( $params['price'] ) ? (float) $params['price'] : null;
+
+		if ( ! $product_id || $price === null || $price < 0 ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Valid product_id and non-negative price are required' ], 400 );
+		}
+
+		$product = wc_get_product( $product_id );
+		if ( ! $product ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Product not found' ], 404 );
+		}
+
+		$product->set_regular_price( $price );
+		$product->set_price( $price );
+		$product->save();
+
+		update_post_meta( $product_id, '_regular_price', $price );
+		update_post_meta( $product_id, '_price', $price );
+
+		// Update base_price in profile metadata if present
+		$meta = get_post_meta( $product_id, self::PROFILE_META_KEY, true );
+		if ( ! empty( $meta ) ) {
+			$profile = is_string( $meta ) ? json_decode( $meta, true ) : $meta;
+			if ( is_array( $profile ) ) {
+				$profile['base_price'] = $price;
+				update_post_meta( $product_id, self::PROFILE_META_KEY, wp_json_encode( $profile ) );
+			}
+		}
+
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log( 'info', 'configurator', "Price updated to IDR {$price} for Product #{$product_id} ({$product->get_name()})" );
+		}
+
+		return rest_ensure_response( [
+			'success'    => true,
+			'product_id' => $product_id,
+			'price'      => $price,
+			'message'    => "Price updated successfully to IDR " . number_format( $price, 0, ',', '.' ),
+		] );
+	}
+
+	/**
+	 * REST Endpoint: Duplicate WooCommerce product and its configurator profile
+	 */
+	public static function rest_duplicate_product( WP_REST_Request $request ): WP_REST_Response {
+		$params = $request->get_json_params() ?: $request->get_params();
+		$source_id = (int) ( $params['source_product_id'] ?? 0 );
+		$new_name = sanitize_text_field( $params['new_name'] ?? '' );
+		$new_slug = sanitize_title( $params['new_slug'] ?? '' );
+		$new_price = isset( $params['new_price'] ) ? (float) $params['new_price'] : null;
+		$copy_configurator = ! empty( $params['copy_configurator'] );
+
+		if ( ! $source_id ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Valid source_product_id is required' ], 400 );
+		}
+
+		$source_product = wc_get_product( $source_id );
+		if ( ! $source_product ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Source product not found' ], 404 );
+		}
+
+		if ( empty( $new_name ) ) {
+			$new_name = $source_product->get_name() . ' (Copy)';
+		}
+
+		if ( empty( $new_slug ) ) {
+			$new_slug = sanitize_title( $new_name );
+		}
+
+		$new_product = null;
+		if ( function_exists( 'wc_duplicate_product' ) ) {
+			$new_product = wc_duplicate_product( $source_product );
+		}
+
+		if ( ! $new_product ) {
+			// Fallback product creation
+			$new_pid = wp_insert_post( [
+				'post_title'   => $new_name,
+				'post_name'    => $new_slug,
+				'post_type'    => 'product',
+				'post_status'  => 'publish',
+				'post_content' => $source_product->get_description(),
+			] );
+
+			if ( is_wp_error( $new_pid ) ) {
+				return new WP_REST_Response( [ 'success' => false, 'message' => $new_pid->get_error_message() ], 500 );
+			}
+
+			$new_product = wc_get_product( $new_pid );
+		}
+
+		if ( ! $new_product ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Failed creating duplicate product' ], 500 );
+		}
+
+		$new_pid = $new_product->get_id();
+		$new_product->set_name( $new_name );
+		$new_product->set_slug( $new_slug );
+		$new_product->set_status( 'publish' );
+
+		$price_to_set = ( $new_price !== null && $new_price > 0 ) ? $new_price : (float) $source_product->get_price();
+		if ( $price_to_set > 0 ) {
+			$new_product->set_regular_price( $price_to_set );
+			$new_product->set_price( $price_to_set );
+		}
+		$new_product->save();
+
+		update_post_meta( $new_pid, '_regular_price', $price_to_set );
+		update_post_meta( $new_pid, '_price', $price_to_set );
+
+		// Copy Categories
+		$source_cats = wp_get_post_terms( $source_id, 'product_cat', [ 'fields' => 'ids' ] );
+		if ( ! empty( $source_cats ) && ! is_wp_error( $source_cats ) ) {
+			wp_set_post_terms( $new_pid, $source_cats, 'product_cat' );
+		}
+
+		// Copy Configurator Profile if requested
+		if ( $copy_configurator ) {
+			$source_profile_raw = get_post_meta( $source_id, self::PROFILE_META_KEY, true );
+			if ( ! empty( $source_profile_raw ) ) {
+				$profile = is_string( $source_profile_raw ) ? json_decode( $source_profile_raw, true ) : $source_profile_raw;
+			} else {
+				$profile = self::convert_mkl_to_profile( $source_id );
+			}
+
+			if ( is_array( $profile ) ) {
+				$profile['product_id'] = $new_pid;
+				$profile['device_name'] = $new_name;
+				$profile['device_slug'] = $new_slug;
+				if ( $price_to_set > 0 ) {
+					$profile['base_price'] = $price_to_set;
+				}
+				update_post_meta( $new_pid, self::PROFILE_META_KEY, wp_json_encode( $profile ) );
+			}
+
+			// Copy legacy MKL metadata for backward compatibility
+			foreach ( [ '_mkl_product_configurator_angles', '_mkl_product_configurator_layers', '_mkl_product_configurator_content', '_mkl_pc__is_configurable' ] as $mkl_key ) {
+				$mkl_val = get_post_meta( $source_id, $mkl_key, true );
+				if ( ! empty( $mkl_val ) ) {
+					update_post_meta( $new_pid, $mkl_key, $mkl_val );
+				}
+			}
+		}
+
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log( 'info', 'configurator', "Product duplicated: #{$source_id} to #{$new_pid} ({$new_name})" );
+		}
+
+		return rest_ensure_response( [
+			'success'    => true,
+			'product_id' => $new_pid,
+			'name'       => $new_name,
+			'slug'       => $new_slug,
+			'price'      => $price_to_set,
+			'message'    => "Product duplicated successfully as #{$new_pid} ({$new_name})",
 		] );
 	}
 

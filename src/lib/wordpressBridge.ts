@@ -1862,3 +1862,95 @@ export async function runBatchConfiguratorMigrationDirect(): Promise<{
   }
 }
 
+export async function setProductPriceDirect(
+  productId: number,
+  price: number
+): Promise<{
+  success: boolean;
+  productId?: number;
+  price?: number;
+  message?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/configurator/set-price`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ product_id: productId, price }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        productId: data.product_id,
+        price: data.price,
+        message: data.message,
+      };
+    }
+    // Fallback: WC v3 products endpoint
+    const wcUrl = `${base}/wp-json/wc/v3/products/${productId}`;
+    const wcRes = await authenticatedFetch(wcUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ regular_price: String(price) }),
+    });
+    if (wcRes.ok) {
+      return { success: true, productId, price, message: `Price updated to IDR ${price.toLocaleString('id-ID')}` };
+    }
+    return { success: false, error: data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function duplicateProductDirect(params: {
+  source_product_id: number;
+  new_name: string;
+  new_slug?: string;
+  new_price?: number;
+  copy_configurator?: boolean;
+}): Promise<{
+  success: boolean;
+  productId?: number;
+  name?: string;
+  slug?: string;
+  price?: number;
+  message?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/configurator/duplicate-product`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        source_product_id: params.source_product_id,
+        new_name: params.new_name,
+        new_slug: params.new_slug,
+        new_price: params.new_price,
+        copy_configurator: params.copy_configurator ?? true,
+      }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        productId: data.product_id,
+        name: data.name,
+        slug: data.slug,
+        price: data.price,
+        message: data.message,
+      };
+    }
+    return { success: false, error: data?.message || data?.error || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+

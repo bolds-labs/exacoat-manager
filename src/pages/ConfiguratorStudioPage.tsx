@@ -9,6 +9,8 @@ import {
   fetchProductConfiguratorProfileDirect,
   saveProductConfiguratorProfileDirect,
   runBatchConfiguratorMigrationDirect,
+  setProductPriceDirect,
+  duplicateProductDirect,
   GlobalFinish,
   fetchGlobalFinishesDirect,
 } from '../lib/wordpressBridge';
@@ -54,6 +56,8 @@ import {
   Settings,
   ShieldCheck,
   Wand2,
+  GripVertical,
+  Tag,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -93,6 +97,29 @@ export const ConfiguratorStudioPage: React.FC = () => {
     total_scanned?: number;
   } | null>(null);
 
+  // Quick Price Edit Dialog state (Catalog)
+  const [priceEditModal, setPriceEditModal] = useState<{
+    productId: number;
+    name: string;
+    currentPrice: number;
+  } | null>(null);
+  const [tempPrice, setTempPrice] = useState<number>(0);
+  const [isSavingPrice, setIsSavingPrice] = useState(false);
+
+  // Duplicate Product Dialog state (Catalog)
+  const [duplicateModal, setDuplicateModal] = useState<{
+    productId: number;
+    name: string;
+    slug: string;
+    price: number;
+    family: string;
+  } | null>(null);
+  const [duplicateName, setDuplicateName] = useState('');
+  const [duplicateSlug, setDuplicateSlug] = useState('');
+  const [duplicatePrice, setDuplicatePrice] = useState(0);
+  const [duplicateCopyConfig, setDuplicateCopyConfig] = useState(true);
+  const [isDuplicating, setIsDuplicating] = useState(false);
+
   // Editor Modal / Fullscreen Workspace state
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [editingProfile, setEditingProfile] = useState<DeviceConfiguratorProfile | null>(null);
@@ -100,10 +127,20 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [autofillPrefix, setAutofillPrefix] = useState<string>('');
 
+  // Draggable inspector panel width (pixels)
+  const [inspectorWidth, setInspectorWidth] = useState<number>(480);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+
   // Inspector layout tab state: 'layers' | 'hardware' | 'settings'
   const [inspectorTab, setInspectorTab] = useState<'layers' | 'hardware' | 'settings'>('layers');
   const [selectedLayerId, setSelectedLayerId] = useState<string>('');
   const [finishCategoryFilter, setFinishCategoryFilter] = useState<string>('all');
+
+  // Find & Replace in URLs Modal state
+  const [showFindReplaceModal, setShowFindReplaceModal] = useState(false);
+  const [findText, setFindText] = useState('');
+  const [replaceText, setReplaceText] = useState('');
+  const [replaceScope, setReplaceScope] = useState<'all' | 'textures' | 'chassis'>('all');
 
   // Texture URL Edit Dialog state
   const [editingTextureModal, setEditingTextureModal] = useState<{
@@ -150,21 +187,60 @@ export const ConfiguratorStudioPage: React.FC = () => {
     loadData();
   }, []);
 
+  // Lock body scroll and handle keyboard shortcuts (ESC)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showFindReplaceModal) {
+          setShowFindReplaceModal(false);
+        } else if (editingTextureModal) {
+          setEditingTextureModal(null);
+        } else if (duplicateModal) {
+          setDuplicateModal(null);
+        } else if (priceEditModal) {
+          setPriceEditModal(null);
+        } else if (selectedProductId !== null) {
+          handleCloseEditor();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showFindReplaceModal, editingTextureModal, duplicateModal, priceEditModal, selectedProductId]);
+
   useEffect(() => {
     if (selectedProductId !== null) {
       const unlock = lockBodyScroll();
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape' && !editingTextureModal) {
-          handleCloseEditor();
-        }
-      };
-      window.addEventListener('keydown', handleKeyDown);
       return () => {
         unlock();
-        window.removeEventListener('keydown', handleKeyDown);
       };
     }
-  }, [selectedProductId, editingTextureModal]);
+  }, [selectedProductId]);
+
+  // Draggable Splitter mousemove/mouseup listener
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const newWidth = window.innerWidth - e.clientX;
+      if (newWidth >= 340 && newWidth <= 850) {
+        setInspectorWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
 
   const handleOpenEditor = async (productId: number) => {
     setSelectedProductId(productId);
@@ -342,6 +418,205 @@ export const ConfiguratorStudioPage: React.FC = () => {
     }
   };
 
+  // Quick Price Edit in Catalog
+  const handleOpenPriceModal = (product: ConfiguratorProfileSummary) => {
+    setPriceEditModal({
+      productId: product.product_id,
+      name: product.name,
+      currentPrice: product.price,
+    });
+    setTempPrice(product.price);
+  };
+
+  const handleSaveQuickPrice = async () => {
+    if (!priceEditModal) return;
+    setIsSavingPrice(true);
+    try {
+      const res = await setProductPriceDirect(priceEditModal.productId, tempPrice);
+      if (res.success) {
+        showToast('success', 'Price Updated', `${priceEditModal.name} price set to IDR ${tempPrice.toLocaleString('id-ID')}.`);
+        setProfiles((prev) =>
+          prev.map((p) => (p.product_id === priceEditModal.productId ? { ...p, price: tempPrice } : p))
+        );
+        setPriceEditModal(null);
+      } else {
+        showToast('error', 'Update Failed', res.error || 'Failed setting product price');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message);
+    } finally {
+      setIsSavingPrice(false);
+    }
+  };
+
+  // Duplicate Product in Catalog
+  const handleOpenDuplicateModal = (product: ConfiguratorProfileSummary) => {
+    setDuplicateModal({
+      productId: product.product_id,
+      name: product.name,
+      slug: product.slug,
+      price: product.price,
+      family: product.family,
+    });
+    setDuplicateName(`${product.name} (Copy)`);
+    setDuplicateSlug(`${product.slug}-copy`);
+    setDuplicatePrice(product.price);
+    setDuplicateCopyConfig(true);
+  };
+
+  const handleExecuteDuplicate = async () => {
+    if (!duplicateModal || !duplicateName.trim()) return;
+    setIsDuplicating(true);
+    try {
+      const res = await duplicateProductDirect({
+        source_product_id: duplicateModal.productId,
+        new_name: duplicateName.trim(),
+        new_slug: duplicateSlug.trim(),
+        new_price: duplicatePrice,
+        copy_configurator: duplicateCopyConfig,
+      });
+
+      if (res.success && res.productId) {
+        showToast(
+          'success',
+          'Product Duplicated',
+          `Created "${res.name}" with ID #${res.productId}. Opening in Studio...`
+        );
+        const newPid = res.productId;
+        setDuplicateModal(null);
+        await loadData(true);
+        // Automatically open the duplicated product in the studio for immediate editing!
+        handleOpenEditor(newPid);
+      } else {
+        showToast('error', 'Duplication Failed', res.error || 'Failed duplicating product');
+      }
+    } catch (err: any) {
+      showToast('error', 'Duplication Error', err.message);
+    } finally {
+      setIsDuplicating(false);
+    }
+  };
+
+  // Find & Replace in URLs calculation and execution
+  const findMatches = useMemo(() => {
+    if (!editingProfile || !findText.trim()) return { count: 0, sampleBefore: '', sampleAfter: '' };
+    const query = findText.trim();
+    let count = 0;
+    let sampleBefore = '';
+    let sampleAfter = '';
+
+    // Check layer textures
+    (editingProfile.layers || []).forEach((layer) => {
+      Object.values(layer.assets_by_view || {}).forEach((viewAsset: any) => {
+        if (replaceScope === 'all' || replaceScope === 'textures') {
+          Object.values(viewAsset.render_texture_map || {}).forEach((url: any) => {
+            if (typeof url === 'string' && url.includes(query)) {
+              count++;
+              if (!sampleBefore) {
+                sampleBefore = url;
+                sampleAfter = url.split(query).join(replaceText);
+              }
+            }
+          });
+        }
+        if (replaceScope === 'all') {
+          ['mask_svg_url', 'shadow_png_url', 'highlight_png_url'].forEach((key) => {
+            const u = viewAsset[key];
+            if (typeof u === 'string' && u.includes(query)) {
+              count++;
+              if (!sampleBefore) {
+                sampleBefore = u;
+                sampleAfter = u.split(query).join(replaceText);
+              }
+            }
+          });
+        }
+      });
+    });
+
+    // Check views background_url (chassis)
+    if (replaceScope === 'all' || replaceScope === 'chassis') {
+      (editingProfile.views || []).forEach((view) => {
+        if (view.background_url && view.background_url.includes(query)) {
+          count++;
+          if (!sampleBefore) {
+            sampleBefore = view.background_url;
+            sampleAfter = view.background_url.split(query).join(replaceText);
+          }
+        }
+      });
+    }
+
+    return { count, sampleBefore, sampleAfter };
+  }, [editingProfile, findText, replaceText, replaceScope]);
+
+  const handleExecuteFindReplace = () => {
+    if (!editingProfile || !findText.trim()) return;
+    const query = findText.trim();
+    const replacement = replaceText;
+
+    let replacedCount = 0;
+
+    const newViews = (editingProfile.views || []).map((v) => {
+      if ((replaceScope === 'all' || replaceScope === 'chassis') && v.background_url && v.background_url.includes(query)) {
+        replacedCount++;
+        return { ...v, background_url: v.background_url.split(query).join(replacement) };
+      }
+      return v;
+    });
+
+    const newLayers = (editingProfile.layers || []).map((layer) => {
+      const newAssetsByView: Record<string, any> = {};
+      Object.entries(layer.assets_by_view || {}).forEach(([viewId, viewAsset]: [string, any]) => {
+        const newTextureMap: Record<string, string> = {};
+        if (replaceScope === 'all' || replaceScope === 'textures') {
+          Object.entries(viewAsset.render_texture_map || {}).forEach(([slug, url]: [string, any]) => {
+            if (typeof url === 'string' && url.includes(query)) {
+              replacedCount++;
+              newTextureMap[slug] = url.split(query).join(replacement);
+            } else {
+              newTextureMap[slug] = url;
+            }
+          });
+        } else {
+          Object.assign(newTextureMap, viewAsset.render_texture_map || {});
+        }
+
+        const patchedAsset = { ...viewAsset, render_texture_map: newTextureMap };
+        if (replaceScope === 'all') {
+          if (viewAsset.mask_svg_url && viewAsset.mask_svg_url.includes(query)) {
+            replacedCount++;
+            patchedAsset.mask_svg_url = viewAsset.mask_svg_url.split(query).join(replacement);
+          }
+          if (viewAsset.shadow_png_url && viewAsset.shadow_png_url.includes(query)) {
+            replacedCount++;
+            patchedAsset.shadow_png_url = viewAsset.shadow_png_url.split(query).join(replacement);
+          }
+        }
+
+        newAssetsByView[viewId] = patchedAsset;
+      });
+
+      return {
+        ...layer,
+        assets_by_view: newAssetsByView,
+      };
+    });
+
+    setEditingProfile({
+      ...editingProfile,
+      views: newViews,
+      layers: newLayers,
+    });
+
+    showToast(
+      'success',
+      'URLs Replaced',
+      `Updated ${replacedCount} image URLs replacing "${query}" with "${replacement}". Click Save Configurator to commit.`
+    );
+    setShowFindReplaceModal(false);
+  };
+
   // Layer manipulation helpers
   const handleAddPresetLayer = (preset: (typeof COMMON_PRESET_LAYERS)[0]) => {
     if (!editingProfile) return;
@@ -431,52 +706,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
     });
   };
 
-  const handleSetMaskSvg = (layerId: string, maskUrl: string) => {
-    if (!editingProfile) return;
-    const viewId = activeSimView || 'main_view';
-    setEditingProfile({
-      ...editingProfile,
-      layers: editingProfile.layers.map((l) => {
-        if (l.id !== layerId) return l;
-        const currentAssets = l.assets_by_view || {};
-        const currentViewAssets = currentAssets[viewId] || {};
-        return {
-          ...l,
-          assets_by_view: {
-            ...currentAssets,
-            [viewId]: {
-              ...currentViewAssets,
-              mask_svg_url: maskUrl.trim(),
-            },
-          },
-        };
-      }),
-    });
-  };
-
-  const handleSetShadowPng = (layerId: string, shadowUrl: string) => {
-    if (!editingProfile) return;
-    const viewId = activeSimView || 'main_view';
-    setEditingProfile({
-      ...editingProfile,
-      layers: editingProfile.layers.map((l) => {
-        if (l.id !== layerId) return l;
-        const currentAssets = l.assets_by_view || {};
-        const currentViewAssets = currentAssets[viewId] || {};
-        return {
-          ...l,
-          assets_by_view: {
-            ...currentAssets,
-            [viewId]: {
-              ...currentViewAssets,
-              shadow_png_url: shadowUrl.trim(),
-            },
-          },
-        };
-      }),
-    });
-  };
-
   const handleSetViewBackground = (viewId: string, bgUrl: string) => {
     if (!editingProfile) return;
     setEditingProfile({
@@ -523,26 +752,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
     });
 
     showToast('success', 'Textures Autofilled', `Generated ${finishes.length} finish image URLs for layer.`);
-  };
-
-  const handleMoveLayer = (index: number, direction: 'up' | 'down') => {
-    if (!editingProfile) return;
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= editingProfile.layers.length) return;
-
-    const copy = [...editingProfile.layers];
-    const temp = copy[index];
-    copy[index] = copy[targetIndex];
-    copy[targetIndex] = temp;
-
-    copy.forEach((l, idx) => {
-      l.z_index = idx + 1;
-    });
-
-    setEditingProfile({
-      ...editingProfile,
-      layers: copy,
-    });
   };
 
   // View manipulation helpers
@@ -966,9 +1175,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-white/[0.06] grid grid-cols-3 gap-2 text-center">
-                  <div className="p-2 rounded-xl bg-white/[0.02] border border-white/5">
-                    <p className="text-[10px] text-zinc-500 font-sans">Base Price</p>
-                    <p className="text-xs font-mono font-bold text-white mt-0.5">
+                  <div
+                    onClick={() => handleOpenPriceModal(p)}
+                    className="p-2 rounded-xl bg-white/[0.02] border border-white/5 hover:border-[#f3aa18]/40 cursor-pointer transition-colors group/price"
+                    title="Click to set product price"
+                  >
+                    <p className="text-[10px] text-zinc-500 font-sans flex items-center justify-center gap-1">
+                      <span>Price</span>
+                      <Edit3 className="w-2.5 h-2.5 text-zinc-500 group-hover/price:text-[#f3aa18]" />
+                    </p>
+                    <p className="text-xs font-mono font-bold text-white group-hover/price:text-[#f3aa18] mt-0.5">
                       IDR {p.price.toLocaleString('id-ID')}
                     </p>
                   </div>
@@ -987,25 +1203,217 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between">
-                <span className="text-[11px] font-mono text-zinc-500">SKU #{p.product_id}</span>
-                <button
-                  onClick={() => handleOpenEditor(p.product_id)}
-                  className="px-4 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-2 cursor-pointer"
-                >
-                  <Sliders className="w-3.5 h-3.5 text-[#f3aa18]" />
-                  Open Studio
-                </button>
+              <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between gap-2">
+                <span className="text-[11px] font-mono text-zinc-500 shrink-0">SKU #{p.product_id}</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenDuplicateModal(p)}
+                    className="px-3 py-1.5 text-xs font-sans font-medium rounded-xl border border-white/10 hover:bg-white/10 text-zinc-300 hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer"
+                    title="Duplicate product & configurator profile"
+                  >
+                    <Copy className="w-3 h-3 text-sky-400" />
+                    <span>Duplicate</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEditor(p.product_id)}
+                    className="px-3.5 py-1.5 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Sliders className="w-3.5 h-3.5 text-[#f3aa18]" />
+                    <span>Open Studio</span>
+                  </button>
+                </div>
               </div>
             </GlassCard>
           ))}
         </div>
       )}
 
+      {/* Quick Price Edit Dialog */}
+      {priceEditModal &&
+        createPortal(
+          <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-2xl bg-zinc-950 border border-white/15 p-6 shadow-2xl space-y-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-white">Set Product Price</h3>
+                  <p className="text-xs text-zinc-400 mt-0.5 truncate max-w-xs">{priceEditModal.name}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPriceEditModal(null)}
+                  className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-zinc-300">
+                  Storefront Regular Price (IDR)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-mono text-zinc-500">IDR</span>
+                  <input
+                    type="number"
+                    step="5000"
+                    value={tempPrice}
+                    onChange={(e) => setTempPrice(Number(e.target.value) || 0)}
+                    autoFocus
+                    className="w-full pl-12 pr-4 py-2.5 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                  />
+                </div>
+                <p className="text-[11px] text-zinc-500 leading-relaxed">
+                  Updates both WooCommerce regular price and configurator base price simultaneously.
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-white/10 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPriceEditModal(null)}
+                  className="px-4 py-2 text-xs font-sans rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveQuickPrice}
+                  disabled={isSavingPrice}
+                  className="px-5 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isSavingPrice ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Updating...</span>
+                    </>
+                  ) : (
+                    <span>Save Price</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* Duplicate Product Dialog */}
+      {duplicateModal &&
+        createPortal(
+          <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-2xl bg-zinc-950 border border-white/15 p-6 shadow-2xl space-y-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
+                    <Copy className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Duplicate Product & Configurator</h3>
+                    <p className="text-xs text-zinc-400 mt-0.5 truncate max-w-xs">Source: {duplicateModal.name}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDuplicateModal(null)}
+                  className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-300 mb-1.5">New Product Name</label>
+                  <input
+                    type="text"
+                    value={duplicateName}
+                    onChange={(e) => {
+                      setDuplicateName(e.target.value);
+                      setDuplicateSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+                    }}
+                    autoFocus
+                    className="w-full px-3.5 py-2.5 text-xs font-sans rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-300 mb-1.5">New Product Slug</label>
+                    <input
+                      type="text"
+                      value={duplicateSlug}
+                      onChange={(e) => setDuplicateSlug(e.target.value)}
+                      className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-300 mb-1.5">Base Price (IDR)</label>
+                    <input
+                      type="number"
+                      step="5000"
+                      value={duplicatePrice}
+                      onChange={(e) => setDuplicatePrice(Number(e.target.value) || 0)}
+                      className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                    />
+                  </div>
+                </div>
+
+                <label className="flex items-start gap-3 p-3 rounded-xl bg-zinc-900/60 border border-white/5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={duplicateCopyConfig}
+                    onChange={(e) => setDuplicateCopyConfig(e.target.checked)}
+                    className="w-4 h-4 rounded text-[#f3aa18] focus:ring-0 focus:outline-none accent-[#f3aa18] mt-0.5 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-zinc-200 block">Copy Full Configurator Setup</span>
+                    <span className="text-[11px] text-zinc-400 leading-snug block mt-0.5">
+                      Copies all viewing angles, composable skin layers, finish restrictions, and texture image mappings.
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <div className="pt-3 border-t border-white/10 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDuplicateModal(null)}
+                  className="px-4 py-2 text-xs font-sans rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteDuplicate}
+                  disabled={isDuplicating || !duplicateName.trim()}
+                  className="px-5 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isDuplicating ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Duplicating...</span>
+                    </>
+                  ) : (
+                    <span>Duplicate & Open Studio</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
       {/* Fullscreen Apple/Figma-Grade Device Configurator Studio */}
       {selectedProductId &&
         createPortal(
-          <div className="fixed inset-0 z-[100] bg-zinc-950 flex flex-col h-screen w-screen overflow-hidden text-white select-none font-sans">
+          <div
+            className={clsx(
+              'fixed inset-0 z-[100] bg-zinc-950 flex flex-col h-screen w-screen overflow-hidden text-white select-none font-sans',
+              isDragging && 'cursor-col-resize'
+            )}
+          >
             {/* 1. Studio Top Navigation Bar */}
             <header className="h-16 px-6 border-b border-white/10 bg-zinc-950/95 backdrop-blur-md flex items-center justify-between shrink-0 gap-4 z-20">
               {/* Left: Exit Studio & Device Identity */}
@@ -1057,8 +1465,19 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Right: Primary Save Action */}
-              <div className="flex items-center gap-3 shrink-0">
+              {/* Right: Find & Replace and Primary Save Action */}
+              <div className="flex items-center gap-2.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowFindReplaceModal(true)}
+                  disabled={!editingProfile}
+                  className="px-3.5 py-2 text-xs font-sans font-semibold rounded-xl border border-white/10 hover:bg-white/5 text-zinc-200 hover:text-white transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  title="Find and replace text across all image URLs (e.g. 17 to 18)"
+                >
+                  <Wand2 className="w-3.5 h-3.5 text-[#f3aa18]" />
+                  <span>Find & Replace in URLs</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={handleSaveProfile}
@@ -1128,8 +1547,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                 return (
                   <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden bg-zinc-950">
-                    {/* LEFT / CENTER PANE: Spacious Interactive Device Canvas (60% width) */}
-                    <div className="flex-1 flex flex-col min-h-0 relative border-b lg:border-b-0 lg:border-r border-white/10 bg-radial from-zinc-900/40 via-zinc-950 to-zinc-950">
+                    {/* LEFT / CENTER PANE: Spacious Interactive Device Canvas */}
+                    <div className="flex-1 flex flex-col min-h-0 relative border-b lg:border-b-0 border-white/10 bg-radial from-zinc-900/40 via-zinc-950 to-zinc-950 overflow-hidden">
                       {/* Top Bar on Stage: Viewing Angles & Layer Toggles */}
                       <div className="p-5 flex flex-wrap items-center justify-between gap-3 z-10">
                         {/* Viewing Angle Pills */}
@@ -1317,8 +1736,25 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* RIGHT PANE: Focused Inspector Panel (40% width) */}
-                    <aside className="w-full lg:w-[480px] shrink-0 flex flex-col h-full bg-zinc-950/90 border-l border-white/10 overflow-hidden">
+                    {/* DRAGGABLE VERTICAL SPLITTER HANDLE */}
+                    <div
+                      onMouseDown={() => setIsDragging(true)}
+                      className={clsx(
+                        'hidden lg:flex w-2.5 relative z-20 cursor-col-resize select-none shrink-0 items-center justify-center transition-colors group',
+                        isDragging ? 'bg-[#f3aa18]/40' : 'bg-white/[0.04] hover:bg-[#f3aa18]/25'
+                      )}
+                      title="Drag left or right to resize Inspector panel"
+                    >
+                      <div className="w-1 h-8 rounded-full bg-zinc-600 group-hover:bg-[#f3aa18] flex items-center justify-center transition-colors">
+                        <GripVertical className="w-3 h-3 text-zinc-400 group-hover:text-black transition-colors" />
+                      </div>
+                    </div>
+
+                    {/* RIGHT PANE: Focused Inspector Panel (resizable width) */}
+                    <aside
+                      style={{ width: `${inspectorWidth}px` }}
+                      className="w-full lg:w-auto shrink-0 flex flex-col h-full bg-zinc-950/90 border-l lg:border-l-0 border-white/10 overflow-hidden"
+                    >
                       {/* Inspector Top Tabs Navigation */}
                       <div className="h-14 px-6 border-b border-white/10 flex items-center justify-between shrink-0 bg-zinc-950">
                         <div className="flex items-center gap-1.5">
@@ -1505,7 +1941,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   </div>
                                 </div>
 
-                                {/* Finish Availability Restrictions (e.g. Magic Keyboard: Swarm & Black Camo only) */}
+                                {/* Finish Availability Restrictions */}
                                 <div className="p-3 rounded-xl bg-zinc-950/60 border border-white/5 space-y-2.5">
                                   <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
@@ -1915,6 +2351,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   }
                                   className="w-full px-3.5 py-2 text-xs rounded-xl bg-zinc-950 border border-white/10 text-white font-mono focus:outline-none focus:border-[#f3aa18]"
                                 />
+                                <p className="text-[11px] text-zinc-500 mt-1">
+                                  Synchronized directly with WooCommerce product regular price.
+                                </p>
                               </div>
 
                               <div>
@@ -2008,11 +2447,157 @@ export const ConfiguratorStudioPage: React.FC = () => {
               })()
             )}
 
-            {/* 3. Focused Texture URL Edit Modal */}
+            {/* 3. Find & Replace in URLs Modal */}
+            {showFindReplaceModal &&
+              createPortal(
+                <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                  <div className="w-full max-w-lg rounded-2xl bg-zinc-950 border border-white/15 p-6 shadow-2xl space-y-5 font-sans">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-xl bg-[#f3aa18]/10 border border-[#f3aa18]/30 flex items-center justify-center text-[#f3aa18] shrink-0">
+                          <Wand2 className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-white">Find & Replace in Image URLs</h3>
+                          <p className="text-xs text-zinc-400 mt-0.5">
+                            Quickly rename device versions (e.g. replace "17" with "18") across all layers.
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowFindReplaceModal(false)}
+                        className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-zinc-300 mb-1.5">Find String</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 17 or iphone-17-pro"
+                          value={findText}
+                          onChange={(e) => setFindText(e.target.value)}
+                          autoFocus
+                          className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-zinc-300 mb-1.5">Replace With</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 18 or iphone-18-pro"
+                          value={replaceText}
+                          onChange={(e) => setReplaceText(e.target.value)}
+                          className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-zinc-300 mb-1.5">Scope</label>
+                        <div className="flex flex-wrap gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setReplaceScope('all')}
+                            className={clsx(
+                              'px-3 py-1.5 rounded-lg text-xs font-sans transition-colors cursor-pointer',
+                              replaceScope === 'all'
+                                ? 'bg-white/15 text-white font-bold'
+                                : 'text-zinc-400 hover:text-white bg-zinc-900 border border-white/5'
+                            )}
+                          >
+                            All URLs (Textures & Chassis)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setReplaceScope('textures')}
+                            className={clsx(
+                              'px-3 py-1.5 rounded-lg text-xs font-sans transition-colors cursor-pointer',
+                              replaceScope === 'textures'
+                                ? 'bg-white/15 text-white font-bold'
+                                : 'text-zinc-400 hover:text-white bg-zinc-900 border border-white/5'
+                            )}
+                          >
+                            Finish Textures Only
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setReplaceScope('chassis')}
+                            className={clsx(
+                              'px-3 py-1.5 rounded-lg text-xs font-sans transition-colors cursor-pointer',
+                              replaceScope === 'chassis'
+                                ? 'bg-white/15 text-white font-bold'
+                                : 'text-zinc-400 hover:text-white bg-zinc-900 border border-white/5'
+                            )}
+                          >
+                            Hardware Chassis Only
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Live Match Preview */}
+                      {findText.trim() && (
+                        <div className="p-3.5 rounded-xl bg-zinc-900/80 border border-white/10 space-y-2 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="text-zinc-400 font-medium">Matches found:</span>
+                            <span
+                              className={clsx(
+                                'font-mono font-bold px-2 py-0.5 rounded text-[11px]',
+                                findMatches.count > 0
+                                  ? 'bg-emerald-500/15 text-emerald-400'
+                                  : 'bg-zinc-800 text-zinc-500'
+                              )}
+                            >
+                              {findMatches.count} {findMatches.count === 1 ? 'URL' : 'URLs'}
+                            </span>
+                          </div>
+
+                          {findMatches.sampleBefore && (
+                            <div className="pt-2 border-t border-white/5 space-y-1 font-mono text-[11px] break-all">
+                              <p className="text-rose-400 truncate">
+                                - {findMatches.sampleBefore}
+                              </p>
+                              <p className="text-emerald-400 truncate">
+                                + {findMatches.sampleAfter}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-3 border-t border-white/10 flex items-center justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowFindReplaceModal(false)}
+                        className="px-4 py-2 text-xs font-sans rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleExecuteFindReplace}
+                        disabled={findMatches.count === 0}
+                        className="px-5 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-2"
+                      >
+                        <span>Replace {findMatches.count > 0 ? `All (${findMatches.count})` : ''}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>,
+                document.body
+              )}
+
+            {/* 4. Focused Texture URL Edit Modal */}
             {editingTextureModal &&
               createPortal(
                 <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                  <div className="w-full max-w-lg rounded-2xl bg-zinc-950 border border-white/15 p-6 shadow-2xl space-y-5">
+                  <div className="w-full max-w-lg rounded-2xl bg-zinc-950 border border-white/15 p-6 shadow-2xl space-y-5 font-sans">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-12 h-12 rounded-xl bg-zinc-900 border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
