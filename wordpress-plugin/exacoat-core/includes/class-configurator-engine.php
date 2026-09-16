@@ -675,12 +675,18 @@ class Exacoat_Configurator_Engine {
 			foreach ( $layers as $idx => $l ) {
 				$layer_name = trim( $l['name'] ?? '' );
 				if ( empty( $layer_name ) ) continue;
+				$layer_name_lower = strtolower( $layer_name );
+
+				// Device layer is the hardware chassis render (Layer 1 base image), not a configurable skin layer
+				if ( $layer_name_lower === 'device' || strpos( (string) ( $l['class_name'] ?? '' ), 'device-body' ) !== false ) {
+					continue;
+				}
 
 				$layer_id_num = $l['_id'] ?? $idx;
 				$layer_slug = sanitize_title( $layer_name );
 				$is_required = ( ( $l['required'] ?? '' ) === '1' || ( $l['required'] ?? false ) === true );
 				$is_optional = ( ( $l['can_deselect'] ?? '' ) === '1' || strpos( (string) ( $l['class_name'] ?? '' ), 'optional' ) !== false );
-				$is_selector = strpos( (string) ( $l['class_name'] ?? '' ), 'none-hover' ) !== false || in_array( strtolower( $layer_name ), [ 'model', 'series', 'iphone model', 'ipad series', 'ipad version', 'device model', 'connectivity' ] );
+				$is_selector = strpos( (string) ( $l['class_name'] ?? '' ), 'none-hover' ) !== false || in_array( $layer_name_lower, [ 'model', 'series', 'iphone model', 'ipad series', 'ipad version', 'device model', 'connectivity' ] );
 
 				$raw_choices = $content_by_layer[ $layer_id_num ] ?? [];
 

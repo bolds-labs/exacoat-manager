@@ -1682,7 +1682,12 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
         }
       });
 
-      let convertedLayers = layers.map((l: any, idx: number) => {
+      let convertedLayers = layers
+        .filter((l: any) => {
+          const lName = (l.name || '').toLowerCase();
+          return lName !== 'device' && !lName.includes('model') && !lName.includes('series');
+        })
+        .map((l: any, idx: number) => {
         const rawChoices = contentByLayer[l._id] || [];
         const assetsByView: Record<string, any> = {};
 
@@ -1720,7 +1725,7 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
         return {
           id: (l.name || `layer_${idx + 1}`).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, ''),
           name: l.name || `Layer ${idx + 1}`,
-          group: (l.name && ['Back', 'Top', 'Device'].includes(l.name) ? 'primary' : 'accent') as any,
+          group: (l.name && ['Back', 'Top'].includes(l.name) ? 'primary' : 'accent') as any,
           is_required: l.required === '1' || l.required === true,
           is_optional: l.can_deselect === '1' || (l.class_name && l.class_name.includes('optional')),
           default_selected: l.required === '1' || !l.can_deselect,

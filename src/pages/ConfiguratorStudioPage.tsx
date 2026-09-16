@@ -149,19 +149,38 @@ export const ConfiguratorStudioPage: React.FC = () => {
     try {
       const res = await fetchProductConfiguratorProfileDirect(productId);
       if (res.success && res.profile) {
-        setEditingProfile(res.profile);
+        const rawLayers = res.profile.layers || [];
+        const deviceLayer = rawLayers.find((l) => (l.name || '').toLowerCase() === 'device');
+        const cleanedLayers = rawLayers.filter((l) => (l.name || '').toLowerCase() !== 'device');
+
+        const viewsWithBody = (res.profile.views || []).map((v) => {
+          if (v.background_url) return v;
+          const devImg =
+            deviceLayer?.assets_by_view?.[v.id]?.render_texture_map?.['device'] ||
+            Object.values(deviceLayer?.assets_by_view || {})[0]?.render_texture_map?.['device'] ||
+            Object.values(deviceLayer?.assets_by_view || {})[0]?.base_hardware_body_url;
+          return devImg ? { ...v, background_url: devImg } : v;
+        });
+
+        const profile: DeviceConfiguratorProfile = {
+          ...res.profile,
+          views: viewsWithBody,
+          layers: cleanedLayers,
+        };
+
+        setEditingProfile(profile);
         
         // Initialize simulator state
         const initialSim: Record<string, boolean> = {};
-        (res.profile.layers || []).forEach((l) => {
+        cleanedLayers.forEach((l) => {
           initialSim[l.id] = l.default_selected || l.is_required;
         });
         setSelectedSimLayers(initialSim);
-        if (res.profile.views && res.profile.views.length > 0) {
-          setActiveSimView(res.profile.views[0].id);
+        if (profile.views && profile.views.length > 0) {
+          setActiveSimView(profile.views[0].id);
         }
-        if (res.profile.device_colors && res.profile.device_colors.length > 0) {
-          setSelectedSimColor(res.profile.device_colors[0].id);
+        if (profile.device_colors && profile.device_colors.length > 0) {
+          setSelectedSimColor(profile.device_colors[0].id);
         }
       } else {
         // Build fallback profile from catalog item so the user can immediately edit
@@ -1218,54 +1237,81 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     ))}
                   </div>
 
-                  {/* Active View Hardware Base Background */}
+                  {/* Active View Hardware Base Background (Layer 1) */}
                   {(() => {
                     const currentView = editingProfile.views.find((v) => v.id === activeSimView) || editingProfile.views[0];
                     if (!currentView) return null;
                     return (
-                      <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono">
-                        <div className="min-w-0">
-                          <label className="block text-[11px] font-bold text-sky-300">
-                            Base Device Hardware Image URL (Angle: {currentView.name})
-                          </label>
-                          <p className="text-[10px] text-zinc-500 mt-0.5">
-                            Layer 1: The transparent neutral render of the device hardware (screen, frame, camera lenses).
-                          </p>
+                      <div className="p-3.5 rounded-xl bg-zinc-900/80 border border-sky-500/20 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs font-mono">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {currentView.background_url ? (
+                            <div className="w-12 h-12 rounded-lg bg-zinc-950 border border-sky-500/30 overflow-hidden shrink-0 flex items-center justify-center p-1">
+                              <img
+                                src={currentView.background_url}
+                                alt="Hardware body"
+                                className="w-full h-full object-contain"
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-12 h-12 rounded-lg bg-zinc-950 border border-dashed border-zinc-700 overflow-hidden shrink-0 flex items-center justify-center text-zinc-600">
+                              <Layers className="w-5 h-5" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <label className="text-[11px] font-bold text-sky-300 uppercase tracking-wider">
+                                Layer 1: Base Device Hardware Render
+                              </label>
+                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                                Angle: {currentView.name}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-zinc-400 mt-0.5">
+                              The neutral base image of the device body (camera lenses, ports, edges). Finish skins overlay on top of this.
+                            </p>
+                          </div>
                         </div>
-                        <input
-                          type="url"
-                          placeholder="https://exacoat.com/wp-content/uploads/renders/iphone-16-pro-body.png"
-                          value={currentView.background_url || ''}
-                          onChange={(e) => handleSetViewBackground(currentView.id, e.target.value)}
-                          className="w-full sm:w-96 px-2.5 py-1.5 text-[11px] font-mono rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-sky-400"
-                        />
+                        <div className="w-full md:w-96 shrink-0">
+                          <input
+                            type="url"
+                            placeholder="https://exacoat.com/wp-content/uploads/renders/device-body.png"
+                            value={currentView.background_url || ''}
+                            onChange={(e) => handleSetViewBackground(currentView.id, e.target.value)}
+                            className="w-full px-2.5 py-1.5 text-[11px] font-mono rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
+                          />
+                        </div>
                       </div>
                     );
                   })()}
                 </div>
 
-                {/* 3. Composable Layers Editor */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                      <Layers className="w-4 h-4 text-[#f3aa18]" />
-                      Composable Layers ({editingProfile.layers.length})
-                    </h4>
-                    <p className="text-[11px] font-mono text-zinc-500">
-                      Configure masks, shadow overlays, or finish textures per layer.
-                    </p>
-                  </div>
-
-                  {editingProfile.layers.length === 0 ? (
-                    <div className="p-8 rounded-xl bg-zinc-900/40 border border-dashed border-white/10 text-center">
-                      <p className="text-xs text-zinc-400">No layers registered for this device yet.</p>
-                      <p className="text-[11px] text-zinc-500 mt-1">
-                        Use the "Quick Add Preset Layer" dropdown above to add standard Back, Frame, or Accent layers.
-                      </p>
-                    </div>
-                  ) : (
+                {/* 3. Composable Skin Layers Editor */}
+                {(() => {
+                  const skinLayers = (editingProfile.layers || []).filter(
+                    (l) => (l.name || '').toLowerCase() !== 'device' && (l.id || '').toLowerCase() !== 'device'
+                  );
+                  return (
                     <div className="space-y-3">
-                      {editingProfile.layers.map((layer, idx) => {
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                          <Layers className="w-4 h-4 text-[#f3aa18]" />
+                          Composable Skin Layers ({skinLayers.length})
+                        </h4>
+                        <p className="text-[11px] font-mono text-zinc-500">
+                          Configure finish texture overlays (Photoshop PNGs) per customizable skin part.
+                        </p>
+                      </div>
+
+                      {skinLayers.length === 0 ? (
+                        <div className="p-8 rounded-xl bg-zinc-900/40 border border-dashed border-white/10 text-center">
+                          <p className="text-xs text-zinc-400">No skin layers registered for this device yet.</p>
+                          <p className="text-[11px] text-zinc-500 mt-1">
+                            Use the "Quick Add Preset Layer" dropdown above to add standard Back, Frame, or Accent layers.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {skinLayers.map((layer, idx) => {
                         const isExpanded = expandedLayerId === layer.id;
                         const viewAssets = layer.assets_by_view?.[activeSimView || 'main_view'] || {};
                         const textureMap = viewAssets.render_texture_map || {};
@@ -1422,46 +1468,48 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   </div>
                                 </div>
 
-                                {/* V2 Composite Asset Inputs (Mask + Realistic Shadow Overlay) */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                  <div className="p-3 rounded-lg bg-zinc-900/60 border border-white/5 space-y-1">
-                                    <div className="flex items-center justify-between">
-                                      <label className="text-[11px] font-mono font-bold text-zinc-300">
-                                        Vector Cutout Mask (SVG or Alpha PNG)
-                                      </label>
-                                      <span className="text-[10px] font-mono text-zinc-500">Layer 2: Mask</span>
+                                {/* V2 Composite Asset Inputs (Mask + Realistic Shadow Overlay) - Only displayed for V2 */}
+                                {editingProfile.configurator_version === 'v2' && (
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div className="p-3 rounded-lg bg-zinc-900/60 border border-white/5 space-y-1">
+                                      <div className="flex items-center justify-between">
+                                        <label className="text-[11px] font-mono font-bold text-zinc-300">
+                                          Vector Cutout Mask (SVG or Alpha PNG)
+                                        </label>
+                                        <span className="text-[10px] font-mono text-zinc-500">Layer 2: Mask</span>
+                                      </div>
+                                      <input
+                                        type="url"
+                                        placeholder="https://exacoat.com/wp-content/uploads/masks/iphone-16-back.svg"
+                                        value={viewAssets.mask_svg_url || ''}
+                                        onChange={(e) => handleSetMaskSvg(layer.id, e.target.value)}
+                                        className="w-full px-2.5 py-1 text-[11px] font-mono rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                                      />
+                                      <p className="text-[10px] text-zinc-500">
+                                        Used for dynamic canvas clipping or SVG shape clipping.
+                                      </p>
                                     </div>
-                                    <input
-                                      type="url"
-                                      placeholder="https://exacoat.com/wp-content/uploads/masks/iphone-16-back.svg"
-                                      value={viewAssets.mask_svg_url || ''}
-                                      onChange={(e) => handleSetMaskSvg(layer.id, e.target.value)}
-                                      className="w-full px-2.5 py-1 text-[11px] font-mono rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
-                                    />
-                                    <p className="text-[10px] text-zinc-500">
-                                      Used for dynamic canvas clipping or SVG shape clipping.
-                                    </p>
-                                  </div>
 
-                                  <div className="p-3 rounded-lg bg-zinc-900/60 border border-white/5 space-y-1">
-                                    <div className="flex items-center justify-between">
-                                      <label className="text-[11px] font-mono font-bold text-amber-300">
-                                        Realistic Shadow & AO Overlay (PNG)
-                                      </label>
-                                      <span className="text-[10px] font-mono text-amber-400">Layer 3: Top Shadow</span>
+                                    <div className="p-3 rounded-lg bg-zinc-900/60 border border-white/5 space-y-1">
+                                      <div className="flex items-center justify-between">
+                                        <label className="text-[11px] font-mono font-bold text-amber-300">
+                                          Realistic Shadow & AO Overlay (PNG)
+                                        </label>
+                                        <span className="text-[10px] font-mono text-amber-400">Layer 3: Top Shadow</span>
+                                      </div>
+                                      <input
+                                        type="url"
+                                        placeholder="https://exacoat.com/wp-content/uploads/shadows/iphone-16-shadow.png"
+                                        value={viewAssets.shadow_png_url || ''}
+                                        onChange={(e) => handleSetShadowPng(layer.id, e.target.value)}
+                                        className="w-full px-2.5 py-1 text-[11px] font-mono rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-amber-400"
+                                      />
+                                      <p className="text-[10px] text-zinc-500">
+                                        Photoshop shadow overlay (camera bump, edge chamfers, logo depth) with multiply blend.
+                                      </p>
                                     </div>
-                                    <input
-                                      type="url"
-                                      placeholder="https://exacoat.com/wp-content/uploads/shadows/iphone-16-shadow.png"
-                                      value={viewAssets.shadow_png_url || ''}
-                                      onChange={(e) => handleSetShadowPng(layer.id, e.target.value)}
-                                      className="w-full px-2.5 py-1 text-[11px] font-mono rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-amber-400"
-                                    />
-                                    <p className="text-[10px] text-zinc-500">
-                                      Photoshop shadow overlay (camera bump, edge chamfers, logo depth) with multiply blend.
-                                    </p>
                                   </div>
-                                </div>
+                                )}
 
                                 {/* Materials Texture URL Matrix */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto pr-1">
@@ -1522,6 +1570,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     </div>
                   )}
                 </div>
+              );
+            })()}
 
                 {/* 4. Real-time Simulator & Price Calculator */}
                 <div className="p-4 rounded-xl bg-zinc-900 border border-white/10 space-y-3">
