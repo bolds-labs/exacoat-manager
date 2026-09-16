@@ -761,6 +761,14 @@ class Exacoat_Configurator_Engine {
 					}
 				}
 
+				$layer_finish_slugs = [];
+				foreach ( $raw_choices as $ch ) {
+					if ( empty( $ch['is_group'] ) && ! empty( $ch['name'] ) ) {
+						$layer_finish_slugs[] = sanitize_title( $ch['name'] );
+					}
+				}
+				$layer_finish_slugs = array_values( array_unique( $layer_finish_slugs ) );
+
 				$normalized_layers[] = [
 					'id'                    => $layer_slug,
 					'legacy_id'             => $layer_id_num,
@@ -772,6 +780,7 @@ class Exacoat_Configurator_Engine {
 					'extra_price'           => $layer_extra_price,
 					'z_index'               => $idx + 1,
 					'allowed_finish_groups' => [ 'Signature skins', 'Colors', 'Natural' ],
+					'allowed_finish_slugs'  => ( count( $layer_finish_slugs ) > 0 && count( $layer_finish_slugs ) < 15 ) ? $layer_finish_slugs : [],
 					'assets_by_view'        => $assets_by_view,
 				];
 			}

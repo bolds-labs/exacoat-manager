@@ -1722,6 +1722,11 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
           }
         });
 
+        const choiceSlugs = (rawChoices || [])
+          .filter((c: any) => !c.is_group && c.name)
+          .map((c: any) => (c.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+        const allowedFinishSlugs = choiceSlugs.length > 0 && choiceSlugs.length < 15 ? choiceSlugs : [];
+
         return {
           id: (l.name || `layer_${idx + 1}`).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, ''),
           name: l.name || `Layer ${idx + 1}`,
@@ -1732,6 +1737,7 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
           extra_price: 0,
           z_index: idx + 1,
           allowed_finish_groups: ['Signature skins', 'Colors', 'Natural'],
+          allowed_finish_slugs: allowedFinishSlugs,
           assets_by_view: assetsByView,
         };
       });
@@ -1758,6 +1764,7 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
             extra_price: 0,
             z_index: 1,
             allowed_finish_groups: ['Signature skins', 'Colors', 'Natural'],
+            allowed_finish_slugs: [],
             assets_by_view: defaultAssets,
           }
         ];

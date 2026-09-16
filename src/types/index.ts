@@ -380,6 +380,7 @@ export interface ConfiguratorLayer {
   z_index: number;
   angle_id?: string;
   allowed_finish_groups?: string[];
+  allowed_finish_slugs?: string[];
   conditional_rule?: {
     parent_layer_id: string;
     show_on_choices: string[];
