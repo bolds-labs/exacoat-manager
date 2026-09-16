@@ -385,6 +385,7 @@ export interface ConfiguratorLayer {
     show_on_choices: string[];
   };
   assets_by_view?: Record<string, {
+    base_hardware_body_url?: string;
     mask_svg_url?: string;
     shadow_png_url?: string;
     highlight_png_url?: string;
@@ -415,6 +416,8 @@ export interface DeviceConfiguratorProfile {
   currency: string;
   size_multiplier: number;
   is_configurable: boolean;
+  configurator_version?: 'v1' | 'v2';
+  device_colors?: { id: string; name: string; hex: string; body_image_url?: string }[];
   views: ConfiguratorView[];
   layers: ConfiguratorLayer[];
   variants?: ConfiguratorVariant[];
@@ -428,10 +431,10 @@ export interface ConfiguratorProfileSummary {
   price: number;
   categories: string[];
   is_migrated: boolean;
+  configurator_version?: 'v1' | 'v2';
   is_configurable: boolean;
   layers_count: number;
   views_count: number;
   family: DeviceFamily;
   size_multiplier: number;
 }
-

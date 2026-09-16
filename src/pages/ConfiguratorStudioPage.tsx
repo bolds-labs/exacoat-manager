@@ -46,6 +46,7 @@ import {
   Link as LinkIcon,
   Copy,
   ExternalLink,
+  Palette,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -75,6 +76,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [filterConfigured, setFilterConfigured] = useState<'all' | 'configured' | 'pending'>('all');
+  const [filterVersion, setFilterVersion] = useState<'all' | 'v1' | 'v2'>('all');
 
   // Batch migration state
   const [isMigrating, setIsMigrating] = useState(false);
@@ -96,6 +98,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [selectedSimLayers, setSelectedSimLayers] = useState<Record<string, boolean>>({});
   const [selectedSimFinish, setSelectedSimFinish] = useState<string>('swarm');
   const [activeSimView, setActiveSimView] = useState<string>('main_view');
+  const [selectedSimColor, setSelectedSimColor] = useState<string>('space-gray');
 
   const loadData = async (quiet = false) => {
     try {
@@ -157,6 +160,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
         if (res.profile.views && res.profile.views.length > 0) {
           setActiveSimView(res.profile.views[0].id);
         }
+        if (res.profile.device_colors && res.profile.device_colors.length > 0) {
+          setSelectedSimColor(res.profile.device_colors[0].id);
+        }
       } else {
         // Build fallback profile from catalog item so the user can immediately edit
         const fallbackSummary = profiles.find((p) => p.product_id === productId);
@@ -179,6 +185,13 @@ export const ConfiguratorStudioPage: React.FC = () => {
             currency: 'IDR',
             size_multiplier: fallbackSummary.size_multiplier || 1.0,
             is_configurable: true,
+            configurator_version: fallbackSummary.configurator_version || 'v1',
+            device_colors: [
+              { id: 'space-gray', name: 'Space Gray', hex: '#535559' },
+              { id: 'silver', name: 'Silver', hex: '#e3e4e5' },
+              { id: 'midnight', name: 'Midnight', hex: '#1e242b' },
+              { id: 'starlight', name: 'Starlight', hex: '#f0e4d3' },
+            ],
             views: [
               {
                 id: 'main_view',
@@ -564,9 +577,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
           ? p.is_configurable
           : !p.is_configurable;
 
-      return matchesSearch && matchesCat && matchesStatus;
+      const matchesVersion =
+        filterVersion === 'all'
+          ? true
+          : (p.configurator_version || 'v1') === filterVersion;
+
+      return matchesSearch && matchesCat && matchesStatus && matchesVersion;
     });
-  }, [profiles, searchQuery, selectedCategory, filterConfigured]);
+  }, [profiles, searchQuery, selectedCategory, filterConfigured, filterVersion]);
 
   // Live Price Calculation in Simulator
   const simulatedTotalPrice = useMemo(() => {
@@ -727,6 +745,36 @@ export const ConfiguratorStudioPage: React.FC = () => {
             </button>
           </div>
 
+          <div className="flex items-center gap-1 bg-zinc-900/60 p-1 rounded-xl border border-white/10 shrink-0">
+            <button
+              onClick={() => setFilterVersion('all')}
+              className={clsx(
+                'px-2.5 py-1 text-xs font-mono rounded-lg transition-colors cursor-pointer',
+                filterVersion === 'all' ? 'bg-white/15 text-white font-bold' : 'text-zinc-400 hover:text-white'
+              )}
+            >
+              All Versions
+            </button>
+            <button
+              onClick={() => setFilterVersion('v1')}
+              className={clsx(
+                'px-2.5 py-1 text-xs font-mono rounded-lg transition-colors cursor-pointer',
+                filterVersion === 'v1' ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40' : 'text-zinc-400 hover:text-white'
+              )}
+            >
+              v1 Legacy
+            </button>
+            <button
+              onClick={() => setFilterVersion('v2')}
+              className={clsx(
+                'px-2.5 py-1 text-xs font-mono rounded-lg transition-colors cursor-pointer',
+                filterVersion === 'v2' ? 'bg-sky-500/20 text-sky-300 font-bold border border-sky-500/40' : 'text-zinc-400 hover:text-white'
+              )}
+            >
+              v2 Modern
+            </button>
+          </div>
+
           <div className="flex items-center gap-1.5 overflow-x-auto">
             {categories.map((cat) => (
               <button
@@ -779,16 +827,29 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <span
-                    className={clsx(
-                      'text-[10px] font-mono px-2 py-0.5 rounded-full border uppercase tracking-wider shrink-0',
-                      p.is_configurable
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                        : 'bg-zinc-800 text-zinc-400 border-white/10'
-                    )}
-                  >
-                    {p.is_configurable ? `${p.layers_count} Layers` : 'No Layers'}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span
+                      className={clsx(
+                        'text-[10px] font-mono px-2 py-0.5 rounded-full border uppercase tracking-wider',
+                        (p.configurator_version || 'v1') === 'v2'
+                          ? 'bg-sky-500/10 text-sky-400 border-sky-500/30'
+                          : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                      )}
+                    >
+                      {(p.configurator_version || 'v1') === 'v2' ? 'v2 Modern' : 'v1 Legacy'}
+                    </span>
+
+                    <span
+                      className={clsx(
+                        'text-[10px] font-mono px-2 py-0.5 rounded-full border uppercase tracking-wider',
+                        p.is_configurable
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                          : 'bg-zinc-800 text-zinc-400 border-white/10'
+                      )}
+                    >
+                      {p.is_configurable ? `${p.layers_count} Layers` : 'No Layers'}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-white/[0.06] grid grid-cols-3 gap-2 text-center">
@@ -834,7 +895,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
             <div className="w-full max-w-5xl rounded-2xl bg-zinc-950 border border-white/10 p-6 shadow-2xl relative my-8 max-h-[90vh] flex flex-col">
             {/* Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-white/10 shrink-0">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-white/10 shrink-0 gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-xl bg-[#f3aa18]/10 border border-[#f3aa18]/30 flex items-center justify-center text-[#f3aa18] shrink-0">
                   <Sliders className="w-5 h-5" />
@@ -849,12 +910,45 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 </div>
               </div>
 
-              <button
-                onClick={handleCloseEditor}
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-3">
+                {editingProfile && (
+                  <div className="flex items-center bg-zinc-900 p-1 rounded-xl border border-white/10 text-xs font-mono">
+                    <button
+                      type="button"
+                      onClick={() => setEditingProfile({ ...editingProfile, configurator_version: 'v1' })}
+                      className={clsx(
+                        'px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer',
+                        (editingProfile.configurator_version || 'v1') === 'v1'
+                          ? 'bg-[#f3aa18] text-black font-bold shadow-sm'
+                          : 'text-zinc-400 hover:text-white'
+                      )}
+                    >
+                      <span>v1 Legacy</span>
+                      <span className="text-[10px] opacity-75">(2-Layer PNG)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingProfile({ ...editingProfile, configurator_version: 'v2' })}
+                      className={clsx(
+                        'px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer',
+                        editingProfile.configurator_version === 'v2'
+                          ? 'bg-sky-500 text-black font-bold shadow-sm'
+                          : 'text-zinc-400 hover:text-white'
+                      )}
+                    >
+                      <span>v2 Modern</span>
+                      <span className="text-[10px] opacity-75">(Mask & Colors)</span>
+                    </button>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleCloseEditor}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {isLoadingProfile || !editingProfile ? (
@@ -864,6 +958,131 @@ export const ConfiguratorStudioPage: React.FC = () => {
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto py-4 space-y-6 pr-1">
+                {/* Active Architecture Mode Explainer */}
+                {(editingProfile.configurator_version || 'v1') === 'v1' ? (
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-2.5 text-xs text-amber-200 font-mono">
+                    <Layers className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-amber-300">v1 Configurator Model (Active):</span> 2-layer production model. Layer 1 is the Device Hardware Body PNG; Layer 2 is the individual texture PNG overlay crafted per finish in Photoshop. 100% backward compatible with current customer store orders.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-start gap-2.5 text-xs text-sky-200 font-mono">
+                    <Sparkles className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-sky-300">v2 Modern Configurator Model (Preview):</span> Dynamic composite engine. Allows hardware chassis color tinting and swatches, reusable vector cutout masks, and realistic Photoshop multiply shadow overlays.
+                    </div>
+                  </div>
+                )}
+
+                {/* v2 Device Hardware Colors & Swatches Panel */}
+                {editingProfile.configurator_version === 'v2' && (
+                  <div className="p-4 rounded-xl bg-zinc-900/80 border border-sky-500/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                          <Palette className="w-4 h-4 text-sky-400" />
+                          Hardware Chassis Colors ({editingProfile.device_colors?.length || 0})
+                        </h4>
+                        <p className="text-[11px] font-mono text-zinc-400 mt-0.5">
+                          Configure hardware color variants that customers can select for the device body in v2.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newColor = {
+                            id: `color-${Date.now()}`,
+                            name: 'New Color',
+                            hex: '#888888',
+                          };
+                          setEditingProfile({
+                            ...editingProfile,
+                            device_colors: [...(editingProfile.device_colors || []), newColor],
+                          });
+                        }}
+                        className="px-2.5 py-1 text-[11px] font-mono rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 transition-colors flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add Color
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
+                      {(editingProfile.device_colors && editingProfile.device_colors.length > 0
+                        ? editingProfile.device_colors
+                        : [
+                            { id: 'space-gray', name: 'Space Gray', hex: '#535559' },
+                            { id: 'silver', name: 'Silver', hex: '#e3e4e5' },
+                            { id: 'midnight', name: 'Midnight', hex: '#1e242b' },
+                            { id: 'starlight', name: 'Starlight', hex: '#f0e4d3' },
+                          ]
+                      ).map((c, cIdx) => (
+                        <div
+                          key={c.id || cIdx}
+                          className="p-2.5 rounded-lg bg-zinc-950 border border-white/10 flex items-center gap-2.5 text-xs font-mono"
+                        >
+                          <input
+                            type="color"
+                            value={c.hex}
+                            onChange={(e) => {
+                              const currentColors = editingProfile.device_colors && editingProfile.device_colors.length > 0
+                                ? [...editingProfile.device_colors]
+                                : [
+                                    { id: 'space-gray', name: 'Space Gray', hex: '#535559' },
+                                    { id: 'silver', name: 'Silver', hex: '#e3e4e5' },
+                                    { id: 'midnight', name: 'Midnight', hex: '#1e242b' },
+                                    { id: 'starlight', name: 'Starlight', hex: '#f0e4d3' },
+                                  ];
+                              currentColors[cIdx] = { ...c, hex: e.target.value };
+                              setEditingProfile({ ...editingProfile, device_colors: currentColors });
+                            }}
+                            className="w-7 h-7 rounded-lg border border-white/20 bg-transparent cursor-pointer shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <input
+                              type="text"
+                              value={c.name}
+                              onChange={(e) => {
+                                const currentColors = editingProfile.device_colors && editingProfile.device_colors.length > 0
+                                  ? [...editingProfile.device_colors]
+                                  : [
+                                      { id: 'space-gray', name: 'Space Gray', hex: '#535559' },
+                                      { id: 'silver', name: 'Silver', hex: '#e3e4e5' },
+                                      { id: 'midnight', name: 'Midnight', hex: '#1e242b' },
+                                      { id: 'starlight', name: 'Starlight', hex: '#f0e4d3' },
+                                    ];
+                                currentColors[cIdx] = { ...c, name: e.target.value };
+                                setEditingProfile({ ...editingProfile, device_colors: currentColors });
+                              }}
+                              className="w-full text-xs font-bold text-white bg-transparent border-b border-white/10 focus:outline-none focus:border-sky-400"
+                            />
+                            <span className="text-[10px] text-zinc-500 uppercase">{c.hex}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const currentColors = editingProfile.device_colors && editingProfile.device_colors.length > 0
+                                ? editingProfile.device_colors
+                                : [
+                                    { id: 'space-gray', name: 'Space Gray', hex: '#535559' },
+                                    { id: 'silver', name: 'Silver', hex: '#e3e4e5' },
+                                    { id: 'midnight', name: 'Midnight', hex: '#1e242b' },
+                                    { id: 'starlight', name: 'Starlight', hex: '#f0e4d3' },
+                                  ];
+                              const updated = currentColors.filter((_, i) => i !== cIdx);
+                              setEditingProfile({ ...editingProfile, device_colors: updated });
+                            }}
+                            className="p-1 rounded text-zinc-500 hover:text-rose-400 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {/* 1. Device Global Settings */}
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 p-4 rounded-xl bg-zinc-900/60 border border-white/5">
                   <div>
@@ -1311,21 +1530,54 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       <Sparkles className="w-4 h-4 text-[#f3aa18]" />
                       Live Configurator Simulator & Price Calculator
                     </h4>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-mono text-zinc-400">Simulate Finish:</span>
-                      <select
-                        value={selectedSimFinish}
-                        onChange={(e) => setSelectedSimFinish(e.target.value)}
-                        className="px-2.5 py-1 text-xs font-mono rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none"
-                      >
-                        {finishes.map((f) => (
-                          <option key={f.id} value={f.slug}>
-                            {f.name} (
-                            {(f.extra_price ?? 0) > 0 ? `+IDR ${(f.extra_price ?? 0).toLocaleString('id-ID')}` : 'Standard'}
-                            )
-                          </option>
-                        ))}
-                      </select>
+                    <div className="flex flex-wrap items-center gap-3">
+                      {editingProfile.configurator_version === 'v2' && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-mono text-zinc-400">Device Color:</span>
+                          <div className="flex items-center gap-1">
+                            {(editingProfile.device_colors && editingProfile.device_colors.length > 0
+                              ? editingProfile.device_colors
+                              : [
+                                  { id: 'space-gray', name: 'Space Gray', hex: '#535559' },
+                                  { id: 'silver', name: 'Silver', hex: '#e3e4e5' },
+                                  { id: 'midnight', name: 'Midnight', hex: '#1e242b' },
+                                  { id: 'starlight', name: 'Starlight', hex: '#f0e4d3' },
+                                ]
+                            ).map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => setSelectedSimColor(c.id)}
+                                title={c.name}
+                                style={{ backgroundColor: c.hex }}
+                                className={clsx(
+                                  'w-4 h-4 rounded-full border cursor-pointer transition-transform',
+                                  selectedSimColor === c.id
+                                    ? 'scale-125 border-white ring-2 ring-sky-400/50'
+                                    : 'border-white/30 hover:scale-110'
+                                )}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] font-mono text-zinc-400">Simulate Finish:</span>
+                        <select
+                          value={selectedSimFinish}
+                          onChange={(e) => setSelectedSimFinish(e.target.value)}
+                          className="px-2.5 py-1 text-xs font-mono rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none"
+                        >
+                          {finishes.map((f) => (
+                            <option key={f.id} value={f.slug}>
+                              {f.name} (
+                              {(f.extra_price ?? 0) > 0 ? `+IDR ${(f.extra_price ?? 0).toLocaleString('id-ID')}` : 'Standard'}
+                              )
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </div>
 
@@ -1375,42 +1627,73 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     {/* 2. Visual Composite Canvas Preview (Base + Textures + Shadow Overlay) */}
                     {(() => {
                       const currentView = editingProfile.views.find((v) => v.id === activeSimView) || editingProfile.views[0];
+                      const devLayer = editingProfile.layers.find((l) => (l.name || '').toLowerCase() === 'device');
+                      const baseBodyUrl =
+                        currentView?.background_url ||
+                        devLayer?.assets_by_view?.[currentView?.id || 'main_view']?.render_texture_map?.['device'] ||
+                        Object.values(devLayer?.assets_by_view || {})[0]?.render_texture_map?.['device'] ||
+                        Object.values(devLayer?.assets_by_view || {})[0]?.base_hardware_body_url ||
+                        Object.values(editingProfile.layers[0]?.assets_by_view || {})[0]?.base_hardware_body_url;
+
                       return (
-                        <div className="p-3.5 rounded-xl bg-zinc-950 border border-white/5 flex flex-col justify-between relative overflow-hidden min-h-[240px]">
+                        <div className="p-3.5 rounded-xl bg-zinc-950 border border-white/5 flex flex-col justify-between relative overflow-hidden min-h-[260px]">
                           <div className="w-full flex items-center justify-between text-[11px] font-mono pb-2 border-b border-white/5">
                             <span className="flex items-center gap-1.5 text-zinc-300 font-bold">
                               <Eye className="w-3.5 h-3.5 text-sky-400" />
                               <span>{currentView?.name || 'Main View'}</span>
                             </span>
                             <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-zinc-400">
-                              Visual Stack
+                              {(editingProfile.configurator_version || 'v1') === 'v2' ? 'v2 Composite' : 'v1 2-Layer'}
                             </span>
                           </div>
 
-                          <div className="relative w-44 h-44 mx-auto my-3 flex items-center justify-center">
+                          <div className="relative w-48 h-48 mx-auto my-3 flex items-center justify-center">
                             {/* Layer 1: Base Device Hardware Render */}
-                            {currentView?.background_url ? (
-                              <img
-                                src={currentView.background_url}
-                                alt="Base Hardware"
-                                className="absolute inset-0 w-full h-full object-contain pointer-events-none z-0"
-                                onError={(e) => {
-                                  (e.target as HTMLElement).style.display = 'none';
-                                }}
-                              />
+                            {baseBodyUrl ? (
+                              <div className="absolute inset-0 w-full h-full flex items-center justify-center pointer-events-none z-0">
+                                <img
+                                  src={baseBodyUrl}
+                                  alt="Base Hardware Body"
+                                  className="w-full h-full object-contain pointer-events-none"
+                                  onError={(e) => {
+                                    (e.target as HTMLElement).style.display = 'none';
+                                  }}
+                                />
+                                {editingProfile.configurator_version === 'v2' && selectedSimColor && (
+                                  <div
+                                    style={{
+                                      backgroundColor:
+                                        editingProfile.device_colors?.find((c) => c.id === selectedSimColor)?.hex ||
+                                        '#535559',
+                                      mixBlendMode: 'color',
+                                    }}
+                                    className="absolute inset-0 w-full h-full pointer-events-none opacity-30"
+                                  />
+                                )}
+                              </div>
                             ) : (
-                              <div className="absolute inset-0 border border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center text-[10px] font-mono text-zinc-600 text-center p-3">
-                                <Smartphone className="w-6 h-6 text-zinc-700 mb-1" />
+                              <div className="absolute inset-0 border border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center text-[10px] font-mono text-zinc-500 text-center p-3">
+                                <Smartphone className="w-6 h-6 text-zinc-600 mb-1" />
                                 <span>No Base Hardware Image URL</span>
                               </div>
                             )}
 
                             {/* Layer 2: Composable Layer Textures */}
                             {editingProfile.layers.map((l) => {
+                              if ((l.name || '').toLowerCase() === 'device') return null;
                               const isChecked = selectedSimLayers[l.id] ?? (l.default_selected || l.is_required);
                               if (!isChecked) return null;
-                              const assets = l.assets_by_view?.[currentView?.id || 'main_view'] || {};
-                              const texUrl = assets.render_texture_map?.[selectedSimFinish];
+
+                              const assets =
+                                l.assets_by_view?.[currentView?.id || 'main_view'] ||
+                                l.assets_by_view?.['main_view'] ||
+                                Object.values(l.assets_by_view || {})[0] ||
+                                {};
+
+                              const texUrl =
+                                assets.render_texture_map?.[selectedSimFinish] ||
+                                assets.render_texture_map?.[selectedSimFinish.toLowerCase().replace(/[^a-z0-9]+/g, '-')];
+
                               if (!texUrl) return null;
 
                               return (
@@ -1418,7 +1701,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   key={l.id}
                                   src={texUrl}
                                   alt={l.name}
-                                  style={{ zIndex: (l.z_index || 1) + 1 }}
+                                  style={{ zIndex: (l.z_index || 1) + 2 }}
                                   className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity"
                                   onError={(e) => {
                                     (e.target as HTMLElement).style.display = 'none';
@@ -1431,7 +1714,13 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             {editingProfile.layers.map((l) => {
                               const isChecked = selectedSimLayers[l.id] ?? (l.default_selected || l.is_required);
                               if (!isChecked) return null;
-                              const assets = l.assets_by_view?.[currentView?.id || 'main_view'] || {};
+
+                              const assets =
+                                l.assets_by_view?.[currentView?.id || 'main_view'] ||
+                                l.assets_by_view?.['main_view'] ||
+                                Object.values(l.assets_by_view || {})[0] ||
+                                {};
+
                               if (!assets.shadow_png_url) return null;
 
                               return (

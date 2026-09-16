@@ -1466,16 +1466,24 @@ function parseMetaJsonString(val: any): any[] {
   if (Array.isArray(val)) return val;
   if (typeof val === 'object' && val !== null) return [val];
   if (typeof val === 'string') {
-    try {
-      const p = JSON.parse(val);
-      if (typeof p === 'string') return JSON.parse(p);
-      return Array.isArray(p) ? p : [p];
-    } catch {
+    let cur = val.trim();
+    for (let i = 0; i < 3; i++) {
       try {
-        const unescaped = val.replace(/\\"/g, '"');
-        const p = JSON.parse(unescaped);
-        return Array.isArray(p) ? p : [p];
-      } catch {}
+        const parsed = JSON.parse(cur);
+        if (typeof parsed === 'string') {
+          cur = parsed;
+          continue;
+        }
+        return Array.isArray(parsed) ? parsed : [parsed];
+      } catch {
+        try {
+          const unescaped = cur.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+          const parsed2 = JSON.parse(unescaped);
+          return Array.isArray(parsed2) ? parsed2 : [parsed2];
+        } catch {
+          break;
+        }
+      }
     }
   }
   return [];
@@ -1541,6 +1549,7 @@ export async function fetchConfiguratorProfilesDirect(params?: {
           price: Number(p.price) || 0,
           categories: (p.categories || []).map((c: any) => c.name),
           is_migrated: Boolean(modernRaw),
+          configurator_version: modern?.configurator_version || 'v1',
           is_configurable: Boolean(layers.length > 0 || modernRaw),
           layers_count: modern?.layers?.length || layers.length || 0,
           views_count: modern?.views?.length || angles.length || 1,
@@ -1578,7 +1587,10 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
     if (res.ok && data?.success && data?.profile) {
       return {
         success: true,
-        profile: data.profile,
+        profile: {
+          ...data.profile,
+          configurator_version: data.profile.configurator_version || 'v1',
+        },
         finishes: data.finishes || [],
       };
     }
@@ -1598,7 +1610,10 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
           const finishesRes = await fetchGlobalFinishesDirect();
           return {
             success: true,
-            profile: parsedModern,
+            profile: {
+              ...parsedModern,
+              configurator_version: parsedModern.configurator_version || 'v1',
+            },
             finishes: finishesRes.finishes || []
           };
         }
@@ -1626,22 +1641,79 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
       else if (catLower.includes('pad') || catLower.includes('tablet')) { family = 'tablet'; size_multiplier = 1.8; }
       else if (catLower.includes('fold') || catLower.includes('flip')) { family = 'foldable'; size_multiplier = 1.3; }
 
-      const convertedViews = angles.map((a: any, idx: number) => ({
-        id: (a.name || `view_${idx + 1}`).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, ''),
-        name: a.name || `View ${idx + 1}`,
-        is_default: idx === 0,
-        aspect_ratio: '1:1' as const,
-        canvas_dimensions: { width: 1000, height: 1000 }
-      }));
+      const convertedViews = (angles.length > 0 ? angles : [{ _id: 1, name: 'Main View' }]).map((a: any, idx: number) => {
+        const slug = (a.name || `view_${idx + 1}`).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
+        return {
+          id: slug || `view_${idx + 1}`,
+          legacy_id: a._id,
+          name: a.name || `View ${idx + 1}`,
+          is_default: idx === 0,
+          aspect_ratio: '1:1' as const,
+          canvas_dimensions: { width: 1000, height: 1000 },
+          background_url: '',
+        };
+      });
+
+      // Extract device body image per view from "Device" layer
+      const deviceLayer = layers.find((l: any) => (l.name || '').toLowerCase() === 'device');
+      const deviceBodyByView: Record<string, string> = {};
+      if (deviceLayer) {
+        const devChoices = contentByLayer[deviceLayer._id] || [];
+        devChoices.forEach((ch: any) => {
+          (ch.images || []).forEach((im: any) => {
+            const url = im.image?.url;
+            if (!url) return;
+            const matchingView = convertedViews.find((v: any) => v.legacy_id === im.angleId || v.name === im.angle_name);
+            if (matchingView) {
+              deviceBodyByView[matchingView.id] = url;
+            } else {
+              convertedViews.forEach((v: any) => {
+                if (!deviceBodyByView[v.id]) deviceBodyByView[v.id] = url;
+              });
+            }
+          });
+        });
+      }
+
+      // Assign device body URL to view background_url
+      convertedViews.forEach((v: any) => {
+        if (deviceBodyByView[v.id]) {
+          v.background_url = deviceBodyByView[v.id];
+        }
+      });
 
       let convertedLayers = layers.map((l: any, idx: number) => {
         const rawChoices = contentByLayer[l._id] || [];
-        const textureMap: Record<string, string> = {};
+        const assetsByView: Record<string, any> = {};
+
+        convertedViews.forEach((v: any) => {
+          assetsByView[v.id] = {
+            render_texture_map: {},
+            base_hardware_body_url: deviceBodyByView[v.id] || ''
+          };
+        });
+        assetsByView['main_view'] = {
+          render_texture_map: {},
+          base_hardware_body_url: Object.values(deviceBodyByView)[0] || ''
+        };
+
         rawChoices.forEach((ch: any) => {
           if (!ch.is_group && ch.name && ch.images && ch.images.length > 0) {
             const chSlug = ch.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-            const imgUrl = ch.images[0]?.image?.url;
-            if (imgUrl) textureMap[chSlug] = imgUrl;
+            ch.images.forEach((im: any) => {
+              const imgUrl = im.image?.url;
+              if (!imgUrl) return;
+
+              const targetView = convertedViews.find((v: any) => v.legacy_id === im.angleId || v.name === im.angle_name);
+              if (targetView) {
+                assetsByView[targetView.id].render_texture_map[chSlug] = imgUrl;
+              } else {
+                convertedViews.forEach((v: any) => {
+                  assetsByView[v.id].render_texture_map[chSlug] = imgUrl;
+                });
+              }
+              assetsByView['main_view'].render_texture_map[chSlug] = imgUrl;
+            });
           }
         });
 
@@ -1655,11 +1727,7 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
           extra_price: 0,
           z_index: idx + 1,
           allowed_finish_groups: ['Signature skins', 'Colors', 'Natural'],
-          assets_by_view: {
-            main_view: {
-              render_texture_map: textureMap
-            }
-          }
+          assets_by_view: assetsByView,
         };
       });
 
@@ -1667,6 +1735,13 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
       if (convertedLayers.length === 0) {
         const defaultName = family === 'laptop' ? 'Top Lid' : family === 'keyboard' ? 'Main Body' : 'Back Skin';
         const defaultId = defaultName.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+        const defaultAssets: Record<string, any> = {
+          main_view: { render_texture_map: {}, base_hardware_body_url: '' }
+        };
+        convertedViews.forEach((v: any) => {
+          defaultAssets[v.id] = { render_texture_map: {}, base_hardware_body_url: '' };
+        });
+
         convertedLayers = [
           {
             id: defaultId,
@@ -1678,11 +1753,7 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
             extra_price: 0,
             z_index: 1,
             allowed_finish_groups: ['Signature skins', 'Colors', 'Natural'],
-            assets_by_view: {
-              main_view: {
-                render_texture_map: {}
-              }
-            }
+            assets_by_view: defaultAssets,
           }
         ];
       }
@@ -1701,6 +1772,13 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
           currency: 'IDR',
           size_multiplier,
           is_configurable: true,
+          configurator_version: 'v1',
+          device_colors: [
+            { id: 'space-gray', name: 'Space Gray', hex: '#535559' },
+            { id: 'silver', name: 'Silver', hex: '#e3e4e5' },
+            { id: 'midnight', name: 'Midnight', hex: '#1e242b' },
+            { id: 'starlight', name: 'Starlight', hex: '#f0e4d3' },
+          ],
           views: convertedViews.length > 0 ? convertedViews : [{ id: 'main_view', name: 'Main View', is_default: true, aspect_ratio: '1:1', canvas_dimensions: { width: 1000, height: 1000 } }],
           layers: convertedLayers
         },

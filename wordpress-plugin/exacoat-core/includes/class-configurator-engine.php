@@ -515,17 +515,25 @@ class Exacoat_Configurator_Engine {
 	}
 
 	/**
-	 * Safe JSON parser for string or array meta values
+	 * Safe JSON parser for string or array meta values with unescaping support
 	 */
 	public static function parse_meta_json( $raw ) {
 		if ( empty( $raw ) ) return [];
 		if ( is_array( $raw ) ) return $raw;
 		if ( is_string( $raw ) ) {
-			$decoded = json_decode( $raw, true );
-			if ( is_array( $decoded ) ) return $decoded;
-			$unescaped = stripslashes( $raw );
-			$decoded2 = json_decode( $unescaped, true );
-			if ( is_array( $decoded2 ) ) return $decoded2;
+			$cur = trim( $raw );
+			for ( $i = 0; $i < 3; $i++ ) {
+				$decoded = json_decode( $cur, true );
+				if ( is_array( $decoded ) ) return $decoded;
+				if ( is_string( $decoded ) ) {
+					$cur = $decoded;
+					continue;
+				}
+				$unescaped = stripslashes( $cur );
+				$decoded2 = json_decode( $unescaped, true );
+				if ( is_array( $decoded2 ) ) return $decoded2;
+				break;
+			}
 		}
 		return [];
 	}
@@ -579,7 +587,8 @@ class Exacoat_Configurator_Engine {
 			foreach ( $angles as $a ) {
 				$name = trim( $a['name'] ?? '' );
 				if ( empty( $name ) ) continue;
-				$slug = sanitize_title( $name );
+				$slug = strtolower( preg_replace( '/[^a-z0-9]+/i', '_', $name ) );
+				$slug = trim( $slug, '_' );
 				$views[] = [
 					'id'                => $slug ?: ( 'view_' . ( $a['_id'] ?? $order_idx ) ),
 					'legacy_id'         => $a['_id'] ?? null,
@@ -587,6 +596,7 @@ class Exacoat_Configurator_Engine {
 					'is_default'        => $order_idx === 0,
 					'aspect_ratio'      => '1:1',
 					'canvas_dimensions' => [ 'width' => 1000, 'height' => 1000 ],
+					'background_url'    => '',
 				];
 				$order_idx++;
 			}
@@ -599,6 +609,7 @@ class Exacoat_Configurator_Engine {
 				'is_default'        => true,
 				'aspect_ratio'      => '1:1',
 				'canvas_dimensions' => [ 'width' => 1000, 'height' => 1000 ],
+				'background_url'    => '',
 			];
 		}
 
@@ -611,6 +622,50 @@ class Exacoat_Configurator_Engine {
 				}
 			}
 		}
+
+		// Find "Device" layer in MKL to extract base hardware body render
+		$device_body_by_view = [];
+		if ( is_array( $layers ) ) {
+			foreach ( $layers as $l ) {
+				$l_name = strtolower( trim( $l['name'] ?? '' ) );
+				if ( $l_name === 'device' || strpos( (string) ( $l['class_name'] ?? '' ), 'device-body' ) !== false ) {
+					$dev_choices = $content_by_layer[ $l['_id'] ?? 0 ] ?? [];
+					foreach ( $dev_choices as $ch ) {
+						if ( ! empty( $ch['images'] ) && is_array( $ch['images'] ) ) {
+							foreach ( $ch['images'] as $img_obj ) {
+								$url = $img_obj['image']['url'] ?? '';
+								if ( empty( $url ) ) continue;
+								$angle_id = $img_obj['angleId'] ?? null;
+								$angle_name = $img_obj['angle_name'] ?? '';
+
+								$matched = false;
+								foreach ( $views as $v ) {
+									if ( ( $angle_id && (int) ( $v['legacy_id'] ?? 0 ) === (int) $angle_id ) || ( $angle_name && strcasecmp( $v['name'], $angle_name ) === 0 ) ) {
+										$device_body_by_view[ $v['id'] ] = $url;
+										$matched = true;
+									}
+								}
+								if ( ! $matched ) {
+									foreach ( $views as $v ) {
+										if ( empty( $device_body_by_view[ $v['id'] ] ) ) {
+											$device_body_by_view[ $v['id'] ] = $url;
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Assign device body URL to views background_url
+		foreach ( $views as &$v ) {
+			if ( ! empty( $device_body_by_view[ $v['id'] ] ) ) {
+				$v['background_url'] = $device_body_by_view[ $v['id'] ];
+			}
+		}
+		unset( $v );
 
 		// Convert Layers
 		$normalized_layers = [];
@@ -650,8 +705,19 @@ class Exacoat_Configurator_Engine {
 					continue;
 				}
 
-				// Build texture map for this layer
-				$texture_map = [];
+				// Build texture map for this layer across all views
+				$assets_by_view = [];
+				foreach ( $views as $v ) {
+					$assets_by_view[ $v['id'] ] = [
+						'render_texture_map'     => [],
+						'base_hardware_body_url' => $device_body_by_view[ $v['id'] ] ?? '',
+					];
+				}
+				$assets_by_view['main_view'] = [
+					'render_texture_map'     => [],
+					'base_hardware_body_url' => reset( $device_body_by_view ) ?: '',
+				];
+
 				$layer_extra_price = 0;
 
 				foreach ( $raw_choices as $ch ) {
@@ -665,9 +731,26 @@ class Exacoat_Configurator_Engine {
 					if ( ! empty( $ch['images'] ) && is_array( $ch['images'] ) ) {
 						foreach ( $ch['images'] as $img_obj ) {
 							$url = $img_obj['image']['url'] ?? '';
-							if ( $url ) {
-								$texture_map[ $ch_slug ] = $url;
+							if ( empty( $url ) ) continue;
+
+							$angle_id = $img_obj['angleId'] ?? null;
+							$angle_name = $img_obj['angle_name'] ?? '';
+
+							$matched = false;
+							foreach ( $views as $v ) {
+								if ( ( $angle_id && (int) ( $v['legacy_id'] ?? 0 ) === (int) $angle_id ) || ( $angle_name && strcasecmp( $v['name'], $angle_name ) === 0 ) ) {
+									$assets_by_view[ $v['id'] ]['render_texture_map'][ $ch_slug ] = $url;
+									$matched = true;
+								}
 							}
+
+							if ( ! $matched || count( $views ) === 1 ) {
+								foreach ( $views as $v ) {
+									$assets_by_view[ $v['id'] ]['render_texture_map'][ $ch_slug ] = $url;
+								}
+							}
+
+							$assets_by_view['main_view']['render_texture_map'][ $ch_slug ] = $url;
 						}
 					}
 				}
@@ -683,11 +766,7 @@ class Exacoat_Configurator_Engine {
 					'extra_price'           => $layer_extra_price,
 					'z_index'               => $idx + 1,
 					'allowed_finish_groups' => [ 'Signature skins', 'Colors', 'Natural' ],
-					'assets_by_view'        => [
-						'main_view' => [
-							'render_texture_map' => $texture_map,
-						],
-					],
+					'assets_by_view'        => $assets_by_view,
 				];
 			}
 		}
@@ -695,19 +774,26 @@ class Exacoat_Configurator_Engine {
 		$base_price = (float) ( $product->get_price() ?: $product->get_regular_price() ?: 0 );
 
 		return [
-			'product_id'      => $product_id,
-			'device_slug'     => $product->get_slug(),
-			'device_name'     => $product->get_name(),
-			'category'        => $main_cat,
-			'family'          => $family,
-			'base_price'      => $base_price,
-			'currency'        => get_woocommerce_currency(),
-			'size_multiplier' => $size_multiplier,
-			'is_configurable' => ! empty( $normalized_layers ),
-			'views'           => $views,
-			'layers'          => $normalized_layers,
-			'variants'        => $variants,
-			'updated_at'      => current_time( 'mysql' ),
+			'product_id'           => $product_id,
+			'device_slug'          => $product->get_slug(),
+			'device_name'          => $product->get_name(),
+			'category'             => $main_cat,
+			'family'               => $family,
+			'base_price'           => $base_price,
+			'currency'             => get_woocommerce_currency(),
+			'size_multiplier'      => $size_multiplier,
+			'is_configurable'      => ! empty( $normalized_layers ),
+			'configurator_version' => 'v1',
+			'device_colors'        => [
+				[ 'id' => 'space-gray', 'name' => 'Space Gray', 'hex' => '#535559' ],
+				[ 'id' => 'silver', 'name' => 'Silver', 'hex' => '#e3e4e5' ],
+				[ 'id' => 'midnight', 'name' => 'Midnight', 'hex' => '#1e242b' ],
+				[ 'id' => 'starlight', 'name' => 'Starlight', 'hex' => '#f0e4d3' ],
+			],
+			'views'                => $views,
+			'layers'               => $normalized_layers,
+			'variants'             => $variants,
+			'updated_at'           => current_time( 'mysql' ),
 		];
 	}
 
@@ -763,17 +849,18 @@ class Exacoat_Configurator_Engine {
 			$cats = wp_get_post_terms( $pid, 'product_cat', [ 'fields' => 'names' ] );
 
 			$profiles[] = [
-				'product_id'      => $pid,
-				'name'            => $product ? $product->get_name() : $p->post_title,
-				'slug'            => $product ? $product->get_slug() : $p->post_name,
-				'price'           => $product ? (float) $product->get_price() : 0,
-				'categories'      => $cats,
-				'is_migrated'     => $is_migrated,
-				'is_configurable' => ! empty( $profile_data['layers'] ),
-				'layers_count'    => count( $profile_data['layers'] ?? [] ),
-				'views_count'     => count( $profile_data['views'] ?? [] ),
-				'family'          => $profile_data['family'] ?? 'phone',
-				'size_multiplier' => $profile_data['size_multiplier'] ?? 1.0,
+				'product_id'           => $pid,
+				'name'                 => $product ? $product->get_name() : $p->post_title,
+				'slug'                 => $product ? $product->get_slug() : $p->post_name,
+				'price'                => $product ? (float) $product->get_price() : 0,
+				'categories'           => $cats,
+				'is_migrated'          => $is_migrated,
+				'configurator_version' => $profile_data['configurator_version'] ?? 'v1',
+				'is_configurable'      => ! empty( $profile_data['layers'] ),
+				'layers_count'         => count( $profile_data['layers'] ?? [] ),
+				'views_count'          => count( $profile_data['views'] ?? [] ),
+				'family'               => $profile_data['family'] ?? 'phone',
+				'size_multiplier'      => $profile_data['size_multiplier'] ?? 1.0,
 			];
 		}
 
@@ -830,18 +917,20 @@ class Exacoat_Configurator_Engine {
 		}
 
 		$profile = [
-			'product_id'      => $product_id,
-			'device_slug'     => sanitize_title( $params['device_slug'] ?? '' ),
-			'device_name'     => sanitize_text_field( $params['device_name'] ?? '' ),
-			'category'        => sanitize_text_field( $params['category'] ?? '' ),
-			'family'          => sanitize_text_field( $params['family'] ?? 'phone' ),
-			'base_price'      => (float) ( $params['base_price'] ?? 0 ),
-			'currency'        => sanitize_text_field( $params['currency'] ?? 'IDR' ),
-			'size_multiplier' => (float) ( $params['size_multiplier'] ?? 1.0 ),
-			'views'           => is_array( $params['views'] ?? null ) ? $params['views'] : [],
-			'layers'          => is_array( $params['layers'] ?? null ) ? $params['layers'] : [],
-			'variants'        => is_array( $params['variants'] ?? null ) ? $params['variants'] : [],
-			'updated_at'      => current_time( 'mysql' ),
+			'product_id'           => $product_id,
+			'device_slug'          => sanitize_title( $params['device_slug'] ?? '' ),
+			'device_name'          => sanitize_text_field( $params['device_name'] ?? '' ),
+			'category'             => sanitize_text_field( $params['category'] ?? '' ),
+			'family'               => sanitize_text_field( $params['family'] ?? 'phone' ),
+			'base_price'           => (float) ( $params['base_price'] ?? 0 ),
+			'currency'             => sanitize_text_field( $params['currency'] ?? 'IDR' ),
+			'size_multiplier'      => (float) ( $params['size_multiplier'] ?? 1.0 ),
+			'configurator_version' => in_array( $params['configurator_version'] ?? '', [ 'v1', 'v2' ], true ) ? $params['configurator_version'] : 'v1',
+			'device_colors'        => is_array( $params['device_colors'] ?? null ) ? $params['device_colors'] : [],
+			'views'                => is_array( $params['views'] ?? null ) ? $params['views'] : [],
+			'layers'               => is_array( $params['layers'] ?? null ) ? $params['layers'] : [],
+			'variants'             => is_array( $params['variants'] ?? null ) ? $params['variants'] : [],
+			'updated_at'           => current_time( 'mysql' ),
 		];
 
 		update_post_meta( $product_id, self::PROFILE_META_KEY, wp_json_encode( $profile ) );
