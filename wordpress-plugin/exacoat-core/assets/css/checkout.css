@@ -1,0 +1,3032 @@
+/**
+ * Artmatter Luxury Checkout Engine Styles
+ * Version: 7.10.27
+ * Clean, minimalist shadcn/ui dark aesthetics with 2-column paired layout,
+ * dark Select2 dropdowns, soft muted labels, and smooth scroll gradient masking.
+ */
+
+:root {
+  --am-co-bg: #09090b;
+  --am-co-surface: #0e0e11;
+  --am-co-surface-hover: #121216;
+  --am-co-border: rgba(255, 255, 255, 0.08);
+  --am-co-border-hover: rgba(255, 255, 255, 0.15);
+  --am-co-border-focus: rgba(255, 255, 255, 0.32);
+  --am-co-text-main: #f4f4f5;
+  --am-co-text-secondary: #a1a1aa;
+  --am-co-text-muted: #71717a;
+  --am-co-text-dim: #52525b;
+  --am-co-radius-lg: 20px;
+  --am-co-radius-md: 14px;
+  --am-co-radius-sm: 8px;
+  --am-co-radius-full: 9999px;
+  --am-co-font-primary: "Artmatter Display", -apple-system, BlinkMacSystemFont, sans-serif;
+  --am-co-font-sans: "Neue Haas Display", "Neue Haas Grotesk Text Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --primary: #f3aa18;
+  --primary-2: #8ac961;
+  --light-1: rgba(255, 255, 255, 0.45);
+}
+
+/* ==========================================================================
+   1. Global Reset & Theme Cleanups
+   ========================================================================== */
+body.woocommerce-checkout,
+body.woocommerce-order-pay,
+body.woocommerce-order-received {
+  background-color: var(--am-co-bg) !important;
+  color: var(--am-co-text-main) !important;
+  font-family: var(--am-co-font-sans) !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Hide theme titles, duplicate headers, and admin bar search input */
+.woocommerce-checkout h1.entry-title,
+.woocommerce-checkout h1:not(.artmatter-ty-title),
+.woocommerce-checkout .woocommerce-form-coupon-toggle,
+.woocommerce-checkout .woocommerce-billing-fields > h3,
+.woocommerce-checkout .woocommerce-additional-fields > h3,
+.woocommerce-checkout #order_review_heading,
+#wpadminbar #wp-admin-bar-search,
+#wpadminbar #adminbar-search,
+#adminbarsearch,
+.adminbar-input {
+  display: none !important;
+}
+
+/* ==========================================================================
+   Dark Luxury BlockUI Overlays & Spinners (Eliminates white screen flash)
+   ========================================================================== */
+.blockUI.blockOverlay {
+  background: rgba(9, 9, 11, 0.78) !important;
+  backdrop-filter: blur(3px) !important;
+  -webkit-backdrop-filter: blur(3px) !important;
+  opacity: 1 !important;
+  border: none !important;
+  z-index: 1000 !important;
+}
+
+.blockUI.blockMsg {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  z-index: 1001 !important;
+}
+
+.blockUI.blockMsg:before,
+.woocommerce .blockUI.blockMsg:before,
+.woocommerce-checkout .blockUI.blockMsg:before {
+  height: 30px !important;
+  width: 30px !important;
+  border: 2.5px solid rgba(255, 255, 255, 0.12) !important;
+  border-top-color: var(--primary, #f3aa18) !important;
+  border-radius: 50% !important;
+  animation: amSpinner 0.6s linear infinite !important;
+  background: transparent !important;
+  content: "" !important;
+  display: block !important;
+  margin: 0 auto !important;
+}
+
+@keyframes amSpinner {
+  to { transform: rotate(360deg); }
+}
+
+/* ==========================================================================
+   Luxury Dark WooCommerce Notices & Error Boxes
+   ========================================================================== */
+/* Dedicated Notices Anchor on Top */
+#artmatter-checkout-notices-top {
+  width: 100% !important;
+  max-width: 520px !important;
+  margin: 0 auto 20px auto !important;
+  display: block !important;
+  clear: both !important;
+  position: relative !important;
+  z-index: 100 !important;
+}
+
+#artmatter-checkout-notices-top:empty {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 0 !important;
+}
+
+/* Hide empty notice wrapper divs */
+#artmatter-checkout-notices-top .woocommerce-notices-wrapper:empty,
+#artmatter-checkout-notices-top .woocommerce-NoticeGroup:empty,
+.woocommerce-notices-wrapper:empty,
+.woocommerce-NoticeGroup:empty {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 0 !important;
+}
+
+/* Instant CSS Deduplication for Duplicate Promo Banners (e.g. Advanced Coupons) */
+#artmatter-checkout-notices-top .woocommerce-info:has(.acfw_apply_notification) ~ .woocommerce-info:has(.acfw_apply_notification),
+#artmatter-checkout-notices-top .woocommerce-info:has(button.acfw_apply_notification) ~ .woocommerce-info:has(button.acfw_apply_notification),
+#artmatter-checkout-notices-top .woocommerce-info:has(button[value]) ~ .woocommerce-info:has(button[value]) {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 0 !important;
+}
+
+.woocommerce-NoticeGroup,
+.woocommerce-NoticeGroup-checkout,
+.woocommerce-NoticeGroup-updateOrderReview,
+.woocommerce-notices-wrapper {
+  grid-column: 1 / -1 !important;
+  width: 100% !important;
+  max-width: 520px !important;
+  margin: 0 auto 20px auto !important;
+  box-sizing: border-box !important;
+  list-style: none !important;
+}
+
+ul.woocommerce-error,
+ul.woocommerce-info,
+ul.woocommerce-message,
+.woocommerce-error,
+.woocommerce-info,
+.woocommerce-message {
+  grid-column: 1 / -1 !important;
+  width: 100% !important;
+  max-width: 520px !important;
+  margin: 0 auto 16px auto !important;
+  background: #141418 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 10px !important;
+  padding: 6px 14px !important;
+  color: #f4f4f5 !important;
+  font-size: 12.5px !important;
+  font-weight: 400 !important;
+  line-height: 1.35 !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+  box-sizing: border-box !important;
+}
+
+/* Suppress duplicate WooCommerce Returning Customer login notices & top coupon form */
+.woocommerce-form-login-toggle,
+.woocommerce-form-login,
+.woocommerce-info a.showlogin,
+.woocommerce-NoticeGroup-checkout .woocommerce-info:has(a.showlogin),
+.woocommerce-info:has(.showlogin),
+.woocommerce-info:has(a[href*="login"]),
+.woocommerce-form-coupon-toggle,
+.woocommerce-form-coupon,
+.checkout_coupon,
+.woocommerce-info:has(a.showcoupon),
+.woocommerce-NoticeGroup-checkout .woocommerce-info:has(a.showcoupon) {
+  display: none !important;
+}
+
+ul.woocommerce-error::before,
+ul.woocommerce-info::before,
+ul.woocommerce-message::before {
+  display: none !important;
+}
+
+ul.woocommerce-error li,
+ul.woocommerce-info li,
+ul.woocommerce-message li {
+  list-style: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  color: inherit !important;
+}
+
+ul.woocommerce-error a,
+ul.woocommerce-info a,
+ul.woocommerce-message a {
+  color: #ffffff !important;
+  text-decoration: underline !important;
+  font-weight: 500 !important;
+}
+
+ul.woocommerce-error a:hover,
+ul.woocommerce-info a:hover,
+ul.woocommerce-message a:hover {
+  color: var(--primary, #f3aa18) !important;
+}
+
+/* Error notice variant */
+ul.woocommerce-error,
+.woocommerce-error {
+  background: rgba(239, 68, 68, 0.08) !important;
+  border: 1px solid rgba(239, 68, 68, 0.25) !important;
+  color: #fca5a5 !important;
+}
+
+/* Success notice variant */
+ul.woocommerce-message,
+.woocommerce-message {
+  background: rgba(169, 255, 93, 0.08) !important;
+  border: 1px solid rgba(169, 255, 93, 0.25) !important;
+  color: #d9f99d !important;
+}
+
+/* Info notice variant (e.g. Endorsement order, coupons) */
+ul.woocommerce-info,
+.woocommerce-info {
+  background: #141418 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #f4f4f5 !important;
+}
+
+/* All notice action buttons and links (e.g. Endorsement order, coupons) */
+ul.woocommerce-info button,
+ul.woocommerce-info .button,
+ul.woocommerce-info a.button,
+ul.woocommerce-info a,
+.woocommerce-info button,
+.woocommerce-info .button,
+.woocommerce-info a.button,
+.woocommerce-info a,
+ul.woocommerce-message button,
+ul.woocommerce-message .button,
+ul.woocommerce-message a.button,
+ul.woocommerce-message a,
+.woocommerce-message button,
+.woocommerce-message .button,
+.woocommerce-message a.button,
+.woocommerce-message a,
+.acfw_apply_notification {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: var(--primary, #c6ff00) !important;
+  background-color: var(--primary, #c6ff00) !important;
+  color: #09090b !important;
+  font-family: var(--am-co-font-sans) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  padding: 0 12px !important;
+  height: 24px !important;
+  min-height: 0 !important;
+  max-height: 24px !important;
+  line-height: 24px !important;
+  border-radius: 9999px !important;
+  border: none !important;
+  cursor: pointer !important;
+  text-decoration: none !important;
+  transition: opacity 0.15s ease, filter 0.15s ease, transform 0.15s ease !important;
+  margin: 0 !important;
+  float: none !important;
+  white-space: nowrap !important;
+  box-sizing: border-box !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+}
+
+ul.woocommerce-info button:hover,
+ul.woocommerce-info .button:hover,
+ul.woocommerce-info a.button:hover,
+ul.woocommerce-info a:hover,
+.woocommerce-info button:hover,
+.woocommerce-info .button:hover,
+.woocommerce-info a.button:hover,
+.woocommerce-info a:hover,
+.acfw_apply_notification:hover {
+  filter: brightness(1.08) !important;
+  opacity: 0.95 !important;
+  color: #09090b !important;
+  text-decoration: none !important;
+}
+
+/* Inline Field Error Message */
+.artmatter-field-inline-error,
+.artmatter-postcode-inline-error {
+  grid-column: 1 / 3 !important;
+  order: 12 !important;
+  font-size: 11px !important;
+  color: #f87171 !important;
+  margin-top: -6px !important;
+  margin-bottom: 2px !important;
+  padding: 0 4px !important;
+  line-height: 1.3 !important;
+  width: 100% !important;
+  display: block !important;
+}
+
+.artmatter-checkout-wrapper {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 20px 16px 80px;
+  box-sizing: border-box;
+}
+
+.artmatter-co-brand-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 2px 28px;
+}
+
+.artmatter-co-brand-link {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  transition: opacity 0.25s ease;
+}
+
+.artmatter-co-brand-link:hover {
+  opacity: 0.76;
+}
+
+.artmatter-co-brand-logo {
+  display: block;
+  width: auto;
+  height: 16px;
+}
+
+.artmatter-co-secure-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--am-co-text-muted);
+  font-family: var(--am-co-font-sans);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.artmatter-co-secure-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--primary);
+}
+
+@media (min-width: 1024px) {
+  .artmatter-checkout-wrapper {
+    padding: 32px 24px 100px;
+  }
+}
+
+@media (max-width: 640px) {
+  .artmatter-co-brand-header {
+    padding-bottom: 22px;
+  }
+
+  .artmatter-co-brand-logo {
+    height: 14px;
+  }
+
+  .artmatter-co-secure-note {
+    font-size: 9px;
+  }
+}
+
+/* ==========================================================================
+   2. Two-Column Layout Grid
+   ========================================================================== */
+.artmatter-checkout-grid {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 32px;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.artmatter-checkout-sidebar {
+  order: 1 !important;
+}
+
+.artmatter-checkout-main {
+  order: 2 !important;
+}
+
+@media (min-width: 1024px) {
+  .artmatter-checkout-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 420px !important;
+    gap: 40px !important;
+    align-items: start !important;
+  }
+
+  .artmatter-checkout-main {
+    grid-column: 1 / 2 !important;
+    order: initial !important;
+  }
+
+  .artmatter-checkout-sidebar,
+  .artmatter-co-summary-box {
+    grid-column: 2 / 3 !important;
+    order: initial !important;
+  }
+}
+
+@media (min-width: 1280px) {
+  .artmatter-checkout-grid {
+    grid-template-columns: 1fr 440px !important;
+    gap: 48px !important;
+  }
+}
+
+/* ==========================================================================
+   3. Centered Glass Stepper Progress Indicator
+   ========================================================================== */
+.artmatter-co-stepper-wrap {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  margin: 0 auto 32px auto !important;
+  text-align: center !important;
+}
+
+.artmatter-co-stepper {
+  display: inline-flex !important;
+  align-items: center !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 9999px !important;
+  padding: 6px 20px !important;
+  gap: 12px !important;
+  margin: 0 auto !important;
+  font-size: 12.5px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
+  max-width: 90vw !important;
+  box-sizing: border-box !important;
+}
+
+.artmatter-co-step {
+  color: var(--am-co-text-muted) !important;
+  text-decoration: none !important;
+  cursor: pointer !important;
+  transition: color 0.15s ease !important;
+  font-weight: 400 !important;
+  font-size: 12.5px !important;
+  white-space: nowrap !important;
+}
+
+.artmatter-co-step:hover {
+  color: #ffffff !important;
+}
+
+.artmatter-co-step.is-active {
+  color: #ffffff !important;
+  font-weight: 500 !important;
+}
+
+.artmatter-co-step.is-completed {
+  color: var(--am-co-text-secondary) !important;
+}
+
+.artmatter-co-step-divider {
+  color: rgba(255, 255, 255, 0.2) !important;
+  font-size: 11px !important;
+}
+
+@media (max-width: 480px) {
+  .artmatter-co-stepper-wrap {
+    margin-bottom: 24px !important;
+  }
+  .artmatter-co-stepper {
+    padding: 5px 14px !important;
+    gap: 8px !important;
+    font-size: 11.5px !important;
+  }
+  .artmatter-co-step {
+    font-size: 11.5px !important;
+  }
+}
+
+/* Artist sample discount active pill */
+.artmatter-co-artist-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--am-co-text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--am-co-border);
+  border-radius: 9999px;
+  padding: 4px 12px;
+  margin-bottom: 18px;
+}
+
+.artmatter-co-artist-badge-pill svg {
+  color: var(--am-co-text-main);
+}
+
+/* ==========================================================================
+   4. Left Column: Compact 2-Column Grid & shadcn/ui Field Cards
+   ========================================================================== */
+.artmatter-co-step-panel {
+  width: 100%;
+}
+
+.artmatter-co-section-header {
+  margin-bottom: 2px !important;
+}
+
+.artmatter-co-user-greeting {
+  font-size: 12px;
+  color: var(--am-co-text-muted);
+  margin: 0;
+  display: block;
+}
+
+.artmatter-co-user-greeting .artmatter-co-user-name {
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.artmatter-co-user-greeting .artmatter-co-user-email {
+  color: var(--am-co-text-secondary);
+}
+
+/* Guest Returning Customer Prompt above Address */
+.artmatter-co-returning-customer-prompt {
+  font-size: 12px;
+  color: var(--am-co-text-muted);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.artmatter-co-returning-customer-prompt .artmatter-co-login-link {
+  color: #ffffff;
+  text-decoration: underline;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.artmatter-co-returning-customer-prompt .artmatter-co-login-link:hover {
+  color: var(--primary, #f3aa18);
+}
+
+.artmatter-co-title {
+  font-family: var(--am-co-font-primary);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--am-co-text-main);
+  letter-spacing: -0.01em;
+  margin: 0 0 4px;
+}
+
+.artmatter-co-subtitle {
+  font-family: var(--am-co-font-primary);
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--am-co-text-main);
+  margin: 0 0 14px;
+}
+
+#billing_city_field.full-width {
+  grid-column: 1 / 3 !important;
+}
+
+/* Billing & Shipping Field Wrapper Grid */
+.woocommerce-billing-fields__field-wrapper,
+.woocommerce-shipping-fields__field-wrapper {
+  display: grid !important;
+  grid-template-columns: repeat(2, 1fr) !important;
+  gap: 12px !important;
+}
+
+/* Section Title Rows */
+.artmatter-co-section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+#artmatter_shipping_heading,
+.artmatter-co-shipping-heading-row {
+  grid-column: 1 / 3 !important;
+  order: 2 !important;
+  margin-top: 20px !important;
+  margin-bottom: 2px !important;
+}
+
+#artmatter_shipping_heading .artmatter-co-title,
+.artmatter-co-shipping-heading-row .artmatter-co-title {
+  margin: 0 !important;
+}
+
+/* Field Placement & Order - Matching Reference Image */
+#billing_email_field      { grid-column: 1 / 3 !important; order: 1; }
+#artmatter_shipping_heading { grid-column: 1 / 3 !important; order: 2; }
+#billing_country_field    { grid-column: 1 / 3 !important; order: 3; }
+#billing_first_name_field { grid-column: 1 / 2 !important; order: 4; }
+#billing_last_name_field  { grid-column: 2 / 3 !important; order: 5; }
+#billing_company_field    { grid-column: 1 / 3 !important; order: 6; }
+#billing_address_1_field  { grid-column: 1 / 3 !important; order: 7; }
+#billing_address_2_field  { grid-column: 1 / 3 !important; order: 8; }
+#billing_city_field       { grid-column: 1 / 2 !important; order: 9; }
+#billing_state_field      { grid-column: 2 / 3 !important; order: 10; }
+#billing_postcode_field   { grid-column: 1 / 3 !important; order: 11; }
+.artmatter-postcode-inline-error { grid-column: 1 / 3 !important; order: 12; }
+#billing_phone_field      { grid-column: 1 / 3 !important; order: 13; }
+
+/* Biteship Automated Address (Full Width for Indonesia only) */
+#biteship_automated_address_field {
+  grid-column: 1 / 3 !important;
+  order: 14 !important;
+  display: none !important;
+}
+
+#bte-edit-toggle {
+  grid-column: 1 / 3 !important;
+  order: 15 !important;
+  display: none !important;
+  margin-top: -4px !important;
+  margin-bottom: 2px !important;
+}
+
+#biteship_token_editor {
+  grid-column: 1 / 3 !important;
+  order: 16 !important;
+  display: none !important;
+}
+
+/* Account Creation Section - Text Only Note */
+.woocommerce-account-fields,
+.woocommerce-account-fields .form-row.create-account,
+.woocommerce-account-fields input#createaccount,
+.woocommerce-account-fields .woocommerce-form__label-for-checkbox,
+#account_password_field,
+.woocommerce-checkout #account_password_field {
+  display: none !important;
+}
+
+.artmatter-co-create-account-note {
+  grid-column: 1 / 3 !important;
+  order: 14 !important;
+  font-size: 11.5px !important;
+  color: var(--am-co-text-muted, #71717a) !important;
+  margin-top: 6px !important;
+  margin-bottom: 0 !important;
+  line-height: 1.4 !important;
+  display: block !important;
+}
+
+.artmatter-co-address-block,
+.woocommerce-billing-fields,
+.woocommerce-shipping-fields,
+.woocommerce-additional-fields {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.woocommerce-shipping-fields,
+.woocommerce-additional-fields {
+  display: none !important;
+}
+
+/* Hide Order Notes Completely */
+.woocommerce-additional-fields,
+.woocommerce-additional-fields__field-wrapper,
+#order_comments_field {
+  display: none !important;
+}
+
+/* Individual Field Card (shadcn/ui dark surface) - Scoped to address fields */
+.woocommerce-billing-fields .form-row:not(.create-account),
+.woocommerce-shipping-fields .form-row,
+.biteship-automated-address-field,
+.artmatter-co-address-block .form-row:not(.create-account):not(#account_password_field) {
+  position: relative !important;
+  background: var(--am-co-surface) !important;
+  border: 1px solid var(--am-co-border) !important;
+  border-radius: var(--am-co-radius-md) !important;
+  padding: 5px 12px !important;
+  min-height: 46px !important;
+  height: 46px !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  margin: 0 !important;
+  width: 100% !important;
+  float: none !important;
+  cursor: text !important;
+  transition: border-color 0.15s ease, background-color 0.15s ease !important;
+}
+
+/* Enforce complete disappearance when hidden */
+.woocommerce-billing-fields .form-row[style*="display: none"],
+.woocommerce-billing-fields .form-row[style*="display:none"],
+.woocommerce-billing-fields .form-row.hidden,
+.woocommerce-billing-fields .form-row.is-hidden,
+.woocommerce-shipping-fields .form-row[style*="display: none"],
+.woocommerce-shipping-fields .form-row[style*="display:none"],
+.woocommerce-shipping-fields .form-row.hidden,
+.woocommerce-shipping-fields .form-row.is-hidden,
+#billing_state_field.is-hidden,
+#billing_state_field.hidden,
+#billing_state_field[style*="display: none"],
+#billing_state_field[style*="display:none"],
+#shipping_state_field.is-hidden,
+#shipping_state_field.hidden,
+#shipping_state_field[style*="display: none"],
+#shipping_state_field[style*="display:none"] {
+  display: none !important;
+}
+
+/* Indonesia Rule: Strictly Hide City, State, Address 2 & Show Automated Address */
+.woocommerce-checkout .is-country-id #billing_city_field,
+.woocommerce-checkout .is-country-id #billing_state_field,
+.woocommerce-checkout .is-country-id #billing_address_2_field,
+.woocommerce-checkout .is-country-id #shipping_city_field,
+.woocommerce-checkout .is-country-id #shipping_state_field,
+.woocommerce-checkout .is-country-id #shipping_address_2_field,
+.is-country-id #billing_city_field,
+.is-country-id #billing_state_field,
+.is-country-id #billing_address_2_field,
+.is-country-id #shipping_city_field,
+.is-country-id #shipping_state_field,
+.is-country-id #shipping_address_2_field {
+  display: none !important;
+}
+
+.woocommerce-checkout .is-country-id #biteship_automated_address_field,
+.is-country-id #biteship_automated_address_field {
+  display: flex !important;
+}
+
+.woocommerce-billing-fields .form-row:hover,
+.woocommerce-shipping-fields .form-row:hover,
+.biteship-automated-address-field:hover,
+.artmatter-co-address-block .form-row:hover {
+  border-color: var(--am-co-border-hover) !important;
+  background: var(--am-co-surface-hover) !important;
+}
+
+/* Clean Subtle Focus State */
+.woocommerce-billing-fields .form-row:focus-within,
+.woocommerce-shipping-fields .form-row:focus-within,
+.biteship-automated-address-field:focus-within,
+.artmatter-co-address-block .form-row:focus-within {
+  border-color: var(--am-co-border-focus) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2) !important;
+  background: #141418 !important;
+}
+
+.woocommerce-billing-fields .form-row.biteship-error-message,
+.woocommerce-billing-fields .form-row.woocommerce-invalid,
+.woocommerce-shipping-fields .form-row.woocommerce-invalid,
+.artmatter-co-address-block .form-row.woocommerce-invalid {
+  border-color: #ef4444 !important;
+}
+
+/* Soft, Less Strong In-Box Labels */
+.woocommerce-billing-fields .form-row label,
+.woocommerce-shipping-fields .form-row label,
+.biteship-automated-address-field label,
+.artmatter-co-address-block .form-row label {
+  font-size: 10.5px !important;
+  font-weight: 400 !important;
+  color: var(--am-co-text-muted) !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  margin: 0 0 1px 0 !important;
+  line-height: 1.15 !important;
+  display: block !important;
+  pointer-events: none;
+}
+
+.woocommerce-billing-fields .form-row label .required,
+.woocommerce-shipping-fields .form-row label .required,
+.artmatter-co-address-block .form-row label .required {
+  color: var(--am-co-text-muted) !important;
+  text-decoration: none !important;
+  font-weight: 400 !important;
+  opacity: 0.8 !important;
+}
+
+.woocommerce-billing-fields .form-row .woocommerce-input-wrapper,
+.woocommerce-shipping-fields .form-row .woocommerce-input-wrapper,
+.biteship-automated-address-field .woocommerce-input-wrapper,
+.artmatter-co-address-block .form-row .woocommerce-input-wrapper {
+  display: flex !important;
+  align-items: center !important;
+  width: 100% !important;
+  height: 20px !important;
+}
+
+/* Input Fields inside Card */
+.woocommerce-billing-fields .form-row input[type="text"],
+.woocommerce-billing-fields .form-row input[type="email"],
+.woocommerce-billing-fields .form-row input[type="tel"],
+.woocommerce-billing-fields .form-row input[type="password"],
+.woocommerce-billing-fields .form-row select,
+.woocommerce-shipping-fields .form-row input,
+.woocommerce-shipping-fields .form-row select,
+.biteship-automated-address-field input,
+.artmatter-co-address-block .form-row input,
+.artmatter-co-address-block .form-row select {
+  width: 100% !important;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  color: var(--am-co-text-main) !important;
+  font-size: 13.5px !important;
+  font-family: inherit !important;
+  font-weight: 400 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  height: 20px !important;
+  line-height: 20px !important;
+  box-sizing: border-box !important;
+}
+
+.woocommerce-checkout input::placeholder,
+.woocommerce-checkout textarea::placeholder,
+.woocommerce-billing-fields input::placeholder,
+.woocommerce-shipping-fields input::placeholder,
+.select2-container--default .select2-selection--single .select2-selection__placeholder {
+  color: #52525b !important;
+  opacity: 1 !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+}
+
+/* Select2 In-Box Container - Perfectly Vertically Aligned & Clickable */
+.woocommerce-billing-fields .form-row:has(select),
+.woocommerce-billing-fields .form-row:has(.select2-container) {
+  cursor: pointer !important;
+}
+
+.woocommerce-checkout .select2-container {
+  width: 100% !important;
+  height: 20px !important;
+  margin: 0 !important;
+  cursor: pointer !important;
+}
+
+.woocommerce-checkout .select2-container--default .select2-selection--single {
+  background: transparent !important;
+  border: none !important;
+  height: 20px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+  display: flex !important;
+  align-items: center !important;
+  cursor: pointer !important;
+}
+
+.woocommerce-checkout .select2-container--default .select2-selection--single .select2-selection__rendered {
+  color: var(--am-co-text-main) !important;
+  padding: 0 20px 0 0 !important;
+  margin: 0 !important;
+  line-height: 20px !important;
+  font-size: 13.5px !important;
+  font-weight: 400 !important;
+  height: 20px !important;
+  display: block !important;
+  cursor: pointer !important;
+}
+
+.woocommerce-checkout .select2-container--default .select2-selection--single .select2-selection__arrow {
+  position: absolute !important;
+  top: 50% !important;
+  right: 4px !important;
+  height: 16px !important;
+  width: 16px !important;
+  transform: translateY(-50%) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  pointer-events: none !important;
+}
+
+.woocommerce-checkout .select2-container--default .select2-selection--single .select2-selection__arrow b {
+  border-color: #71717a transparent transparent transparent !important;
+  border-width: 4px 4px 0 4px !important;
+  margin: 0 !important;
+  display: block !important;
+}
+
+/* ==========================================================================
+   5. Select2 Dark Dropdown Styling (Compact Search & High Contrast Options)
+   ========================================================================== */
+.select2-dropdown {
+  background-color: var(--am-co-surface) !important;
+  border: 1px solid var(--am-co-border) !important;
+  border-radius: var(--am-co-radius-md) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7) !important;
+  color: var(--am-co-text-main) !important;
+  z-index: 99999 !important;
+  overflow: hidden !important;
+}
+
+.select2-container--default .select2-search--dropdown {
+  padding: 6px 8px !important;
+  background: var(--am-co-surface) !important;
+  border-bottom: 1px solid var(--am-co-border) !important;
+}
+
+.select2-container--default .select2-search--dropdown .select2-search__field {
+  background: #141418 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: var(--am-co-radius-sm) !important;
+  color: var(--am-co-text-main) !important;
+  padding: 4px 8px !important;
+  font-size: 12px !important;
+  height: 28px !important;
+  line-height: 28px !important;
+  outline: none !important;
+  box-sizing: border-box !important;
+}
+
+.select2-container--default .select2-search--dropdown .select2-search__field:focus {
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+.select2-container--default .select2-results__options {
+  max-height: 240px !important;
+  padding: 4px !important;
+}
+
+.select2-container--default .select2-results__options::-webkit-scrollbar {
+  width: 4px;
+}
+.select2-container--default .select2-results__options::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.select2-container--default .select2-results__option {
+  padding: 6px 10px !important;
+  font-size: 12.5px !important;
+  color: #a1a1aa !important;
+  border-radius: var(--am-co-radius-sm) !important;
+  margin-bottom: 2px !important;
+  font-weight: 400 !important;
+}
+
+.select2-container--default .select2-results__option[aria-selected="true"] {
+  background-color: #1f1f23 !important;
+  color: #f4f4f5 !important;
+  font-weight: 400 !important;
+}
+
+.select2-container--default .select2-results__option--highlighted,
+.select2-container--default .select2-results__option--highlighted[aria-selected] {
+  background-color: #27272a !important;
+  color: #ffffff !important;
+  font-weight: 400 !important;
+}
+
+/* Biteship Automated Address & Token Editor */
+.biteship-automated-address-field input[readonly] {
+  cursor: default !important;
+}
+
+.bte-edit-wrap {
+  width: 100%;
+}
+
+.bte-toggle-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--am-co-text-muted);
+  font-size: 11.5px;
+  text-decoration: underline;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.bte-toggle-link:hover {
+  color: #ffffff;
+}
+
+.biteship-token-editor {
+  display: none;
+  gap: 6px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.bte-token {
+  padding: 5px 10px;
+  border: 1px solid var(--am-co-border);
+  border-radius: var(--am-co-radius-sm);
+  background: #18181b;
+  color: #ffffff;
+  font-size: 12.5px;
+  min-width: 50px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.bte-token[contenteditable="true"]:focus {
+  border-color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* Customer Info Recap Box */
+.artmatter-co-recap-box {
+  background: var(--am-co-surface);
+  border: 1px solid var(--am-co-border);
+  border-radius: var(--am-co-radius-md);
+  padding: 12px 16px;
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.artmatter-co-recap-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 12.5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 8px;
+}
+
+.artmatter-co-recap-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.recap-label {
+  color: var(--am-co-text-muted);
+  width: 65px;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.recap-value {
+  color: var(--am-co-text-main);
+  flex: 1;
+  font-weight: 400;
+  padding: 0 12px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.recap-edit {
+  color: #71717a;
+  font-size: 11px;
+  text-decoration: none !important;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+  cursor: pointer;
+}
+
+.recap-edit:hover {
+  color: #ffffff;
+  text-decoration: none !important;
+}
+
+/* Nav Action Buttons */
+.artmatter-co-nav-actions {
+  margin-top: 14px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+#artmatter-step-shipping .artmatter-co-nav-actions,
+#artmatter-step-payment .artmatter-co-nav-actions {
+  justify-content: space-between !important;
+}
+
+/* 3D Glass Lime Primary Button (Matching Bricks button styles) */
+.artmatter-co-btn-next,
+#place_order,
+button#place_order {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: linear-gradient(180deg, #c8ff99 0%, var(--primary, #f3aa18) 48%, #8fe344 100%) !important;
+  color: #0f0f0f !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), inset 0 -3px 0 rgba(51, 96, 20, 0.28) !important;
+  font-family: var(--am-co-font-sans) !important;
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.01em !important;
+  padding: 11px 24px !important;
+  min-height: 42px !important;
+  height: 42px !important;
+  border: none !important;
+  border-radius: 9999px !important;
+  cursor: pointer !important;
+  transition: opacity 0.25s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), filter 0.25s ease, box-shadow 0.3s ease !important;
+  text-transform: none !important;
+  width: auto !important;
+}
+
+.artmatter-co-btn-next:hover,
+#place_order:hover,
+button#place_order:hover {
+  opacity: 0.96 !important;
+  filter: brightness(1.05) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -3px 0 rgba(51, 96, 20, 0.22) !important;
+}
+
+.artmatter-co-btn-next:active,
+#place_order:active,
+button#place_order:active {
+  transform: translateY(1px) scale(0.985) !important;
+}
+
+.artmatter-co-btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  color: var(--am-co-text-muted);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 400;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s ease;
+}
+
+.artmatter-co-btn-back:hover {
+  color: #ffffff;
+}
+
+/* Shipping Methods Container - Force 100% Full Width */
+.artmatter-co-shipping-options-wrap,
+.artmatter-co-shipping-options-wrap .woocommerce-shipping-totals,
+.artmatter-co-shipping-options-wrap tr,
+.artmatter-co-shipping-options-wrap td,
+.artmatter-co-shipping-options-wrap td[data-title],
+#artmatter-shipping-methods-container,
+.artmatter-shipping-methods-container,
+#artmatter-shipping-methods-container table,
+#artmatter-shipping-methods-container table.woocommerce-shipping-totals,
+#artmatter-shipping-methods-container tbody,
+#artmatter-shipping-methods-container tr,
+#artmatter-shipping-methods-container td,
+#artmatter-shipping-methods-container td[data-title],
+tr.woocommerce-shipping-totals,
+tr.woocommerce-shipping-totals td,
+td:has(ul#shipping_method),
+ul#shipping_method,
+ul.woocommerce-shipping-methods {
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+  display: block !important;
+  box-sizing: border-box !important;
+  align-self: stretch !important;
+  flex: 1 1 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+}
+
+#artmatter-shipping-methods-container table,
+.artmatter-co-shipping-options-wrap table {
+  border: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+#artmatter-shipping-methods-container td,
+.artmatter-co-shipping-options-wrap td {
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+.artmatter-co-shipping-options-wrap h3,
+.artmatter-co-shipping-options-wrap th,
+tr.woocommerce-shipping-totals th,
+.artmatter-co-shipping-options-wrap .shipping-package-name,
+.artmatter-co-shipping-options-wrap p.woocommerce-shipping-destination,
+.artmatter-co-shipping-options-wrap .woocommerce-shipping-contents,
+.artmatter-co-shipping-options-wrap .woocommerce-shipping-totals th,
+#artmatter-shipping-methods-container th,
+#artmatter-shipping-methods-container h3,
+#artmatter-shipping-methods-container .shipping-package-name,
+#artmatter-shipping-methods-container p:not(.artmatter-no-shipping),
+.shipping-package-name,
+#shipping_method_heading {
+  display: none !important;
+}
+
+ul#shipping_method {
+  list-style: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  background: var(--am-co-surface) !important;
+  border: 1px solid var(--am-co-border) !important;
+  border-radius: var(--am-co-radius-lg) !important;
+  overflow: hidden !important;
+  gap: 0 !important;
+}
+
+ul#shipping_method li {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+  border-radius: 0 !important;
+  padding: 14px 18px !important;
+  display: flex !important;
+  align-items: center !important;
+  cursor: pointer !important;
+  transition: background 0.15s ease !important;
+  margin: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+ul#shipping_method li:last-child {
+  border-bottom: none !important;
+}
+
+ul#shipping_method li:hover {
+  background: var(--am-co-surface-hover) !important;
+}
+
+ul#shipping_method li input[type="radio"] {
+  margin: 0 14px 0 0 !important;
+  accent-color: var(--primary, #f3aa18) !important;
+  cursor: pointer !important;
+  flex-shrink: 0 !important;
+  width: 16px !important;
+  height: 16px !important;
+}
+
+ul#shipping_method li label {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+  cursor: pointer !important;
+  margin: 0 !important;
+  font-size: 13.5px !important;
+  font-weight: 400 !important;
+}
+
+.am-shipping-meta-wrap {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 3px !important;
+}
+
+.am-shipping-title {
+  color: var(--am-co-text-main) !important;
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  line-height: 1.2 !important;
+}
+
+.am-shipping-duration {
+  color: var(--am-co-text-muted) !important;
+  font-size: 11.5px !important;
+  font-weight: 400 !important;
+  line-height: 1.2 !important;
+}
+
+.am-shipping-price {
+  color: #ffffff !important;
+  font-family: var(--am-co-font-sans) !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  text-align: right !important;
+  flex-shrink: 0 !important;
+  margin-left: 16px !important;
+}
+
+.am-shipping-price .free-shipping-label {
+  color: #ffffff !important;
+  font-family: var(--am-co-font-sans) !important;
+}
+
+/* ==========================================================================
+   6. Payment Gateway Cards & Place Order Button (Matching Image 3)
+   ========================================================================== */
+#payment {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+#payment ul.payment_methods {
+  list-style: none !important;
+  padding: 0 !important;
+  margin: 0 0 18px !important;
+  border: 1px solid var(--am-co-border) !important;
+  border-radius: var(--am-co-radius-lg) !important;
+  background: var(--am-co-surface) !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+}
+
+#payment ul.payment_methods li.wc_payment_method {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+  border-radius: 0 !important;
+  padding: 14px 18px !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  transition: background-color 0.2s ease, border-color 0.2s ease !important;
+  margin: 0 !important;
+  cursor: pointer !important;
+}
+
+#payment ul.payment_methods li.wc_payment_method:last-child {
+  border-bottom: none !important;
+}
+
+#payment ul.payment_methods li.wc_payment_method:hover {
+  background: var(--am-co-surface-hover) !important;
+}
+
+#payment ul.payment_methods li.wc_payment_method.is-selected,
+#payment ul.payment_methods li.wc_payment_method:has(input[type="radio"]:checked) {
+  background: rgba(255, 255, 255, 0.03) !important;
+}
+
+#payment ul.payment_methods li.wc_payment_method input[type="radio"] {
+  margin: 0 14px 0 0 !important;
+  accent-color: var(--primary, #f3aa18) !important;
+  cursor: pointer !important;
+  width: 16px !important;
+  height: 16px !important;
+  flex-shrink: 0 !important;
+}
+
+#payment ul.payment_methods li.wc_payment_method label::after,
+#payment ul.payment_methods li.wc_payment_method label::before,
+#payment ul.payment_methods li.wc_payment_method::after,
+#payment ul.payment_methods li.wc_payment_method::before {
+  display: none !important;
+  content: none !important;
+}
+
+#payment ul.payment_methods li.wc_payment_method > label {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex: 1 1 auto !important;
+  width: calc(100% - 30px) !important;
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  color: var(--am-co-text-main) !important;
+  cursor: pointer !important;
+  margin: 0 !important;
+  text-transform: none !important;
+  gap: 12px !important;
+  box-sizing: border-box !important;
+}
+
+.artmatter-payment-icons {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 6px !important;
+  margin-left: auto !important;
+  flex-shrink: 0 !important;
+}
+
+#payment ul.payment_methods li.wc_payment_method img {
+  max-height: 22px !important;
+  height: 22px !important;
+  width: auto !important;
+  object-fit: contain !important;
+  background: #ffffff !important;
+  padding: 2px 5px !important;
+  border-radius: 4px !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25) !important;
+  margin: 0 !important;
+  flex-shrink: 0 !important;
+}
+
+#payment ul.payment_methods li.wc_payment_method > label img:first-of-type {
+  margin-left: auto !important;
+}
+
+#payment ul.payment_methods li.wc_payment_method > label img + img {
+  margin-left: 6px !important;
+}
+
+#payment ul.payment_methods li.wc_payment_method .payment_box {
+  display: block !important;
+  width: 100% !important;
+  flex-basis: 100% !important;
+  max-height: 0 !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  background: #141418 !important;
+  font-size: 12.5px !important;
+  color: var(--am-co-text-secondary) !important;
+  line-height: 1.45 !important;
+  box-sizing: border-box !important;
+  pointer-events: none !important;
+  transition: max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.25s ease,
+              padding 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              margin 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.2s ease !important;
+}
+
+#payment ul.payment_methods li.wc_payment_method:has(input[type="radio"]:checked) .payment_box,
+#payment ul.payment_methods li.wc_payment_method.is-selected .payment_box {
+  max-height: 800px !important;
+  opacity: 1 !important;
+  padding: 12px 14px !important;
+  margin: 10px 0 2px 30px !important;
+  width: calc(100% - 30px) !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+  pointer-events: auto !important;
+}
+
+#payment ul.payment_methods li.wc_payment_method .payment_box::before {
+  display: none !important;
+}
+
+/* Privacy & Terms Text with Centered Checkbox */
+/* Privacy & Terms Text with Centered Checkbox */
+#payment .form-row,
+#payment .place-order,
+.woocommerce-checkout #payment .form-row,
+.woocommerce-checkout #payment .place-order {
+  position: static !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  min-height: auto !important;
+  height: auto !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+  width: 100% !important;
+}
+
+.woocommerce-privacy-policy-text {
+  font-size: 11.5px !important;
+  color: var(--am-co-text-muted) !important;
+  line-height: 1.5 !important;
+  margin: 16px 0 10px !important;
+  display: block !important;
+  width: 100% !important;
+  clear: both !important;
+}
+
+.woocommerce-privacy-policy-text a,
+.woocommerce-terms-and-conditions-wrapper a {
+  color: var(--am-co-text-secondary) !important;
+  text-decoration: underline !important;
+}
+
+.woocommerce-privacy-policy-text a:hover,
+.woocommerce-terms-and-conditions-wrapper a:hover {
+  color: #ffffff !important;
+}
+
+/* Stacked Terms & Privacy Policy Container */
+.woocommerce-terms-and-conditions-wrapper {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  width: 100% !important;
+  gap: 12px !important;
+  margin: 16px 0 10px !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  clear: both !important;
+}
+
+.woocommerce-privacy-policy-text {
+  font-size: 11.5px !important;
+  color: var(--am-co-text-muted) !important;
+  line-height: 1.5 !important;
+  margin: 0 !important;
+  display: block !important;
+  width: 100% !important;
+  clear: both !important;
+}
+
+.woocommerce-privacy-policy-text p {
+  margin: 0 !important;
+  font-size: 11.5px !important;
+  color: var(--am-co-text-muted) !important;
+  line-height: 1.5 !important;
+}
+
+.woocommerce-terms-and-conditions {
+  background: #141418 !important;
+  border: 1px solid var(--am-co-border) !important;
+  border-radius: var(--am-co-radius-md) !important;
+  padding: 12px 16px !important;
+  font-size: 11.5px !important;
+  color: var(--am-co-text-secondary) !important;
+  margin-bottom: 8px !important;
+}
+
+#payment .form-row.validate-required,
+.woocommerce-checkout #payment .woocommerce-terms-and-conditions-wrapper .form-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 10px !important;
+  padding: 12px 16px !important;
+  margin: 16px 0 8px 0 !important;
+  width: 100% !important;
+  cursor: pointer !important;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease !important;
+  box-sizing: border-box !important;
+  min-height: auto !important;
+}
+
+#payment .form-row.validate-required:hover,
+.woocommerce-checkout #payment .woocommerce-terms-and-conditions-wrapper .form-row:hover {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+}
+
+#payment .form-row.validate-required:has(input[type="checkbox"]:checked),
+.woocommerce-checkout #payment .woocommerce-terms-and-conditions-wrapper .form-row:has(input[type="checkbox"]:checked) {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+}
+
+#payment .form-row.validate-required.woocommerce-invalid {
+  border-color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.04) !important;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.25) !important;
+}
+
+#payment .form-row.validate-required *,
+.woocommerce-checkout #payment .woocommerce-terms-and-conditions-wrapper * {
+  font-weight: 400 !important;
+}
+
+.woocommerce-form__label-for-checkbox {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  cursor: pointer !important;
+  line-height: 1.4 !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  color: var(--am-co-text-secondary, #a1a1aa) !important;
+  user-select: none !important;
+}
+
+#payment input#terms,
+.woocommerce-form__input-checkbox {
+  accent-color: var(--primary, #c6ff00) !important;
+  width: 13.5px !important;
+  height: 13.5px !important;
+  min-width: 13.5px !important;
+  min-height: 13.5px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  flex-shrink: 0 !important;
+  cursor: pointer !important;
+  align-self: center !important;
+  vertical-align: middle !important;
+  position: relative !important;
+  top: 0 !important;
+}
+
+.woocommerce-terms-and-conditions-checkbox-text {
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  color: var(--am-co-text-secondary, #a1a1aa) !important;
+  display: inline !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1.4 !important;
+}
+
+.woocommerce-terms-and-conditions-checkbox-text a {
+  color: #ffffff !important;
+  text-decoration: underline !important;
+  font-weight: 400 !important;
+  display: inline !important;
+  margin-left: 4px !important;
+}
+
+.woocommerce-terms-and-conditions-checkbox-text a:hover {
+  color: var(--primary, #c6ff00) !important;
+}
+
+.woocommerce-form__label-for-checkbox abbr.required,
+.woocommerce-terms-and-conditions-checkbox-text abbr.required,
+#payment abbr.required {
+  border: none !important;
+  border-bottom: none !important;
+  text-decoration: none !important;
+  color: var(--am-co-text-muted, #71717a) !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  display: inline !important;
+  margin: 0 0 0 4px !important;
+  padding: 0 !important;
+}
+
+/* Suppress redundant error notices inside the terms card box */
+#payment .woocommerce-terms-and-conditions-wrapper .woocommerce-error,
+#payment .woocommerce-terms-and-conditions-wrapper .woocommerce-NoticeGroup,
+#payment .woocommerce-terms-and-conditions-wrapper ul.woocommerce-error,
+#payment .form-row .woocommerce-error,
+#payment .form-row .woocommerce-NoticeGroup,
+#payment .form-row ul.woocommerce-error,
+#payment .form-row.validate-required > ul,
+#payment .form-row.validate-required > .woocommerce-error {
+  display: none !important;
+}
+
+/* Place Order Container & Button Row */
+#payment .place-order {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  margin-top: 18px !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  width: 100% !important;
+  clear: both !important;
+}
+
+.artmatter-co-place-order-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+  margin-top: 6px !important;
+}
+
+#payment .place-order #place_order,
+#payment button#place_order {
+  margin: 0 0 0 auto !important;
+}
+
+/* ==========================================================================
+   7. Right Column: Sticky Order Summary & Masking Gradient Scroll
+   ========================================================================== */
+.artmatter-checkout-sidebar {
+  position: relative;
+}
+
+@media (min-width: 1024px) {
+  .artmatter-co-sticky-summary {
+    position: sticky;
+    top: 24px;
+  }
+}
+
+.artmatter-co-summary-card {
+  background: var(--am-co-surface);
+  border: 1px solid var(--am-co-border);
+  border-radius: var(--am-co-radius-lg);
+  padding: 16px 20px 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  box-sizing: border-box;
+}
+
+/* Line Items List with Dynamic Smooth Scroll Masking Gradient */
+.artmatter-co-summary-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 380px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+  padding: 10px 8px 12px 2px;
+  transition: mask-image 0.15s ease, -webkit-mask-image 0.15s ease;
+}
+
+.artmatter-co-summary-items::-webkit-scrollbar {
+  width: 3px;
+}
+.artmatter-co-summary-items::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+.artmatter-co-item-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.artmatter-co-item-row:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+/* Museum Mat Artwork Thumbnail */
+.artmatter-co-item-thumb-frame {
+  width: 48px;
+  aspect-ratio: 32 / 45;
+  background: radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.12) 40%, rgba(0, 0, 0, 0.06) 75%, rgba(0, 0, 0, 0.15) 100%), #c6c5c2 !important;
+  border-radius: 2px;
+  padding: 4px 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  position: relative;
+  overflow: visible !important;
+}
+
+.artmatter-co-item-thumb-frame.is-landscape {
+  aspect-ratio: 45 / 32;
+  width: 56px;
+}
+
+.artmatter-co-item-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Quantity Badge (Unclipped with clean shadow) */
+.artmatter-co-item-qty-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #27272a;
+  color: #f4f4f5;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 9999px;
+  font-size: 10px;
+  font-family: var(--am-co-font-sans);
+  font-weight: 600;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.artmatter-co-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.artmatter-co-item-name {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--am-co-text-main);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.artmatter-co-item-meta {
+  font-size: 11px;
+  color: var(--am-co-text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.artmatter-co-item-price {
+  font-size: 13px;
+  font-weight: 400;
+  color: #ffffff;
+  text-align: right;
+  white-space: nowrap;
+  font-family: var(--am-co-font-sans);
+}
+
+.artmatter-co-item-price del {
+  opacity: 0.4;
+  text-decoration: line-through;
+  margin-right: 5px;
+}
+
+.artmatter-co-item-price ins {
+  text-decoration: none;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+/* Collapsible Promo Code Drawer - Compact 32px */
+.artmatter-co-promo-wrap {
+  margin-bottom: 14px;
+}
+
+.artmatter-co-promo-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: var(--am-co-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+  cursor: pointer;
+  padding: 2px 0;
+  transition: color 0.15s ease;
+}
+
+.artmatter-co-promo-toggle-btn:hover,
+.artmatter-co-promo-toggle-btn.is-open {
+  color: #ffffff;
+}
+
+.artmatter-co-promo-chevron {
+  transition: transform 0.15s ease;
+}
+
+.artmatter-co-promo-toggle-btn.is-open .artmatter-co-promo-chevron {
+  transform: rotate(180deg);
+}
+
+.artmatter-co-coupon-group {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.artmatter-co-coupon-group input {
+  flex: 1 !important;
+  background: #141418 !important;
+  border: 1px solid var(--am-co-border) !important;
+  border-radius: var(--am-co-radius-sm) !important;
+  color: #ffffff !important;
+  font-size: 12px !important;
+  padding: 0 10px !important;
+  min-height: 32px !important;
+  height: 32px !important;
+  box-sizing: border-box !important;
+}
+
+.artmatter-co-btn-coupon {
+  background: #27272a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--am-co-radius-sm);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0 12px;
+  height: 32px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.artmatter-co-btn-coupon:hover {
+  background: #3f3f46;
+}
+
+/* Totals Table (Completely Borderless) */
+.woocommerce-checkout-review-order-table,
+.artmatter-co-totals-table,
+#order_review,
+.woocommerce-checkout-review-order {
+  border: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  padding-top: 10px !important;
+  margin: 0 !important;
+}
+
+.artmatter-co-total-row,
+.artmatter-co-total-row.final-total-row,
+.woocommerce-checkout-review-order-table tr,
+.woocommerce-checkout-review-order-table td,
+.woocommerce-checkout-review-order-table th {
+  border: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  box-shadow: none !important;
+}
+
+.artmatter-co-total-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  color: var(--am-co-text-secondary);
+  font-weight: 400 !important;
+}
+
+.artmatter-co-total-row.discount-row,
+.artmatter-co-total-row.shipping-discount-row,
+.artmatter-co-total-row.fee-row.discount-row,
+.artmatter-co-total-row.fee-row.shipping-discount-row {
+  color: var(--am-co-text-secondary, #a1a1aa) !important;
+  font-weight: 400 !important;
+}
+
+.artmatter-co-total-row.discount-row .total-label,
+.artmatter-co-total-row.shipping-discount-row .total-label,
+.artmatter-co-total-row.fee-row.discount-row .total-label,
+.artmatter-co-total-row.fee-row.shipping-discount-row .total-label,
+.artmatter-co-total-row.discount-row .total-label *,
+.artmatter-co-total-row.shipping-discount-row .total-label *,
+.artmatter-co-total-row.fee-row.discount-row .total-label *,
+.artmatter-co-total-row.fee-row.shipping-discount-row .total-label * {
+  color: var(--am-co-text-secondary, #a1a1aa) !important;
+  font-weight: 400 !important;
+}
+
+.artmatter-co-total-row.discount-row .total-value,
+.artmatter-co-total-row.shipping-discount-row .total-value,
+.artmatter-co-total-row.fee-row.discount-row .total-value,
+.artmatter-co-total-row.fee-row.shipping-discount-row .total-value {
+  color: var(--primary, #f3aa18) !important;
+  font-family: var(--am-co-font-mono) !important;
+  font-weight: 400 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.artmatter-co-total-row.discount-row .total-value bdi,
+.artmatter-co-total-row.discount-row .total-value span,
+.artmatter-co-total-row.shipping-discount-row .total-value bdi,
+.artmatter-co-total-row.shipping-discount-row .total-value span,
+.artmatter-co-total-row.fee-row.discount-row .total-value bdi,
+.artmatter-co-total-row.fee-row.discount-row .total-value span,
+.artmatter-co-total-row.fee-row.shipping-discount-row .total-value bdi,
+.artmatter-co-total-row.fee-row.shipping-discount-row .total-value span {
+  color: var(--primary, #f3aa18) !important;
+  font-weight: 400 !important;
+}
+
+.artmatter-co-total-row.discount-row a.woocommerce-remove-coupon {
+  color: var(--am-co-text-muted, #71717a) !important;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  text-decoration: underline !important;
+  background: transparent !important;
+  padding: 0 3px !important;
+  margin-left: 4px !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  transition: color 0.15s ease !important;
+}
+
+.artmatter-co-total-row.discount-row a.woocommerce-remove-coupon:hover {
+  color: #ffffff !important;
+  background: transparent !important;
+}
+
+.artmatter-co-total-row.final-total-row {
+  padding-top: 6px !important;
+  margin-top: 6px !important;
+  font-size: 15px;
+  font-weight: 500;
+  color: #ffffff;
+}
+
+.artmatter-co-total-row.final-total-row .amount {
+  color: #ffffff;
+  font-family: var(--am-co-font-sans);
+  font-size: 16.5px;
+  font-weight: 500;
+}
+
+/* ==========================================================================
+   8. Thank You & Repayment Pages
+   ========================================================================== */
+.artmatter-thankyou-shell,
+.artmatter-order-pay-shell {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 16px 80px;
+}
+
+.artmatter-ty-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.artmatter-ty-badge-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+
+.artmatter-ty-badge-icon svg {
+  width: 28px;
+  height: 28px;
+  color: #ffffff;
+}
+
+.artmatter-ty-title {
+  font-size: 22px;
+  font-weight: 500;
+  color: #ffffff;
+  margin-bottom: 6px;
+}
+
+.artmatter-ty-subtitle {
+  font-size: 13px;
+  color: var(--am-co-text-muted);
+}
+
+.artmatter-ty-timeline-card,
+.artmatter-ty-details-card,
+.artmatter-order-pay-card {
+  background: var(--am-co-surface);
+  border: 1px solid var(--am-co-border);
+  border-radius: var(--am-co-radius-lg);
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.artmatter-ty-timeline {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  position: relative;
+  margin-top: 12px;
+}
+
+.artmatter-ty-timeline::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: 8%;
+  right: 8%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  z-index: 1;
+}
+
+.artmatter-ty-timeline-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  position: relative;
+  z-index: 2;
+}
+
+.artmatter-ty-step-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #141418;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6px;
+  font-size: 10px;
+  color: #71717a;
+  transition: all 0.2s ease;
+}
+
+.artmatter-ty-step-dot svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.artmatter-ty-timeline-step.is-active .artmatter-ty-step-dot {
+  background: #18181c;
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.05);
+}
+
+.artmatter-ty-timeline-step.is-current .artmatter-ty-step-dot {
+  background: rgba(169, 255, 93, 0.08);
+  border-color: var(--primary, #f3aa18);
+  color: var(--primary, #f3aa18);
+  box-shadow: none;
+}
+
+.artmatter-ty-step-label {
+  font-size: 10px;
+  color: var(--am-co-text-muted);
+}
+
+.artmatter-ty-timeline-step.is-active .artmatter-ty-step-label {
+  color: #ffffff;
+  font-weight: 500;
+}
+
+/* Subtle Status Pill */
+.artmatter-order-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 12px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 400;
+  text-transform: capitalize;
+  line-height: 1.2;
+  white-space: nowrap;
+  letter-spacing: normal;
+}
+
+.artmatter-order-status-pill.status-processing,
+.artmatter-order-status-pill.status-confirmed {
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.artmatter-order-status-pill.status-in-production {
+  color: #e2c08d;
+  background: rgba(226, 192, 141, 0.08);
+  border: 1px solid rgba(226, 192, 141, 0.16);
+}
+
+.artmatter-order-status-pill.status-quality-check {
+  color: #c4b5fd;
+  background: rgba(196, 181, 253, 0.08);
+  border: 1px solid rgba(196, 181, 253, 0.16);
+}
+
+.artmatter-order-status-pill.status-awaiting-pickup {
+  color: #93c5fd;
+  background: rgba(147, 197, 253, 0.08);
+  border: 1px solid rgba(147, 197, 253, 0.16);
+}
+
+.artmatter-order-status-pill.status-completed {
+  color: #86efac;
+  background: rgba(134, 239, 172, 0.08);
+  border: 1px solid rgba(134, 239, 172, 0.16);
+}
+
+.artmatter-order-status-pill.status-pending,
+.artmatter-order-status-pill.status-on-hold {
+  color: #d4d4d8;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.artmatter-order-status-pill.status-cancelled,
+.artmatter-order-status-pill.status-failed,
+.artmatter-order-status-pill.status-refunded {
+  color: #fca5a5;
+  background: rgba(252, 165, 165, 0.08);
+  border: 1px solid rgba(252, 165, 165, 0.16);
+}
+
+/* Thank You Address Cards Grid */
+.artmatter-ty-address-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .artmatter-ty-address-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.artmatter-ty-address-card {
+  background: #141418;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--am-co-radius-md);
+  padding: 14px;
+}
+
+.artmatter-ty-card-subtitle {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--am-co-text-muted);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.artmatter-ty-card-text {
+  font-size: 13px;
+  color: var(--am-co-text-secondary);
+  line-height: 1.5;
+}
+
+.artmatter-ty-track-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  color: var(--primary, #f3aa18);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+.artmatter-ty-track-btn:hover {
+  text-decoration: underline;
+}
+
+.artmatter-ty-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.artmatter-ty-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f4f4f5;
+  color: #09090b;
+  font-size: 13px;
+  font-weight: 500; /* NOT BOLD */
+  padding: 10px 20px;
+  border-radius: var(--am-co-radius-md);
+  text-decoration: none;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.artmatter-ty-btn-primary:hover {
+  background: #ffffff;
+}
+
+.artmatter-ty-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--am-co-border);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 20px;
+  border-radius: var(--am-co-radius-md);
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+
+.artmatter-ty-btn-secondary:hover {
+  background: var(--am-co-surface-hover);
+}
+
+/* ==========================================================================
+   Customer Orders Portal ([artmatter_orders])
+   ========================================================================== */
+.artmatter-orders-wrapper {
+  width: 100%;
+  margin: 0 auto;
+  color: #ffffff;
+  font-family: var(--am-co-font-sans);
+}
+
+.artmatter-orders-table-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  background: #0e0e11;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 8px 14px;
+  box-sizing: border-box;
+}
+
+.artmatter-orders-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+
+.artmatter-orders-table th {
+  padding: 16px 14px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #ffffff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+  text-transform: capitalize;
+  letter-spacing: normal;
+}
+
+.artmatter-orders-table td {
+  padding: 14px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  vertical-align: middle;
+}
+
+.artmatter-orders-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.artmatter-orders-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.order-id-link {
+  color: #ffffff;
+  font-weight: 400;
+  font-size: 13px;
+  text-decoration: none;
+  font-family: var(--am-co-font-sans);
+  transition: color 0.15s ease;
+}
+
+.order-id-link:hover {
+  color: var(--primary, #f3aa18);
+}
+
+.order-date-text {
+  color: var(--am-co-text-secondary);
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.order-total-amount {
+  font-weight: 400;
+  font-size: 13px;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.order-actions-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
+.artmatter-btn-order-view {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 18px;
+  height: 27px;
+  border-radius: 9999px;
+  background: #ffffff;
+  color: #09090b;
+  font-size: 11.5px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+  box-sizing: border-box;
+  line-height: 1;
+}
+
+.artmatter-btn-order-view:hover {
+  background: var(--primary, #f3aa18);
+  color: #09090b;
+}
+
+.artmatter-btn-order-track {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px 14px;
+  height: 27px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 400;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  box-sizing: border-box;
+  line-height: 1;
+}
+
+.artmatter-btn-order-track:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Orders Table Pagination Capsule */
+.artmatter-orders-pagination-wrap {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  margin-top: 22px !important;
+  text-align: center !important;
+}
+
+.artmatter-orders-pagination {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  padding: 3px 6px !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 9999px !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  margin: 0 auto !important;
+}
+
+.artmatter-page-btn {
+  min-width: 28px !important;
+  height: 28px !important;
+  padding: 0 10px !important;
+  border-radius: 9999px !important;
+  background: transparent !important;
+  border: none !important;
+  color: var(--am-co-text-secondary, #a1a1aa) !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+}
+
+.artmatter-page-btn:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+
+.artmatter-page-btn.is-active {
+  background: #ffffff !important;
+  border-color: #ffffff !important;
+  color: #09090b !important;
+  font-weight: 500 !important;
+}
+
+.artmatter-orders-guest-shell,
+.artmatter-orders-empty {
+  text-align: center;
+  padding: 48px 20px;
+  background: var(--am-co-surface);
+  border: 1px solid var(--am-co-border);
+  border-radius: 20px;
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+.artmatter-orders-guest-icon,
+.artmatter-orders-empty-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  color: #ffffff;
+}
+
+.artmatter-orders-guest-title {
+  font-size: 18px;
+  font-weight: 500;
+  color: #ffffff;
+  margin: 0 0 8px;
+}
+
+.artmatter-orders-guest-desc {
+  font-size: 13px;
+  color: var(--am-co-text-muted);
+  line-height: 1.5;
+  margin: 0 0 20px;
+}
+
+.artmatter-btn-login {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  color: #09090b;
+  padding: 10px 22px;
+  border-radius: var(--am-co-radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+
+.artmatter-btn-login:hover {
+  background: var(--primary, #f3aa18);
+}
+
+/* ==========================================================================
+   9. Mobile Optimization (< 768px)
+   ========================================================================== */
+@media (max-width: 767px) {
+  .artmatter-checkout-wrapper {
+    padding: 20px 20px 80px !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .artmatter-checkout-grid {
+    gap: 28px !important;
+    margin: 0 !important;
+  }
+
+  .artmatter-checkout-main {
+    padding: 0 2px !important;
+    box-sizing: border-box !important;
+  }
+
+  .artmatter-co-summary-card {
+    padding: 20px 18px !important;
+    border-radius: 16px !important;
+    margin-bottom: 4px !important;
+  }
+
+  .woocommerce-billing-fields__field-wrapper {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .artmatter-co-contact-section {
+    margin-bottom: 24px !important;
+  }
+
+  .artmatter-co-address-block {
+    margin-top: 4px !important;
+  }
+
+  #billing_first_name_field,
+  #billing_last_name_field,
+  #billing_email_field,
+  #billing_phone_field,
+  #billing_address_1_field,
+  #billing_country_field,
+  #billing_postcode_field,
+  #biteship_automated_address_field,
+  #billing_address_2_field,
+  #billing_city_field,
+  #billing_state_field {
+    grid-column: 1 / -1 !important;
+  }
+
+  /* Notices on Mobile: Always stick to the very top above everything */
+  .woocommerce-NoticeGroup,
+  .woocommerce-NoticeGroup-checkout,
+  .woocommerce-NoticeGroup-updateOrderReview,
+  .woocommerce-notices-wrapper,
+  ul.woocommerce-error,
+  ul.woocommerce-info,
+  ul.woocommerce-message,
+  .woocommerce-error,
+  .woocommerce-info,
+  .woocommerce-message {
+    order: -999 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 0 16px 0 !important;
+  }
+
+  /* Nav Actions on Mobile: Primary button on top, back link centered below */
+  .artmatter-co-nav-actions {
+    flex-direction: column-reverse !important;
+    align-items: center !important;
+    gap: 12px !important;
+    margin-top: 24px !important;
+    width: 100% !important;
+  }
+
+  .artmatter-co-nav-actions .artmatter-co-btn-next,
+  .artmatter-co-nav-actions #place_order,
+  .artmatter-co-nav-actions button#place_order,
+  .artmatter-co-btn-next,
+  #place_order {
+    width: 100% !important;
+    order: 1 !important;
+    min-height: 46px !important;
+    height: 46px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .artmatter-co-nav-actions .artmatter-co-btn-back {
+    order: 2 !important;
+    width: 100% !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 10px 0 !important;
+    font-size: 13px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .artmatter-checkout-wrapper {
+    padding: 16px 18px 70px !important;
+  }
+
+  .artmatter-co-summary-card {
+    padding: 18px 16px !important;
+  }
+}
+
+/* ==========================================================================
+   10. Quick Login Modal for Registered Users
+   ========================================================================== */
+body.artmatter-modal-open,
+html.artmatter-modal-open {
+  overflow: hidden !important;
+  height: 100% !important;
+  touch-action: none !important;
+}
+
+.artmatter-co-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.artmatter-co-modal-card {
+  position: relative;
+  background: #0e0e11;
+  border: 1px solid var(--am-co-border);
+  border-radius: var(--am-co-radius-lg);
+  padding: 24px 20px;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+  box-sizing: border-box;
+  animation: amModalFadeIn 0.18s ease-out;
+}
+
+@keyframes amModalFadeIn {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.artmatter-co-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  background: transparent;
+  border: none;
+  color: var(--am-co-text-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.artmatter-co-modal-close:hover {
+  color: #ffffff;
+}
+
+.artmatter-co-modal-header {
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+.artmatter-co-modal-badge {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 12px;
+  color: #ffffff;
+}
+
+.artmatter-co-modal-title {
+  font-family: var(--am-co-font-primary);
+  font-size: 17px;
+  font-weight: 500;
+  color: #ffffff;
+  margin: 0 0 6px;
+}
+
+.artmatter-co-modal-desc {
+  font-size: 12px;
+  color: var(--am-co-text-secondary);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.artmatter-co-modal-field-group {
+  margin-bottom: 12px;
+  text-align: left;
+}
+
+.artmatter-co-modal-field-group label,
+#artmatter_quick_login_form label {
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  color: var(--am-co-text-muted) !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  margin-bottom: 5px !important;
+  display: block !important;
+}
+
+.artmatter-co-modal-field-group input,
+#artmatter_quick_login_form input[type="text"],
+#artmatter_quick_login_form input[type="email"],
+#artmatter_quick_login_form input[type="password"] {
+  width: 100% !important;
+  background: #141418 !important;
+  border: 1px solid var(--am-co-border) !important;
+  border-radius: var(--am-co-radius-md) !important;
+  padding: 10px 12px !important;
+  color: #ffffff !important;
+  font-size: 13.5px !important;
+  font-family: inherit !important;
+  font-weight: 400 !important;
+  height: 42px !important;
+  box-sizing: border-box !important;
+  outline: none !important;
+  transition: border-color 0.15s ease, background-color 0.15s ease !important;
+}
+
+.artmatter-co-modal-field-group input:focus,
+#artmatter_quick_login_form input:focus {
+  border-color: var(--am-co-border-focus) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2) !important;
+  background: #18181c !important;
+}
+
+.artmatter-co-modal-field-group input::placeholder,
+#artmatter_quick_login_form input::placeholder {
+  color: #52525b !important;
+  font-size: 13px !important;
+}
+
+.artmatter-co-modal-error {
+  color: #ef4444;
+  font-size: 11.5px;
+  line-height: 1.35;
+  margin-bottom: 12px;
+  background: rgba(239, 68, 68, 0.08);
+  padding: 6px 10px;
+  border-radius: var(--am-co-radius-sm);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.artmatter-co-modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+#artmatter_btn_quick_login {
+  height: 42px !important;
+  font-weight: 500 !important;
+  font-size: 13px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.artmatter-co-btn-guest-opt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--am-co-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+  cursor: pointer;
+  padding: 6px 0 0;
+  transition: color 0.15s ease;
+}
+
+.artmatter-co-btn-guest-opt:hover {
+  color: #ffffff;
+}
+
+/* ==========================================================================
+   Artmatter Customer Orders - Live Tracking Timeline Modal
+   ========================================================================== */
+
+.artmatter-tracking-modal-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 999999 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 16px !important;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  box-sizing: border-box !important;
+}
+
+.artmatter-tracking-modal-overlay.is-open {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+.artmatter-tracking-modal-backdrop {
+  position: absolute !important;
+  inset: 0 !important;
+  background: rgba(0, 0, 0, 0.78) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}
+
+.artmatter-tracking-modal-dialog {
+  position: relative !important;
+  z-index: 2 !important;
+  width: 100% !important;
+  max-width: 680px !important;
+  max-height: 88vh !important;
+  background: #121214 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  font-family: "Neue Haas Display", "Neue Haas Grotesk Text Pro", inherit, sans-serif !important;
+  color: #ffffff !important;
+  transform: scale(0.96) translateY(8px);
+  transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  box-sizing: border-box !important;
+}
+
+.artmatter-tracking-modal-overlay.is-open .artmatter-tracking-modal-dialog {
+  transform: scale(1) translateY(0) !important;
+}
+
+.artmatter-tracking-modal-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 18px 24px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: #121214 !important;
+  flex-shrink: 0 !important;
+}
+
+.artmatter-modal-subtitle {
+  font-size: 10px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+  color: #71717a !important;
+  font-weight: 500 !important;
+  display: block !important;
+  margin-bottom: 2px !important;
+}
+
+.artmatter-modal-title {
+  font-size: 17px !important;
+  font-weight: 600 !important;
+  color: #ffffff !important;
+  margin: 0 !important;
+  letter-spacing: -0.01em !important;
+}
+
+.artmatter-modal-close-btn {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #a1a1aa !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  transition: all 0.15s ease !important;
+}
+
+.artmatter-modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
+}
+
+.artmatter-tracking-modal-body {
+  padding: 20px 24px !important;
+  overflow-y: auto !important;
+  max-height: calc(88vh - 74px) !important;
+  box-sizing: border-box !important;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+.artmatter-tracking-modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.artmatter-tracking-modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.artmatter-tracking-modal-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+}
+
+.artmatter-tracking-loading {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 48px 20px !important;
+  text-align: center !important;
+}
+
+.artmatter-tracking-spinner {
+  width: 26px !important;
+  height: 26px !important;
+  border: 2px solid rgba(255, 255, 255, 0.12) !important;
+  border-top-color: #f3aa18 !important;
+  border-radius: 50% !important;
+  animation: artmatter-spin 0.7s linear infinite !important;
+}
+
+@keyframes artmatter-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 640px) {
+  .artmatter-tracking-modal-overlay {
+    padding: 10px !important;
+  }
+  .artmatter-tracking-modal-dialog {
+    max-height: 92vh !important;
+    border-radius: 12px !important;
+  }
+  .artmatter-tracking-modal-header {
+    padding: 14px 18px !important;
+  }
+  .artmatter-tracking-modal-body {
+    padding: 16px 18px !important;
+    max-height: calc(92vh - 66px) !important;
+  }
+}
+

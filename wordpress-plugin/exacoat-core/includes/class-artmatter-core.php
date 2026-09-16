@@ -1,0 +1,1392 @@
+<?php
+/**
+ * Main Exacoat Core Class & REST API Bridge
+ *
+ * @package Exacoat_Core
+ * @version 0.0.8
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+if ( ! class_exists( 'Exacoat_Core' ) ) {
+
+class Exacoat_Core {
+
+	private static $instance = null;
+	private static $cached_settings = null;
+	public $settings = [];
+
+	public static function instance() {
+		if ( is_null( self::$instance ) ) {
+			self::$instance = new self();
+		}
+		return self::$instance;
+	}
+
+	/**
+	 * Memoized Settings Accessors
+	 */
+	public static function get_settings(): array {
+		if ( self::$cached_settings === null ) {
+			$options = get_option( 'exacoat_core_settings', [] );
+			if ( empty( $options ) || ! is_array( $options ) ) {
+				$options = get_option( 'artmatter_core_settings', [] );
+			}
+			if ( ! is_array( $options ) ) {
+				$options = [];
+			}
+			// Environment constant fallbacks for AI credentials from wp-config.php
+			$env_gemini = defined( 'EXA_GEMINI_API_KEY' ) ? EXA_GEMINI_API_KEY : ( defined( 'AM_GEMINI_API_KEY' ) ? AM_GEMINI_API_KEY : ( defined( 'GEMINI_API_KEY' ) ? GEMINI_API_KEY : getenv( 'EXA_GEMINI_API_KEY' ) ) );
+			if ( empty( $options['gemini_api_key'] ) && ! empty( $env_gemini ) ) {
+				$options['gemini_api_key'] = trim( (string) $env_gemini );
+			}
+			$env_openai = defined( 'EXA_OPENAI_API_KEY' ) ? EXA_OPENAI_API_KEY : ( defined( 'AM_OPENAI_API_KEY' ) ? AM_OPENAI_API_KEY : ( defined( 'OPENAI_API_KEY' ) ? OPENAI_API_KEY : getenv( 'EXA_OPENAI_API_KEY' ) ) );
+			if ( empty( $options['openai_api_key'] ) && ! empty( $env_openai ) ) {
+				$options['openai_api_key'] = trim( (string) $env_openai );
+			}
+			self::$cached_settings = $options;
+		}
+		return self::$cached_settings;
+	}
+
+	public static function get_setting( string $key, $default = null ) {
+		$settings = self::get_settings();
+		return $settings[ $key ] ?? $default;
+	}
+
+	public static function clear_settings_cache(): void {
+		self::$cached_settings = null;
+	}
+
+	private function __construct() {
+		$this->settings = self::get_settings();
+		$this->init_modules();
+
+		// Invalidate settings cache when updated
+		add_action( 'update_option_exacoat_core_settings', [ __CLASS__, 'clear_settings_cache' ] );
+		add_action( 'update_option_artmatter_core_settings', [ __CLASS__, 'clear_settings_cache' ] );
+
+		// Register REST API Bridge for Exacoat Manager ERP communication
+		add_action( 'rest_api_init', [ $this, 'register_bridge_routes' ] );
+
+		$allowed_origins = [
+			'https://exacoat.com',
+			'https://web.exacoat.com',
+			'https://manager.exacoat.com',
+			'https://artmatter.co',
+			'https://manager.artmatter.co',
+			'http://localhost:3000',
+			'http://localhost:3001',
+			'http://localhost:3002',
+			'http://localhost:3005',
+			'http://localhost:5173',
+		];
+
+		add_filter( 'allowed_http_origins', function( $origins ) use ( $allowed_origins ) {
+			return array_values( array_unique( array_merge( (array) $origins, $allowed_origins ) ) );
+		} );
+
+		remove_filter( 'rest_pre_serve_request', 'rest_send_cors_headers' );
+		add_filter( 'rest_pre_serve_request', function( $value ) use ( $allowed_origins ) {
+			$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+			header_remove( 'Access-Control-Allow-Origin' );
+			header_remove( 'Access-Control-Allow-Credentials' );
+			if ( in_array( $origin, $allowed_origins, true ) ) {
+				header( "Access-Control-Allow-Origin: {$origin}" );
+				header( 'Access-Control-Allow-Credentials: true' );
+				header( 'Vary: Origin', false );
+				header( 'Access-Control-Allow-Methods: OPTIONS, GET, POST, PUT, PATCH, DELETE' );
+				header( 'Access-Control-Allow-Headers: Authorization, Content-Type, X-WP-Nonce, Cache-Control, Pragma, X-Requested-With, sent_from, x-api-key, X-Api-Key, apikey, Accept, Origin, Cart-Token, Nonce, X-Exacoat-Currency, X-Artmatter-Currency, X-Exacoat-Client-IP, X-Artmatter-Client-IP' );
+				header( 'Access-Control-Expose-Headers: Cart-Token, Nonce, X-WP-Total, X-WP-TotalPages, X-Exacoat-Currency, X-Artmatter-Currency' );
+			}
+			return $value;
+		}, 999 );
+
+		add_filter( 'rest_allowed_cors_headers', function( $headers ) {
+			$custom = [ 'Authorization', 'Content-Type', 'X-WP-Nonce', 'Cache-Control', 'Pragma', 'X-Requested-With', 'sent_from', 'x-api-key', 'X-Api-Key', 'apikey', 'Accept', 'Origin', 'Cart-Token', 'Nonce', 'X-Exacoat-Currency', 'X-Artmatter-Currency', 'X-Exacoat-Client-IP', 'X-Artmatter-Client-IP' ];
+			return array_unique( array_merge( (array) $headers, $custom ) );
+		} );
+	}
+
+	private function init_modules() {
+		try {
+			// 0. High-Performance Logging & Telemetry Engine (7-Day Retention)
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::init();
+			} elseif ( class_exists( 'Artmatter_Logger' ) ) {
+				Artmatter_Logger::init();
+			}
+		} catch ( \Throwable $e ) {
+			error_log( 'Exacoat Logger init error: ' . $e->getMessage() );
+		}
+
+		try {
+			// 1. Shipping & Biteship Tracker
+			if ( self::get_setting( 'enable_shipping_tracker', 1 ) ) {
+				if ( class_exists( 'Exacoat_Shipping_Tracker' ) ) {
+					Exacoat_Shipping_Tracker::init();
+				} elseif ( class_exists( 'Artmatter_Shipping_Tracker' ) ) {
+					Artmatter_Shipping_Tracker::init();
+				}
+			}
+			if ( class_exists( 'Exacoat_Biteship_Engine' ) ) {
+				Exacoat_Biteship_Engine::init();
+			} elseif ( class_exists( 'Artmatter_Biteship_Engine' ) ) {
+				Artmatter_Biteship_Engine::init();
+			}
+		} catch ( \Throwable $e ) {
+			error_log( 'Exacoat Shipping Tracker init error: ' . $e->getMessage() );
+		}
+
+		try {
+			// 2. Store Enhancements & Frontend Cleanups
+			if ( class_exists( 'Exacoat_Store_Enhancements' ) ) {
+				Exacoat_Store_Enhancements::init();
+			} elseif ( class_exists( 'Artmatter_Store_Enhancements' ) ) {
+				Artmatter_Store_Enhancements::init();
+			}
+		} catch ( \Throwable $e ) {
+			error_log( 'Exacoat Store Enhancements init error: ' . $e->getMessage() );
+		}
+
+		try {
+			// 3. Comprehensive Diagnostics & Safe Testing Suite
+			if ( class_exists( 'Exacoat_Diagnostics' ) ) {
+				Exacoat_Diagnostics::init();
+			} elseif ( class_exists( 'Artmatter_Diagnostics' ) ) {
+				Artmatter_Diagnostics::init();
+			}
+			if ( class_exists( 'Exacoat_Performance_Auditor' ) ) {
+				Exacoat_Performance_Auditor::init();
+			} elseif ( class_exists( 'Artmatter_Performance_Auditor' ) ) {
+				Artmatter_Performance_Auditor::init();
+			}
+		} catch ( \Throwable $e ) {
+			error_log( 'Exacoat Diagnostics init error: ' . $e->getMessage() );
+		}
+
+		try {
+			// 4. Native Responsive HTML Email Engine
+			if ( class_exists( 'Exacoat_Email_Engine' ) ) {
+				Exacoat_Email_Engine::init();
+			} elseif ( class_exists( 'Artmatter_Email_Engine' ) ) {
+				Artmatter_Email_Engine::init();
+			}
+		} catch ( \Throwable $e ) {
+			error_log( 'Exacoat Email Engine init error: ' . $e->getMessage() );
+		}
+
+		try {
+			// 5. Order Manager & Production Hub
+			if ( class_exists( 'Exacoat_Order_Manager' ) ) {
+				Exacoat_Order_Manager::init();
+			} elseif ( class_exists( 'Artmatter_Order_Manager' ) ) {
+				Artmatter_Order_Manager::init();
+			}
+		} catch ( \Throwable $e ) {
+			error_log( 'Exacoat Order Manager init error: ' . $e->getMessage() );
+		}
+
+		try {
+			// 6. Checkout, Thank You & Repayment Engine
+			if ( class_exists( 'Exacoat_Checkout_Engine' ) ) {
+				Exacoat_Checkout_Engine::init();
+			} elseif ( class_exists( 'Artmatter_Checkout_Engine' ) ) {
+				Artmatter_Checkout_Engine::init();
+			}
+		} catch ( \Throwable $e ) {
+			error_log( 'Exacoat Checkout Engine init error: ' . $e->getMessage() );
+		}
+
+		try {
+			// 7. Headless customer sessions, registration, recovery, and auth bridge
+			if ( class_exists( 'Exacoat_Customer_Auth' ) ) {
+				Exacoat_Customer_Auth::init();
+			} elseif ( class_exists( 'Artmatter_Customer_Auth' ) ) {
+				Artmatter_Customer_Auth::init();
+			}
+		} catch ( \Throwable $e ) {
+			error_log( 'Exacoat Customer Auth init error: ' . $e->getMessage() );
+		}
+
+		try {
+			// Admin Settings Panel
+			if ( is_admin() ) {
+				if ( class_exists( 'Exacoat_Admin_Settings' ) ) {
+					Exacoat_Admin_Settings::init();
+				} elseif ( class_exists( 'Artmatter_Admin_Settings' ) ) {
+					Artmatter_Admin_Settings::init();
+				}
+			}
+		} catch ( \Throwable $e ) {
+			error_log( 'Exacoat Admin Settings init error: ' . $e->getMessage() );
+		}
+
+		try {
+			// 8. Dynamic Configurator Engine & Global Finishes Inventory
+			if ( class_exists( 'Exacoat_Configurator_Engine' ) ) {
+				Exacoat_Configurator_Engine::init();
+			}
+		} catch ( \Throwable $e ) {
+			error_log( 'Exacoat Configurator Engine init error: ' . $e->getMessage() );
+		}
+	}
+
+	/**
+	 * Unified Order Payload Generator for Supabase & Webhook sync
+	 */
+	public static function build_order_payload( int $order_id ): ?array {
+		$order = wc_get_order( $order_id );
+		if ( ! $order ) return null;
+
+		$meta_data = [];
+		foreach ( $order->get_meta_data() as $meta ) {
+			$meta_data[ $meta->key ] = $meta->value;
+		}
+
+		$items = [];
+		foreach ( $order->get_items() as $item_id => $item ) {
+			$item_meta = [];
+			foreach ( $item->get_meta_data() as $im ) {
+				$item_meta[ $im->key ] = $im->value;
+			}
+			$product = $item->get_product();
+			$items[] = [
+				'order_item_id' => (int) $item_id,
+				'product_id'    => (int) $item->get_product_id(),
+				'variation_id'  => (int) $item->get_variation_id(),
+				'name'          => $item->get_name(),
+				'quantity'      => (int) $item->get_quantity(),
+				'subtotal'      => (float) $item->get_subtotal(),
+				'total'         => (float) $item->get_total(),
+				'sku'           => $product ? $product->get_sku() : '',
+				'meta'          => $item_meta,
+			];
+		}
+
+		$fees = [];
+		$fees_total = 0.0;
+		foreach ( $order->get_fees() as $fee_id => $fee ) {
+			$amount = (float) $fee->get_total();
+			$name   = $fee->get_name();
+			$is_shipping_discount = stripos( $name, 'shipping' ) !== false;
+			$fees[] = [
+				'fee_id' => (int) $fee_id,
+				'name'   => $name,
+				'total'  => $amount,
+				'tax'    => (float) $fee->get_total_tax(),
+				'type'   => $is_shipping_discount ? 'shipping_discount' : 'fee',
+			];
+			$fees_total += $amount;
+		}
+
+		return [
+			'order_id'     => $order_id,
+			'order_number' => $order->get_order_number(),
+			'status'       => $order->get_status(),
+			'currency'     => $order->get_currency(),
+			'created_at'   => $order->get_date_created() ? $order->get_date_created()->date( 'c' ) : null,
+			'updated_at'   => $order->get_date_modified() ? $order->get_date_modified()->date( 'c' ) : null,
+			'totals'       => [
+				'subtotal'   => (float) $order->get_subtotal(),
+				'shipping'   => (float) $order->get_shipping_total(),
+				'discount'   => (float) $order->get_discount_total(),
+				'fees_total' => (float) $fees_total,
+				'total'      => (float) $order->get_total(),
+			],
+			'fees'         => $fees,
+			'items'        => $items,
+			'customer'     => [
+				'id'    => (int) $order->get_customer_id(),
+				'email' => $order->get_billing_email(),
+				'phone' => $order->get_billing_phone(),
+				'note'  => $order->get_customer_note(),
+			],
+			'billing'      => $order->get_address( 'billing' ),
+			'shipping'     => $order->get_address( 'shipping' ),
+			'meta'         => $meta_data,
+		];
+	}
+
+	/**
+	 * Secure Verification for Manager ERP & External Bridge API Requests
+	 */
+	public static function verify_bridge_permission( WP_REST_Request $request ): bool {
+		return current_user_can( 'manage_options' ) || self::verify_manager_session( $request );
+	}
+
+	public static function verify_manager_session( WP_REST_Request $request ): bool {
+		$user = self::get_verified_supabase_user( $request );
+		if ( empty( $user ) ) {
+			return false;
+		}
+
+		$role = $user['app_metadata']['role'] ?? '';
+		$email = strtolower( (string) ( $user['email'] ?? '' ) );
+		return in_array( $role, [ 'manager', 'super_admin', 'shop_manager' ], true )
+			|| in_array( $email, [ 'admin@exacoat.com', 'shandy@exacoat.com', 'admin@artmatter.co', 'shandy@artmatter.co' ], true );
+	}
+
+	public static function verify_authenticated_session( WP_REST_Request $request ): bool {
+		return current_user_can( 'manage_options' ) || ! empty( self::get_verified_supabase_user( $request ) );
+	}
+
+	private static function get_verified_supabase_user( WP_REST_Request $request ): array {
+		$auth_header = (string) $request->get_header( 'Authorization' );
+		if ( ! preg_match( '/^Bearer\s+(.+)$/i', $auth_header, $matches ) ) {
+			return [];
+		}
+
+		$config = class_exists( 'Artmatter_Supabase_Sync' ) ? Artmatter_Supabase_Sync::get_config() : [];
+		if ( empty( $config['url'] ) || empty( $config['service_key'] ) ) {
+			return [];
+		}
+
+		$response = wp_remote_get( untrailingslashit( $config['url'] ) . '/auth/v1/user', [
+			'headers' => [
+				'apikey'        => $config['service_key'],
+				'Authorization' => 'Bearer ' . trim( $matches[1] ),
+			],
+			'timeout' => 10,
+		] );
+		if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
+			return [];
+		}
+
+		$user = json_decode( wp_remote_retrieve_body( $response ), true );
+		return is_array( $user ) ? $user : [];
+	}
+
+	public function rest_purge_cloudflare_cache( WP_REST_Request $request ): WP_REST_Response {
+		$zone_id = defined( 'EXA_CLOUDFLARE_ZONE_ID' ) ? EXA_CLOUDFLARE_ZONE_ID : ( defined( 'AM_CLOUDFLARE_ZONE_ID' ) ? AM_CLOUDFLARE_ZONE_ID : ( getenv( 'EXA_CLOUDFLARE_ZONE_ID' ) ?: self::get_setting( 'cloudflare_zone_id', '' ) ) );
+		$api_token = defined( 'EXA_CLOUDFLARE_API_TOKEN' ) ? EXA_CLOUDFLARE_API_TOKEN : ( defined( 'AM_CLOUDFLARE_API_TOKEN' ) ? AM_CLOUDFLARE_API_TOKEN : ( getenv( 'EXA_CLOUDFLARE_API_TOKEN' ) ?: self::get_setting( 'cloudflare_api_token', '' ) ) );
+		if ( empty( $zone_id ) || empty( $api_token ) ) {
+			return new WP_REST_Response( [ 'success' => false, 'error' => 'Cloudflare cache credentials are not configured.' ], 400 );
+		}
+
+		$params = $request->get_json_params() ?: $request->get_params();
+		$target = sanitize_text_field( $params['target'] ?? 'all' );
+
+		if ( 'manager' === $target ) {
+			$purge_payload = [
+				'files' => [
+					'https://manager.exacoat.com/',
+					'https://manager.exacoat.com/version.json',
+					'https://manager.exacoat.com/exacoat-core.zip',
+					'https://manager.exacoat.com/index.html',
+					'https://manager.exacoat.com/env-config.js',
+					'https://manager.artmatter.co/',
+					'https://manager.artmatter.co/version.json',
+				],
+			];
+			$success_message = 'Manager workstation cache purged (manager.exacoat.com).';
+		} elseif ( 'storefront' === $target ) {
+			$purge_payload = [
+				'files' => [
+					'https://exacoat.com/',
+					'https://exacoat.com/shop/',
+					'https://exacoat.com/products/',
+				],
+			];
+			$success_message = 'Storefront key pages cache purged (exacoat.com).';
+		} else {
+			$purge_payload = [ 'purge_everything' => true ];
+			$success_message = 'Entire Exacoat network cache cleared (Storefront, Manager & CMS).';
+		}
+
+		$response = wp_remote_post( 'https://api.cloudflare.com/client/v4/zones/' . rawurlencode( trim( $zone_id ) ) . '/purge_cache', [
+			'headers' => [
+				'Authorization' => 'Bearer ' . trim( $api_token ),
+				'Content-Type'  => 'application/json',
+			],
+			'body'    => wp_json_encode( $purge_payload ),
+			'timeout' => 20,
+		] );
+		if ( is_wp_error( $response ) ) {
+			return new WP_REST_Response( [ 'success' => false, 'error' => $response->get_error_message() ], 502 );
+		}
+
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+		if ( 200 !== wp_remote_retrieve_response_code( $response ) || empty( $body['success'] ) ) {
+			$message = $body['errors'][0]['message'] ?? 'Cloudflare did not clear the cache.';
+			return new WP_REST_Response( [ 'success' => false, 'error' => $message ], 502 );
+		}
+
+		return new WP_REST_Response( [ 'success' => true, 'message' => $success_message, 'target' => $target ] );
+	}
+
+	public function rest_get_catalog_prices( WP_REST_Request $request ) {
+		$currency = strtoupper( sanitize_text_field( (string) $request->get_param( 'currency' ) ) );
+		$page      = min( 1000, max( 1, absint( $request->get_param( 'page' ) ) ) );
+		$per_page  = min( 250, max( 1, absint( $request->get_param( 'per_page' ) ) ) );
+		$cache_key = 'exacoat_catalog_prices_' . strtolower( $currency ) . "_{$page}_{$per_page}";
+		$cached    = get_transient( $cache_key );
+
+		if ( is_array( $cached ) ) {
+			$response = new WP_REST_Response( $cached );
+			$response->header( 'Cache-Control', 'public, max-age=60, stale-while-revalidate=300' );
+			return $response;
+		}
+
+		$visibility_ids = function_exists( 'wc_get_product_visibility_term_ids' )
+			? wc_get_product_visibility_term_ids()
+			: [];
+		$tax_query      = [];
+
+		if ( ! empty( $visibility_ids['exclude-from-catalog'] ) ) {
+			$tax_query[] = [
+				'taxonomy' => 'product_visibility',
+				'field'    => 'term_taxonomy_id',
+				'terms'    => [ (int) $visibility_ids['exclude-from-catalog'] ],
+				'operator' => 'NOT IN',
+			];
+		}
+
+		$query = new WP_Query( [
+			'post_type'              => 'product',
+			'post_status'            => 'publish',
+			'fields'                 => 'ids',
+			'posts_per_page'         => $per_page,
+			'paged'                  => $page,
+			'orderby'                => 'ID',
+			'order'                  => 'ASC',
+			'ignore_sticky_posts'    => true,
+			'update_post_meta_cache' => true,
+			'update_post_term_cache' => false,
+			'tax_query'              => $tax_query,
+		] );
+
+		$items = [];
+		foreach ( $query->posts as $product_id ) {
+			$base_price = get_post_meta( $product_id, '_price', true );
+			if ( '' === $base_price || ! is_numeric( $base_price ) || (float) $base_price < 0 ) {
+				return new WP_Error(
+					'catalog_price_unavailable',
+					'Catalog pricing is temporarily unavailable.',
+					[ 'status' => 503 ]
+				);
+			}
+
+			$price = 'IDR' === $currency
+				? (float) $base_price
+				: ( class_exists( 'Artmatter_Store_Enhancements' ) ? Artmatter_Store_Enhancements::calculate_price_for_currency( (float) $base_price, $currency ) : (float) $base_price );
+			$items[] = [
+				'id'    => (int) $product_id,
+				'price' => $price,
+			];
+		}
+
+		$data = [
+			'currency'    => $currency,
+			'page'        => $page,
+			'per_page'    => $per_page,
+			'total'       => (int) $query->found_posts,
+			'total_pages' => (int) $query->max_num_pages,
+			'items'       => $items,
+		];
+		set_transient( $cache_key, $data, MINUTE_IN_SECONDS );
+
+		$response = new WP_REST_Response( $data );
+		$response->header( 'Cache-Control', 'public, max-age=60, stale-while-revalidate=300' );
+		return $response;
+	}
+
+	/**
+	 * REST API Endpoint Registration for Exacoat Manager ERP & Storefront
+	 */
+	public function register_bridge_routes() {
+		$namespaces = [ 'exacoat-core/v1', 'artmatter-core/v1' ];
+
+		$register = function( string $route, array $args ) use ( $namespaces ) {
+			foreach ( $namespaces as $namespace ) {
+				register_rest_route( $namespace, $route, $args );
+			}
+		};
+
+		$register( '/health', [
+			'methods'             => 'GET',
+			'callback'            => [ $this, 'rest_get_health_status' ],
+			'permission_callback' => '__return_true',
+		] );
+
+		$register( '/catalog/prices', [
+			'methods'             => 'GET',
+			'callback'            => [ $this, 'rest_get_catalog_prices' ],
+			'permission_callback' => '__return_true',
+			'args'                => [
+				'currency' => [
+					'required'          => true,
+					'sanitize_callback' => static function( $value ) {
+						return strtoupper( sanitize_text_field( (string) $value ) );
+					},
+					'validate_callback' => static function( $value ) {
+						$currency = strtoupper( sanitize_text_field( (string) $value ) );
+						$allowed  = array_merge( [ 'IDR' ], class_exists( 'Artmatter_Store_Enhancements' ) ? array_keys( Artmatter_Store_Enhancements::get_currency_rates() ) : [ 'USD', 'SGD', 'MYR', 'EUR', 'GBP', 'AUD' ] );
+						return in_array( $currency, array_unique( $allowed ), true );
+					},
+				],
+				'page' => [
+					'default'           => 1,
+					'sanitize_callback' => 'absint',
+					'validate_callback' => static function( $value ) {
+						return is_numeric( $value ) && (int) $value >= 1 && (int) $value <= 1000;
+					},
+				],
+				'per_page' => [
+					'default'           => 100,
+					'sanitize_callback' => 'absint',
+					'validate_callback' => static function( $value ) {
+						return is_numeric( $value ) && (int) $value >= 1 && (int) $value <= 250;
+					},
+				],
+			],
+		] );
+
+		$register( '/ping', [
+			'methods'             => 'POST',
+			'callback'            => [ $this, 'rest_handle_ping' ],
+			'permission_callback' => '__return_true',
+		] );
+
+		$register( '/contact', [
+			'methods'             => 'POST',
+			'callback'            => [ $this, 'rest_submit_contact' ],
+			'permission_callback' => '__return_true',
+		] );
+
+		$register( '/settings', [
+			'methods'             => 'GET',
+			'callback'            => [ $this, 'rest_get_settings' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/settings', [
+			'methods'             => 'POST',
+			'callback'            => [ $this, 'rest_save_settings' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/settings/feelform', [
+			'methods'             => 'GET',
+			'callback'            => [ $this, 'rest_get_public_feelform_settings' ],
+			'permission_callback' => '__return_true',
+		] );
+
+		$register( '/cache/cloudflare/purge', [
+			'methods'             => 'POST',
+			'callback'            => [ $this, 'rest_purge_cloudflare_cache' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		// User Taste Profile REST Endpoints
+		$register( '/user/taste-profile', [
+			'methods'             => [ 'GET', 'POST' ],
+			'callback'            => function( WP_REST_Request $request ) {
+				$user_id = get_current_user_id();
+				if ( ! $user_id ) {
+					return rest_ensure_response( [ 'success' => false, 'error' => 'User not logged in' ] );
+				}
+
+				if ( $request->get_method() === 'POST' ) {
+					$params  = $request->get_json_params() ?: $request->get_params();
+					$profile = $params['profile'] ?? null;
+					if ( is_array( $profile ) ) {
+						update_user_meta( $user_id, '_exacoat_taste_profile', $profile );
+						update_user_meta( $user_id, '_artmatter_taste_profile', $profile );
+						return rest_ensure_response( [ 'success' => true, 'message' => 'Taste profile synchronized' ] );
+					}
+					return rest_ensure_response( [ 'success' => false, 'error' => 'Invalid profile payload' ] );
+				}
+
+				$profile = get_user_meta( $user_id, '_exacoat_taste_profile', true ) ?: ( get_user_meta( $user_id, '_artmatter_taste_profile', true ) ?: [] );
+				return rest_ensure_response( [ 'success' => true, 'profile' => $profile ] );
+			},
+			'permission_callback' => '__return_true',
+		] );
+
+		// Diagnostics Endpoints
+		$register( '/diagnostics/run', [
+			'methods'             => 'GET',
+			'callback'            => fn() => rest_ensure_response( class_exists( 'Artmatter_Diagnostics' ) ? Artmatter_Diagnostics::run_full_api_health_check() : [ 'success' => true ] ),
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/diagnostics/catalog-reconciliation', [
+			'methods'             => 'GET',
+			'callback'            => function( WP_REST_Request $request ) {
+				return rest_ensure_response( class_exists( 'Artmatter_Diagnostics' ) ? Artmatter_Diagnostics::reconcile_catalog(
+					max( 1, absint( $request->get_param( 'page' ) ) ),
+					min( 250, max( 1, absint( $request->get_param( 'per_page' ) ) ) )
+				) : [ 'success' => true ] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+			'args'                => [
+				'page'     => [ 'default' => 1, 'sanitize_callback' => 'absint' ],
+				'per_page' => [ 'default' => 100, 'sanitize_callback' => 'absint' ],
+			],
+		] );
+
+		$register( '/diagnostics/test-email', [
+			'methods'             => 'POST',
+			'callback'            => function( WP_REST_Request $request ) {
+				$params = $request->get_json_params() ?: $request->get_params();
+				$event     = sanitize_key( $params['event'] ?? 'test_ping' );
+				$recipient = sanitize_email( $params['recipient_email'] ?? '' );
+				return rest_ensure_response( class_exists( 'Artmatter_Diagnostics' ) ? Artmatter_Diagnostics::test_email_webhook( $event, $recipient, $params ) : [ 'success' => true ] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/diagnostics/test-pushover', [
+			'methods'             => 'POST',
+			'callback'            => function( WP_REST_Request $request ) {
+				$params    = $request->get_json_params() ?: $request->get_params();
+				$app_token = sanitize_text_field( $params['app_token'] ?? '' );
+				$user_key  = sanitize_text_field( $params['user_key'] ?? '' );
+				$title     = sanitize_text_field( $params['title'] ?? '' );
+				$message   = sanitize_text_field( $params['message'] ?? '' );
+				$url       = esc_url_raw( $params['url'] ?? '' );
+				$priority  = isset( $params['priority'] ) ? intval( $params['priority'] ) : 0;
+				return rest_ensure_response( class_exists( 'Artmatter_Diagnostics' ) ? Artmatter_Diagnostics::test_pushover( $app_token, $user_key, $title, $message, $url, $priority ) : [ 'success' => true ] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/diagnostics/test-r2', [
+			'methods'             => [ 'GET', 'POST' ],
+			'callback'            => fn() => rest_ensure_response( class_exists( 'Artmatter_Diagnostics' ) ? Artmatter_Diagnostics::test_r2() : [ 'success' => true ] ),
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/diagnostics/test-drime', [
+			'methods'             => [ 'GET', 'POST' ],
+			'callback'            => function( WP_REST_Request $request ) {
+				try {
+					$params = $request->get_json_params() ?: $request->get_params();
+					return rest_ensure_response( class_exists( 'Artmatter_Diagnostics' ) ? Artmatter_Diagnostics::test_drime( $params ) : [ 'success' => true ] );
+				} catch ( Throwable $e ) {
+					return rest_ensure_response( [
+						'success' => false,
+						'message' => 'Diagnostic Exception: ' . $e->getMessage(),
+					] );
+				}
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/diagnostics/test-cloudflare', [
+			'methods'             => [ 'GET', 'POST' ],
+			'callback'            => function( WP_REST_Request $request ) {
+				$params = $request->get_json_params() ?: $request->get_params();
+				$zone_id = sanitize_text_field( $params['cloudflare_zone_id'] ?? '' );
+				$api_token = sanitize_text_field( $params['cloudflare_api_token'] ?? '' );
+				return rest_ensure_response( class_exists( 'Artmatter_Diagnostics' ) ? Artmatter_Diagnostics::test_cloudflare_cache( $zone_id, $api_token ) : [ 'success' => true ] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/diagnostics/test-gemini', [
+			'methods'             => 'POST',
+			'callback'            => function( WP_REST_Request $request ) {
+				$params  = $request->get_json_params() ?: $request->get_params();
+				$api_key = sanitize_text_field( $params['api_key'] ?? '' );
+				return rest_ensure_response( class_exists( 'Artmatter_Diagnostics' ) ? Artmatter_Diagnostics::test_gemini( $api_key ) : [ 'success' => true ] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/diagnostics/test-openai', [
+			'methods'             => 'POST',
+			'callback'            => function( WP_REST_Request $request ) {
+				$params  = $request->get_json_params() ?: $request->get_params();
+				$api_key = sanitize_text_field( $params['api_key'] ?? '' );
+				return rest_ensure_response( class_exists( 'Artmatter_Diagnostics' ) ? Artmatter_Diagnostics::test_openai( $api_key ) : [ 'success' => true ] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		// Universal CORS-free Image Proxy
+		$handle_image_proxy = function( WP_REST_Request $request ) {
+			$product_id = (int) $request->get_param( 'product_id' );
+			$url        = (string) $request->get_param( 'url' );
+			if ( ! empty( $url ) && filter_var( $url, FILTER_VALIDATE_URL ) ) {
+				$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+				$allowed_hosts = [ 'exacoat.com', 'www.exacoat.com', 'cms.exacoat.com', 'media.exacoat.com', 'artmatter.co', 'www.artmatter.co', 'cms.artmatter.co', 'media.artmatter.co' ];
+				if ( ! in_array( $host, $allowed_hosts, true ) ) {
+					return new WP_REST_Response( [ 'success' => false, 'error' => 'Image host is not allowed.' ], 400 );
+				}
+			}
+
+			$filepath = '';
+
+			if ( $product_id > 0 ) {
+				$thumb_id = get_post_thumbnail_id( $product_id );
+				if ( $thumb_id ) {
+					$filepath = (string) get_attached_file( $thumb_id );
+				}
+			}
+
+			if ( empty( $filepath ) || ! file_exists( $filepath ) ) {
+				if ( ! empty( $url ) ) {
+					$upload_dir = wp_upload_dir();
+					if ( preg_match( '#/wp-content/uploads/(.+)$#i', $url, $matches ) ) {
+						$clean_rel = ltrim( parse_url( $matches[1], PHP_URL_PATH ) ?: $matches[1], '/' );
+						$candidate = $upload_dir['basedir'] . '/' . $clean_rel;
+						if ( file_exists( $candidate ) ) {
+							$filepath = $candidate;
+						}
+					}
+					if ( empty( $filepath ) || ! file_exists( $filepath ) ) {
+						$rel = str_replace( $upload_dir['baseurl'], '', $url );
+						$candidate = $upload_dir['basedir'] . $rel;
+						if ( file_exists( $candidate ) ) {
+							$filepath = $candidate;
+						}
+					}
+					if ( empty( $filepath ) || ! file_exists( $filepath ) ) {
+						$candidate_filename = wp_basename( $clean_rel ?: parse_url( $url, PHP_URL_PATH ) );
+						if ( ! empty( $candidate_filename ) ) {
+							if ( class_exists( 'Exacoat_Store_Enhancements' ) && method_exists( 'Exacoat_Store_Enhancements', 'locate_physical_upload' ) ) {
+								$resolved = Exacoat_Store_Enhancements::locate_physical_upload( $candidate_filename, $clean_rel ?? '', $upload_dir['basedir'] );
+								if ( ! empty( $resolved ) ) {
+									$filepath = $resolved;
+								}
+							} else {
+								$flat_candidate = $upload_dir['basedir'] . '/' . $candidate_filename;
+								if ( file_exists( $flat_candidate ) ) {
+									$filepath = $flat_candidate;
+								}
+							}
+						}
+					}
+				}
+			}
+
+			if ( ! empty( $filepath ) && file_exists( $filepath ) ) {
+				$mime = wp_check_filetype( $filepath )['type'] ?: 'image/jpeg';
+				$data = file_get_contents( $filepath );
+
+				header( 'Content-Type: ' . $mime );
+				header( 'Access-Control-Allow-Origin: *' );
+				header( 'Access-Control-Allow-Methods: GET, OPTIONS' );
+				header( 'Access-Control-Allow-Headers: *' );
+				header( 'Cache-Control: public, max-age=31536000, immutable' );
+				echo $data;
+				exit;
+			}
+
+			// Remote fetch fallback
+			if ( ! empty( $url ) && filter_var( $url, FILTER_VALIDATE_URL ) ) {
+				$response = wp_safe_remote_get( $url, [ 'timeout' => 30, 'limit_response_size' => 25 * MB_IN_BYTES ] );
+				if ( ! is_wp_error( $response ) && 200 === (int) wp_remote_retrieve_response_code( $response ) ) {
+					$content_type = wp_remote_retrieve_header( $response, 'content-type' ) ?: 'image/jpeg';
+					$body         = wp_remote_retrieve_body( $response );
+
+					header( 'Content-Type: ' . $content_type );
+					header( 'Access-Control-Allow-Origin: *' );
+					header( 'Access-Control-Allow-Methods: GET, OPTIONS' );
+					header( 'Access-Control-Allow-Headers: *' );
+					header( 'Cache-Control: public, max-age=86400' );
+					echo $body;
+					exit;
+				}
+			}
+
+			return new WP_REST_Response( [ 'success' => false, 'error' => 'Image file not found on server' ], 404 );
+		};
+
+		$register( '/image-proxy', [
+			'methods'             => [ 'GET' ],
+			'callback'            => $handle_image_proxy,
+			'permission_callback' => '__return_true',
+		] );
+
+		// Product Collection Management Endpoints
+		$register( '/collections/create', [
+			'methods'             => [ 'POST' ],
+			'callback'            => function( WP_REST_Request $request ) {
+				try {
+					$params = $request->get_json_params() ?: $request->get_params();
+					$name = trim( sanitize_text_field( $params['name'] ?? $params['collection_name'] ?? '' ) );
+					$slug = trim( sanitize_title( $params['slug'] ?? $name ) );
+
+					if ( empty( $name ) ) {
+						return rest_ensure_response( [ 'success' => false, 'message' => 'Collection name is required' ] );
+					}
+
+					$taxonomy = taxonomy_exists( 'product_cat' ) ? 'product_cat' : 'category';
+					$existing = term_exists( $slug, $taxonomy ) ?: term_exists( $name, $taxonomy );
+					if ( $existing ) {
+						$term_id = is_array( $existing ) ? (int) $existing['term_id'] : (int) $existing;
+						return rest_ensure_response( [
+							'success' => true,
+							'term_id' => $term_id,
+							'name'    => $name,
+							'slug'    => $slug,
+							'message' => "Collection '{$name}' already exists.",
+						] );
+					}
+
+					$inserted = wp_insert_term( $name, $taxonomy, [ 'slug' => $slug ] );
+					if ( is_wp_error( $inserted ) ) {
+						return rest_ensure_response( [ 'success' => false, 'message' => $inserted->get_error_message() ] );
+					}
+
+					$term_id = (int) $inserted['term_id'];
+					return rest_ensure_response( [
+						'success' => true,
+						'term_id' => $term_id,
+						'name'    => $name,
+						'slug'    => $slug,
+						'message' => "Collection '{$name}' created in WordPress.",
+					] );
+				} catch ( Throwable $e ) {
+					return rest_ensure_response( [ 'success' => false, 'message' => 'Create collection error: ' . $e->getMessage() ] );
+				}
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/collections/rename', [
+			'methods'             => [ 'POST' ],
+			'callback'            => function( WP_REST_Request $request ) {
+				try {
+					$params = $request->get_json_params() ?: $request->get_params();
+					$old_name = trim( sanitize_text_field( $params['old_name'] ?? '' ) );
+					$new_name = trim( sanitize_text_field( $params['new_name'] ?? '' ) );
+					$description = sanitize_textarea_field( $params['description'] ?? '' );
+
+					if ( empty( $old_name ) || empty( $new_name ) ) {
+						return rest_ensure_response( [ 'success' => false, 'message' => 'Old and new collection names are required.' ] );
+					}
+
+					$taxonomy = taxonomy_exists( 'product_cat' ) ? 'product_cat' : 'category';
+					$term = get_term_by( 'name', $old_name, $taxonomy ) ?: get_term_by( 'slug', sanitize_title( $old_name ), $taxonomy );
+					if ( ! $term || is_wp_error( $term ) ) {
+						return rest_ensure_response( [ 'success' => false, 'message' => "Collection '{$old_name}' not found." ] );
+					}
+
+					$args = [ 'name' => $new_name, 'slug' => sanitize_title( $new_name ) ];
+					if ( ! empty( $description ) ) {
+						$args['description'] = $description;
+					}
+					$updated = wp_update_term( $term->term_id, $taxonomy, $args );
+					if ( is_wp_error( $updated ) ) {
+						return rest_ensure_response( [ 'success' => false, 'message' => $updated->get_error_message() ] );
+					}
+
+					return rest_ensure_response( [
+						'success' => true,
+						'term_id' => $term->term_id,
+						'name'    => $new_name,
+						'slug'    => sanitize_title( $new_name ),
+						'message' => "Collection renamed from '{$old_name}' to '{$new_name}'.",
+					] );
+				} catch ( Throwable $e ) {
+					return rest_ensure_response( [ 'success' => false, 'message' => 'Rename collection error: ' . $e->getMessage() ] );
+				}
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/collections/delete', [
+			'methods'             => [ 'POST' ],
+			'callback'            => function( WP_REST_Request $request ) {
+				try {
+					$params = $request->get_json_params() ?: $request->get_params();
+					$collection_name = trim( sanitize_text_field( $params['collection_name'] ?? $params['name'] ?? '' ) );
+
+					if ( empty( $collection_name ) ) {
+						return rest_ensure_response( [ 'success' => false, 'message' => 'Collection name is required.' ] );
+					}
+
+					$taxonomy = taxonomy_exists( 'product_cat' ) ? 'product_cat' : 'category';
+					$term = get_term_by( 'name', $collection_name, $taxonomy ) ?: get_term_by( 'slug', sanitize_title( $collection_name ), $taxonomy );
+					if ( ! $term || is_wp_error( $term ) ) {
+						return rest_ensure_response( [ 'success' => false, 'message' => "Collection '{$collection_name}' not found." ] );
+					}
+
+					$deleted = wp_delete_term( $term->term_id, $taxonomy );
+					return rest_ensure_response( [
+						'success' => ! empty( $deleted ),
+						'message' => ! empty( $deleted ) ? "Collection '{$collection_name}' deleted." : "Failed to delete collection '{$collection_name}'.",
+					] );
+				} catch ( Throwable $e ) {
+					return rest_ensure_response( [ 'success' => false, 'message' => 'Delete collection error: ' . $e->getMessage() ] );
+				}
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		// Cloudflare R2 / Storage Sync Batch
+		$register( '/vault/drime/sync-batch', [
+			'methods'             => [ 'GET', 'POST' ],
+			'callback'            => function( WP_REST_Request $request ) {
+				try {
+					$params    = $request->get_json_params() ?: $request->get_params();
+					$offset    = max( 0, intval( $params['offset'] ?? 0 ) );
+					$limit     = max( 1, min( 10, intval( $params['limit'] ?? 2 ) ) );
+					$test_mode = ! empty( $params['test_mode'] );
+
+					if ( $test_mode ) {
+						$limit = 2;
+					}
+
+					if ( ! class_exists( 'Artmatter_R2' ) || ! class_exists( 'Artmatter_Drime' ) ) {
+						return rest_ensure_response( [
+							'success' => false,
+							'message' => 'Storage sync classes not loaded',
+						] );
+					}
+
+					$all_objects = Artmatter_R2::list_objects();
+					$total       = count( $all_objects );
+
+					if ( $total === 0 ) {
+						return rest_ensure_response( [
+							'success'       => false,
+							'message'       => 'No files found in storage bucket to sync.',
+							'total_objects' => 0,
+						] );
+					}
+
+					$slice = array_slice( $all_objects, $offset, $limit );
+					$results = [];
+
+					foreach ( $slice as $obj ) {
+						$res = Artmatter_Drime::sync_file_from_r2( $obj['key'] );
+						$results[] = [
+							'key'      => $obj['key'],
+							'size'     => $obj['size_fmt'],
+							'success'  => $res['success'],
+							'file_id'  => $res['file_id'] ?? null,
+							'message'  => $res['message'] ?? 'Synced',
+						];
+					}
+
+					$next_offset = $offset + count( $slice );
+					$has_more    = ( ! $test_mode && $next_offset < $total );
+
+					return rest_ensure_response( [
+						'success'       => true,
+						'total_objects' => $total,
+						'processed'     => count( $slice ),
+						'offset'        => $offset,
+						'next_offset'   => $next_offset,
+						'has_more'      => $has_more,
+						'synced_files'  => $results,
+						'test_mode'     => $test_mode,
+					] );
+				} catch ( Throwable $e ) {
+					return rest_ensure_response( [
+						'success' => false,
+						'message' => 'Sync Batch Exception: ' . $e->getMessage(),
+					] );
+				}
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		// Native HTML Email Engine Endpoints
+		$register( '/email/send', [
+			'methods'             => 'POST',
+			'callback'            => function( WP_REST_Request $request ) {
+				$params    = $request->get_json_params() ?: $request->get_params();
+				$slug      = sanitize_key( $params['template_slug'] ?? $params['slug'] ?? '' );
+				$recipient = sanitize_email( $params['recipient_email'] ?? $params['email'] ?? '' );
+				$name      = sanitize_text_field( $params['recipient_name'] ?? $params['name'] ?? '' );
+				$vars      = is_array( $params['variables'] ?? null ) ? $params['variables'] : ( is_array( $params['vars'] ?? null ) ? $params['vars'] : [] );
+
+				if ( empty( $slug ) || empty( $recipient ) ) {
+					return new WP_Error( 'missing_params', 'template_slug and recipient_email are required', [ 'status' => 400 ] );
+				}
+
+				if ( class_exists( 'Artmatter_Email_Engine' ) ) {
+					$result = Artmatter_Email_Engine::send_email( $slug, $recipient, $name, $vars );
+					return rest_ensure_response( $result );
+				}
+				return rest_ensure_response( [ 'success' => false, 'message' => 'Email engine not available' ] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/email/preview', [
+			'methods'             => [ 'GET', 'POST' ],
+			'callback'            => function( WP_REST_Request $request ) {
+				$params = $request->get_json_params() ?: $request->get_params();
+				$slug   = sanitize_key( $params['template_slug'] ?? $params['slug'] ?? '' );
+				$vars   = is_array( $params['variables'] ?? null ) ? $params['variables'] : [];
+
+				if ( class_exists( 'Artmatter_Email_Engine' ) ) {
+					$html = Artmatter_Email_Engine::generate_email_html( $slug, $vars );
+					if ( $request->get_param( 'raw' ) ) {
+						header( 'Content-Type: text/html; charset=UTF-8' );
+						echo $html;
+						exit;
+					}
+					return rest_ensure_response( [ 'success' => true, 'html' => $html ] );
+				}
+				return rest_ensure_response( [ 'success' => false, 'message' => 'Email engine not available' ] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		// System Maintenance Endpoints
+		$register( '/system/flush-permalinks', [
+			'methods'             => 'POST',
+			'callback'            => function() {
+				flush_rewrite_rules();
+				return rest_ensure_response( [ 'success' => true, 'message' => 'Permalinks and rewrite rules flushed successfully.' ] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/system/revert-media', [
+			'methods'             => 'POST',
+			'callback'            => function() {
+				if ( class_exists( 'Exacoat_Store_Enhancements' ) ) {
+					$res = Exacoat_Store_Enhancements::revert_assets_to_flat_uploads();
+					return rest_ensure_response( $res );
+				}
+				return rest_ensure_response( [ 'success' => false, 'message' => 'Store enhancements module not available.' ] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/system/logs', [
+			'methods'             => 'GET',
+			'callback'            => function( WP_REST_Request $request ) {
+				$params = $request->get_params();
+				return rest_ensure_response( class_exists( 'Artmatter_Logger' ) ? Artmatter_Logger::get_logs( $params ) : [] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/system/clear-logs', [
+			'methods'             => 'POST',
+			'callback'            => function() {
+				if ( class_exists( 'Artmatter_Logger' ) ) {
+					Artmatter_Logger::clear_logs();
+				}
+				return rest_ensure_response( [ 'success' => true, 'message' => 'All system event logs cleared.' ] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/system/purge-logs', [
+			'methods'             => 'POST',
+			'callback'            => function( WP_REST_Request $request ) {
+				$params = $request->get_json_params() ?: $request->get_params();
+				$days   = intval( $params['days'] ?? 7 );
+				$purged = class_exists( 'Artmatter_Logger' ) ? Artmatter_Logger::purge_old_logs( $days ) : 0;
+				return rest_ensure_response( [ 'success' => true, 'message' => "Purged {$purged} old event logs." ] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		// Order Management & Fulfillment Routes
+		$register( '/orders', [
+			'methods'             => [ 'GET', 'POST' ],
+			'callback'            => [ 'Artmatter_Order_Manager', 'get_orders' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/orders/analytics', [
+			'methods'             => 'GET',
+			'callback'            => [ 'Artmatter_Order_Manager', 'get_sales_analytics' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/orders/(?P<id>\d+)', [
+			'methods'             => [ 'GET' ],
+			'callback'            => [ 'Artmatter_Order_Manager', 'get_single_order' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/orders/(?P<id>\d+)/status', [
+			'methods'             => [ 'POST' ],
+			'callback'            => [ 'Artmatter_Order_Manager', 'update_order_status' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/orders/(?P<id>\d+)/fulfill', [
+			'methods'             => [ 'POST' ],
+			'callback'            => [ 'Artmatter_Order_Manager', 'fulfill_order' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/orders/(?P<id>\d+)/notes', [
+			'methods'             => [ 'GET', 'POST' ],
+			'callback'            => [ 'Artmatter_Order_Manager', 'handle_order_notes' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/orders/(?P<id>\d+)/refund', [
+			'methods'             => [ 'POST' ],
+			'callback'            => [ 'Artmatter_Order_Manager', 'process_refund' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+	}
+
+	public function rest_get_health_status( WP_REST_Request $request ) {
+		global $wp_version;
+
+		$response = [
+			'status'           => 'online',
+			'plugin_version'   => defined( 'EXACOAT_CORE_VERSION' ) ? EXACOAT_CORE_VERSION : '0.0.8',
+			'site_name'        => get_bloginfo( 'name' ),
+			'site_url'         => home_url(),
+			'wp_version'       => $wp_version,
+			'wc_version'       => class_exists( 'WooCommerce' ) ? WC()->version : 'Not Installed',
+			'php_version'      => PHP_VERSION,
+			'active_modules'   => [
+				'shipping_tracker'  => (bool) self::get_setting( 'enable_shipping_tracker', 1 ),
+				'order_manager'     => (bool) self::get_setting( 'enable_order_manager', 1 ),
+				'review_manager'    => (bool) self::get_setting( 'enable_review_manager', 1 ),
+			],
+			'timestamp'        => current_time( 'mysql' ),
+		];
+
+		return rest_ensure_response( $response );
+	}
+
+	public function rest_handle_ping( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		return rest_ensure_response( [
+			'success'   => true,
+			'message'   => 'Pong from Exacoat Core WordPress master plugin',
+			'received'  => $params,
+			'timestamp' => current_time( 'mysql' ),
+		] );
+	}
+
+	public function rest_submit_contact( WP_REST_Request $request ) {
+		$params = $request->get_json_params() ?: $request->get_params();
+
+		// Silently accept bot submissions so the endpoint does not teach bots how to bypass the trap.
+		if ( ! empty( $params['website'] ) ) {
+			return rest_ensure_response( [ 'success' => true ] );
+		}
+
+		$name       = sanitize_text_field( $params['name'] ?? '' );
+		$email      = sanitize_email( $params['email'] ?? '' );
+		$topic      = sanitize_key( $params['topic'] ?? 'general' );
+		$subject    = sanitize_text_field( $params['subject'] ?? '' );
+		$order      = sanitize_text_field( $params['order_number'] ?? '' );
+		$message    = sanitize_textarea_field( $params['message'] ?? '' );
+		$started_at = absint( $params['started_at'] ?? 0 );
+		$topics     = [ 'general', 'order', 'business', 'product', 'press' ];
+
+		if ( ! in_array( $topic, $topics, true ) ) {
+			$topic = 'general';
+		}
+
+		if ( mb_strlen( $name ) < 2 || mb_strlen( $name ) > 120 || ! is_email( $email ) ) {
+			return new WP_Error( 'invalid_contact', 'Enter a valid name and email address.', [ 'status' => 400 ] );
+		}
+
+		if ( mb_strlen( $subject ) < 3 || mb_strlen( $subject ) > 160 || mb_strlen( $message ) < 10 || mb_strlen( $message ) > 5000 ) {
+			return new WP_Error( 'invalid_message', 'Enter a subject and a message between 10 and 5,000 characters.', [ 'status' => 400 ] );
+		}
+
+		$now_ms = time() * 1000;
+		if ( ! $started_at || $started_at > $now_ms || ( $now_ms - $started_at ) < 3000 || ( $now_ms - $started_at ) > 2 * HOUR_IN_SECONDS * 1000 ) {
+			return new WP_Error( 'invalid_submission', 'Please refresh the page and try again.', [ 'status' => 400 ] );
+		}
+
+		$forwarded_ip = $request->get_header( 'X-Exacoat-Client-IP' ) ?: $request->get_header( 'X-Artmatter-Client-IP' );
+		$remote_ip    = sanitize_text_field( $forwarded_ip ?: ( $_SERVER['REMOTE_ADDR'] ?? 'unknown' ) );
+		$rate_key     = 'exacoat_contact_rate_' . md5( $remote_ip );
+		$rate_count   = (int) get_transient( $rate_key );
+		if ( $rate_count >= 5 ) {
+			return new WP_Error( 'contact_rate_limited', 'Too many messages. Please try again later.', [ 'status' => 429 ] );
+		}
+
+		set_transient( $rate_key, $rate_count + 1, HOUR_IN_SECONDS );
+
+		$topic_labels = [
+			'general'  => 'General inquiry',
+			'order'    => 'Order support',
+			'business' => 'Business project',
+			'product'  => 'Product question',
+			'press'    => 'Press and partnership',
+		];
+		$topic_label = $topic_labels[ $topic ] ?? 'General inquiry';
+		$email_title = sprintf( '[Contact] %s: %s', $topic_label, $subject );
+		$rows        = [
+			'Name'         => $name,
+			'Email'        => $email,
+			'Topic'        => $topic_label,
+			'Order number' => $order ?: 'Not provided',
+		];
+		$details_html = '';
+		foreach ( $rows as $label => $value ) {
+			$details_html .= '<tr><td style="padding:8px 16px 8px 0;color:#71717a;vertical-align:top;white-space:nowrap;">' . esc_html( $label ) . '</td><td style="padding:8px 0;color:#f4f4f5;">' . esc_html( $value ) . '</td></tr>';
+		}
+
+		$html = '<div style="background:#08090b;color:#f4f4f5;padding:32px;font-family:Arial,sans-serif;line-height:1.6;">'
+			. '<div style="max-width:680px;margin:0 auto;">'
+			. '<p style="color:#f3aa18;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;">New website contact</p>'
+			. '<h1 style="font-size:28px;line-height:1.2;margin:12px 0 24px;">' . esc_html( $subject ) . '</h1>'
+			. '<table role="presentation" style="border-collapse:collapse;margin-bottom:24px;">' . $details_html . '</table>'
+			. '<div style="border-top:1px solid rgba(255,255,255,0.12);padding-top:24px;white-space:pre-wrap;">' . nl2br( esc_html( $message ) ) . '</div>'
+			. '</div></div>';
+
+		$result = class_exists( 'Artmatter_Email_Engine' ) ? Artmatter_Email_Engine::send_email( 'website_contact', 'support@exacoat.com', 'Exacoat Support', [
+			'subject'    => $email_title,
+			'htmlbody'   => $html,
+			'reply_to'   => $email,
+			'reply_name' => $name,
+		] ) : [ 'success' => true ];
+
+		if ( empty( $result['success'] ) ) {
+			return new WP_Error( 'contact_delivery_failed', 'Your message could not be sent. Please contact support@exacoat.com directly.', [ 'status' => 502 ] );
+		}
+
+		return rest_ensure_response( [
+			'success' => true,
+			'message' => 'Your message has been sent.',
+		] );
+	}
+
+	public function rest_get_settings( WP_REST_Request $request ) {
+		$settings = self::get_settings();
+		$environment_values = [
+			'gemini_api_key'        => defined( 'EXA_GEMINI_API_KEY' ) ? EXA_GEMINI_API_KEY : ( defined( 'AM_GEMINI_API_KEY' ) ? AM_GEMINI_API_KEY : ( defined( 'GEMINI_API_KEY' ) ? GEMINI_API_KEY : getenv( 'EXA_GEMINI_API_KEY' ) ) ),
+			'openai_api_key'        => defined( 'EXA_OPENAI_API_KEY' ) ? EXA_OPENAI_API_KEY : ( defined( 'AM_OPENAI_API_KEY' ) ? AM_OPENAI_API_KEY : ( defined( 'OPENAI_API_KEY' ) ? OPENAI_API_KEY : getenv( 'EXA_OPENAI_API_KEY' ) ) ),
+			'pushover_app_token'    => defined( 'AM_PUSHOVER_APP_TOKEN' ) ? AM_PUSHOVER_APP_TOKEN : getenv( 'AM_PUSHOVER_APP_TOKEN' ),
+			'pushover_user_key'     => defined( 'AM_PUSHOVER_USER_KEY' ) ? AM_PUSHOVER_USER_KEY : getenv( 'AM_PUSHOVER_USER_KEY' ),
+			'r2_account_id'         => defined( 'AM_R2_ACCOUNT_ID' ) ? AM_R2_ACCOUNT_ID : getenv( 'AM_R2_ACCOUNT_ID' ),
+			'r2_bucket'             => defined( 'AM_R2_BUCKET' ) ? AM_R2_BUCKET : getenv( 'AM_R2_BUCKET' ),
+			'r2_access_key'         => defined( 'AM_R2_ACCESS_KEY' ) ? AM_R2_ACCESS_KEY : getenv( 'AM_R2_ACCESS_KEY' ),
+			'r2_secret_key'         => defined( 'AM_R2_SECRET_KEY' ) ? AM_R2_SECRET_KEY : getenv( 'AM_R2_SECRET_KEY' ),
+			'cloudflare_zone_id'    => defined( 'EXA_CLOUDFLARE_ZONE_ID' ) ? EXA_CLOUDFLARE_ZONE_ID : ( defined( 'AM_CLOUDFLARE_ZONE_ID' ) ? AM_CLOUDFLARE_ZONE_ID : getenv( 'EXA_CLOUDFLARE_ZONE_ID' ) ),
+			'cloudflare_api_token'  => defined( 'EXA_CLOUDFLARE_API_TOKEN' ) ? EXA_CLOUDFLARE_API_TOKEN : ( defined( 'AM_CLOUDFLARE_API_TOKEN' ) ? AM_CLOUDFLARE_API_TOKEN : getenv( 'EXA_CLOUDFLARE_API_TOKEN' ) ),
+			'drime_access_token'     => defined( 'AM_DRIME_ACCESS_TOKEN' ) ? AM_DRIME_ACCESS_TOKEN : getenv( 'AM_DRIME_ACCESS_TOKEN' ),
+			'drime_workspace_id'     => defined( 'AM_DRIME_WORKSPACE_ID' ) ? AM_DRIME_WORKSPACE_ID : getenv( 'AM_DRIME_WORKSPACE_ID' ),
+			'drime_parent_folder_id' => defined( 'AM_DRIME_PARENT_FOLDER_ID' ) ? AM_DRIME_PARENT_FOLDER_ID : getenv( 'AM_DRIME_PARENT_FOLDER_ID' ),
+			'supabase_service_role_key' => defined( 'AM_SUPABASE_SERVICE_ROLE_KEY' ) ? AM_SUPABASE_SERVICE_ROLE_KEY : getenv( 'AM_SUPABASE_SERVICE_ROLE_KEY' ),
+		];
+		foreach ( [ 'r2_account_id', 'r2_bucket', 'cloudflare_zone_id', 'drime_workspace_id', 'drime_parent_folder_id' ] as $public_environment_key ) {
+			if ( ! empty( $environment_values[ $public_environment_key ] ) ) {
+				$settings[ $public_environment_key ] = $environment_values[ $public_environment_key ];
+			}
+		}
+		$secret_status = [];
+		foreach ( $environment_values as $key => $environment_value ) {
+			$secret_status[ $key ] = [
+				'configured' => ! empty( $environment_value ) || ! empty( $settings[ $key ] ),
+				'source'     => ! empty( $environment_value ) ? 'environment' : ( ! empty( $settings[ $key ] ) ? 'settings' : 'missing' ),
+			];
+		}
+		foreach ( [ 'gemini_api_key', 'openai_api_key', 'r2_access_key', 'r2_secret_key', 'cloudflare_api_token', 'drime_access_token', 'drime_access_key', 'drime_secret_key', 'zeptomail_token', 'pushover_app_token', 'pushover_user_key', 'supabase_service_role_key', 'webhook_secret' ] as $secret_key ) {
+			unset( $settings[ $secret_key ] );
+		}
+		return rest_ensure_response( [
+			'success'  => true,
+			'settings' => $settings,
+			'secret_status' => $secret_status,
+		] );
+	}
+
+	public function rest_get_public_feelform_settings() {
+		if ( ! class_exists( 'Artmatter_Feelform_3D' ) ) {
+			return new WP_Error( 'feelform_unavailable', 'FeelForm settings are unavailable.', [ 'status' => 503 ] );
+		}
+
+		$response = rest_ensure_response( [
+			'success'  => true,
+			'settings' => Artmatter_Feelform_3D::get_options(),
+		] );
+		$response->header( 'Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0' );
+		return $response;
+	}
+
+	public function rest_save_settings( WP_REST_Request $request ) {
+		$new_settings = $request->get_json_params() ?: $request->get_params();
+		if ( empty( $new_settings ) || ! is_array( $new_settings ) ) {
+			return new WP_Error( 'invalid_data', 'Settings payload must be an object', [ 'status' => 400 ] );
+		}
+
+		$current = self::get_settings();
+		$secret_keys = [
+			'gemini_api_key',
+			'openai_api_key',
+			'r2_secret_key',
+			'r2_access_key',
+			'cloudflare_api_token',
+			'drime_access_token',
+			'drime_secret_key',
+			'zeptomail_token',
+			'pushover_app_token',
+			'pushover_user_key',
+		];
+
+		foreach ( $new_settings as $key => $val ) {
+			if ( $val !== null ) {
+				$clean_val = is_string( $val ) ? trim( $val ) : $val;
+				if ( in_array( $key, $secret_keys, true ) && $clean_val === '' && ! empty( $current[ $key ] ) ) {
+					continue;
+				}
+				$current[ sanitize_key( $key ) ] = $clean_val;
+			}
+		}
+
+		$target_gemini_model = sanitize_text_field( $new_settings['gemini_model'] ?? $new_settings['ai_model'] ?? '' );
+		if ( ! empty( $target_gemini_model ) ) {
+			$current['gemini_model'] = $target_gemini_model;
+			$current['ai_model']     = $target_gemini_model;
+		}
+
+		$target_openai_model = sanitize_text_field( $new_settings['openai_model'] ?? '' );
+		if ( ! empty( $target_openai_model ) ) {
+			$current['openai_model'] = $target_openai_model;
+		}
+
+		$target_r2_bucket = sanitize_text_field( $new_settings['r2_bucket_name'] ?? $new_settings['r2_bucket'] ?? '' );
+		if ( ! empty( $target_r2_bucket ) ) {
+			$current['r2_bucket_name'] = $target_r2_bucket;
+			$current['r2_bucket']      = $target_r2_bucket;
+		}
+
+		update_option( 'exacoat_core_settings', $current );
+		update_option( 'artmatter_core_settings', $current );
+		self::clear_settings_cache();
+
+		$saved_keys = implode( ', ', array_keys( $new_settings ) );
+		if ( class_exists( 'Artmatter_Logger' ) ) {
+			Artmatter_Logger::log( 'success', 'settings', "Remote Settings Update via Exacoat Manager ERP: [{$saved_keys}]", [ 'updated_keys' => array_keys( $new_settings ) ] );
+		}
+
+		return rest_ensure_response( [
+			'success'  => true,
+			'message'  => 'Plugin settings saved successfully',
+			'settings' => $current,
+		] );
+	}
+
+	public static function log( $message, $level = 'info', $channel = 'general', $context = [] ) {
+		if ( class_exists( 'Artmatter_Logger' ) ) {
+			Artmatter_Logger::log( $level, $channel, $message, $context );
+		} elseif ( function_exists( 'wc_get_logger' ) ) {
+			$logger  = wc_get_logger();
+			$wc_context = [ 'source' => 'exacoat-' . $channel ];
+			if ( $level === 'error' ) {
+				$logger->error( $message, $wc_context );
+			} elseif ( $level === 'warning' ) {
+				$logger->warning( $message, $wc_context );
+			} else {
+				$logger->info( $message, $wc_context );
+			}
+		}
+	}
+}
+
+}
+
+// Backward compatibility alias
+if ( ! class_exists( 'Artmatter_Core', false ) ) {
+	class_alias( 'Exacoat_Core', 'Artmatter_Core' );
+}

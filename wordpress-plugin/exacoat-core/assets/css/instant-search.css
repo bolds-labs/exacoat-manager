@@ -1,0 +1,1889 @@
+/**
+ * Artmatter Instant Live Search Styles
+ * Luxury Dark Glassmorphism with #f3aa18 Neon Accents & Fluid Animations
+ */
+
+/* 1. Trigger Search Bar & Trigger Button */
+.artmatter-search-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  color: #a1a1aa;
+  font-family: inherit;
+  font-size: 13px;
+  user-select: none;
+  max-width: 320px;
+  width: 100%;
+}
+.artmatter-search-bar-wrap:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+.artmatter-search-bar-wrap .artmatter-search-icon {
+  flex-shrink: 0;
+  stroke: #71717a;
+  transition: stroke 0.2s;
+}
+.artmatter-search-bar-wrap:hover .artmatter-search-icon {
+  stroke: #f3aa18;
+}
+.artmatter-search-bar-wrap .artmatter-search-placeholder {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.artmatter-search-kbd-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.artmatter-search-kbd-badge kbd,
+.artmatter-close-kbd,
+.artmatter-footer-hint kbd {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #a1a1aa;
+  line-height: 1.2;
+}
+
+.artmatter-search-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 8px 12px;
+  color: #e4e4e7;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.artmatter-search-trigger-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(169, 255, 93, 0.4);
+  color: #f3aa18;
+}
+.artmatter-search-trigger-btn .artmatter-search-icon {
+  flex-shrink: 0;
+}
+
+/* 2. Modal Overlay & Dialog */
+.artmatter-search-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999999;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 50px 16px 20px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+.artmatter-search-modal * {
+  box-sizing: border-box;
+}
+.artmatter-search-modal.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.artmatter-search-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(4, 4, 4, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  opacity: 0;
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.artmatter-search-modal.is-open .artmatter-search-backdrop {
+  opacity: 1;
+}
+
+.artmatter-search-dialog {
+  position: relative;
+  width: 100%;
+  max-width: 620px;
+  max-height: 84vh;
+  background: #0d0d10;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 30px 80px -10px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-12px) scale(0.97);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.artmatter-search-modal.is-open .artmatter-search-dialog {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* 3. Header Input */
+.artmatter-search-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: #121216;
+}
+.artmatter-search-input-icon {
+  flex-shrink: 0;
+  stroke: #f3aa18;
+}
+.artmatter-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 15px;
+  color: #ffffff;
+  font-family: inherit;
+  line-height: 1.4;
+  padding: 0;
+}
+.artmatter-search-input::placeholder {
+  color: #71717a;
+}
+.artmatter-search-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.artmatter-search-clear,
+.artmatter-search-close-btn {
+  background: transparent;
+  border: none;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #71717a;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s;
+}
+.artmatter-search-clear:hover,
+.artmatter-search-close-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+.artmatter-close-icon {
+  display: none;
+}
+
+/* 4. Filter Tabs */
+.artmatter-search-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: #0d0d10;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.artmatter-search-tabs::-webkit-scrollbar {
+  display: none;
+}
+.artmatter-tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 3.5px 9px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #a1a1aa;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.artmatter-tab-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.04);
+}
+.artmatter-tab-btn.active {
+  background: rgba(169, 255, 93, 0.1);
+  border-color: rgba(169, 255, 93, 0.25);
+  color: #f3aa18;
+}
+.artmatter-tab-count {
+  font-size: 9.5px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.5px 4.5px;
+  border-radius: 8px;
+  color: #d4d4d8;
+}
+.artmatter-tab-btn.active .artmatter-tab-count {
+  background: rgba(169, 255, 93, 0.25);
+  color: #f3aa18;
+}
+
+/* 5. Results Body */
+.artmatter-search-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+.artmatter-search-body::-webkit-scrollbar {
+  width: 5px;
+}
+.artmatter-search-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+/* Section Header */
+.artmatter-result-group {
+  margin-bottom: 14px;
+}
+.artmatter-result-group:last-child {
+  margin-bottom: 2px;
+}
+.artmatter-group-title {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+  color: #71717a;
+  padding: 4px 6px;
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Result Items */
+.artmatter-search-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.12s ease-out;
+  cursor: pointer;
+  border: 1px solid transparent;
+  animation: artmatterItemIn 0.18s ease-out both;
+}
+@keyframes artmatterItemIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.artmatter-search-item:hover,
+.artmatter-search-item.is-selected {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.artmatter-search-item.is-selected {
+  background: rgba(169, 255, 93, 0.08);
+  border-color: rgba(169, 255, 93, 0.2);
+}
+
+/* Item Thumbnails & Avatars */
+.artmatter-item-thumb {
+  width: 48px;
+  height: 62px;
+  border-radius: 4px;
+  background: #18181b;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.artmatter-item-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #18181b;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.artmatter-item-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(169, 255, 93, 0.08);
+  border: 1px solid rgba(169, 255, 93, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f3aa18;
+  flex-shrink: 0;
+}
+
+/* Item Content & Tighter Typography */
+.artmatter-item-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+.artmatter-item-title {
+  font-size: 13.5px;
+  font-weight: 400;
+  color: #f4f4f5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.25;
+}
+.artmatter-item-subtitle {
+  font-size: 11.5px;
+  font-weight: 300;
+  color: #a1a1aa;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+  margin-top: 0;
+}
+
+/* Badge Pill - Compact 8.5px Pill */
+.artmatter-item-pill {
+  font-size: 8.5px;
+  font-weight: 400;
+  font-family: inherit;
+  letter-spacing: 0.01em;
+  padding: 2px 6.5px;
+  border-radius: 9999px;
+  background: rgba(169, 255, 93, 0.1);
+  color: #f3aa18;
+  border: 1px solid rgba(169, 255, 93, 0.25);
+  white-space: nowrap;
+  line-height: 1 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Item Meta (Arrow) */
+.artmatter-item-meta {
+  text-align: right;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.artmatter-item-arrow {
+  color: #52525b;
+  stroke-width: 2;
+  transition: transform 0.15s, color 0.15s;
+}
+.artmatter-search-item:hover .artmatter-item-arrow,
+.artmatter-search-item.is-selected .artmatter-item-arrow {
+  color: #f3aa18;
+  transform: translateX(2px);
+}
+
+/* See All Results Action Button */
+.artmatter-search-see-all-wrap {
+  padding: 12px 16px 14px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: 6px;
+}
+.artmatter-search-see-all-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 9px 14px;
+  background: rgba(169, 255, 93, 0.07);
+  border: 1px solid rgba(169, 255, 93, 0.22);
+  border-radius: 10px;
+  color: #f3aa18;
+  font-size: 12px;
+  font-weight: 400;
+  text-decoration: none;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.artmatter-search-see-all-btn:hover {
+  background: rgba(169, 255, 93, 0.14);
+  border-color: rgba(169, 255, 93, 0.4);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+.artmatter-search-see-all-btn svg {
+  stroke: #f3aa18;
+  transition: transform 0.15s;
+}
+.artmatter-search-see-all-btn:hover svg {
+  stroke: #ffffff;
+  transform: translateX(3px);
+}
+
+/* Highlights */
+mark.artmatter-highlight {
+  background: transparent !important;
+  color: inherit !important;
+  font-weight: inherit !important;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* Empty / No Results State */
+.artmatter-search-empty {
+  text-align: center;
+  padding: 36px 16px;
+  color: #71717a;
+}
+.artmatter-empty-icon {
+  margin-bottom: 10px;
+  color: #52525b;
+}
+.artmatter-empty-title {
+  font-size: 13.5px;
+  font-weight: 400;
+  color: #e4e4e7;
+  margin-bottom: 3px;
+}
+.artmatter-empty-desc {
+  font-size: 11.5px;
+  font-weight: 300;
+  color: #71717a;
+}
+
+/* Loading Skeleton */
+.artmatter-search-loading {
+  padding: 6px 4px;
+}
+.artmatter-skeleton-row {
+  height: 48px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.03) 25%, rgba(255, 255, 255, 0.06) 50%, rgba(255, 255, 255, 0.03) 75%);
+  background-size: 200% 100%;
+  animation: artmatter-skeleton-pulse 1.5s infinite;
+  border-radius: 8px;
+  margin-bottom: 6px;
+}
+@keyframes artmatter-skeleton-pulse {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* 6. Footer Navigation Hints */
+.artmatter-search-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 8px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: #09090c;
+  font-size: 11px;
+  color: #71717a;
+}
+.artmatter-footer-hint {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 7. Mobile Responsive Optimization (Native App-Like Touch Experience) */
+@media (max-width: 640px) {
+  .artmatter-search-modal {
+    padding: 0;
+    align-items: stretch;
+  }
+  .artmatter-search-dialog {
+    max-width: 100%;
+    max-height: 100dvh;
+    height: 100dvh;
+    border-radius: 0;
+    border: none;
+    background: #0d0d10;
+  }
+  .artmatter-search-header {
+    padding: 14px 16px;
+    padding-top: max(14px, env(safe-area-inset-top));
+    gap: 10px;
+    background: #121216;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .artmatter-search-input {
+    font-size: 16px; /* Prevents iOS auto-zoom */
+    line-height: 1.3;
+  }
+  .artmatter-search-input::placeholder {
+    font-size: 15px;
+    color: #71717a;
+  }
+  .artmatter-search-clear,
+  .artmatter-search-close-btn {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .artmatter-close-kbd {
+    display: none;
+  }
+  .artmatter-close-icon {
+    display: block;
+  }
+  .desktop-only {
+    display: none !important;
+  }
+  .artmatter-search-tabs {
+    padding: 10px 16px;
+    gap: 8px;
+    background: #0d0d10;
+    -webkit-overflow-scrolling: touch;
+  }
+  .artmatter-tab-btn {
+    padding: 6px 14px;
+    font-size: 13px;
+    min-height: 34px;
+    border-radius: 9999px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .artmatter-tab-count {
+    font-size: 10.5px;
+    padding: 1px 6px;
+    border-radius: 9999px;
+  }
+  .artmatter-search-body {
+    padding: 10px 14px;
+    padding-bottom: max(32px, env(safe-area-inset-bottom));
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+  .artmatter-group-title {
+    font-size: 11px;
+    padding: 8px 6px 4px 6px;
+  }
+  .artmatter-search-item {
+    padding: 10px 10px;
+    gap: 12px;
+    border-radius: 10px;
+    min-height: 60px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .artmatter-search-item:active {
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .artmatter-item-thumb {
+    width: 44px;
+    height: 58px;
+    border-radius: 4px;
+  }
+  .artmatter-item-avatar {
+    width: 44px;
+    height: 44px;
+  }
+  .artmatter-item-icon-wrap {
+    width: 44px;
+    height: 44px;
+  }
+  .artmatter-item-title {
+    font-size: 14.5px;
+    line-height: 1.3;
+  }
+  .artmatter-item-subtitle {
+    font-size: 12.5px;
+    margin-top: 1px;
+  }
+  .artmatter-search-footer {
+    display: none; /* Hide desktop keyboard hints on mobile */
+  }
+}
+
+/* ==========================================================================
+   8. Dedicated Search Results Page (Museum Mat Pedestal & Orientation Filter)
+   ========================================================================== */
+.artmatter-search-results-page {
+  width: 100%;
+  box-sizing: border-box;
+  color: #ececec;
+  font-family: inherit;
+}
+.artmatter-search-results-page * {
+  box-sizing: border-box;
+}
+
+/* Hero Search Form & Query Status */
+.artmatter-results-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 16px 0 36px 0;
+  width: 100%;
+}
+.artmatter-results-search-form {
+  width: 100%;
+  max-width: 640px;
+}
+.artmatter-results-input-wrap {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+.artmatter-results-search-icon {
+  position: absolute;
+  left: 20px;
+  stroke: #71717a;
+  pointer-events: none;
+  transition: stroke 0.3s ease;
+}
+.artmatter-results-input-wrap:focus-within .artmatter-results-search-icon {
+  stroke: #f3aa18;
+}
+.artmatter-results-search-input {
+  width: 100%;
+  height: 48px;
+  background: #111114;
+  border: 1px solid rgba(169, 255, 93, 0.4);
+  border-radius: 9999px;
+  padding: 0 46px 0 52px;
+  font-size: 14px;
+  font-weight: 300;
+  color: #ffffff;
+  outline: none;
+  font-family: inherit;
+  box-shadow: 0 0 0 2px rgba(169, 255, 93, 0.08);
+  transition: all 0.25s ease;
+}
+.artmatter-results-search-input:focus {
+  border-color: #f3aa18;
+  box-shadow: 0 0 0 4px rgba(169, 255, 93, 0.15);
+  background: #141418;
+}
+.artmatter-results-search-input::placeholder {
+  color: #71717a;
+  font-weight: 300;
+}
+.artmatter-results-search-clear {
+  position: absolute;
+  right: 18px;
+  color: #71717a;
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+.artmatter-results-search-clear:hover {
+  color: #ffffff;
+}
+.artmatter-results-query-stat {
+  margin-top: 14px;
+  font-size: 13.5px;
+  font-weight: 300;
+  color: #a1a1aa;
+  text-align: center;
+}
+.artmatter-stat-count {
+  font-weight: 400;
+  color: #ffffff;
+}
+.artmatter-stat-term {
+  color: #f3aa18;
+  font-weight: 400;
+}
+
+/* Section Heading */
+.artmatter-results-section-heading {
+  font-size: 16px;
+  font-weight: 400;
+  color: #ffffff;
+  margin: 0 0 16px 0;
+  letter-spacing: -0.01em;
+}
+
+/* Matching Artists Grid (Expanded Luxury Cards without Artworks) */
+.artmatter-matching-artists-grid,
+.artmatter-matching-creators-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 20px;
+}
+
+.artmatter-matching-artist-card {
+  text-decoration: none !important;
+  color: inherit !important;
+  cursor: pointer;
+}
+.artmatter-matching-artist-card .artmatter-card-separator {
+  margin: 18px 0;
+}
+
+@media (max-width: 767px) {
+  .artmatter-matching-artists-grid,
+  .artmatter-matching-creators-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+/* Matching Fandoms Grid & Landscape Banner Cards */
+.artmatter-matching-fandoms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+.artmatter-matching-fandom-card {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  height: 130px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: #111114;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 16px;
+  text-decoration: none;
+  color: #ffffff;
+  transition: transform 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+}
+.artmatter-matching-fandom-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+.artmatter-fandom-banner-wrap {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+.artmatter-fandom-banner-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+.artmatter-fandom-banner-placeholder {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: #16161b;
+  z-index: 1;
+}
+.artmatter-fandom-banner-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0.85) 100%);
+  z-index: 2;
+}
+.artmatter-fandom-card-content {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.artmatter-fandom-tag-pill {
+  align-self: flex-start;
+  font-size: 9.5px;
+  font-weight: 400 !important;
+  color: #f3aa18;
+  background: rgba(169, 255, 93, 0.15);
+  border: 1px solid rgba(169, 255, 93, 0.3);
+  border-radius: 9999px;
+  padding: 2.5px 7px;
+  line-height: 1 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 3px;
+  letter-spacing: 0.02em;
+}
+.artmatter-fandom-name {
+  font-size: 15px;
+  font-weight: 400;
+  color: #ffffff;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.artmatter-fandom-count {
+  font-size: 11.5px;
+  color: #a1a1aa;
+  font-weight: 300;
+}
+.artmatter-creator-avatar-placeholder {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(169, 255, 93, 0.08);
+  color: #f3aa18;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.artmatter-creator-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.artmatter-creator-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.artmatter-creator-name {
+  font-size: 14px;
+  font-weight: 400;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.artmatter-creator-badge-pill {
+  font-size: 10px;
+  font-weight: 400 !important;
+  color: #f3aa18;
+  background: rgba(169, 255, 93, 0.09);
+  border: 1px solid rgba(169, 255, 93, 0.28);
+  padding: 2.5px 8px;
+  line-height: 1 !important;
+  border-radius: 9999px;
+  letter-spacing: 0.01em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+.artmatter-creator-art-count {
+  font-size: 11.5px;
+  color: #a1a1aa;
+  font-weight: 300;
+}
+
+/* Orientation Filter Segmented Bar (Shadcn Minimalist Tabs Style) */
+.artmatter-results-orient-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+  margin-bottom: 32px;
+  width: 100%;
+}
+.artmatter-results-orient-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #111114;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0;
+  border-radius: 9999px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+.artmatter-orient-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 16px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #a1a1aa;
+  cursor: pointer;
+  outline: none;
+  font-family: inherit;
+  transition: all 0.3s ease;
+  user-select: none;
+}
+.artmatter-orient-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+}
+.artmatter-orient-btn.active {
+  background: rgba(169, 255, 93, 0.09);
+  border-color: rgba(169, 255, 93, 0.35);
+  color: #f3aa18;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+.artmatter-orient-icon {
+  stroke: currentColor;
+  flex-shrink: 0;
+}
+.artmatter-orient-count {
+  font-size: 9.5px;
+  font-weight: 400;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 6px;
+  border-radius: 9999px;
+  color: #d4d4d8;
+  transition: all 0.3s ease;
+}
+.artmatter-orient-btn.active .artmatter-orient-count {
+  background: rgba(169, 255, 93, 0.22);
+  color: #f3aa18;
+}
+
+/* Collections Dropdown Pill */
+.artmatter-dir-col-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.artmatter-dir-col-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  max-width: 32px;
+  padding: 0;
+  border-radius: 50%;
+  background: #111114;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11.5px;
+  font-weight: 400;
+  color: #a1a1aa;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  transition: all 0.25s ease;
+  user-select: none;
+  outline: none;
+  box-sizing: border-box;
+}
+.artmatter-dir-col-btn:hover,
+.artmatter-dir-col-btn.active,
+.artmatter-dir-col-wrap.open .artmatter-dir-col-btn {
+  background: #18181c;
+  border-color: rgba(169, 255, 93, 0.35);
+  color: #f3aa18;
+}
+.artmatter-col-current-badge {
+  font-size: 9.5px;
+  padding: 1px 5px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #a1a1aa;
+  font-weight: 500;
+}
+.artmatter-dir-col-wrap.open .artmatter-col-current-badge {
+  background: rgba(169, 255, 93, 0.15);
+  color: #f3aa18;
+}
+.artmatter-col-chevron {
+  transition: transform 0.3s ease;
+  color: #71717a;
+}
+.artmatter-dir-col-wrap.open .artmatter-col-chevron {
+  transform: rotate(180deg);
+  color: #f3aa18;
+}
+.artmatter-dir-col-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 170px;
+  background: #141418;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 5px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.artmatter-dir-col-wrap.open .artmatter-dir-col-menu {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.artmatter-col-option {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 7px 11px;
+  font-size: 11.5px;
+  color: #a1a1aa;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: inherit;
+}
+.artmatter-col-option:hover {
+  background: #1e1e24;
+  color: #ffffff;
+}
+.artmatter-col-option.active {
+  color: #f3aa18;
+  background: rgba(169, 255, 93, 0.08);
+  font-weight: 500;
+}
+.artmatter-col-option-badge {
+  font-size: 9.5px;
+  padding: 1px 5px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #71717a;
+}
+.artmatter-col-option.active .artmatter-col-option-badge {
+  background: rgba(169, 255, 93, 0.15);
+  color: #f3aa18;
+}
+
+.artmatter-pinned-pill {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto !important;
+  height: auto !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  color: #000000 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  z-index: 10;
+  pointer-events: none;
+  padding: 0 !important;
+}
+
+/* Sort Dropdown Pill with Top-Down Icon */
+.artmatter-dir-sort-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.artmatter-dir-sort-btn {
+  height: 32px;
+  padding: 0 13px;
+  border-radius: 9999px;
+  background: #111114;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11.5px;
+  font-weight: 400;
+  color: #ececec;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: inherit;
+  transition: all 0.3s ease;
+  user-select: none;
+  outline: none;
+}
+.artmatter-dir-sort-btn:hover,
+.artmatter-dir-sort-wrap.open .artmatter-dir-sort-btn {
+  background: #18181c;
+  border-color: rgba(169, 255, 93, 0.35);
+  color: #f3aa18;
+}
+.artmatter-sort-chevron {
+  transition: transform 0.3s ease;
+  color: #71717a;
+}
+.artmatter-dir-sort-wrap.open .artmatter-sort-chevron {
+  transform: rotate(180deg);
+  color: #f3aa18;
+}
+.artmatter-dir-sort-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 150px;
+  background: #141418;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 5px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.artmatter-dir-sort-wrap.open .artmatter-dir-sort-menu {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.artmatter-sort-option {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 7px 11px;
+  font-size: 11.5px;
+  color: #a1a1aa;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: inherit;
+}
+.artmatter-sort-option:hover {
+  background: #1e1e24;
+  color: #ffffff;
+}
+.artmatter-sort-option.active {
+  color: #f3aa18;
+  background: rgba(169, 255, 93, 0.08);
+  font-weight: 500;
+}
+
+/* Search Circle Button & Smooth Expandable Field */
+.artmatter-dir-search-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.artmatter-dir-search-toggle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #111114;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #a1a1aa;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+  outline: none;
+  padding: 0;
+}
+.artmatter-dir-search-toggle:hover,
+.artmatter-dir-search-wrap.open .artmatter-dir-search-toggle {
+  background: rgba(169, 255, 93, 0.09);
+  border-color: rgba(169, 255, 93, 0.35);
+  color: #f3aa18;
+}
+.artmatter-dir-search-expandable {
+  width: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition: width 0.35s ease, opacity 0.3s ease, margin 0.35s ease;
+  margin-left: 0;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+.artmatter-dir-search-wrap.open .artmatter-dir-search-expandable {
+  width: 220px;
+  opacity: 1;
+  pointer-events: auto;
+  margin-left: 6px;
+}
+.artmatter-dir-search-input {
+  width: 100%;
+  height: 32px;
+  background: #141417;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  padding: 0 28px 0 12px;
+  font-size: 11.5px;
+  font-weight: 300;
+  color: #ffffff;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.artmatter-dir-search-input:focus {
+  border-color: rgba(169, 255, 93, 0.4);
+  box-shadow: 0 0 0 2px rgba(169, 255, 93, 0.08);
+}
+.artmatter-dir-search-input::placeholder {
+  color: #71717a;
+  font-weight: 300;
+}
+.artmatter-dir-search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #71717a;
+  padding: 3px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  border-radius: 50%;
+}
+
+/* Museum Mat Gallery Grid (Portrait Default: 3 Cols Desktop, 2 Cols Mobile) */
+.artmatter-museum-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 36px;
+  width: 100%;
+  position: relative;
+  transition: grid-template-columns 0.5s ease;
+}
+
+/* Landscape Mode: 2 Columns on Desktop, 1 Column on Mobile */
+.artmatter-museum-grid.landscape-view {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 40px;
+}
+
+.artmatter-results-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  transition: transform 0.5s ease, opacity 0.5s ease;
+  will-change: transform, opacity;
+}
+
+/* Product Showcase Card with Subtle Light Angle & Balanced Padding */
+.artmatter-museum-mat-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: auto;
+  background: radial-gradient(circle at var(--artmatter-mat-light-x, 18%) var(--artmatter-mat-light-y, 12%), rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.12) 40%, rgba(0, 0, 0, 0.06) 75%, rgba(0, 0, 0, 0.15) 100%), var(--artmatter-mat-bg, #c6c5c2);
+  border-radius: 2px;
+  padding: 64px;
+  text-decoration: none;
+  overflow: visible;
+  position: relative;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+  transition: background 0.5s ease, box-shadow 0.5s ease;
+  box-sizing: border-box;
+}
+.artmatter-museum-mat-card:hover {
+  background: radial-gradient(circle at var(--artmatter-mat-light-x, 18%) var(--artmatter-mat-light-y, 12%), rgba(255, 255, 255, 0.46) 0%, rgba(255, 255, 255, 0.16) 42%, rgba(0, 0, 0, 0.05) 75%, rgba(0, 0, 0, 0.13) 100%), var(--artmatter-mat-bg, #c6c5c2);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.44);
+}
+
+@media (max-width: 1024px) {
+  .artmatter-museum-mat-card {
+    padding: 56px;
+  }
+}
+@media (max-width: 768px) {
+  .artmatter-museum-mat-card {
+    padding: 52px;
+  }
+}
+@media (max-width: 480px) {
+  .artmatter-museum-mat-card {
+    padding: 48px;
+  }
+}
+
+.artmatter-mobile-col-toggle {
+  display: none !important;
+}
+
+.artmatter-pinned-pill {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px !important;
+  height: 24px !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  color: #000000 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  z-index: 10;
+  pointer-events: none;
+  padding: 0 !important;
+}
+.artmatter-pinned-pill svg {
+  transform: rotate(45deg);
+  display: block;
+  width: 19px !important;
+  height: 19px !important;
+  stroke: #000000 !important;
+  color: #000000 !important;
+}
+
+/* Card Bookmark / Wishlist Toggle (Reveals on Hover, Top-Right) */
+.artmatter-card-bookmark-btn {
+  position: absolute !important;
+  top: 14px !important;
+  right: 14px !important;
+  left: auto !important;
+  bottom: auto !important;
+  width: 24px !important;
+  height: 24px !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  color: #000000 !important;
+  cursor: pointer !important;
+  z-index: 12 !important;
+  outline: none !important;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.22s ease, transform 0.22s ease !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+.artmatter-museum-mat-card:hover .artmatter-card-bookmark-btn {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+}
+.artmatter-card-bookmark-btn.is-active {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.artmatter-card-bookmark-btn .artmatter-bookmark-icon {
+  width: 18px !important;
+  height: 18px !important;
+  stroke: #000000 !important;
+  fill: none;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), fill 0.2s ease, stroke 0.2s ease;
+  display: block;
+}
+.artmatter-card-bookmark-btn.is-active .artmatter-bookmark-icon {
+  fill: #000000 !important;
+  stroke: #000000 !important;
+}
+.artmatter-card-bookmark-btn:hover {
+  transform: scale(1.15) !important;
+  background: transparent !important;
+  border: none !important;
+}
+
+/* If pinned icon exists on card, position bookmark button to the left of the pin */
+.artmatter-card-bookmark-btn.has-pinned-neighbor,
+.artmatter-museum-mat-card:has(.artmatter-pinned-pill) .artmatter-card-bookmark-btn,
+.artmatter-results-item:has(.artmatter-pinned-pill) .artmatter-card-bookmark-btn {
+  right: 44px !important;
+  left: auto !important;
+}
+
+/* Mounted Artwork inside Mat Frame with Realistic Volumetric Plate Relief & Top-Left Sun Shadow (Stuck-to-Wall resting state) */
+.artmatter-museum-art-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  aspect-ratio: 1 / 1.4;
+  background: rgba(255, 255, 255, 0.05);
+  line-height: 0;
+  border: none;
+  border-radius: 0;
+  overflow: hidden;
+  box-shadow:
+    var(--artmatter-hl-x, 0px) var(--artmatter-hl-y, -1px) 0 0.5px rgba(255, 255, 255, 0.15),
+    var(--artmatter-sh-rest-x, 0px) var(--artmatter-sh-rest-y, 2.5px) 1.5px 0 rgba(0, 0, 0, 0.38),
+    calc(var(--artmatter-sh-rest-x, 0px) * 0.7) calc(var(--artmatter-sh-rest-y, 2.5px) * 1.4) 4px 0 rgba(0, 0, 0, 0.45);
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.5s ease;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Metal Plate Micro-Bevel Chamfer Edge (Top-Left Highlight & Bottom-Right Drop) */
+.artmatter-museum-art-wrap::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border: 2px solid rgba(120, 120, 128, 0.18);
+  border-top-color: #52525b; /* subtle luxury dark grey */
+  border-radius: 50%;
+  animation: amTactileSpin 0.8s linear infinite;
+  z-index: 1;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.artmatter-museum-art-wrap.is-loaded::before {
+  display: none !important;
+}
+
+.artmatter-museum-art-wrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 0;
+  box-shadow: inset var(--artmatter-occ-x, 0px) var(--artmatter-occ-y, 1px) 0.5px rgba(255, 255, 255, 0.32), inset calc(var(--artmatter-occ-x, 0px) * -1) calc(var(--artmatter-occ-y, 1px) * -1) 0.5px rgba(0, 0, 0, 0.48);
+  z-index: 3;
+  transform: translateZ(0);
+  box-sizing: border-box;
+}
+
+/* Subtle Realistic Lift Dimension on Mat Hover */
+.artmatter-museum-mat-card:hover .artmatter-museum-art-wrap {
+  transform: scale(1.012) translateZ(0);
+  box-shadow:
+    var(--artmatter-hl-x, 0px) var(--artmatter-hl-y, -1px) 0 0.5px rgba(255, 255, 255, 0.22),
+    -2px 14px 16px -2px rgba(0, 0, 0, 0.22),
+    2px 14px 16px -2px rgba(0, 0, 0, 0.22),
+    0px 6px 8px -2px rgba(0, 0, 0, 0.48),
+    0px 14px 20px -3px rgba(0, 0, 0, 0.55),
+    0px 26px 42px 0 rgba(0, 0, 0, 0.65);
+}
+
+.artmatter-museum-mat-card.is-landscape .artmatter-museum-art-wrap,
+.artmatter-results-item[data-orient="landscape"] .artmatter-museum-art-wrap,
+.artmatter-results-item.is-landscape .artmatter-museum-art-wrap {
+  width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 1.4 / 1 !important;
+}
+
+/* Full Artwork Image - Natural Ratio, No Crop, No Black Letterbox */
+.artmatter-museum-art-img,
+.artmatter-poster-img {
+  width: 100% !important;
+  height: 100% !important;
+  aspect-ratio: 1 / 1.4 !important;
+  object-fit: cover !important;
+  display: block !important;
+  border-radius: 0 !important;
+  background: transparent;
+  position: relative;
+  z-index: 2;
+  transition: opacity 0.3s ease-out;
+}
+
+.artmatter-museum-grid.landscape-view .artmatter-poster-img,
+.artmatter-museum-grid.landscape-view .artmatter-museum-art-img,
+.artmatter-museum-grid.landscape-view .poster-lighting img,
+.artmatter-results-item[data-orient="landscape"] .artmatter-poster-img,
+.artmatter-results-item[data-orient="landscape"] .artmatter-museum-art-img,
+.artmatter-results-item[data-orient="landscape"] .poster-lighting img,
+.artmatter-results-item.is-landscape .artmatter-poster-img,
+.artmatter-results-item.is-landscape .artmatter-museum-art-img,
+.artmatter-results-item.is-landscape .poster-lighting img,
+.artmatter-museum-mat-card.is-landscape .artmatter-poster-img,
+.artmatter-museum-mat-card.is-landscape .artmatter-museum-art-img,
+.artmatter-museum-mat-card.is-landscape .poster-lighting img,
+.artmatter-poster-img.is-landscape,
+.artmatter-museum-art-img.is-landscape {
+  aspect-ratio: 1.4 / 1 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+/* Item Caption Centered Below Mat Card - Ultra Tight Spacing & Clickable Artist */
+.artmatter-results-item-caption {
+  margin-top: 10px;
+  text-align: center;
+  width: 100%;
+  padding: 0 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0px;
+}
+.artmatter-results-item-title {
+  font-size: 13.5px;
+  line-height: 1.25;
+  font-weight: 400;
+  color: #ececec;
+  text-decoration: none;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding: 0;
+  transition: color 0.2s ease;
+}
+.artmatter-results-item-title:hover {
+  color: #f3aa18;
+}
+.artmatter-results-item-artist,
+a.artmatter-results-item-artist {
+  font-size: 11.5px;
+  line-height: 1.2;
+  font-weight: 300;
+  color: #71717a;
+  text-decoration: none;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  margin-top: 2px;
+  padding: 0;
+  transition: color 0.2s ease;
+}
+a.artmatter-results-item-artist:hover {
+  color: #ffffff;
+}
+
+/* Responsive Rules: 2 Cols Portrait / 2 Cols Landscape on Tablet */
+@media (max-width: 900px) {
+  .artmatter-museum-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+  }
+  .artmatter-museum-grid.landscape-view {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 28px;
+  }
+  .artmatter-museum-mat-card {
+    padding: 38px;
+  }
+}
+
+/* Responsive Rules: 2 Cols Portrait / 1 Col Landscape on Mobile */
+@media (max-width: 600px) {
+  .artmatter-museum-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+  .artmatter-museum-grid.landscape-view {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+  .artmatter-museum-mat-card {
+    padding: 24px;
+  }
+  .artmatter-results-item-title {
+    font-size: 12px;
+  }
+  .artmatter-results-item-artist {
+    font-size: 10.5px;
+  }
+}
+
+/* Responsive Topbar Layout for Mobile & Tablet */
+@media (max-width: 768px) {
+  .artmatter-dir-controls-row {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    width: 100% !important;
+    flex-wrap: nowrap !important;
+  }
+  .artmatter-results-orient-bar {
+    display: inline-flex !important;
+    width: auto !important;
+    flex: 0 0 auto !important;
+    box-sizing: border-box !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 9999px !important;
+  }
+  .artmatter-orient-btn {
+    flex: none !important;
+    width: auto !important;
+    justify-content: center !important;
+    text-align: center !important;
+    padding: 0 10px !important;
+    font-size: 11px !important;
+    height: 34px !important;
+    gap: 4px !important;
+    border-radius: 9999px !important;
+  }
+  .artmatter-dir-actions {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    width: auto !important;
+    flex: 0 0 auto !important;
+    gap: 6px !important;
+    flex-wrap: nowrap !important;
+    margin-left: auto !important;
+  }
+  .artmatter-dir-col-wrap {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    max-width: fit-content !important;
+    margin: 0 !important;
+  }
+  .artmatter-dir-col-btn {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    border-radius: 50% !important;
+    padding: 0 !important;
+    justify-content: center !important;
+    display: inline-flex !important;
+    align-items: center !important;
+  }
+  .artmatter-dir-sort-wrap {
+    flex-shrink: 0 !important;
+    margin: 0 !important;
+  }
+  .artmatter-dir-sort-btn {
+    padding: 0 !important;
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    justify-content: center !important;
+    border-radius: 50% !important;
+  }
+  .artmatter-dir-sort-btn .artmatter-sort-current-label,
+  .artmatter-dir-sort-btn .artmatter-sort-chevron {
+    display: none !important;
+  }
+  .artmatter-dir-search-wrap {
+    flex-shrink: 0 !important;
+    margin: 0 !important;
+  }
+  .artmatter-mobile-col-toggle {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    border-radius: 50% !important;
+    padding: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    aspect-ratio: 1 / 1 !important;
+    flex-shrink: 0 !important;
+    background: #111114 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    color: #ececec !important;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    cursor: pointer !important;
+    outline: none !important;
+    box-sizing: border-box !important;
+  }
+  .artmatter-mobile-col-toggle:hover,
+  .artmatter-mobile-col-toggle:active {
+    background: #18181c !important;
+    border-color: rgba(169, 255, 93, 0.35) !important;
+    color: #f3aa18 !important;
+  }
+
+  .artmatter-museum-grid[data-mobile-cols="2"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+  }
+  .artmatter-museum-grid[data-mobile-cols="2"] .artmatter-museum-mat-card {
+    padding: 28px !important;
+  }
+  .artmatter-museum-grid[data-mobile-cols="2"] .artmatter-results-item-title {
+    font-size: 11.5px !important;
+  }
+  .artmatter-museum-grid[data-mobile-cols="2"] .artmatter-results-item-artist {
+    font-size: 10px !important;
+  }
+  .artmatter-museum-grid[data-mobile-cols="2"] .artmatter-pinned-pill {
+    width: 18px !important;
+    height: 18px !important;
+    top: 8px !important;
+    right: 8px !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+  .artmatter-museum-grid[data-mobile-cols="2"] .artmatter-pinned-pill svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+  .artmatter-museum-grid[data-mobile-cols="2"] .artmatter-card-bookmark-btn {
+    top: 8px !important;
+    right: 8px !important;
+    left: auto !important;
+    width: 18px !important;
+    height: 18px !important;
+  }
+  .artmatter-museum-grid[data-mobile-cols="2"] .artmatter-card-bookmark-btn.has-pinned-neighbor,
+  .artmatter-museum-grid[data-mobile-cols="2"] .artmatter-museum-mat-card:has(.artmatter-pinned-pill) .artmatter-card-bookmark-btn,
+  .artmatter-museum-grid[data-mobile-cols="2"] .artmatter-results-item:has(.artmatter-pinned-pill) .artmatter-card-bookmark-btn {
+    right: 32px !important;
+    left: auto !important;
+  }
+  .artmatter-museum-grid[data-mobile-cols="2"] .artmatter-card-bookmark-btn .artmatter-bookmark-icon {
+    width: 14px !important;
+    height: 14px !important;
+  }
+  .artmatter-museum-grid[data-mobile-cols="1"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 20px !important;
+  }
+  .artmatter-museum-grid[data-mobile-cols="1"] .artmatter-museum-mat-card {
+    padding: 52px !important;
+  }
+
+  /* Centered and Non-Overflowing Mobile Filter Popup Modal */
+  .artmatter-arc-filter-menu,
+  .artmatter-dir-col-wrap.open .artmatter-arc-filter-menu {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(340px, calc(100vw - 32px)) !important;
+    max-width: calc(100vw - 32px) !important;
+    max-height: calc(100vh - 40px) !important;
+    max-height: calc(100dvh - 40px) !important;
+    z-index: 999999 !important;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.95), 0 0 0 100vmax rgba(0, 0, 0, 0.75) !important;
+    border-radius: 18px !important;
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    background: #141417 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+  }
+  .artmatter-filter-tab-pane {
+    max-height: min(280px, 48vh) !important;
+    max-height: min(280px, 48dvh) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+}
+
+/* Toast Notifications (Bottom-Center Luxury Pill) */
+.artmatter-wishlist-toast {
+  position: fixed !important;
+  bottom: 32px !important;
+  left: 50% !important;
+  right: auto !important;
+  z-index: 9999999 !important;
+  background: rgba(14, 14, 18, 0.94) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  border-radius: 9999px !important;
+  padding: 10px 22px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  color: #e4e4e7 !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.75) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  transform: translate(-50%, 20px) scale(0.96) !important;
+  opacity: 0 !important;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  pointer-events: none !important;
+  white-space: nowrap !important;
+  max-width: calc(100vw - 32px) !important;
+  box-sizing: border-box !important;
+  font-family: inherit !important;
+  line-height: 1.3 !important;
+}
+
+.artmatter-wishlist-toast.is-visible {
+  transform: translate(-50%, 0) scale(1) !important;
+  opacity: 1 !important;
+}
+
+.artmatter-wishlist-toast svg {
+  color: #f3aa18;
+  flex-shrink: 0;
+}
+
+.artmatter-wishlist-toast strong {
+  font-weight: 600;
+  color: #ffffff;
+}
+
+@media (max-width: 768px) {
+  .artmatter-wishlist-toast {
+    bottom: 24px !important;
+    padding: 9px 18px !important;
+    font-size: 12px !important;
+    white-space: normal !important;
+    text-align: center !important;
+  }
+}
+
+@keyframes amTactileSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}

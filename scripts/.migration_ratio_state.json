@@ -1,0 +1,2727 @@
+{
+  "completed": {
+    "3722": {
+      "title": "Old Window Watcher",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:19:36.353Z"
+    },
+    "3726": {
+      "title": "Market Whisper",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:19:42.001Z"
+    },
+    "3730": {
+      "title": "Sunlit Village Lane",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:19:39.151Z"
+    },
+    "3767": {
+      "title": "Harbor Morning",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:19:44.814Z"
+    },
+    "3771": {
+      "title": "Hearthlight Quiet",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:19:47.631Z"
+    },
+    "3775": {
+      "title": "Cliffside Blue Noon",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:19:50.431Z"
+    },
+    "3777": {
+      "title": "Sparks in the Forge",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:19:53.139Z"
+    },
+    "3940": {
+      "title": "Echo 1923 Sunrise",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:19:58.725Z"
+    },
+    "3944": {
+      "title": "Frankfurt 1919 Cobalt",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:20:01.535Z"
+    },
+    "3946": {
+      "title": "Meridian 1923",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:19:55.879Z"
+    },
+    "3952": {
+      "title": "Echo 1923 Ocean",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:20:04.455Z"
+    },
+    "3967": {
+      "title": "Resonance 1923",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:21:20.620Z"
+    },
+    "3969": {
+      "title": "Resonance 1923 Hollow",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:20:28.691Z"
+    },
+    "3971": {
+      "title": "Resonance 1923 Green",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:20:17.447Z"
+    },
+    "3979": {
+      "title": "Frankfurt 1919 Green",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:20:20.314Z"
+    },
+    "3983": {
+      "title": "Resonance 1923 Cobalt",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:20:14.577Z"
+    },
+    "3985": {
+      "title": "Resonance 1923 Bold",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:20:07.184Z"
+    },
+    "3987": {
+      "title": "Resonance 1923 Bold Cobalt",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:20:25.971Z"
+    },
+    "3995": {
+      "title": "Radiance 1919",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:20:50.686Z"
+    },
+    "3997": {
+      "title": "Orbit 1919",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:21:23.875Z"
+    },
+    "4003": {
+      "title": "Mosaic 1919",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T15:19:20.602Z"
+    },
+    "4007": {
+      "title": "Playfield 1919",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:20:39.807Z"
+    },
+    "4009": {
+      "title": "Strata 1919 Light",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:21:26.865Z"
+    },
+    "4011": {
+      "title": "Strata 1919",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:21:10.508Z"
+    },
+    "4019": {
+      "title": "Crescent 1919",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:20:53.416Z"
+    },
+    "4021": {
+      "title": "Archway 1919",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:20:45.242Z"
+    },
+    "4023": {
+      "title": "Mesh 1919",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:21:01.869Z"
+    },
+    "4025": {
+      "title": "Echo 1923",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:21:07.436Z"
+    },
+    "4027": {
+      "title": "Echo 1923 Light",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:20:47.943Z"
+    },
+    "4039": {
+      "title": "Echo Terra 1923",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:20:42.461Z"
+    },
+    "4041": {
+      "title": "Current 1923",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:20:34.238Z"
+    },
+    "4043": {
+      "title": "Violet Stack 1923",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:20:56.372Z"
+    },
+    "4051": {
+      "title": "Surf 1923 Noir",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:20:37.037Z"
+    },
+    "4053": {
+      "title": "Surf 1923 Cyan",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:21:17.037Z"
+    },
+    "4055": {
+      "title": "Petal Cross 1919 Noir",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:21:04.687Z"
+    },
+    "4063": {
+      "title": "Petal Cross 1919",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:21:13.769Z"
+    },
+    "4065": {
+      "title": "Petal Cross 1919 Noir Reverse",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:20:31.446Z"
+    },
+    "4067": {
+      "title": "Petal Cross Reverse 1919",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:20:59.076Z"
+    },
+    "4069": {
+      "title": "Petal Cross 1919 Navy",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:20:23.222Z"
+    },
+    "4079": {
+      "title": "Modules 1923",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:21:32.656Z"
+    },
+    "4081": {
+      "title": "Sunstripes 1923",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:21:35.521Z"
+    },
+    "4087": {
+      "title": "Orbits 1923",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:21:29.785Z"
+    },
+    "4089": {
+      "title": "Tiles 1919",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:21:43.980Z"
+    },
+    "4095": {
+      "title": "Weimar Tiles",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:21:38.361Z"
+    },
+    "4097": {
+      "title": "Intersection",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:21:41.167Z"
+    },
+    "4663": {
+      "title": "Cathedral of Noise",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:22:37.343Z"
+    },
+    "10093": {
+      "title": "Love",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:22:46.998Z"
+    },
+    "10106": {
+      "title": "Retro Spective",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:22:56.127Z"
+    },
+    "10113": {
+      "title": "Affection",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:23:08.635Z"
+    },
+    "10168": {
+      "title": "Good Vibes",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:23:17.201Z"
+    },
+    "10173": {
+      "title": "The Embrace",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:23:19.502Z"
+    },
+    "10175": {
+      "title": "Ceramic Forms",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:23:18.302Z"
+    },
+    "10179": {
+      "title": "Le Jardin Moderne",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:23:20.524Z"
+    },
+    "10291": {
+      "title": "Petals at First Light",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:23:23.766Z"
+    },
+    "10293": {
+      "title": "A Thousand Quiet Blooms",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:23:22.736Z"
+    },
+    "10295": {
+      "title": "Illusion in Motion",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:23:21.529Z"
+    },
+    "10457": {
+      "title": "Soft Goodbye",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:23:40.653Z"
+    },
+    "10459": {
+      "title": "Spotted Silence",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:23:34.550Z"
+    },
+    "10461": {
+      "title": "Paper Garden",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:23:51.033Z"
+    },
+    "10465": {
+      "title": "Bodies That Remember",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:23:59.434Z"
+    },
+    "10637": {
+      "title": "Stay Groovy",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:24:14.305Z"
+    },
+    "10641": {
+      "title": "Step loop",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:24:07.479Z"
+    },
+    "10646": {
+      "title": "Protect Your Energy",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:24:21.911Z"
+    },
+    "10650": {
+      "title": "Help Others",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:24:31.617Z"
+    },
+    "10654": {
+      "title": "Don't be stressin'",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:24:36.657Z"
+    },
+    "10657": {
+      "title": "Sweet Balance",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:24:42.711Z"
+    },
+    "10661": {
+      "title": "Good Vibes Only",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:26:00.778Z"
+    },
+    "10664": {
+      "title": "Holly Jolly",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:25:49.675Z"
+    },
+    "10668": {
+      "title": "See Ya",
+      "old_dimensions": "1428x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:25:38.042Z"
+    },
+    "10676": {
+      "title": "Happy Reach",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:25:26.834Z"
+    },
+    "10679": {
+      "title": "One More",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:25:16.929Z"
+    },
+    "10681": {
+      "title": "Good Life",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:25:06.721Z"
+    },
+    "10683": {
+      "title": "My Everything",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:24:56.376Z"
+    },
+    "10687": {
+      "title": "Step Easy",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:24:49.384Z"
+    },
+    "10700": {
+      "title": "No Bad Days",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:26:15.735Z"
+    },
+    "10709": {
+      "title": "Pond with Water Lilies (1907)",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:26:04.458Z"
+    },
+    "10711": {
+      "title": "Jerusalem Artichoke Flowers (1880)",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:26:03.300Z"
+    },
+    "10715": {
+      "title": "Boulevard des Capucines (1873-74)",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:26:02.060Z"
+    },
+    "10723": {
+      "title": "A Corner of the Apartment (1875)",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:26:05.551Z"
+    },
+    "10729": {
+      "title": "Woman Seated under the Willows (1880)",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:26:16.925Z"
+    },
+    "10869": {
+      "title": "Lady with an Ermine",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:26:26.507Z"
+    },
+    "10878": {
+      "title": "Vitruvian Man",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:26:37.860Z"
+    },
+    "10883": {
+      "title": "Mona Lisa",
+      "old_dimensions": "1428x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:26:50.720Z"
+    },
+    "10887": {
+      "title": "Glen Ellis Falls",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:26:53.998Z"
+    },
+    "10889": {
+      "title": "Sunrise on the Matterhorn",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:26:52.949Z"
+    },
+    "10891": {
+      "title": "The Grizzly Giant Sequoia",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:26:51.899Z"
+    },
+    "10896": {
+      "title": "Bridal Veil Falls",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:26:56.087Z"
+    },
+    "10898": {
+      "title": "The Matterhorn",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:26:55.085Z"
+    },
+    "10902": {
+      "title": "Nevada Falls",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:26:57.154Z"
+    },
+    "11130": {
+      "title": "Retro Eats!",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:07.849Z"
+    },
+    "11132": {
+      "title": "Groovy",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:16.687Z"
+    },
+    "11182": {
+      "title": "Vetheuil in Winter",
+      "old_dimensions": "2000x1428",
+      "new_dimensions": "2000x1414",
+      "orientation": "landscape",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:17.797Z"
+    },
+    "11555": {
+      "title": "Self-portrait with Grey Felt Hat",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:20.909Z"
+    },
+    "11557": {
+      "title": "The Caf\u00e9 Terrace at Night",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:19.863Z"
+    },
+    "11559": {
+      "title": "Self-portrait with Bandaged Ear",
+      "old_dimensions": "1428x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:18.796Z"
+    },
+    "11583": {
+      "title": "Falling Through the Sky City",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:24.387Z"
+    },
+    "11585": {
+      "title": "Ponyo Beneath the Waves",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:23.262Z"
+    },
+    "11587": {
+      "title": "Porco Over the Adriatic",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:22.032Z"
+    },
+    "11592": {
+      "title": "Ashitaka of the Forest",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:25.413Z"
+    },
+    "11595": {
+      "title": "San and the Wolf God",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:38.750Z"
+    },
+    "11597": {
+      "title": "The Dragon\u2019s Balance",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:37.699Z"
+    },
+    "11599": {
+      "title": "A Quiet Awakening",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:36.658Z"
+    },
+    "11601": {
+      "title": "Dreams of Flight",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:35.600Z"
+    },
+    "11603": {
+      "title": "City in the Clouds",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:34.483Z"
+    },
+    "11605": {
+      "title": "Riding Forward",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:33.395Z"
+    },
+    "11607": {
+      "title": "Hidden Among Leaves",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:32.259Z"
+    },
+    "11609": {
+      "title": "Falling Light",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:31.052Z"
+    },
+    "11611": {
+      "title": "Sophie\u2019s First Steps",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:29.552Z"
+    },
+    "11613": {
+      "title": "Kiki at the Bakery",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:28.500Z"
+    },
+    "11615": {
+      "title": "The Rainy Bus Stop",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:27.467Z"
+    },
+    "11617": {
+      "title": "Under the Firelight",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:26.417Z"
+    },
+    "11619": {
+      "title": "Shapeshifters of Tama Hills",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:27.861Z"
+    },
+    "11635": {
+      "title": "Lavender Camellia",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:26.805Z"
+    },
+    "11637": {
+      "title": "Dusty Pink Camellia",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:16.233Z"
+    },
+    "11639": {
+      "title": "Muted Pink Camellia",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:10.353Z"
+    },
+    "11641": {
+      "title": "Deep Blue Camellia",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:04.351Z"
+    },
+    "11643": {
+      "title": "Deep Red Camellia",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:29:57.816Z"
+    },
+    "11645": {
+      "title": "Amber Camellia",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:29:52.098Z"
+    },
+    "11647": {
+      "title": "Stillness in Blush",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:29:46.647Z"
+    },
+    "11649": {
+      "title": "Blue That Holds Its Breath",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:29:39.799Z"
+    },
+    "11651": {
+      "title": "Crimson Without Noise",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:29:33.383Z"
+    },
+    "11653": {
+      "title": "Golden Interval",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:29:24.484Z"
+    },
+    "11655": {
+      "title": "Violet After Silence",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:29:16.490Z"
+    },
+    "11657": {
+      "title": "Ember of Restraint",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:29:11.082Z"
+    },
+    "11659": {
+      "title": "Golden Poise",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:29:05.602Z"
+    },
+    "11661": {
+      "title": "Violet Devotion",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:29:00.755Z"
+    },
+    "11663": {
+      "title": "Ember Grace",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:28:55.590Z"
+    },
+    "11665": {
+      "title": "Quiet Resilience",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:28:50.146Z"
+    },
+    "11667": {
+      "title": "Fleeting Spring",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:28:44.307Z"
+    },
+    "11669": {
+      "title": "Soft Devotion",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:28:35.876Z"
+    },
+    "11671": {
+      "title": "Crimson Resolve",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:28:26.027Z"
+    },
+    "11673": {
+      "title": "Stillness in Blue",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:28:14.581Z"
+    },
+    "11675": {
+      "title": "Marguarite - Quiet Radiance",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:28:03.320Z"
+    },
+    "11677": {
+      "title": "Lis - Still Devotion",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:28:02.201Z"
+    },
+    "11679": {
+      "title": "Orchid\u00e9e - Delicate Sovereignty",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:28:01.170Z"
+    },
+    "11681": {
+      "title": "Rose - Enduring Passion",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:28:00.131Z"
+    },
+    "11683": {
+      "title": "Tulipe - Poised Awakening",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:59.124Z"
+    },
+    "11685": {
+      "title": "Cam\u00e9lia - Nocturne Grace",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:58.055Z"
+    },
+    "11687": {
+      "title": "Red Field",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:57.077Z"
+    },
+    "11689": {
+      "title": "Organic Red",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:55.862Z"
+    },
+    "11691": {
+      "title": "Solar Orange",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:54.755Z"
+    },
+    "11693": {
+      "title": "Quiet Teal",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:53.658Z"
+    },
+    "11695": {
+      "title": "Shelter in Still Rain",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:44.644Z"
+    },
+    "11697": {
+      "title": "Camellia in Soft Light",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:52.550Z"
+    },
+    "11699": {
+      "title": "Crane at Distant Sun",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:45.838Z"
+    },
+    "11701": {
+      "title": "Early Blossom Perch",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:51.456Z"
+    },
+    "11703": {
+      "title": "Drift of the Golden Koi",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:43.321Z"
+    },
+    "11705": {
+      "title": "Early Blossom Perch",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:42.135Z"
+    },
+    "11707": {
+      "title": "Stillness Beneath the Parasol",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:40.936Z"
+    },
+    "11709": {
+      "title": "White Blossom, Silent Perch",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:50.372Z"
+    },
+    "11711": {
+      "title": "Crimson Sun Ascent",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:49.295Z"
+    },
+    "11713": {
+      "title": "Branch of Early Spring",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:48.242Z"
+    },
+    "11715": {
+      "title": "Ink Feather Reverie",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:39.833Z"
+    },
+    "11717": {
+      "title": "Golden Current",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:27:47.077Z"
+    },
+    "11764": {
+      "title": "Still Frame",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:36.257Z"
+    },
+    "11766": {
+      "title": "Soft Focus",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:35.252Z"
+    },
+    "11768": {
+      "title": "Split Surface",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:34.196Z"
+    },
+    "11770": {
+      "title": "Direct Gaze",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:33.082Z"
+    },
+    "11772": {
+      "title": "Soft Cut",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:32.022Z"
+    },
+    "11774": {
+      "title": "Fixed Point",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:30.987Z"
+    },
+    "11776": {
+      "title": "Rest",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:29.960Z"
+    },
+    "11778": {
+      "title": "Tilted Frame",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:28.945Z"
+    },
+    "12642": {
+      "title": "Blue Drive, Quiet City",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:37.274Z"
+    },
+    "12646": {
+      "title": "Pink Tide, Late Afternoon",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:38.328Z"
+    },
+    "12650": {
+      "title": "Night Pool, Still Horizon",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:31:12.134Z"
+    },
+    "12652": {
+      "title": "Red Coastline",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:31:04.259Z"
+    },
+    "12654": {
+      "title": "Open Field, Clear Sky",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:31:03.109Z"
+    },
+    "12656": {
+      "title": "Records After Noon",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:31:02.033Z"
+    },
+    "12658": {
+      "title": "Yellow Road, Distant Fields",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:31:00.941Z"
+    },
+    "12660": {
+      "title": "Room Facing the Coast",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:59.841Z"
+    },
+    "12662": {
+      "title": "Clouds Passing Slowly",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:58.682Z"
+    },
+    "12664": {
+      "title": "Evening Balcony",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:57.560Z"
+    },
+    "12666": {
+      "title": "Still Afternoon",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:56.351Z"
+    },
+    "12668": {
+      "title": "Wide Distance",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:55.155Z"
+    },
+    "12670": {
+      "title": "Cliff Residence",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:53.998Z"
+    },
+    "12672": {
+      "title": "Blue Silence",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:52.926Z"
+    },
+    "12674": {
+      "title": "Open Water",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:51.892Z"
+    },
+    "12676": {
+      "title": "Passing Shade",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:50.868Z"
+    },
+    "12678": {
+      "title": "Spring Field",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:49.834Z"
+    },
+    "12680": {
+      "title": "Harbor Light",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:48.781Z"
+    },
+    "12682": {
+      "title": "Quiet Geometry",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:47.748Z"
+    },
+    "12684": {
+      "title": "Clear Distance",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:46.722Z"
+    },
+    "12686": {
+      "title": "Garden Stillness",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:45.735Z"
+    },
+    "12688": {
+      "title": "Quiet Shade",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:44.700Z"
+    },
+    "12690": {
+      "title": "Blue Facade",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:43.651Z"
+    },
+    "12692": {
+      "title": "Leaning Palms",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:42.582Z"
+    },
+    "12694": {
+      "title": "Red Pause",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:41.543Z"
+    },
+    "12696": {
+      "title": "Winter Path",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:40.459Z"
+    },
+    "12700": {
+      "title": "Three Palms",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:30:39.415Z"
+    },
+    "12765": {
+      "title": "Corncockle",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:31:51.975Z"
+    },
+    "12767": {
+      "title": "Flower Garden",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:31:41.226Z"
+    },
+    "12771": {
+      "title": "Honeysuckle",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:31:32.191Z"
+    },
+    "12773": {
+      "title": "Chrysanthemum",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:31:31.158Z"
+    },
+    "12775": {
+      "title": "Tulip",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:31:30.106Z"
+    },
+    "12777": {
+      "title": "Furnishing",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:31:29.059Z"
+    },
+    "12779": {
+      "title": "Fruit Pattern",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:31:27.805Z"
+    },
+    "12781": {
+      "title": "Violet and Columbine",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:31:17.401Z"
+    },
+    "12785": {
+      "title": "Daisy",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:31:16.092Z"
+    },
+    "12787": {
+      "title": "Branch",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:31:14.677Z"
+    },
+    "15231": {
+      "title": "Glow Within",
+      "old_dimensions": "1414x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": true,
+      "timestamp": "2026-08-24T13:31:53.457Z"
+    },
+    "15234": {
+      "title": "Shared Silence",
+      "old_dimensions": "1414x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": true,
+      "timestamp": "2026-08-24T13:31:54.163Z"
+    },
+    "15237": {
+      "title": "A Soft Gesture",
+      "old_dimensions": "1414x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": true,
+      "timestamp": "2026-08-24T13:31:52.743Z"
+    },
+    "15244": {
+      "title": "Beyond Control",
+      "old_dimensions": "1428x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:38:14.106Z"
+    },
+    "15248": {
+      "title": "Made of Meaning",
+      "old_dimensions": "1428x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:38:13.026Z"
+    },
+    "15253": {
+      "title": "Stay Curious",
+      "old_dimensions": "1428x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:38:03.904Z"
+    },
+    "15257": {
+      "title": "Snow at Benten Shrine",
+      "old_dimensions": "1414x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": true,
+      "timestamp": "2026-08-24T13:32:02.474Z"
+    },
+    "15260": {
+      "title": "Zojoji Temple in Autumn",
+      "old_dimensions": "1414x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": true,
+      "timestamp": "2026-08-24T13:32:22.416Z"
+    },
+    "15263": {
+      "title": "Rain at Senso-ji Temple",
+      "old_dimensions": "1414x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": true,
+      "timestamp": "2026-08-24T13:32:11.499Z"
+    },
+    "15286": {
+      "title": "Ushibori",
+      "old_dimensions": "1428x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:32:44.554Z"
+    },
+    "15288": {
+      "title": "Lake Ashi with Torii Gate",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:32:35.213Z"
+    },
+    "15296": {
+      "title": "Kasuga Shrine, Nara",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:32:55.169Z"
+    },
+    "15301": {
+      "title": "Rain at Nagoya Castle",
+      "old_dimensions": "1428x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:33:06.361Z"
+    },
+    "15307": {
+      "title": "Coast of Hota, Awa Province",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:33:16.339Z"
+    },
+    "15310": {
+      "title": "Snow at Zojoji Temple",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:33:26.509Z"
+    },
+    "15313": {
+      "title": "Tomonoura, Inland Sea",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:33:36.528Z"
+    },
+    "15317": {
+      "title": "Evening at Itabashi",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:33:46.154Z"
+    },
+    "15322": {
+      "title": "Spring Evening at Kintai Bridge",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:33:55.182Z"
+    },
+    "15326": {
+      "title": "Byodo-in Temple, Uji",
+      "old_dimensions": "1428x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:34:07.109Z"
+    },
+    "15331": {
+      "title": "Fuji from Yamanaka Village",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:34:19.600Z"
+    },
+    "15335": {
+      "title": "Matsuyama Castle",
+      "old_dimensions": "1428x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:34:25.710Z"
+    },
+    "15340": {
+      "title": "Futami Sea Cave",
+      "old_dimensions": "1428x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:34:33.103Z"
+    },
+    "15344": {
+      "title": "Snow at Senso-ji Temple, Asakusa",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:34:40.363Z"
+    },
+    "15348": {
+      "title": "Rain at Kasuga Shrine, Nara",
+      "old_dimensions": "1428x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:35:26.503Z"
+    },
+    "15357": {
+      "title": "Miho no Matsubara",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:35:19.504Z"
+    },
+    "15361": {
+      "title": "Snow at Toshogu Shrine, Nikko",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:35:11.929Z"
+    },
+    "15364": {
+      "title": "Nikko, Futarasan Shrine",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:35:06.008Z"
+    },
+    "15369": {
+      "title": "Snow at Zojoji Temple",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:34:59.258Z"
+    },
+    "15373": {
+      "title": "Public Bathhouse (Sento)",
+      "old_dimensions": "1428x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:34:48.635Z"
+    },
+    "15376": {
+      "title": "Great Buddha at Kamakura",
+      "old_dimensions": "1428x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:37:07.304Z"
+    },
+    "15379": {
+      "title": "Evening at Kanazawa",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:36:56.730Z"
+    },
+    "15382": {
+      "title": "Lake Shinji",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:36:50.102Z"
+    },
+    "15385": {
+      "title": "Kameido Tenjin Shrine",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:36:44.158Z"
+    },
+    "15387": {
+      "title": "Yoro Gorge",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:36:37.454Z"
+    },
+    "15391": {
+      "title": "Shinobazu Pond, Ueno",
+      "old_dimensions": "2000x1429",
+      "new_dimensions": "2000x1414",
+      "orientation": "landscape",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:35:35.911Z"
+    },
+    "15426": {
+      "title": "Snow at Tsuchiyu",
+      "old_dimensions": "2000x1429",
+      "new_dimensions": "2000x1414",
+      "orientation": "landscape",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:36:24.871Z"
+    },
+    "15428": {
+      "title": "Moonlight at Enoshima",
+      "old_dimensions": "2000x1429",
+      "new_dimensions": "2000x1414",
+      "orientation": "landscape",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:36:10.113Z"
+    },
+    "15432": {
+      "title": "Summer River Landscape",
+      "old_dimensions": "2000x1429",
+      "new_dimensions": "2000x1414",
+      "orientation": "landscape",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:35:43.766Z"
+    },
+    "15435": {
+      "title": "Rain at Maekawa",
+      "old_dimensions": "2000x1428",
+      "new_dimensions": "2000x1414",
+      "orientation": "landscape",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:35:59.668Z"
+    },
+    "15437": {
+      "title": "Farmhouse with Mount Fuji",
+      "old_dimensions": "2000x1429",
+      "new_dimensions": "2000x1414",
+      "orientation": "landscape",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:35:52.228Z"
+    },
+    "15441": {
+      "title": "Mount Fuji from the Fuji River",
+      "old_dimensions": "2000x1429",
+      "new_dimensions": "2000x1414",
+      "orientation": "landscape",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:37:54.271Z"
+    },
+    "15446": {
+      "title": "Futami Gaura, Ise",
+      "old_dimensions": "2000x1429",
+      "new_dimensions": "2000x1414",
+      "orientation": "landscape",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:37:46.518Z"
+    },
+    "15450": {
+      "title": "Fuji from Miho",
+      "old_dimensions": "2000x1429",
+      "new_dimensions": "2000x1414",
+      "orientation": "landscape",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:37:36.743Z"
+    },
+    "15453": {
+      "title": "Edo Castle",
+      "old_dimensions": "2000x1429",
+      "new_dimensions": "2000x1414",
+      "orientation": "landscape",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:37:27.623Z"
+    },
+    "15455": {
+      "title": "Kiyosu Bridge, Tokyo",
+      "old_dimensions": "2000x1429",
+      "new_dimensions": "2000x1414",
+      "orientation": "landscape",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:37:16.227Z"
+    },
+    "15731": {
+      "title": "The Man in the Chair",
+      "old_dimensions": "1414x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": true,
+      "timestamp": "2026-08-24T13:37:56.540Z"
+    },
+    "15735": {
+      "title": "The Spinner",
+      "old_dimensions": "1414x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": true,
+      "timestamp": "2026-08-24T13:37:55.820Z"
+    },
+    "15738": {
+      "title": "The Window",
+      "old_dimensions": "1414x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": true,
+      "timestamp": "2026-08-24T13:37:55.075Z"
+    },
+    "15742": {
+      "title": "The Reader",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:38:02.854Z"
+    },
+    "15744": {
+      "title": "The Weighing of Gold",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:38:01.832Z"
+    },
+    "15761": {
+      "title": "Girl Seen from the Back",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:38:00.779Z"
+    },
+    "15764": {
+      "title": "The Engraver",
+      "old_dimensions": "2000x1429",
+      "new_dimensions": "2000x1414",
+      "orientation": "landscape",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:37:59.750Z"
+    },
+    "15770": {
+      "title": "The Visit",
+      "old_dimensions": "2000x1429",
+      "new_dimensions": "2000x1414",
+      "orientation": "landscape",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:37:58.348Z"
+    },
+    "15773": {
+      "title": "The Painter\u2019s Studio",
+      "old_dimensions": "2000x1428",
+      "new_dimensions": "2000x1414",
+      "orientation": "landscape",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:37:57.434Z"
+    },
+    "16160": {
+      "title": "Custom Order #NGGEE8",
+      "old_dimensions": "1045x1463",
+      "new_dimensions": "1034x1463",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:38:04.799Z"
+    },
+    "16191": {
+      "title": "Midnight Minstrel Hare",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:38:15.658Z"
+    },
+    "16243": {
+      "title": "Golden Fairway Solitude",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:38:23.203Z"
+    },
+    "16245": {
+      "title": "Bunkers at Dusk",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:38:30.956Z"
+    },
+    "16255": {
+      "title": "Golden Hour Putt",
+      "old_dimensions": "1428x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:38:38.756Z"
+    },
+    "16257": {
+      "title": "Coastal Fairway Solitude",
+      "old_dimensions": "1428x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:38:45.641Z"
+    },
+    "16261": {
+      "title": "Concrete Shadow Ribbons",
+      "old_dimensions": "5118x7165",
+      "new_dimensions": "5066x7165",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T15:41:11.585Z"
+    },
+    "16263": {
+      "title": "Concrete Spiral Silence",
+      "old_dimensions": "5118x7165",
+      "new_dimensions": "5066x7165",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:42:40.114Z"
+    },
+    "16265": {
+      "title": "Concrete Wave Study",
+      "old_dimensions": "5118x7165",
+      "new_dimensions": "5066x7165",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:44:40.018Z"
+    },
+    "16267": {
+      "title": "Concrete Shadow Geometry",
+      "old_dimensions": "5118x7165",
+      "new_dimensions": "5066x7165",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T15:42:42.028Z"
+    },
+    "16269": {
+      "title": "Monumental Passage",
+      "old_dimensions": "5118x7165",
+      "new_dimensions": "5066x7165",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T15:44:11.766Z"
+    },
+    "16271": {
+      "title": "The Horizon",
+      "old_dimensions": "5118x7165",
+      "new_dimensions": "5066x7165",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T15:45:46.956Z"
+    },
+    "16273": {
+      "title": "Shadow Curves",
+      "old_dimensions": "5120x7165",
+      "new_dimensions": "5066x7165",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:52:39.189Z"
+    },
+    "16283": {
+      "title": "Midnight Caf\u00e9 Sentinel",
+      "old_dimensions": "5118x7165",
+      "new_dimensions": "5066x7165",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T15:47:18.876Z"
+    },
+    "16285": {
+      "title": "Siamese Dinner",
+      "old_dimensions": "5118x7165",
+      "new_dimensions": "5066x7165",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T15:48:54.409Z"
+    },
+    "17065": {
+      "title": "Custom Order #RQCM",
+      "old_dimensions": "1765x2505",
+      "new_dimensions": "1765x2496",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:56:42.375Z"
+    },
+    "17067": {
+      "title": "Custom Order #TADV",
+      "old_dimensions": "3900x5460",
+      "new_dimensions": "3861x5460",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:57:46.222Z"
+    },
+    "17123": {
+      "title": "Silvia Red Sun",
+      "old_dimensions": "5120x7168",
+      "new_dimensions": "5069x7168",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T13:59:43.095Z"
+    },
+    "17127": {
+      "title": "240SX Street Legend",
+      "old_dimensions": "5120x7168",
+      "new_dimensions": "5069x7168",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T15:50:36.250Z"
+    },
+    "17131": {
+      "title": "Scirocco Sunset Grid",
+      "old_dimensions": "5120x7168",
+      "new_dimensions": "5069x7168",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T15:52:12.469Z"
+    },
+    "17139": {
+      "title": "240SX Drift Legacy",
+      "old_dimensions": "5120x7168",
+      "new_dimensions": "5069x7168",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T15:53:50.592Z"
+    },
+    "17147": {
+      "title": "Silvia S14 Akina Descent",
+      "old_dimensions": "4571x6400",
+      "new_dimensions": "4525x6400",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T14:06:58.815Z"
+    },
+    "17151": {
+      "title": "Akina Trueno AE86",
+      "old_dimensions": "4571x6400",
+      "new_dimensions": "4525x6400",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T14:08:40.503Z"
+    },
+    "17155": {
+      "title": "Takumi's Akina AE86",
+      "old_dimensions": "4571x6400",
+      "new_dimensions": "4525x6400",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T14:10:14.292Z"
+    },
+    "17159": {
+      "title": "Akina AE86 Night Run",
+      "old_dimensions": "4571x6400",
+      "new_dimensions": "4525x6400",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T14:11:59.780Z"
+    },
+    "17166": {
+      "title": "Initial D Silvia S15",
+      "old_dimensions": "4571x6400",
+      "new_dimensions": "4525x6400",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T14:13:44.398Z"
+    },
+    "17186": {
+      "title": "Witness Chamber",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T14:17:12.909Z"
+    },
+    "17190": {
+      "title": "Solstice Refuge",
+      "old_dimensions": "1429x2000",
+      "new_dimensions": "1414x2000",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T14:17:28.063Z"
+    },
+    "17231": {
+      "title": "Stone Reverie",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "timestamp": "2026-08-24T15:57:29.181Z"
+    },
+    "17182": {
+      "title": "Cathedral Reverie",
+      "old_dimensions": "5322x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": true,
+      "elapsed_sec": 37.0,
+      "timestamp": "2026-08-24T16:25:00Z"
+    },
+    "17233": {
+      "title": "Rainbound Reverie",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 35.9,
+      "timestamp": "2026-08-24T16:25:36Z"
+    },
+    "17237": {
+      "title": "Tidal Procession",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 37.7,
+      "timestamp": "2026-08-24T16:26:14Z"
+    },
+    "17241": {
+      "title": "Domestic Interval",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 40.2,
+      "timestamp": "2026-08-24T16:26:54Z"
+    },
+    "17246": {
+      "title": "Harbor Passage",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 39.9,
+      "timestamp": "2026-08-24T16:27:34Z"
+    },
+    "17260": {
+      "title": "Lunar Threshold",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 62.1,
+      "timestamp": "2026-08-24T16:28:37Z"
+    },
+    "17264": {
+      "title": "Architecture Chaos 35 Ar 23 Profile Vlhjfir Stylize 1 Ac44fb43 3571 4d21 A77e 7d9e376a1981 3",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 33.6,
+      "timestamp": "2026-08-24T16:29:11Z"
+    },
+    "17268": {
+      "title": "Obsidian Threshold",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 30.3,
+      "timestamp": "2026-08-24T16:29:41Z"
+    },
+    "17272": {
+      "title": "Silent Threshold",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 25.6,
+      "timestamp": "2026-08-24T16:30:07Z"
+    },
+    "17276": {
+      "title": "Silent Bastion",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 34.0,
+      "timestamp": "2026-08-24T16:30:41Z"
+    },
+    "17280": {
+      "title": "Abyssal Refuge",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 29.2,
+      "timestamp": "2026-08-24T16:31:10Z"
+    },
+    "17285": {
+      "title": "Apex Sanctuary",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 50.9,
+      "timestamp": "2026-08-24T16:32:02Z"
+    },
+    "17287": {
+      "title": "Metropolis Transit",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 33.2,
+      "timestamp": "2026-08-24T16:32:35Z"
+    },
+    "17291": {
+      "title": "Silent Immersion",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 43.2,
+      "timestamp": "2026-08-24T16:33:18Z"
+    },
+    "17295": {
+      "title": "Silent Descent",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 35.9,
+      "timestamp": "2026-08-24T16:33:55Z"
+    },
+    "17299": {
+      "title": "Lunar Terrace",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 41.0,
+      "timestamp": "2026-08-24T16:34:36Z"
+    },
+    "17303": {
+      "title": "Sunken Passage",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 33.6,
+      "timestamp": "2026-08-24T16:35:10Z"
+    },
+    "17307": {
+      "title": "Nevermore Echo",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 36.6,
+      "timestamp": "2026-08-24T16:35:46Z"
+    },
+    "17311": {
+      "title": "Abyssal Threshold",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 38.5,
+      "timestamp": "2026-08-24T16:36:25Z"
+    },
+    "17315": {
+      "title": "Apex Sanctuary",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 54.1,
+      "timestamp": "2026-08-24T16:37:19Z"
+    },
+    "17317": {
+      "title": "Metropolis Transit",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 37.6,
+      "timestamp": "2026-08-24T16:37:57Z"
+    },
+    "17322": {
+      "title": "Liminal Provisions",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 32.5,
+      "timestamp": "2026-08-24T16:38:30Z"
+    },
+    "17326": {
+      "title": "Liminal Shift",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 31.1,
+      "timestamp": "2026-08-24T16:39:01Z"
+    },
+    "17329": {
+      "title": "Apex Sanctuary",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 26.2,
+      "timestamp": "2026-08-24T16:39:28Z"
+    },
+    "17333": {
+      "title": "Monolith Silence",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 32.2,
+      "timestamp": "2026-08-24T16:40:00Z"
+    },
+    "17335": {
+      "title": "Liminal Shift",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 34.1,
+      "timestamp": "2026-08-24T16:40:34Z"
+    },
+    "17338": {
+      "title": "Monolith Silence",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 34.7,
+      "timestamp": "2026-08-24T16:41:09Z"
+    },
+    "17340": {
+      "title": "Liminal Shift",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 32.6,
+      "timestamp": "2026-08-24T16:41:42Z"
+    },
+    "17344": {
+      "title": "Phantom Aisle",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 33.1,
+      "timestamp": "2026-08-24T16:42:16Z"
+    },
+    "17362": {
+      "title": "Nocturne Haven",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 33.2,
+      "timestamp": "2026-08-24T16:42:49Z"
+    },
+    "17364": {
+      "title": "Phantom Pass",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 39.5,
+      "timestamp": "2026-08-24T16:43:29Z"
+    },
+    "17366": {
+      "title": "Apex Solitude",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 36.7,
+      "timestamp": "2026-08-24T16:44:06Z"
+    },
+    "17368": {
+      "title": "Silent Enclave",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 35.6,
+      "timestamp": "2026-08-24T16:44:41Z"
+    },
+    "17370": {
+      "title": "Sublime Creation",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 32.6,
+      "timestamp": "2026-08-24T16:45:14Z"
+    },
+    "17372": {
+      "title": "Silent Companion",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 36.4,
+      "timestamp": "2026-08-24T16:45:51Z"
+    },
+    "17374": {
+      "title": "Solar Sentinel",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 35.7,
+      "timestamp": "2026-08-24T16:46:27Z"
+    },
+    "17376": {
+      "title": "Silent Atrium",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 32.6,
+      "timestamp": "2026-08-24T16:46:59Z"
+    },
+    "17378": {
+      "title": "Capital Eclipse",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 35.1,
+      "timestamp": "2026-08-24T16:47:35Z"
+    },
+    "17380": {
+      "title": "Quiet Observer",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 34.7,
+      "timestamp": "2026-08-24T16:48:10Z"
+    },
+    "17382": {
+      "title": "Solitary Traverse",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 37.7,
+      "timestamp": "2026-08-24T16:48:48Z"
+    },
+    "17384": {
+      "title": "Solitary Ascent",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 33.7,
+      "timestamp": "2026-08-24T16:49:22Z"
+    },
+    "17386": {
+      "title": "Spectral Transit",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 27.7,
+      "timestamp": "2026-08-24T16:49:49Z"
+    },
+    "17388": {
+      "title": "Synthetic Solitude",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 33.6,
+      "timestamp": "2026-08-24T16:50:23Z"
+    },
+    "17390": {
+      "title": "Nocturnal Hearth",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 30.9,
+      "timestamp": "2026-08-24T16:50:54Z"
+    },
+    "17392": {
+      "title": "Phantom Passage",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 34.8,
+      "timestamp": "2026-08-24T16:51:29Z"
+    },
+    "17394": {
+      "title": "Silent Enclave",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 40.0,
+      "timestamp": "2026-08-24T16:52:10Z"
+    },
+    "17396": {
+      "title": "Studio Bloom",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 36.1,
+      "timestamp": "2026-08-24T16:52:46Z"
+    },
+    "17398": {
+      "title": "Celestial Artisan",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 37.2,
+      "timestamp": "2026-08-24T16:53:23Z"
+    },
+    "17400": {
+      "title": "Abyssal Sanctum",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 36.1,
+      "timestamp": "2026-08-24T16:54:00Z"
+    },
+    "17402": {
+      "title": "Terminal Solitude",
+      "old_dimensions": "5376x7526",
+      "new_dimensions": "5322x7526",
+      "orientation": "portrait",
+      "already_exact": false,
+      "elapsed_sec": 35.3,
+      "timestamp": "2026-08-24T16:54:35Z"
+    },
+    "17446": {
+      "title": "The Collector",
+      "old_dimensions": "2000x1429",
+      "new_dimensions": "2000x1414",
+      "orientation": "landscape",
+      "already_exact": false,
+      "elapsed_sec": 24.2,
+      "timestamp": "2026-08-24T16:55:00Z"
+    }
+  },
+  "failed": {
+    "15767": {
+      "title": "The Collector",
+      "error": "Product #15767 not found",
+      "timestamp": "2026-08-24T15:39:43.109Z"
+    }
+  },
+  "lastRun": "2026-08-24T16:55:00Z"
+}

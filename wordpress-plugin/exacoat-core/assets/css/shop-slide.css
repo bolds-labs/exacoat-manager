@@ -1,0 +1,335 @@
+/**
+ * Artmatter 3D Circular Arc Exhibition Slider Stylesheet
+ * 1:1.4 aspect ratio, big desktop exhibition presence, circular merry-go-round arc geometry,
+ * zoomed-out depth recession for far left/right items, 100% unblocked clickable surface,
+ * 58px museum mat padding, top edge highlight, and small hard shadows.
+ */
+
+.artmatter-shop-slide-wrap {
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 10px 0 40px 0;
+    position: relative;
+    box-sizing: border-box;
+    font-family: "Neue Haas Display", "Neue Haas Grotesk Text Pro", inherit, sans-serif;
+    color: #ffffff;
+    overflow: hidden;
+}
+
+.artmatter-shop-slide-wrap * {
+    box-sizing: border-box;
+}
+
+/* Museum Header Bar (Orientation Pills + Shuffle Button) */
+.artmatter-slide-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.artmatter-orient-pills {
+    display: inline-flex;
+    align-items: center;
+    background: #121215;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 9999px;
+    padding: 4px;
+    gap: 4px;
+}
+
+.artmatter-orient-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 36px;
+    padding: 0 20px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 9999px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #a1a1aa;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    user-select: none;
+}
+
+.artmatter-orient-btn svg {
+    color: currentColor;
+    flex-shrink: 0;
+}
+
+.artmatter-orient-btn:hover {
+    color: #ffffff;
+}
+
+.artmatter-orient-btn.active {
+    background: rgba(169, 255, 93, 0.09);
+    border-color: rgba(169, 255, 93, 0.35);
+    color: #f3aa18;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+}
+
+.artmatter-slide-shuffle-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: #121215;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #a1a1aa;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    outline: none;
+}
+
+.artmatter-slide-shuffle-btn:hover {
+    background: rgba(169, 255, 93, 0.09);
+    border-color: rgba(169, 255, 93, 0.35);
+    color: #f3aa18;
+    transform: rotate(180deg);
+}
+
+/* BIG 3D Viewport Stage - 88svh Majestic Height */
+.artmatter-slide-viewport {
+    position: relative;
+    width: 100%;
+    height: min(88svh, 860px);
+    min-height: 640px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    perspective: 1600px;
+    -webkit-perspective: 1600px;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: pan-y;
+    cursor: grab;
+}
+
+.artmatter-slide-viewport.is-dragging {
+    cursor: grabbing;
+}
+
+/* Infinite 3D Track */
+.artmatter-slide-track {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform-style: preserve-3d;
+    -webkit-transform-style: preserve-3d;
+    overflow: visible;
+}
+
+/* 3D Card - Ratio 1 / 1.4 with Smooth Carousel Motion */
+.artmatter-slide-card {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    height: min(74svh, 720px);
+    aspect-ratio: 1 / 1.4;
+    width: auto;
+    transform-style: preserve-3d;
+    -webkit-transform-style: preserve-3d;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    will-change: transform, filter, opacity;
+    pointer-events: auto;
+    transition: filter 0.35s ease, opacity 0.35s ease;
+}
+
+.artmatter-slide-card.is-filtered-out {
+    display: none !important;
+}
+
+.artmatter-slide-card.is-landscape,
+.artmatter-slide-card[data-orient="landscape"] {
+    height: min(56svh, 540px);
+    aspect-ratio: 1.4 / 1 !important;
+    width: auto;
+    max-width: calc(100vw - 36px);
+}
+
+/* Authentic Museum Mat Board with Generous 58px Padding */
+.artmatter-slide-mat-wrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.12) 40%, rgba(0, 0, 0, 0.06) 75%, rgba(0, 0, 0, 0.15) 100%), #c6c5c2;
+    border-radius: 2px;
+    padding: 58px;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: box-shadow 0.4s ease;
+    transform: translateZ(0);
+    pointer-events: auto;
+}
+
+/* Active Center Card - Majestic Front Elevation Shadow */
+.artmatter-slide-card.is-active .artmatter-slide-mat-wrap {
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.55), 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+/* Product Card Container - Top Crisp Highlight, Small Hard Bottom Shadow */
+.artmatter-slide-poster-wrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 0 !important;
+    overflow: hidden;
+    background: #0e0e11;
+    line-height: 0;
+    box-shadow: 0 -1px 0 0.5px rgba(255, 255, 255, 0.35), 
+                0 2.5px 1.5px 0 rgba(0, 0, 0, 0.45), 
+                0 4.5px 6px 0 rgba(0, 0, 0, 0.38);
+    pointer-events: auto;
+}
+
+.artmatter-slide-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    pointer-events: none;
+    -webkit-user-drag: none;
+    border-radius: 0 !important;
+}
+
+/* Card Caption - Minimal Museum Title Below Poster (Appears only when settled) */
+.artmatter-slide-card-caption {
+    margin-top: 16px;
+    padding: 0 4px;
+    text-align: center;
+    width: 100%;
+    opacity: 0;
+    transform: translateY(8px);
+    pointer-events: none;
+    transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), 
+                transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.artmatter-slide-card.is-active.is-settled .artmatter-slide-card-caption {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+    transition-delay: 0.08s;
+}
+
+.artmatter-slide-card-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 500;
+    color: #ffffff;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.artmatter-slide-card-artist {
+    margin: 3px 0 0 0;
+    font-size: 12px;
+    font-weight: 400;
+    color: #88888e;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Floating Navigation Arrows */
+.artmatter-slide-nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 600;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(18, 18, 24, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    cursor: pointer;
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    outline: none;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    -webkit-tap-highlight-color: transparent;
+}
+
+.artmatter-slide-nav-btn.prev { left: 28px; }
+.artmatter-slide-nav-btn.next { right: 28px; }
+
+.artmatter-slide-nav-btn:hover {
+    background: rgba(28, 28, 36, 0.95);
+    border-color: rgba(169, 255, 93, 0.5);
+    color: #f3aa18;
+    transform: translateY(-50%) scale(1.08);
+}
+
+.artmatter-slide-nav-btn:active {
+    transform: translateY(-50%) scale(0.92);
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    .artmatter-slide-viewport {
+        height: 60svh;
+        min-height: 420px;
+        max-height: 520px;
+    }
+    .artmatter-slide-card {
+        height: min(48svh, 380px);
+        aspect-ratio: 1 / 1.4;
+        width: auto;
+        max-width: calc(100vw - 44px);
+    }
+    .artmatter-slide-card.is-landscape {
+        height: auto;
+        width: min(84vw, 360px);
+        aspect-ratio: 1.4 / 1;
+        max-width: calc(100vw - 32px);
+    }
+    .artmatter-slide-mat-wrap {
+        padding: 26px;
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+    }
+    .artmatter-slide-card.is-active .artmatter-slide-mat-wrap {
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+    }
+    .artmatter-slide-nav-btn {
+        width: 36px;
+        height: 36px;
+    }
+    .artmatter-slide-nav-btn.prev { left: 10px; }
+    .artmatter-slide-nav-btn.next { right: 10px; }
+    .artmatter-slide-card-title {
+        font-size: 13px;
+    }
+    .artmatter-slide-card-artist {
+        font-size: 10.5px;
+    }
+}

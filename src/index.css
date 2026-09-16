@@ -1,41 +1,288 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@300;400;500;600;700&family=Montserrat:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: dark;
+@layer base {
+  :root {
+    --bg-primary: #070709;
+    --bg-surface: #0e0e12;
+    --bg-surface-raised: #141418;
+    --bg-surface-hover: #18181d;
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.15);
+    --accent: #f3aa18;
+    --accent-hover: #ffbe3b;
+    --text-primary: #ffffff;
+    --text-secondary: #a1a1aa;
+    --text-muted: #71717a;
+    --radius-control: 12px;
+    --radius-card: 16px;
+    --shadow-panel: 0 18px 50px -24px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  * {
+    border-color: var(--border-subtle);
+  }
+
+  html {
+    background: var(--bg-primary);
+  }
+
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+    text-rendering: optimizeLegibility;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [role="button"]:focus-visible {
+    outline: 2px solid rgba(243, 170, 24, 0.7);
+    outline-offset: 2px;
+  }
+
+  /* Minimalist Luxury Scrollbars */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.25);
+  }
 }
 
-body {
-  margin: 0;
-  background-color: #000000;
-  color: #f4f4f5;
-  font-family: 'Outfit', sans-serif;
-  -webkit-font-smoothing: antialiased;
+/* ==========================================================================
+   Exacoat Obsidian Glass Design System
+   ========================================================================== */
+
+.glass-panel,
+.exacoat-glass,
+.artmatter-glass {
+  background: linear-gradient(180deg, rgba(20, 20, 24, 0.82) 0%, rgba(12, 12, 15, 0.94) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-panel);
 }
 
-h1, h2, h3, h4, .font-chakra {
-  font-family: 'Chakra Petch', sans-serif;
+:root:not(.dark) .glass-panel,
+:root:not(.dark) .exacoat-glass,
+:root:not(.dark) .artmatter-glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(249, 249, 247, 0.88));
+  border-color: rgba(24, 24, 27, 0.1);
+  box-shadow: 0 18px 45px -30px rgba(24, 24, 27, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
-/* Custom scrollbar for high density ERP */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+.glass-panel-hover,
+.exacoat-glass-hover,
+.artmatter-glass-hover {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
-::-webkit-scrollbar-track {
-  background: #09090b;
+
+.glass-panel-hover:hover,
+.exacoat-glass-hover:hover,
+.artmatter-glass-hover:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: linear-gradient(180deg, rgba(26, 26, 32, 0.9) 0%, rgba(16, 16, 22, 0.98) 100%);
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.75), inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
 }
-::-webkit-scrollbar-thumb {
-  background: #27272a;
-  border-radius: 9999px;
+
+.glass-pill {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
-::-webkit-scrollbar-thumb:hover {
+
+.glass-pill-active {
   background: #f3aa18;
+  color: #080808;
+  border: 1px solid #f3aa18;
 }
 
-/* Accessible focus outline */
-*:focus-visible {
-  outline: 2px solid #f3aa18 !important;
-  outline-offset: 2px !important;
+@layer components {
+  .manager-workspace {
+    background-image:
+      radial-gradient(circle at 18% -10%, rgba(243, 170, 24, 0.055), transparent 30rem),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 12rem);
+  }
+
+  .manager-content {
+    @apply w-full max-w-[1680px] mx-auto px-3 py-4 sm:px-5 sm:py-5 md:px-6 md:py-7 xl:px-8;
+  }
+
+  .manager-workspace input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  .manager-workspace select,
+  .manager-workspace textarea {
+    min-height: 40px;
+    border-radius: var(--radius-control);
+  }
+
+  .manager-workspace table {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .manager-workspace th {
+    letter-spacing: 0.055em;
+  }
+
+  .manager-workspace td {
+    line-height: 1.45;
+  }
+
+
+  .manager-workspace span.rounded-full,
+  .manager-workspace span.rounded-lg,
+  .manager-workspace span.rounded-md {
+    line-height: 1rem;
+  }
+
+  .record-detail {
+    @apply space-y-5 text-sm;
+  }
+
+}
+
+/* ==========================================================================
+   Canonical Exacoat Motion System
+   ========================================================================== */
+
+@keyframes cardEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+@keyframes pageEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+    filter: blur(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0px);
+  }
+}
+
+@keyframes modalEnter {
+  0% {
+    opacity: 0;
+    transform: scale(0.97) translateY(8px);
+    filter: blur(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0px);
+  }
+}
+
+@keyframes backdropFade {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; filter: blur(4px); }
+  to { opacity: 1; filter: blur(0px); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.97); filter: blur(4px); }
+  to { opacity: 1; transform: scale(1); filter: blur(0px); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translate(-50%, 8px); filter: blur(4px); }
+  to { opacity: 1; transform: translate(-50%, 0); filter: blur(0px); }
+}
+
+@keyframes pulseSubtle {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.animate-card-enter {
+  animation: cardEnter 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-page-enter {
+  animation: pageEnter 360ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-modal-enter {
+  animation: modalEnter 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-backdrop-fade {
+  animation: backdropFade 180ms ease-out forwards;
+}
+
+.animate-fade-in,
+.animate-fadeIn,
+.fade-in,
+.fade-in-0 {
+  animation: fadeIn 180ms ease-out both;
+}
+
+.animate-scale-in,
+.zoom-in-95 {
+  animation: scaleIn 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-slideUp {
+  animation: slideUp 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-pulse-subtle {
+  animation: pulseSubtle 5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

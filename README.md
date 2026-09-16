@@ -1,76 +1,90 @@
-# Exacoat Manager (ERP & Operations Hub)
+# Artmatter Artist Manager ERP & Payout Hub
 
-High-speed enterprise operations hub, order management system, and configurator inspector for the Exacoat headless commerce ecosystem.
-
-Built with **React 19**, **Vite 6**, **Tailwind CSS**, and direct **WooCommerce REST v3 Bridge** with zero live WordPress disruption.
+> Enterprise-grade, modern glassmorphic Artist Management ERP, automated commission tracking, and payout disbursement platform for **Artmatter ([artmatter.co](https://artmatter.co))**, backed by live Supabase data and WordPress/WooCommerce integration.
 
 ---
 
-## Key Features
+## 🌟 Key Features & Capabilities
 
-1. **Order Hub & Fulfillment Pipeline**:
-   - Real-time order synchronization with live `exacoat.com` store (21,000+ orders).
-   - Instant filtering by status (`Processing`, `Ready to Ship`, `Completed`, `Cancelled`).
-   - Deep configurator item inspector: extracts and displays custom stacked skin layers (Back, Additional Camera, Frame, Model) directly from `_configurator_data` and Store API line item metadata.
-   - Quick fulfillment pipeline actions to transition orders between statuses.
-   - AWB / Resi tracking number injection directly to order meta (`tracking_number` and `_shipping_carrier`).
+- **Executive Analytics & KPI Dashboard**:
+  - Live Gross Sales ($), Total Artist Commissions ($), Pending Payouts ($), and Catalog statistics.
+  - Interactive Recharts Area & Donut charts for sales volume, artist tier distributions, and payout trends.
+  - Top Earning Artists Leaderboard and Top Selling Artworks Ranking.
+  - Urgent Action Alert Banners for pending payouts and artwork approvals.
 
-2. **A6 Thermal Shipping Label Generator**:
-   - Native client-side PDF generator producing standard **105mm x 148mm (A6 portrait)** thermal courier labels via jsPDF.
-   - Formatted for Indonesian couriers (JNE, Biteship) and international postal logistics (POS ID).
-   - Includes recipient phone, subdistrict, district, city, tracking number barcode, and complete skin layer packing checklist.
+- **Artist CRM & Tier Management**:
+  - Complete directory with search, filtering (by Badge, Status, KYC verification, Country, Boosted status), and sorting.
+  - Slide-out Artist Detail Drawer with profile preview, financial KPI cards, identity document viewer, and payment details.
+  - Real-time Tier / Badge Management (Community Creator 12.5%, Curated Artist 17.5%, Verified Artist 20.0%, Public Domain 0.0%) with instant commission rate recalculation.
+  - Boosted Promo toggle and KYC verification management.
 
-3. **Customer Packing Slip & Invoice**:
-   - High-fidelity PDF packing slip generator via jsPDF and AutoTable.
-   - Itemized line items with custom skin specifications, subtotal, discounts, shipping fees, and multi-currency pricing.
+- **Artwork Moderation & High-Res Catalog**:
+  - Toggle between visual Card Grid and rapid Table moderation views.
+  - High-res artwork modal with zoom preview, metadata inspector (fandom, collection, tags, style, mood, colors).
+  - Moderation workflow: Approve & Publish, Reject with reason note (triggers 14-day schedule deletion), and Schedule for Removal.
 
-4. **Product & Configurator Hub**:
-   - Complete catalog inspector for 300+ Exacoat hardware models and skins.
-   - **Marc Lacroix (MKL) Configurator**: inspects stacked layers, layer requirements, swatches, and choice schemas.
-   - **Acowebs Custom Product Addons (WCPA)**: recognizes and inspects products using Acowebs forms (e.g., Titanium+ Skins and Back Glass Kits).
+- **Commissions Real-time Ledger**:
+  - Complete transaction ledger across all orders with multi-currency (IDR to USD) conversion.
+  - Status management: `Pending Clearance`, `Approved for Payout`, `Processing`, `Paid Out`, `Cancelled`.
+  - Batch approval actions and full CSV export.
 
-5. **Customer Intelligence CRM**:
-   - Fast search across 67,000+ customer profiles.
-   - Lifetime order history, total spent, and shipping address inspection.
+- **Payouts Hub & Statement Generator**:
+  - Tabbed payout processing queue (`Pending Requests`, `Processing`, `Completed / Sent`, `Rejected`).
+  - Disbursement modal with withholding tax calculation and transaction reference / bank proof recording.
+  - Manual Payout Wizard: Aggregate an artist's approved commissions into a new payout record.
+  - Formatted Printable PDF Payout Statements & Invoices generated with jsPDF.
 
-6. **WordPress Companion Plugin (`exacoat-core`)**:
-   - Production-safe companion plugin located in `wordpress-plugin/exacoat-core`.
-   - Packaged automatically into `exacoat-core.zip` via `npm run package:plugin`.
-   - Registers custom order status `wc-ready-to-ship` ("Ready to Ship").
-   - Exposes read-safe REST endpoints at `/wp-json/exacoat/v1/health` and `/wp-json/exacoat/v1/orders`.
+- **System Health Diagnostics & Anomaly Scanner**:
+  - Real-time Supabase latency ping and table integrity inspection.
+  - Automated anomaly scanner (detects orphan commissions, missing payout destinations, stale pending items, KYC verifications).
+  - Diagnostic JSON report export.
 
----
-
-## Antislop Compliance
-
-Strictly engineered under the Antislop Craftsmanship Standard:
-- **R-02**: Zero em dashes (`—`) in UI copy or documentation strings.
-- **R-03 & R-25**: Mobile responsive touch targets (minimum 44px) and WCAG AAA color contrast ratios.
-- **R-26 & R-27**: Zero dead controls, with complete Loading, Empty, and Error states on all data tables and drawers.
-- **R-32**: Full keyboard navigation support (Tab, Enter, Escape) and high-contrast visible focus rings.
-- **R-37 Dials**: **ENERGY 2 / RHYTHM 2 / MOTION 2**.
+- **Immutable Audit Trail**:
+  - Searchable activity stream tracking badge upgrades, status modifications, and disbursements with expandable JSON payloads.
 
 ---
 
-## Quick Start
+## 🚀 Quick Start (Local Development)
 
 ```bash
-# Install dependencies
+# 1. Clone repository
+git clone https://github.com/bolds-labs/artmatter-artist-manager.git
+cd artmatter-artist-manager
+
+# 2. Install dependencies
 npm install
 
-# Start Vite development server with /cms proxy
-npm run dev
+# 3. Configure environment
+cp .env.example .env
 
-# Compile TypeScript, build production bundle, and package WordPress plugin
-npm run build
+# 4. Start local development server
+npm run dev
 ```
+
+App will be available at `http://localhost:3000`.
 
 ---
 
-## Environment Variables
+## 🐳 Dokploy Production Deployment
 
-Configured in `.env`:
-- `VITE_WORDPRESS_URL`: `https://exacoat.com`
-- `VITE_WC_CONSUMER_KEY`: WooCommerce REST API consumer key
-- `VITE_WC_CONSUMER_SECRET`: WooCommerce REST API consumer secret
-- `VITE_SUPABASE_URL`: Supabase backend endpoint
+This project includes a production-ready multi-stage `Dockerfile` and `nginx.conf` optimized for Dokploy.
+
+1. In Dokploy, create a new **Application** connected to `bolds-labs/artmatter-artist-manager`.
+2. Select **Dockerfile** build type.
+3. Configure the public browser variables `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_ADMIN_EMAIL`. Keep service-role credentials and passwords in the CMS environment only.
+4. Port: `80` (Internal).
+5. Click **Deploy**.
+
+For detailed setup instructions, see [docs/dokploy-deployment-guide.md](./docs/dokploy-deployment-guide.md).
+
+---
+
+## 📦 WordPress Master Plugin Architecture Proposal
+
+See [docs/wordpress-master-plugin-proposal.md](./docs/wordpress-master-plugin-proposal.md) for the complete specification to consolidate the 38 WPCode snippets and n8n webhooks into a unified `artmatter-core` WordPress plugin.
+
+---
+
+## 🛡️ License
+
+Proprietary • Built for Artmatter Co.

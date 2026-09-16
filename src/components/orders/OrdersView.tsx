@@ -2,66 +2,46 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Order } from '../../types';
 import { OrderTable } from './OrderTable';
 import { OrderDetailDrawer } from './OrderDetailDrawer';
-import { ShippingLabelA6Modal } from './ShippingLabelA6Modal';
-import { PageHeroHeader } from '../ui/PageHeroHeader';
-import { GlassCard } from '../ui/GlassCard';
-import { Button } from '../ui/Button';
 import { fetchOrdersDirect, fetchOrderDetailDirect } from '../../lib/wordpressBridge';
-import { formatCurrency } from '../../lib/formatters';
 import { useToast } from '../../context/ToastContext';
-import { 
-  ShoppingBag, 
-  Clock, 
-  Truck, 
-  CheckCircle2, 
-  Layers, 
-  RefreshCw,
-  Search,
-  Filter
-} from 'lucide-react';
+import { formatCurrency } from '../../lib/formatters';
+import { RefreshCw } from 'lucide-react';
+import { GlassCard } from '../ui/GlassCard';
+import { PageHeroHeader } from '../ui/PageHeroHeader';
+import { clsx } from 'clsx';
 
-interface OrdersViewProps {
-  searchFilter?: string;
-}
+interface OrdersViewProps {}
 
-export const OrdersView: React.FC<OrdersViewProps> = ({ searchFilter = '' }) => {
+export const OrdersView: React.FC<OrdersViewProps> = () => {
   const { showToast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>('all');
-  const [localSearch, setLocalSearch] = useState(searchFilter);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [labelOrder, setLabelOrder] = useState<Order | null>(null);
 
   const loadOrders = useCallback(async (quiet = false) => {
     try {
       if (!quiet) setIsLoading(true);
       else setIsRefreshing(true);
 
-      const res = await fetchOrdersDirect({ 
-        status: activeTab === 'all' ? undefined : activeTab,
-        search: localSearch || undefined,
-        per_page: 50 
-      });
-
-      if (res.success) {
-        setOrders(res.orders);
+      const res = await fetchOrdersDirect({ per_page: 50 });
+      if (res.success && Array.isArray(res.orders)) {
+        setOrders(res.orders as Order[]);
       } else {
         if (!quiet) {
-          showToast('warning', 'Orders Fetch Warning', res.error || 'Could not fetch orders.');
+          showToast('warning', 'Orders Sync Warning', res.error || 'Could not fetch orders from store.');
         }
       }
     } catch (err: any) {
       if (!quiet) {
-        showToast('error', 'Orders Fetch Error', err.message);
+        showToast('error', 'Orders Fetch Failed', err.message);
       }
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [activeTab, localSearch, showToast]);
+  }, [showToast]);
 
   useEffect(() => {
     loadOrders();
@@ -70,142 +50,187 @@ export const OrdersView: React.FC<OrdersViewProps> = ({ searchFilter = '' }) => 
   const handleSelectOrder = async (order: Order) => {
     setSelectedOrder(order);
     setIsDrawerOpen(true);
-    // Fetch fresh detail in background
     try {
       const res = await fetchOrderDetailDirect(order.id);
       if (res.success && res.order) {
         setSelectedOrder(res.order);
       }
     } catch (e) {
-      console.warn('Could not refresh order details', e);
+      console.warn('Could not fetch fresh order details', e);
     }
   };
 
-  const handleOrderUpdated = (updated: Order) => {
-    setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
-    if (selectedOrder?.id === updated.id) {
-      setSelectedOrder(updated);
-    }
-  };
-
-  // KPIs
-  const processingCount = orders.filter((o) => o.status.replace('wc-', '') === 'processing').length;
-  const readyToShipCount = orders.filter((o) => ['ready-to-ship', 'ready_to_ship'].includes(o.status.replace('wc-', ''))).length;
-  const completedCount = orders.filter((o) => ['completed', 'delivered'].includes(o.status.replace('wc-', ''))).length;
-
-  const currencyTotals = useMemo(() => {
-    const map: Record<string, number> = {};
-    orders.forEach((o) => {
-      const curr = (o.currency || 'IDR').toUpperCase();
-      map[curr] = (map[curr] || 0) + (parseFloat(o.total) || 0);
+  // Multicurrency Metric Computations
+  const currencyBreakdown = useMemo(() => {
+    const map: Record<string, { total: number; count: number }> = {};
+    orders.forEach(o => {
+      const curr = (o.currency || 'USD').toUpperCase().trim();
+      if (!map[curr]) {
+        map[curr] = { total: 0, count: 0 };
+      }
+      map[curr].total += Number(o.total) || 0;
+      map[curr].count += 1;
     });
     return map;
   }, [orders]);
 
-  const primaryCurr = Object.keys(currencyTotals)[0] || 'IDR';
+  const currencyKeys = Object.keys(currencyBreakdown);
+  const primaryCurrency = currencyKeys.includes('IDR') ? 'IDR' : (currencyKeys[0] || 'USD');
+  const otherCurrencies = currencyKeys.filter(c => c !== primaryCurrency);
+
+  const inProductionCount = orders.filter(o => ['in-production', 'in_production'].includes(String(o.status).replace('wc-', ''))).length;
+  const processingCount = orders.filter(o => String(o.status).replace('wc-', '') === 'processing').length;
+  const shippedCount = orders.filter(o => String(o.status).replace('wc-', '') === 'shipped').length;
+  const deliveredCount = orders.filter(o => ['completed', 'delivered'].includes(String(o.status).replace('wc-', ''))).length;
 
   return (
     <div className="space-y-6">
+      {/* Top Banner & Refresh */}
       <PageHeroHeader
-        title="Orders & Fulfillment Pipeline"
-        subtitle="Manage live orders, custom skin layer specs, and Biteship/JNE tracking resi"
-        icon={<ShoppingBag className="w-5 h-5" />}
-        action={
-          <Button
-            variant="outline"
-            size="sm"
+        title="Orders"
+        subtitle="Orders, production, and delivery."
+        actions={
+          <button
             onClick={() => loadOrders(true)}
-            isLoading={isRefreshing}
-            className="gap-2 text-xs"
+            disabled={isLoading || isRefreshing}
+            className="px-4 py-2 rounded-xl bg-[#141414] hover:bg-white/[0.06] text-neutral-300 hover:text-white border border-white/[0.08] text-xs font-semibold font-sans flex items-center gap-2 transition-all shrink-0 self-start sm:self-auto disabled:opacity-50"
           >
-            <RefreshCw className={isRefreshing ? 'w-3.5 h-3.5 animate-spin' : 'w-3.5 h-3.5'} />
-            <span>Refresh</span>
-          </Button>
+            <RefreshCw className={clsx('w-3.5 h-3.5', (isLoading || isRefreshing) && 'animate-spin text-[#f3aa18]')} />
+            Refresh
+          </button>
         }
       />
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <GlassCard className="p-4 space-y-1">
-          <div className="flex items-center justify-between text-zinc-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Processing</span>
-            <Clock className="w-4 h-4 text-amber-400" />
+      {/* Metric KPI Cards Header (Obsidian Glass Design System) */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-4">
+        {/* Total Orders */}
+        <GlassCard className="p-4 sm:p-5 flex flex-col justify-between font-sans group transition-all min-h-[120px]">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 truncate">
+              All Orders
+            </p>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-white/[0.04] text-zinc-400 border border-white/[0.06] shrink-0">
+              All
+            </span>
           </div>
-          <div className="text-2xl font-bold text-white font-chakra">{processingCount}</div>
-          <p className="text-[11px] text-zinc-500">Awaiting skin cutting & packing</p>
+          <div className="my-1 space-y-1">
+            <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-white font-mono tabular-nums">
+              {orders.length}
+            </h3>
+            <p className="text-xs text-zinc-400 font-mono leading-relaxed line-clamp-1">
+              Store orders placed
+            </p>
+          </div>
         </GlassCard>
 
-        <GlassCard className="p-4 space-y-1">
-          <div className="flex items-center justify-between text-zinc-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Ready to Ship</span>
-            <Truck className="w-4 h-4 text-blue-400" />
+        {/* Processing Queue */}
+        <GlassCard className={clsx(
+          "p-4 sm:p-5 flex flex-col justify-between font-sans group transition-all min-h-[120px]",
+          processingCount > 0 && "border-amber-500/30 shadow-[0_0_20px_rgba(245,158,11,0.08)]"
+        )}>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 truncate">
+              Confirmed
+            </p>
+            <span className={clsx(
+              "inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-bold shrink-0 border",
+              processingCount > 0
+                ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                : "bg-white/[0.04] text-zinc-400 border-white/[0.06]"
+            )}>
+              {processingCount > 0 ? 'To prepare' : 'Clear'}
+            </span>
           </div>
-          <div className="text-2xl font-bold text-white font-chakra">{readyToShipCount}</div>
-          <p className="text-[11px] text-zinc-500">Packed and courier label printed</p>
+          <div className="my-1 space-y-1">
+            <h3 className={clsx(
+              "text-xl sm:text-2xl font-bold tracking-tight font-mono tabular-nums",
+              processingCount > 0 ? "text-amber-400 font-medium" : "text-white"
+            )}>
+              {processingCount}
+            </h3>
+            <p className="text-xs text-zinc-400 font-mono leading-relaxed line-clamp-1">
+              Ready for production
+            </p>
+          </div>
         </GlassCard>
 
-        <GlassCard className="p-4 space-y-1">
-          <div className="flex items-center justify-between text-zinc-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Delivered</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+        {/* In Production */}
+        <GlassCard className={clsx(
+          "p-4 sm:p-5 flex flex-col justify-between font-sans group transition-all min-h-[120px]",
+          inProductionCount > 0 && "border-cyan-500/30 shadow-[0_0_20px_rgba(6,182,212,0.08)]"
+        )}>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 truncate">
+              In Production
+            </p>
+            <span className={clsx(
+              "inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-bold shrink-0 border",
+              inProductionCount > 0
+                ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"
+                : "bg-white/[0.04] text-zinc-400 border-white/[0.06]"
+            )}>
+              Active
+            </span>
           </div>
-          <div className="text-2xl font-bold text-white font-chakra">{completedCount}</div>
-          <p className="text-[11px] text-zinc-500">Fulfilled customer orders</p>
+          <div className="my-1 space-y-1">
+            <h3 className={clsx(
+              "text-xl sm:text-2xl font-bold tracking-tight font-mono tabular-nums",
+              inProductionCount > 0 ? "text-cyan-400 font-medium" : "text-white"
+            )}>
+              {inProductionCount}
+            </h3>
+            <p className="text-xs text-zinc-400 font-mono leading-relaxed line-clamp-1">
+              Being prepared
+            </p>
+          </div>
         </GlassCard>
 
-        <GlassCard className="p-4 space-y-1">
-          <div className="flex items-center justify-between text-zinc-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Gross Revenue</span>
-            <Layers className="w-4 h-4 text-[#f3aa18]" />
+        {/* Shipped & Dispatched */}
+        <GlassCard className="p-4 sm:p-5 flex flex-col justify-between font-sans group transition-all min-h-[120px]">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 truncate">
+              Shipped
+            </p>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20 shrink-0">
+              On the way
+            </span>
           </div>
-          <div className="text-2xl font-bold text-[#f3aa18] font-chakra">
-            {formatCurrency(currencyTotals[primaryCurr] || 0, primaryCurr)}
+          <div className="my-1 space-y-1">
+            <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-sky-400 font-mono tabular-nums">
+              {shippedCount}
+            </h3>
+            <p className="text-xs text-zinc-400 font-mono leading-relaxed line-clamp-1">
+              {deliveredCount} delivered
+            </p>
           </div>
-          <p className="text-[11px] text-zinc-500">
-            {Object.keys(currencyTotals).length > 1
-              ? Object.entries(currencyTotals)
-                  .filter(([c]) => c !== primaryCurr)
-                  .map(([c, v]) => formatCurrency(v, c))
-                  .join(' | ')
-              : 'Direct from store API'}
-          </p>
         </GlassCard>
-      </div>
 
-      {/* Filter Tabs & Search Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-2">
-        <div className="flex items-center gap-1.5 p-1 bg-[#0d0d11] border border-white/[0.08] rounded-xl self-start">
-          {[
-            { id: 'all', label: 'All Orders' },
-            { id: 'processing', label: 'Processing' },
-            { id: 'ready-to-ship', label: 'Ready to Ship' },
-            { id: 'completed', label: 'Completed' },
-            { id: 'cancelled', label: 'Cancelled' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={'px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer min-h-[44px] ' + (
-                activeTab === tab.id
-                  ? 'bg-[#f3aa18] text-black font-bold'
-                  : 'text-zinc-400 hover:text-white'
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="relative w-full md:w-72">
-          <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search order #, customer, resi..."
-            value={localSearch}
-            onChange={(e) => setLocalSearch(e.target.value)}
-            className="w-full bg-[#0d0d11] border border-white/[0.08] text-xs text-zinc-200 placeholder-zinc-500 pl-9 pr-3 py-2 rounded-xl focus:border-[#f3aa18] min-h-[44px]"
-          />
-        </div>
+        {/* Gross Revenue */}
+        <GlassCard className="p-4 sm:p-5 flex flex-col justify-between font-sans group transition-all min-h-[120px] col-span-2 sm:col-span-2 lg:col-span-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 truncate">
+              Total Sales
+            </p>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/20 shrink-0">
+              Revenue
+            </span>
+          </div>
+          <div className="my-1 space-y-1">
+            <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-[#f3aa18] font-mono tabular-nums">
+              {formatCurrency(currencyBreakdown[primaryCurrency]?.total || 0, primaryCurrency)}
+            </h3>
+            <div className="flex flex-col gap-0.5 pt-0.5">
+              <span className="text-[10px] text-zinc-400 font-mono">
+                {orders.length} total orders placed
+              </span>
+              {otherCurrencies.map(curr => (
+                <span key={curr} className="text-[9px] text-zinc-500 font-mono">
+                  + {formatCurrency(currencyBreakdown[curr].total, curr)} ({currencyBreakdown[curr].count} orders)
+                </span>
+              ))}
+            </div>
+          </div>
+        </GlassCard>
       </div>
 
       {/* Orders Table */}
@@ -213,25 +238,16 @@ export const OrdersView: React.FC<OrdersViewProps> = ({ searchFilter = '' }) => 
         orders={orders}
         isLoading={isLoading}
         onSelectOrder={handleSelectOrder}
-        onPrintA6={(ord) => setLabelOrder(ord)}
+        onRefresh={() => loadOrders(false)}
       />
 
-      {/* Detail Drawer */}
+      {/* Order Detail & Fulfillment Drawer */}
       <OrderDetailDrawer
         order={selectedOrder}
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
-        onOrderUpdated={handleOrderUpdated}
+        onOrderUpdated={() => loadOrders(true)}
       />
-
-      {/* A6 Print Modal */}
-      {labelOrder && (
-        <ShippingLabelA6Modal
-          order={labelOrder}
-          isOpen={!!labelOrder}
-          onClose={() => setLabelOrder(null)}
-        />
-      )}
     </div>
   );
 };

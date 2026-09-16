@@ -1,0 +1,781 @@
+/**
+ * Artmatter Mini Cart & Slide-Over Luxury Drawer Styles
+ * Deep Obsidian Glassmorphism, Museum Mat Aesthetics, and Precision Typography
+ */
+
+:root {
+  --am-mc-bg: #09090b;
+  --am-mc-panel-bg: #0d0d10;
+  --am-mc-card-bg: #131316;
+  --am-mc-card-hover: #18181c;
+  --am-mc-border: rgba(255, 255, 255, 0.08);
+  --am-mc-border-subtle: rgba(255, 255, 255, 0.05);
+  --am-mc-primary: #f3aa18;
+  --am-mc-primary-hover: #b8ff75;
+  --am-mc-text-primary: #ffffff;
+  --am-mc-text-secondary: #a1a1aa;
+  --am-mc-text-muted: #71717a;
+  --am-mc-font: inherit;
+}
+
+/* 1. Header Trigger Button & Custom Bricks Trigger Badges */
+.artmatter-cart-trigger,
+#brxe-asapjl,
+.cart-toggle {
+  cursor: pointer;
+}
+
+.artmatter-cart-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  background: #111114;
+  border: 1px solid var(--am-mc-border);
+  border-radius: 50%;
+  color: #f4f4f5;
+  cursor: pointer;
+  outline: none;
+  padding: 0;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.artmatter-cart-trigger-btn:hover {
+  background: #18181c;
+  border-color: rgba(169, 255, 93, 0.4);
+  color: var(--am-mc-primary);
+  transform: scale(1.04);
+}
+
+.artmatter-cart-icon-box {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.artmatter-cart-icon-box .artmatter-cart-count-badge {
+  position: absolute !important;
+  top: -5px !important;
+  right: -7px !important;
+  left: auto !important;
+  bottom: auto !important;
+}
+
+.artmatter-cart-count-badge {
+  position: fixed;
+  background: var(--am-mc-primary, #f3aa18) !important;
+  color: #09090b !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  font-family: "Neue Haas Display", "Neue Haas Grotesk Text Pro", inherit, sans-serif !important;
+  line-height: 1 !important;
+  padding: 2px 5px !important;
+  border-radius: 9999px !important;
+  min-width: 16px !important;
+  height: 16px !important;
+  box-sizing: border-box !important;
+  display: inline-flex;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.7), 0 0 10px rgba(169, 255, 93, 0.4) !important;
+  pointer-events: none !important;
+  z-index: 999999 !important;
+  transform: none !important;
+  margin: 0 !important;
+}
+
+/* STRICT RULE: If count is 0, empty, or hidden, NEVER show the badge */
+.artmatter-cart-count-badge[data-count="0"],
+.artmatter-cart-count-badge.is-zero,
+.artmatter-cart-count-badge:empty,
+.artmatter-cart-count-badge[style*="display: none"],
+.artmatter-cart-count-badge[style*="display:none"],
+body > .artmatter-cart-count-badge[data-count="0"],
+body > .artmatter-cart-count-badge.is-zero,
+body > .artmatter-cart-count-badge:empty {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* 2. Top-Right Floating Context Card Shell */
+.artmatter-mini-cart-drawer {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 9999999 !important;
+  visibility: hidden;
+  pointer-events: none;
+  transition: visibility 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: inherit;
+  -webkit-font-smoothing: antialiased;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.artmatter-mini-cart-drawer.is-open {
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* Translucent Soft Blur Backdrop */
+.artmatter-mc-backdrop {
+  position: absolute !important;
+  inset: 0 !important;
+  background: rgba(0, 0, 0, 0.45) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  opacity: 0 !important;
+  transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  cursor: pointer;
+}
+
+.artmatter-mini-cart-drawer.is-open .artmatter-mc-backdrop {
+  opacity: 1 !important;
+}
+
+/* Floating Luxury Context Card Popover */
+.artmatter-mc-panel {
+  position: absolute !important;
+  top: 76px;
+  right: 24px;
+  bottom: auto;
+  left: auto;
+  width: 390px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 96px);
+  max-height: calc(100dvh - 96px);
+  height: auto;
+  background: rgba(13, 13, 16, 0.96) !important;
+  backdrop-filter: blur(28px) !important;
+  -webkit-backdrop-filter: blur(28px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.06) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  transform: scale(0.95) translateY(-8px) !important;
+  transform-origin: top right;
+  opacity: 0 !important;
+  will-change: transform, opacity, top, right, left !important;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  z-index: 10 !important;
+}
+
+.artmatter-mini-cart-drawer.is-open .artmatter-mc-panel {
+  transform: scale(1) translateY(0) !important;
+  opacity: 1 !important;
+}
+
+/* 3. Context Card Header */
+.artmatter-mc-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 16px 20px 14px !important;
+  background: rgba(9, 9, 11, 0.5) !important;
+  border-bottom: 1px solid var(--am-mc-border-subtle) !important;
+  flex-shrink: 0 !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+}
+
+.artmatter-mc-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.artmatter-mc-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--am-mc-text-primary);
+  letter-spacing: -0.02em;
+}
+
+.artmatter-mc-header-badge {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(169, 255, 93, 0.1);
+  color: var(--am-mc-primary);
+  border: 1px solid rgba(169, 255, 93, 0.3);
+  font-size: 11px;
+  font-weight: 300;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  line-height: 1;
+}
+
+.artmatter-mc-btn-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--am-mc-border);
+  color: var(--am-mc-text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.artmatter-mc-btn-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  transform: scale(1.05);
+}
+
+/* 4. Scrollable Body */
+.artmatter-mc-body {
+  flex: 1;
+  max-height: 350px;
+  overflow-y: auto;
+  padding: 16px 20px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.artmatter-mc-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.artmatter-mc-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 9999px;
+}
+
+/* 6. Empty State */
+.artmatter-mc-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 60px 16px;
+  min-height: 280px;
+}
+
+.artmatter-mc-empty-icon-wrap {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--am-mc-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--am-mc-text-muted);
+  margin-bottom: 20px;
+}
+
+.artmatter-mc-empty-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--am-mc-text-primary);
+}
+
+.artmatter-mc-empty-desc {
+  margin: 0 0 24px;
+  font-size: 12.5px;
+  color: var(--am-mc-text-secondary);
+  max-width: 260px;
+  line-height: 1.5;
+}
+
+.artmatter-mc-btn-discover {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(169, 255, 93, 0.12);
+  border: 1px solid rgba(169, 255, 93, 0.4);
+  color: var(--am-mc-primary);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 9px 20px;
+  border-radius: 9999px;
+  text-decoration: none;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.artmatter-mc-btn-discover:hover {
+  background: var(--am-mc-primary);
+  color: #09090b;
+  box-shadow: 0 0 20px rgba(169, 255, 93, 0.3);
+  transform: scale(1.02);
+}
+
+/* 7. Cart Items List */
+.artmatter-mc-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.artmatter-mc-item-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--am-mc-card-bg);
+  border: 1px solid var(--am-mc-border);
+  border-radius: 12px;
+  padding: 12px;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.artmatter-mc-item-card:hover {
+  background: var(--am-mc-card-hover);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.artmatter-mc-thumb-link {
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+/* Museum Mat Thumbnail Frame */
+.artmatter-mc-mat-frame {
+  width: 68px;
+  aspect-ratio: 32 / 45;
+  background: radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.12) 40%, rgba(0, 0, 0, 0.06) 75%, rgba(0, 0, 0, 0.15) 100%), #c6c5c2 !important;
+  border-radius: 2px;
+  padding: 7px 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  box-sizing: border-box;
+  overflow: hidden;
+  transition: transform 0.2s ease;
+}
+
+.artmatter-mc-mat-frame.is-landscape {
+  aspect-ratio: 45 / 32;
+  width: 78px;
+}
+
+.artmatter-mc-item-card:hover .artmatter-mc-mat-frame {
+  transform: scale(1.03);
+}
+
+.artmatter-mc-art-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  background: transparent;
+}
+
+/* Item Information & Controls */
+.artmatter-mc-item-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.artmatter-mc-item-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.artmatter-mc-title-group {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.artmatter-mc-item-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--am-mc-text-primary);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+  transition: color 0.15s ease;
+}
+
+.artmatter-mc-item-title:hover {
+  color: var(--am-mc-primary);
+}
+
+.artmatter-mc-item-artist {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--am-mc-text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.15s ease;
+}
+
+.artmatter-mc-item-artist:hover {
+  color: var(--am-mc-text-secondary);
+}
+
+.artmatter-mc-btn-remove {
+  background: transparent;
+  border: none;
+  color: var(--am-mc-text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.artmatter-mc-btn-remove:hover {
+  color: #f43f5e;
+  background: rgba(244, 63, 94, 0.1);
+  transform: scale(1.1);
+}
+
+/* Bottom Controls */
+.artmatter-mc-item-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 2px;
+}
+
+.artmatter-mc-qty-control {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--am-mc-border);
+  border-radius: 20px;
+  padding: 2px;
+  gap: 4px;
+}
+
+.artmatter-mc-qty-btn {
+  background: transparent;
+  border: none;
+  color: var(--am-mc-text-secondary);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.artmatter-mc-qty-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.artmatter-mc-qty-value {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--am-mc-text-primary);
+  min-width: 14px;
+  text-align: center;
+  line-height: 1;
+}
+
+.artmatter-mc-item-price {
+  font-size: 13px;
+  font-weight: 400 !important;
+  color: #e4e4e7;
+  letter-spacing: -0.01em;
+}
+
+.artmatter-mc-item-price del {
+  opacity: 0.4;
+  text-decoration: line-through;
+  font-size: inherit;
+  font-weight: inherit;
+  margin-right: 5px;
+  color: inherit;
+}
+
+.artmatter-mc-item-price ins {
+  text-decoration: none;
+  color: var(--am-mc-primary, #f3aa18);
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+/* Clean Meta Tags */
+.artmatter-mc-meta-clean {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.artmatter-mc-meta-tag {
+  font-size: 10.5px;
+  color: #a1a1aa;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 1.5px 7px;
+  border-radius: 5px;
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.artmatter-mc-meta-tag .meta-k {
+  color: #71717a;
+  font-weight: 400;
+}
+
+.artmatter-mc-meta-tag .meta-v {
+  color: #e4e4e7;
+  font-weight: 500;
+}
+
+/* 8. Drawer Footer & Checkout */
+.artmatter-mc-footer {
+  padding: 20px 24px 24px;
+  background: var(--am-mc-bg);
+  border-top: 1px solid var(--am-mc-border);
+  flex-shrink: 0;
+}
+
+.artmatter-mc-subtotal-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.artmatter-mc-subtotal-label {
+  font-size: 18px !important;
+  font-weight: 300 !important;
+  color: #a1a1aa !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.2 !important;
+}
+
+.artmatter-mc-subtotal-amount {
+  font-size: 18px !important;
+  font-weight: 300 !important;
+  color: var(--am-mc-text-primary) !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.2 !important;
+}
+
+.artmatter-mc-artist-discount-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  margin-bottom: 12px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.artmatter-mc-artist-discount-label {
+  font-size: 13px !important;
+  font-weight: 300 !important;
+  color: var(--am-mc-primary, #f3aa18) !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  letter-spacing: -0.01em;
+}
+
+.artmatter-mc-artist-discount-amount {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: var(--am-mc-primary, #f3aa18) !important;
+  font-family: var(--font-mono, monospace);
+  letter-spacing: -0.01em;
+}
+
+.artmatter-mc-shipping-note {
+  margin: 0 0 16px;
+  font-size: 11px;
+  color: var(--am-mc-text-muted);
+  line-height: 1.3;
+}
+
+.artmatter-mc-btn-checkout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  background: var(--am-mc-primary);
+  color: #09090b;
+  font-family: inherit !important;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  padding: 13px 20px;
+  border-radius: 12px;
+  text-decoration: none;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 20px rgba(169, 255, 93, 0.25);
+  box-sizing: border-box;
+}
+
+.artmatter-mc-btn-checkout:hover {
+  background: var(--am-mc-primary-hover);
+  box-shadow: 0 6px 28px rgba(169, 255, 93, 0.4);
+  transform: translateY(-1px);
+}
+
+/* 9. Art of the Day / Random Artwork Navbar Card */
+.artmatter-aotd-card {
+  display: block;
+  width: 100%;
+  max-width: 280px;
+  background: rgba(20, 22, 27, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+  box-sizing: border-box;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  text-decoration: none;
+}
+
+.artmatter-aotd-card:hover {
+  background: rgba(26, 29, 36, 0.95);
+  border-color: rgba(169, 255, 93, 0.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(169, 255, 93, 0.1);
+  transform: translateY(-2px);
+}
+
+.artmatter-aotd-link {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.artmatter-aotd-mat-frame {
+  width: 100%;
+  aspect-ratio: 32 / 45;
+  background: radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.12) 40%, rgba(0, 0, 0, 0.06) 75%, rgba(0, 0, 0, 0.15) 100%), #c6c5c2 !important;
+  border-radius: 4px;
+  padding: 8px 6px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s ease;
+}
+
+.artmatter-aotd-card.is-landscape .artmatter-aotd-mat-frame {
+  aspect-ratio: 45 / 32;
+}
+
+.artmatter-aotd-card:hover .artmatter-aotd-mat-frame {
+  transform: scale(1.02);
+}
+
+.artmatter-aotd-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+.artmatter-aotd-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.artmatter-aotd-badge {
+  display: inline-block;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--am-mc-primary);
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.artmatter-aotd-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.artmatter-aotd-artist {
+  font-size: 11.5px;
+  color: #a1a1aa;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+/* 10. Mobile Responsiveness */
+@media (max-width: 640px) {
+  .artmatter-mc-panel {
+    border-radius: 18px !important;
+    transform: scale(0.96) translateY(-6px) !important;
+    transform-origin: top center;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.92), 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+  }
+  .artmatter-mini-cart-drawer.is-open .artmatter-mc-panel {
+    transform: scale(1) translateY(0) !important;
+  }
+  .artmatter-mc-header {
+    padding: 14px 16px 12px !important;
+  }
+  .artmatter-mc-body {
+    padding: 12px 16px !important;
+    max-height: 48vh !important;
+    max-height: 48dvh !important;
+  }
+  .artmatter-mc-footer {
+    padding: 14px 16px 16px !important;
+  }
+}

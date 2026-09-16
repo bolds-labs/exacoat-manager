@@ -5,9 +5,8 @@ interface ImportMetaEnv {
   readonly VITE_WORDPRESS_URL?: string;
   readonly VITE_WC_CONSUMER_KEY?: string;
   readonly VITE_WC_CONSUMER_SECRET?: string;
-  readonly VITE_SUPABASE_URL?: string;
-  readonly VITE_SUPABASE_ANON_KEY?: string;
   readonly VITE_ADMIN_EMAIL?: string;
+  readonly VITE_N8N_WEBHOOK_URL?: string;
 }
 
 interface ImportMeta {

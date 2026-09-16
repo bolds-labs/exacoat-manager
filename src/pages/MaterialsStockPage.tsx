@@ -1,0 +1,487 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { PageHeroHeader } from '../components/ui/PageHeroHeader';
+import { GlassCard } from '../components/ui/GlassCard';
+import { useToast } from '../context/ToastContext';
+import {
+  fetchGlobalFinishesDirect,
+  toggleFinishStockDirect,
+  saveGlobalFinishDirect,
+  GlobalFinish,
+  DEFAULT_GLOBAL_FINISHES,
+} from '../lib/wordpressBridge';
+import {
+  Layers,
+  Search,
+  CheckCircle2,
+  AlertTriangle,
+  Plus,
+  RefreshCw,
+  Sparkles,
+  Package,
+  ExternalLink,
+  Filter,
+  Check,
+  X,
+} from 'lucide-react';
+import { clsx } from 'clsx';
+
+export const MaterialsStockPage: React.FC = () => {
+  const { showToast } = useToast();
+  const [finishes, setFinishes] = useState<GlobalFinish[]>(DEFAULT_GLOBAL_FINISHES);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState<string>('all');
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // New Material Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [newFinish, setNewFinish] = useState({
+    name: '',
+    group: 'Signature skins',
+    slug: '',
+    thumbnail: '',
+    extra_price: 0,
+    in_stock: true,
+  });
+
+  const loadFinishes = async (quiet = false) => {
+    try {
+      if (!quiet) setIsLoading(true);
+      else setIsRefreshing(true);
+
+      const res = await fetchGlobalFinishesDirect();
+      if (res.finishes && Array.isArray(res.finishes) && res.finishes.length > 0) {
+        setFinishes(res.finishes);
+      }
+    } catch (err: any) {
+      console.warn('Materials inventory load warning:', err);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadFinishes();
+  }, []);
+
+  const handleToggleStock = async (finish: GlobalFinish) => {
+    const nextStock = !finish.in_stock;
+    setUpdatingId(finish.id);
+
+    // Optimistic update
+    setFinishes((prev) =>
+      prev.map((f) => (f.id === finish.id ? { ...f, in_stock: nextStock } : f))
+    );
+
+    try {
+      const res = await toggleFinishStockDirect(finish.id, nextStock);
+      if (res.success) {
+        showToast(
+          'success',
+          'Stock Status Updated',
+          `${finish.name} marked as ${nextStock ? 'IN STOCK' : 'OUT OF STOCK'}. Propagated across all device configurators.`
+        );
+      } else {
+        // Revert on failure
+        setFinishes((prev) =>
+          prev.map((f) => (f.id === finish.id ? { ...f, in_stock: finish.in_stock } : f))
+        );
+        showToast('error', 'Update Failed', res.error || 'Failed updating stock status');
+      }
+    } catch (err: any) {
+      setFinishes((prev) =>
+        prev.map((f) => (f.id === finish.id ? { ...f, in_stock: finish.in_stock } : f))
+      );
+      showToast('error', 'Store Error', err.message || 'Communication error with store');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleCreateFinish = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFinish.name.trim()) {
+      showToast('error', 'Validation Error', 'Finish name is required');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const slug =
+        newFinish.slug.trim() ||
+        newFinish.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+      const res = await saveGlobalFinishDirect({
+        name: newFinish.name.trim(),
+        slug,
+        group: newFinish.group,
+        class_name: `cfg-${slug}`,
+        thumbnail: newFinish.thumbnail.trim(),
+        extra_price: Number(newFinish.extra_price) || 0,
+        in_stock: newFinish.in_stock,
+      });
+
+      if (res.success) {
+        showToast('success', 'Material Registered', `Material finish "${newFinish.name}" registered successfully.`);
+        setIsModalOpen(false);
+        setNewFinish({
+          name: '',
+          group: 'Signature skins',
+          slug: '',
+          thumbnail: '',
+          extra_price: 0,
+          in_stock: true,
+        });
+        loadFinishes(true);
+      } else {
+        showToast('error', 'Registration Failed', res.error || 'Failed registering finish');
+      }
+    } catch (err: any) {
+      showToast('error', 'Save Error', err.message || 'Error saving finish');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Unique groups
+  const groups = useMemo(() => {
+    const list = Array.from(new Set(finishes.map((f) => f.group))).filter(Boolean);
+    return ['all', ...list];
+  }, [finishes]);
+
+  // Filtered finishes
+  const filteredFinishes = useMemo(() => {
+    return finishes.filter((f) => {
+      const matchesSearch =
+        f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        f.slug.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        f.group.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesGroup = selectedGroup === 'all' || f.group === selectedGroup;
+
+      return matchesSearch && matchesGroup;
+    });
+  }, [finishes, searchQuery, selectedGroup]);
+
+  // Inventory stats
+  const stats = useMemo(() => {
+    const total = finishes.length;
+    const inStock = finishes.filter((f) => f.in_stock).length;
+    const outOfStock = total - inStock;
+    return { total, inStock, outOfStock };
+  }, [finishes]);
+
+  return (
+    <div className="space-y-6">
+      {/* Top Banner */}
+      <PageHeroHeader
+        title="Materials & Finishes Inventory"
+        subtitle="Workshop vinyl rolls and texture availability. Toggling a finish out of stock updates all phone, laptop, and console configurators storewide immediately."
+        actions={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => loadFinishes(true)}
+              disabled={isRefreshing}
+              className="px-3.5 py-2 text-xs font-mono font-medium rounded-xl border border-white/10 hover:bg-white/[0.04] text-zinc-300 transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={clsx('w-3.5 h-3.5', isRefreshing && 'animate-spin text-[#f3aa18]')} />
+              Refresh
+            </button>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="px-4 py-2 text-xs font-mono font-bold rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black transition-colors flex items-center gap-2 shadow-sm cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Finish
+            </button>
+          </div>
+        }
+      />
+
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <GlassCard className="p-4 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-[#f3aa18] shrink-0">
+            <Layers className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider">Total Finishes</p>
+            <p className="text-2xl font-mono font-bold text-white mt-0.5">{stats.total}</p>
+          </div>
+        </GlassCard>
+
+        <GlassCard className="p-4 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider">In Stock</p>
+            <p className="text-2xl font-mono font-bold text-emerald-400 mt-0.5">{stats.inStock}</p>
+          </div>
+        </GlassCard>
+
+        <GlassCard className="p-4 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+            <AlertTriangle className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider">Depleted Finishes</p>
+            <p className="text-2xl font-mono font-bold text-rose-400 mt-0.5">{stats.outOfStock}</p>
+          </div>
+        </GlassCard>
+      </div>
+
+      {/* Filter and Search Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        {/* Search */}
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search material by name or group..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 text-xs rounded-xl bg-zinc-900/60 border border-white/10 text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/50"
+          />
+        </div>
+
+        {/* Group Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+          {groups.map((grp) => (
+            <button
+              key={grp}
+              onClick={() => setSelectedGroup(grp)}
+              className={clsx(
+                'px-3 py-1.5 text-xs font-mono rounded-lg transition-colors capitalize whitespace-nowrap cursor-pointer',
+                selectedGroup === grp
+                  ? 'bg-white/10 text-white font-bold border border-white/20'
+                  : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'
+              )}
+            >
+              {grp === 'all' ? 'All Finishes' : grp}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Grid of Materials */}
+      {isLoading ? (
+        <div className="h-64 flex flex-col items-center justify-center gap-3">
+          <RefreshCw className="w-6 h-6 animate-spin text-[#f3aa18]" />
+          <p className="text-xs font-mono text-zinc-500">Loading materials database...</p>
+        </div>
+      ) : filteredFinishes.length === 0 ? (
+        <GlassCard className="p-12 text-center">
+          <Package className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
+          <p className="text-sm font-medium text-zinc-300">No materials matched your search</p>
+          <p className="text-xs text-zinc-500 mt-1">Try searching for a different name or switch filter category.</p>
+        </GlassCard>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredFinishes.map((finish) => {
+            const isUpdating = updatingId === finish.id;
+
+            return (
+              <GlassCard
+                key={finish.id}
+                className={clsx(
+                  'p-4 transition-all duration-200 flex flex-col justify-between border',
+                  finish.in_stock
+                    ? 'border-white/10 hover:border-white/20'
+                    : 'border-rose-500/30 bg-rose-950/10'
+                )}
+              >
+                <div>
+                  {/* Top Row: Thumbnail + Category + Stock Status Badge */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl overflow-hidden bg-zinc-800 border border-white/10 shrink-0 flex items-center justify-center">
+                        {finish.thumbnail ? (
+                          <img
+                            src={finish.thumbnail}
+                            alt={finish.name}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <Sparkles className="w-5 h-5 text-zinc-600" />
+                        )}
+                      </div>
+
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-bold text-white truncate">{finish.name}</h4>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/[0.06] text-zinc-400 border border-white/10 inline-block mt-1">
+                          {finish.group}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Stock Status Pill */}
+                    <span
+                      className={clsx(
+                        'text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 border',
+                        finish.in_stock
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                          : 'bg-rose-500/15 text-rose-400 border-rose-500/40'
+                      )}
+                    >
+                      {finish.in_stock ? 'In Stock' : 'Depleted'}
+                    </span>
+                  </div>
+
+                  {/* Pricing / Meta info */}
+                  <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono">
+                    <span className="text-zinc-500">Tier surcharge:</span>
+                    <span className="text-zinc-300 font-bold">
+                      {(finish.extra_price ?? 0) > 0
+                        ? `+IDR ${(finish.extra_price ?? 0).toLocaleString('id-ID')}`
+                        : 'Standard (IDR 0)'}
+                    </span>
+                  </div>
+
+                  <div className="mt-1 flex items-center justify-between text-[11px] font-mono">
+                    <span className="text-zinc-500">CSS Class:</span>
+                    <span className="text-zinc-400 truncate max-w-[140px]">{finish.class_name || finish.slug}</span>
+                  </div>
+                </div>
+
+                {/* Stock Toggle Action */}
+                <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between">
+                  <span className="text-xs text-zinc-400 font-sans">
+                    {finish.in_stock ? 'Available storewide' : 'Disabled storewide'}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => handleToggleStock(finish)}
+                    disabled={isUpdating}
+                    className={clsx(
+                      'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50',
+                      finish.in_stock ? 'bg-emerald-500' : 'bg-zinc-700'
+                    )}
+                    aria-label={`Toggle stock for ${finish.name}`}
+                  >
+                    <span
+                      className={clsx(
+                        'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out',
+                        finish.in_stock ? 'translate-x-5' : 'translate-x-0'
+                      )}
+                    />
+                  </button>
+                </div>
+              </GlassCard>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Add Finish Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-zinc-950 border border-white/10 p-6 shadow-2xl relative">
+            <div className="flex items-center justify-between pb-4 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-[#f3aa18]" />
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
+                  Register New Material Finish
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateFinish} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-mono text-zinc-400 mb-1">Finish Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Swarm, Patina, Titanium Black"
+                  value={newFinish.name}
+                  onChange={(e) => setNewFinish({ ...newFinish, name: e.target.value })}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-zinc-400 mb-1">Category Group</label>
+                <select
+                  value={newFinish.group}
+                  onChange={(e) => setNewFinish({ ...newFinish, group: e.target.value })}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                >
+                  <option value="Signature skins">Signature skins</option>
+                  <option value="Colors">Colors</option>
+                  <option value="Natural">Natural</option>
+                  <option value="Custom Edition">Custom Edition</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-zinc-400 mb-1">Thumbnail Image URL</label>
+                <input
+                  type="url"
+                  placeholder="https://exacoat.com/wp-content/uploads/..."
+                  value={newFinish.thumbnail}
+                  onChange={(e) => setNewFinish({ ...newFinish, thumbnail: e.target.value })}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-zinc-400 mb-1">Extra Surcharge (IDR)</label>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={newFinish.extra_price}
+                  onChange={(e) => setNewFinish({ ...newFinish, extra_price: Number(e.target.value) })}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/60 border border-white/5">
+                <div>
+                  <p className="text-xs font-bold text-white">Initial Stock Availability</p>
+                  <p className="text-[11px] text-zinc-500">Enable material in product configurators</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={newFinish.in_stock}
+                  onChange={(e) => setNewFinish({ ...newFinish, in_stock: e.target.checked })}
+                  className="w-4 h-4 rounded text-[#f3aa18] focus:ring-0 bg-zinc-800 border-white/20"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 text-xs font-mono rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="px-4 py-2 text-xs font-mono font-bold rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {isSaving ? 'Saving...' : 'Register Material'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

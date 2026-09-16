@@ -1,5 +1,6 @@
 import React from 'react';
 import { clsx } from 'clsx';
+import { twMerge } from 'tailwind-merge';
 
 interface GlassCardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
@@ -9,16 +10,21 @@ interface GlassCardProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export const GlassCard: React.FC<GlassCardProps> = ({
   children,
-  className,
+  className = '',
   hoverEffect = false,
   ...props
 }) => {
+  const isOverflowSpecified = className.includes('overflow-');
+
   return (
     <div
-      className={clsx(
-        'bg-[#0d0d11] border border-white/[0.08] rounded-2xl p-5 relative overflow-hidden',
-        hoverEffect && 'transition-all duration-200 hover:border-white/[0.16] hover:bg-[#121217]',
-        className
+      className={twMerge(
+        clsx(
+          'glass-panel exacoat-glass rounded-2xl relative transition-[background-color,border-color,box-shadow,transform] duration-200 animate-card-enter',
+          !isOverflowSpecified && 'overflow-hidden',
+          hoverEffect && 'glass-panel-hover exacoat-glass-hover cursor-pointer',
+          className
+        )
       )}
       {...props}
     >
