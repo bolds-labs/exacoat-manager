@@ -41,8 +41,10 @@ export const ShopeeSettingsModal: React.FC<ShopeeSettingsModalProps> = ({
   const [environment, setEnvironment] = useState<'sandbox' | 'live'>('sandbox');
   const [testPartnerId, setTestPartnerId] = useState<number>(1244885);
   const [testPartnerKey, setTestPartnerKey] = useState<string>('');
+  const [testPushPartnerKey, setTestPushPartnerKey] = useState<string>('');
   const [livePartnerId, setLivePartnerId] = useState<number>(2011551);
   const [livePartnerKey, setLivePartnerKey] = useState<string>('');
+  const [livePushPartnerKey, setLivePushPartnerKey] = useState<string>('');
   const [shopId, setShopId] = useState<number>(227918647);
   const [shopName, setShopName] = useState<string>('');
 
@@ -102,8 +104,14 @@ export const ShopeeSettingsModal: React.FC<ShopeeSettingsModalProps> = ({
       if (testPartnerKey.trim()) {
         payload.test_partner_key = testPartnerKey.trim();
       }
+      if (testPushPartnerKey.trim()) {
+        payload.test_push_partner_key = testPushPartnerKey.trim();
+      }
       if (livePartnerKey.trim()) {
         payload.live_partner_key = livePartnerKey.trim();
+      }
+      if (livePushPartnerKey.trim()) {
+        payload.live_push_partner_key = livePushPartnerKey.trim();
       }
 
       const res = await saveShopeeSettingsDirect(payload);
@@ -113,7 +121,9 @@ export const ShopeeSettingsModal: React.FC<ShopeeSettingsModalProps> = ({
           setSettings(res.settings);
         }
         setTestPartnerKey('');
+        setTestPushPartnerKey('');
         setLivePartnerKey('');
+        setLivePushPartnerKey('');
         onSettingsSaved?.();
       } else {
         showToast('error', 'Save Failed', res.error || 'Could not update settings.');
@@ -148,6 +158,7 @@ export const ShopeeSettingsModal: React.FC<ShopeeSettingsModalProps> = ({
 
   const testRedirectDomain = 'https://manager.exacoat.com';
   const callbackUrl = settings?.redirect_url || 'https://manager.exacoat.com/shopee/callback';
+  const pushCallbackUrl = settings?.push_callback_url || 'https://exacoat.com/wp-json/exacoat-core/v1/shopee/webhook';
 
   return (
     <Modal
@@ -303,17 +314,31 @@ export const ShopeeSettingsModal: React.FC<ShopeeSettingsModalProps> = ({
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs text-neutral-400 mb-1">
-                      Test Partner Key (Leave blank to preserve current key)
-                    </label>
-                    <input
-                      type="password"
-                      value={testPartnerKey}
-                      onChange={(e) => setTestPartnerKey(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-white/10 text-xs text-white focus:outline-none focus:border-orange-500 font-mono"
-                      placeholder={settings?.test_partner_key_set ? 'Key is configured (shpk...)' : 'Enter test key'}
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-neutral-400 mb-1">
+                        Test API Key (Leave blank to keep current)
+                      </label>
+                      <input
+                        type="password"
+                        value={testPartnerKey}
+                        onChange={(e) => setTestPartnerKey(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-white/10 text-xs text-white focus:outline-none focus:border-orange-500 font-mono"
+                        placeholder={settings?.has_test_key ? 'Key is configured' : 'Enter test API key'}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-neutral-400 mb-1">
+                        Test Push Partner Key (Webhooks)
+                      </label>
+                      <input
+                        type="password"
+                        value={testPushPartnerKey}
+                        onChange={(e) => setTestPushPartnerKey(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-white/10 text-xs text-white focus:outline-none focus:border-orange-500 font-mono"
+                        placeholder={settings?.has_test_push_key ? 'Push key configured' : 'Enter test push key'}
+                      />
+                    </div>
                   </div>
                 </>
               ) : (
@@ -341,17 +366,31 @@ export const ShopeeSettingsModal: React.FC<ShopeeSettingsModalProps> = ({
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs text-neutral-400 mb-1">
-                      Live Partner Key (Leave blank to keep existing)
-                    </label>
-                    <input
-                      type="password"
-                      value={livePartnerKey}
-                      onChange={(e) => setLivePartnerKey(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-white/10 text-xs text-white focus:outline-none focus:border-orange-500 font-mono"
-                      placeholder={settings?.live_partner_key_set ? 'Key is configured' : 'Enter live production key'}
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-neutral-400 mb-1">
+                        Live API Key (Leave blank to keep current)
+                      </label>
+                      <input
+                        type="password"
+                        value={livePartnerKey}
+                        onChange={(e) => setLivePartnerKey(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-white/10 text-xs text-white focus:outline-none focus:border-orange-500 font-mono"
+                        placeholder={settings?.has_live_key ? 'Key is configured' : 'Enter live API key'}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-neutral-400 mb-1">
+                        Live Push Partner Key (Webhooks)
+                      </label>
+                      <input
+                        type="password"
+                        value={livePushPartnerKey}
+                        onChange={(e) => setLivePushPartnerKey(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-white/10 text-xs text-white focus:outline-none focus:border-orange-500 font-mono"
+                        placeholder={settings?.has_live_push_key ? 'Push key configured' : 'Enter live push key'}
+                      />
+                    </div>
                   </div>
                 </>
               )}
@@ -361,15 +400,15 @@ export const ShopeeSettingsModal: React.FC<ShopeeSettingsModalProps> = ({
             <div className="space-y-3 p-4 rounded-xl border border-white/10 bg-neutral-900/40 text-xs">
               <div className="flex items-center gap-2 text-neutral-300 font-semibold">
                 <Globe className="w-3.5 h-3.5 text-orange-400" />
-                <span>Shopee Console Redirect Configuration</span>
+                <span>Shopee Console Integration Endpoints</span>
               </div>
               <p className="text-neutral-400 text-[11px] leading-relaxed">
-                In your Shopee Open Platform Console App Settings, enter this domain as your Test / Live Redirect URL Domain. Shopee strictly forbids localhost or IP addresses:
+                Configure these endpoints in your Shopee Open Platform Console for OAuth authorization and real-time push webhooks:
               </p>
 
               <div className="flex items-center justify-between p-2.5 rounded-lg bg-neutral-950 border border-white/10">
                 <div>
-                  <span className="text-[10px] text-neutral-400 block">Test / Live Redirect URL Domain</span>
+                  <span className="text-[10px] text-neutral-400 block">App Settings: Test / Live Redirect URL Domain</span>
                   <span className="font-mono text-white text-xs">{testRedirectDomain}</span>
                 </div>
                 <button
@@ -388,7 +427,7 @@ export const ShopeeSettingsModal: React.FC<ShopeeSettingsModalProps> = ({
 
               <div className="flex items-center justify-between p-2.5 rounded-lg bg-neutral-950 border border-white/10">
                 <div>
-                  <span className="text-[10px] text-neutral-400 block">OAuth Callback URL</span>
+                  <span className="text-[10px] text-neutral-400 block">App Settings: OAuth Callback URL</span>
                   <span className="font-mono text-neutral-300 text-xs">{callbackUrl}</span>
                 </div>
                 <button
@@ -398,6 +437,25 @@ export const ShopeeSettingsModal: React.FC<ShopeeSettingsModalProps> = ({
                   title="Copy Callback URL"
                 >
                   {copiedField === 'callback' ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-neutral-950 border border-white/10">
+                <div>
+                  <span className="text-[10px] text-neutral-400 block">Push Mechanism: Test / Live Call Back URL</span>
+                  <span className="font-mono text-orange-300 text-xs">{pushCallbackUrl}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(pushCallbackUrl, 'webhook')}
+                  className="p-1.5 rounded-md hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                  title="Copy Webhook URL"
+                >
+                  {copiedField === 'webhook' ? (
                     <Check className="w-3.5 h-3.5 text-emerald-400" />
                   ) : (
                     <Copy className="w-3.5 h-3.5" />

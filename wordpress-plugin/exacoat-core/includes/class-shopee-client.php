@@ -14,12 +14,14 @@ if ( ! class_exists( 'Exacoat_Shopee_Client' ) ) {
 
 class Exacoat_Shopee_Client {
 
-	const OPTION_KEY        = '_exacoat_shopee_settings';
-	const ORDERS_CACHE_KEY  = '_exacoat_shopee_orders_cache';
-	const DEFAULT_TEST_PID  = 1244885;
-	const DEFAULT_LIVE_PID  = 2011551;
-	const SANDBOX_BASE_URL  = 'https://partner.test-stable.shopeemobile.com';
-	const LIVE_BASE_URL     = 'https://partner.shopeemobile.com';
+	const OPTION_KEY             = '_exacoat_shopee_settings';
+	const ORDERS_CACHE_KEY       = '_exacoat_shopee_orders_cache';
+	const DEFAULT_TEST_PID       = 1244885;
+	const DEFAULT_LIVE_PID       = 2011551;
+	const DEFAULT_TEST_PUSH_KEY  = 'aaaaaaaaaaaaaactd5mbgvzd3cjhmhh48v428zpt6ywwnuosz567nweg42ey8pky';
+	const DEFAULT_WEBHOOK_URL    = 'https://exacoat.com/wp-json/exacoat-core/v1/shopee/webhook';
+	const SANDBOX_BASE_URL       = 'https://partner.test-stable.shopeemobile.com';
+	const LIVE_BASE_URL          = 'https://partner.shopeemobile.com';
 
 	/**
 	 * Initialize Hooks & REST API Routes
@@ -33,18 +35,21 @@ class Exacoat_Shopee_Client {
 	 */
 	public static function get_settings(): array {
 		$defaults = [
-			'environment'       => 'sandbox', // 'sandbox' | 'live'
-			'test_partner_id'   => self::DEFAULT_TEST_PID,
-			'test_partner_key'  => 'shpk666c6843537a484142475a44787861767052765558666f635a434f58566e',
-			'live_partner_id'   => self::DEFAULT_LIVE_PID,
-			'live_partner_key'  => 'shpk706c666c6f42674755427a546a79445a78417449554e5674616b4b665a4f',
-			'redirect_url'      => 'https://manager.exacoat.com/shopee/callback',
-			'shop_id'           => 227918647,
-			'shop_name'         => 'Sandbox Exacoat ID',
-			'access_token'      => '',
-			'refresh_token'     => '',
-			'token_expires_at'  => 0,
-			'last_synced_at'    => 0,
+			'environment'           => 'sandbox', // 'sandbox' | 'live'
+			'test_partner_id'       => self::DEFAULT_TEST_PID,
+			'test_partner_key'      => 'shpk666c6843537a484142475a44787861767052765558666f635a434f58566e',
+			'test_push_partner_key' => self::DEFAULT_TEST_PUSH_KEY,
+			'live_partner_id'       => self::DEFAULT_LIVE_PID,
+			'live_partner_key'      => 'shpk706c666c6f42674755427a546a79445a78417449554e5674616b4b665a4f',
+			'live_push_partner_key' => '',
+			'redirect_url'          => 'https://manager.exacoat.com/shopee/callback',
+			'push_callback_url'     => self::DEFAULT_WEBHOOK_URL,
+			'shop_id'               => 227918647,
+			'shop_name'             => 'Sandbox Exacoat ID',
+			'access_token'          => '',
+			'refresh_token'         => '',
+			'token_expires_at'      => 0,
+			'last_synced_at'        => 0,
 		];
 
 		$saved = get_option( self::OPTION_KEY, [] );
@@ -74,6 +79,53 @@ class Exacoat_Shopee_Client {
 	public static function get_active_partner_key(): string {
 		$s = self::get_settings();
 		return $s['environment'] === 'live' ? trim( $s['live_partner_key'] ) : trim( $s['test_partner_key'] );
+	}
+
+	/**
+	 * Get active push partner key for webhook signature verification
+	 */
+	public static function get_active_push_partner_key(): string {
+		$s = self::get_settings();
+		$key = $s['environment'] === 'live'
+			? trim( (string) ( $s['live_push_partner_key'] ?? '' ) )
+			: trim( (string) ( $s['test_push_partner_key'] ?? '' ) );
+
+		if ( ! empty( $key ) ) {
+			return $key;
+		}
+		return self::get_active_partner_key();
+	}
+
+	/**
+	 * Verify HMAC-SHA256 signature from Shopee Push request header
+	 * Base string: URL|request_body
+	 */
+	public static function verify_push_signature( string $url, string $raw_body, string $header_auth ): bool {
+		if ( empty( $header_auth ) ) {
+			return false;
+		}
+
+		$push_key = self::get_active_push_partner_key();
+		if ( empty( $push_key ) ) {
+			return true;
+		}
+
+		$base_str = $url . '|' . $raw_body;
+		$computed = hash_hmac( 'sha256', $base_str, $push_key );
+		if ( hash_equals( strtolower( $computed ), strtolower( trim( $header_auth ) ) ) ) {
+			return true;
+		}
+
+		// Fallback check against standard partner key
+		$std_key = self::get_active_partner_key();
+		if ( ! empty( $std_key ) && $std_key !== $push_key ) {
+			$computed_std = hash_hmac( 'sha256', $base_str, $std_key );
+			if ( hash_equals( strtolower( $computed_std ), strtolower( trim( $header_auth ) ) ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -262,9 +314,34 @@ class Exacoat_Shopee_Client {
 	 * Synchronize orders from Shopee Open API v2
 	 */
 	public static function sync_orders( int $days_back = 15 ): array {
+		$start_time = microtime( true );
+		$s = self::get_settings();
+
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log(
+				'info',
+				'shopee_sync',
+				sprintf( 'Initiating Shopee order sync (days_back: %d, env: %s)', $days_back, $s['environment'] ),
+				[
+					'partner_id' => self::get_active_partner_id(),
+					'shop_id'    => $s['shop_id'] ?? 0,
+					'days_back'  => $days_back,
+				]
+			);
+		}
+
 		$token_res = self::ensure_valid_token();
 		if ( ! $token_res['success'] ) {
-			// If not connected or in sandbox without live orders, return cached/mock orders gracefully
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log(
+					'warning',
+					'shopee_sync',
+					'Shopee token validation failed during sync: ' . ( $token_res['error'] ?? 'Token invalid' ),
+					$token_res
+				);
+			}
+
+			// If not connected or in sandbox without live orders, return cached orders gracefully
 			$cached = get_option( self::ORDERS_CACHE_KEY, [] );
 			if ( ! empty( $cached ) ) {
 				return [
@@ -305,20 +382,31 @@ class Exacoat_Shopee_Client {
 
 		$list_res = wp_remote_get( $list_url, [ 'timeout' => 25 ] );
 		if ( is_wp_error( $list_res ) ) {
-			return [ 'success' => false, 'error' => $list_res->get_error_message() ];
+			$err = $list_res->get_error_message();
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log( 'error', 'shopee_sync', 'Shopee get_order_list HTTP transport error: ' . $err );
+			}
+			return [ 'success' => false, 'error' => $err ];
 		}
 
 		$list_data = json_decode( wp_remote_retrieve_body( $list_res ), true );
 		if ( ! empty( $list_data['error'] ) ) {
+			$err = $list_data['message'] ?? $list_data['error'];
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log( 'error', 'shopee_sync', 'Shopee get_order_list API error: ' . $err, $list_data );
+			}
 			return [
 				'success' => false,
 				'error'   => $list_data['error'],
-				'message' => $list_data['message'] ?? 'Failed to retrieve order list from Shopee.',
+				'message' => $err,
 			];
 		}
 
 		$raw_order_list = $list_data['response']['order_list'] ?? [];
 		if ( empty( $raw_order_list ) ) {
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log( 'info', 'shopee_sync', 'Shopee get_order_list completed: 0 orders found for time range' );
+			}
 			return [
 				'success'      => true,
 				'orders'       => [],
@@ -328,7 +416,16 @@ class Exacoat_Shopee_Client {
 		}
 
 		$order_sns = array_column( $raw_order_list, 'order_sn' );
-		$order_sns = array_slice( $order_sns, 0, 50 ); // Max 50 per detail call
+		$order_sns = array_slice( $order_sns, 0, 50 );
+
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log(
+				'info',
+				'shopee_sync',
+				sprintf( 'Shopee get_order_list found %d orders. Fetching batch details...', count( $order_sns ) ),
+				[ 'order_sns' => $order_sns ]
+			);
+		}
 
 		// Step 2: Call /api/v2/order/get_order_detail in batch
 		$detail_path = '/api/v2/order/get_order_detail';
@@ -347,12 +444,22 @@ class Exacoat_Shopee_Client {
 
 		$detail_res = wp_remote_get( $detail_url, [ 'timeout' => 30 ] );
 		if ( is_wp_error( $detail_res ) ) {
-			return [ 'success' => false, 'error' => $detail_res->get_error_message() ];
+			$err = $detail_res->get_error_message();
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log( 'error', 'shopee_sync', 'Shopee get_order_detail HTTP transport error: ' . $err );
+			}
+			return [ 'success' => false, 'error' => $err ];
 		}
 
 		$detail_data = json_decode( wp_remote_retrieve_body( $detail_res ), true );
-		$raw_details = $detail_data['response']['order_list'] ?? [];
+		if ( ! empty( $detail_data['error'] ) ) {
+			$err = $detail_data['message'] ?? $detail_data['error'];
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log( 'error', 'shopee_sync', 'Shopee get_order_detail API error: ' . $err, $detail_data );
+			}
+		}
 
+		$raw_details = $detail_data['response']['order_list'] ?? [];
 		$normalized_orders = [];
 
 		foreach ( $raw_details as $ord ) {
@@ -367,7 +474,6 @@ class Exacoat_Shopee_Client {
 				$var_name = trim( $item['model_name'] ?? '' );
 				$prod_name = trim( $item['item_name'] ?? 'Exacoat Skin' );
 
-				// Parse variations (e.g. "Model Cut, Black Camo, With Logo" or "Top & Bottom, Matt Black")
 				$items[] = [
 					'item_id'          => $item['item_id'] ?? 0,
 					'item_name'        => $prod_name,
@@ -410,12 +516,60 @@ class Exacoat_Shopee_Client {
 		update_option( self::ORDERS_CACHE_KEY, $normalized_orders );
 		self::save_settings([ 'last_synced_at' => time() ]);
 
+		$elapsed = round( microtime( true ) - $start_time, 2 );
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log(
+				'info',
+				'shopee_sync',
+				sprintf( 'Shopee order sync completed successfully: %d orders saved to cache (elapsed: %ss)', count( $normalized_orders ), $elapsed ),
+				[
+					'total_synced' => count( $normalized_orders ),
+					'elapsed_sec'  => $elapsed,
+					'order_sns'    => array_column( $normalized_orders, 'order_sn' ),
+				]
+			);
+		}
+
 		return [
 			'success'      => true,
 			'orders'       => $normalized_orders,
 			'total_synced' => count( $normalized_orders ),
 			'synced_at'    => date( 'Y-m-d H:i:s' ),
 		];
+	}
+
+	/**
+	 * Update specific order fields in the cached orders list
+	 */
+	public static function update_order_cache_field( string $order_sn, array $fields ): bool {
+		$clean_sn = trim( preg_replace( '/^#+/', '', $order_sn ) );
+		if ( empty( $clean_sn ) || empty( $fields ) ) {
+			return false;
+		}
+
+		$cached = get_option( self::ORDERS_CACHE_KEY, [] );
+		if ( ! is_array( $cached ) ) {
+			$cached = [];
+		}
+
+		$found = false;
+		foreach ( $cached as &$ord ) {
+			if ( strcasecmp( $ord['order_sn'] ?? '', $clean_sn ) === 0 ) {
+				foreach ( $fields as $k => $v ) {
+					$ord[ $k ] = $v;
+				}
+				$found = true;
+				break;
+			}
+		}
+		unset( $ord );
+
+		if ( $found ) {
+			update_option( self::ORDERS_CACHE_KEY, $cached );
+			return true;
+		}
+
+		return false;
 	}
 
 	/**
@@ -504,6 +658,13 @@ class Exacoat_Shopee_Client {
 			'callback'            => [ __CLASS__, 'rest_verify_order' ],
 			'permission_callback' => '__return_true',
 		]);
+
+		// 7. GET & POST /shopee/webhook (receives Shopee Push events and test verification pings)
+		register_rest_route( $ns, '/shopee/webhook', [
+			'methods'             => [ 'GET', 'POST' ],
+			'callback'            => [ __CLASS__, 'rest_handle_webhook' ],
+			'permission_callback' => '__return_true',
+		]);
 	}
 
 	public static function check_admin_permission(): bool {
@@ -516,23 +677,30 @@ class Exacoat_Shopee_Client {
 		// Mask keys for security
 		$masked_test = ! empty( $s['test_partner_key'] ) ? substr( $s['test_partner_key'], 0, 8 ) . '...' . substr( $s['test_partner_key'], -4 ) : '';
 		$masked_live = ! empty( $s['live_partner_key'] ) ? substr( $s['live_partner_key'], 0, 8 ) . '...' . substr( $s['live_partner_key'], -4 ) : '';
+		$masked_test_push = ! empty( $s['test_push_partner_key'] ) ? substr( $s['test_push_partner_key'], 0, 8 ) . '...' . substr( $s['test_push_partner_key'], -4 ) : '';
+		$masked_live_push = ! empty( $s['live_push_partner_key'] ) ? substr( $s['live_push_partner_key'], 0, 8 ) . '...' . substr( $s['live_push_partner_key'], -4 ) : '';
 
 		return rest_ensure_response([
-			'success'          => true,
-			'environment'      => $s['environment'],
-			'test_partner_id'  => $s['test_partner_id'],
-			'test_partner_key' => $masked_test,
-			'has_test_key'     => ! empty( $s['test_partner_key'] ),
-			'live_partner_id'  => $s['live_partner_id'],
-			'live_partner_key' => $masked_live,
-			'has_live_key'     => ! empty( $s['live_partner_key'] ),
-			'redirect_url'     => $s['redirect_url'],
-			'shop_id'          => $s['shop_id'],
-			'shop_name'        => $s['shop_name'],
-			'is_connected'     => ! empty( $s['access_token'] ),
-			'token_expires_at' => $s['token_expires_at'],
-			'is_expired'       => $s['token_expires_at'] > 0 && time() >= $s['token_expires_at'],
-			'last_synced_at'   => $s['last_synced_at'] ? date( 'Y-m-d H:i:s', $s['last_synced_at'] ) : null,
+			'success'                => true,
+			'environment'            => $s['environment'],
+			'test_partner_id'        => $s['test_partner_id'],
+			'test_partner_key'       => $masked_test,
+			'has_test_key'           => ! empty( $s['test_partner_key'] ),
+			'test_push_partner_key'  => $masked_test_push,
+			'has_test_push_key'      => ! empty( $s['test_push_partner_key'] ),
+			'live_partner_id'        => $s['live_partner_id'],
+			'live_partner_key'       => $masked_live,
+			'has_live_key'           => ! empty( $s['live_partner_key'] ),
+			'live_push_partner_key'  => $masked_live_push,
+			'has_live_push_key'      => ! empty( $s['live_push_partner_key'] ),
+			'redirect_url'           => $s['redirect_url'],
+			'push_callback_url'      => $s['push_callback_url'] ?? self::DEFAULT_WEBHOOK_URL,
+			'shop_id'                => $s['shop_id'],
+			'shop_name'              => $s['shop_name'],
+			'is_connected'           => ! empty( $s['access_token'] ),
+			'token_expires_at'       => $s['token_expires_at'],
+			'is_expired'             => $s['token_expires_at'] > 0 && time() >= $s['token_expires_at'],
+			'last_synced_at'         => $s['last_synced_at'] ? date( 'Y-m-d H:i:s', $s['last_synced_at'] ) : null,
 		]);
 	}
 
@@ -550,14 +718,23 @@ class Exacoat_Shopee_Client {
 		if ( ! empty( $params['test_partner_key'] ) && ! str_contains( $params['test_partner_key'], '...' ) ) {
 			$updates['test_partner_key'] = trim( $params['test_partner_key'] );
 		}
+		if ( ! empty( $params['test_push_partner_key'] ) && ! str_contains( $params['test_push_partner_key'], '...' ) ) {
+			$updates['test_push_partner_key'] = trim( $params['test_push_partner_key'] );
+		}
 		if ( isset( $params['live_partner_id'] ) ) {
 			$updates['live_partner_id'] = (int) $params['live_partner_id'];
 		}
 		if ( ! empty( $params['live_partner_key'] ) && ! str_contains( $params['live_partner_key'], '...' ) ) {
 			$updates['live_partner_key'] = trim( $params['live_partner_key'] );
 		}
+		if ( ! empty( $params['live_push_partner_key'] ) && ! str_contains( $params['live_push_partner_key'], '...' ) ) {
+			$updates['live_push_partner_key'] = trim( $params['live_push_partner_key'] );
+		}
 		if ( isset( $params['redirect_url'] ) ) {
 			$updates['redirect_url'] = esc_url_raw( trim( $params['redirect_url'] ) );
+		}
+		if ( isset( $params['push_callback_url'] ) ) {
+			$updates['push_callback_url'] = esc_url_raw( trim( $params['push_callback_url'] ) );
 		}
 		if ( isset( $params['shop_id'] ) ) {
 			$updates['shop_id'] = (int) $params['shop_id'];
@@ -732,6 +909,149 @@ class Exacoat_Shopee_Client {
 			'message'          => 'Invoice is eligible for warranty claim.',
 		]);
 	}
+
+	/**
+	 * Handle incoming Shopee Push notifications and verification pings
+	 */
+	public static function rest_handle_webhook( \WP_REST_Request $request ): \WP_REST_Response {
+		$method = $request->get_method();
+
+		// Browser or GET health-check verification
+		if ( $method === 'GET' ) {
+			return new \WP_REST_Response([
+				'code'    => 0,
+				'status'  => 'active',
+				'message' => 'Exacoat Shopee webhook receiver is operational.',
+			], 200 );
+		}
+
+		$raw_body = $request->get_body();
+		$auth_header = $request->get_header( 'authorization' ) ?: ( $_SERVER['HTTP_AUTHORIZATION'] ?? '' );
+		$protocol = is_ssl() || ( isset( $_SERVER['HTTP_X_FORWARDED_PROTO'] ) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https' ) ? 'https://' : 'http://';
+		$request_url = $protocol . ( $_SERVER['HTTP_HOST'] ?? 'exacoat.com' ) . ( $_SERVER['REQUEST_URI'] ?? '/wp-json/exacoat-core/v1/shopee/webhook' );
+
+		// Parse JSON payload
+		$payload = json_decode( $raw_body, true );
+		if ( ! is_array( $payload ) ) {
+			$payload = $request->get_json_params() ?: [];
+		}
+
+		$code = (int) ( $payload['code'] ?? 0 );
+		$shop_id = (int) ( $payload['shop_id'] ?? 0 );
+		$timestamp = (int) ( $payload['timestamp'] ?? time() );
+		$data = $payload['data'] ?? [];
+
+		// Log incoming webhook event to Exacoat_Logger
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log(
+				'info',
+				'shopee_push',
+				sprintf( 'Received Shopee Push: Code %d for Shop #%d', $code, $shop_id ),
+				[
+					'code'          => $code,
+					'shop_id'       => $shop_id,
+					'timestamp'     => $timestamp,
+					'data'          => $data,
+					'has_signature' => ! empty( $auth_header ),
+					'raw_bytes'     => strlen( $raw_body ),
+				]
+			);
+		}
+
+		// Optional signature verification check
+		if ( ! empty( $auth_header ) ) {
+			$is_valid_sign = self::verify_push_signature( $request_url, $raw_body, $auth_header );
+			if ( ! $is_valid_sign && class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log(
+					'warning',
+					'shopee_push',
+					'Shopee push signature verification mismatch. Processing event with caution.',
+					[
+						'computed_against' => $request_url,
+						'auth_header'      => substr( $auth_header, 0, 12 ) . '...',
+					]
+				);
+			}
+		}
+
+		// Process push events by code
+		switch ( $code ) {
+			case 3:
+				// order_status_push: Buyer paid, shipped, completed, or cancelled
+				$order_sn = $data['ordersn'] ?? ( $data['order_sn'] ?? '' );
+				$status = $data['status'] ?? '';
+				if ( ! empty( $order_sn ) ) {
+					self::update_order_cache_field( $order_sn, [
+						'order_status' => $status,
+						'update_time'  => date( 'Y-m-d H:i:s', $data['update_time'] ?? time() ),
+					]);
+					if ( class_exists( 'Exacoat_Logger' ) ) {
+						Exacoat_Logger::log(
+							'info',
+							'shopee_push',
+							sprintf( 'Updated order_status to %s for Order SN %s', $status, $order_sn )
+						);
+					}
+				}
+				break;
+
+			case 4:
+				// order_trackingno_push: Live courier resi assigned or updated
+				$order_sn = $data['ordersn'] ?? ( $data['order_sn'] ?? '' );
+				$tracking_no = $data['tracking_no'] ?? ( $data['tracking_number'] ?? '' );
+				if ( ! empty( $order_sn ) ) {
+					self::update_order_cache_field( $order_sn, [
+						'tracking_number' => $tracking_no,
+					]);
+					if ( class_exists( 'Exacoat_Logger' ) ) {
+						Exacoat_Logger::log(
+							'info',
+							'shopee_push',
+							sprintf( 'Updated tracking_number to %s for Order SN %s', $tracking_no, $order_sn )
+						);
+					}
+				}
+				break;
+
+			case 30:
+				// package_fulfillment_status_push
+				$order_sn = $data['ordersn'] ?? ( $data['order_sn'] ?? '' );
+				$package_number = $data['package_number'] ?? '';
+				$fulfillment_status = $data['fulfillment_status'] ?? '';
+				if ( ! empty( $order_sn ) ) {
+					self::update_order_cache_field( $order_sn, [
+						'fulfillment_status' => $fulfillment_status,
+						'package_number'     => $package_number,
+					]);
+				}
+				break;
+
+			case 1:
+				// shop_authorization_push
+				if ( class_exists( 'Exacoat_Logger' ) ) {
+					Exacoat_Logger::log( 'info', 'shopee_push', "Shop #{$shop_id} authorized via Shopee Push" );
+				}
+				break;
+
+			case 2:
+				// shop_authorization_canceled_push
+				if ( class_exists( 'Exacoat_Logger' ) ) {
+					Exacoat_Logger::log( 'warning', 'shopee_push', "Shop #{$shop_id} authorization revoked via Shopee Push" );
+				}
+				break;
+
+			default:
+				// Verification test ping or other push codes
+				break;
+		}
+
+		// Shopee Open Platform expects HTTP 200 with code 0 to acknowledge receipt
+		return new \WP_REST_Response([
+			'code'    => 0,
+			'message' => 'success',
+		], 200 );
+	}
 }
 
 }
+

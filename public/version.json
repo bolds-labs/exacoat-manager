@@ -1,17 +1,17 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://exacoat.com/exacoat-core-v0.0.15.zip?v=0.0.15",
+  "download_url": "https://exacoat.com/exacoat-core-v0.0.16.zip?v=0.0.16",
   "homepage": "https://exacoat.com",
-  "last_updated": "2026-09-18T04:48:58.755Z",
+  "last_updated": "2026-09-18T05:02:07.702Z",
   "sections": {
     "description": "The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.",
-    "changelog": "### Version 0.0.15\n- High-speed order management & ready-to-ship custom status\n- Integrated courier tracking and A6 label metadata synchronization"
+    "changelog": "### Version 0.0.16\n- High-speed order management & ready-to-ship custom status\n- Integrated courier tracking and A6 label metadata synchronization"
   }
 }

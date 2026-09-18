@@ -143,10 +143,19 @@ export interface ShopeeOrder {
 export interface ShopeeSettings {
   environment: 'sandbox' | 'live';
   test_partner_id: number;
-  test_partner_key_set: boolean;
+  test_partner_key?: string;
+  test_partner_key_set?: boolean;
+  has_test_key?: boolean;
+  test_push_partner_key?: string;
+  has_test_push_key?: boolean;
   live_partner_id: number;
-  live_partner_key_set: boolean;
+  live_partner_key?: string;
+  live_partner_key_set?: boolean;
+  has_live_key?: boolean;
+  live_push_partner_key?: string;
+  has_live_push_key?: boolean;
   redirect_url: string;
+  push_callback_url?: string;
   shop_id: number;
   shop_name: string;
   is_connected: boolean;
