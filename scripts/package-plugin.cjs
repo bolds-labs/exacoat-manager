@@ -53,6 +53,8 @@ async function createPluginZip() {
   const targets = [
     path.join(__dirname, '../public/exacoat-core.zip'),
     path.join(__dirname, `../public/exacoat-core-v${version}.zip`),
+    path.join(__dirname, '../dist/exacoat-core.zip'),
+    path.join(__dirname, `../dist/exacoat-core-v${version}.zip`),
     path.join(__dirname, '../exacoat-core.zip'),
     path.join(__dirname, `../exacoat-core-v${version}.zip`),
     path.join(__dirname, `../wordpress-plugin/exacoat-core-v${version}.zip`),

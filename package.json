@@ -1,11 +1,11 @@
 {
   "name": "exacoat-manager",
   "private": true,
-  "version": "0.0.20",
+  "version": "0.0.21",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && node scripts/package-plugin.cjs",
+    "build": "node scripts/package-plugin.cjs && tsc && vite build && node scripts/package-plugin.cjs",
     "start": "vite preview --host 0.0.0.0 --port 3000",
     "preview": "vite preview",
     "package:plugin": "node scripts/package-plugin.cjs"
