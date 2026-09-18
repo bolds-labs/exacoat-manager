@@ -69,7 +69,7 @@ class Exacoat_Webhook_Dispatcher {
 				'headers'   => [
 					'Content-Type' => 'application/json',
 					'x-secret-key' => self::get_secret_key(),
-					'user-agent'   => 'Artmatter-Core/' . ARTMATTER_CORE_VERSION,
+					'user-agent'   => 'Exacoat-Core/' . ( defined( 'EXACOAT_CORE_VERSION' ) ? EXACOAT_CORE_VERSION : '0.0.32' ),
 				],
 				'body'      => wp_json_encode( $payload ),
 				'timeout'   => 8,

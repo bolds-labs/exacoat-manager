@@ -54,8 +54,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<div class="artmatter-ty-badge-icon">
 					<svg viewBox="0 0 24 24" fill="none" stroke="#f3aa18" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
 				</div>
-				<h1 class="artmatter-ty-title"><?php echo sprintf( esc_html__( 'Thank you for your order, %s!', 'artmatter-core' ), esc_html( $first_name ) ); ?></h1>
-				<p class="artmatter-ty-subtitle"><?php echo sprintf( esc_html__( 'Order #%s has been received and is currently in %s status.', 'artmatter-core' ), esc_html( $order_num ), '<strong style="color:#ffffff;">' . esc_html( $status_name ) . '</strong>' ); ?></p>
+				<h1 class="artmatter-ty-title"><?php echo sprintf( esc_html__( 'Thank you for your order, %s!', 'exacoat-core' ), esc_html( $first_name ) ); ?></h1>
+				<p class="artmatter-ty-subtitle"><?php echo sprintf( esc_html__( 'Order #%s has been received and is currently in %s status.', 'exacoat-core' ), esc_html( $order_num ), '<strong style="color:#ffffff;">' . esc_html( $status_name ) . '</strong>' ); ?></p>
 			</div>
 
 			<!-- Dynamic Production Fulfillment Timeline -->
@@ -63,7 +63,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<div class="artmatter-ty-timeline-card">
 					<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
 						<div style="font-size:11px;color:#a1a1aa;text-transform:uppercase;letter-spacing:0.05em;font-weight:500;">
-							<?php esc_html_e( 'Fulfillment Status', 'artmatter-core' ); ?>
+							<?php esc_html_e( 'Fulfillment Status', 'exacoat-core' ); ?>
 						</div>
 						<div class="artmatter-order-status-pill status-<?php echo esc_attr( $raw_status ); ?>">
 							<?php echo esc_html( $status_name ); ?>
@@ -73,27 +73,27 @@ if ( ! defined( 'ABSPATH' ) ) {
 						<?php
 						$stages = [
 							1 => [
-								'label' => __( 'Confirmed', 'artmatter-core' ),
+								'label' => __( 'Confirmed', 'exacoat-core' ),
 								'icon'  => '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
 							],
 							2 => [
-								'label' => __( 'In Production', 'artmatter-core' ),
+								'label' => __( 'In Production', 'exacoat-core' ),
 								'icon'  => '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>',
 							],
 							3 => [
-								'label' => __( 'Quality Check', 'artmatter-core' ),
+								'label' => __( 'Quality Check', 'exacoat-core' ),
 								'icon'  => '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>',
 							],
 							4 => [
-								'label' => __( 'Ready to Ship', 'artmatter-core' ),
+								'label' => __( 'Ready to Ship', 'exacoat-core' ),
 								'icon'  => '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>',
 							],
 							5 => [
-								'label' => __( 'Shipped', 'artmatter-core' ),
+								'label' => __( 'Shipped', 'exacoat-core' ),
 								'icon'  => '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18.5" r="2.5"/><circle cx="7" cy="18.5" r="2.5"/></svg>',
 							],
 							6 => [
-								'label' => __( 'Delivered', 'artmatter-core' ),
+								'label' => __( 'Delivered', 'exacoat-core' ),
 								'icon'  => '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
 							],
 						];
@@ -115,7 +115,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 						<span class="artmatter-order-status-pill status-<?php echo esc_attr( $raw_status ); ?>" style="font-size:12px;padding:4px 10px;">
 							<?php echo esc_html( $status_name ); ?>
 						</span>
-						<span style="font-size:12.5px;color:#fca5a5;"><?php echo sprintf( esc_html__( 'This order has been marked as %s.', 'artmatter-core' ), esc_html( strtolower( $status_name ) ) ); ?></span>
+						<span style="font-size:12.5px;color:#fca5a5;"><?php echo sprintf( esc_html__( 'This order has been marked as %s.', 'exacoat-core' ), esc_html( strtolower( $status_name ) ) ); ?></span>
 					</div>
 				</div>
 			<?php endif; ?>
@@ -171,7 +171,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 						<?php endif; ?>
 						<div class="artmatter-co-total-row shipping-row">
 							<span class="total-label"><?php esc_html_e( 'Shipping', 'woocommerce' ); ?></span>
-							<span class="total-value"><?php echo $order->get_shipping_to_display() ?: esc_html__( 'Free', 'artmatter-core' ); ?></span>
+							<span class="total-value"><?php echo $order->get_shipping_to_display() ?: esc_html__( 'Free', 'exacoat-core' ); ?></span>
 						</div>
 						<div class="artmatter-co-total-row final-total-row">
 							<span class="total-label"><?php esc_html_e( 'Total Paid', 'woocommerce' ); ?></span>
@@ -184,11 +184,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 			<!-- Customer Shipping Address & Delivery Details Card -->
 			<div class="artmatter-ty-details-card" style="margin-top:16px;">
 				<h3 style="font-size:16px;font-weight:500;color:#ffffff;margin:0 0 14px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:12px;">
-					<?php esc_html_e( 'Delivery & Shipping Details', 'artmatter-core' ); ?>
+					<?php esc_html_e( 'Delivery & Shipping Details', 'exacoat-core' ); ?>
 				</h3>
 				<div class="artmatter-ty-address-grid">
 					<div class="artmatter-ty-address-card">
-						<div class="artmatter-ty-card-subtitle"><?php esc_html_e( 'Shipping Address', 'artmatter-core' ); ?></div>
+						<div class="artmatter-ty-card-subtitle"><?php esc_html_e( 'Shipping Address', 'exacoat-core' ); ?></div>
 						<div class="artmatter-ty-card-text">
 							<?php
 							$formatted_address = $order->get_formatted_shipping_address() ?: $order->get_formatted_billing_address();
@@ -203,7 +203,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 						</div>
 					</div>
 					<div class="artmatter-ty-address-card">
-						<div class="artmatter-ty-card-subtitle"><?php esc_html_e( 'Shipping Method', 'artmatter-core' ); ?></div>
+						<div class="artmatter-ty-card-subtitle"><?php esc_html_e( 'Shipping Method', 'exacoat-core' ); ?></div>
 						<div class="artmatter-ty-card-text">
 							<div style="color:#ffffff;font-weight:500;"><?php echo esc_html( $order->get_shipping_method() ?: __( 'Standard Shipping', 'exacoat-core' ) ); ?></div>
 							<?php
@@ -215,41 +215,46 @@ if ( ! defined( 'ABSPATH' ) ) {
 							$tracking_number = ( function_exists( 'get_field' ) ? get_field( 'tracking_number', $order_id ) : '' ) 
 								?: $order->get_meta( 'tracking_number' ) 
 								?: $order->get_meta( '_tracking_number' ) 
+								?: $order->get_meta( '_exacoat_tracking_number' ) 
 								?: $order->get_meta( '_artmatter_tracking_number' ) 
 								?: get_post_meta( $order_id, 'tracking_number', true );
 
 							if ( empty( $tracking_number ) ) {
-								$t_info = $order->get_meta( '_artmatter_tracking_info' ) ?: get_post_meta( $order_id, '_artmatter_tracking_info', true );
+								$t_info = $order->get_meta( '_exacoat_tracking_info' ) ?: ( $order->get_meta( '_artmatter_tracking_info' ) ?: get_post_meta( $order_id, '_artmatter_tracking_info', true ) );
 								if ( is_array( $t_info ) && ! empty( $t_info['tracking_number'] ) ) {
 									$tracking_number = $t_info['tracking_number'];
 									$carrier         = $t_info['carrier_id'] ?? ( $t_info['courier'] ?? $carrier );
 								}
 							}
 
+							$tracker_class = class_exists( 'Exacoat_Shipping_Tracker' ) ? 'Exacoat_Shipping_Tracker' : ( class_exists( 'Artmatter_Shipping_Tracker' ) ? 'Artmatter_Shipping_Tracker' : false );
+
 							if ( $tracking_number ) :
 								$track_url = '';
-								if ( class_exists( 'Artmatter_Shipping_Tracker' ) ) {
-									$track_url = Artmatter_Shipping_Tracker::get_carrier_tracking_url( $carrier, $tracking_number );
+								if ( $tracker_class ) {
+									$track_url = $tracker_class::get_carrier_tracking_url( $carrier, $tracking_number );
+								} elseif ( function_exists( 'exacoat_get_carrier_tracking_url' ) ) {
+									$track_url = exacoat_get_carrier_tracking_url( $carrier, $tracking_number );
 								} elseif ( function_exists( 'artmatter_get_carrier_tracking_url' ) ) {
 									$track_url = artmatter_get_carrier_tracking_url( $carrier, $tracking_number );
 								}
 
-								$checkpoints = $order->get_meta( '_artmatter_tracking_checkpoints' ) ?: get_post_meta( $order_id, '_artmatter_tracking_checkpoints', true );
+								$checkpoints = $order->get_meta( '_exacoat_tracking_checkpoints' ) ?: ( $order->get_meta( '_artmatter_tracking_checkpoints' ) ?: get_post_meta( $order_id, '_artmatter_tracking_checkpoints', true ) );
 								if ( ! is_array( $checkpoints ) ) {
 									$checkpoints = [];
 								}
 
 								// Auto-sync live TrackingMore checkpoints if missing or stale
-								if ( class_exists( 'Artmatter_Shipping_Tracker' ) ) {
-									$last_sync  = (int) ( $order->get_meta( '_artmatter_last_tracking_sync' ) ?: get_post_meta( $order_id, '_artmatter_last_tracking_sync', true ) );
+								if ( $tracker_class ) {
+									$last_sync  = (int) ( $order->get_meta( '_exacoat_last_tracking_sync' ) ?: ( $order->get_meta( '_artmatter_last_tracking_sync' ) ?: get_post_meta( $order_id, '_artmatter_last_tracking_sync', true ) ) );
 									$needs_sync = empty( $checkpoints ) || ( ( time() - $last_sync ) > 900 && ! in_array( $raw_status, [ 'completed', 'delivered' ], true ) );
 
 									if ( $needs_sync ) {
-										update_post_meta( $order_id, '_artmatter_last_tracking_sync', time() );
-										$order->update_meta_data( '_artmatter_last_tracking_sync', time() );
+										update_post_meta( $order_id, '_exacoat_last_tracking_sync', time() );
+										$order->update_meta_data( '_exacoat_last_tracking_sync', time() );
 										$order->save();
 
-										Artmatter_Shipping_Tracker::sync_order_tracking( $order_id );
+										$tracker_class::sync_order_tracking( $order_id );
 
 										$order_refreshed = wc_get_order( $order_id );
 										if ( $order_refreshed ) {
@@ -257,7 +262,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 											$raw_status         = $order->get_status();
 											$status_name        = wc_get_order_status_name( $raw_status );
 											$active_stage_index = isset( $status_stages[ $raw_status ] ) ? $status_stages[ $raw_status ] : 1;
-											$checkpoints        = $order->get_meta( '_artmatter_tracking_checkpoints' ) ?: [];
+											$checkpoints        = $order->get_meta( '_exacoat_tracking_checkpoints' ) ?: ( $order->get_meta( '_artmatter_tracking_checkpoints' ) ?: [] );
 											if ( ! is_array( $checkpoints ) ) {
 												$checkpoints = [];
 											}
@@ -280,7 +285,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 												$c_time = ! empty( $ev['time'] ) ? $ev['time'] : ( $ev['time_iso'] ?? '' );
 												$c_desc = $ev['description'] ?? ( $ev['context'] ?? '' );
 												$raw_loc = $ev['location'] ?? '';
-												$c_loc  = class_exists( 'Artmatter_Shipping_Tracker' ) ? Artmatter_Shipping_Tracker::clean_checkpoint_location( $raw_loc ) : trim( $raw_loc );
+												$c_loc  = $tracker_class ? $tracker_class::clean_checkpoint_location( $raw_loc ) : trim( $raw_loc );
 												$is_lat = ( $c_idx === 0 );
 
 												// Suppress duplicate location if description already mentions or ends with it
@@ -292,8 +297,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 													}
 												}
 
-												$c_time_fmt = class_exists( 'Artmatter_Shipping_Tracker' )
-													? Artmatter_Shipping_Tracker::format_checkpoint_time( $c_time )
+												$c_time_fmt = $tracker_class
+													? $tracker_class::format_checkpoint_time( $c_time )
 													: $c_time;
 											?>
 												<div style="position:relative; margin-bottom:<?php echo $c_idx === $total_top - 1 ? '0' : '12px'; ?>;">
@@ -323,7 +328,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 										<div class="artmatter-ty-pending-notice" style="margin-top:12px; padding:10px 12px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:8px; display:flex; align-items:flex-start; gap:8px;">
 											<div style="width:5px; height:5px; border-radius:50%; background:#f3aa18; margin-top:5px; flex-shrink:0;"></div>
 											<div style="font-size:11.5px; line-height:1.5; color:#a1a1aa; font-weight:400;">
-												<?php esc_html_e( 'Electronic shipping manifest registered with carrier. Checkpoints will update as your order is processed at the courier hub.', 'artmatter-core' ); ?>
+												<?php esc_html_e( 'Electronic shipping manifest registered with carrier. Checkpoints will update as your order is processed at the courier hub.', 'exacoat-core' ); ?>
 											</div>
 										</div>
 									<?php endif; ?>
@@ -341,7 +346,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
 				</a>
 				<a href="<?php echo esc_url( home_url( '/account#orders' ) ); ?>" class="artmatter-ty-btn-secondary">
-					<span><?php esc_html_e( 'View Order History', 'artmatter-core' ); ?></span>
+					<span><?php esc_html_e( 'View Order History', 'exacoat-core' ); ?></span>
 				</a>
 			</div>
 

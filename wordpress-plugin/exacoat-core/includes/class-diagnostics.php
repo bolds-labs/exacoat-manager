@@ -1,6 +1,6 @@
 <?php
 /**
- * Artmatter Core Enterprise Diagnostics & Safe API Testing Engine
+ * Exacoat Core Enterprise Diagnostics & Safe API Testing Engine
  * Executes read-only connectivity probes and email webhook simulations without polluting databases.
  */
 
@@ -16,7 +16,9 @@ class Exacoat_Diagnostics {
 
 	public static function init() {
 		// AJAX Handlers for Admin
+		add_action( 'wp_ajax_exacoat_run_full_diagnostics', [ __CLASS__, 'ajax_run_full_diagnostics' ] );
 		add_action( 'wp_ajax_artmatter_run_full_diagnostics', [ __CLASS__, 'ajax_run_full_diagnostics' ] );
+		add_action( 'wp_ajax_exacoat_test_email_webhook', [ __CLASS__, 'ajax_test_email_webhook' ] );
 		add_action( 'wp_ajax_artmatter_test_email_webhook', [ __CLASS__, 'ajax_test_email_webhook' ] );
 	}
 
@@ -29,58 +31,72 @@ class Exacoat_Diagnostics {
 		$overall_healthy = true;
 
 		// 1. Supabase PostgREST Read-Only Ping
-		$supabase_config = Artmatter_Supabase_Sync::get_config();
+		$supabase_config = class_exists( 'Exacoat_Supabase_Sync' )
+			? Exacoat_Supabase_Sync::get_config()
+			: ( class_exists( 'Artmatter_Supabase_Sync' ) ? Artmatter_Supabase_Sync::get_config() : [] );
 		$start = microtime( true );
 
-		$supabase_resp = wp_remote_get( $supabase_config['url'] . '/rest/v1/orders?select=count', [
-			'headers' => [
-				'apikey'        => $supabase_config['service_key'],
-				'Authorization' => 'Bearer ' . $supabase_config['service_key'],
-				'Range'         => '0-0',
-			],
-			'timeout' => 8,
-		] );
-		$supabase_latency = round( ( microtime( true ) - $start ) * 1000 );
-
-		if ( is_wp_error( $supabase_resp ) ) {
-			$overall_healthy = false;
+		if ( empty( $supabase_config['url'] ) || empty( $supabase_config['service_key'] ) ) {
 			$results['supabase'] = [
 				'service' => 'Supabase PostgREST (PostgreSQL)',
-				'status'  => 'error',
+				'status'  => 'warning',
 				'code'    => 0,
-				'latency' => $supabase_latency,
-				'message' => 'Network error: ' . $supabase_resp->get_error_message(),
+				'latency' => 0,
+				'message' => 'Supabase credentials not configured in settings or environment',
 			];
-			Artmatter_Logger::log( 'error', 'supabase', 'Diagnostics: Supabase Ping Failed — ' . $supabase_resp->get_error_message() );
 		} else {
-			$code = wp_remote_retrieve_response_code( $supabase_resp );
-			$is_ok = ( $code === 200 || $code === 206 );
-			if ( ! $is_ok ) $overall_healthy = false;
+			$supabase_resp = wp_remote_get( $supabase_config['url'] . '/rest/v1/orders?select=count', [
+				'headers' => [
+					'apikey'        => $supabase_config['service_key'],
+					'Authorization' => 'Bearer ' . $supabase_config['service_key'],
+					'Range'         => '0-0',
+				],
+				'timeout' => 8,
+			] );
+			$supabase_latency = round( ( microtime( true ) - $start ) * 1000 );
 
-			$results['supabase'] = [
-				'service' => 'Supabase PostgREST (PostgreSQL)',
-				'status'  => $is_ok ? 'healthy' : 'error',
-				'code'    => $code,
-				'latency' => $supabase_latency,
-				'message' => $is_ok ? "Connected ({$supabase_latency}ms) — PostgreSQL Online (Zero write mutations)" : "Authentication or API Error (HTTP {$code})",
-			];
-			Artmatter_Logger::log(
-				$is_ok ? 'success' : 'error',
-				'supabase',
-				"Diagnostics: Supabase Read-Only Ping ({$supabase_latency}ms) -> HTTP {$code}",
-				[ 'url' => $supabase_config['url'], 'latency_ms' => $supabase_latency, 'code' => $code ]
-			);
+			if ( is_wp_error( $supabase_resp ) ) {
+				$overall_healthy = false;
+				$results['supabase'] = [
+					'service' => 'Supabase PostgREST (PostgreSQL)',
+					'status'  => 'error',
+					'code'    => 0,
+					'latency' => $supabase_latency,
+					'message' => 'Network error: ' . $supabase_resp->get_error_message(),
+				];
+				Exacoat_Logger::log( 'error', 'supabase', 'Diagnostics: Supabase Ping Failed: ' . $supabase_resp->get_error_message() );
+			} else {
+				$code = wp_remote_retrieve_response_code( $supabase_resp );
+				$is_ok = ( $code === 200 || $code === 206 );
+				if ( ! $is_ok ) $overall_healthy = false;
+
+				$results['supabase'] = [
+					'service' => 'Supabase PostgREST (PostgreSQL)',
+					'status'  => $is_ok ? 'healthy' : 'error',
+					'code'    => $code,
+					'latency' => $supabase_latency,
+					'message' => $is_ok ? "Connected ({$supabase_latency}ms): PostgreSQL Online (Zero write mutations)" : "Authentication or API Error (HTTP {$code})",
+				];
+				Exacoat_Logger::log(
+					$is_ok ? 'success' : 'error',
+					'supabase',
+					"Diagnostics: Supabase Read-Only Ping ({$supabase_latency}ms) -> HTTP {$code}",
+					[ 'url' => $supabase_config['url'], 'latency_ms' => $supabase_latency, 'code' => $code ]
+				);
+			}
 		}
 
 		// 2. Cloudflare R2 Storage Vault
-		$r2_configured = class_exists( 'Artmatter_R2' ) ? Artmatter_R2::is_configured() : false;
+		$r2_configured = class_exists( 'Exacoat_R2' )
+			? Exacoat_R2::is_configured()
+			: ( class_exists( 'Artmatter_R2' ) ? Artmatter_R2::is_configured() : false );
 		$results['r2_vault'] = [
 			'service' => 'Cloudflare R2 Master Vault',
 			'status'  => $r2_configured ? 'healthy' : 'warning',
 			'latency' => 0,
 			'message' => $r2_configured ? 'Cloudflare R2 Bucket Configured & Ready' : 'R2 Credentials Not Configured (Using Local Disk /arts-master/)',
 		];
-		Artmatter_Logger::log(
+		Exacoat_Logger::log(
 			$r2_configured ? 'info' : 'warning',
 			'vault',
 			'Diagnostics: Cloudflare R2 Storage Status: ' . ( $r2_configured ? 'Configured' : 'Local Fallback' )
@@ -98,7 +114,7 @@ class Exacoat_Diagnostics {
 		];
 
 		// 3. Google Gemini Vision AI API Ping
-		$ai_config = class_exists( 'Artmatter_AI_Classifier' ) ? Artmatter_AI_Classifier::get_config() : [];
+		$ai_config = class_exists( 'Exacoat_AI_Classifier' ) ? Exacoat_AI_Classifier::get_config() : ( class_exists( 'Artmatter_AI_Classifier' ) ? Artmatter_AI_Classifier::get_config() : [] );
 		if ( ! empty( $ai_config['api_key'] ) ) {
 			$ai_start = microtime( true );
 			$ai_resp = wp_remote_get( 'https://generativelanguage.googleapis.com/v1beta/models?key=' . $ai_config['api_key'], [ 'timeout' => 8 ] );
@@ -291,13 +307,13 @@ class Exacoat_Diagnostics {
 	 */
 	public static function test_email_webhook( string $event, string $recipient_email, array $custom_params = [] ): array {
 		$settings = Exacoat_Core::get_settings();
-		$webhook_url = trim( $settings['email_webhook_url'] ?? 'https://node.exacoat.com/webhook/artmatter/email' );
-		$secret_key  = trim( defined( 'AM_WEBHOOK_SECRET' ) ? AM_WEBHOOK_SECRET : ( getenv( 'AM_WEBHOOK_SECRET' ) ?: ( $settings['webhook_secret_key'] ?? '' ) ) );
+		$webhook_url = trim( $settings['email_webhook_url'] ?? 'https://node.exacoat.com/webhook/exacoat/email' );
+		$secret_key  = trim( defined( 'EXACOAT_WEBHOOK_SECRET' ) ? EXACOAT_WEBHOOK_SECRET : ( getenv( 'EXACOAT_WEBHOOK_SECRET' ) ?: ( defined( 'AM_WEBHOOK_SECRET' ) ? AM_WEBHOOK_SECRET : ( getenv( 'AM_WEBHOOK_SECRET' ) ?: ( $settings['webhook_secret_key'] ?? '' ) ) ) ) );
 
 		if ( empty( $webhook_url ) ) {
 			return [
 				'success' => false,
-				'message' => 'No Email Webhook URL configured in Artmatter Core settings.',
+				'message' => 'No Email Webhook URL configured in Exacoat Core settings.',
 			];
 		}
 
@@ -320,7 +336,7 @@ class Exacoat_Diagnostics {
 			'email'           => $recipient_email,
 			'is_test'         => true,
 			'test_timestamp'  => current_time( 'mysql' ),
-			'source'          => 'artmatter_core_diagnostics',
+			'source'          => 'exacoat_core_diagnostics',
 			'site_url'        => home_url(),
 			'secret_key'      => $secret_key,
 			'template_id'     => $event_info['template_id'] ?? '',
@@ -333,7 +349,7 @@ class Exacoat_Diagnostics {
 			'headers' => [
 				'Content-Type' => 'application/json',
 				'X-Secret-Key' => $secret_key,
-				'User-Agent'   => 'Artmatter-Core-Diagnostics/' . ARTMATTER_CORE_VERSION,
+				'User-Agent'   => 'Exacoat-Core-Diagnostics/' . ( defined( 'EXACOAT_CORE_VERSION' ) ? EXACOAT_CORE_VERSION : '0.0.32' ),
 			],
 			'body'    => wp_json_encode( $payload ),
 			'timeout' => 12,
@@ -342,10 +358,10 @@ class Exacoat_Diagnostics {
 
 		if ( is_wp_error( $response ) ) {
 			$err_msg = $response->get_error_message();
-			Artmatter_Logger::log(
+			Exacoat_Logger::log(
 				'error',
 				'email',
-				"Email Webhook Test Failed: '{$event}' to {$recipient_email} — {$err_msg}",
+				"Email Webhook Test Failed: '{$event}' to {$recipient_email} - {$err_msg}",
 				[
 					'url'        => $webhook_url,
 					'event'      => $event,
@@ -368,7 +384,7 @@ class Exacoat_Diagnostics {
 		$is_success    = ( $status_code >= 200 && $status_code < 300 );
 
 		// Structured Telemetry Log
-		Artmatter_Logger::log(
+		Exacoat_Logger::log(
 			$is_success ? 'success' : 'email',
 			'email',
 			"Email Webhook Test Dispatched: '{$event}' to {$recipient_email} -> HTTP {$status_code} ({$latency}ms)",
@@ -432,9 +448,9 @@ class Exacoat_Diagnostics {
 	 * Dedicated 1-Click Integration Test Methods
 	 */
 	public static function test_pushover( string $app_token = '', string $user_key = '', string $title = '', string $message = '', string $url = '', int $priority = 0 ): array {
-		$config = class_exists( 'Artmatter_Pushover' ) ? Artmatter_Pushover::get_config() : [];
-		$app_token = $app_token ?: $config['app_token'];
-		$user_key  = $user_key ?: $config['user_key'];
+		$config = class_exists( 'Exacoat_Pushover_Service' ) ? Exacoat_Pushover_Service::get_config() : ( class_exists( 'Artmatter_Pushover' ) ? Artmatter_Pushover::get_config() : [] );
+		$app_token = $app_token ?: ( $config['app_token'] ?? '' );
+		$user_key  = $user_key ?: ( $config['user_key'] ?? '' );
 
 		if ( empty( $app_token ) || empty( $user_key ) ) {
 			return [ 'success' => false, 'message' => 'Pushover App Token or User Key missing' ];
@@ -443,8 +459,8 @@ class Exacoat_Diagnostics {
 		$body = [
 			'token'   => $app_token,
 			'user'    => $user_key,
-			'title'   => ! empty( $title ) ? $title : '🔔 Artmatter ERP Alert',
-			'message' => ! empty( $message ) ? $message : 'Your Pushover mobile alert gateway is working perfectly! (Dispatched from manager.artmatter.co)',
+			'title'   => ! empty( $title ) ? $title : '🔔 Exacoat ERP Alert',
+			'message' => ! empty( $message ) ? $message : 'Your Pushover mobile alert gateway is working perfectly! (Dispatched from manager.exacoat.com)',
 			'priority'=> $priority,
 		];
 
@@ -462,7 +478,7 @@ class Exacoat_Diagnostics {
 		$latency = round( ( microtime( true ) - $start ) * 1000 );
 
 		if ( is_wp_error( $resp ) ) {
-			Artmatter_Logger::log( 'error', 'pushover', 'Pushover Test Failed: ' . $resp->get_error_message() );
+			Exacoat_Logger::log( 'error', 'pushover', 'Pushover Test Failed: ' . $resp->get_error_message() );
 			return [ 'success' => false, 'message' => $resp->get_error_message(), 'latency_ms' => $latency ];
 		}
 
@@ -470,7 +486,7 @@ class Exacoat_Diagnostics {
 		$body = json_decode( wp_remote_retrieve_body( $resp ), true );
 		$is_ok = ( $code >= 200 && $code < 300 && ( $body['status'] ?? 0 ) === 1 );
 
-		Artmatter_Logger::log(
+		Exacoat_Logger::log(
 			$is_ok ? 'success' : 'error',
 			'pushover',
 			"Diagnostics: Pushover Test Alert Dispatched ({$latency}ms) -> HTTP {$code}",
@@ -488,7 +504,7 @@ class Exacoat_Diagnostics {
 	public static function test_r2(): array {
 		$settings = Exacoat_Core::get_settings();
 		$r2_id     = trim( $settings['r2_account_id'] ?? '' );
-		$r2_bucket = trim( $settings['r2_bucket'] ?? 'artmatter' );
+		$r2_bucket = trim( $settings['r2_bucket'] ?? 'exacoat' );
 		$r2_key    = trim( $settings['r2_access_key'] ?? '' );
 		$r2_secret = trim( $settings['r2_secret_key'] ?? '' );
 
@@ -505,7 +521,7 @@ class Exacoat_Diagnostics {
 		$code = is_wp_error( $resp ) ? 0 : wp_remote_retrieve_response_code( $resp );
 		$is_ok = ( $code === 200 || $code === 403 ); // 403 or 200 means R2 endpoint is live and reachable
 
-		Artmatter_Logger::log(
+		Exacoat_Logger::log(
 			'info',
 			'vault',
 			"Diagnostics: Cloudflare R2 Endpoint Ping ({$latency}ms) -> HTTP {$code}",
@@ -521,8 +537,8 @@ class Exacoat_Diagnostics {
 	}
 
 	public static function test_cloudflare_cache( string $zone_id = '', string $api_token = '' ): array {
-		$zone_id   = ! empty( $zone_id ) ? trim( $zone_id ) : ( defined( 'AM_CLOUDFLARE_ZONE_ID' ) ? AM_CLOUDFLARE_ZONE_ID : ( getenv( 'AM_CLOUDFLARE_ZONE_ID' ) ?: Exacoat_Core::get_setting( 'cloudflare_zone_id', '' ) ) );
-		$api_token = ! empty( $api_token ) ? trim( $api_token ) : ( defined( 'AM_CLOUDFLARE_API_TOKEN' ) ? AM_CLOUDFLARE_API_TOKEN : ( getenv( 'AM_CLOUDFLARE_API_TOKEN' ) ?: Exacoat_Core::get_setting( 'cloudflare_api_token', '' ) ) );
+		$zone_id   = ! empty( $zone_id ) ? trim( $zone_id ) : ( defined( 'EXACOAT_CLOUDFLARE_ZONE_ID' ) ? EXACOAT_CLOUDFLARE_ZONE_ID : ( getenv( 'EXACOAT_CLOUDFLARE_ZONE_ID' ) ?: ( defined( 'AM_CLOUDFLARE_ZONE_ID' ) ? AM_CLOUDFLARE_ZONE_ID : ( getenv( 'AM_CLOUDFLARE_ZONE_ID' ) ?: Exacoat_Core::get_setting( 'cloudflare_zone_id', '' ) ) ) ) );
+		$api_token = ! empty( $api_token ) ? trim( $api_token ) : ( defined( 'EXACOAT_CLOUDFLARE_API_TOKEN' ) ? EXACOAT_CLOUDFLARE_API_TOKEN : ( getenv( 'EXACOAT_CLOUDFLARE_API_TOKEN' ) ?: ( defined( 'AM_CLOUDFLARE_API_TOKEN' ) ? AM_CLOUDFLARE_API_TOKEN : ( getenv( 'AM_CLOUDFLARE_API_TOKEN' ) ?: Exacoat_Core::get_setting( 'cloudflare_api_token', '' ) ) ) ) );
 
 		if ( empty( $zone_id ) || empty( $api_token ) ) {
 			return [
@@ -563,11 +579,11 @@ class Exacoat_Diagnostics {
 			];
 		}
 
-		$zone_name   = $body['result']['name'] ?? 'artmatter.co';
+		$zone_name   = $body['result']['name'] ?? 'exacoat.com';
 		$zone_status = $body['result']['status'] ?? 'active';
 		$plan_name   = $body['result']['plan']['name'] ?? 'Free';
 
-		Artmatter_Logger::log(
+		Exacoat_Logger::log(
 			'info',
 			'vault',
 			"Diagnostics: Cloudflare Zone Verified [{$zone_name}] ({$latency}ms) -> Status: {$zone_status}",
@@ -586,8 +602,12 @@ class Exacoat_Diagnostics {
 	}
 
 	public static function test_drime( array $params = [] ): array {
-		if ( ! class_exists( 'Artmatter_Drime' ) ) {
-			return [ 'success' => false, 'message' => 'Artmatter_Drime client not available' ];
+		if ( class_exists( 'Exacoat_Drime' ) ) {
+			$drime_class = 'Exacoat_Drime';
+		} elseif ( class_exists( 'Artmatter_Drime' ) ) {
+			$drime_class = 'Artmatter_Drime';
+		} else {
+			return [ 'success' => false, 'message' => 'Drime client not available' ];
 		}
 
 		$custom_creds = [];
@@ -601,14 +621,14 @@ class Exacoat_Diagnostics {
 			$custom_creds['parent_folder_id'] = sanitize_text_field( $params['drime_parent_folder_id'] ?? $params['parent_folder_id'] );
 		}
 
-		return Artmatter_Drime::test_connection( $custom_creds );
+		return $drime_class::test_connection( $custom_creds );
 	}
 
 	public static function test_gemini( string $api_key = '' ): array {
-		$ai_config = class_exists( 'Artmatter_AI_Classifier' ) ? Artmatter_AI_Classifier::get_config() : [];
+		$ai_config = class_exists( 'Exacoat_AI_Classifier' ) ? Exacoat_AI_Classifier::get_config() : ( class_exists( 'Artmatter_AI_Classifier' ) ? Artmatter_AI_Classifier::get_config() : [] );
 		$api_key   = $api_key ?: ( $ai_config['api_key'] ?? '' );
 		if ( empty( $api_key ) ) {
-			$api_key = defined( 'AM_GEMINI_API_KEY' ) ? AM_GEMINI_API_KEY : ( defined( 'GEMINI_API_KEY' ) ? GEMINI_API_KEY : ( getenv( 'AM_GEMINI_API_KEY' ) ?: '' ) );
+			$api_key = defined( 'EXACOAT_GEMINI_API_KEY' ) ? EXACOAT_GEMINI_API_KEY : ( defined( 'AM_GEMINI_API_KEY' ) ? AM_GEMINI_API_KEY : ( defined( 'GEMINI_API_KEY' ) ? GEMINI_API_KEY : ( getenv( 'EXACOAT_GEMINI_API_KEY' ) ?: ( getenv( 'AM_GEMINI_API_KEY' ) ?: '' ) ) ) );
 		}
 
 		if ( empty( $api_key ) ) {
@@ -620,7 +640,7 @@ class Exacoat_Diagnostics {
 		$latency = round( ( microtime( true ) - $start ) * 1000 );
 
 		if ( is_wp_error( $resp ) ) {
-			Artmatter_Logger::log( 'error', 'ai', 'Gemini Ping Failed: ' . $resp->get_error_message() );
+			Exacoat_Logger::log( 'error', 'ai', 'Gemini Ping Failed: ' . $resp->get_error_message() );
 			return [ 'success' => false, 'message' => $resp->get_error_message(), 'latency_ms' => $latency ];
 		}
 
@@ -654,7 +674,7 @@ class Exacoat_Diagnostics {
 
 		$models = array_values( array_unique( $models ) );
 
-		Artmatter_Logger::log(
+		Exacoat_Logger::log(
 			$is_ok ? 'success' : 'error',
 			'ai',
 			"Diagnostics: Google Gemini API Test ({$latency}ms) -> HTTP {$code}",
@@ -674,7 +694,7 @@ class Exacoat_Diagnostics {
 		$settings = Exacoat_Core::get_settings();
 		$api_key  = $api_key ?: trim( $settings['openai_api_key'] ?? '' );
 		if ( empty( $api_key ) ) {
-			$api_key = defined( 'AM_OPENAI_API_KEY' ) ? AM_OPENAI_API_KEY : ( defined( 'OPENAI_API_KEY' ) ? OPENAI_API_KEY : ( getenv( 'AM_OPENAI_API_KEY' ) ?: '' ) );
+			$api_key = defined( 'EXACOAT_OPENAI_API_KEY' ) ? EXACOAT_OPENAI_API_KEY : ( defined( 'AM_OPENAI_API_KEY' ) ? AM_OPENAI_API_KEY : ( defined( 'OPENAI_API_KEY' ) ? OPENAI_API_KEY : ( getenv( 'EXACOAT_OPENAI_API_KEY' ) ?: ( getenv( 'AM_OPENAI_API_KEY' ) ?: '' ) ) ) );
 		}
 
 		if ( empty( $api_key ) ) {
@@ -689,7 +709,7 @@ class Exacoat_Diagnostics {
 		$latency = round( ( microtime( true ) - $start ) * 1000 );
 
 		if ( is_wp_error( $resp ) ) {
-			Artmatter_Logger::log( 'error', 'ai', 'OpenAI Ping Failed: ' . $resp->get_error_message() );
+			Exacoat_Logger::log( 'error', 'ai', 'OpenAI Ping Failed: ' . $resp->get_error_message() );
 			return [ 'success' => false, 'message' => $resp->get_error_message(), 'latency_ms' => $latency ];
 		}
 
@@ -697,7 +717,7 @@ class Exacoat_Diagnostics {
 		$body = json_decode( wp_remote_retrieve_body( $resp ), true );
 		$is_ok = ( $code === 200 );
 
-		Artmatter_Logger::log(
+		Exacoat_Logger::log(
 			$is_ok ? 'success' : 'error',
 			'ai',
 			"Diagnostics: OpenAI API Test ({$latency}ms) -> HTTP {$code}",

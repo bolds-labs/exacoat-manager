@@ -900,7 +900,7 @@ class Exacoat_Performance_Auditor {
 		$audit = self::get_or_run_audit( false );
 		$payload = [
 			'site_url'           => home_url(),
-			'plugin_version'     => ARTMATTER_CORE_VERSION,
+			'plugin_version'     => defined( 'EXACOAT_CORE_VERSION' ) ? EXACOAT_CORE_VERSION : ( defined( 'ARTMATTER_CORE_VERSION' ) ? ARTMATTER_CORE_VERSION : '0.0.32' ),
 			'health_score'       => $audit['health_score'],
 			'rating'             => $audit['rating'],
 			'checks_passed'      => $audit['checks_passed'],

@@ -93,7 +93,7 @@ class Exacoat_Checkout_Engine {
 	 * Make the original visitor and explicitly selected currency available to Aelia.
 	 */
 	public static function apply_headless_currency_context(): void {
-		$client_ip = sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_ARTMATTER_CLIENT_IP'] ?? '' ) );
+		$client_ip = sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_EXACOAT_CLIENT_IP'] ?? ( $_SERVER['HTTP_X_ARTMATTER_CLIENT_IP'] ?? '' ) ) );
 		if ( $client_ip && filter_var( $client_ip, FILTER_VALIDATE_IP ) ) {
 			$_SERVER['REMOTE_ADDR'] = $client_ip;
 		}
@@ -109,13 +109,15 @@ class Exacoat_Checkout_Engine {
 	}
 
 	private static function get_requested_currency(): string {
-		$currency = strtoupper( sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_ARTMATTER_CURRENCY'] ?? '' ) ) );
+		$currency = strtoupper( sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_EXACOAT_CURRENCY'] ?? ( $_SERVER['HTTP_X_ARTMATTER_CURRENCY'] ?? '' ) ) ) );
 		if ( ! preg_match( '/^[A-Z]{3}$/', $currency ) ) {
 			return '';
 		}
 
 		$supported = [ 'IDR' ];
-		if ( class_exists( 'Artmatter_Store_Enhancements' ) ) {
+		if ( class_exists( 'Exacoat_Store_Enhancements' ) ) {
+			$supported = array_merge( $supported, array_keys( Exacoat_Store_Enhancements::get_currency_rates() ) );
+		} elseif ( class_exists( 'Artmatter_Store_Enhancements' ) ) {
 			$supported = array_merge( $supported, array_keys( Artmatter_Store_Enhancements::get_currency_rates() ) );
 		}
 
@@ -123,51 +125,55 @@ class Exacoat_Checkout_Engine {
 	}
 
 	public static function register_headless_checkout_routes() {
-		register_rest_route( 'artmatter-core/v1', '/checkout/config', [
-			'methods'             => 'GET',
-			'callback'            => [ __CLASS__, 'get_headless_checkout_config' ],
-			'permission_callback' => '__return_true',
-		] );
+		$namespaces = [ 'exacoat-core/v1', 'artmatter-core/v1' ];
 
-		register_rest_route( 'artmatter-core/v1', '/checkout/address', [
-			'methods'             => 'POST',
-			'callback'            => [ __CLASS__, 'resolve_headless_checkout_address' ],
-			'permission_callback' => '__return_true',
-			'args'                => [
-				'country'  => [
-					'default'           => 'ID',
-					'sanitize_callback' => 'sanitize_text_field',
-				],
-				'postcode' => [
-					'required'          => true,
-					'sanitize_callback' => 'sanitize_text_field',
-				],
-			],
-		] );
+		foreach ( $namespaces as $ns ) {
+			register_rest_route( $ns, '/checkout/config', [
+				'methods'             => 'GET',
+				'callback'            => [ __CLASS__, 'get_headless_checkout_config' ],
+				'permission_callback' => '__return_true',
+			] );
 
-		register_rest_route( 'artmatter-core/v1', '/checkout/price', [
-			'methods'             => 'GET',
-			'callback'            => [ __CLASS__, 'get_headless_product_price' ],
-			'permission_callback' => '__return_true',
-			'args'                => [
-				'product_id' => [
-					'required'          => true,
-					'sanitize_callback' => 'absint',
+			register_rest_route( $ns, '/checkout/address', [
+				'methods'             => 'POST',
+				'callback'            => [ __CLASS__, 'resolve_headless_checkout_address' ],
+				'permission_callback' => '__return_true',
+				'args'                => [
+					'country'  => [
+						'default'           => 'ID',
+						'sanitize_callback' => 'sanitize_text_field',
+					],
+					'postcode' => [
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					],
 				],
-			],
-		] );
+			] );
 
-		register_rest_route( 'artmatter-core/v1', '/checkout/cancel-order', [
-			'methods'             => 'POST',
-			'callback'            => [ __CLASS__, 'cancel_headless_checkout_order' ],
-			'permission_callback' => '__return_true',
-			'args'                => [
-				'order_id' => [
-					'required'          => true,
-					'sanitize_callback' => 'absint',
+			register_rest_route( $ns, '/checkout/price', [
+				'methods'             => 'GET',
+				'callback'            => [ __CLASS__, 'get_headless_product_price' ],
+				'permission_callback' => '__return_true',
+				'args'                => [
+					'product_id' => [
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+					],
 				],
-			],
-		] );
+			] );
+
+			register_rest_route( $ns, '/checkout/cancel-order', [
+				'methods'             => 'POST',
+				'callback'            => [ __CLASS__, 'cancel_headless_checkout_order' ],
+				'permission_callback' => '__return_true',
+				'args'                => [
+					'order_id' => [
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+					],
+				],
+			] );
+		}
 	}
 
 	public static function cancel_headless_checkout_order( WP_REST_Request $request ) {
@@ -525,7 +531,8 @@ class Exacoat_Checkout_Engine {
 	 * Locate plugin template overrides for WooCommerce
 	 */
 	public static function locate_checkout_templates( $template, $template_name, $template_path ) {
-		$plugin_path = ARTMATTER_CORE_PATH . 'templates/' . $template_name;
+		$base_path = defined( 'EXACOAT_CORE_PATH' ) ? EXACOAT_CORE_PATH : ( defined( 'ARTMATTER_CORE_PATH' ) ? ARTMATTER_CORE_PATH : plugin_dir_path( dirname( __DIR__ ) . '/exacoat-core.php' ) );
+		$plugin_path = $base_path . 'templates/' . $template_name;
 		if ( file_exists( $plugin_path ) ) {
 			return $plugin_path;
 		}
@@ -536,7 +543,8 @@ class Exacoat_Checkout_Engine {
 	 * Intercept wc_get_template calls directly
 	 */
 	public static function intercept_checkout_templates( $located, $template_name, $args, $template_path, $default_path ) {
-		$plugin_path = ARTMATTER_CORE_PATH . 'templates/' . $template_name;
+		$base_path = defined( 'EXACOAT_CORE_PATH' ) ? EXACOAT_CORE_PATH : ( defined( 'ARTMATTER_CORE_PATH' ) ? ARTMATTER_CORE_PATH : plugin_dir_path( dirname( __DIR__ ) . '/exacoat-core.php' ) );
+		$plugin_path = $base_path . 'templates/' . $template_name;
 		if ( file_exists( $plugin_path ) ) {
 			return $plugin_path;
 		}
@@ -556,27 +564,31 @@ class Exacoat_Checkout_Engine {
 		$is_received = is_wc_endpoint_url( 'order-received' );
 
 		if ( $is_checkout || $is_pay || $is_received ) {
-			$ver = defined( 'ARTMATTER_CORE_VERSION' ) ? ARTMATTER_CORE_VERSION : '7.3.1';
+			$ver      = defined( 'EXACOAT_CORE_VERSION' ) ? EXACOAT_CORE_VERSION : ( defined( 'ARTMATTER_CORE_VERSION' ) ? ARTMATTER_CORE_VERSION : '0.0.32' );
+			$core_url = defined( 'EXACOAT_CORE_URL' ) ? EXACOAT_CORE_URL : ( defined( 'ARTMATTER_CORE_URL' ) ? ARTMATTER_CORE_URL : plugin_dir_url( dirname( __DIR__ ) . '/exacoat-core.php' ) );
 
 			wp_enqueue_style(
-				'artmatter-checkout-style',
-				ARTMATTER_CORE_URL . 'assets/css/checkout.css',
+				'exacoat-checkout-style',
+				$core_url . 'assets/css/checkout.css',
 				[],
 				$ver
 			);
 
 			wp_enqueue_script(
-				'artmatter-checkout-script',
-				ARTMATTER_CORE_URL . 'assets/js/checkout.js',
+				'exacoat-checkout-script',
+				$core_url . 'assets/js/checkout.js',
 				[ 'jquery' ],
 				$ver,
 				true
 			);
 
-			wp_localize_script( 'artmatter-checkout-script', 'artmatterCheckoutData', [
+			$checkout_data = [
 				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 				'nonce'   => wp_create_nonce( 'artmatter-checkout-nonce' ),
-			] );
+			];
+
+			wp_localize_script( 'exacoat-checkout-script', 'exacoatCheckoutData', $checkout_data );
+			wp_localize_script( 'exacoat-checkout-script', 'artmatterCheckoutData', $checkout_data );
 		}
 	}
 

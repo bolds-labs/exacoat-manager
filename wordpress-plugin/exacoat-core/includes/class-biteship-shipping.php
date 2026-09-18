@@ -32,7 +32,8 @@ class Exacoat_Biteship_Engine {
 
 	public static function shipping_init() {
 		if ( class_exists( 'WC_Shipping_Method' ) && ! class_exists( 'WC_Biteship_Shipping_Method' ) ) {
-			require_once ARTMATTER_CORE_PATH . 'includes/class-wc-biteship-shipping-method.php';
+			$base_path = defined( 'EXACOAT_CORE_PATH' ) ? EXACOAT_CORE_PATH : ( defined( 'ARTMATTER_CORE_PATH' ) ? ARTMATTER_CORE_PATH : plugin_dir_path( dirname( __DIR__ ) . '/exacoat-core.php' ) );
+			require_once $base_path . 'includes/class-wc-biteship-shipping-method.php';
 		}
 	}
 

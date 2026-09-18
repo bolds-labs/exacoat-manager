@@ -1825,25 +1825,45 @@ class Exacoat_Review_Manager {
 	 * Register front-end scripts and styles
 	 */
 	public static function register_frontend_assets() {
+		$core_url = defined( 'EXACOAT_CORE_URL' ) ? EXACOAT_CORE_URL : ( defined( 'ARTMATTER_CORE_URL' ) ? ARTMATTER_CORE_URL : plugin_dir_url( dirname( __DIR__ ) . '/exacoat-core.php' ) );
+		$core_ver = defined( 'EXACOAT_CORE_VERSION' ) ? EXACOAT_CORE_VERSION : ( defined( 'ARTMATTER_CORE_VERSION' ) ? ARTMATTER_CORE_VERSION : '0.0.32' );
+
+		wp_register_style(
+			'exacoat-reviews',
+			$core_url . 'assets/css/reviews.css',
+			[],
+			$core_ver
+		);
 		wp_register_style(
 			'artmatter-reviews',
-			ARTMATTER_CORE_URL . 'assets/css/reviews.css',
+			$core_url . 'assets/css/reviews.css',
 			[],
-			ARTMATTER_CORE_VERSION
+			$core_ver
 		);
 
 		wp_register_script(
-			'artmatter-reviews',
-			ARTMATTER_CORE_URL . 'assets/js/reviews.js',
+			'exacoat-reviews',
+			$core_url . 'assets/js/reviews.js',
 			[ 'jquery' ],
-			ARTMATTER_CORE_VERSION,
+			$core_ver,
+			true
+		);
+		wp_register_script(
+			'artmatter-reviews',
+			$core_url . 'assets/js/reviews.js',
+			[ 'jquery' ],
+			$core_ver,
 			true
 		);
 
-		wp_localize_script( 'artmatter-reviews', 'ArtmatterReviewsData', [
-			'restUrl' => esc_url_raw( rest_url( 'artmatter-core/v1/' ) ),
+		$reviews_data = [
+			'restUrl' => esc_url_raw( rest_url( 'exacoat-core/v1/' ) ),
 			'nonce'   => wp_create_nonce( 'wp_rest' ),
-		] );
+		];
+
+		wp_localize_script( 'exacoat-reviews', 'ExacoatReviewsData', $reviews_data );
+		wp_localize_script( 'exacoat-reviews', 'ArtmatterReviewsData', $reviews_data );
+		wp_localize_script( 'artmatter-reviews', 'ArtmatterReviewsData', $reviews_data );
 	}
 
 	/**

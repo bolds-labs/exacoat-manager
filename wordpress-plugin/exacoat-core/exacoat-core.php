@@ -3,7 +3,7 @@
  * Plugin Name:       Exacoat Core Platform
  * Plugin URI:        https://exacoat.com
  * Description:       Proprietary e-commerce core engine, configurator manager, and ERP workstation integration for Exacoat.
- * Version:           0.0.31
+ * Version:           0.0.32
  * Author:            Exacoat
  * Author URI:        https://exacoat.com
  * License:           Proprietary
@@ -15,7 +15,42 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'EXACOAT_CORE_VERSION' ) ) {
-	define( 'EXACOAT_CORE_VERSION', '0.0.31' );
+	define( 'EXACOAT_CORE_VERSION', '0.0.32' );
+}
+if ( ! defined( 'EXACOAT_CORE_FILE' ) ) {
+	define( 'EXACOAT_CORE_FILE', __FILE__ );
+}
+if ( ! defined( 'EXACOAT_CORE_PATH' ) ) {
+	define( 'EXACOAT_CORE_PATH', plugin_dir_path( __FILE__ ) );
+}
+if ( ! defined( 'EXACOAT_CORE_URL' ) ) {
+	define( 'EXACOAT_CORE_URL', plugin_dir_url( __FILE__ ) );
+}
+if ( ! defined( 'EXACOAT_WEB_URL' ) ) {
+	define( 'EXACOAT_WEB_URL', getenv( 'EXACOAT_WEB_URL' ) ?: 'https://exacoat.com' );
+}
+if ( ! defined( 'EXACOAT_MEDIA_URL' ) ) {
+	define( 'EXACOAT_MEDIA_URL', getenv( 'EXACOAT_MEDIA_URL' ) ?: 'https://exacoat.com' );
+}
+
+// Safety Fallbacks for legacy/forked constant references to prevent fatal undefined constant crashes
+if ( ! defined( 'ARTMATTER_CORE_VERSION' ) ) {
+	define( 'ARTMATTER_CORE_VERSION', EXACOAT_CORE_VERSION );
+}
+if ( ! defined( 'ARTMATTER_CORE_FILE' ) ) {
+	define( 'ARTMATTER_CORE_FILE', EXACOAT_CORE_FILE );
+}
+if ( ! defined( 'ARTMATTER_CORE_PATH' ) ) {
+	define( 'ARTMATTER_CORE_PATH', EXACOAT_CORE_PATH );
+}
+if ( ! defined( 'ARTMATTER_CORE_URL' ) ) {
+	define( 'ARTMATTER_CORE_URL', EXACOAT_CORE_URL );
+}
+if ( ! defined( 'ARTMATTER_WEB_URL' ) ) {
+	define( 'ARTMATTER_WEB_URL', EXACOAT_WEB_URL );
+}
+if ( ! defined( 'ARTMATTER_MEDIA_URL' ) ) {
+	define( 'ARTMATTER_MEDIA_URL', EXACOAT_MEDIA_URL );
 }
 
 // Authenticate WooCommerce API keys across custom REST endpoints before WordPress Application Passwords (prio 20) triggers invalid_username
@@ -76,22 +111,6 @@ add_action( 'template_redirect', function() {
 	}
 }, -999 );
 
-// Define Plugin Constants
-if ( ! defined( 'EXACOAT_CORE_FILE' ) ) {
-	define( 'EXACOAT_CORE_FILE', __FILE__ );
-}
-if ( ! defined( 'EXACOAT_CORE_PATH' ) ) {
-	define( 'EXACOAT_CORE_PATH', plugin_dir_path( __FILE__ ) );
-}
-if ( ! defined( 'EXACOAT_CORE_URL' ) ) {
-	define( 'EXACOAT_CORE_URL', plugin_dir_url( __FILE__ ) );
-}
-if ( ! defined( 'EXACOAT_WEB_URL' ) ) {
-	define( 'EXACOAT_WEB_URL', getenv( 'EXACOAT_WEB_URL' ) ?: 'https://exacoat.com' );
-}
-if ( ! defined( 'EXACOAT_MEDIA_URL' ) ) {
-	define( 'EXACOAT_MEDIA_URL', getenv( 'EXACOAT_MEDIA_URL' ) ?: 'https://exacoat.com' );
-}
 
 if ( ! function_exists( 'exacoat_storefront_url' ) ) {
 	function exacoat_storefront_url( string $path = '/' ): string {
@@ -367,7 +386,6 @@ add_action( 'admin_init', function () {
 		$installed_ver = get_option( 'exacoat_core_installed_version' ) ?: get_option( 'artmatter_core_installed_version' );
 		if ( $installed_ver !== EXACOAT_CORE_VERSION ) {
 			update_option( 'exacoat_core_installed_version', EXACOAT_CORE_VERSION );
-			update_option( 'artmatter_core_installed_version', EXACOAT_CORE_VERSION );
 			delete_transient( 'exacoat_core_remote_version_manifest' );
 			delete_transient( 'artmatter_core_remote_version_manifest' );
 			delete_site_transient( 'update_plugins' );
@@ -383,22 +401,20 @@ add_action( 'admin_init', function () {
 register_activation_hook( __FILE__, function () {
 	try {
 		// 1. Initialize default plugin options
-		if ( ! get_option( 'exacoat_core_settings' ) && ! get_option( 'artmatter_core_settings' ) ) {
-			$default_settings = [
+		if ( ! get_option( 'exacoat_core_settings' ) ) {
+			$legacy_settings = get_option( 'artmatter_core_settings' );
+			$default_settings = is_array( $legacy_settings ) ? $legacy_settings : [
 				'enable_shipping_tracker' => 1,
 				'enable_review_manager'   => 1,
 				'enable_order_manager'    => 1,
 				'webhook_secret'          => 'EXA_SECRET_' . wp_generate_password( 24, false ),
 			];
 			update_option( 'exacoat_core_settings', $default_settings );
-			update_option( 'artmatter_core_settings', $default_settings );
 		}
 
 		// 2. Create Reviews table if not exists
 		if ( class_exists( 'Exacoat_Review_Manager' ) ) {
 			Exacoat_Review_Manager::create_tables();
-		} elseif ( class_exists( 'Artmatter_Review_Manager' ) ) {
-			Artmatter_Review_Manager::create_tables();
 		}
 
 		// 3. Flush rewrite rules

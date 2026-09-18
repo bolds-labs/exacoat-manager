@@ -46,15 +46,15 @@ $item_count    = ( function_exists( 'WC' ) && WC()->cart ) ? WC()->cart->get_car
 	<div class="artmatter-co-stepper-wrap">
 		<div class="artmatter-co-stepper">
 			<a href="#information" class="artmatter-co-step is-active" data-step="information">
-				<span><?php esc_html_e( 'Information', 'artmatter-core' ); ?></span>
+				<span><?php esc_html_e( 'Information', 'exacoat-core' ); ?></span>
 			</a>
 			<span class="artmatter-co-step-divider">›</span>
 			<a href="#shipping" class="artmatter-co-step" data-step="shipping">
-				<span><?php esc_html_e( 'Shipping', 'artmatter-core' ); ?></span>
+				<span><?php esc_html_e( 'Shipping', 'exacoat-core' ); ?></span>
 			</a>
 			<span class="artmatter-co-step-divider">›</span>
 			<a href="#payment" class="artmatter-co-step" data-step="payment">
-				<span><?php esc_html_e( 'Payment', 'artmatter-core' ); ?></span>
+				<span><?php esc_html_e( 'Payment', 'exacoat-core' ); ?></span>
 			</a>
 		</div>
 	</div>
@@ -74,15 +74,15 @@ $item_count    = ( function_exists( 'WC' ) && WC()->cart ) ? WC()->cart->get_car
 			<div class="artmatter-co-step-panel is-active" id="artmatter-step-info">
 				<div class="artmatter-co-section-header">
 					<div class="artmatter-co-section-title-row">
-						<h2 class="artmatter-co-title"><?php esc_html_e( 'Contact', 'artmatter-core' ); ?></h2>
+						<h2 class="artmatter-co-title"><?php esc_html_e( 'Contact', 'exacoat-core' ); ?></h2>
 						<?php if ( $current_user->exists() ) : ?>
 							<div class="artmatter-co-user-greeting">
-								<?php echo sprintf( esc_html__( 'Logged in as %s', 'artmatter-core' ), '<span class="artmatter-co-user-name">' . esc_html( $user_name ) . '</span>' ); ?>
+								<?php echo sprintf( esc_html__( 'Logged in as %s', 'exacoat-core' ), '<span class="artmatter-co-user-name">' . esc_html( $user_name ) . '</span>' ); ?>
 							</div>
 						<?php else : ?>
 							<div class="artmatter-co-returning-customer-prompt">
-								<span><?php esc_html_e( 'Have an account?', 'artmatter-core' ); ?></span>
-								<a href="#login" id="artmatter_trigger_login_modal" class="artmatter-co-login-link"><?php esc_html_e( 'Log in', 'artmatter-core' ); ?></a>
+								<span><?php esc_html_e( 'Have an account?', 'exacoat-core' ); ?></span>
+								<a href="#login" id="artmatter_trigger_login_modal" class="artmatter-co-login-link"><?php esc_html_e( 'Log in', 'exacoat-core' ); ?></a>
 							</div>
 						<?php endif; ?>
 					</div>
@@ -93,13 +93,13 @@ $item_count    = ( function_exists( 'WC' ) && WC()->cart ) ? WC()->cart->get_car
 
 					<!-- Biteship Automated Address Box (Injected for Indonesia) -->
 					<div class="form-row form-row-wide biteship-automated-address-field" id="biteship_automated_address_field" style="display:none;">
-						<label for="biteship_automated_input_billing"><?php esc_html_e( 'Automated Address', 'artmatter-core' ); ?></label>
+						<label for="biteship_automated_input_billing"><?php esc_html_e( 'Automated Address', 'exacoat-core' ); ?></label>
 						<span class="woocommerce-input-wrapper">
-							<input type="text" class="input-text" id="biteship_automated_input_billing" readonly placeholder="<?php esc_attr_e( 'Enter postcode for automated address', 'artmatter-core' ); ?>">
+							<input type="text" class="input-text" id="biteship_automated_input_billing" readonly placeholder="<?php esc_attr_e( 'Enter postcode for automated address', 'exacoat-core' ); ?>">
 						</span>
 					</div>
 					<div id="bte-edit-toggle" class="bte-edit-wrap" style="display:none;">
-						<button type="button" class="bte-toggle-link" aria-expanded="false" aria-controls="biteship_token_editor"><?php esc_html_e( 'Incorrect address? Edit', 'artmatter-core' ); ?></button>
+						<button type="button" class="bte-toggle-link" aria-expanded="false" aria-controls="biteship_token_editor"><?php esc_html_e( 'Incorrect address? Edit', 'exacoat-core' ); ?></button>
 					</div>
 					<div id="biteship_token_editor" class="biteship-token-editor" role="group" aria-hidden="true" style="display:none;">
 						<span class="bte-token" data-key="subdistrict" contenteditable="true" title="Edit subdistrict"></span>
@@ -110,14 +110,14 @@ $item_count    = ( function_exists( 'WC' ) && WC()->cart ) ? WC()->cart->get_car
 
 					<?php if ( ! $current_user->exists() ) : ?>
 						<div class="artmatter-co-create-account-note">
-							<span><?php esc_html_e( 'Save your info for next time: you can create an account on the order confirmation page.', 'artmatter-core' ); ?></span>
+							<span><?php esc_html_e( 'Save your info for next time: you can create an account on the order confirmation page.', 'exacoat-core' ); ?></span>
 						</div>
 					<?php endif; ?>
 				</div>
 
 				<div class="artmatter-co-nav-actions">
 					<button type="button" class="artmatter-co-btn-next" data-action="goto-step" data-target-step="shipping">
-						<span><?php esc_html_e( 'Continue to shipping', 'artmatter-core' ); ?></span>
+						<span><?php esc_html_e( 'Continue to shipping', 'exacoat-core' ); ?></span>
 					</button>
 				</div>
 			</div>
@@ -127,25 +127,25 @@ $item_count    = ( function_exists( 'WC' ) && WC()->cart ) ? WC()->cart->get_car
 				<!-- Customer Info Recap Box (Directly at top) -->
 				<div class="artmatter-co-recap-box">
 					<div class="artmatter-co-recap-row">
-						<span class="recap-label"><?php esc_html_e( 'Contact', 'artmatter-core' ); ?></span>
+						<span class="recap-label"><?php esc_html_e( 'Contact', 'exacoat-core' ); ?></span>
 						<span class="recap-value" id="recap-email"><?php echo esc_html( $user_email ?: '-' ); ?></span>
-						<a href="#information" class="recap-edit" data-action="goto-step" data-target-step="information"><?php esc_html_e( 'Change', 'artmatter-core' ); ?></a>
+						<a href="#information" class="recap-edit" data-action="goto-step" data-target-step="information"><?php esc_html_e( 'Change', 'exacoat-core' ); ?></a>
 					</div>
 					<div class="artmatter-co-recap-row">
-						<span class="recap-label"><?php esc_html_e( 'Ship to', 'artmatter-core' ); ?></span>
+						<span class="recap-label"><?php esc_html_e( 'Ship to', 'exacoat-core' ); ?></span>
 						<span class="recap-value" id="recap-address">-</span>
-						<a href="#information" class="recap-edit" data-action="goto-step" data-target-step="information"><?php esc_html_e( 'Change', 'artmatter-core' ); ?></a>
+						<a href="#information" class="recap-edit" data-action="goto-step" data-target-step="information"><?php esc_html_e( 'Change', 'exacoat-core' ); ?></a>
 					</div>
 				</div>
 
 				<!-- Shipping Methods Section -->
 				<div class="artmatter-co-shipping-options-wrap">
-					<h2 class="artmatter-co-title" style="margin: 28px 0 14px;"><?php esc_html_e( 'Shipping method', 'artmatter-core' ); ?></h2>
+					<h2 class="artmatter-co-title" style="margin: 28px 0 14px;"><?php esc_html_e( 'Shipping method', 'exacoat-core' ); ?></h2>
 					<div id="artmatter-shipping-methods-container">
 						<?php if ( WC()->cart->needs_shipping() && WC()->cart->show_shipping() ) : ?>
 							<?php wc_cart_totals_shipping_html(); ?>
 						<?php else : ?>
-							<p style="font-size:13px;color:#a1a1aa;"><?php esc_html_e( 'No shipping required or standard complimentary shipping applies.', 'artmatter-core' ); ?></p>
+							<p style="font-size:13px;color:#a1a1aa;"><?php esc_html_e( 'No shipping required or standard complimentary shipping applies.', 'exacoat-core' ); ?></p>
 						<?php endif; ?>
 					</div>
 				</div>
@@ -153,10 +153,10 @@ $item_count    = ( function_exists( 'WC' ) && WC()->cart ) ? WC()->cart->get_car
 				<div class="artmatter-co-nav-actions" style="display:flex;align-items:center;justify-content:space-between;gap:16px;">
 					<button type="button" class="artmatter-co-btn-back" data-action="goto-step" data-target-step="information">
 						<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
-						<span><?php esc_html_e( 'Return to information', 'artmatter-core' ); ?></span>
+						<span><?php esc_html_e( 'Return to information', 'exacoat-core' ); ?></span>
 					</button>
 					<button type="button" class="artmatter-co-btn-next" data-action="goto-step" data-target-step="payment">
-						<span><?php esc_html_e( 'Continue to payment', 'artmatter-core' ); ?></span>
+						<span><?php esc_html_e( 'Continue to payment', 'exacoat-core' ); ?></span>
 					</button>
 				</div>
 			</div>
@@ -166,33 +166,33 @@ $item_count    = ( function_exists( 'WC' ) && WC()->cart ) ? WC()->cart->get_car
 				<!-- Customer Info + Shipping Recap Box (Directly at top) -->
 				<div class="artmatter-co-recap-box">
 					<div class="artmatter-co-recap-row">
-						<span class="recap-label"><?php esc_html_e( 'Contact', 'artmatter-core' ); ?></span>
+						<span class="recap-label"><?php esc_html_e( 'Contact', 'exacoat-core' ); ?></span>
 						<span class="recap-value" id="recap-email-2"><?php echo esc_html( $user_email ?: '-' ); ?></span>
-						<a href="#information" class="recap-edit" data-action="goto-step" data-target-step="information"><?php esc_html_e( 'Change', 'artmatter-core' ); ?></a>
+						<a href="#information" class="recap-edit" data-action="goto-step" data-target-step="information"><?php esc_html_e( 'Change', 'exacoat-core' ); ?></a>
 					</div>
 					<div class="artmatter-co-recap-row">
-						<span class="recap-label"><?php esc_html_e( 'Ship to', 'artmatter-core' ); ?></span>
+						<span class="recap-label"><?php esc_html_e( 'Ship to', 'exacoat-core' ); ?></span>
 						<span class="recap-value" id="recap-address-2">-</span>
-						<a href="#information" class="recap-edit" data-action="goto-step" data-target-step="information"><?php esc_html_e( 'Change', 'artmatter-core' ); ?></a>
+						<a href="#information" class="recap-edit" data-action="goto-step" data-target-step="information"><?php esc_html_e( 'Change', 'exacoat-core' ); ?></a>
 					</div>
 					<div class="artmatter-co-recap-row">
-						<span class="recap-label"><?php esc_html_e( 'Method', 'artmatter-core' ); ?></span>
+						<span class="recap-label"><?php esc_html_e( 'Method', 'exacoat-core' ); ?></span>
 						<span class="recap-value" id="recap-shipping">-</span>
-						<a href="#shipping" class="recap-edit" data-action="goto-step" data-target-step="shipping"><?php esc_html_e( 'Change', 'artmatter-core' ); ?></a>
+						<a href="#shipping" class="recap-edit" data-action="goto-step" data-target-step="shipping"><?php esc_html_e( 'Change', 'exacoat-core' ); ?></a>
 					</div>
 				</div>
 
 				<!-- Payment Methods Section -->
 				<div class="artmatter-co-payment-methods-wrap">
-					<h2 class="artmatter-co-title" style="margin: 28px 0 4px;"><?php esc_html_e( 'Payment', 'artmatter-core' ); ?></h2>
-					<p class="artmatter-co-user-greeting" style="margin-bottom: 16px;"><?php esc_html_e( 'All transactions are secure and encrypted.', 'artmatter-core' ); ?></p>
+					<h2 class="artmatter-co-title" style="margin: 28px 0 4px;"><?php esc_html_e( 'Payment', 'exacoat-core' ); ?></h2>
+					<p class="artmatter-co-user-greeting" style="margin-bottom: 16px;"><?php esc_html_e( 'All transactions are secure and encrypted.', 'exacoat-core' ); ?></p>
 					<?php woocommerce_checkout_payment(); ?>
 				</div>
 
 				<div class="artmatter-co-nav-actions" style="margin-top:16px;">
 					<button type="button" class="artmatter-co-btn-back" data-action="goto-step" data-target-step="shipping">
 						<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
-						<span><?php esc_html_e( 'Return to shipping', 'artmatter-core' ); ?></span>
+						<span><?php esc_html_e( 'Return to shipping', 'exacoat-core' ); ?></span>
 					</button>
 				</div>
 			</div>
@@ -259,12 +259,12 @@ $item_count    = ( function_exists( 'WC' ) && WC()->cart ) ? WC()->cart->get_car
 					<!-- Collapsible Promo / Discount Code Drawer -->
 					<div class="artmatter-co-promo-wrap">
 						<button type="button" class="artmatter-co-promo-toggle-btn" id="artmatter_promo_toggle_btn" aria-expanded="false">
-							<span><?php esc_html_e( 'Have a promo code?', 'artmatter-core' ); ?></span>
+							<span><?php esc_html_e( 'Have a promo code?', 'exacoat-core' ); ?></span>
 							<svg class="artmatter-co-promo-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
 						</button>
 						<div class="artmatter-co-coupon-group" id="artmatter_promo_drawer" style="display:none;">
-							<input type="text" name="artmatter_coupon_code_input" id="artmatter_coupon_code_input" placeholder="<?php esc_attr_e( 'Enter code...', 'artmatter-core' ); ?>" />
-							<button type="button" id="artmatter_apply_coupon_btn" class="artmatter-co-btn-coupon"><?php esc_html_e( 'Apply', 'artmatter-core' ); ?></button>
+							<input type="text" name="artmatter_coupon_code_input" id="artmatter_coupon_code_input" placeholder="<?php esc_attr_e( 'Enter code...', 'exacoat-core' ); ?>" />
+							<button type="button" id="artmatter_apply_coupon_btn" class="artmatter-co-btn-coupon"><?php esc_html_e( 'Apply', 'exacoat-core' ); ?></button>
 						</div>
 						<div id="artmatter_coupon_feedback" style="display:none;font-size:12px;margin-top:6px;"></div>
 					</div>
@@ -283,35 +283,35 @@ $item_count    = ( function_exists( 'WC' ) && WC()->cart ) ? WC()->cart->get_car
 	<!-- Auto-Detected Existing User Quick Login Modal -->
 	<div id="artmatter-account-modal" class="artmatter-co-modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="artmatter_modal_title">
 		<div class="artmatter-co-modal-card">
-			<button type="button" class="artmatter-co-modal-close" id="artmatter_close_account_modal" aria-label="<?php esc_attr_e( 'Close', 'artmatter-core' ); ?>">&times;</button>
+			<button type="button" class="artmatter-co-modal-close" id="artmatter_close_account_modal" aria-label="<?php esc_attr_e( 'Close', 'exacoat-core' ); ?>">&times;</button>
 			<div class="artmatter-co-modal-header">
 				<div class="artmatter-co-modal-badge">
 					<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
 				</div>
-				<h3 class="artmatter-co-modal-title" id="artmatter_modal_title"><?php esc_html_e( 'Welcome back', 'artmatter-core' ); ?></h3>
+				<h3 class="artmatter-co-modal-title" id="artmatter_modal_title"><?php esc_html_e( 'Welcome back', 'exacoat-core' ); ?></h3>
 				<p class="artmatter-co-modal-desc">
-					<?php esc_html_e( 'Log in to access your saved addresses & faster checkout.', 'artmatter-core' ); ?>
+					<?php esc_html_e( 'Log in to access your saved addresses & faster checkout.', 'exacoat-core' ); ?>
 				</p>
 			</div>
 
 			<form id="artmatter_quick_login_form" method="post" onsubmit="return false;">
 				<div class="artmatter-co-modal-field-group" id="artmatter_quick_email_group" style="display:none; margin-bottom:12px;">
-					<label for="artmatter_quick_email"><?php esc_html_e( 'Email address', 'artmatter-core' ); ?></label>
-					<input type="email" id="artmatter_quick_email" name="artmatter_quick_email" autocomplete="email" placeholder="<?php esc_attr_e( 'name@example.com', 'artmatter-core' ); ?>" />
+					<label for="artmatter_quick_email"><?php esc_html_e( 'Email address', 'exacoat-core' ); ?></label>
+					<input type="email" id="artmatter_quick_email" name="artmatter_quick_email" autocomplete="email" placeholder="<?php esc_attr_e( 'name@example.com', 'exacoat-core' ); ?>" />
 				</div>
 				<div class="artmatter-co-modal-field-group" style="margin-bottom:14px;">
-					<label for="artmatter_quick_pass"><?php esc_html_e( 'Password', 'artmatter-core' ); ?></label>
-					<input type="password" id="artmatter_quick_pass" name="artmatter_quick_pass" required autocomplete="current-password" placeholder="<?php esc_attr_e( 'Enter your password', 'artmatter-core' ); ?>" />
+					<label for="artmatter_quick_pass"><?php esc_html_e( 'Password', 'exacoat-core' ); ?></label>
+					<input type="password" id="artmatter_quick_pass" name="artmatter_quick_pass" required autocomplete="current-password" placeholder="<?php esc_attr_e( 'Enter your password', 'exacoat-core' ); ?>" />
 				</div>
 
 				<div id="artmatter_quick_login_error" class="artmatter-co-modal-error" style="display:none;"></div>
 
 				<div class="artmatter-co-modal-actions">
 					<button type="submit" id="artmatter_btn_quick_login" class="artmatter-co-btn-next" style="width:100%;">
-						<span><?php esc_html_e( 'Log In & Auto-fill', 'artmatter-core' ); ?></span>
+						<span><?php esc_html_e( 'Log In & Auto-fill', 'exacoat-core' ); ?></span>
 					</button>
 					<button type="button" id="artmatter_btn_continue_guest" class="artmatter-co-btn-guest-opt">
-						<span><?php esc_html_e( 'Continue as guest', 'artmatter-core' ); ?></span>
+						<span><?php esc_html_e( 'Continue as guest', 'exacoat-core' ); ?></span>
 					</button>
 				</div>
 			</form>

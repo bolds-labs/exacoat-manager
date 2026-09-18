@@ -102,18 +102,21 @@ class Exacoat_Wishlist_Engine {
 	 * Enqueue CSS & JS Assets
 	 */
 	public static function enqueue_frontend_assets() {
+		$core_url = defined( 'EXACOAT_CORE_URL' ) ? EXACOAT_CORE_URL : ( defined( 'ARTMATTER_CORE_URL' ) ? ARTMATTER_CORE_URL : plugin_dir_url( dirname( __DIR__ ) . '/exacoat-core.php' ) );
+		$core_ver = defined( 'EXACOAT_CORE_VERSION' ) ? EXACOAT_CORE_VERSION : ( defined( 'ARTMATTER_CORE_VERSION' ) ? ARTMATTER_CORE_VERSION : '0.0.32' );
+
 		wp_enqueue_style(
-			'artmatter-wishlist-css',
-			ARTMATTER_CORE_URL . 'assets/css/wishlist-engine.css',
+			'exacoat-wishlist-css',
+			$core_url . 'assets/css/wishlist-engine.css',
 			[],
-			ARTMATTER_CORE_VERSION
+			$core_ver
 		);
 
 		wp_enqueue_script(
-			'artmatter-wishlist-js',
-			ARTMATTER_CORE_URL . 'assets/js/wishlist-engine.js',
+			'exacoat-wishlist-js',
+			$core_url . 'assets/js/wishlist-engine.js',
 			[],
-			ARTMATTER_CORE_VERSION,
+			$core_ver,
 			true
 		);
 

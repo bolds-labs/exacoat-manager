@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	<div class="artmatter-order-pay-card">
 		<div class="artmatter-co-section-header" style="margin-bottom:24px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:16px;">
 			<h2 class="artmatter-co-title" style="font-size:22px;"><?php esc_html_e( 'Pay for Order', 'woocommerce' ); ?> #<?php echo esc_html( $order->get_order_number() ); ?></h2>
-			<p class="artmatter-co-user-greeting"><?php echo sprintf( esc_html__( 'Total amount due: %s', 'artmatter-core' ), '<strong style="color:#f3aa18;font-family:var(--am-co-font-mono);">' . $order->get_formatted_order_total() . '</strong>' ); ?></p>
+			<p class="artmatter-co-user-greeting"><?php echo sprintf( esc_html__( 'Total amount due: %s', 'exacoat-core' ), '<strong style="color:#f3aa18;font-family:var(--am-co-font-mono);">' . $order->get_formatted_order_total() . '</strong>' ); ?></p>
 		</div>
 
 		<form id="order_review" method="post">
@@ -43,7 +43,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 			<!-- Payment Method Selector -->
 			<div id="payment" style="margin-top:24px;">
 				<?php if ( $order->needs_payment() ) : ?>
-					<h3 class="artmatter-co-subtitle" style="font-size:14px;color:#ffffff;margin-bottom:12px;"><?php esc_html_e( 'Payment Method', 'artmatter-core' ); ?></h3>
+					<h3 class="artmatter-co-subtitle" style="font-size:14px;color:#ffffff;margin-bottom:12px;"><?php esc_html_e( 'Payment Method', 'exacoat-core' ); ?></h3>
 					<ul class="wc_payment_methods payment_methods methods">
 						<?php
 						if ( ! empty( $available_gateways ) ) {

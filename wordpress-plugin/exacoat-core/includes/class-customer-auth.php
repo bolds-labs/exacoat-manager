@@ -1122,7 +1122,7 @@ class Exacoat_Customer_Auth {
 	}
 
 	private static function web_origin(): string {
-		$url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : ( defined( 'ARTMATTER_WEB_URL' ) ? ARTMATTER_WEB_URL : ( getenv( 'EXACOAT_WEB_URL' ) ?: getenv( 'ARTMATTER_WEB_URL' ) ) );
+		$url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : ( getenv( 'EXACOAT_WEB_URL' ) ?: ( defined( 'ARTMATTER_WEB_URL' ) ? ARTMATTER_WEB_URL : 'https://exacoat.com' ) );
 		return untrailingslashit( esc_url_raw( $url ?: home_url( '/' ) ) );
 	}
 
@@ -1132,7 +1132,7 @@ class Exacoat_Customer_Auth {
 		if ( ! $callback || ! $allowed ) {
 			return false;
 		}
-		$allowed_hosts = array_filter( [ $allowed['host'] ?? '', 'exacoat.com', 'web.exacoat.com', 'artmatter.co', 'web.artmatter.co' ] );
+		$allowed_hosts = array_filter( [ $allowed['host'] ?? '', 'exacoat.com', 'web.exacoat.com', 'manager.exacoat.com' ] );
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			$allowed_hosts[] = 'localhost';
 			$allowed_hosts[] = '127.0.0.1';

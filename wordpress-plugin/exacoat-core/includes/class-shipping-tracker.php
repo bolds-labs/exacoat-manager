@@ -1865,3 +1865,7 @@ add_action( 'init', function() {
 		}
 	}
 }, 999 );
+
+if ( ! class_exists( 'Artmatter_Shipping_Tracker' ) ) {
+	class_alias( 'Exacoat_Shipping_Tracker', 'Artmatter_Shipping_Tracker' );
+}
