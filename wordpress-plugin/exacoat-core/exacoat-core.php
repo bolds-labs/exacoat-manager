@@ -3,7 +3,7 @@
  * Plugin Name:       Exacoat Core Platform
  * Plugin URI:        https://exacoat.com
  * Description:       Proprietary e-commerce core engine, configurator manager, and ERP workstation integration for Exacoat.
- * Version:           0.0.23
+ * Version:           0.0.24
  * Author:            Exacoat
  * Author URI:        https://exacoat.com
  * License:           Proprietary
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'EXACOAT_CORE_VERSION' ) ) {
-	define( 'EXACOAT_CORE_VERSION', '0.0.23' );
+	define( 'EXACOAT_CORE_VERSION', '0.0.24' );
 }
 
 // Authenticate WooCommerce API keys across custom REST endpoints before WordPress Application Passwords (prio 20) triggers invalid_username

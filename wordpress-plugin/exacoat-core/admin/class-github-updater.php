@@ -450,6 +450,14 @@ class Exacoat_Plugin_Updater {
 		$current_ver = ltrim( (string) $this->version, 'v' );
 		$has_update  = version_compare( $current_ver, $remote_ver, '<' );
 
+		// Force-update WordPress core plugin update transient so core upgrader and plugins.php know
+		$current_transient = get_site_transient( 'update_plugins' );
+		if ( ! is_object( $current_transient ) ) {
+			$current_transient = new stdClass();
+		}
+		$updated_transient = $this->check_for_plugin_update( $current_transient );
+		set_site_transient( 'update_plugins', $updated_transient );
+
 		$update_url = wp_nonce_url(
 			self_admin_url( 'update.php?action=upgrade-plugin&plugin=' . urlencode( $this->basename ) ),
 			'upgrade-plugin_' . $this->basename

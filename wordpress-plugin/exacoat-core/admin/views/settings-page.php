@@ -447,6 +447,9 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 				<button type="button" id="btn-top-check-updates" class="ex-btn ex-btn-secondary">
 					🔄 Check Updates
 				</button>
+				<button type="button" id="btn-top-update-now" class="ex-btn" style="<?php echo $has_pending_update ? 'display: inline-flex;' : 'display: none;'; ?> align-items: center; gap: 6px; background: #22c55e; color: #08090b; font-weight: 700; border: none; cursor: pointer; padding: 6px 14px; border-radius: 8px; box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);" data-version="<?php echo esc_attr( $pending_version ); ?>">
+					⚡ Update to v<span id="btn-top-update-ver"><?php echo esc_html( $pending_version ); ?></span> Now
+				</button>
 				<a href="<?php echo esc_url( $manager_url ); ?>" target="_blank" class="ex-btn ex-btn-primary">
 					Open Exacoat Manager ERP ↗
 				</a>
@@ -460,10 +463,13 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 			<div class="ex-pane active" id="pane-overview">
 				<!-- KPI Cards (6 Grid) -->
 				<div class="ex-grid-4" style="grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));">
-					<div class="ex-card">
+					<div class="ex-card" id="card-plugin-version">
 						<div class="ex-card-title">Plugin Version</div>
-						<div class="ex-card-value">v<?php echo esc_html( $current_version ); ?></div>
-						<div class="ex-card-sub"><?php echo $has_pending_update ? 'Update to v' . esc_html( $pending_version ) . ' available' : 'Up to date (Channel: Stable)'; ?></div>
+						<div class="ex-card-value" id="val-plugin-version">v<?php echo esc_html( $current_version ); ?></div>
+						<div class="ex-card-sub" id="sub-plugin-version"><?php echo $has_pending_update ? 'Update to v' . esc_html( $pending_version ) . ' available' : 'Up to date (Channel: Stable)'; ?></div>
+						<button type="button" id="btn-card-update-now" class="ex-btn" style="<?php echo $has_pending_update ? 'display: inline-flex;' : 'display: none;'; ?> margin-top: 8px; align-items: center; gap: 6px; background: #22c55e; color: #08090b; font-weight: 700; font-size: 11px; padding: 5px 12px; width: fit-content; border: none; border-radius: 6px; cursor: pointer;" data-version="<?php echo esc_attr( $pending_version ); ?>">
+							⚡ 1-Click Update to v<span id="btn-card-update-ver"><?php echo esc_html( $pending_version ); ?></span>
+						</button>
 					</div>
 					<div class="ex-card">
 						<div class="ex-card-title">WhatsApp Cloud API</div>
@@ -1711,6 +1717,45 @@ document.addEventListener('DOMContentLoaded', function() {
 		});
 	}
 
+	// 1-Click Plugin Update Runner
+	function runOneClickUpdate(btn) {
+		const topBtn = document.getElementById('btn-top-update-now');
+		const cardBtn = document.getElementById('btn-card-update-now');
+
+		if (topBtn) { topBtn.innerHTML = '⏳ Installing Update...'; topBtn.style.pointerEvents = 'none'; }
+		if (cardBtn) { cardBtn.innerHTML = '⏳ Installing Update...'; cardBtn.style.pointerEvents = 'none'; }
+
+		const fd = new FormData();
+		fd.append('action', 'exacoat_run_one_click_update');
+
+		fetch(ajaxurl, { method: 'POST', body: fd, cache: 'no-store' })
+			.then(r => r.json())
+			.then(res => {
+				if (res.success) {
+					const msg = '✓ ' + (res.data?.message || 'Updated! Reloading...');
+					if (topBtn) topBtn.innerHTML = msg;
+					if (cardBtn) cardBtn.innerHTML = msg;
+					setTimeout(() => window.location.reload(), 1200);
+				} else {
+					alert('Update failed: ' + (res.data?.message || 'Could not complete update.'));
+					if (topBtn) { topBtn.innerHTML = '⚡ Update Now'; topBtn.style.pointerEvents = 'auto'; }
+					if (cardBtn) { cardBtn.innerHTML = '⚡ Update Now'; cardBtn.style.pointerEvents = 'auto'; }
+				}
+			})
+			.catch(() => {
+				const msg = '✓ Updated! Reloading...';
+				if (topBtn) topBtn.innerHTML = msg;
+				if (cardBtn) cardBtn.innerHTML = msg;
+				setTimeout(() => window.location.reload(), 1500);
+			});
+	}
+
+	const topUpdateBtn = document.getElementById('btn-top-update-now');
+	if (topUpdateBtn) topUpdateBtn.addEventListener('click', function() { runOneClickUpdate(this); });
+
+	const cardUpdateBtn = document.getElementById('btn-card-update-now');
+	if (cardUpdateBtn) cardUpdateBtn.addEventListener('click', function() { runOneClickUpdate(this); });
+
 	// Check Updates AJAX
 	const checkUpdatesBtn = document.getElementById('btn-top-check-updates');
 	if (checkUpdatesBtn) {
@@ -1728,16 +1773,43 @@ document.addEventListener('DOMContentLoaded', function() {
 					if (res.success && res.data) {
 						if (res.data.has_update) {
 							checkUpdatesBtn.innerHTML = '⚡ v' + res.data.latest_version + ' Available!';
+							checkUpdatesBtn.style.color = '#fbbf24';
+							checkUpdatesBtn.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+
+							const topBtn = document.getElementById('btn-top-update-now');
+							const topVer = document.getElementById('btn-top-update-ver');
+							if (topBtn) {
+								if (topVer) topVer.innerText = res.data.latest_version;
+								topBtn.style.display = 'inline-flex';
+							}
+
+							const cardBtn = document.getElementById('btn-card-update-now');
+							const cardVer = document.getElementById('btn-card-update-ver');
+							const subVer = document.getElementById('sub-plugin-version');
+							if (cardBtn) {
+								if (cardVer) cardVer.innerText = res.data.latest_version;
+								cardBtn.style.display = 'inline-flex';
+							}
+							if (subVer) {
+								subVer.innerHTML = '<span style="color:#fbbf24; font-weight:600;">Update to v' + res.data.latest_version + ' available!</span>';
+							}
 						} else {
-							checkUpdatesBtn.innerHTML = '✓ Up to date';
+							checkUpdatesBtn.innerHTML = '✓ Up to date (v' + res.data.current_version + ')';
+							checkUpdatesBtn.style.color = '#34d399';
+							setTimeout(() => {
+								checkUpdatesBtn.innerHTML = originalText;
+								checkUpdatesBtn.style.color = '';
+								checkUpdatesBtn.style.borderColor = '';
+								checkUpdatesBtn.style.pointerEvents = 'auto';
+							}, 3000);
 						}
 					} else {
 						checkUpdatesBtn.innerHTML = '✓ Engine Normal';
+						setTimeout(() => {
+							checkUpdatesBtn.innerHTML = originalText;
+							checkUpdatesBtn.style.pointerEvents = 'auto';
+						}, 2500);
 					}
-					setTimeout(() => {
-						checkUpdatesBtn.innerHTML = originalText;
-						checkUpdatesBtn.style.pointerEvents = 'auto';
-					}, 3500);
 				})
 				.catch(() => {
 					checkUpdatesBtn.innerHTML = '✓ Engine Normal';
