@@ -5,6 +5,7 @@ import {
   fetchTikTokSettingsDirect,
   saveTikTokSettingsDirect,
   getTikTokAuthUrlDirect,
+  refreshTikTokShopsDirect,
   TikTokSettings,
 } from '../../lib/wordpressBridge';
 import {
@@ -37,6 +38,7 @@ export const TikTokSettingsModal: React.FC<TikTokSettingsModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isGeneratingAuth, setIsGeneratingAuth] = useState(false);
+  const [isDetectingCipher, setIsDetectingCipher] = useState(false);
 
   // Form State
   const [environment, setEnvironment] = useState<'sandbox' | 'live'>('live');
@@ -142,6 +144,29 @@ export const TikTokSettingsModal: React.FC<TikTokSettingsModalProps> = ({
       showToast('error', 'Authorization failed', err.message);
     } finally {
       setIsGeneratingAuth(false);
+    }
+  };
+
+  const handleDetectCipher = async () => {
+    setIsDetectingCipher(true);
+    try {
+      const res = await refreshTikTokShopsDirect();
+      if (res.success && res.shop_cipher) {
+        setShopCipher(res.shop_cipher);
+        if (res.shop_name) setShopName(res.shop_name);
+        showToast('success', 'Shop Cipher Detected', `Found cipher: ${res.shop_cipher} (${res.shop_name || 'shop'})`);
+        onSettingsSaved?.();
+        const refreshed = await fetchTikTokSettingsDirect();
+        if (refreshed.success && refreshed.settings) {
+          setSettings(refreshed.settings);
+        }
+      } else {
+        showToast('error', 'Detection failed', res.error || 'Please ensure TikTok Shop is authorized first.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Detection failed', err.message);
+    } finally {
+      setIsDetectingCipher(false);
     }
   };
 
@@ -290,12 +315,24 @@ export const TikTokSettingsModal: React.FC<TikTokSettingsModalProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-neutral-300 mb-1">Shop Cipher / Open ID</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-neutral-300">Shop Cipher (Required)</label>
+                <button
+                  type="button"
+                  onClick={handleDetectCipher}
+                  disabled={isDetectingCipher || !settings?.is_connected}
+                  title="Detect authorized shop cipher from TikTok Open API"
+                  className="text-[11px] text-rose-400 hover:text-rose-300 disabled:text-neutral-600 flex items-center gap-1 font-medium transition-colors cursor-pointer disabled:cursor-not-allowed"
+                >
+                  {isDetectingCipher ? <Loader2 className="w-3 h-3 animate-spin" /> : <Radio className="w-3 h-3" />}
+                  <span>{isDetectingCipher ? 'Detecting...' : 'Detect from API'}</span>
+                </button>
+              </div>
               <input
                 type="text"
                 value={shopCipher}
                 onChange={(e) => setShopCipher(e.target.value)}
-                placeholder="Auto-populated upon authorization"
+                placeholder="Auto-detected (e.g. ROW_...)"
                 className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-white/10 text-neutral-100 text-xs font-mono focus:outline-none focus:border-rose-500"
               />
             </div>

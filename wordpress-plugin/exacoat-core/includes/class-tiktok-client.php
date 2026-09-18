@@ -140,15 +140,139 @@ class Exacoat_TikTok_Client {
 			'access_token'     => $access_token,
 			'refresh_token'    => $refresh_token,
 			'token_expires_at' => time() + $expires_in,
-			'shop_cipher'      => $token_data['open_id'] ?? $s['shop_cipher'],
 			'shop_name'        => $token_data['seller_name'] ?? $s['shop_name'],
 		]);
+
+		// Immediately fetch authorized shops to retrieve the official shop_cipher
+		$shops_res = self::fetch_authorized_shops();
+		$final_s = self::get_settings();
 
 		return [
 			'success'      => true,
 			'access_token' => $access_token,
 			'seller_name'  => $token_data['seller_name'] ?? '',
+			'shop_cipher'  => $final_s['shop_cipher'] ?? '',
+			'shop_name'    => $final_s['shop_name'] ?? '',
 			'expire_in'    => $expires_in,
+		];
+	}
+
+	/**
+	 * Fetch Authorized Shops from TikTok Open Platform API
+	 * Endpoint: GET /authorization/202309/shops
+	 * Resolves the true shop_cipher, shop_id, and shop_name
+	 */
+	public static function fetch_authorized_shops(): array {
+		$s = self::get_settings();
+		$access_token = trim( (string) ( $s['access_token'] ?? '' ) );
+		$app_key      = trim( (string) ( $s['app_key'] ?? '' ) );
+		$app_secret   = trim( (string) ( $s['app_secret'] ?? '' ) );
+
+		if ( empty( $access_token ) ) {
+			return [
+				'success' => false,
+				'error'   => 'TikTok Shop is not connected. Please authorize first.',
+			];
+		}
+
+		if ( empty( $app_key ) || empty( $app_secret ) ) {
+			return [
+				'success' => false,
+				'error'   => 'TikTok App Key and App Secret must be configured.',
+			];
+		}
+
+		$path      = '/authorization/202309/shops';
+		$timestamp = time();
+
+		$query = [
+			'app_key'   => $app_key,
+			'timestamp' => $timestamp,
+		];
+
+		// Do not attach shop_cipher when calling the shops discovery endpoint
+		$sign = self::generate_signature( $path, $query, '', $app_secret );
+		$query['sign'] = $sign;
+
+		$url = self::API_BASE_URL . $path . '?' . http_build_query( $query );
+
+		$res = wp_remote_get( $url, [
+			'headers' => [
+				'Content-Type'       => 'application/json',
+				'x-tts-access-token' => $access_token,
+			],
+			'timeout' => 25,
+		] );
+
+		if ( is_wp_error( $res ) ) {
+			return [ 'success' => false, 'error' => $res->get_error_message() ];
+		}
+
+		$raw_body = wp_remote_retrieve_body( $res );
+		$data = json_decode( $raw_body, true );
+
+		if ( empty( $data ) || ( isset( $data['code'] ) && (int) $data['code'] !== 0 ) ) {
+			return [
+				'success' => false,
+				'error'   => $data['message'] ?? 'Failed to fetch authorized shops from TikTok.',
+				'raw'     => $data,
+			];
+		}
+
+		$shops = $data['data']['shops'] ?? [];
+		if ( empty( $shops ) ) {
+			return [
+				'success' => false,
+				'error'   => 'No authorized shops found for this TikTok seller account.',
+				'shops'   => [],
+			];
+		}
+
+		// Prefer first authorized shop or match existing shop_id if available
+		$selected_shop = $shops[0];
+		if ( ! empty( $s['shop_id'] ) ) {
+			foreach ( $shops as $sh ) {
+				if ( (string) ( $sh['id'] ?? '' ) === (string) $s['shop_id'] ) {
+					$selected_shop = $sh;
+					break;
+				}
+			}
+		}
+
+		$shop_cipher = trim( (string) ( $selected_shop['cipher'] ?? '' ) );
+		$shop_id     = trim( (string) ( $selected_shop['id'] ?? '' ) );
+		$shop_name   = trim( (string) ( $selected_shop['name'] ?? ( $s['shop_name'] ?? 'Exacoat TikTok Shop' ) ) );
+		$shop_code   = trim( (string) ( $selected_shop['code'] ?? '' ) );
+
+		if ( ! empty( $shop_cipher ) ) {
+			self::save_settings([
+				'shop_cipher' => $shop_cipher,
+				'shop_id'     => $shop_id,
+				'shop_name'   => $shop_name,
+			]);
+
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log(
+					'info',
+					'tiktok',
+					"TikTok shop_cipher successfully resolved: {$shop_name} ({$shop_id}) -> {$shop_cipher}",
+					[
+						'shop_id'     => $shop_id,
+						'shop_name'   => $shop_name,
+						'shop_cipher' => $shop_cipher,
+						'total_shops' => count( $shops ),
+					]
+				);
+			}
+		}
+
+		return [
+			'success'     => true,
+			'shops'       => $shops,
+			'shop_cipher' => $shop_cipher,
+			'shop_id'     => $shop_id,
+			'shop_name'   => $shop_name,
+			'shop_code'   => $shop_code,
 		];
 	}
 
@@ -221,9 +345,9 @@ class Exacoat_TikTok_Client {
 	}
 
 	/**
-	 * Core TikTok Open API caller with automated signing and token header
+	 * Core TikTok Open API caller with automated signing, token header, and shop_cipher resolution
 	 */
-	public static function call_api( string $path, string $method = 'GET', array $query = [], array $body = [] ): array {
+	public static function call_api( string $path, string $method = 'GET', array $query = [], array $body = [], int $retry_count = 0 ): array {
 		$token_res = self::ensure_valid_token();
 		if ( ! $token_res['success'] ) {
 			return $token_res;
@@ -235,13 +359,21 @@ class Exacoat_TikTok_Client {
 		$app_secret   = trim( $s['app_secret'] );
 		$shop_cipher  = trim( $s['shop_cipher'] );
 
+		// Auto-resolve shop_cipher if empty and calling a shop-scoped endpoint
+		if ( empty( $shop_cipher ) && $path !== '/authorization/202309/shops' ) {
+			$shops_res = self::fetch_authorized_shops();
+			if ( ! empty( $shops_res['shop_cipher'] ) ) {
+				$shop_cipher = $shops_res['shop_cipher'];
+			}
+		}
+
 		$timestamp = time();
 
 		$common_query = [
 			'app_key'   => $app_key,
 			'timestamp' => $timestamp,
 		];
-		if ( ! empty( $shop_cipher ) ) {
+		if ( ! empty( $shop_cipher ) && $path !== '/authorization/202309/shops' ) {
 			$common_query['shop_cipher'] = $shop_cipher;
 		}
 
@@ -294,7 +426,18 @@ class Exacoat_TikTok_Client {
 			];
 		}
 
+		// Self-healing: if error says shop_cipher is missing or invalid, try fetching shop_cipher and retrying once
 		if ( isset( $data['code'] ) && (int) $data['code'] !== 0 ) {
+			$err_msg = (string) ( $data['message'] ?? '' );
+			$is_cipher_err = ( (int) $data['code'] === 106013 || str_contains( strtolower( $err_msg ), 'shop_cipher' ) );
+
+			if ( $is_cipher_err && $retry_count < 1 && $path !== '/authorization/202309/shops' ) {
+				$shops_res = self::fetch_authorized_shops();
+				if ( ! empty( $shops_res['shop_cipher'] ) ) {
+					return self::call_api( $path, $method, $query, $body, $retry_count + 1 );
+				}
+			}
+
 			return [
 				'success' => false,
 				'error'   => $data['message'] ?? 'TikTok API error',
@@ -682,6 +825,18 @@ class Exacoat_TikTok_Client {
 			'callback'            => [ __CLASS__, 'rest_handle_webhook' ],
 			'permission_callback' => '__return_true',
 		]);
+
+		// 10. GET & POST /tiktok/refresh-shops
+		register_rest_route( $ns, '/tiktok/refresh-shops', [
+			'methods'             => [ 'GET', 'POST' ],
+			'callback'            => [ __CLASS__, 'rest_refresh_shops' ],
+			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+		]);
+	}
+
+	public static function rest_refresh_shops( \WP_REST_Request $request ): \WP_REST_Response {
+		$res = self::fetch_authorized_shops();
+		return rest_ensure_response( $res );
 	}
 
 	public static function check_admin_permission(): bool {

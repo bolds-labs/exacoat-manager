@@ -3578,6 +3578,41 @@ export async function getTikTokAuthUrlDirect(): Promise<{
   }
 }
 
+export async function refreshTikTokShopsDirect(): Promise<{
+  success: boolean;
+  shop_cipher?: string;
+  shop_id?: string;
+  shop_name?: string;
+  shops?: any[];
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/tiktok/refresh-shops`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        shop_cipher: data.shop_cipher,
+        shop_id: data.shop_id,
+        shop_name: data.shop_name,
+        shops: data.shops,
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function handleTikTokCallbackDirect(
   code: string,
   shop_id?: string,
