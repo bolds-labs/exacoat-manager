@@ -163,8 +163,13 @@ class Exacoat_TikTok_Client {
 	 * Resolves the true shop_cipher, shop_id, and shop_name
 	 */
 	public static function fetch_authorized_shops(): array {
+		$token_res = self::ensure_valid_token();
+		if ( ! $token_res['success'] ) {
+			return $token_res;
+		}
+
 		$s = self::get_settings();
-		$access_token = trim( (string) ( $s['access_token'] ?? '' ) );
+		$access_token = trim( (string) ( $token_res['access_token'] ?? $s['access_token'] ?? '' ) );
 		$app_key      = trim( (string) ( $s['app_key'] ?? '' ) );
 		$app_secret   = trim( (string) ( $s['app_secret'] ?? '' ) );
 
@@ -212,18 +217,27 @@ class Exacoat_TikTok_Client {
 		$data = json_decode( $raw_body, true );
 
 		if ( empty( $data ) || ( isset( $data['code'] ) && (int) $data['code'] !== 0 ) ) {
+			$err_msg = (string) ( $data['message'] ?? 'Failed to fetch authorized shops from TikTok.' );
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log( 'error', 'tiktok', "fetch_authorized_shops failed: {$err_msg}", [ 'raw' => $data ] );
+			}
 			return [
 				'success' => false,
-				'error'   => $data['message'] ?? 'Failed to fetch authorized shops from TikTok.',
+				'error'   => $err_msg,
+				'code'    => $data['code'] ?? -1,
 				'raw'     => $data,
 			];
 		}
 
-		$shops = $data['data']['shops'] ?? [];
+		$shops = $data['data']['shops'] ?? ( $data['data']['shop_list'] ?? [] );
+		if ( empty( $shops ) && isset( $data['data'][0]['cipher'] ) ) {
+			$shops = $data['data'];
+		}
+
 		if ( empty( $shops ) ) {
 			return [
 				'success' => false,
-				'error'   => 'No authorized shops found for this TikTok seller account.',
+				'error'   => 'No authorized shops found for this TikTok seller account. Please ensure your TikTok seller account authorized this app in Partner Center.',
 				'shops'   => [],
 			];
 		}
@@ -239,9 +253,9 @@ class Exacoat_TikTok_Client {
 			}
 		}
 
-		$shop_cipher = trim( (string) ( $selected_shop['cipher'] ?? '' ) );
-		$shop_id     = trim( (string) ( $selected_shop['id'] ?? '' ) );
-		$shop_name   = trim( (string) ( $selected_shop['name'] ?? ( $s['shop_name'] ?? 'Exacoat TikTok Shop' ) ) );
+		$shop_cipher = trim( (string) ( $selected_shop['cipher'] ?? ( $selected_shop['shop_cipher'] ?? '' ) ) );
+		$shop_id     = trim( (string) ( $selected_shop['id'] ?? ( $selected_shop['shop_id'] ?? '' ) ) );
+		$shop_name   = trim( (string) ( $selected_shop['name'] ?? ( $selected_shop['shop_name'] ?? ( $s['shop_name'] ?? 'Exacoat TikTok Shop' ) ) ) );
 		$shop_code   = trim( (string) ( $selected_shop['code'] ?? '' ) );
 
 		if ( ! empty( $shop_cipher ) ) {
@@ -364,6 +378,14 @@ class Exacoat_TikTok_Client {
 			$shops_res = self::fetch_authorized_shops();
 			if ( ! empty( $shops_res['shop_cipher'] ) ) {
 				$shop_cipher = $shops_res['shop_cipher'];
+			} else {
+				$reason = ! empty( $shops_res['error'] ) ? $shops_res['error'] : 'Could not detect authorized shop cipher from TikTok.';
+				return [
+					'success' => false,
+					'error'   => "TikTok Shop Cipher is required. {$reason} Please re-authorize TikTok Shop or enter Shop Cipher in Settings.",
+					'code'    => 106013,
+					'raw'     => $shops_res,
+				];
 			}
 		}
 

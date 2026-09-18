@@ -5,6 +5,7 @@ import {
   fetchTikTokOrdersDirect,
   syncTikTokOrdersDirect,
   fetchTikTokSettingsDirect,
+  refreshTikTokShopsDirect,
   downloadTikTokShippingLabelDirect,
   arrangeTikTokShipmentDirect,
 } from '../../lib/wordpressBridge';
@@ -117,7 +118,26 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      const res = await syncTikTokOrdersDirect();
+      let res = await syncTikTokOrdersDirect();
+
+      // If sync failed because shop_cipher is missing or rejected, try auto-detecting and retrying once
+      if (
+        !res.success &&
+        res.error &&
+        (res.error.toLowerCase().includes('shop_cipher') || res.error.toLowerCase().includes('cipher'))
+      ) {
+        showToast('info', 'Detecting Shop Credentials', 'Retrieving authorized shop cipher from TikTok...');
+        const detectRes = await refreshTikTokShopsDirect();
+        if (detectRes.success && detectRes.shop_cipher) {
+          showToast(
+            'success',
+            'Shop Cipher Linked',
+            `Connected cipher: ${detectRes.shop_cipher}. Retrying order sync...`
+          );
+          res = await syncTikTokOrdersDirect();
+        }
+      }
+
       if (res.success && Array.isArray(res.orders)) {
         if (res.orders.length > 0) {
           setOrders(res.orders);
