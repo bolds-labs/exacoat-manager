@@ -266,11 +266,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                 </div>
                 <div class="recipient-name">${rName}</div>
                 <div class="recipient-phone">Tel: ${rPhone}</div>
-                <div class="recipient-address">
-                  ${isPickup
-                    ? `<strong style="color: #000; font-size: 10px;">PICKUP LOCATION:</strong><br />Exacoat Store Summarecon Bekasi (Ruko Ruby Commercial TB12)<br /><span style="color: #555; font-size: 8.5px;">Customer Self-Pickup &bull; Ready for Workshop Handover</span>`
-                    : rAddrLines.join('<br />')}
-                </div>
+                ${!isPickup ? `<div class="recipient-address">${rAddrLines.join('<br />')}</div>` : ''}
               </div>
             </div>
 
@@ -794,19 +790,13 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                       {recipientName}
                     </p>
                     <p className="font-extrabold text-[10.5px] text-black">Tel: {recipientPhone}</p>
-                    <div className="text-[10.5px] text-neutral-900 font-bold mt-0.5 leading-tight">
-                      {isActivePickup ? (
-                        <>
-                          <span className="block text-black font-black">PICKUP LOCATION:</span>
-                          <span className="block">Exacoat Store Summarecon Bekasi (Ruko Ruby Commercial TB12)</span>
-                          <span className="block text-[8.5px] text-neutral-600 font-semibold mt-0.5">Customer Self-Pickup • Workshop Production Manifest</span>
-                        </>
-                      ) : (
-                        fullAddressLines.map((line, idx) => (
+                    {!isActivePickup && (
+                      <div className="text-[10.5px] text-neutral-900 font-bold mt-0.5 leading-tight">
+                        {fullAddressLines.map((line, idx) => (
                           <span key={idx} className="block">{line}</span>
-                        ))
-                      )}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 

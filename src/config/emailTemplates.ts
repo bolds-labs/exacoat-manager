@@ -77,8 +77,18 @@ export const EMAIL_TEMPLATES_CATALOG: { category: string; items: EmailTemplateIt
         badgeVariant: 'amber',
         subject: '{{customer_first_name}}, your order (#{{order_number}}) is ready for pick up',
         trigger: 'Dispatched when store pickup order is packaged and ready at Exacoat Store Bekasi.',
-        payload: '{ "event": "customer_order_store_pickup_ready", "recipient_email": "customer@gmail.com", "order_number": "14589", "customer_first_name": "William" }',
-        defaults: { order_number: '14589', customer_first_name: 'William' }
+        payload: '{ "event": "customer_order_store_pickup_ready", "recipient_email": "customer@gmail.com", "order_number": "14589", "customer_first_name": "William", "is_store_pickup": true, "pickup_ready": true, "shipping_total": "Rp 0", "shipping_method_name": "Store Pickup (Summarecon Bekasi)", "courier": "", "tracking_number": "" }',
+        defaults: {
+          order_number: '14589',
+          customer_first_name: 'William',
+          is_store_pickup: true,
+          pickup_ready: true,
+          shipping_total: 'Rp 0',
+          shipping_method_name: 'Store Pickup (Summarecon Bekasi)',
+          courier: '',
+          tracking_number: '',
+          tracking_url: '',
+        }
       },
       {
         key: 'customer_order_store_pickup_completed',
@@ -88,8 +98,18 @@ export const EMAIL_TEMPLATES_CATALOG: { category: string; items: EmailTemplateIt
         badgeVariant: 'lime',
         subject: '{{customer_first_name}}, your order has been picked up',
         trigger: 'Dispatched when customer picks up order at Exacoat Store Bekasi.',
-        payload: '{ "event": "customer_order_store_pickup_completed", "recipient_email": "customer@gmail.com", "order_number": "14589", "customer_first_name": "William" }',
-        defaults: { order_number: '14589', customer_first_name: 'William' }
+        payload: '{ "event": "customer_order_store_pickup_completed", "recipient_email": "customer@gmail.com", "order_number": "14589", "customer_first_name": "William", "is_store_pickup": true, "pickup_review": true, "shipping_total": "Rp 0", "shipping_method_name": "Store Pickup (Summarecon Bekasi)", "courier": "", "tracking_number": "" }',
+        defaults: {
+          order_number: '14589',
+          customer_first_name: 'William',
+          is_store_pickup: true,
+          pickup_review: true,
+          shipping_total: 'Rp 0',
+          shipping_method_name: 'Store Pickup (Summarecon Bekasi)',
+          courier: '',
+          tracking_number: '',
+          tracking_url: '',
+        }
       },
       {
         key: 'customer_order_refunded',

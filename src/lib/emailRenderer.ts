@@ -265,12 +265,19 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
   const orderNum = escapeHtml(merged.order_number);
   const custName = escapeHtml(merged.customer_first_name || 'William');
 
+  const isStorePickup = Boolean(
+    merged.is_store_pickup ||
+    event === 'customer_order_store_pickup_ready' ||
+    event === 'customer_order_store_pickup_completed'
+  );
+
   let subject = `Your Exacoat order #${orderNum} is confirmed`;
   let badgeText = 'Order confirmed';
   let title = 'Order confirmed';
   let bodyPrimary = `Thank you for your order. We’ve received order #${orderNum} and our production team will begin preparing your order shortly.`;
   let bodySecondary = 'You can review your order and delivery details below.';
   let showShipment = false;
+  let pickupActionHtml = '';
 
   if (event === 'customer_order_in_production') {
     subject = `Your Exacoat order #${orderNum} is in production`;
@@ -278,6 +285,18 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
     title = 'In production';
     bodyPrimary = `Your custom skins for order #${orderNum} are now on our production line.`;
     bodySecondary = 'We will notify you as soon as your order is packaged and ready to ship.';
+  } else if (event === 'customer_order_store_pickup_ready') {
+    subject = `${custName}, your order (#${orderNum}) is ready for pick up`;
+    badgeText = 'Ready for pick up';
+    title = 'Your order is ready for pick up';
+    bodyPrimary = `Your order <b>(#${orderNum})</b> is ready for pick up.<br>Bring your order number and get it installed for free on:`;
+    bodySecondary = '';
+  } else if (event === 'customer_order_store_pickup_completed') {
+    subject = `${custName}, your order has been picked up`;
+    badgeText = 'Picked up';
+    title = 'Order picked up';
+    bodyPrimary = `Your order <b>(#${orderNum})</b> has been picked up.<br>Leave a review and tell us about your experience!`;
+    bodySecondary = '';
   } else if (event === 'customer_order_awaiting_pickup') {
     subject = `Your Exacoat order #${orderNum} is packaged and ready to ship`;
     badgeText = 'Ready to ship';
@@ -362,6 +381,32 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
     </table>`;
   }
 
+  // Store Pickup Action Card (Google Maps or Review CTA)
+  if (event === 'customer_order_store_pickup_ready' || merged.pickup_ready) {
+    pickupActionHtml = `
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:16px;margin:24px 0;">
+      <tr>
+        <td style="padding:22px 24px;">
+          <p style="margin:0 0 4px;font-size:16px;font-weight:700;color:#111827;letter-spacing:-0.2px;">Exacoat Store Bekasi</p>
+          <p style="margin:0 0 16px;font-size:13.5px;color:#4b5563;line-height:1.5;">Ruby Commercial TB-12, Summarecon Bekasi, Bekasi Utara</p>
+          <a href="https://maps.app.goo.gl/B9Z2n98o5kM33k4q9" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:10px 20px;background:#111111;color:#ffffff;font-size:13px;font-weight:600;border-radius:100px;text-decoration:none;letter-spacing:0.2px;">Open in Google Maps &rarr;</a>
+        </td>
+      </tr>
+    </table>
+    <p style="margin:16px 0 0;font-size:13px;color:#71717a;">Need help? <a href="https://exacoat.com/cs" target="_blank" rel="noopener noreferrer" style="color:#f3aa18;text-decoration:underline;font-weight:600;">Contact admin</a></p>`;
+  } else if (event === 'customer_order_store_pickup_completed' || merged.pickup_review) {
+    pickupActionHtml = `
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:16px;margin:24px 0;">
+      <tr>
+        <td style="padding:24px;text-align:center;">
+          <p style="margin:0 0 16px;font-size:14.5px;color:#374151;font-weight:500;">Leave a review and tell us about your experience!</p>
+          <a href="https://g.page/r/CZZ440l0WvPWEBM/review" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 28px;background:#111111;color:#ffffff;font-size:13.5px;font-weight:700;border-radius:100px;text-decoration:none;letter-spacing:0.2px;">Write a review &rarr;</a>
+        </td>
+      </tr>
+    </table>
+    <p style="margin:16px 0 0;font-size:13px;color:#71717a;text-align:center;">Need help? <a href="https://exacoat.com/cs" target="_blank" rel="noopener noreferrer" style="color:#f3aa18;text-decoration:underline;font-weight:600;">Contact admin</a></p>`;
+  }
+
   // Items rows with 80px thumbnail (supporting configured composite skin renders or regular products)
   const items = Array.isArray(merged.items) && merged.items.length > 0 ? merged.items : defaults.items;
   const itemsHtml = items.map((item: any) => {
@@ -422,10 +467,10 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
 
   const subtotal = escapeHtml(merged.subtotal || 'Rp 149.000');
   const discountTotal = escapeHtml(merged.discount_total || '');
-  const shippingTotal = escapeHtml(merged.shipping_total || 'Rp 15.000');
-  const shippingName = escapeHtml(merged.shipping_method_name || 'Standard');
+  const shippingTotal = escapeHtml(isStorePickup ? (merged.shipping_total || 'Rp 0') : (merged.shipping_total || 'Rp 15.000'));
+  const shippingName = escapeHtml(isStorePickup ? (merged.shipping_method_name || 'Store Pickup (Summarecon Bekasi)') : (merged.shipping_method_name || 'Standard'));
   const totalTax = escapeHtml(merged.total_tax || '');
-  const total = escapeHtml(merged.total || 'Rp 164.000');
+  const total = escapeHtml(isStorePickup && !data.total ? (merged.subtotal || 'Rp 149.000') : (merged.total || (isStorePickup ? 'Rp 149.000' : 'Rp 164.000')));
   const totalRefunded = escapeHtml(merged.total_refunded || '');
   const paymentMeth = escapeHtml(merged.payment_method_title || 'Midtrans / QRIS');
   const shippingAddr = escapeHtml(merged.shipping_address || 'William Vance\nJl. Sudirman No. 42\nJakarta Selatan 12190\nIndonesia').replace(/\n/g, '<br>');
@@ -514,6 +559,7 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
                 ${bodySecondary ? `<p style="margin:0 0 24px;font-size:14.5px;line-height:1.7;color:#52525b;">${bodySecondary}</p>` : ''}
 
                 ${shipmentHtml}
+                ${pickupActionHtml}
 
                 <!-- Dedicated Spacer above Order Summary -->
                 <table width="100%" cellpadding="0" cellspacing="0">
@@ -555,8 +601,13 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
                 <table width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #eaeaea;border-radius:16px;margin-bottom:32px;">
                   <tr>
                     <td class="address-col" width="58%" valign="top" style="padding:22px 24px;border-right:1px solid #eaeaea;">
-                      <p style="margin:0 0 8px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#71717a;">Shipping Address</p>
-                      <p style="margin:0;font-size:13px;line-height:1.65;color:#3f3f46;">${shippingAddr}</p>
+                      ${isStorePickup ? `
+                        <p style="margin:0 0 8px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#71717a;">Store Pickup Location</p>
+                        <p style="margin:0;font-size:13px;line-height:1.65;color:#3f3f46;">Exacoat Store Bekasi<br>Ruby Commercial TB-12, Summarecon Bekasi, Bekasi Utara</p>
+                      ` : `
+                        <p style="margin:0 0 8px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#71717a;">Shipping Address</p>
+                        <p style="margin:0;font-size:13px;line-height:1.65;color:#3f3f46;">${shippingAddr}</p>
+                      `}
                     </td>
                     <td class="address-col" width="42%" valign="top" style="padding:22px 24px;">
                       <p style="margin:0 0 8px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#71717a;">Payment Method</p>

@@ -243,7 +243,15 @@ class Exacoat_Email_Engine {
 				'is_store_pickup'=> true,
 				'pickup_ready'   => true,
 				'type'           => 'customer_order',
-				'defaults'       => self::get_mock_order_defaults( '14589' ),
+				'defaults'       => self::get_mock_order_defaults( '14589', [
+					'is_store_pickup'      => true,
+					'pickup_ready'         => true,
+					'shipping_total'       => 'Rp 0',
+					'shipping_method_name' => 'Store Pickup (Summarecon Bekasi)',
+					'courier'              => '',
+					'tracking_number'      => '',
+					'tracking_url'         => '',
+				] ),
 			],
 			'customer_order_store_pickup_completed' => [
 				'category'       => 'Orders',
@@ -258,7 +266,15 @@ class Exacoat_Email_Engine {
 				'is_store_pickup'=> true,
 				'pickup_review'  => true,
 				'type'           => 'customer_order',
-				'defaults'       => self::get_mock_order_defaults( '14589' ),
+				'defaults'       => self::get_mock_order_defaults( '14589', [
+					'is_store_pickup'      => true,
+					'pickup_review'        => true,
+					'shipping_total'       => 'Rp 0',
+					'shipping_method_name' => 'Store Pickup (Summarecon Bekasi)',
+					'courier'              => '',
+					'tracking_number'      => '',
+					'tracking_url'         => '',
+				] ),
 			],
 			'customer_order_review_invitation' => [
 				'category'       => 'Orders',

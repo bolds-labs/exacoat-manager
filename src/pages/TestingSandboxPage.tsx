@@ -75,18 +75,41 @@ export const TestingSandboxPage: React.FC<TestingSandboxPageProps> = () => {
     setEmailSendResult(null);
 
     try {
+      const tmplDefaults = activeEmailTemplate.defaults || {};
+      const isStorePickupEvent = emailEvent.includes('store_pickup');
+
+      const payloadVars: Record<string, any> = {
+        customer_name: 'Alex Tan',
+        customer_first_name: 'Alex',
+        order_id: '542222',
+        order_number: '542222',
+        device_name: 'Xiaomi 17T Pro',
+        year: String(new Date().getFullYear()),
+        ...tmplDefaults,
+      };
+
+      if (isStorePickupEvent) {
+        payloadVars.is_store_pickup = true;
+        payloadVars.courier = '';
+        payloadVars.tracking_number = '';
+        payloadVars.tracking_url = '';
+        payloadVars.shipping_method_name = 'Store Pickup (Summarecon Bekasi)';
+        payloadVars.shipping_total = 'Rp 0';
+        if (emailEvent === 'customer_order_store_pickup_ready') {
+          payloadVars.pickup_ready = true;
+        } else if (emailEvent === 'customer_order_store_pickup_completed') {
+          payloadVars.pickup_review = true;
+        }
+      } else {
+        payloadVars.tracking_number = payloadVars.tracking_number || 'JNT1234567890';
+        payloadVars.courier_name = payloadVars.courier_name || 'J&T Express';
+      }
+
       const res = await sendDirectZeptoMailEmail(
         emailEvent,
         emailRecipient.trim(),
         'Valued Customer',
-        {
-          customer_name: 'Alex Tan',
-          order_id: '542222',
-          device_name: 'Xiaomi 17T Pro',
-          tracking_number: 'JNT1234567890',
-          courier_name: 'J&T Express',
-          year: String(new Date().getFullYear()),
-        }
+        payloadVars
       );
 
       setEmailSendResult(res);
