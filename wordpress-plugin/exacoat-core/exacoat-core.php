@@ -3,7 +3,7 @@
  * Plugin Name:       Exacoat Core Platform
  * Plugin URI:        https://exacoat.com
  * Description:       Proprietary e-commerce core engine, configurator manager, and ERP workstation integration for Exacoat.
- * Version:           0.0.27
+ * Version:           0.0.28
  * Author:            Exacoat
  * Author URI:        https://exacoat.com
  * License:           Proprietary
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'EXACOAT_CORE_VERSION' ) ) {
-	define( 'EXACOAT_CORE_VERSION', '0.0.27' );
+	define( 'EXACOAT_CORE_VERSION', '0.0.28' );
 }
 
 // Authenticate WooCommerce API keys across custom REST endpoints before WordPress Application Passwords (prio 20) triggers invalid_username
@@ -306,6 +306,7 @@ require_once EXACOAT_CORE_PATH . 'includes/class-whatsapp-service.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-warranty-manager.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-guarantee-manager.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-shopee-client.php';
+require_once EXACOAT_CORE_PATH . 'includes/class-tiktok-client.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-webhook-dispatcher.php';
 require_once EXACOAT_CORE_PATH . 'admin/class-admin-settings.php';
 require_once EXACOAT_CORE_PATH . 'admin/class-github-updater.php';
@@ -353,6 +354,11 @@ if ( class_exists( 'Exacoat_Guarantee_Manager' ) ) {
 // Initialize Shopee Open Platform API v2 Engine
 if ( class_exists( 'Exacoat_Shopee_Client' ) ) {
 	Exacoat_Shopee_Client::init();
+}
+
+// Initialize TikTok Shop Open Platform Engine
+if ( class_exists( 'Exacoat_TikTok_Client' ) ) {
+	Exacoat_TikTok_Client::init();
 }
 
 // Safe version tracking on admin_init

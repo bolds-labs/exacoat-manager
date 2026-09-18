@@ -7,7 +7,8 @@ import { TrackingPoolModal } from './TrackingPoolModal';
 import { ManualWarrantyModal } from './ManualWarrantyModal';
 import { RmaClaimsLogModal } from './RmaClaimsLogModal';
 import { ShopeeOrdersView } from './ShopeeOrdersView';
-import { fetchOrdersDirect, fetchOrderDetailDirect, ShopeeOrder } from '../../lib/wordpressBridge';
+import { TikTokOrdersView } from './TikTokOrdersView';
+import { fetchOrdersDirect, fetchOrderDetailDirect, ShopeeOrder, TikTokOrder } from '../../lib/wordpressBridge';
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency } from '../../lib/formatters';
 import { RefreshCw, FileSpreadsheet, Package, ShieldCheck, RotateCcw, Layers } from 'lucide-react';
@@ -29,8 +30,9 @@ export const OrdersView: React.FC<OrdersViewProps> = () => {
   const [isManualWarrantyModalOpen, setIsManualWarrantyModalOpen] = useState(false);
   const [isRmaLogModalOpen, setIsRmaLogModalOpen] = useState(false);
   const [manualClaimInitialType, setManualClaimInitialType] = useState<'Warranty' | 'Redeem'>('Warranty');
-  const [activeChannel, setActiveChannel] = useState<'web' | 'shopee'>('web');
+  const [activeChannel, setActiveChannel] = useState<'web' | 'shopee' | 'tiktok'>('web');
   const [selectedShopeeOrder, setSelectedShopeeOrder] = useState<ShopeeOrder | null>(null);
+  const [selectedTikTokOrder, setSelectedTikTokOrder] = useState<TikTokOrder | null>(null);
 
   const loadOrders = useCallback(async (quiet = false) => {
     try {
@@ -210,17 +212,57 @@ export const OrdersView: React.FC<OrdersViewProps> = () => {
             Open API v2
           </span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveChannel('tiktok')}
+          className={clsx(
+            'px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer',
+            activeChannel === 'tiktok'
+              ? 'bg-gradient-to-r from-rose-500 to-pink-600 text-white font-bold shadow-sm'
+              : 'text-neutral-400 hover:text-white hover:bg-white/5'
+          )}
+        >
+          <span>TikTok Shop</span>
+          <span
+            className={clsx(
+              'text-[10px] px-2 py-0.5 rounded-full font-semibold',
+              activeChannel === 'tiktok'
+                ? 'bg-black/25 text-white'
+                : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+            )}
+          >
+            Open API
+          </span>
+        </button>
       </div>
 
-      {activeChannel === 'shopee' ? (
+      {activeChannel === 'tiktok' ? (
+        <TikTokOrdersView
+          onClaimWarranty={(tiktokOrder) => {
+            setSelectedTikTokOrder(tiktokOrder);
+            setSelectedShopeeOrder(null);
+            setManualClaimInitialType('Warranty');
+            setIsManualWarrantyModalOpen(true);
+          }}
+          onClaimRedeem={(tiktokOrder) => {
+            setSelectedTikTokOrder(tiktokOrder);
+            setSelectedShopeeOrder(null);
+            setManualClaimInitialType('Redeem');
+            setIsManualWarrantyModalOpen(true);
+          }}
+        />
+      ) : activeChannel === 'shopee' ? (
         <ShopeeOrdersView
           onClaimWarranty={(shopeeOrder) => {
             setSelectedShopeeOrder(shopeeOrder);
+            setSelectedTikTokOrder(null);
             setManualClaimInitialType('Warranty');
             setIsManualWarrantyModalOpen(true);
           }}
           onClaimRedeem={(shopeeOrder) => {
             setSelectedShopeeOrder(shopeeOrder);
+            setSelectedTikTokOrder(null);
             setManualClaimInitialType('Redeem');
             setIsManualWarrantyModalOpen(true);
           }}
@@ -411,8 +453,10 @@ export const OrdersView: React.FC<OrdersViewProps> = () => {
         onClose={() => {
           setIsManualWarrantyModalOpen(false);
           setSelectedShopeeOrder(null);
+          setSelectedTikTokOrder(null);
         }}
         initialShopeeOrder={selectedShopeeOrder}
+        initialTikTokOrder={selectedTikTokOrder}
         initialClaimType={manualClaimInitialType}
         onSuccess={() => loadOrders(true)}
       />

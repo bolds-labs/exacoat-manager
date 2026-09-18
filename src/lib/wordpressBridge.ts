@@ -213,6 +213,57 @@ export interface ShopeeSettings {
   last_synced_at: number;
 }
 
+export interface TikTokOrderItem {
+  item_id: string;
+  item_name: string;
+  sku_id: string;
+  sku_name: string;
+  quantity: number;
+  price: number;
+  image_url: string;
+}
+
+export interface TikTokOrder {
+  order_id: string;
+  order_sn: string;
+  order_status: string;
+  create_time: string;
+  create_timestamp: number;
+  pay_time?: string | null;
+  buyer_username: string;
+  buyer_uid?: string;
+  total_amount: number;
+  currency: string;
+  shipping_carrier: string;
+  tracking_number: string;
+  package_id?: string;
+  buyer_note: string;
+  recipient_name: string;
+  recipient_phone: string;
+  recipient_address: string;
+  recipient_city: string;
+  recipient_postcode: string;
+  items: TikTokOrderItem[];
+  already_claimed: boolean;
+  existing_claim?: ShopeeExistingClaim;
+}
+
+export interface TikTokSettings {
+  environment: 'sandbox' | 'live';
+  service_id: string;
+  app_key: string;
+  app_secret?: string;
+  has_secret?: boolean;
+  shop_cipher: string;
+  shop_name: string;
+  redirect_url: string;
+  webhook_url: string;
+  is_connected: boolean;
+  token_expires_at: number;
+  is_expired?: boolean;
+  last_synced_at: string | null;
+}
+
 export interface CatalogReconciliationResult {
   success: boolean;
   message?: string;
@@ -3276,5 +3327,271 @@ export async function downloadShopeeShippingLabelDirect(order_sn: string): Promi
     return { success: false, error: err.message };
   }
 }
+
+// ==========================================
+// TikTok Shop Open Platform API Bridge
+// ==========================================
+
+export async function fetchTikTokOrdersDirect(): Promise<{
+  success: boolean;
+  orders?: TikTokOrder[];
+  total?: number;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/tiktok/orders`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        orders: data.orders || [],
+        total: data.total || (data.orders || []).length,
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function syncTikTokOrdersDirect(days = 15): Promise<{
+  success: boolean;
+  orders?: TikTokOrder[];
+  total_synced?: number;
+  synced_at?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/tiktok/sync`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ days }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        orders: data.orders || [],
+        total_synced: data.total_synced || (data.orders || []).length,
+        synced_at: data.synced_at,
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchTikTokSettingsDirect(): Promise<{
+  success: boolean;
+  settings?: TikTokSettings;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/tiktok/settings`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        settings: data,
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function saveTikTokSettingsDirect(
+  settings: Partial<{
+    environment: 'sandbox' | 'live';
+    service_id: string;
+    app_key: string;
+    app_secret: string;
+    shop_cipher: string;
+    shop_name: string;
+  }>
+): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/tiktok/settings`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(settings),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        message: data.message,
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function getTikTokAuthUrlDirect(): Promise<{
+  success: boolean;
+  auth_url?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/tiktok/auth-url`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        auth_url: data.auth_url,
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function arrangeTikTokShipmentDirect(
+  package_id: string,
+  payload: {
+    pick_up_type?: number;
+    tracking_number?: string;
+    shipping_provider_id?: string;
+    order_id?: string;
+  }
+): Promise<{
+  success: boolean;
+  package_id?: string;
+  message?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/tiktok/ship-package`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        package_id,
+        ...payload,
+      }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        package_id: data.package_id,
+        message: data.message,
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export function getTikTokShippingDocumentUrl(package_id: string, doc_size = 'A6'): string {
+  const base = getWordPressBaseUrl();
+  return `${base}/wp-json/exacoat-core/v1/tiktok/shipping-document?package_id=${encodeURIComponent(package_id)}&document_size=${encodeURIComponent(doc_size)}`;
+}
+
+export async function downloadTikTokShippingLabelDirect(
+  package_id: string,
+  doc_size = 'A6'
+): Promise<{
+  success: boolean;
+  blob?: Blob;
+  url?: string;
+  doc_url?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/tiktok/shipping-document?package_id=${encodeURIComponent(package_id)}&document_size=${encodeURIComponent(doc_size)}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/pdf, application/json' },
+    });
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/pdf')) {
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      return {
+        success: true,
+        blob,
+        url: objectUrl,
+      };
+    }
+
+    const data = await res.json();
+    if (data?.doc_url) {
+      return {
+        success: true,
+        doc_url: data.doc_url,
+      };
+    }
+
+    return {
+      success: false,
+      error: data?.message || data?.error || 'Could not download PDF from TikTok.',
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 
 

@@ -13,6 +13,7 @@ import {
   ShippingRateOption,
   Product,
   ShopeeOrder,
+  TikTokOrder,
 } from '../../lib/wordpressBridge';
 import { Order } from '../../types';
 import { formatCurrency } from '../../lib/formatters';
@@ -153,6 +154,7 @@ interface ManualWarrantyModalProps {
   existingOrder?: Order | null;
   initialClaimType?: 'Warranty' | 'Redeem';
   initialShopeeOrder?: ShopeeOrder | null;
+  initialTikTokOrder?: TikTokOrder | null;
   onSuccess?: (newOrderId?: number) => void;
 }
 
@@ -187,6 +189,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
   existingOrder,
   initialClaimType = 'Warranty',
   initialShopeeOrder,
+  initialTikTokOrder,
   onSuccess,
 }) => {
   const { showToast } = useToast();
@@ -350,6 +353,54 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
               checked: true,
               available: true,
               message: 'Shopee invoice verified. No previous claims recorded.',
+            });
+          }
+        });
+      }
+
+      // Auto-calculate shipping if zip exists
+      if (zip.trim().length >= 4) {
+        handleCalculateShipping(zip.trim());
+      }
+    } else if (initialTikTokOrder && isOpen) {
+      setChannel('TikTok Shop');
+      const orderId = initialTikTokOrder.order_id || initialTikTokOrder.order_sn || '';
+      setMarketplaceInvoice(orderId);
+      setCustomerName(
+        initialTikTokOrder.recipient_name ||
+          initialTikTokOrder.buyer_username ||
+          ''
+      );
+      setCustomerPhone(initialTikTokOrder.recipient_phone || '');
+      setCustomerEmail('');
+      setAddress1(initialTikTokOrder.recipient_address || '');
+      setCity(initialTikTokOrder.recipient_city || '');
+      const zip = initialTikTokOrder.recipient_postcode || '';
+      setPostcode(zip);
+
+      // Format purchased TikTok products and variations
+      const itemsText = (initialTikTokOrder.items || [])
+        .map((it) => `${it.item_name}${it.sku_name ? ` (${it.sku_name})` : ''} x${it.quantity}`)
+        .join('\n');
+      setFreeformConfigText(itemsText);
+      setConfigMode('modeB');
+
+      // Trigger invoice duplicate check immediately
+      if (orderId) {
+        checkMarketplaceInvoiceDirect(orderId, 'TikTok Shop').then((chk) => {
+          if (chk.success && chk.available === false) {
+            setInvoiceStatus({
+              checked: true,
+              available: false,
+              message: chk.message || 'This TikTok Shop order invoice has already been claimed.',
+              existingOrderNumber: chk.existing_order_number,
+              existingOrderType: chk.existing_order_type,
+            });
+          } else {
+            setInvoiceStatus({
+              checked: true,
+              available: true,
+              message: 'TikTok Shop invoice verified. No previous claims recorded.',
             });
           }
         });
