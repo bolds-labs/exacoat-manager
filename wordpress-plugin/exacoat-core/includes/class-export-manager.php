@@ -372,9 +372,12 @@ class Exacoat_Export_Manager {
 			return new WP_Error( 'missing_library', __( 'PhpSpreadsheet library is not installed on this server. Please ensure the cbxphpspreadsheet plugin is active.', 'exacoat-core' ) );
 		}
 
-		$template_path = self::get_template_path( '1. Master Data exacoat.xlsx' );
+		$template_path = self::get_template_path( 'master-data-exacoat.xlsx' );
 		if ( empty( $template_path ) || ! file_exists( $template_path ) ) {
-			return new WP_Error( 'missing_template', __( 'JNE Excel template (1. Master Data exacoat.xlsx) could not be located.', 'exacoat-core' ) );
+			$template_path = self::get_template_path( '1. Master Data exacoat.xlsx' );
+		}
+		if ( empty( $template_path ) || ! file_exists( $template_path ) ) {
+			return new WP_Error( 'missing_template', __( 'JNE Excel template (master-data-exacoat.xlsx) could not be located.', 'exacoat-core' ) );
 		}
 
 		$output_info = self::get_output_dir( 'jne' );
