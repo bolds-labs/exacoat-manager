@@ -251,24 +251,15 @@ export const SettingsPanel: React.FC = () => {
     }
 
     try {
-      const basicAuth = btoa(`${activeKey}:${activeSecret}`);
-      const endpoint = `${wpBaseUrl}/wp-json/wc/v3/system_status`;
+      // Over HTTPS, WooCommerce REST API natively uses consumer_key and consumer_secret query params.
+      // Do NOT send Basic Auth header: WordPress core Application Passwords intercepts it and rejects ck_ as an unknown username.
+      const endpoint = `${wpBaseUrl}/wp-json/wc/v3/system_status?consumer_key=${encodeURIComponent(activeKey)}&consumer_secret=${encodeURIComponent(activeSecret)}`;
 
-      let response = await fetch(endpoint, {
+      const response = await fetch(endpoint, {
         headers: {
-          'Authorization': `Basic ${basicAuth}`,
           'Content-Type': 'application/json',
         },
       });
-
-      // Fallback: If Basic Auth returned 401 (often caused by LiteSpeed stripping Authorization headers), retry with query parameters
-      if (response.status === 401 && wpBaseUrl.startsWith('https://')) {
-        const queryEndpoint = `${wpBaseUrl}/wp-json/wc/v3/system_status?consumer_key=${encodeURIComponent(activeKey)}&consumer_secret=${encodeURIComponent(activeSecret)}`;
-        const fallbackRes = await fetch(queryEndpoint);
-        if (fallbackRes.ok) {
-          response = fallbackRes;
-        }
-      }
 
       const latency = Date.now() - startTime;
 

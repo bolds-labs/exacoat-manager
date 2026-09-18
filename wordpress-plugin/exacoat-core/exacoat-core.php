@@ -3,7 +3,7 @@
  * Plugin Name:       Exacoat Core Platform
  * Plugin URI:        https://exacoat.com
  * Description:       Proprietary e-commerce core engine, configurator manager, and ERP workstation integration for Exacoat.
- * Version:           0.0.21
+ * Version:           0.0.22
  * Author:            Exacoat
  * Author URI:        https://exacoat.com
  * License:           Proprietary
@@ -15,8 +15,40 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'EXACOAT_CORE_VERSION' ) ) {
-	define( 'EXACOAT_CORE_VERSION', '0.0.21' );
+	define( 'EXACOAT_CORE_VERSION', '0.0.22' );
 }
+
+// Authenticate WooCommerce API keys across custom REST endpoints before WordPress Application Passwords (prio 20) triggers invalid_username
+add_filter( 'determine_current_user', function( $user ) {
+	if ( $user ) {
+		return $user;
+	}
+	$key = '';
+	if ( ! empty( $_SERVER['HTTP_AUTHORIZATION'] ) && preg_match( '/^Basic\s+(.+)$/i', $_SERVER['HTTP_AUTHORIZATION'], $m ) ) {
+		$decoded = base64_decode( $m[1] );
+		if ( strpos( $decoded, ':' ) !== false ) {
+			list( $k, $s ) = explode( ':', $decoded, 2 );
+			if ( strpos( $k, 'ck_' ) === 0 ) {
+				$key = $k;
+			}
+		}
+	}
+	if ( ! $key && ! empty( $_GET['consumer_key'] ) ) {
+		$key = sanitize_text_field( wp_unslash( $_GET['consumer_key'] ) );
+	}
+	if ( $key && function_exists( 'wc_api_hash' ) ) {
+		global $wpdb;
+		$user_id = $wpdb->get_var( $wpdb->prepare(
+			"SELECT user_id FROM {$wpdb->prefix}woocommerce_api_keys WHERE consumer_key = %s OR truncated_key = %s LIMIT 1",
+			wc_api_hash( $key ),
+			substr( $key, -7 )
+		) );
+		if ( $user_id ) {
+			return (int) $user_id;
+		}
+	}
+	return $user;
+}, 10 );
 
 // Ensure sufficient PHP memory for high-resolution product image processing, thumbnail regeneration, and Bricks asset compiling
 if ( function_exists( 'ini_set' ) ) {

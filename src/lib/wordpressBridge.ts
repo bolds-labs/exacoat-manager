@@ -367,13 +367,9 @@ function getAuthHeader(): Record<string, string> {
     }
   } catch {}
 
-  const { key, secret } = getWcCredentials();
-  if (key && secret) {
-    const creds = typeof btoa !== 'undefined' ? btoa(`${key}:${secret}`) : '';
-    if (creds) {
-      return { Authorization: `Basic ${creds}` };
-    }
-  }
+  // Do NOT return Basic auth header for WooCommerce consumer keys (ck_ / cs_).
+  // WordPress core Application Passwords intercepts "Authorization: Basic" on all /wp-json/ routes
+  // and rejects ck_ as an "Unknown username". WooCommerce consumer keys are safely passed via query params.
   return {};
 }
 
@@ -408,10 +404,12 @@ async function authenticatedFetch(input: RequestInfo | URL, init: RequestInit = 
 
     if (isWcOrPluginRoute && !auth.Authorization?.startsWith('Bearer')) {
       const { key, secret } = getWcCredentials();
-      if (key && secret && !targetUrlObj.searchParams.has('consumer_key')) {
+      if (key && secret) {
         targetUrlObj.searchParams.set('consumer_key', key);
         targetUrlObj.searchParams.set('consumer_secret', secret);
         finalInput = targetUrlObj.toString();
+        // Remove any Authorization header so WordPress Application Passwords does not intercept ck_ as a WP username
+        headers.delete('Authorization');
       }
     }
   }
