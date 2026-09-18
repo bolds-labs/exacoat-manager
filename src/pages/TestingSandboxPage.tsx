@@ -291,7 +291,8 @@ export const TestingSandboxPage: React.FC<TestingSandboxPageProps> = () => {
                   type="button"
                   onClick={async () => {
                     setIsPreviewLoading(true);
-                    const res = await previewEmailHtml(emailEvent);
+                    const tmpl = ALL_EMAIL_TEMPLATES.find(t => t.key === emailEvent);
+                    const res = await previewEmailHtml(emailEvent, tmpl?.defaults || {});
                     setIsPreviewLoading(false);
                     if (res.success && res.html) {
                       const win = window.open('', '_blank');

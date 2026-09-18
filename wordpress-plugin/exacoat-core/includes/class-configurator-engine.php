@@ -28,7 +28,14 @@ class Exacoat_Configurator_Engine {
 
 		// Hook into WooCommerce product REST response and data loading
 		add_filter( 'woocommerce_rest_prepare_product_object', [ __CLASS__, 'enrich_wc_product_configurator_meta' ], 10, 3 );
+
+		// Hook into WooCommerce cart and order items for headless addons
+		add_filter( 'woocommerce_add_cart_item_data', [ __CLASS__, 'add_addon_data_to_cart_item' ], 10, 3 );
+		add_action( 'woocommerce_before_calculate_totals', [ __CLASS__, 'calculate_custom_addon_totals' ], 20, 1 );
+		add_filter( 'woocommerce_get_item_data', [ __CLASS__, 'display_custom_addons_in_cart' ], 10, 2 );
+		add_action( 'woocommerce_checkout_create_order_line_item', [ __CLASS__, 'save_custom_addons_to_order_item' ], 10, 4 );
 	}
+
 
 	/**
 	 * Default initial finish database
@@ -404,7 +411,22 @@ class Exacoat_Configurator_Engine {
 			'callback'            => [ __CLASS__, 'rest_duplicate_product' ],
 			'permission_callback' => [ __CLASS__, 'verify_permission' ],
 		] );
+
+		// 10. GET /addons/schemas: Fetch custom product addon schemas and device catalog
+		$register( '/addons/schemas', [
+			'methods'             => 'GET',
+			'callback'            => [ __CLASS__, 'rest_get_addon_schemas' ],
+			'permission_callback' => '__return_true',
+		] );
+
+		// 11. POST /addons/schema/save: Save/update custom product addon schemas and catalog
+		$register( '/addons/schema/save', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_save_addon_schemas' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+		] );
 	}
+
 
 	public static function verify_permission( WP_REST_Request $request ): bool {
 		if ( class_exists( 'Exacoat_Core' ) && method_exists( 'Exacoat_Core', 'verify_bridge_permission' ) ) {
@@ -1211,6 +1233,85 @@ class Exacoat_Configurator_Engine {
 		$response->set_data( $data );
 		return $response;
 	}
+
+	const ADDON_SCHEMAS_OPTION_KEY = 'exacoat_addon_schemas';
+
+	public static function rest_get_addon_schemas( WP_REST_Request $request ): WP_REST_Response {
+		$schemas = get_option( self::ADDON_SCHEMAS_OPTION_KEY, null );
+		return new WP_REST_Response( [
+			'success' => true,
+			'schemas' => $schemas,
+		], 200 );
+	}
+
+	public static function rest_save_addon_schemas( WP_REST_Request $request ): WP_REST_Response {
+		$schemas = $request->get_param( 'schemas' );
+		if ( empty( $schemas ) ) {
+			return new WP_REST_Response( [
+				'success' => false,
+				'message' => 'Schema payload is required.',
+			], 400 );
+		}
+		update_option( self::ADDON_SCHEMAS_OPTION_KEY, $schemas );
+		return new WP_REST_Response( [
+			'success' => true,
+			'message' => 'Addon schemas updated successfully.',
+		], 200 );
+	}
+
+	public static function add_addon_data_to_cart_item( $cart_item_data, $product_id, $variation_id ) {
+		if ( ! empty( $_POST['exacoat_addon_data'] ) ) {
+			$raw = wp_unslash( $_POST['exacoat_addon_data'] );
+			$parsed = json_decode( $raw, true );
+			if ( is_array( $parsed ) ) {
+				$cart_item_data['exacoat_addons'] = $parsed;
+				$cart_item_data['unique_key'] = md5( microtime() . rand() );
+			}
+		}
+		if ( ! empty( $_POST['exacoat_custom_price'] ) ) {
+			$custom_price = floatval( $_POST['exacoat_custom_price'] );
+			if ( $custom_price > 0 ) {
+				$cart_item_data['exacoat_custom_price'] = $custom_price;
+			}
+		}
+		return $cart_item_data;
+	}
+
+	public static function calculate_custom_addon_totals( $cart ) {
+		if ( is_admin() && ! defined( 'DOING_AJAX' ) ) return;
+		if ( did_action( 'woocommerce_before_calculate_totals' ) >= 2 ) return;
+
+		foreach ( $cart->get_cart() as $cart_item_key => $cart_item ) {
+			if ( isset( $cart_item['exacoat_custom_price'] ) && floatval( $cart_item['exacoat_custom_price'] ) > 0 ) {
+				$cart_item['data']->set_price( floatval( $cart_item['exacoat_custom_price'] ) );
+			}
+		}
+	}
+
+	public static function display_custom_addons_in_cart( $item_data, $cart_item ) {
+		if ( ! empty( $cart_item['exacoat_addons'] ) && is_array( $cart_item['exacoat_addons'] ) ) {
+			foreach ( $cart_item['exacoat_addons'] as $addon ) {
+				if ( ! empty( $addon['label'] ) && ! empty( $addon['value'] ) ) {
+					$item_data[] = [
+						'key'   => sanitize_text_field( $addon['label'] ),
+						'value' => sanitize_text_field( $addon['value'] ),
+					];
+				}
+			}
+		}
+		return $item_data;
+	}
+
+	public static function save_custom_addons_to_order_item( $item, $cart_item_key, $values, $order ) {
+		if ( ! empty( $values['exacoat_addons'] ) && is_array( $values['exacoat_addons'] ) ) {
+			foreach ( $values['exacoat_addons'] as $addon ) {
+				if ( ! empty( $addon['label'] ) && ! empty( $addon['value'] ) ) {
+					$item->add_meta_data( sanitize_text_field( $addon['label'] ), sanitize_text_field( $addon['value'] ), true );
+				}
+			}
+		}
+	}
 }
 
 }
+

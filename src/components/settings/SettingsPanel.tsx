@@ -37,8 +37,9 @@ import {
 import { getWordPressBaseUrl, getWcCredentials } from '../../lib/env';
 import { PLUGIN_VERSION, PLUGIN_ZIP_NAME } from '../../config/version';
 import { TeamRolesManager } from './TeamRolesManager';
+import { WhatsAppAutomationSection } from './WhatsAppAutomationSection';
 
-type SettingsTab = 'general' | 'team' | 'integrations' | 'database';
+type SettingsTab = 'general' | 'team' | 'automation' | 'integrations' | 'database';
 
 export const SettingsPanel: React.FC = () => {
   const { showToast } = useToast();
@@ -267,6 +268,7 @@ export const SettingsPanel: React.FC = () => {
   const tabs: { id: SettingsTab; label: string }[] = [
     { id: 'general', label: 'General' },
     { id: 'team', label: 'Team Roles' },
+    { id: 'automation', label: 'WhatsApp & Automation' },
     { id: 'integrations', label: 'Integrations' },
     { id: 'database', label: 'Store API & Data' },
   ];
@@ -297,6 +299,11 @@ export const SettingsPanel: React.FC = () => {
       {/* TAB: Team & Staff Roles */}
       {activeTab === 'team' && (
         <TeamRolesManager />
+      )}
+
+      {/* TAB: WhatsApp & Automation Engine */}
+      {activeTab === 'automation' && (
+        <WhatsAppAutomationSection />
       )}
 
       {/* TAB: General Store Settings */}

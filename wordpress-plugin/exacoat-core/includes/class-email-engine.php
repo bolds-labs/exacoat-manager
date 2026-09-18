@@ -1,6 +1,6 @@
 <?php
 /**
- * Artmatter Core Universal Native Email Engine
+ * Exacoat Core Universal Native Email Engine
  * Directly renders pixel-perfect responsive dark-mode HTML templates and dispatches via Zoho ZeptoMail API.
  */
 
@@ -15,10 +15,13 @@ class Exacoat_Email_Engine {
 	public static function init() {
 		// AJAX Test / Preview Handlers
 		add_action( 'wp_ajax_artmatter_send_native_test_email', [ __CLASS__, 'ajax_send_test_email' ] );
+		add_action( 'wp_ajax_exacoat_send_native_test_email', [ __CLASS__, 'ajax_send_test_email' ] );
 		add_action( 'wp_ajax_artmatter_preview_email_html', [ __CLASS__, 'ajax_preview_email_html' ] );
+		add_action( 'wp_ajax_exacoat_preview_email_html', [ __CLASS__, 'ajax_preview_email_html' ] );
 
 		// Action Scheduler async worker for sending emails in background
 		add_action( 'artmatter_async_send_email_job', [ __CLASS__, 'process_async_email_job' ], 10, 4 );
+		add_action( 'exacoat_async_send_email_job', [ __CLASS__, 'process_async_email_job' ], 10, 4 );
 
 		// 1. Automatically suppress default WooCommerce core duplicate emails
 		$suppressed_emails = [
@@ -53,6 +56,16 @@ class Exacoat_Email_Engine {
 	/**
 	 * Configuration Accessor
 	 */
+	/**
+	 * Official Exacoat Brand Logo SVG
+	 */
+	public static function get_brand_logo_html(): string {
+		return '<svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" width="136" height="24" viewBox="0 0 1368000 241000" shape-rendering="geometricPrecision" text-rendering="geometricPrecision" style="display:block;border:0;outline:none;width:136px;height:24px;">'
+			. '<path fill="#000000" fill-rule="nonzero" d="M1281000 218000l0 -40000 22000 -23000 43000 0 22000 23000 0 40000 -22000 23000 -43000 0 -22000 -23000zm59000 10000l14000 -14000 0 -32000 -14000 -14000 -31000 0 -14000 14000 0 32000 14000 14000 31000 0zm-33000 -52000l28000 0 8000 8000 0 13000 -5000 5000 6000 6000 0 10000 -12000 0 0 -7000 -4000 -5000 -9000 0 0 12000 -12000 0 0 -42000zm22000 20000l3000 -2000 0 -5000 -3000 -3000 -10000 0 0 10000 10000 0z"/>'
+			. '<path fill="#000000" fill-rule="nonzero" d="M0 202000l0 -108000 36000 -36000 97000 0 37000 36000 0 67000 -129000 0 0 29000 13000 14000 62000 0 13000 -13000 0 -11000 40000 0 0 23000 -35000 35000 -99000 0 -35000 -36000zm129000 -70000l0 -25000 -14000 -15000 -60000 0 -14000 15000 0 25000 88000 0zm180000 106000l-43000 -60000 -44000 60000 -45000 0 66000 -91000 -65000 -89000 46000 0 42000 58000 41000 -58000 46000 0 -64000 89000 66000 91000 -46000 0zm51000 -32000l0 -43000 32000 -31000 93000 0 0 -27000 -14000 -13000 -56000 0 -14000 13000 0 11000 -40000 0 0 -20000 37000 -38000 90000 0 37000 38000 0 142000 -37000 0 0 -28000 -29000 28000 -67000 0 -32000 -32000zm95000 0l30000 -29000 0 -15000 -74000 0 -11000 11000 0 22000 11000 11000 44000 0zm102000 -4000l0 -108000 35000 -36000 95000 0 35000 36000 0 30000 -40000 0 0 -17000 -15000 -14000 -55000 0 -15000 14000 0 82000 15000 14000 55000 0 15000 -14000 0 -17000 40000 0 0 30000 -35000 36000 -95000 0 -35000 -36000zm188000 0l0 -108000 36000 -36000 100000 0 36000 36000 0 108000 -36000 36000 -100000 0 -36000 -36000zm116000 2000l15000 -15000 0 -82000 -15000 -14000 -60000 0 -15000 14000 0 82000 15000 15000 60000 0zm84000 2000l0 -43000 32000 -31000 93000 0 0 -27000 -14000 -13000 -56000 0 -14000 13000 0 11000 -40000 0 0 -20000 37000 -38000 90000 0 37000 38000 0 142000 -37000 0 0 -28000 -29000 28000 -67000 0 -32000 -32000zm95000 0l30000 -29000 0 -15000 -73000 0 -12000 11000 0 22000 11000 11000 44000 0zm118000 -4000l0 -109000 -33000 0 0 -35000 34000 0 0 -58000 40000 0 0 58000 55000 0 0 35000 -55000 0 0 96000 14000 14000 41000 0 0 35000 -60000 0 -36000 -36000z"/>'
+			. '</svg>';
+	}
+
 	public static function get_config(): array {
 		$settings = Artmatter_Core::get_settings();
 		return [
@@ -148,8 +161,8 @@ class Exacoat_Email_Engine {
 				'badge'          => 'Order confirmed',
 				'icon'           => 'security',
 				'title'          => 'Order confirmed',
-				'body_primary'   => 'Thank you for your order. We have received order #{{order_number}} and our production team will begin preparing your precision skins shortly.',
-				'body_secondary' => 'Every skin is precision cut with authentic premium materials. You can review your order details below.',
+				'body_primary'   => 'Thank you for your order. We’ve received order #{{order_number}} and our production team will begin preparing your order shortly.',
+				'body_secondary' => 'You can review your order and delivery details below.',
 				'type'           => 'customer_order',
 				'defaults'       => self::get_mock_order_defaults( '14589' ),
 			],
@@ -160,8 +173,8 @@ class Exacoat_Email_Engine {
 				'badge'          => 'In production',
 				'icon'           => 'security',
 				'title'          => 'In production',
-				'body_primary'   => 'Your device skins for order #{{order_number}} are now in production.',
-				'body_secondary' => 'Our production team is carefully cutting and inspecting your skins to ensure an exact fit. We will notify you as soon as your order is packaged and ready to ship.',
+				'body_primary'   => 'Your custom skins for order #{{order_number}} are now on our production line.',
+				'body_secondary' => 'We will notify you as soon as your order is packaged and ready to ship.',
 				'type'           => 'customer_order',
 				'defaults'       => self::get_mock_order_defaults( '14589' ),
 			],
@@ -172,8 +185,8 @@ class Exacoat_Email_Engine {
 				'badge'          => 'Ready to ship',
 				'icon'           => 'document_verified',
 				'title'          => 'Ready to ship',
-				'body_primary'   => 'Your order #{{order_number}} has passed quality inspection and has been packaged for dispatch.',
-				'body_secondary' => 'Your tracking information will be updated and shared as soon as the courier scans your shipment.',
+				'body_primary'   => 'Your order #{{order_number}} has passed quality inspection and has been packaged for courier pickup.',
+				'body_secondary' => 'Your tracking number will be activated once scanned at the logistics hub.',
 				'type'           => 'customer_order',
 				'defaults'       => self::get_mock_order_defaults( '14589' ),
 			],
@@ -184,13 +197,13 @@ class Exacoat_Email_Engine {
 				'badge'          => 'On its way',
 				'icon'           => 'document_verified',
 				'title'          => 'On its way to you',
-				'body_primary'   => 'Your order #{{order_number}} has left our facility and is on its way to you. You can find the shipment and order details below.',
-				'body_secondary' => 'We hope you enjoy your new device protection. Thank you for choosing Exacoat.',
+				'body_primary'   => 'Your order #{{order_number}} has been dispatched and is on its way.',
+				'body_secondary' => 'You can find your tracking details and order summary below.',
 				'type'           => 'customer_order',
 				'defaults'       => self::get_mock_order_defaults( '14589', [
 					'courier'         => 'JNE Express',
-					'tracking_number' => 'EXA99881122ID',
-					'tracking_url'    => 'https://exacoat.com/track?no=EXA99881122ID',
+					'tracking_number' => 'JNE9842194829',
+					'tracking_url'    => 'https://www.jne.co.id',
 				] ),
 			],
 			'customer_order_completed' => [
@@ -199,9 +212,9 @@ class Exacoat_Email_Engine {
 				'subject'        => 'Your Exacoat order #{{order_number}} has arrived',
 				'badge'          => 'Delivered',
 				'icon'           => 'document_verified',
-				'title'          => 'Your Order Has Arrived',
-				'body_primary'   => 'Your order #{{order_number}} has been delivered. We hope you enjoy your new setup.',
-				'body_secondary' => '<strong>Installation Tips:</strong><br>&bull; Clean device surface with the included microfiber wipe.<br>&bull; Align skin carefully with ports, buttons, and camera openings.<br>&bull; Use gentle heat from a hairdryer for smooth curves and edges.',
+				'title'          => 'Delivered',
+				'body_primary'   => 'Your order #{{order_number}} has been delivered by the courier.',
+				'body_secondary' => 'We hope you enjoy your new skins. If you need any assistance, our support team is always here to help.',
 				'type'           => 'customer_order',
 				'defaults'       => self::get_mock_order_defaults( '14589' ),
 			],
@@ -211,9 +224,9 @@ class Exacoat_Email_Engine {
 				'subject'        => 'Your Exacoat order #{{order_number}} has arrived',
 				'badge'          => 'Delivered',
 				'icon'           => 'document_verified',
-				'title'          => 'Your Order Has Arrived',
-				'body_primary'   => 'Your order #{{order_number}} has been delivered. We hope you enjoy your new setup.',
-				'body_secondary' => '<strong>Installation Tips:</strong><br>&bull; Clean device surface with the included microfiber wipe.<br>&bull; Align skin carefully with ports, buttons, and camera openings.<br>&bull; Use gentle heat from a hairdryer for smooth curves and edges.',
+				'title'          => 'Delivered',
+				'body_primary'   => 'Your order #{{order_number}} has been delivered by the courier.',
+				'body_secondary' => 'We hope you enjoy your new skins. If you need any assistance, our support team is always here to help.',
 				'type'           => 'customer_order',
 				'defaults'       => self::get_mock_order_defaults( '14589' ),
 			],
@@ -224,16 +237,16 @@ class Exacoat_Email_Engine {
 				'badge'          => 'Product Review',
 				'icon'           => 'document_verified',
 				'title'          => 'How do your new skins look?',
-				'body_primary'   => 'Your Exacoat skin was delivered recently. We hope you love your new device protection and look.',
+				'body_primary'   => 'Your Exacoat skin was delivered recently. We hope you love your new look.',
 				'body_secondary' => 'Take a moment to share your review and a photo of your skin installed on your device.',
 				'cta_text'       => 'Write a Review',
 				'type'           => 'review_invitation',
 				'defaults'       => [
 					'order_number'        => '14589',
 					'customer_first_name' => 'Alex',
-					'product_title'       => 'iPhone 16 Pro Full Body Skin',
-					'artwork_title'       => 'iPhone 16 Pro Full Body Skin',
-					'artwork_image'       => 'https://exacoat.com/assets/sample-skin.jpg',
+					'product_title'       => 'iPhone 16 Pro Skins',
+					'artwork_title'       => 'iPhone 16 Pro Skins',
+					'artwork_image'       => 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
 					'review_url'          => 'https://exacoat.com/review?order_id=14589',
 				],
 			],
@@ -245,11 +258,11 @@ class Exacoat_Email_Engine {
 				'icon'           => 'document_alert',
 				'title'          => 'Refund processed',
 				'body_primary'   => 'We have processed a refund of {{refund_amount}} for order #{{order_number}}.',
-				'body_secondary' => 'Depending on your payment provider, the funds should reflect in your account within 3 to 5 business days. Your updated order summary is provided below.',
+				'body_secondary' => 'Depending on your payment method or bank, the funds will reflect in your account within 3 to 5 business days.',
 				'type'           => 'customer_order',
 				'defaults'       => self::get_mock_order_defaults( '14589', [
-					'refund_amount'  => '$32.00',
-					'total_refunded' => '$32.00',
+					'refund_amount'  => 'Rp 149.000',
+					'total_refunded' => 'Rp 149.000',
 				] ),
 			],
 			'customer_order_on_hold' => [
@@ -259,20 +272,20 @@ class Exacoat_Email_Engine {
 				'badge'          => 'Payment pending',
 				'icon'           => 'security',
 				'title'          => 'Order on hold',
-				'body_primary'   => 'We have received your order #{{order_number}} and are awaiting payment confirmation.',
-				'body_secondary' => 'We will begin preparing your skins as soon as payment is confirmed. You can review your order details below.',
+				'body_primary'   => 'We’ve received your order #{{order_number}} and are awaiting payment confirmation.',
+				'body_secondary' => 'Your order will enter production as soon as payment is confirmed.',
 				'type'           => 'customer_order',
 				'defaults'       => self::get_mock_order_defaults( '14589' ),
 			],
 			'customer_order_failed' => [
 				'category'       => 'Orders',
 				'label'          => 'Payment Failed',
-				'subject'        => 'Payment not completed for order #{{order_number}}',
+				'subject'        => 'Payment incomplete for order #{{order_number}}',
 				'badge'          => 'Payment not completed',
 				'icon'           => 'document_alert',
 				'title'          => 'Payment not completed',
-				'body_primary'   => 'We were unable to process payment for order #{{order_number}}. Your payment provider may have declined the transaction.',
-				'body_secondary' => 'Your items remain saved in your order. You can try placing your order again with an alternative payment method.',
+				'body_primary'   => 'We were unable to process payment for order #{{order_number}}.',
+				'body_secondary' => 'Your items remain saved in your cart. You can retry checkout with an alternative payment method.',
 				'type'           => 'customer_order',
 				'defaults'       => self::get_mock_order_defaults( '14589' ),
 			],
@@ -298,7 +311,7 @@ class Exacoat_Email_Engine {
 				'icon'           => 'document_verified',
 				'title'          => 'Your order summary',
 				'body_primary'   => 'Here is a copy of your order details for order #{{order_number}}.',
-				'body_secondary' => 'Every skin is precision cut with authentic premium materials. You can review your order breakdown below.',
+				'body_secondary' => 'You can review your complete order breakdown and delivery details below.',
 				'type'           => 'customer_order',
 				'defaults'       => self::get_mock_order_defaults( '14589' ),
 			],
@@ -319,7 +332,7 @@ class Exacoat_Email_Engine {
 					'discount_percent'    => '20',
 					'discount_amount'     => '20%',
 					'expiry_date'         => date( 'F j, Y', strtotime( '+30 days' ) ),
-					'product_title'       => 'Precision Device Skin',
+					'product_title'       => 'Device Skin',
 					'shop_url'            => 'https://exacoat.com/shop/',
 				],
 			],
@@ -333,32 +346,32 @@ class Exacoat_Email_Engine {
 		return array_merge( [
 			'order_number'         => $order_number,
 			'customer_first_name'  => 'William',
-			'currency'             => 'USD',
+			'currency'             => 'IDR',
 			'items'                => [
 				[
-					'name'          => 'iPhone 16 Pro Max Skin - Shadow Camo',
-					'image_url'     => 'https://exacoat.com/assets/mock-skin.jpg',
+					'name'          => 'iPhone 16 Pro Skins',
+					'image_url'     => 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
 					'quantity'      => 1,
-					'subtotal'      => '$32.00',
-					'total'         => '$32.00',
-					'artist_name'   => 'Exacoat',
+					'subtotal'      => 'Rp 149.000',
+					'total'         => 'Rp 149.000',
+					'meta'          => "Variant: Full Body\nTexture: Matrix Black",
 				],
 			],
 			'item_count'           => 1,
-			'subtotal'             => '$32.00',
-			'discount_total'       => '$0.00',
+			'subtotal'             => 'Rp 149.000',
+			'discount_total'       => '',
 			'coupon_codes'         => [],
-			'shipping_total'       => '$15.00',
-			'shipping_method_name' => 'Standard Tracked Delivery',
-			'total_tax'            => '$0.00',
-			'total'                => '$47.00',
-			'total_refunded'       => '$0.00',
-			'payment_method_title' => 'Credit Card (Stripe)',
-			'shipping_address'     => "William Vance\n742 Evergreen Terrace\nSpringfield, OR 97477\nUnited States",
-			'billing_address'      => "William Vance\n742 Evergreen Terrace\nSpringfield, OR 97477\nUnited States",
-			'courier'              => 'DHL Express',
-			'tracking_number'      => 'DHL9842194829',
-			'tracking_url'         => 'https://www.dhl.com/en/express/tracking.html?AWB=DHL9842194829',
+			'shipping_total'       => 'Rp 15.000',
+			'shipping_method_name' => 'JNE Reguler',
+			'total_tax'            => '',
+			'total'                => 'Rp 164.000',
+			'total_refunded'       => '',
+			'payment_method_title' => 'Midtrans / QRIS',
+			'shipping_address'     => "William Vance\nJl. Sudirman No. 42\nJakarta Selatan 12190\nIndonesia",
+			'billing_address'      => "William Vance\nJl. Sudirman No. 42\nJakarta Selatan 12190\nIndonesia",
+			'courier'              => 'JNE Express',
+			'tracking_number'      => 'JNE9842194829',
+			'tracking_url'         => 'https://www.jne.co.id',
 		], $extra );
 	}
 
@@ -799,7 +812,7 @@ class Exacoat_Email_Engine {
               <!-- 1. Wordmark Header -->
               <tr>
                 <td align=\"center\" style=\"padding:48px 40px 12px;\" class=\"mobile-padding\">
-                  <img src=\"https://media.artmatter.co/assets/brand/artmatter-wordmark-light.png\" alt=\"Artmatter\" width=\"180\" style=\"display:block;width:180px;height:auto;\">
+                  ' . self::get_brand_logo_html() . '
                 </td>
               </tr>
 
@@ -878,7 +891,7 @@ class Exacoat_Email_Engine {
             <tbody>
               <tr>
                 <td align=\"center\">
-                  <p style=\"margin:0 0 8px;font-size:12px;color:#555555;\">© Artmatter. All rights reserved.</p>
+                  <p style=\"margin:0 0 8px;font-size:12px;color:#555555;\">© Exacoat. All rights reserved.</p>
                   <p style=\"margin:0;font-size:12px;color:#444444;\">You’re receiving this email regarding your Exacoat account.</p>
                 </td>
               </tr>
@@ -933,7 +946,7 @@ class Exacoat_Email_Engine {
 			<div class=\"box\">
 				<div class=\"header\">
 					<div>
-						<img src=\"https://exacoat.com/wp-content/uploads/exacoat-logo.png\" alt=\"Artmatter\" style=\"height:22px;display:block;margin-bottom:6px;\" />
+						<img src=\"https://exacoat.com/wp-content/uploads/exacoat-logo.png\" alt=\"Exacoat\" style=\"height:22px;display:block;margin-bottom:6px;\" />
 						<div style=\"font-size:11px;color:#4b5563;font-weight:500;\">Exacoat Operations &bull; Settlement Statement</div>
 						<div style=\"font-size:11px;color:#4b5563;\">support@exacoat.com &bull; https://exacoat.com</div>
 					</div>
@@ -1037,27 +1050,50 @@ class Exacoat_Email_Engine {
 		if ( empty( $items ) || ! is_array( $items ) ) {
 			$items = [
 				[
-					'name'          => 'iPhone 16 Pro Max Skin - Shadow Camo',
-					'image_url'     => 'https://exacoat.com/assets/mock-skin.jpg',
+					'name'          => 'iPhone 16 Pro Skins',
+					'image_url'     => 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
 					'quantity'      => 1,
-					'total'         => $data['total'] ?? '$32.00',
-					'artist_name'   => 'Exacoat',
+					'total'         => $data['total'] ?? 'Rp 149.000',
+					'meta'          => "Variant: Full Body\nTexture: Matrix Black",
 				]
 			];
 		}
 
 		$items_rows = '';
 		foreach ( $items as $item ) {
-			$raw_name = $item['name'] ?? 'Precision Skin';
+			$raw_name = $item['name'] ?? 'Device Skin';
 			$clean_name = trim( preg_replace( '/\s*\(\s*feelform.*?\s*\)/i', '', (string) $raw_name ) );
 			$i_name = esc_html( $clean_name );
-			$i_img  = esc_url( $item['image_url'] ?? 'https://exacoat.com/assets/mock-skin.jpg' );
-			$i_qty  = intval( $item['quantity'] ?? 1 );
-			$i_tot  = esc_html( $item['total'] ?? '$32.00' );
+			$i_img  = esc_url( $item['image_url'] ?? ( $item['image'] ?? 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg' ) );
+			$i_qty  = intval( $item['quantity'] ?? ( $item['qty'] ?? 1 ) );
+			$i_tot  = esc_html( $item['total'] ?? ( $item['price'] ?? ( $item['subtotal'] ?? 'Rp 149.000' ) ) );
 			
 			$specs = [];
-			if ( ! empty( $item['device_model'] ) ) $specs[] = esc_html( (string) $item['device_model'] );
-			$specs_str = implode( ' &bull; ', $specs );
+			if ( ! empty( $item['parsed_configurator'] ) && is_array( $item['parsed_configurator'] ) ) {
+				foreach ( $item['parsed_configurator'] as $c ) {
+					$layer  = trim( (string) ( $c['layer_name'] ?? ( $c['name'] ?? '' ) ) );
+					$choice = trim( (string) ( $c['choice_name'] ?? ( $c['choice_title'] ?? ( $c['name'] ?? '' ) ) ) );
+					if ( '' !== $layer && '' !== $choice && strtolower( $layer ) !== strtolower( $choice ) ) {
+						$specs[] = esc_html( $layer ) . ': ' . esc_html( $choice );
+					} elseif ( '' !== $choice ) {
+						$specs[] = esc_html( $choice );
+					}
+				}
+			} elseif ( ! empty( $item['meta'] ) ) {
+				$raw_meta = (string) $item['meta'];
+				$parts    = preg_split( '/\s*(?:&bull;|•|<br\s*\/?>|\r?\n|\|)\s*/i', $raw_meta );
+				if ( is_array( $parts ) ) {
+					foreach ( $parts as $p ) {
+						$clean = trim( str_replace( [ '&bull;', '•' ], '', $p ) );
+						if ( '' !== $clean ) {
+							$specs[] = esc_html( $clean );
+						}
+					}
+				}
+			} elseif ( ! empty( $item['device_model'] ) ) {
+				$specs[] = esc_html( trim( (string) $item['device_model'] ) );
+			}
+			$specs_str = ! empty( $specs ) ? implode( '<br>', $specs ) : '';
 
 			$items_rows .= "
 			<tr>
@@ -1069,7 +1105,7 @@ class Exacoat_Email_Engine {
 							</td>
 							<td valign=\"top\">
 								<p style=\"margin:0 0 5px;font-size:15px;font-weight:600;color:#111111;line-height:1.4;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">{$i_name}</p>
-								" . ( $specs_str ? "<p style=\"margin:0 0 6px;font-size:12.5px;color:#71717a;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">{$specs_str}</p>" : "" ) . "
+								" . ( $specs_str ? "<p style=\"margin:0 0 6px;font-size:12px;color:#71717a;line-height:1.5;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">{$specs_str}</p>" : "" ) . "
 								<p style=\"margin:0;font-size:12.5px;color:#52525b;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">Qty: <strong style=\"color:#111111;\">{$i_qty}</strong></p>
 							</td>
 							<td align=\"right\" valign=\"top\" style=\"white-space:nowrap;padding-left:14px;\">
@@ -1081,19 +1117,19 @@ class Exacoat_Email_Engine {
 			</tr>";
 		}
 
-		$subtotal       = esc_html( $data['subtotal'] ?? '$32.00' );
-		$discount_total = esc_html( $data['discount_total'] ?? '$0.00' );
+		$subtotal       = esc_html( $data['subtotal'] ?? 'Rp 149.000' );
+		$discount_total = esc_html( $data['discount_total'] ?? '' );
 		$coupons        = $data['coupon_codes'] ?? [];
-		$shipping_total = esc_html( $data['shipping_total'] ?? '$15.00' );
-		$shipping_name  = esc_html( $data['shipping_method_name'] ?? 'Standard Tracked Delivery' );
-		$total_tax      = esc_html( $data['total_tax'] ?? '$0.00' );
-		$total          = esc_html( $data['total'] ?? '$47.00' );
-		$total_refunded = esc_html( $data['total_refunded'] ?? '$0.00' );
-		$payment_meth   = esc_html( $data['payment_method_title'] ?? 'Online Payment' );
-		$shipping_addr  = nl2br( esc_html( $data['shipping_address'] ?? "William Vance\n742 Evergreen Terrace\nSpringfield, OR 97477\nUnited States" ) );
+		$shipping_total = esc_html( $data['shipping_total'] ?? 'Rp 15.000' );
+		$shipping_name  = esc_html( $data['shipping_method_name'] ?? 'JNE Reguler' );
+		$total_tax      = esc_html( $data['total_tax'] ?? '' );
+		$total          = esc_html( $data['total'] ?? 'Rp 164.000' );
+		$total_refunded = esc_html( $data['total_refunded'] ?? '' );
+		$payment_meth   = esc_html( $data['payment_method_title'] ?? 'Midtrans / QRIS' );
+		$shipping_addr  = nl2br( esc_html( $data['shipping_address'] ?? "William Vance\nJl. Sudirman No. 42\nJakarta Selatan 12190\nIndonesia" ) );
 
 		$coupons_row = '';
-		if ( ! empty( $discount_total ) && '$0.00' !== $discount_total && '0' !== $discount_total ) {
+		if ( ! empty( $discount_total ) && '$0.00' !== $discount_total && '0' !== $discount_total && 'Rp 0' !== $discount_total ) {
 			$c_code = ! empty( $coupons ) ? '(' . implode( ', ', array_map( 'esc_html', (array) $coupons ) ) . ')' : '';
 			$coupons_row = "
 			<tr>
@@ -1103,7 +1139,7 @@ class Exacoat_Email_Engine {
 		}
 
 		$tax_row = '';
-		if ( ! empty( $total_tax ) && '$0.00' !== $total_tax && '0' !== $total_tax ) {
+		if ( ! empty( $total_tax ) && '$0.00' !== $total_tax && '0' !== $total_tax && 'Rp 0' !== $total_tax ) {
 			$tax_row = "
 			<tr>
 				<td style=\"padding:8px 0;font-size:13.5px;color:#52525b;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">Taxes / DDP</td>
@@ -1112,7 +1148,7 @@ class Exacoat_Email_Engine {
 		}
 
 		$refund_row = '';
-		if ( ! empty( $total_refunded ) && '$0.00' !== $total_refunded && '0' !== $total_refunded ) {
+		if ( ! empty( $total_refunded ) && '$0.00' !== $total_refunded && '0' !== $total_refunded && 'Rp 0' !== $total_refunded ) {
 			$refund_row = "
 			<tr>
 				<td style=\"padding:8px 0;font-size:13.5px;color:#dc2626;font-weight:600;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">Refunded Amount</td>
@@ -1170,7 +1206,7 @@ class Exacoat_Email_Engine {
                 <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">
                   <tr>
                     <td valign=\"middle\">
-                      <img src=\"https://exacoat.com/wp-content/uploads/exacoat-logo.png\" alt=\"Artmatter\" width=\"180\" height=\"17\" style=\"width:180px;height:17px;display:block;border:0;outline:none;text-decoration:none;\" />
+                      " . self::get_brand_logo_html() . "
                     </td>
                     <td align=\"right\" valign=\"middle\">
                       <span style=\"display:inline-block;padding:5px 13px;background:#f4f4f5;color:#3f3f46;font-size:11px;font-weight:600;border-radius:999px;border:1px solid #e4e4e7;letter-spacing:0.3px;\">{$badge_text}</span>
@@ -1300,8 +1336,8 @@ class Exacoat_Email_Engine {
 		$badge_text    = esc_html( $data['badge_text'] ?? $tmpl['badge'] ?? 'Product Review' );
 		$title         = esc_html( $data['title'] ?? $tmpl['title'] ?? 'How does your new skin look on your device?' );
 		$art_title     = esc_html( $data['product_title'] ?? ( $data['artwork_title'] ?? 'Precision Device Skin' ) );
-		$art_img       = esc_url( $data['artwork_image'] ?? 'https://media.artmatter.co/assets/sample-art.jpg' );
-		$artist_name   = esc_html( $data['artist_name'] ?? 'Artmatter Studio' );
+		$art_img       = esc_url( $data['artwork_image'] ?? 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg' );
+		$artist_name   = esc_html( $data['artist_name'] ?? 'Exacoat' );
 		$review_url    = esc_url( $data['review_url'] ?? ( home_url( '/review?order_id=' . $order_num ) ) );
 
 		$has_reward   = ! empty( $data['has_reward'] ) || ! empty( $data['discount_percent'] );
@@ -1359,7 +1395,7 @@ class Exacoat_Email_Engine {
                 <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">
                   <tr>
                     <td valign=\"middle\">
-                      <img src=\"https://exacoat.com/wp-content/uploads/exacoat-logo.png\" alt=\"Artmatter\" width=\"160\" height=\"15\" style=\"width:160px;height:15px;display:block;border:0;\" />
+                      " . self::get_brand_logo_html() . "
                     </td>
                     <td align=\"right\" valign=\"middle\">
                       <span style=\"display:inline-block;padding:4px 10px;background:#f4f4f5;color:#52525b;font-size:11px;font-weight:500;border-radius:9999px;\">{$badge_text}</span>
@@ -1385,7 +1421,7 @@ class Exacoat_Email_Engine {
                     </td>
                     <td valign=\"middle\" style=\"padding:12px 16px;\">
                       <p style=\"margin:0 0 4px;font-size:15px;font-weight:600;color:#111111;\">{$art_title}</p>
-                      <p style=\"margin:0;font-size:13px;color:#71717a;\">Exacoat Precision Skin</p>
+                      <p style=\"margin:0;font-size:13px;color:#71717a;\">Exacoat Skin</p>
                       <p style=\"margin:6px 0 0;font-size:11px;color:#a1a1aa;text-transform:uppercase;letter-spacing:0.5px;\">Order #{$order_num}</p>
                     </td>
                   </tr>
@@ -1503,7 +1539,7 @@ class Exacoat_Email_Engine {
                 <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">
                   <tr>
                     <td valign=\"middle\">
-                      <img src=\"https://exacoat.com/wp-content/uploads/exacoat-logo.png\" alt=\"Artmatter\" width=\"160\" height=\"15\" style=\"width:160px;height:15px;display:block;border:0;\" />
+                      " . self::get_brand_logo_html() . "
                     </td>
                     <td align=\"right\" valign=\"middle\">
                       <span style=\"display:inline-block;padding:5px 12px;background:#f4f4f5;color:#18181b;font-size:11px;font-weight:600;border-radius:9999px;border:1px solid #e4e4e7;\">{$badge_text}</span>
@@ -1623,7 +1659,7 @@ class Exacoat_Email_Engine {
 			$title       = 'Welcome to Exacoat';
 			$content_html = "
 			<p style=\"margin:0 0 16px;font-size:14.5px;line-height:1.7;color:#3f3f46;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">
-				Your Exacoat account has been created. You can use your account to review orders, save delivery details, and discover new precision skins and wraps.
+				Your Exacoat account has been created. You can use your account to review orders, save delivery details, and track shipments.
 			</p>
 			<div style=\"margin:28px 0;\">
 				<a href=\"{$account_url}\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"display:inline-block;padding:13px 26px;background:#111111;color:#ffffff;font-size:14px;font-weight:600;border-radius:100px;text-decoration:none;letter-spacing:0.2px;box-shadow:0 2px 8px rgba(0,0,0,0.1);font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">
@@ -1681,7 +1717,7 @@ class Exacoat_Email_Engine {
                 <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">
                   <tr>
                     <td valign=\"middle\">
-                      <img src=\"https://exacoat.com/wp-content/uploads/exacoat-logo.png\" alt=\"Artmatter\" width=\"180\" height=\"17\" style=\"width:180px;height:17px;display:block;border:0;outline:none;text-decoration:none;\" />
+                      " . self::get_brand_logo_html() . "
                     </td>
                     <td align=\"right\" valign=\"middle\">
                       <span style=\"display:inline-block;padding:5px 13px;background:#f4f4f5;color:#3f3f46;font-size:11px;font-weight:600;border-radius:999px;border:1px solid #e4e4e7;letter-spacing:0.3px;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">{$badge_text}</span>
@@ -1825,7 +1861,7 @@ class Exacoat_Email_Engine {
                 <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">
                   <tr>
                     <td valign=\"middle\">
-                      <img src=\"https://exacoat.com/wp-content/uploads/exacoat-logo.png\" alt=\"Artmatter\" width=\"180\" height=\"17\" style=\"width:180px;height:17px;display:block;border:0;outline:none;text-decoration:none;\" />
+                      " . self::get_brand_logo_html() . "
                     </td>
                     <td align=\"right\" valign=\"middle\">
                       <span style=\"display:inline-block;padding:5px 13px;background:#f4f4f5;color:#3f3f46;font-size:11px;font-weight:600;border-radius:999px;border:1px solid #e4e4e7;letter-spacing:0.3px;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">{$badge_text}</span>
@@ -1878,7 +1914,7 @@ class Exacoat_Email_Engine {
                         &copy; Exacoat. All rights reserved.
                       </p>
                       <p style=\"margin:0;font-size:11px;color:#a1a1aa;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">
-                        You’re receiving this email regarding your custom poster on artmatter.co.
+                        You’re receiving this email regarding your custom order on exacoat.com.
                       </p>
                     </td>
                   </tr>
@@ -1986,7 +2022,7 @@ class Exacoat_Email_Engine {
 		$config = self::get_config();
 		if ( ! empty( $data['htmlbody'] ) || ! empty( $data['html'] ) ) {
 			$html    = $data['htmlbody'] ?? $data['html'];
-			$subject = $data['subject'] ?? 'Artmatter Update';
+			$subject = $data['subject'] ?? 'Exacoat Update';
 		} else {
 			$rendered = self::render_html( $event, array_merge( [ 'customer_name' => $recipient_name ?: 'Customer' ], $data ) );
 			$subject = $rendered['subject'];
@@ -2143,8 +2179,15 @@ class Exacoat_Email_Engine {
 			wp_send_json_error( [ 'message' => 'Unauthorized' ] );
 		}
 
-		$event = sanitize_key( $_GET['event'] ?? $_POST['event'] ?? 'artist_otp_code' );
-		$rendered = self::render_html( $event );
+		$event = sanitize_key( $_GET['event'] ?? ( $_POST['event'] ?? ( $_GET['template_key'] ?? ( $_POST['template_key'] ?? ( $_GET['template_slug'] ?? ( $_POST['template_slug'] ?? ( $_GET['slug'] ?? ( $_POST['slug'] ?? 'customer_order_processing' ) ) ) ) ) ) ) );
+		$custom_data = $_POST['data'] ?? ( $_GET['data'] ?? [] );
+		if ( is_string( $custom_data ) ) {
+			$decoded = json_decode( stripslashes( $custom_data ), true );
+			if ( is_array( $decoded ) ) {
+				$custom_data = $decoded;
+			}
+		}
+		$rendered = self::render_html( $event, is_array( $custom_data ) ? $custom_data : [] );
 
 		wp_send_json_success( [
 			'subject' => $rendered['subject'],

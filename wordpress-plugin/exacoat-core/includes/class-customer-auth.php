@@ -27,25 +27,30 @@ class Exacoat_Customer_Auth {
 	}
 
 	public static function register_routes(): void {
+		$namespaces = [ 'exacoat-core/v1', 'artmatter-core/v1', 'exacoat/v1' ];
 		foreach ( [ 'login', 'register', 'forgot', 'reset', 'exchange', 'logout', 'profile', 'password', 'orders', 'order', 'coupons', 'link-ticket', 'delete' ] as $action ) {
-			register_rest_route( self::NAMESPACE, '/auth/' . $action, [
-				'methods'             => 'POST',
-				'callback'            => [ __CLASS__, 'rest_' . str_replace( '-', '_', $action ) ],
+			foreach ( $namespaces as $namespace ) {
+				register_rest_route( $namespace, '/auth/' . $action, [
+					'methods'             => 'POST',
+					'callback'            => [ __CLASS__, 'rest_' . str_replace( '-', '_', $action ) ],
+					'permission_callback' => '__return_true',
+				] );
+			}
+		}
+
+		foreach ( $namespaces as $namespace ) {
+			register_rest_route( $namespace, '/auth/me', [
+				'methods'             => 'GET',
+				'callback'            => [ __CLASS__, 'rest_me' ],
+				'permission_callback' => '__return_true',
+			] );
+
+			register_rest_route( $namespace, '/auth/coupons', [
+				'methods'             => 'GET',
+				'callback'            => [ __CLASS__, 'rest_coupons' ],
 				'permission_callback' => '__return_true',
 			] );
 		}
-
-		register_rest_route( self::NAMESPACE, '/auth/me', [
-			'methods'             => 'GET',
-			'callback'            => [ __CLASS__, 'rest_me' ],
-			'permission_callback' => '__return_true',
-		] );
-
-		register_rest_route( self::NAMESPACE, '/auth/coupons', [
-			'methods'             => 'GET',
-			'callback'            => [ __CLASS__, 'rest_coupons' ],
-			'permission_callback' => '__return_true',
-		] );
 	}
 
 	public static function rest_login( WP_REST_Request $request ) {
@@ -795,17 +800,17 @@ class Exacoat_Customer_Auth {
 	}
 
 	public static function handle_social_start(): void {
-		if ( ! empty( $_GET['artmatter_auth_link_callback'] ) ) {
+		if ( ! empty( $_GET['exacoat_auth_link_callback'] ) || ! empty( $_GET['artmatter_auth_link_callback'] ) ) {
 			self::finish_social_link();
 		}
-		if ( ! empty( $_GET['artmatter_auth_link'] ) ) {
+		if ( ! empty( $_GET['exacoat_auth_link'] ) || ! empty( $_GET['artmatter_auth_link'] ) ) {
 			self::start_social_link();
 		}
-		if ( empty( $_GET['artmatter_auth_social'] ) ) {
+		if ( empty( $_GET['exacoat_auth_social'] ) && empty( $_GET['artmatter_auth_social'] ) ) {
 			return;
 		}
 
-		$provider_id = sanitize_key( wp_unslash( $_GET['artmatter_auth_social'] ) );
+		$provider_id = sanitize_key( wp_unslash( $_GET['exacoat_auth_social'] ?? $_GET['artmatter_auth_social'] ) );
 		$return_url  = esc_url_raw( wp_unslash( $_GET['return_url'] ?? '' ) );
 		if ( 'google' !== $provider_id || ! self::is_allowed_callback( $return_url ) ) {
 			self::social_failure( $return_url );
@@ -817,7 +822,15 @@ class Exacoat_Customer_Auth {
 			}
 
 			$state = self::random_token( 32 );
+			set_transient( 'exacoat_auth_state_' . hash( 'sha256', $state ), [ 'return_url' => $return_url ], self::STATE_TTL );
 			set_transient( 'artmatter_auth_state_' . hash( 'sha256', $state ), [ 'return_url' => $return_url ], self::STATE_TTL );
+			setcookie( 'exacoat_auth_state', $state, [
+				'expires'  => time() + self::STATE_TTL,
+				'path'     => '/',
+				'secure'   => is_ssl(),
+				'httponly' => true,
+				'samesite' => 'Lax',
+			] );
 			setcookie( 'artmatter_auth_state', $state, [
 				'expires'  => time() + self::STATE_TTL,
 				'path'     => '/',
@@ -826,7 +839,7 @@ class Exacoat_Customer_Auth {
 				'samesite' => 'Lax',
 			] );
 
-			$callback  = add_query_arg( [ 'artmatter_auth_callback' => '1', 'state' => $state ], home_url( '/' ) );
+			$callback  = add_query_arg( [ 'exacoat_auth_callback' => '1', 'artmatter_auth_callback' => '1', 'state' => $state ], home_url( '/' ) );
 			$login_url = NextendSocialLogin::$enabledProviders[ $provider_id ]->getLoginUrl();
 			wp_redirect( add_query_arg( 'redirect', rawurlencode( $callback ), $login_url ) );
 			exit;
@@ -929,20 +942,25 @@ class Exacoat_Customer_Auth {
 	}
 
 	public static function handle_social_callback(): void {
-		if ( empty( $_GET['artmatter_auth_callback'] ) ) {
+		if ( empty( $_GET['exacoat_auth_callback'] ) && empty( $_GET['artmatter_auth_callback'] ) ) {
 			return;
 		}
 
 		$state        = preg_replace( '/[^A-Za-z0-9_-]/', '', (string) wp_unslash( $_GET['state'] ?? '' ) );
-		$cookie_state = preg_replace( '/[^A-Za-z0-9_-]/', '', (string) wp_unslash( $_COOKIE['artmatter_auth_state'] ?? '' ) );
+		$cookie_state = preg_replace( '/[^A-Za-z0-9_-]/', '', (string) wp_unslash( $_COOKIE['exacoat_auth_state'] ?? ( $_COOKIE['artmatter_auth_state'] ?? '' ) ) );
 
 		if ( ! $state && ! empty( $cookie_state ) ) {
 			$state = $cookie_state;
 		}
 
-		$key  = 'artmatter_auth_state_' . hash( 'sha256', $state );
-		$data = get_transient( $key );
-		delete_transient( $key );
+		$data = get_transient( 'exacoat_auth_state_' . hash( 'sha256', $state ) );
+		if ( ! $data ) {
+			$data = get_transient( 'artmatter_auth_state_' . hash( 'sha256', $state ) );
+		}
+		delete_transient( 'exacoat_auth_state_' . hash( 'sha256', $state ) );
+		delete_transient( 'artmatter_auth_state_' . hash( 'sha256', $state ) );
+
+		setcookie( 'exacoat_auth_state', '', [ 'expires' => time() - HOUR_IN_SECONDS, 'path' => '/', 'secure' => is_ssl(), 'httponly' => true, 'samesite' => 'Lax' ] );
 		setcookie( 'artmatter_auth_state', '', [ 'expires' => time() - HOUR_IN_SECONDS, 'path' => '/', 'secure' => is_ssl(), 'httponly' => true, 'samesite' => 'Lax' ] );
 
 		if ( ! $state || ( $cookie_state && ! hash_equals( $state, $cookie_state ) ) || ! is_array( $data ) || ! is_user_logged_in() ) {
@@ -950,27 +968,26 @@ class Exacoat_Customer_Auth {
 		}
 
 		$code = self::random_token( 32 );
+		set_transient( 'exacoat_auth_code_' . hash( 'sha256', $code ), [ 'user_id' => get_current_user_id() ], self::CODE_TTL );
 		set_transient( 'artmatter_auth_code_' . hash( 'sha256', $code ), [ 'user_id' => get_current_user_id() ], self::CODE_TTL );
 		wp_redirect( add_query_arg( 'code', $code, $data['return_url'] ), 303 );
 		exit;
 	}
 
 	public static function filter_nsl_redirect( $redirect_to, $requested_redirect_to ) {
-		if ( ! empty( $requested_redirect_to ) && false !== strpos( $requested_redirect_to, 'artmatter_auth_callback' ) ) {
+		if ( ! empty( $requested_redirect_to ) && ( false !== strpos( $requested_redirect_to, 'exacoat_auth_callback' ) || false !== strpos( $requested_redirect_to, 'artmatter_auth_callback' ) ) ) {
 			return $requested_redirect_to;
 		}
-		if ( ! empty( $_COOKIE['artmatter_auth_state'] ) && false !== strpos( $redirect_to, 'artmatter_auth_callback' ) && false === strpos( $redirect_to, 'state=' ) ) {
-			$cookie_state = preg_replace( '/[^A-Za-z0-9_-]/', '', (string) wp_unslash( $_COOKIE['artmatter_auth_state'] ) );
-			if ( $cookie_state ) {
-				return add_query_arg( 'state', $cookie_state, $redirect_to );
-			}
+		$cookie_state = preg_replace( '/[^A-Za-z0-9_-]/', '', (string) wp_unslash( $_COOKIE['exacoat_auth_state'] ?? ( $_COOKIE['artmatter_auth_state'] ?? '' ) ) );
+		if ( ! empty( $cookie_state ) && ( false !== strpos( $redirect_to, 'exacoat_auth_callback' ) || false !== strpos( $redirect_to, 'artmatter_auth_callback' ) ) && false === strpos( $redirect_to, 'state=' ) ) {
+			return add_query_arg( 'state', $cookie_state, $redirect_to );
 		}
 		return $redirect_to;
 	}
 
 	public static function filter_nsl_fixed_redirect( $fixed_redirect, $provider ) {
-		$cookie_state = preg_replace( '/[^A-Za-z0-9_-]/', '', (string) wp_unslash( $_COOKIE['artmatter_auth_state'] ?? '' ) );
-		$link_flow    = preg_replace( '/[^A-Za-z0-9_-]/', '', (string) wp_unslash( $_COOKIE['artmatter_auth_link_flow'] ?? '' ) );
+		$cookie_state = preg_replace( '/[^A-Za-z0-9_-]/', '', (string) wp_unslash( $_COOKIE['exacoat_auth_state'] ?? ( $_COOKIE['artmatter_auth_state'] ?? '' ) ) );
+		$link_flow    = preg_replace( '/[^A-Za-z0-9_-]/', '', (string) wp_unslash( $_COOKIE['exacoat_auth_link_flow'] ?? ( $_COOKIE['artmatter_auth_link_flow'] ?? '' ) ) );
 		if ( ! empty( $cookie_state ) || ! empty( $link_flow ) ) {
 			return '';
 		}
@@ -1013,6 +1030,9 @@ class Exacoat_Customer_Auth {
 		}
 		if ( ! $token && ! empty( $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ) && preg_match( '/^Bearer\s+(.+)$/i', (string) $_SERVER['REDIRECT_HTTP_AUTHORIZATION'], $matches ) ) {
 			$token = trim( $matches[1] );
+		}
+		if ( ! $token && ! empty( $_COOKIE['exacoat_customer_session'] ) ) {
+			$token = trim( (string) $_COOKIE['exacoat_customer_session'] );
 		}
 		if ( ! $token && ! empty( $_COOKIE['artmatter_customer_session'] ) ) {
 			$token = trim( (string) $_COOKIE['artmatter_customer_session'] );
@@ -1065,12 +1085,17 @@ class Exacoat_Customer_Auth {
 			'email'      => get_user_meta( $user->ID, 'billing_email', true ) ?: $user->user_email,
 		];
 
+		$roles = (array) $user->roles;
+		$role  = in_array( 'administrator', $roles, true ) ? 'super_admin' : ( in_array( 'shop_manager', $roles, true ) ? 'shop_manager' : 'customer' );
+
 		return [
 			'id'              => $user->ID,
 			'email'           => $user->user_email,
 			'displayName'     => $user->display_name ?: $user->user_login,
 			'firstName'       => $user->first_name,
 			'lastName'        => $user->last_name,
+			'roles'           => $roles,
+			'role'            => $role,
 			'createdAt'       => $user->user_registered,
 			'linkedProviders' => $linked_providers,
 			'billingAddress'  => $billing,
@@ -1097,7 +1122,7 @@ class Exacoat_Customer_Auth {
 	}
 
 	private static function web_origin(): string {
-		$url = defined( 'ARTMATTER_WEB_URL' ) ? ARTMATTER_WEB_URL : getenv( 'ARTMATTER_WEB_URL' );
+		$url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : ( defined( 'ARTMATTER_WEB_URL' ) ? ARTMATTER_WEB_URL : ( getenv( 'EXACOAT_WEB_URL' ) ?: getenv( 'ARTMATTER_WEB_URL' ) ) );
 		return untrailingslashit( esc_url_raw( $url ?: home_url( '/' ) ) );
 	}
 
@@ -1107,7 +1132,7 @@ class Exacoat_Customer_Auth {
 		if ( ! $callback || ! $allowed ) {
 			return false;
 		}
-		$allowed_hosts = array_filter( [ $allowed['host'] ?? '', 'artmatter.co', 'web.artmatter.co' ] );
+		$allowed_hosts = array_filter( [ $allowed['host'] ?? '', 'exacoat.com', 'web.exacoat.com', 'artmatter.co', 'web.artmatter.co' ] );
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			$allowed_hosts[] = 'localhost';
 			$allowed_hosts[] = '127.0.0.1';

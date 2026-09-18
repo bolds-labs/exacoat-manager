@@ -10,7 +10,7 @@ import {
   SelectContent,
   SelectItem
 } from '../ui/Select';
-import { Order, OrderStatus, OrderNote, OrderReview, OrderReviewMedia } from '../../types';
+import { Order, OrderStatus, OrderNote, OrderReview, OrderReviewMedia, getOrderRma, getOrderGuarantee } from '../../types';
 import { formatCurrency, formatDateTime, formatDate } from '../../lib/formatters';
 import { 
   Package, 
@@ -45,10 +45,15 @@ import {
   Sparkles,
   Star,
   Video,
-  Play
+  Play,
+  RefreshCw,
+  ChevronDown,
+  ChevronUp,
+  Plane
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { getWpBaseUrl } from '../../lib/wordpressBridge';
+import { formatGooritaShipmentText, openGooritaWhatsApp } from '../../lib/exportManager';
 import { 
   updateOrderStatusDirect, 
   fulfillOrderDirect, 
@@ -56,10 +61,14 @@ import {
   fetchOrderNotesDirect,
   refundOrderDirect,
   sendReviewInviteDirect,
-  fetchOrderReviewDirect
+  fetchOrderReviewDirect,
+  syncOrderTrackingDirect,
+  processGuaranteeActionDirect
 } from '../../lib/wordpressBridge';
 import { ShippingLabelA6Modal } from './ShippingLabelA6Modal';
 import { CustomerInvoiceModal } from './CustomerInvoiceModal';
+import { WarrantyReviewModal } from './WarrantyReviewModal';
+import { ManualWarrantyModal } from './ManualWarrantyModal';
 import { clsx } from 'clsx';
 
 interface OrderDetailDrawerProps {
@@ -67,6 +76,7 @@ interface OrderDetailDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onOrderUpdated?: () => void;
+  onSelectOrderById?: (orderId: number) => void;
 }
 
 const COURIER_PRESETS = [
@@ -87,6 +97,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   isOpen,
   onClose,
   onOrderUpdated,
+  onSelectOrderById,
 }) => {
   const { showToast } = useToast();
   
@@ -96,6 +107,8 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   const [customTrackingUrl, setCustomTrackingUrl] = useState('');
   const [trackingNumber, setTrackingNumber] = useState('');
   const [isFulfilling, setIsFulfilling] = useState(false);
+  const [isSyncingTracking, setIsSyncingTracking] = useState(false);
+  const [showAllCheckpoints, setShowAllCheckpoints] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
@@ -117,12 +130,40 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   // A6 Shipping Label & Customer Invoice modal state
   const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+  const [isWarrantyReviewModalOpen, setIsWarrantyReviewModalOpen] = useState(false);
+  const [isManualWarrantyModalOpen, setIsManualWarrantyModalOpen] = useState(false);
+  const [manualClaimType, setManualClaimType] = useState<'Warranty' | 'Redeem'>('Warranty');
   const [previewCustomItem, setPreviewCustomItem] = useState<any | null>(null);
+
+  // 30-Day Money Back Guarantee state
+  const [isProcessingGuaranteeAction, setIsProcessingGuaranteeAction] = useState(false);
+  const [isGuaranteeRejectModalOpen, setIsGuaranteeRejectModalOpen] = useState(false);
+  const [guaranteeRejectReason, setGuaranteeRejectReason] = useState('');
 
   // Collector Review & Media state
   const [orderReview, setOrderReview] = useState<OrderReview | null>(order?.review || null);
   const [isSendingReviewInvite, setIsSendingReviewInvite] = useState(false);
   const [previewReviewMedia, setPreviewReviewMedia] = useState<OrderReviewMedia | null>(null);
+
+  // Goorita US Shipment Quick Actions State
+  const [isGooritaCopied, setIsGooritaCopied] = useState(false);
+  const [showGooritaPreview, setShowGooritaPreview] = useState(false);
+
+  const isUsOrder = Boolean(
+    (order?.shipping?.country || order?.billing?.country || '').toUpperCase() === 'US' ||
+    courier === 'goorita' ||
+    (order?.shipping_lines?.[0]?.method_id || '').toLowerCase().includes('goorita')
+  );
+
+  const handleCopyGooritaText = () => {
+    if (!order) return;
+    const text = formatGooritaShipmentText(order);
+    navigator.clipboard.writeText(text).then(() => {
+      setIsGooritaCopied(true);
+      showToast('success', 'Shipment Copied', 'Goorita shipment form copied to clipboard.');
+      setTimeout(() => setIsGooritaCopied(false), 2500);
+    });
+  };
 
   // Sync tracking form, reviews and notes when order changes
   useEffect(() => {
@@ -270,6 +311,45 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
     }
   };
 
+  const handleSyncTracking = async () => {
+    if (!order) return;
+    try {
+      setIsSyncingTracking(true);
+      const res = await syncOrderTrackingDirect(order.id);
+      if (res.success) {
+        showToast(
+          'success',
+          'Tracking Refreshed',
+          res.status === 'completed'
+            ? `Order marked as Completed (Delivered by ${res.source || 'courier'})`
+            : `Status: ${res.latest_status || 'In Transit'} (${res.checkpoints?.length || 0} checkpoints)`
+        );
+        if (res.status && order.status !== res.status) {
+          order.status = res.status as OrderStatus;
+        }
+        if (order.tracking) {
+          order.tracking.latest_status = res.latest_status;
+          order.tracking.checkpoints = res.checkpoints;
+        } else if (res.checkpoints) {
+          order.tracking = {
+            courier: courier,
+            tracking_number: trackingNumber,
+            latest_status: res.latest_status,
+            checkpoints: res.checkpoints,
+          };
+        }
+        await loadNotes(order.id);
+        if (onOrderUpdated) onOrderUpdated();
+      } else {
+        showToast('error', 'Tracking sync failed', res.message || res.error || 'Could not fetch tracking updates');
+      }
+    } catch (err: any) {
+      showToast('error', 'Tracking sync error', err.message);
+    } finally {
+      setIsSyncingTracking(false);
+    }
+  };
+
   const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newNote.trim()) return;
@@ -341,8 +421,50 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
     }
   };
 
+  const handleGuaranteeAction = async (action: 'mark_received' | 'approve_refund' | 'reject', rejectNotes?: string) => {
+    if (!order) return;
+    try {
+      setIsProcessingGuaranteeAction(true);
+      const res = await processGuaranteeActionDirect(order.id, action, rejectNotes);
+      if (res.success) {
+        if (action === 'approve_refund') {
+          showToast('success', 'Refund Approved & Issued', res.message || 'Refund issued and confirmation email dispatched.');
+        } else if (action === 'mark_received') {
+          showToast('success', 'Package Received', 'Return package inspected and marked as received at Ruby Commercial TB12.');
+        } else {
+          showToast('info', 'Claim Rejected', 'Guarantee claim marked as rejected.');
+          setIsGuaranteeRejectModalOpen(false);
+          setGuaranteeRejectReason('');
+        }
+        await loadNotes(order.id);
+        if (onOrderUpdated) onOrderUpdated();
+      } else {
+        showToast('error', 'Action Failed', res.error || 'Failed processing guarantee action');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message || 'Failed processing guarantee action');
+    } finally {
+      setIsProcessingGuaranteeAction(false);
+    }
+  };
+
     const currentStatusClean = String(order.status || '').replace('wc-', '');
     const cleanOrderNum = String(order.order_number || order.id || '').replace(/^#+/, '');
+    const shippingMethodName = String((order as any).shipping_method || (order as any).shipping_lines?.[0]?.method_title || '').toLowerCase();
+    const shippingAddressStr = `${order.shipping?.address_1 || ''} ${order.shipping?.city || ''} ${order.shipping?.postcode || ''}`.toLowerCase();
+    const isStorePickup = shippingMethodName.includes('pickup') || 
+      shippingMethodName.includes('store') || 
+      shippingAddressStr.includes('summarecon') || 
+      shippingAddressStr.includes('bekasi store') || 
+      shippingAddressStr.includes('ruby commercial') ||
+      currentStatusClean === 'smb-ready' ||
+      currentStatusClean === 'smb-picked';
+
+    const rmaDetails = getOrderRma(order);
+    const guaranteeDetails = getOrderGuarantee(order);
+    const parentWarrantyClaimId = (order.meta_data || []).find(m => m.key === '_warranty_claim_order_id' || m.key === '_warranty_replacement_order_id')?.value;
+    const parentWarrantyClaimInvoice = (order.meta_data || []).find(m => m.key === '_warranty_claim_invoice')?.value;
+    const parentRedeemClaimId = (order.meta_data || []).find(m => m.key === '_redeem_replacement_order_id')?.value;
 
     return (
       <SlideDrawer
@@ -350,9 +472,41 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         onClose={onClose}
         width="2xl"
         title={
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <span className="text-lg font-semibold text-zinc-950 dark:text-white font-sans tracking-tight">Order #{cleanOrderNum}</span>
             <Badge type="orderStatus" value={order.status} size="sm" />
+            {rmaDetails?.order_type === 'Redeem' && (
+              <span className="inline-flex h-6 items-center whitespace-nowrap text-[11px] leading-none font-mono font-bold text-amber-400 bg-amber-500/20 px-2.5 rounded-full border border-amber-500/40 shadow-xs">
+                <Sparkles className="w-3.5 h-3.5 mr-1 text-amber-400" />
+                REDEEM (COMPANY FAULT)
+              </span>
+            )}
+            {rmaDetails?.order_type === 'Warranty' && (
+              <span className="inline-flex h-6 items-center whitespace-nowrap text-[11px] leading-none font-mono font-bold text-sky-400 bg-sky-500/20 px-2.5 rounded-full border border-sky-500/40 shadow-xs">
+                <ShieldCheck className="w-3.5 h-3.5 mr-1 text-sky-400" />
+                WARRANTY REPLACEMENT
+              </span>
+            )}
+            {guaranteeDetails && (
+              <span className={clsx(
+                "inline-flex h-6 items-center whitespace-nowrap text-[11px] leading-none font-mono font-bold px-2.5 rounded-full border shadow-xs",
+                guaranteeDetails.status === 'refunded'
+                  ? "text-emerald-400 bg-emerald-500/20 border-emerald-500/40"
+                  : guaranteeDetails.status === 'package_received'
+                  ? "text-sky-400 bg-sky-500/20 border-sky-500/40"
+                  : guaranteeDetails.status === 'rejected'
+                  ? "text-rose-400 bg-rose-500/20 border-rose-500/40"
+                  : "text-purple-400 bg-purple-500/20 border-purple-500/40"
+              )}>
+                <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                30D GUARANTEE {guaranteeDetails.status === 'refunded' ? 'REFUNDED' : guaranteeDetails.status === 'package_received' ? 'PACKAGE RECEIVED' : guaranteeDetails.status === 'rejected' ? 'REJECTED' : 'CLAIM'}
+              </span>
+            )}
+            {isStorePickup && (
+              <span className="inline-flex h-6 items-center whitespace-nowrap text-[11px] leading-none font-mono font-semibold text-[#f3aa18] bg-[#f3aa18]/15 px-2.5 rounded-full border border-[#f3aa18]/30">
+                Store Pickup (Bekasi)
+              </span>
+            )}
             <span className="inline-flex h-6 items-center whitespace-nowrap text-xs leading-none font-mono font-medium text-lime-700 dark:text-[#f3aa18] bg-[#f3aa18]/10 px-2.5 rounded-full border border-[#f3aa18]/20">
               {formatCurrency(order.total, order.currency)}
             </span>
@@ -361,28 +515,274 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
       subtitle={`Created on ${formatDateTime(order.created_at)} • via ${order.payment_method_title || order.payment_method || 'Direct Payment'}${order.customer_ip ? ` • IP: ${order.customer_ip}` : ''}`}
     >
       <div className="space-y-6">
+
+        {/* RMA Installation Warranty or Redeem Replacement Card */}
+        {(rmaDetails?.order_type === 'Warranty' || rmaDetails?.order_type === 'Redeem') && (
+          <div className={clsx(
+            "p-4 rounded-2xl border shadow-lg",
+            rmaDetails.order_type === 'Redeem'
+              ? "border-amber-500/30 bg-amber-950/20 shadow-[0_0_20px_rgba(245,158,11,0.08)]"
+              : "border-emerald-500/30 bg-emerald-950/20 shadow-[0_0_20px_rgba(16,185,129,0.08)]"
+          )}>
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className={clsx(
+                  "w-10 h-10 rounded-xl border flex items-center justify-center shrink-0",
+                  rmaDetails.order_type === 'Redeem'
+                    ? "bg-amber-500/15 border-amber-500/30 text-amber-400"
+                    : "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                )}>
+                  {rmaDetails.order_type === 'Redeem' ? <Sparkles className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-white font-sans">
+                      {rmaDetails.order_type === 'Redeem'
+                        ? 'Redeem Replacement Order (Exacoat Fault - Free Shipping)'
+                        : '48-Hour Installation Warranty Replacement'}
+                    </span>
+                    <span className={clsx(
+                      "px-2 py-0.5 rounded-md text-[10px] font-mono font-bold uppercase tracking-wider border",
+                      rmaDetails.status === 'approved'
+                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                        : rmaDetails.status === 'rejected'
+                        ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                        : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                    )}>
+                      {rmaDetails.status === 'approved' ? 'Approved' : rmaDetails.status === 'rejected' ? 'Rejected' : 'Pending Review'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-300 font-sans mt-1">
+                    Original Reference:{' '}
+                    {rmaDetails.original_order_id && onSelectOrderById ? (
+                      <button
+                        type="button"
+                        onClick={() => onSelectOrderById(Number(rmaDetails.original_order_id))}
+                        className={clsx(
+                          "font-mono font-bold underline underline-offset-2 cursor-pointer",
+                          rmaDetails.order_type === 'Redeem' ? "text-amber-400 hover:text-amber-300" : "text-emerald-400 hover:text-emerald-300"
+                        )}
+                      >
+                        #{rmaDetails.original_invoice || rmaDetails.original_order_id}
+                      </button>
+                    ) : (
+                      <span className="font-mono font-bold text-white">
+                        #{rmaDetails.original_invoice || rmaDetails.original_order_id || 'N/A'}
+                      </span>
+                    )}
+                    {rmaDetails.claim_reason && (
+                      <span className="text-neutral-400"> • Reason: <span className="italic text-neutral-200">{rmaDetails.claim_reason}</span></span>
+                    )}
+                  </p>
+                  {rmaDetails.video_deleted && (
+                    <p className="text-[11px] text-zinc-400 font-mono mt-0.5">
+                      Proof video auto-deleted on review.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {rmaDetails.video_proof_url && (
+                <button
+                  type="button"
+                  onClick={() => setIsWarrantyReviewModalOpen(true)}
+                  className={clsx(
+                    "px-3.5 py-2 rounded-xl text-xs font-bold font-sans flex items-center gap-2 transition-all shadow-sm active:scale-95 text-white cursor-pointer shrink-0",
+                    rmaDetails.order_type === 'Redeem' ? "bg-amber-600 hover:bg-amber-500" : "bg-emerald-600 hover:bg-emerald-500"
+                  )}
+                >
+                  <Video className="w-4 h-4" />
+                  <span>Review Claim Proof</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Parent Order Warranty Claim Notice */}
+        {parentWarrantyClaimId && (
+          <div className="p-3.5 rounded-2xl border border-sky-500/30 bg-sky-950/20 flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0" />
+              <div className="text-xs font-sans text-neutral-300">
+                <span>48h Warranty Replacement claim order filed: </span>
+                {onSelectOrderById ? (
+                  <button
+                    type="button"
+                    onClick={() => onSelectOrderById(Number(parentWarrantyClaimId))}
+                    className="font-mono font-bold text-sky-400 hover:text-sky-300 underline underline-offset-2 cursor-pointer"
+                  >
+                    #{parentWarrantyClaimInvoice || parentWarrantyClaimId}
+                  </button>
+                ) : (
+                  <span className="font-mono font-bold text-white">
+                    #{parentWarrantyClaimInvoice || parentWarrantyClaimId}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Parent Order Redeem Claim Notice */}
+        {parentRedeemClaimId && (
+          <div className="p-3.5 rounded-2xl border border-amber-500/30 bg-amber-950/20 flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2.5">
+              <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+              <div className="text-xs font-sans text-neutral-300">
+                <span>Redeem Replacement order filed (Exacoat Fault - Free Shipping): </span>
+                {onSelectOrderById ? (
+                  <button
+                    type="button"
+                    onClick={() => onSelectOrderById(Number(parentRedeemClaimId))}
+                    className="font-mono font-bold text-amber-400 hover:text-amber-300 underline underline-offset-2 cursor-pointer"
+                  >
+                    #{parentRedeemClaimId}
+                  </button>
+                ) : (
+                  <span className="font-mono font-bold text-white">
+                    #{parentRedeemClaimId}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 30-Day Money Back Guarantee Return Card */}
+        {guaranteeDetails && (
+          <div className="p-4 rounded-2xl border border-purple-500/30 bg-purple-950/20 space-y-3">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center shrink-0 mt-0.5">
+                  <RotateCcw className="w-5 h-5 text-purple-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold uppercase tracking-wider text-purple-300 font-sans">
+                      30-Day Money Back Guarantee Return
+                    </span>
+                    <span className={clsx(
+                      "px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase border",
+                      guaranteeDetails.status === 'refunded'
+                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                        : guaranteeDetails.status === 'package_received'
+                        ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
+                        : guaranteeDetails.status === 'rejected'
+                        ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                        : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                    )}>
+                      {guaranteeDetails.status === 'refunded' 
+                        ? 'Refund Paid' 
+                        : guaranteeDetails.status === 'package_received'
+                        ? 'Package Received at Ruby Commercial TB12'
+                        : guaranteeDetails.status === 'rejected'
+                        ? 'Rejected'
+                        : 'Awaiting Return Package'}
+                    </span>
+                  </div>
+                  <div className="text-xs text-neutral-300 font-sans mt-1.5 space-y-1">
+                    <p>
+                      <span className="text-neutral-400">Method:</span>{' '}
+                      <span className="font-semibold text-white">
+                        {guaranteeDetails.refund_method === 'store_credit' 
+                          ? 'Store Credit (100%)' 
+                          : guaranteeDetails.refund_method === 'bank_transfer'
+                          ? 'Bank Transfer (70%)'
+                          : 'PayPal (70%)'}
+                      </span>
+                      {' • '}
+                      <span className="text-neutral-400">Amount:</span>{' '}
+                      <span className="font-bold text-amber-400 font-mono">
+                        {formatCurrency(guaranteeDetails.refund_amount, order.currency)}
+                      </span>
+                    </p>
+                    {guaranteeDetails.destination && (
+                      <p>
+                        <span className="text-neutral-400">Destination:</span>{' '}
+                        <span className="font-mono text-zinc-200">{guaranteeDetails.destination}</span>
+                      </p>
+                    )}
+                    <p className="text-[11px] text-zinc-400">
+                      <span className="text-neutral-400">Return Hub:</span>{' '}
+                      Exacoat Returns Hub, Ruby Commercial TB12, Jl. Bulevar Selatan, Bekasi 17142
+                    </p>
+                    {guaranteeDetails.return_tracking ? (
+                      <p className="text-[11px]">
+                        <span className="text-neutral-400">Customer Return Courier:</span>{' '}
+                        <span className="font-mono font-bold text-emerald-400">
+                          {guaranteeDetails.return_courier || 'Courier'} #{guaranteeDetails.return_tracking}
+                        </span>
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-amber-400/80 italic">
+                        Return shipment resi not yet uploaded by customer.
+                      </p>
+                    )}
+                    {guaranteeDetails.claim_data?.reason && (
+                      <p className="text-[11px] text-neutral-400">
+                        <span>Reason: </span>
+                        <span className="italic text-neutral-200">{guaranteeDetails.claim_data.reason}</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 flex-wrap">
+                {guaranteeDetails.status === 'pending_return' && (
+                  <button
+                    type="button"
+                    disabled={isProcessingGuaranteeAction}
+                    onClick={() => handleGuaranteeAction('mark_received')}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 cursor-pointer disabled:opacity-50"
+                    title="Confirm package has been received and inspected at Ruby Commercial TB12"
+                  >
+                    <Package className="w-3.5 h-3.5" />
+                    <span>Mark Package Received</span>
+                  </button>
+                )}
+
+                {(guaranteeDetails.status === 'pending_return' || guaranteeDetails.status === 'package_received') && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={isProcessingGuaranteeAction}
+                      onClick={() => handleGuaranteeAction('approve_refund')}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer disabled:opacity-50"
+                      title="Approve refund, record in WooCommerce, and send light-theme confirmation email"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Approve & Issue Refund</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isProcessingGuaranteeAction}
+                      onClick={() => setIsGuaranteeRejectModalOpen(true)}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 cursor-pointer disabled:opacity-50"
+                      title="Reject guarantee return claim"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Reject</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
         
         {/* Quick Lifecycle Stage Transition Pipeline */}
         <div className="p-4 rounded-2xl border border-white/[0.06] bg-[#111111]">
-          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-neutral-400 font-sans">
-              Order Status
-            </span>
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Order Progress Timeline</span>
               {isUpdatingStatus && (
-                <span className="text-[11px] text-[#f3aa18] font-mono animate-pulse flex items-center gap-1.5 mr-2">
-                  <Clock className="w-3.5 h-3.5" /> Updating...
-                </span>
+                <div className="w-3 h-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
               )}
-              <button
-                type="button"
-                onClick={() => setIsInvoiceModalOpen(true)}
-                className="px-3 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/[0.08]"
-                title="View, download, and print official customer tax invoice"
-              >
-                <FileText className="w-3.5 h-3.5 text-[#f3aa18]" />
-                <span>Invoice</span>
-              </button>
+            </div>
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setIsLabelModalOpen(true)}
@@ -402,21 +802,52 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   </span>
                 )}
               </button>
+              {rmaDetails?.order_type !== 'Warranty' && rmaDetails?.order_type !== 'Redeem' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManualClaimType('Warranty');
+                      setIsManualWarrantyModalOpen(true);
+                    }}
+                    className="px-3 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 cursor-pointer"
+                    title="Claim installation warranty manually for this order"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Claim Warranty</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManualClaimType('Redeem');
+                      setIsManualWarrantyModalOpen(true);
+                    }}
+                    className="px-3 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 cursor-pointer"
+                    title="Issue free redeem replacement order (Exacoat factory defect / error)"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Redeem (Fault)</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
             {[
-              { key: 'processing', label: 'Order Confirmed', icon: Clock },
-              { key: 'in-production', label: 'In Production', icon: Layers },
-              { key: 'quality-check', label: 'Quality Check', icon: Eye },
-              { key: 'awaiting-pickup', label: 'Ready to Ship', icon: Package },
-              { key: 'shipped', label: 'Shipped', icon: Truck },
-              { key: 'completed', label: 'Delivered', icon: CheckCircle2 },
+              { key: 'on-hold', label: 'Waiting for Payment', icon: Clock },
+              { key: 'processing', label: 'Payment confirmed', icon: Clock },
+              { key: 'preparing-order', label: 'Preparing order', icon: Layers },
+              { key: isStorePickup ? 'smb-ready' : 'ready-to-ship', label: isStorePickup ? 'Ready for Pickup' : 'Waiting for Courier Pickup', icon: Package },
+              { key: isStorePickup ? 'smb-picked' : 'shipped', label: isStorePickup ? 'Picked Up' : 'Shipped', icon: isStorePickup ? CheckCircle2 : Truck },
+              { key: 'completed', label: 'Completed', icon: CheckCircle2 },
             ].map(stage => {
               const isActive = (currentStatusClean === stage.key) || 
-                (stage.key === 'completed' && currentStatusClean === 'delivered') || 
-                (stage.key === 'awaiting-pickup' && currentStatusClean === 'awaiting_pickup');
+                (stage.key === 'completed' && (currentStatusClean === 'delivered' || currentStatusClean === 'completed')) || 
+                (stage.key === 'ready-to-ship' && (currentStatusClean === 'awaiting-pickup' || currentStatusClean === 'awaiting_pickup' || currentStatusClean === 'ready-to-ship' || currentStatusClean === 'ready_to_ship')) ||
+                (stage.key === 'smb-ready' && (currentStatusClean === 'smb-ready' || currentStatusClean === 'ready-to-ship' || currentStatusClean === 'awaiting-pickup')) ||
+                (stage.key === 'smb-picked' && (currentStatusClean === 'smb-picked' || currentStatusClean === 'completed')) ||
+                (stage.key === 'preparing-order' && (currentStatusClean === 'in-production' || currentStatusClean === 'in_production' || currentStatusClean === 'preparing-order' || currentStatusClean === 'preparing_order'));
               const Icon = stage.icon;
               return (
                 <button
@@ -426,7 +857,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   className={clsx(
                     'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all duration-200',
                     isActive 
-                      ? 'bg-[#f3aa18]/10 border-[#f3aa18]/30 text-[#f3aa18] shadow-[0_0_15px_rgba(169,255,93,0.15)] font-bold' 
+                      ? 'bg-[#f3aa18]/10 border-[#f3aa18]/30 text-[#f3aa18] shadow-[0_0_15px_rgba(243,170,24,0.15)] font-bold' 
                       : 'bg-[#141414] border-white/[0.06] text-neutral-400 hover:text-white hover:bg-white/[0.04] hover:border-white/[0.1]'
                   )}
                 >
@@ -568,6 +999,18 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                         <h5 className={clsx("text-xs font-bold font-sans", item.is_refunded ? "text-neutral-500 line-through" : "text-white")}>
                           {item.name}
                         </h5>
+                        {rmaDetails?.order_type === 'Redeem' && (
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0 flex items-center gap-1 shadow-xs">
+                            <Sparkles className="w-3 h-3 text-amber-400" />
+                            <span>Redeem Replacement (Free)</span>
+                          </span>
+                        )}
+                        {rmaDetails?.order_type === 'Warranty' && (
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40 shrink-0 flex items-center gap-1 shadow-xs">
+                            <ShieldCheck className="w-3 h-3 text-sky-400" />
+                            <span>Warranty Replacement</span>
+                          </span>
+                        )}
                         {(item.name.toLowerCase().startsWith('custom order') || (item as any).is_custom) && (
                           <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0 flex items-center gap-1">
                             <span className="text-[#f3aa18] font-bold">✦</span>
@@ -717,14 +1160,33 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
               </h4>
               <Tooltip 
                 position="top"
-                content="Save tracking code at any stage (e.g. Ready to Ship). When the status is set to Shipped, tracking is automatically emailed to the customer."
+                content="Domestic orders (SiCepat, JNE, POS, J&T) are verified with Biteship live tracking. Delivered status automatically moves the order to Completed."
               />
             </div>
-            {order.tracking?.tracking_number && !order.tracking.tracking_number.startsWith('field_') && (
-              <span className="text-[11px] font-mono text-neutral-300 bg-white/[0.04] px-2 py-0.5 rounded border border-white/[0.08]">
-                Tracking Saved
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {order.tracking?.latest_status && (
+                <span className={clsx(
+                  "text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider",
+                  order.tracking.latest_status === 'delivered'
+                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                    : "bg-[#f3aa18]/10 text-[#f3aa18] border-[#f3aa18]/30"
+                )}>
+                  {order.tracking.latest_status === 'delivered' ? '✓ Delivered' : order.tracking.latest_status.replace('_', ' ')}
+                </span>
+              )}
+              {order.tracking?.tracking_number && !order.tracking.tracking_number.startsWith('field_') && (
+                <button
+                  type="button"
+                  disabled={isSyncingTracking}
+                  onClick={handleSyncTracking}
+                  className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-xs text-neutral-200 font-sans font-medium flex items-center gap-1.5 border border-white/[0.08] transition-all disabled:opacity-50"
+                  title="Sync live status and checkpoints with carrier"
+                >
+                  <RefreshCw className={clsx("w-3 h-3", isSyncingTracking && "animate-spin text-[#f3aa18]")} />
+                  <span>{isSyncingTracking ? 'Syncing...' : 'Sync Status'}</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <form onSubmit={handleSaveTracking} className="space-y-4">
@@ -821,6 +1283,147 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
               </button>
             </div>
           </form>
+
+          {/* Goorita US Shipment Quick Actions (US Orders & Goorita Courier) */}
+          {isUsOrder && (
+            <div className="p-4 rounded-xl bg-sky-950/20 border border-sky-500/25 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Plane className="w-4 h-4 text-sky-400" />
+                  <span className="text-xs font-bold text-white font-sans uppercase tracking-wider">
+                    Goorita US Shipment
+                  </span>
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                    US Destination
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowGooritaPreview(!showGooritaPreview)}
+                  className="text-[11px] text-sky-400 hover:text-sky-300 font-mono transition-colors cursor-pointer"
+                >
+                  {showGooritaPreview ? 'Hide Form Text' : 'View Form Text'}
+                </button>
+              </div>
+
+              {showGooritaPreview && (
+                <pre className="p-3 rounded-lg bg-zinc-950 border border-white/10 text-[11px] font-mono text-zinc-300 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto select-all">
+                  {formatGooritaShipmentText(order)}
+                </pre>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleCopyGooritaText}
+                  className={clsx(
+                    "px-3.5 py-2 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm cursor-pointer",
+                    isGooritaCopied
+                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                      : "bg-white/[0.08] hover:bg-white/[0.14] text-white border border-white/[0.1]"
+                  )}
+                >
+                  {isGooritaCopied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Copied to Clipboard</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy Goorita Shipment</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    openGooritaWhatsApp(order);
+                    showToast('success', 'WhatsApp Launched', 'Opened WhatsApp chat with pre-filled Goorita shipment form.');
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-zinc-950 text-xs font-bold font-sans flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                >
+                  <MessageSquare className="w-3.5 h-3.5 text-zinc-950" />
+                  <span>Send WhatsApp</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Live Tracking Timeline & Checkpoints */}
+          {order.tracking?.checkpoints && order.tracking.checkpoints.length > 0 && (
+            <div className="pt-3 border-t border-white/[0.06] space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 font-sans">
+                  Carrier Checkpoints ({order.tracking.checkpoints.length})
+                </span>
+                {order.tracking.checkpoints.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllCheckpoints(!showAllCheckpoints)}
+                    className="text-[11px] text-[#f3aa18] hover:underline font-sans flex items-center gap-1"
+                  >
+                    {showAllCheckpoints ? (
+                      <>Hide history <ChevronUp className="w-3 h-3" /></>
+                    ) : (
+                      <>View all checkpoints <ChevronDown className="w-3 h-3" /></>
+                    )}
+                  </button>
+                )}
+              </div>
+
+              {/* Latest Checkpoint Highlight Card */}
+              {order.tracking.checkpoints[0] && (
+                <div className="p-3 rounded-xl bg-[#141414] border border-white/[0.06] space-y-1">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-semibold text-white font-sans flex items-center gap-1.5">
+                      <span className={clsx(
+                        "size-2 rounded-full shrink-0",
+                        order.tracking.latest_status === 'delivered' ? "bg-emerald-400" : "bg-[#f3aa18]"
+                      )} />
+                      <span className="line-clamp-1">{order.tracking.checkpoints[0].description}</span>
+                    </span>
+                    {order.tracking.checkpoints[0].stage && (
+                      <span className="text-[9px] font-mono text-neutral-400 uppercase bg-white/[0.04] px-1.5 py-0.5 rounded shrink-0 ml-2">
+                        {order.tracking.checkpoints[0].stage.replace('_', ' ')}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 text-[10px] text-neutral-400 font-mono pt-0.5">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-neutral-500" />
+                      {order.tracking.checkpoints[0].time}
+                    </span>
+                    {order.tracking.checkpoints[0].location && (
+                      <span className="flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-neutral-500" />
+                        {order.tracking.checkpoints[0].location}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Expanded Checkpoint History */}
+              {showAllCheckpoints && order.tracking.checkpoints.length > 1 && (
+                <div className="space-y-1.5 pt-1 max-h-60 overflow-y-auto pr-1">
+                  {order.tracking.checkpoints.slice(1).map((cp, idx) => (
+                    <div 
+                      key={idx}
+                      className="p-2.5 rounded-lg bg-[#0e0e0e] border border-white/[0.04] text-xs font-sans space-y-1"
+                    >
+                      <p className="text-neutral-300 font-medium">{cp.description}</p>
+                      <div className="flex items-center gap-3 text-[10px] text-neutral-500 font-mono">
+                        <span>{cp.time}</span>
+                        {cp.location && <span>• {cp.location}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Section 4: Financial Summary */}
@@ -895,6 +1498,22 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
               </div>
             )}
 
+            {/* Kode Unik BCA */}
+            {(() => {
+              const bcaCode = order.meta_data?.find(m => m.key === '_bca_unique_code')?.value;
+              if (!bcaCode) return null;
+              return (
+                <div className="flex items-center justify-between text-neutral-400">
+                  <span className="text-amber-400 text-xs flex items-center gap-1">
+                    Kode Unik Pembayaran (BCA)
+                  </span>
+                  <span className="font-mono text-amber-400 font-semibold">
+                    +{formatCurrency(Number(bcaCode), order.currency)}
+                  </span>
+                </div>
+              );
+            })()}
+
             {/* Grand Total */}
             <div className="border-t border-white/[0.08] pt-2.5 flex items-center justify-between font-bold text-sm text-white">
               <span>Order Total</span>
@@ -949,6 +1568,18 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                 {order.date_paid ? `${formatCurrency(order.total, order.currency)} paid on ${formatDate(order.date_paid)}` : 'Pending'}
               </span>
             </div>
+
+            {/* BCA Mutation Detail */}
+            {(() => {
+              const bcaMutation = order.meta_data?.find(m => m.key === '_bca_mutation_desc')?.value;
+              if (!bcaMutation) return null;
+              return (
+                <div className="text-[10px] text-neutral-400 font-mono bg-white/[0.02] p-2.5 rounded-lg border border-white/[0.04] mt-1.5 break-all">
+                  <span className="text-emerald-400 font-sans font-semibold block mb-0.5">BCA Webhook Mutation:</span>
+                  {String(bcaMutation)}
+                </div>
+              );
+            })()}
           </div>
         </div>
 
@@ -1411,6 +2042,35 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         onClose={() => setIsInvoiceModalOpen(false)}
       />
 
+      {/* 48-Hour Installation Warranty Review Modal */}
+      {order && (
+        <WarrantyReviewModal
+          orderId={order.id}
+          isOpen={isWarrantyReviewModalOpen}
+          onClose={() => setIsWarrantyReviewModalOpen(false)}
+          onClaimReviewed={() => {
+            onOrderUpdated?.();
+          }}
+          onSelectParentOrder={onSelectOrderById}
+        />
+      )}
+
+      {/* Manual Warranty Claim Modal */}
+      {order && (
+        <ManualWarrantyModal
+          isOpen={isManualWarrantyModalOpen}
+          onClose={() => setIsManualWarrantyModalOpen(false)}
+          existingOrder={order}
+          initialClaimType={manualClaimType}
+          onSuccess={(newOrderId) => {
+            onOrderUpdated?.();
+            if (newOrderId && onSelectOrderById) {
+              onSelectOrderById(newOrderId);
+            }
+          }}
+        />
+      )}
+
       {/* Custom Skin Preview Lightbox Modal */}
       {previewCustomItem && (
         <Modal
@@ -1518,6 +2178,45 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                 <Download className="w-3.5 h-3.5" />
                 <span>Download Asset</span>
               </a>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* 30-Day Guarantee Rejection Modal */}
+      {isGuaranteeRejectModalOpen && (
+        <Modal
+          isOpen={isGuaranteeRejectModalOpen}
+          onClose={() => setIsGuaranteeRejectModalOpen(false)}
+          title="Reject 30-Day Guarantee Return"
+        >
+          <div className="space-y-4 font-sans">
+            <p className="text-xs text-neutral-300">
+              Provide a reason for rejecting the guarantee claim for Order #{cleanOrderNum}. This note will be recorded on the order timeline.
+            </p>
+            <textarea
+              value={guaranteeRejectReason}
+              onChange={(e) => setGuaranteeRejectReason(e.target.value)}
+              placeholder="e.g. Missing original retail packaging or merchandise was damaged during customer application..."
+              rows={3}
+              className="w-full rounded-xl bg-neutral-900 border border-white/10 p-3 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-rose-500/50"
+            />
+            <div className="flex justify-end gap-2 pt-2 border-t border-white/[0.08]">
+              <button
+                type="button"
+                onClick={() => setIsGuaranteeRejectModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-neutral-400 hover:text-white bg-neutral-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isProcessingGuaranteeAction}
+                onClick={() => handleGuaranteeAction('reject', guaranteeRejectReason)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 disabled:opacity-50"
+              >
+                {isProcessingGuaranteeAction ? 'Rejecting...' : 'Confirm Rejection'}
+              </button>
             </div>
           </div>
         </Modal>

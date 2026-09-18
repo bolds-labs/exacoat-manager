@@ -131,11 +131,11 @@ export const Badge: React.FC<BadgeProps> = ({
     bgClass = info.bg;
     const clean = String(value || '').replace('wc-', '').toLowerCase();
     if (clean === 'shipped') IconComponent = Truck;
-    else if (clean === 'completed' || clean === 'delivered') IconComponent = CheckCircle2;
-    else if (clean === 'awaiting-pickup' || clean === 'awaiting_pickup') IconComponent = Package;
-    else if (clean === 'in-production' || clean === 'in_production') IconComponent = Layers;
-    else if (clean === 'quality-check' || clean === 'quality_check') IconComponent = Eye;
+    else if (clean === 'completed' || clean === 'delivered' || clean === 'smb-picked') IconComponent = CheckCircle2;
+    else if (clean === 'awaiting-pickup' || clean === 'awaiting_pickup' || clean === 'ready-to-ship' || clean === 'ready_to_ship' || clean === 'smb-ready') IconComponent = Package;
+    else if (clean === 'in-production' || clean === 'in_production' || clean === 'preparing-order' || clean === 'preparing_order') IconComponent = Layers;
     else if (clean === 'processing') IconComponent = Clock;
+    else if (clean === 'on-hold' || clean === 'pending-payment') IconComponent = Clock;
     else if (clean === 'cancelled' || clean === 'refunded') IconComponent = XCircle;
   } else if (variant) {
     const variantMap: Record<string, { color: string; bg: string }> = {

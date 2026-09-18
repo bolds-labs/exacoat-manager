@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Order } from '../../types';
+import { Order, getOrderRma } from '../../types';
 import { Badge } from '../ui/Badge';
 import { GlassCard } from '../ui/GlassCard';
 import { formatCurrency, formatDateTime } from '../../lib/formatters';
@@ -10,7 +10,9 @@ import {
   Package, 
   Truck, 
   Calendar,
-  Layers
+  Layers,
+  ShieldCheck,
+  Sparkles
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -31,12 +33,47 @@ export const OrderTable: React.FC<OrderTableProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
+  const warrantyCount = useMemo(() => {
+    return orders.filter(o => getOrderRma(o)?.order_type === 'Warranty').length;
+  }, [orders]);
+
+  const redeemCount = useMemo(() => {
+    return orders.filter(o => getOrderRma(o)?.order_type === 'Redeem').length;
+  }, [orders]);
+
   const filteredOrders = useMemo(() => {
     return orders.filter(order => {
       // Status filter
       if (statusFilter !== 'all') {
-        const cleanStatus = String(order.status || '').replace('wc-', '').toLowerCase();
-        if (cleanStatus !== statusFilter) return false;
+        if (statusFilter === 'warranty') {
+          const rma = getOrderRma(order);
+          if (rma?.order_type !== 'Warranty') return false;
+        } else if (statusFilter === 'redeem') {
+          const rma = getOrderRma(order);
+          if (rma?.order_type !== 'Redeem') return false;
+        } else {
+          const cleanStatus = String(order.status || '').replace('wc-', '').toLowerCase();
+          if (statusFilter === 'store-pickup') {
+            const shippingMethodName = String((order as any).shipping_method || (order as any).shipping_lines?.[0]?.method_title || '').toLowerCase();
+            const shippingAddressStr = `${order.shipping?.address_1 || ''} ${order.shipping?.city || ''} ${order.shipping?.postcode || ''}`.toLowerCase();
+            const isPickup = shippingMethodName.includes('pickup') || 
+              shippingMethodName.includes('store') || 
+              shippingAddressStr.includes('summarecon') || 
+              shippingAddressStr.includes('bekasi store') || 
+              shippingAddressStr.includes('ruby commercial') ||
+              cleanStatus === 'smb-ready' ||
+              cleanStatus === 'smb-picked';
+            if (!isPickup) return false;
+          } else if (statusFilter === 'ready-to-ship') {
+            if (!['ready-to-ship', 'ready_to_ship', 'awaiting-pickup', 'awaiting_pickup', 'smb-ready'].includes(cleanStatus)) return false;
+          } else if (statusFilter === 'preparing-order') {
+            if (!['preparing-order', 'preparing_order', 'in-production', 'in_production'].includes(cleanStatus)) return false;
+          } else if (statusFilter === 'on-hold') {
+            if (!['on-hold', 'pending-payment', 'pending'].includes(cleanStatus)) return false;
+          } else if (cleanStatus !== statusFilter) {
+            return false;
+          }
+        }
       }
 
       // Text query
@@ -56,7 +93,6 @@ export const OrderTable: React.FC<OrderTableProps> = ({
           itemNames.includes(q)
         );
       }
-
       return true;
     });
   }, [orders, statusFilter, searchQuery]);
@@ -70,23 +106,40 @@ export const OrderTable: React.FC<OrderTableProps> = ({
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 custom-scrollbar">
             {[
               { key: 'all', label: 'All Orders' },
-              { key: 'processing', label: 'Processing' },
-              { key: 'in-production', label: 'In Production' },
+              { key: 'on-hold', label: 'Waiting for Payment' },
+              { key: 'processing', label: 'Payment confirmed' },
+              { key: 'preparing-order', label: 'Preparing order' },
+              { key: 'ready-to-ship', label: 'Waiting for Pickup' },
+              { key: 'store-pickup', label: 'Store Pickup (SMB)' },
               { key: 'shipped', label: 'Shipped' },
-              { key: 'completed', label: 'Delivered' },
+              { key: 'completed', label: 'Completed' },
+              { key: 'warranty', label: 'Warranty Claims', count: warrantyCount },
+              { key: 'redeem', label: 'Redeem (Fault)', count: redeemCount },
             ].map(tab => (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => setStatusFilter(tab.key)}
                 className={clsx(
-                  'px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer border',
+                  'px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer border flex items-center gap-1.5',
                   statusFilter === tab.key
                     ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 border-zinc-900 dark:border-white shadow-xs'
                     : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-transparent'
                 )}
               >
-                {tab.label}
+                <span>{tab.label}</span>
+                {tab.count !== undefined && tab.count > 0 && (
+                  <span className={clsx(
+                    "px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold",
+                    statusFilter === tab.key
+                      ? tab.key === 'redeem' ? "bg-amber-500 text-black font-extrabold" : "bg-emerald-500 text-white dark:bg-emerald-600"
+                      : tab.key === 'redeem'
+                      ? "bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-500/30"
+                      : "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                  )}>
+                    {tab.count}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -158,9 +211,23 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                     >
                       {/* Order Number & Date */}
                       <td className="py-3.5 px-4">
-                        <span className="font-mono font-bold text-zinc-900 dark:text-white block">
-                          {order.order_number || `#${order.id}`}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-mono font-bold text-zinc-900 dark:text-white">
+                            {order.order_number || `#${order.id}`}
+                          </span>
+                          {getOrderRma(order)?.order_type === 'Redeem' && (
+                            <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/15 border border-amber-500/30 px-1 py-0.5 rounded shadow-xs">
+                              <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                              REDEEM
+                            </span>
+                          )}
+                          {getOrderRma(order)?.order_type === 'Warranty' && (
+                            <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold text-sky-500 dark:text-sky-400 bg-sky-500/15 border border-sky-500/30 px-1 py-0.5 rounded shadow-xs">
+                              <ShieldCheck className="w-2.5 h-2.5 text-sky-400" />
+                              WARRANTY
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[10px] text-zinc-500 font-mono block mt-0.5">
                           {formatDateTime(order.created_at)}
                         </span>
@@ -222,7 +289,31 @@ export const OrderTable: React.FC<OrderTableProps> = ({
 
                       {/* Status */}
                       <td className="py-3.5 px-4 text-center">
-                        <Badge type="orderStatus" value={order.status} size="xs" />
+                        <div className="flex flex-col items-center gap-1">
+                          <Badge type="orderStatus" value={order.status} size="xs" />
+                          {getOrderRma(order)?.order_type === 'Redeem' && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30 whitespace-nowrap">
+                              <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                              Redeem (Fault)
+                            </span>
+                          )}
+                          {getOrderRma(order)?.order_type === 'Warranty' && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30 whitespace-nowrap">
+                              <ShieldCheck className="w-2.5 h-2.5" />
+                              Warranty Claim
+                            </span>
+                          )}
+                          {(() => {
+                            const shipMethod = String((order as any).shipping_method || (order as any).shipping_lines?.[0]?.method_title || '').toLowerCase();
+                            const shipAddr = `${order.shipping?.address_1 || ''} ${order.shipping?.city || ''}`.toLowerCase();
+                            const isPickup = shipMethod.includes('pickup') || shipMethod.includes('store') || shipAddr.includes('summarecon') || shipAddr.includes('bekasi store') || shipAddr.includes('ruby commercial');
+                            return isPickup ? (
+                              <span className="inline-flex items-center text-[9px] font-mono font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-1.5 py-0.5 rounded border border-[#f3aa18]/20 whitespace-nowrap">
+                                Store Pickup (SMB)
+                              </span>
+                            ) : null;
+                          })()}
+                        </div>
                       </td>
 
                       {/* Tracking */}
@@ -280,10 +371,22 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                 className="p-3.5 hover:bg-zinc-50 dark:hover:bg-white/[0.02] transition-colors cursor-pointer space-y-2.5"
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="font-mono font-bold text-xs text-zinc-900 dark:text-white">
                       {order.order_number || `#${order.id}`}
                     </span>
+                    {getOrderRma(order)?.order_type === 'Redeem' && (
+                      <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/20 border border-amber-500/40 px-1 py-0.2 rounded">
+                        <Sparkles className="w-2 h-2 text-amber-400" />
+                        REDEEM
+                      </span>
+                    )}
+                    {getOrderRma(order)?.order_type === 'Warranty' && (
+                      <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold text-sky-500 dark:text-sky-400 bg-sky-500/20 border border-sky-500/40 px-1 py-0.2 rounded">
+                        <ShieldCheck className="w-2 h-2 text-sky-400" />
+                        WARRANTY
+                      </span>
+                    )}
                     <span className="text-[10px] text-zinc-500 font-mono">
                       {formatDateTime(order.created_at)}
                     </span>

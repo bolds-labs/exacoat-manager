@@ -288,28 +288,34 @@ export function getIdentityStatusInfo(status: IdentityStatus | string | null | u
 export function getOrderStatusInfo(status: string | null | undefined) {
   const clean = String(status || '').replace('wc-', '').toLowerCase();
   switch (clean) {
+    case 'on-hold':
+    case 'pending-payment':
+      return { label: 'Waiting for Payment', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' };
     case 'processing':
-      return { label: 'Order Confirmed', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' };
+      return { label: 'Payment confirmed', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30' };
+    case 'preparing-order':
+    case 'preparing_order':
     case 'in-production':
     case 'in_production':
-      return { label: 'In Production', color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/30' };
-    case 'quality-check':
-    case 'quality_check':
-      return { label: 'Quality Check', color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/30' };
+      return { label: 'Preparing order', color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/30' };
+    case 'ready-to-ship':
+    case 'ready_to_ship':
     case 'awaiting-pickup':
     case 'awaiting_pickup':
-      return { label: 'Ready to Ship', color: 'text-amber-300', bg: 'bg-amber-500/10 border-amber-500/20' };
+      return { label: 'Waiting for Courier Pickup', color: 'text-sky-300', bg: 'bg-sky-500/10 border-sky-500/20' };
+    case 'smb-ready':
+      return { label: 'Ready for Pickup (SMB)', color: 'text-[#f3aa18]', bg: 'bg-[#f3aa18]/10 border-[#f3aa18]/30' };
+    case 'smb-picked':
+      return { label: 'Picked Up (SMB)', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30' };
     case 'shipped':
-      return { label: 'Shipped', color: 'text-sky-400', bg: 'bg-sky-500/10 border-sky-500/30' };
+      return { label: 'Shipped', color: 'text-indigo-400', bg: 'bg-indigo-500/10 border-indigo-500/30' };
     case 'completed':
     case 'delivered':
-      return { label: 'Delivered', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30' };
+      return { label: 'Completed', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30' };
     case 'cancelled':
       return { label: 'Cancelled', color: 'text-rose-400', bg: 'bg-rose-500/10 border-rose-500/30' };
     case 'refunded':
       return { label: 'Refunded', color: 'text-rose-400', bg: 'bg-rose-500/10 border-rose-500/30' };
-    case 'on-hold':
-      return { label: 'On Hold', color: 'text-zinc-400', bg: 'bg-zinc-800/50 border-zinc-700/50' };
     case 'pending':
     default:
       return { label: clean ? clean.replace('-', ' ') : 'Pending', color: 'text-zinc-400', bg: 'bg-zinc-800/50 border-zinc-700/50' };

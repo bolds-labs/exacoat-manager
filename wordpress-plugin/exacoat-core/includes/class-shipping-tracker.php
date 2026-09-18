@@ -47,13 +47,22 @@ class Exacoat_Shipping_Tracker {
 		add_action( 'wp_ajax_artmatter_admin_sync_17track', [ __CLASS__, 'ajax_admin_sync_trackingmore' ] );
 		add_action( 'wp_ajax_artmatter_refresh_order_tracking', [ __CLASS__, 'ajax_refresh_order_tracking' ] );
 		add_action( 'wp_ajax_nopriv_artmatter_refresh_order_tracking', [ __CLASS__, 'ajax_refresh_order_tracking' ] );
+
+		// 8. Automated Shipping Sync Cron for Active Domestic & International Orders (Every 6 Hours to conserve Biteship tokens)
+		add_filter( 'cron_schedules', [ __CLASS__, 'register_cron_intervals' ] );
+		add_action( 'exacoat_shipping_sync_cron', [ __CLASS__, 'cron_sync_active_shipments' ] );
+		add_action( 'exacoat_hourly_shipping_sync', [ __CLASS__, 'cron_sync_active_shipments' ] );
+		add_action( 'artmatter_hourly_shipping_sync', [ __CLASS__, 'cron_sync_active_shipments' ] );
+		if ( ! wp_next_scheduled( 'exacoat_shipping_sync_cron' ) ) {
+			wp_schedule_event( time() + 600, 'six_hours', 'exacoat_shipping_sync_cron' );
+		}
 	}
 
 	/**
 	 * Get Dynamic Carrier Registry
 	 */
 	public static function get_carrier_registry(): array {
-		$settings = Artmatter_Core::get_settings();
+		$settings = class_exists( 'Artmatter_Core' ) ? Artmatter_Core::get_settings() : [];
 		$default_carriers = [
 			'jne' => [
 				'name' => 'JNE Express',
@@ -300,13 +309,14 @@ class Exacoat_Shipping_Tracker {
 
 		if ( empty( $carrier_value ) || empty( $tracking_number ) ) return;
 
-		// Link directly to Artmatter native tracking page (/track)
+		// Link directly to Exacoat storefront tracking page (/track)
 		$billing_email = $order->get_billing_email();
+		$track_base    = function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'track' ) : home_url( '/track' );
 		$tracking_url  = add_query_arg( [
 			'order_id'    => $order->get_order_number(),
 			'order_email' => $billing_email,
 			'key'         => $order->get_order_key(),
-		], home_url( '/track' ) );
+		], $track_base );
 
 		$carriers = self::get_carrier_registry();
 		$carrier_label = $carriers[ $carrier_value ]['name'] ?? ucfirst( (string) $carrier_value );
@@ -423,11 +433,89 @@ class Exacoat_Shipping_Tracker {
 	}
 
 	/**
+	 * Get Biteship API Secret Key with dynamic multi-source fallback
+	 */
+	public static function get_biteship_api_key(): string {
+		$key = '';
+
+		// 1. Check Biteship Shipping Method instance if active
+		if ( class_exists( 'Exacoat_Biteship_Engine' ) && method_exists( 'Exacoat_Biteship_Engine', 'get_api_key' ) ) {
+			$key = Exacoat_Biteship_Engine::get_api_key();
+		}
+
+		// 2. Check Plugin Settings
+		if ( empty( $key ) && class_exists( 'Artmatter_Core' ) ) {
+			$settings = Artmatter_Core::get_settings();
+			$key = trim( (string) ( $settings['biteship_api_key'] ?? '' ) );
+		}
+
+		// 3. Check PHP Constant
+		if ( empty( $key ) && defined( 'BITESHIP_API_KEY' ) ) {
+			$key = trim( (string) BITESHIP_API_KEY );
+		}
+
+		// 4. Check wp_options for woocommerce_biteship_shipping_%_settings
+		if ( empty( $key ) ) {
+			global $wpdb;
+			if ( ! empty( $wpdb ) && is_object( $wpdb ) && ! empty( $wpdb->options ) ) {
+				$opt_val = $wpdb->get_var( "SELECT option_value FROM {$wpdb->options} WHERE option_name LIKE 'woocommerce_biteship_shipping_%_settings' ORDER BY option_id DESC LIMIT 1" );
+				if ( ! empty( $opt_val ) ) {
+					$parsed = maybe_unserialize( $opt_val );
+					if ( is_array( $parsed ) && ! empty( $parsed['api_key'] ) ) {
+						$key = trim( (string) $parsed['api_key'] );
+					}
+				}
+			}
+		}
+
+		// Guard: If the key is only 24 hex characters (Biteship token ID, e.g. 68cfd6c09b89f1001134ffa2) without JWT signature,
+		// or if key is empty, fallback to the validated production live token.
+		if ( empty( $key ) || ( strlen( $key ) === 24 && ctype_xdigit( $key ) ) || strpos( $key, 'biteship_live.' ) === false ) {
+			$fallback = 'biteship_live.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiRXhhY29hdCIsInVzZXJJZCI6IjY2ZDM1NmE0OWEyOGQzMDAxMjUyN2Q1NCIsImlhdCI6MTc1ODQ1MTM5Mn0.zAWrMuQusXZc8_V0AyJCRO09Yig4n9uUjqza4E5lXag';
+			if ( empty( $key ) || ( strlen( $key ) === 24 && ctype_xdigit( $key ) ) ) {
+				return $fallback;
+			}
+		}
+
+		return $key;
+	}
+
+	/**
+	 * Map internal carrier slug to Biteship official courier code
+	 */
+	public static function get_biteship_courier_code( string $carrier ): string {
+		$carrier = strtolower( trim( $carrier ) );
+		$map = [
+			'jne'           => 'jne',
+			'jne express'   => 'jne',
+			'sicepat'       => 'sicepat',
+			'pos'           => 'pos',
+			'pos indonesia' => 'pos',
+			'posindonesia'  => 'pos',
+			'pos-indonesia' => 'pos',
+			'jnt'           => 'jnt',
+			'j&t'           => 'jnt',
+			'j&t express'   => 'jnt',
+			'anteraja'      => 'anteraja',
+			'tiki'          => 'tiki',
+			'wahana'        => 'wahana',
+			'lion'          => 'lion',
+			'lion parcel'   => 'lion',
+			'ninja'         => 'ninja',
+			'ninja van'     => 'ninja',
+		];
+		return $map[ $carrier ] ?? '';
+	}
+
+	/**
 	 * Get TrackingMore API Key
 	 */
 	public static function get_trackingmore_api_key(): string {
-		$settings = Artmatter_Core::get_settings();
-		$key = trim( $settings['trackingmore_api_key'] ?? ( $settings['17track_api_key'] ?? '' ) );
+		$key = '';
+		if ( class_exists( 'Artmatter_Core' ) ) {
+			$settings = Artmatter_Core::get_settings();
+			$key = trim( $settings['trackingmore_api_key'] ?? ( $settings['17track_api_key'] ?? '' ) );
+		}
 		return ! empty( $key ) ? $key : 'bkows1gc-6uu5-si5b-f4st-bqvk3lae9u5c';
 	}
 
@@ -624,43 +712,141 @@ class Exacoat_Shipping_Tracker {
 	}
 
 	/**
-	 * Sync Live Checkpoints from TrackingMore v4 API for a Specific Order
+	 * Query Biteship Tracking API for Domestic Shipments (SiCepat, JNE, POS, J&T, etc.)
 	 */
-	public static function sync_order_tracking( int $order_id ): array {
+	public static function sync_biteship_tracking( string $tracking_number, string $carrier, int $order_id ): array {
+		$tracking_number = trim( $tracking_number );
+		if ( empty( $tracking_number ) ) {
+			return [ 'success' => false, 'message' => 'Missing tracking number' ];
+		}
+
+		$biteship_courier = self::get_biteship_courier_code( $carrier );
+		if ( empty( $biteship_courier ) ) {
+			return [ 'success' => false, 'message' => "Carrier {$carrier} is not supported by Biteship tracking" ];
+		}
+
+		$api_key = self::get_biteship_api_key();
+		if ( empty( $api_key ) ) {
+			return [ 'success' => false, 'message' => 'Missing Biteship API key' ];
+		}
+
+		$endpoint = sprintf( 'https://api.biteship.com/v1/trackings/%s/couriers/%s', rawurlencode( $tracking_number ), rawurlencode( $biteship_courier ) );
+
+		$response = wp_remote_get( $endpoint, [
+			'headers' => [
+				'Authorization' => $api_key,
+				'Content-Type'  => 'application/json',
+			],
+			'timeout' => 15,
+		] );
+
+		if ( is_wp_error( $response ) ) {
+			return [ 'success' => false, 'message' => $response->get_error_message() ];
+		}
+
+		$status_code = wp_remote_retrieve_response_code( $response );
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( 200 !== $status_code || empty( $body['success'] ) ) {
+			$err_msg = $body['error'] ?? ( $body['message'] ?? "Biteship tracking returned HTTP {$status_code}" );
+			return [ 'success' => false, 'message' => $err_msg, 'status_code' => $status_code, 'raw' => $body ];
+		}
+
+		// Process tracking data
+		$biteship_status = strtolower( trim( (string) ( $body['status'] ?? '' ) ) );
+		$history = is_array( $body['history'] ?? null ) ? $body['history'] : [];
+		$dest_addr = trim( (string) ( $body['destination']['address'] ?? '' ) );
+
+		$formatted_checkpoints = [];
+		foreach ( $history as $h ) {
+			$note = trim( (string) ( $h['note'] ?? '' ) );
+			$time = trim( (string) ( $h['updated_at'] ?? '' ) );
+			$stg  = trim( (string) ( $h['status'] ?? '' ) );
+			if ( empty( $note ) && empty( $time ) ) {
+				continue;
+			}
+
+			// Extract location from note if available
+			$location = '';
+			if ( preg_match( '/\[([^\]]+)\]/', $note, $lm ) ) {
+				$location = trim( $lm[1] );
+			} elseif ( preg_match( '/(?:di|ke)\s+([A-Za-z0-9\s]+)/i', $note, $lm ) ) {
+				$location = trim( $lm[1] );
+			} elseif ( 'delivered' === $stg && ! empty( $dest_addr ) ) {
+				$location = $dest_addr;
+			}
+
+			$formatted_checkpoints[] = [
+				'time'        => $time,
+				'description' => $note,
+				'location'    => self::clean_checkpoint_location( $location ),
+				'stage'       => $stg,
+			];
+		}
+
+		// Sort chronologically descending (newest checkpoint first)
+		usort( $formatted_checkpoints, function( $a, $b ) {
+			$ta = ! empty( $a['time'] ) ? strtotime( $a['time'] ) : 0;
+			$tb = ! empty( $b['time'] ) ? strtotime( $b['time'] ) : 0;
+			return $tb <=> $ta;
+		} );
+
+		$order = wc_get_order( $order_id );
+		if ( $order ) {
+			if ( ! empty( $formatted_checkpoints ) ) {
+				$order->update_meta_data( '_artmatter_tracking_checkpoints', $formatted_checkpoints );
+				update_post_meta( $order_id, '_artmatter_tracking_checkpoints', $formatted_checkpoints );
+			}
+
+			$order->update_meta_data( '_biteship_latest_status', $biteship_status );
+			$order->update_meta_data( '_artmatter_trackingmore_latest_status', $biteship_status );
+			update_post_meta( $order_id, '_biteship_latest_status', $biteship_status );
+			update_post_meta( $order_id, '_artmatter_trackingmore_latest_status', $biteship_status );
+
+			$carriers = self::get_carrier_registry();
+			$carrier_label = $carriers[ $biteship_courier ]['name'] ?? ucfirst( $biteship_courier );
+			$latest_note = ! empty( $formatted_checkpoints[0]['description'] ) ? $formatted_checkpoints[0]['description'] : '';
+
+			// Status transition:
+			// If Biteship reports 'delivered', transition order to 'completed' (Delivered)
+			$current_status = $order->get_status();
+			if ( 'delivered' === $biteship_status ) {
+				if ( 'completed' !== $current_status ) {
+					$note_text = sprintf( 'Biteship: Package delivered by courier %s (%s). %s', $carrier_label, $tracking_number, $latest_note );
+					$order->update_status( 'completed', $note_text );
+				}
+			} elseif ( in_array( $biteship_status, [ 'picked', 'dropping_off', 'droppingoff', 'picking_up', 'in_transit' ], true ) ) {
+				if ( in_array( $current_status, [ 'processing', 'preparing-order', 'ready-to-ship', 'awaiting-pickup' ], true ) ) {
+					$note_text = sprintf( 'Biteship: Package in transit with courier %s (%s).', $carrier_label, $tracking_number );
+					$order->update_status( 'shipped', $note_text );
+				}
+			}
+
+			$order->save();
+		}
+
+		return [
+			'success'     => true,
+			'source'      => 'biteship',
+			'status'      => $biteship_status,
+			'checkpoints' => $formatted_checkpoints,
+			'raw'         => $body,
+		];
+	}
+
+	/**
+	 * Sync Live Checkpoints with TrackingMore v4 API
+	 */
+	public static function sync_trackingmore_tracking( int $order_id, string $tracking_number, string $carrier ): array {
 		$order = wc_get_order( $order_id );
 		if ( ! $order ) {
 			return [ 'success' => false, 'message' => 'Order not found' ];
-		}
-
-		$tracking_number = (string) ( $order->get_meta( 'tracking_number' ) 
-			?: ( $order->get_meta( '_tracking_number' ) 
-			?: ( $order->get_meta( '_artmatter_tracking_number' ) 
-			?: ( get_post_meta( $order_id, 'tracking_number', true ) 
-			?: ( get_post_meta( $order_id, '_tracking_number', true ) 
-			?: ( function_exists( 'get_field' ) ? (string) get_field( 'tracking_number', $order_id ) : '' ) ) ) ) ) );
-
-		if ( empty( $tracking_number ) ) {
-			$t_info = $order->get_meta( '_artmatter_tracking_info' ) ?: get_post_meta( $order_id, '_artmatter_tracking_info', true );
-			if ( is_array( $t_info ) && ! empty( $t_info['tracking_number'] ) ) {
-				$tracking_number = (string) $t_info['tracking_number'];
-			}
-		}
-
-		$tracking_number = trim( $tracking_number );
-
-		if ( empty( $tracking_number ) ) {
-			return [ 'success' => false, 'message' => 'Order has no tracking number' ];
 		}
 
 		$api_key = self::get_trackingmore_api_key();
 		if ( empty( $api_key ) ) {
 			return [ 'success' => false, 'message' => 'Missing TrackingMore API key' ];
 		}
-
-		$carrier = (string) ( $order->get_meta( 'carrier_id' ) 
-			?: ( $order->get_meta( '_carrier_id' ) 
-			?: ( get_post_meta( $order_id, 'carrier_id', true ) 
-			?: ( function_exists( 'get_field' ) ? (string) get_field( 'carrier_id', $order_id ) : '' ) ) ) );
 
 		// Query TrackingMore GET endpoint
 		$query_url = add_query_arg( [
@@ -710,7 +896,117 @@ class Exacoat_Shipping_Tracker {
 		self::process_trackingmore_item_update( $item, $order_id );
 
 		$checkpoints = $order->get_meta( '_artmatter_tracking_checkpoints' ) ?: get_post_meta( $order_id, '_artmatter_tracking_checkpoints', true );
-		return [ 'success' => true, 'checkpoints' => $checkpoints ?: [] ];
+		$latest_st   = $order->get_meta( '_artmatter_trackingmore_latest_status' ) ?: get_post_meta( $order_id, '_artmatter_trackingmore_latest_status', true );
+		return [ 'success' => true, 'source' => 'trackingmore', 'status' => $latest_st ?: '', 'checkpoints' => $checkpoints ?: [] ];
+	}
+
+	/**
+	 * Smart Dual-Engine Shipping Tracker (Biteship First for ID Couriers, TrackingMore for Goorita/International/Fallback)
+	 */
+	public static function sync_order_tracking( int $order_id ): array {
+		$order = wc_get_order( $order_id );
+		if ( ! $order ) {
+			return [ 'success' => false, 'message' => 'Order not found' ];
+		}
+
+		$tracking_number = (string) ( $order->get_meta( 'tracking_number' ) 
+			?: ( $order->get_meta( '_tracking_number' ) 
+			?: ( $order->get_meta( '_artmatter_tracking_number' ) 
+			?: ( get_post_meta( $order_id, 'tracking_number', true ) 
+			?: ( get_post_meta( $order_id, '_tracking_number', true ) 
+			?: ( function_exists( 'get_field' ) ? (string) get_field( 'tracking_number', $order_id ) : '' ) ) ) ) ) );
+
+		if ( empty( $tracking_number ) ) {
+			$t_info = $order->get_meta( '_artmatter_tracking_info' ) ?: get_post_meta( $order_id, '_artmatter_tracking_info', true );
+			if ( is_array( $t_info ) && ! empty( $t_info['tracking_number'] ) ) {
+				$tracking_number = (string) $t_info['tracking_number'];
+			}
+		}
+
+		$tracking_number = trim( $tracking_number );
+		if ( empty( $tracking_number ) ) {
+			return [ 'success' => false, 'message' => 'Order has no tracking number' ];
+		}
+
+		$carrier = (string) ( $order->get_meta( 'carrier_id' ) 
+			?: ( $order->get_meta( '_carrier_id' ) 
+			?: ( get_post_meta( $order_id, 'carrier_id', true ) 
+			?: ( function_exists( 'get_field' ) ? (string) get_field( 'carrier_id', $order_id ) : '' ) ) ) );
+
+		$carrier = strtolower( trim( $carrier ) );
+
+		// 1. If courier is supported by Biteship (SiCepat, JNE, POS, J&T, etc.), query Biteship first
+		$biteship_courier = self::get_biteship_courier_code( $carrier );
+		if ( ! empty( $biteship_courier ) ) {
+			$biteship_res = self::sync_biteship_tracking( $tracking_number, $biteship_courier, $order_id );
+			if ( ! empty( $biteship_res['success'] ) ) {
+				return $biteship_res;
+			}
+			// If Biteship fails (e.g. invalid/expired waybill or temporary sync delay), smoothly fall through to TrackingMore
+		}
+
+		// 2. Query TrackingMore (Primary for Goorita/International, or reliable domestic fallback)
+		return self::sync_trackingmore_tracking( $order_id, $tracking_number, $carrier );
+	}
+
+	/**
+	 * Register Custom Cron Intervals (3 Hours & 6 Hours)
+	 */
+	public static function register_cron_intervals( $schedules ) {
+		$schedules['three_hours'] = [
+			'interval' => 3 * HOUR_IN_SECONDS,
+			'display'  => __( 'Every Three Hours', 'exacoat-core' ),
+		];
+		$schedules['six_hours'] = [
+			'interval' => 6 * HOUR_IN_SECONDS,
+			'display'  => __( 'Every Six Hours', 'exacoat-core' ),
+		];
+		return $schedules;
+	}
+
+	/**
+	 * Periodic Automated Shipping Sync Cron (Every 6 Hours)
+	 * Checks active shipped orders from the past 30 days and updates delivered status automatically.
+	 * Conserves Biteship API quota by enforcing a minimum 4-hour cooldown per order.
+	 */
+	public static function cron_sync_active_shipments() {
+		if ( ! function_exists( 'wc_get_orders' ) ) {
+			return;
+		}
+
+		$orders = wc_get_orders( [
+			'status'       => [ 'wc-shipped', 'shipped', 'wc-ready-to-ship', 'ready-to-ship', 'wc-awaiting-pickup', 'awaiting-pickup' ],
+			'limit'        => 50,
+			'date_created' => '>=' . ( time() - ( 30 * DAY_IN_SECONDS ) ),
+			'orderby'      => 'date',
+			'order'        => 'DESC',
+		] );
+
+		if ( empty( $orders ) ) {
+			return;
+		}
+
+		$now          = time();
+		$min_interval = 4 * HOUR_IN_SECONDS; // Guard: check an order at most once per 4 hours
+
+		foreach ( $orders as $order ) {
+			$order_id = $order->get_id();
+			$tracking = (string) ( $order->get_meta( 'tracking_number' ) ?: ( $order->get_meta( '_tracking_number' ) ?: '' ) );
+			if ( empty( $tracking ) ) {
+				continue;
+			}
+
+			$last_sync = (int) $order->get_meta( '_last_tracking_sync_time' );
+			if ( $last_sync > 0 && ( $now - $last_sync ) < $min_interval ) {
+				continue; // Skip: checked recently, save Biteship tokens
+			}
+
+			$order->update_meta_data( '_last_tracking_sync_time', $now );
+			$order->save();
+			update_post_meta( $order_id, '_last_tracking_sync_time', $now );
+
+			self::sync_order_tracking( $order_id );
+		}
 	}
 
 	/**
@@ -1178,23 +1474,39 @@ class Exacoat_Shipping_Tracker {
 	 * Register REST Routes for Tracking Webhooks & Public Order Tracking
 	 */
 	public static function register_rest_routes() {
-		register_rest_route( 'artmatter-core/v1', '/shipping/track', [
-			'methods'             => [ 'GET', 'POST' ],
-			'callback'            => [ __CLASS__, 'rest_track_order' ],
-			'permission_callback' => '__return_true',
-		] );
+		$namespaces = [ 'exacoat-core/v1', 'artmatter-core/v1' ];
 
-		register_rest_route( 'artmatter-core/v1', '/shipping/trackingmore-webhook', [
-			'methods'             => [ 'POST', 'GET' ],
-			'callback'            => [ __CLASS__, 'handle_trackingmore_webhook' ],
-			'permission_callback' => '__return_true',
-		] );
+		foreach ( $namespaces as $ns ) {
+			register_rest_route( $ns, '/shipping/track', [
+				'methods'             => [ 'GET', 'POST' ],
+				'callback'            => [ __CLASS__, 'rest_track_order' ],
+				'permission_callback' => '__return_true',
+			] );
 
-		register_rest_route( 'artmatter-core/v1', '/shipping/17track-webhook', [
-			'methods'             => [ 'POST', 'GET' ],
-			'callback'            => [ __CLASS__, 'handle_trackingmore_webhook' ],
-			'permission_callback' => '__return_true',
-		] );
+			register_rest_route( $ns, '/shipping/trackingmore-webhook', [
+				'methods'             => [ 'POST', 'GET' ],
+				'callback'            => [ __CLASS__, 'handle_trackingmore_webhook' ],
+				'permission_callback' => '__return_true',
+			] );
+
+			register_rest_route( $ns, '/shipping/17track-webhook', [
+				'methods'             => [ 'POST', 'GET' ],
+				'callback'            => [ __CLASS__, 'handle_trackingmore_webhook' ],
+				'permission_callback' => '__return_true',
+			] );
+
+			register_rest_route( $ns, '/shipping/biteship-webhook', [
+				'methods'             => [ 'POST', 'GET' ],
+				'callback'            => [ __CLASS__, 'handle_biteship_webhook' ],
+				'permission_callback' => '__return_true',
+			] );
+
+			register_rest_route( $ns, '/shipping/sync-order', [
+				'methods'             => [ 'POST', 'GET' ],
+				'callback'            => [ __CLASS__, 'rest_sync_order_tracking' ],
+				'permission_callback' => '__return_true',
+			] );
+		}
 	}
 
 	/**
@@ -1323,6 +1635,86 @@ class Exacoat_Shipping_Tracker {
 
 	public static function handle_17track_webhook( WP_REST_Request $request ) {
 		return self::handle_trackingmore_webhook( $request );
+	}
+
+	/**
+	 * Handle incoming webhook updates from Biteship
+	 */
+	public static function handle_biteship_webhook( WP_REST_Request $request ) {
+		$params = $request->get_json_params() ?: $request->get_params();
+
+		if ( class_exists( 'Artmatter_Logger' ) ) {
+			Artmatter_Logger::info( 'shipping', 'Biteship Webhook received', [ 'payload' => $params ] );
+		}
+
+		$waybill_id = sanitize_text_field( (string) ( $params['courier_waybill_id'] ?? ( $params['waybill_id'] ?? '' ) ) );
+
+		if ( empty( $waybill_id ) ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Missing waybill ID' ], 400 );
+		}
+
+		global $wpdb;
+		$order_id = 0;
+
+		// 1. Check HPOS table if available
+		$hpos_table = $wpdb->prefix . 'wc_orders_meta';
+		if ( $wpdb->get_var( "SHOW TABLES LIKE '{$hpos_table}'" ) === $hpos_table ) {
+			$order_id = (int) $wpdb->get_var( $wpdb->prepare(
+				"SELECT order_id FROM {$hpos_table} WHERE meta_key IN ('tracking_number', '_tracking_number', '_artmatter_tracking_number') AND meta_value = %s LIMIT 1",
+				$waybill_id
+			) );
+		}
+
+		// 2. Fallback to postmeta
+		if ( $order_id <= 0 ) {
+			$order_id = (int) $wpdb->get_var( $wpdb->prepare(
+				"SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key IN ('tracking_number', '_tracking_number', '_artmatter_tracking_number') AND meta_value = %s LIMIT 1",
+				$waybill_id
+			) );
+		}
+
+		if ( $order_id > 0 ) {
+			$sync_res = self::sync_order_tracking( $order_id );
+			return new WP_REST_Response( [
+				'success'  => true,
+				'order_id' => $order_id,
+				'message'  => 'Order tracking synced from Biteship webhook',
+				'data'     => $sync_res,
+			], 200 );
+		}
+
+		return new WP_REST_Response( [ 'success' => true, 'message' => 'Webhook received but order not found' ], 200 );
+	}
+
+	/**
+	 * REST: On-demand sync order tracking directly from manager or client
+	 */
+	public static function rest_sync_order_tracking( WP_REST_Request $request ) {
+		$order_id = (int) ( $request->get_param( 'order_id' ) ?? $request->get_param( 'orderId' ) ?? 0 );
+		if ( $order_id <= 0 ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Invalid order ID' ], 400 );
+		}
+
+		$result = self::sync_order_tracking( $order_id );
+		$order  = wc_get_order( $order_id );
+
+		if ( ! empty( $result['success'] ) && $order ) {
+			$status = $order->get_status();
+			return new WP_REST_Response( [
+				'success'       => true,
+				'order_id'      => $order_id,
+				'status'        => $status,
+				'status_label'  => wc_get_order_status_name( $status ),
+				'checkpoints'   => $result['checkpoints'] ?? [],
+				'latest_status' => $result['status'] ?? ( $order->get_meta( '_artmatter_trackingmore_latest_status' ) ?: '' ),
+				'source'        => $result['source'] ?? 'tracking',
+			], 200 );
+		}
+
+		return new WP_REST_Response( [
+			'success' => false,
+			'message' => $result['message'] ?? 'Failed syncing tracking',
+		], 400 );
 	}
 
 	/**

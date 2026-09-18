@@ -6,6 +6,7 @@
 
 import { getEnv, getWordPressBaseUrl, getWcCredentials } from './env';
 import { CreateReviewPayload, Order, OrderItem, OrderTracking, DeviceConfiguratorProfile, ConfiguratorProfileSummary, DeviceFamily } from '../types';
+import { renderEmailHtmlLocally } from './emailRenderer';
 
 
 // ==========================================
@@ -96,6 +97,61 @@ export interface PrivateSettingStatus {
   has_gemini_api_key?: boolean;
   has_openai_api_key?: boolean;
   [key: string]: any;
+}
+
+export interface ShopeeOrderItem {
+  item_id: number;
+  item_name: string;
+  model_id: number;
+  model_name: string;
+  quantity: number;
+  price: number;
+  image_url: string;
+}
+
+export interface ShopeeExistingClaim {
+  already_claimed: boolean;
+  existing_order_id?: number;
+  existing_order_num?: string;
+  claim_type?: 'Warranty' | 'Redeem';
+  created_at?: string;
+}
+
+export interface ShopeeOrder {
+  order_sn: string;
+  order_status: string;
+  create_time: string;
+  create_timestamp: number;
+  pay_time?: string | null;
+  buyer_username: string;
+  buyer_user_id: number;
+  total_amount: number;
+  currency: string;
+  shipping_carrier: string;
+  tracking_number: string;
+  buyer_note: string;
+  recipient_name: string;
+  recipient_phone: string;
+  recipient_address: string;
+  recipient_city: string;
+  recipient_postcode: string;
+  items: ShopeeOrderItem[];
+  already_claimed: boolean;
+  existing_claim?: ShopeeExistingClaim;
+}
+
+export interface ShopeeSettings {
+  environment: 'sandbox' | 'live';
+  test_partner_id: number;
+  test_partner_key_set: boolean;
+  live_partner_id: number;
+  live_partner_key_set: boolean;
+  redirect_url: string;
+  shop_id: number;
+  shop_name: string;
+  is_connected: boolean;
+  token_expires_at: number;
+  last_synced_at: number;
 }
 
 export interface CatalogReconciliationResult {
@@ -287,8 +343,12 @@ async function authenticatedFetch(input: RequestInfo | URL, init: RequestInit = 
       headers.set('Authorization', auth.Authorization);
     }
 
-    // Attach WooCommerce credentials to /wp-json/wc/ requests if not using JWT Bearer
-    if (targetUrlObj.pathname.includes('/wp-json/wc/') && !auth.Authorization?.startsWith('Bearer')) {
+    // Attach WooCommerce credentials to /wp-json/wc/, /wp-json/exacoat-core/, and /wp-json/artmatter-core/ requests if not using JWT Bearer
+    const isWcOrPluginRoute = targetUrlObj.pathname.includes('/wp-json/wc/') ||
+      targetUrlObj.pathname.includes('/wp-json/exacoat-core/') ||
+      targetUrlObj.pathname.includes('/wp-json/artmatter-core/');
+
+    if (isWcOrPluginRoute && !auth.Authorization?.startsWith('Bearer')) {
       const { key, secret } = getWcCredentials();
       if (key && secret && !targetUrlObj.searchParams.has('consumer_key')) {
         targetUrlObj.searchParams.set('consumer_key', key);
@@ -363,8 +423,10 @@ function parseConfiguratorFromItem(item: any): any[] {
 
 function enrichOrder(order: any): Order {
   const metaList = order.meta_data || [];
-  const trackingMeta = metaList.find((m: any) => m.key === 'tracking_number');
-  const carrierMeta = metaList.find((m: any) => m.key === '_shipping_carrier');
+  const trackingMeta = metaList.find((m: any) => m.key === 'tracking_number' || m.key === '_tracking_number' || m.key === '_artmatter_tracking_number');
+  const carrierMeta = metaList.find((m: any) => m.key === '_shipping_carrier' || m.key === 'carrier_id' || m.key === '_carrier_id');
+  const checkpointsMeta = metaList.find((m: any) => m.key === '_artmatter_tracking_checkpoints');
+  const latestStatusMeta = metaList.find((m: any) => m.key === '_biteship_latest_status' || m.key === '_artmatter_trackingmore_latest_status' || m.key === '_artmatter_17track_latest_status');
   const districtMeta = metaList.find((m: any) => m.key === '_shipping_district');
   const subdistrictMeta = metaList.find((m: any) => m.key === '_shipping_subdistrict');
   const phoneMeta = metaList.find((m: any) => m.key === '_shipping_phone_formatted' || m.key === '_billing_phone');
@@ -376,7 +438,10 @@ function enrichOrder(order: any): Order {
 
   const tracking: OrderTracking | null = trackingMeta?.value && trackingMeta.value !== '⚠️' ? {
     courier: carrierMeta?.value ? String(carrierMeta.value) : 'Standard',
+    carrier_id: carrierMeta?.value ? String(carrierMeta.value) : undefined,
     tracking_number: String(trackingMeta.value),
+    latest_status: latestStatusMeta?.value ? String(latestStatusMeta.value) : undefined,
+    checkpoints: Array.isArray(checkpointsMeta?.value) ? checkpointsMeta.value : undefined,
   } : null;
 
   return {
@@ -750,16 +815,34 @@ export async function generateFandomDescriptionAi(
 // Email System
 // ==========================================
 
-export async function sendDirectZeptoMailEmail(recipientEmail: string, templateKey: string, recipientName = 'Customer', variables: Record<string, any> = {}): Promise<{ success: boolean; latency_ms?: number; message?: string; error?: string }> {
+export async function sendDirectZeptoMailEmail(
+  arg1: string,
+  arg2: string,
+  recipientName = 'Customer',
+  variables: Record<string, any> = {}
+): Promise<{ success: boolean; latency_ms?: number; message?: string; error?: string }> {
   const start = performance.now();
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/email/send`;
+
+  // Support both calling patterns: (recipientEmail, templateKey) and (templateKey, recipientEmail)
+  const isArg1Email = typeof arg1 === 'string' && arg1.includes('@');
+  const recipientEmail = isArg1Email ? arg1 : arg2;
+  const templateKey = isArg1Email ? arg2 : arg1;
 
   try {
     const res = await authenticatedFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ recipient_email: recipientEmail, template_key: templateKey, recipient_name: recipientName, variables }),
+      body: JSON.stringify({
+        recipient_email: recipientEmail,
+        template_key: templateKey,
+        template_slug: templateKey,
+        slug: templateKey,
+        event: templateKey,
+        recipient_name: recipientName,
+        variables,
+      }),
     });
     const latency = Math.round(performance.now() - start);
     const data = await res.json();
@@ -773,7 +856,25 @@ export async function sendDirectZeptoMailEmail(recipientEmail: string, templateK
   }
 }
 
-export async function previewEmailHtml(templateKey: string, sampleData: Record<string, any> = {}): Promise<{ success: boolean; subject?: string; html?: string; error?: string }> {
+export async function previewEmailHtml(
+  templateKey: string,
+  sampleData: Record<string, any> = {}
+): Promise<{ success: boolean; subject?: string; html?: string; error?: string }> {
+  // 1. Attempt client-side render first for instant, reliable, zero-latency preview
+  try {
+    const local = renderEmailHtmlLocally(templateKey, sampleData);
+    if (local && local.html) {
+      return {
+        success: true,
+        subject: local.subject,
+        html: local.html,
+      };
+    }
+  } catch (err: any) {
+    console.warn('[previewEmailHtml] Local render fallback to remote:', err);
+  }
+
+  // 2. Fallback to WordPress REST endpoint
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/email/preview`;
 
@@ -781,11 +882,24 @@ export async function previewEmailHtml(templateKey: string, sampleData: Record<s
     const res = await authenticatedFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ template_key: templateKey, variables: sampleData }),
+      body: JSON.stringify({
+        template_key: templateKey,
+        template_slug: templateKey,
+        slug: templateKey,
+        event: templateKey,
+        variables: sampleData,
+      }),
     });
-    return await res.json();
+    const data = await res.json();
+    return data;
   } catch (err: any) {
-    return { success: false, error: err.message };
+    // 3. If remote fails, attempt local render again as safeguard
+    try {
+      const local = renderEmailHtmlLocally(templateKey, sampleData);
+      return { success: true, subject: local.subject, html: local.html };
+    } catch {
+      return { success: false, error: err.message };
+    }
   }
 }
 
@@ -972,6 +1086,33 @@ export async function fulfillOrderDirect(orderId: number | string, payload: {
       message: data.message,
       error: data.message,
     };
+  } catch (err: any) {
+    return { success: false, error: err.message, message: err.message };
+  }
+}
+
+export async function syncOrderTrackingDirect(orderId: number | string): Promise<{
+  success: boolean;
+  order_id?: number;
+  status?: string;
+  status_label?: string;
+  latest_status?: string;
+  checkpoints?: any[];
+  source?: string;
+  message?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/shipping/sync-order`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ order_id: Number(orderId) }),
+    });
+    const data = await res.json();
+    return data;
   } catch (err: any) {
     return { success: false, error: err.message, message: err.message };
   }
@@ -1585,10 +1726,16 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
     const res = await authenticatedFetch(url, { headers: { Accept: 'application/json' } });
     const data = await res.json();
     if (res.ok && data?.success && data?.profile) {
+      const cleanLayers = (data.profile.layers || []).filter((l: any) => {
+        const lName = (l.name || '').toLowerCase();
+        return lName !== 'device' && !lName.includes('device-body') && !lName.includes('model') && !lName.includes('coverage') && !lName.includes('360') && !lName.includes('series') && !lName.includes('logo') && !lName.includes('cutout');
+      });
+
       return {
         success: true,
         profile: {
           ...data.profile,
+          layers: cleanLayers,
           configurator_version: data.profile.configurator_version || 'v1',
         },
         finishes: data.finishes || [],
@@ -1607,11 +1754,16 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
       if (modernRaw) {
         const parsedModern = typeof modernRaw === 'string' ? parseMetaJsonString(modernRaw)[0] : modernRaw;
         if (parsedModern && (parsedModern.layers || parsedModern.views)) {
+          const cleanLayers = (parsedModern.layers || []).filter((l: any) => {
+            const lName = (l.name || '').toLowerCase();
+            return lName !== 'device' && !lName.includes('device-body') && !lName.includes('model') && !lName.includes('coverage') && !lName.includes('360') && !lName.includes('series') && !lName.includes('logo') && !lName.includes('cutout');
+          });
           const finishesRes = await fetchGlobalFinishesDirect();
           return {
             success: true,
             profile: {
               ...parsedModern,
+              layers: cleanLayers,
               configurator_version: parsedModern.configurator_version || 'v1',
             },
             finishes: finishesRes.finishes || []
@@ -1682,10 +1834,42 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
         }
       });
 
+      // Detect Coverage and Logo Cutout options from layers
+      const hasCoverageFromLayers = layers.some((l: any) => {
+        const n = (l.name || '').toLowerCase();
+        return n.includes('model') || n.includes('coverage') || n.includes('360');
+      });
+      const hasLogoFromLayers = layers.some((l: any) => {
+        const n = (l.name || '').toLowerCase();
+        return n.includes('logo') || n.includes('cutout');
+      });
+
+      const convertedVariants: any[] = [];
+      if (hasCoverageFromLayers || family === 'phone') {
+        convertedVariants.push({
+          id: 'coverage',
+          name: 'Coverage',
+          options: [
+            { id: 'model_cut', name: 'Model Cut', price_diff: 0 },
+            { id: 'model_360', name: 'Model 360°', price_diff: 40000 },
+          ],
+        });
+      }
+      if (hasLogoFromLayers || family === 'laptop' || (p.name || '').toLowerCase().includes('iphone') || (p.name || '').toLowerCase().includes('ipad')) {
+        convertedVariants.push({
+          id: 'logo_cutout',
+          name: 'Logo Cutout',
+          options: [
+            { id: 'with_logo', name: 'With Logo Cutout', price_diff: 0 },
+            { id: 'without_logo', name: 'Without Logo Cutout', price_diff: 0 },
+          ],
+        });
+      }
+
       let convertedLayers = layers
         .filter((l: any) => {
           const lName = (l.name || '').toLowerCase();
-          return lName !== 'device' && !lName.includes('model') && !lName.includes('series');
+          return lName !== 'device' && !lName.includes('device-body') && !lName.includes('model') && !lName.includes('coverage') && !lName.includes('360') && !lName.includes('series') && !lName.includes('logo') && !lName.includes('cutout');
         })
         .map((l: any, idx: number) => {
         const rawChoices = contentByLayer[l._id] || [];
@@ -1792,7 +1976,8 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
             { id: 'starlight', name: 'Starlight', hex: '#f0e4d3' },
           ],
           views: convertedViews.length > 0 ? convertedViews : [{ id: 'main_view', name: 'Main View', is_default: true, aspect_ratio: '1:1', canvas_dimensions: { width: 1000, height: 1000 } }],
-          layers: convertedLayers
+          layers: convertedLayers,
+          variants: convertedVariants,
         },
         finishes: finishesRes.finishes || []
       };
@@ -1948,6 +2133,970 @@ export async function duplicateProductDirect(params: {
       };
     }
     return { success: false, error: data?.message || data?.error || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ==========================================
+// Tracking Number Pool & Auto-Resi Engine
+// ==========================================
+
+export interface CarrierInventory {
+  name: string;
+  code: string;
+  auto_resi: boolean;
+  available: number;
+  assigned_total: number;
+  low_stock: boolean;
+  sample_available?: string[];
+}
+
+export interface TrackingPoolInventory {
+  jne: CarrierInventory;
+  sicepat: CarrierInventory;
+  pos: CarrierInventory;
+  goorita: CarrierInventory;
+  [key: string]: CarrierInventory;
+}
+
+export interface TrackingAssignmentRecord {
+  number: string;
+  order_id: number;
+  assigned_at: string;
+  carrier: string;
+}
+
+export async function fetchTrackingPoolInventory(): Promise<{
+  success: boolean;
+  inventory?: TrackingPoolInventory;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/tracking-pool`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, inventory: data.inventory };
+    }
+    return { success: false, error: data?.error || data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function addTrackingNumbersToPool(
+  carrier: string,
+  numbers: string | string[]
+): Promise<{
+  success: boolean;
+  added_count?: number;
+  total_pool?: number;
+  carrier?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/tracking-pool/add`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ carrier, numbers }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        added_count: data.added_count,
+        total_pool: data.total_pool,
+        carrier: data.carrier,
+      };
+    }
+    return { success: false, error: data?.error || data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function deleteTrackingNumbersFromPool(
+  carrier: string,
+  numbers: string[]
+): Promise<{
+  success: boolean;
+  deleted_count?: number;
+  total_pool?: number;
+  carrier?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/tracking-pool/delete`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ carrier, numbers }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        deleted_count: data.deleted_count,
+        total_pool: data.total_pool,
+        carrier: data.carrier,
+      };
+    }
+    return { success: false, error: data?.error || data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchTrackingPoolHistory(
+  carrier?: string,
+  limit: number = 50
+): Promise<{
+  success: boolean;
+  history?: TrackingAssignmentRecord[];
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = new URL(`${base}/wp-json/exacoat-core/v1/tracking-pool/history`);
+  if (carrier) url.searchParams.set('carrier', carrier);
+  url.searchParams.set('limit', String(limit));
+
+  try {
+    const res = await authenticatedFetch(url.toString(), {
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, history: data.history };
+    }
+    return { success: false, error: data?.error || data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ==========================================
+// WhatsApp Customer Notification Service
+// ==========================================
+
+export interface WhatsAppSettings {
+  enabled: boolean;
+  phone_number_id: string;
+  access_token: string;
+  business_account_id: string;
+  telegram_bot_token: string;
+  telegram_chat_id: string;
+  telegram_alerts_enabled: boolean;
+  events: {
+    processing: boolean;
+    completed: boolean;
+    smb_ready: boolean;
+    smb_picked: boolean;
+  };
+}
+
+export async function fetchWhatsAppSettings(): Promise<{
+  success: boolean;
+  settings?: WhatsAppSettings;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/whatsapp/settings`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, settings: data.settings };
+    }
+    return { success: false, error: data?.error || data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function saveWhatsAppSettings(
+  settings: Partial<WhatsAppSettings>
+): Promise<{
+  success: boolean;
+  settings?: WhatsAppSettings;
+  message?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/whatsapp/settings`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(settings),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, settings: data.settings, message: data.message };
+    }
+    return { success: false, error: data?.error || data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function testWhatsAppMessage(
+  phone: string,
+  template: string = 'notif_order_confirmed'
+): Promise<{
+  success: boolean;
+  message_id?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/whatsapp/test`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ phone, template }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, message_id: data.message_id };
+    }
+    return { success: false, error: data?.error || data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ==========================================
+// BCA Payment Webhook Status
+// ==========================================
+
+export interface BcaWebhookStatus {
+  success: boolean;
+  webhook_url: string;
+  unmatched_count: number;
+  unmatched_mutations: Array<{
+    amount: number;
+    description: string;
+    timestamp: string;
+    ip?: string;
+  }>;
+}
+
+export async function fetchBcaWebhookStatus(): Promise<{
+  success: boolean;
+  status?: BcaWebhookStatus;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/bca/status`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, status: data };
+    }
+    return { success: false, error: data?.error || data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ==========================================
+// 48-Hour Installation Warranty & RMA Review
+// ==========================================
+
+export interface WarrantyClaimDetails {
+  success: boolean;
+  order_id: number;
+  order_number: string;
+  parent_order_id: number;
+  parent_order_number: string;
+  rma_status: string;
+  claim_reason?: string;
+  customer_notes?: string;
+  video_proof_url?: string;
+  video_deleted: boolean;
+  video_deleted_at?: string;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  rejection_reason?: string;
+  items?: Array<{ name: string; quantity: number; image?: string }>;
+  customer_name?: string;
+  customer_phone?: string;
+  customer_email?: string;
+  shipping_address?: string;
+}
+
+export async function fetchWarrantyClaimDetails(
+  orderId: number
+): Promise<{ success: boolean; data?: WarrantyClaimDetails; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/warranty/claim/${orderId}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, data };
+    }
+    return { success: false, error: data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function reviewWarrantyClaimDirect(
+  orderId: number,
+  action: 'approve' | 'reject',
+  reason?: string,
+  adminName?: string
+): Promise<{ success: boolean; rma_status?: string; video_deleted?: boolean; message?: string; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/warranty/review`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        order_id: orderId,
+        action,
+        reason: reason || '',
+        admin_name: adminName || 'Operations Manager',
+      }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        rma_status: data.rma_status,
+        video_deleted: data.video_deleted,
+        message: data.message,
+      };
+    }
+    return { success: false, error: data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export interface ShippingRateOption {
+  id: string;
+  courier: string;
+  service: string;
+  label: string;
+  price: number;
+  duration: string;
+}
+
+export async function fetchShippingRatesDirect(
+  postcode: string,
+  country: string = 'ID'
+): Promise<{ success: boolean; rates?: ShippingRateOption[]; postcode?: string; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/warranty/shipping-rates`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        postcode,
+        destination_country: country,
+      }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, rates: data.rates || [], postcode: data.postcode };
+    }
+    return { success: false, error: data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export interface ManualWarrantyItem {
+  product_id: number;
+  name?: string;
+  quantity?: number;
+  configuration?: string;
+  configurator_data?: any[];
+  device_model?: string;
+}
+
+export interface ManualWarrantyClaimPayload {
+  source_type: 'existing_order' | 'marketplace';
+  rma_type?: 'Warranty' | 'Redeem';
+  parent_order_id?: number;
+  selected_item_ids?: Array<number | string>;
+  selected_parts?: Record<string | number, string[]>;
+  channel?: 'Tokopedia' | 'Shopee' | 'TikTok Shop' | 'Manual / WhatsApp' | string;
+  marketplace_invoice?: string;
+  customer_name?: string;
+  customer_phone?: string;
+  customer_email?: string;
+  shipping_address?: {
+    address_1: string;
+    city?: string;
+    state?: string;
+    postcode: string;
+    country?: string;
+  };
+  items?: ManualWarrantyItem[];
+  courier_id?: string;
+  courier_label?: string;
+  shipping_cost?: number;
+  waive_shipping?: boolean;
+  claim_reason?: string;
+  initial_status?: 'processing' | 'on-hold' | 'preparing-order';
+  notes?: string;
+  admin_name?: string;
+}
+
+export interface RmaClaimLogItem {
+  id: number;
+  name: string;
+  quantity: number;
+  configuration?: string;
+  claimed_parts?: string[];
+  device?: string;
+}
+
+export interface RmaClaimLogEntry {
+  order_id: number;
+  order_number: string;
+  created_at: string;
+  type: 'Warranty' | 'Redeem';
+  status: 'pending_review' | 'approved' | 'rejected';
+  order_status: string;
+  channel: string;
+  original_invoice: string;
+  customer_name: string;
+  customer_phone?: string;
+  customer_email?: string;
+  claim_reason?: string;
+  customer_notes?: string;
+  shipping_cost: number;
+  waived_shipping: boolean;
+  video_url?: string;
+  video_deleted?: boolean;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  items: RmaClaimLogItem[];
+}
+
+export interface RmaClaimsStats {
+  total: number;
+  warranty_count: number;
+  redeem_count: number;
+  pending_count: number;
+  approved_count: number;
+  rejected_count: number;
+  waived_count: number;
+}
+
+export interface RmaClaimsLogResponse {
+  success: boolean;
+  claims: RmaClaimLogEntry[];
+  stats: RmaClaimsStats;
+  pagination: {
+    page: number;
+    per_page: number;
+    total_items: number;
+    total_pages: number;
+  };
+  error?: string;
+}
+
+export async function createManualWarrantyClaimDirect(
+  payload: ManualWarrantyClaimPayload
+): Promise<{
+  success: boolean;
+  replacement_order_id?: number;
+  replacement_order_number?: string;
+  shipping_cost?: number;
+  message?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/warranty/manual-claim`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        replacement_order_id: data.replacement_order_id,
+        replacement_order_number: data.replacement_order_number,
+        shipping_cost: data.shipping_cost,
+        message: data.message,
+      };
+    }
+    return { success: false, error: data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchRmaClaimsLogDirect(params?: {
+  type?: 'all' | 'Warranty' | 'Redeem';
+  status?: 'all' | 'pending_review' | 'approved' | 'rejected';
+  channel?: string;
+  search?: string;
+  page?: number;
+  per_page?: number;
+}): Promise<RmaClaimsLogResponse> {
+  const base = getWordPressBaseUrl();
+  const searchParams = new URLSearchParams();
+  if (params?.type && params.type !== 'all') searchParams.set('type', params.type);
+  if (params?.status && params.status !== 'all') searchParams.set('status', params.status);
+  if (params?.channel && params.channel !== 'all') searchParams.set('channel', params.channel);
+  if (params?.search) searchParams.set('search', params.search);
+  if (params?.page) searchParams.set('page', String(params.page));
+  if (params?.per_page) searchParams.set('per_page', String(params.per_page));
+
+  const url = `${base}/wp-json/exacoat-core/v1/warranty/claims-log?${searchParams.toString()}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        claims: data.claims || [],
+        stats: data.stats || {
+          total: 0,
+          warranty_count: 0,
+          redeem_count: 0,
+          pending_count: 0,
+          approved_count: 0,
+          rejected_count: 0,
+          waived_count: 0,
+        },
+        pagination: data.pagination || {
+          page: 1,
+          per_page: 20,
+          total_items: 0,
+          total_pages: 1,
+        },
+      };
+    }
+    return {
+      success: false,
+      claims: [],
+      stats: { total: 0, warranty_count: 0, redeem_count: 0, pending_count: 0, approved_count: 0, rejected_count: 0, waived_count: 0 },
+      pagination: { page: 1, per_page: 20, total_items: 0, total_pages: 1 },
+      error: data?.message || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      claims: [],
+      stats: { total: 0, warranty_count: 0, redeem_count: 0, pending_count: 0, approved_count: 0, rejected_count: 0, waived_count: 0 },
+      pagination: { page: 1, per_page: 20, total_items: 0, total_pages: 1 },
+      error: err.message,
+    };
+  }
+}
+
+export async function checkMarketplaceInvoiceDirect(
+  invoice: string,
+  channel?: string
+): Promise<{
+  success: boolean;
+  available: boolean;
+  existing_order_id?: number;
+  existing_order_number?: string;
+  existing_order_type?: string;
+  order_date?: string;
+  message?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/warranty/check-invoice`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ invoice: invoice.trim(), channel }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        available: Boolean(data.available),
+        existing_order_id: data.existing_order_id,
+        existing_order_number: data.existing_order_number,
+        existing_order_type: data.existing_order_type,
+        order_date: data.order_date,
+        message: data.message,
+      };
+    }
+    return {
+      success: false,
+      available: false,
+      error: data?.message || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, available: false, error: err.message };
+  }
+}
+
+// ==========================================
+// 30-Day Money Back Guarantee System
+// ==========================================
+
+export interface GuaranteeClaimEntry {
+  order_id: number;
+  order_number: string;
+  order_status: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone?: string;
+  shipped_at: string;
+  days_since_shipped: number;
+  guarantee_status: 'pending_return' | 'package_received' | 'refunded' | 'rejected';
+  refund_method: 'store_credit' | 'bank_transfer' | 'paypal';
+  refund_amount: number;
+  refund_amount_fmt: string;
+  refund_destination: string;
+  return_courier?: string;
+  return_tracking_number?: string;
+  submitted_at: string;
+  reason?: string;
+  claimed_items: string[];
+}
+
+export interface GuaranteeClaimsStats {
+  total: number;
+  pending_return: number;
+  package_received: number;
+  refunded: number;
+  rejected: number;
+}
+
+export interface GuaranteeClaimsLogResponse {
+  success: boolean;
+  claims: GuaranteeClaimEntry[];
+  stats: GuaranteeClaimsStats;
+  pagination: {
+    page: number;
+    per_page: number;
+    total_items: number;
+    total_pages: number;
+  };
+  error?: string;
+}
+
+export async function fetchGuaranteeClaimsDirect(params?: {
+  status?: string;
+  search?: string;
+  page?: number;
+  per_page?: number;
+}): Promise<GuaranteeClaimsLogResponse> {
+  const base = getWordPressBaseUrl();
+  const searchParams = new URLSearchParams();
+  if (params?.status && params.status !== 'all') searchParams.set('status', params.status);
+  if (params?.search) searchParams.set('search', params.search);
+  if (params?.page) searchParams.set('page', String(params.page));
+  if (params?.per_page) searchParams.set('per_page', String(params.per_page));
+
+  const url = `${base}/wp-json/exacoat-core/v1/guarantee/claims-log?${searchParams.toString()}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        claims: data.claims || [],
+        stats: data.stats || { total: 0, pending_return: 0, package_received: 0, refunded: 0, rejected: 0 },
+        pagination: data.pagination || { page: 1, per_page: 20, total_items: 0, total_pages: 1 },
+      };
+    }
+    return {
+      success: false,
+      claims: [],
+      stats: { total: 0, pending_return: 0, package_received: 0, refunded: 0, rejected: 0 },
+      pagination: { page: 1, per_page: 20, total_items: 0, total_pages: 1 },
+      error: data?.message || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      claims: [],
+      stats: { total: 0, pending_return: 0, package_received: 0, refunded: 0, rejected: 0 },
+      pagination: { page: 1, per_page: 20, total_items: 0, total_pages: 1 },
+      error: err.message,
+    };
+  }
+}
+
+export async function processGuaranteeActionDirect(
+  orderId: number,
+  action: 'mark_received' | 'approve_refund' | 'reject',
+  notes?: string
+): Promise<{
+  success: boolean;
+  status?: string;
+  refund_amount?: string;
+  email_dispatched?: boolean;
+  message?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/guarantee/action`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        order_id: orderId,
+        action,
+        notes: notes?.trim(),
+      }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        status: data.status,
+        refund_amount: data.refund_amount,
+        email_dispatched: data.email_dispatched,
+        message: data.message,
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ==========================================
+// Shopee Open Platform API v2 Bridge
+// ==========================================
+
+export async function fetchShopeeOrdersDirect(): Promise<{
+  success: boolean;
+  orders?: ShopeeOrder[];
+  total?: number;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/orders`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        orders: data.orders || [],
+        total: data.total || (data.orders || []).length,
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function syncShopeeOrdersDirect(): Promise<{
+  success: boolean;
+  orders?: ShopeeOrder[];
+  total_synced?: number;
+  synced_at?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/sync`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        orders: data.orders || [],
+        total_synced: data.total_synced || (data.orders || []).length,
+        synced_at: data.synced_at,
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchShopeeSettingsDirect(): Promise<{
+  success: boolean;
+  settings?: ShopeeSettings;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/settings`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        settings: data.settings,
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function saveShopeeSettingsDirect(
+  settings: Partial<{
+    environment: 'sandbox' | 'live';
+    test_partner_id: number;
+    test_partner_key: string;
+    live_partner_id: number;
+    live_partner_key: string;
+    redirect_url: string;
+    shop_id: number;
+    shop_name: string;
+  }>
+): Promise<{
+  success: boolean;
+  settings?: ShopeeSettings;
+  message?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/settings`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(settings),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        settings: data.settings,
+        message: data.message,
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function getShopeeAuthUrlDirect(): Promise<{
+  success: boolean;
+  auth_url?: string;
+  environment?: string;
+  partner_id?: number;
+  redirect_url?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/auth-url`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        auth_url: data.auth_url,
+        environment: data.environment,
+        partner_id: data.partner_id,
+        redirect_url: data.redirect_url,
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
   } catch (err: any) {
     return { success: false, error: err.message };
   }

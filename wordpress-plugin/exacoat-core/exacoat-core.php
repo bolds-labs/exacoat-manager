@@ -3,7 +3,7 @@
  * Plugin Name:       Exacoat Core Platform
  * Plugin URI:        https://exacoat.com
  * Description:       Proprietary e-commerce core engine, configurator manager, and ERP workstation integration for Exacoat.
- * Version:           0.0.9
+ * Version:           0.0.15
  * Author:            Exacoat
  * Author URI:        https://exacoat.com
  * License:           Proprietary
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'EXACOAT_CORE_VERSION' ) ) {
-	define( 'EXACOAT_CORE_VERSION', '0.0.9' );
+	define( 'EXACOAT_CORE_VERSION', '0.0.15' );
 }
 
 // Ensure sufficient PHP memory for high-resolution product image processing, thumbnail regeneration, and Bricks asset compiling
@@ -289,6 +289,14 @@ require_once EXACOAT_CORE_PATH . 'includes/class-customer-auth.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-review-manager.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-pages-controller.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-configurator-engine.php';
+require_once EXACOAT_CORE_PATH . 'includes/class-image-sizes.php';
+require_once EXACOAT_CORE_PATH . 'includes/class-export-manager.php';
+require_once EXACOAT_CORE_PATH . 'includes/class-bca-payment-webhook.php';
+require_once EXACOAT_CORE_PATH . 'includes/class-tracking-pool.php';
+require_once EXACOAT_CORE_PATH . 'includes/class-whatsapp-service.php';
+require_once EXACOAT_CORE_PATH . 'includes/class-warranty-manager.php';
+require_once EXACOAT_CORE_PATH . 'includes/class-guarantee-manager.php';
+require_once EXACOAT_CORE_PATH . 'includes/class-shopee-client.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-webhook-dispatcher.php';
 require_once EXACOAT_CORE_PATH . 'admin/class-admin-settings.php';
 require_once EXACOAT_CORE_PATH . 'admin/class-github-updater.php';
@@ -296,6 +304,46 @@ require_once EXACOAT_CORE_PATH . 'admin/class-github-updater.php';
 // Initialize Headless Pages REST Controller
 if ( class_exists( 'Exacoat_Pages_Controller' ) ) {
 	Exacoat_Pages_Controller::init();
+}
+
+// Initialize Custom Image Sizes & Media Derivative Engine
+if ( class_exists( 'Exacoat_Image_Sizes' ) ) {
+	Exacoat_Image_Sizes::init();
+}
+
+// Initialize Logistics Export Manager (JNE & Goorita)
+if ( class_exists( 'Exacoat_Export_Manager' ) ) {
+	Exacoat_Export_Manager::init();
+}
+
+// Initialize BCA Automated Payment Webhook & Unique Code Engine
+if ( class_exists( 'Exacoat_BCA_Payment_Webhook' ) ) {
+	Exacoat_BCA_Payment_Webhook::init();
+}
+
+// Initialize Automated Tracking Pool Dispenser Engine
+if ( class_exists( 'Exacoat_Tracking_Pool' ) ) {
+	Exacoat_Tracking_Pool::init();
+}
+
+// Initialize Automated WhatsApp Notification Engine
+if ( class_exists( 'Exacoat_WhatsApp_Service' ) ) {
+	Exacoat_WhatsApp_Service::init();
+}
+
+// Initialize 48-Hour Installation Warranty & RMA Engine
+if ( class_exists( 'Exacoat_Warranty_Manager' ) ) {
+	Exacoat_Warranty_Manager::init();
+}
+
+// Initialize 30-Day Money Back Guarantee Manager
+if ( class_exists( 'Exacoat_Guarantee_Manager' ) ) {
+	Exacoat_Guarantee_Manager::init();
+}
+
+// Initialize Shopee Open Platform API v2 Engine
+if ( class_exists( 'Exacoat_Shopee_Client' ) ) {
+	Exacoat_Shopee_Client::init();
 }
 
 // Safe version tracking on admin_init

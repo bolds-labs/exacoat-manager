@@ -23,6 +23,10 @@ class Exacoat_Admin_Settings {
 		add_action( 'wp_ajax_artmatter_flush_permalinks', [ __CLASS__, 'ajax_flush_permalinks' ] );
 		add_action( 'wp_ajax_exacoat_revert_flat_media', [ __CLASS__, 'ajax_revert_flat_media' ] );
 		add_action( 'wp_ajax_artmatter_revert_flat_media', [ __CLASS__, 'ajax_revert_flat_media' ] );
+		add_action( 'wp_ajax_exacoat_save_whatsapp_settings', [ __CLASS__, 'ajax_save_whatsapp_settings' ] );
+		add_action( 'wp_ajax_exacoat_test_whatsapp', [ __CLASS__, 'ajax_test_whatsapp' ] );
+		add_action( 'wp_ajax_exacoat_add_tracking_numbers', [ __CLASS__, 'ajax_add_tracking_numbers' ] );
+		add_action( 'wp_ajax_exacoat_get_tracking_inventory', [ __CLASS__, 'ajax_get_tracking_inventory' ] );
 	}
 
 	public static function suppress_third_party_notices() {
@@ -144,6 +148,124 @@ class Exacoat_Admin_Settings {
 		];
 
 		wp_send_json_success( $results );
+	}
+
+	/**
+	 * AJAX Handler: Save WhatsApp Settings
+	 */
+	public static function ajax_save_whatsapp_settings() {
+		if ( ! current_user_can( 'manage_woocommerce' ) && ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( [ 'message' => 'Unauthorized administrator access.' ] );
+		}
+
+		if ( ! class_exists( 'Exacoat_WhatsApp_Service' ) ) {
+			wp_send_json_error( [ 'message' => 'WhatsApp service engine not loaded.' ] );
+		}
+
+		$enabled           = ! empty( $_POST['enabled'] );
+		$phone_number_id   = sanitize_text_field( wp_unslash( $_POST['phone_number_id'] ?? '' ) );
+		$access_token      = sanitize_text_field( wp_unslash( $_POST['access_token'] ?? '' ) );
+		$business_acc_id   = sanitize_text_field( wp_unslash( $_POST['business_account_id'] ?? '' ) );
+		$telegram_token    = sanitize_text_field( wp_unslash( $_POST['telegram_bot_token'] ?? '' ) );
+		$telegram_chat_id  = sanitize_text_field( wp_unslash( $_POST['telegram_chat_id'] ?? '' ) );
+		$telegram_alerts   = ! empty( $_POST['telegram_alerts_enabled'] );
+
+		$events = [
+			'processing' => ! empty( $_POST['event_processing'] ),
+			'completed'  => ! empty( $_POST['event_completed'] ),
+			'smb_ready'  => ! empty( $_POST['event_smb_ready'] ),
+			'smb_picked' => ! empty( $_POST['event_smb_picked'] ),
+		];
+
+		$payload = [
+			'enabled'                 => $enabled,
+			'phone_number_id'         => $phone_number_id,
+			'access_token'            => $access_token,
+			'business_account_id'     => $business_acc_id,
+			'telegram_bot_token'      => $telegram_token,
+			'telegram_chat_id'        => $telegram_chat_id,
+			'telegram_alerts_enabled' => $telegram_alerts,
+			'events'                  => $events,
+		];
+
+		Exacoat_WhatsApp_Service::update_settings( $payload );
+
+		wp_send_json_success( [
+			'message'  => 'WhatsApp service configuration saved successfully.',
+			'settings' => Exacoat_WhatsApp_Service::get_settings(),
+		] );
+	}
+
+	/**
+	 * AJAX Handler: Dispatch WhatsApp Test Message
+	 */
+	public static function ajax_test_whatsapp() {
+		if ( ! current_user_can( 'manage_woocommerce' ) && ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( [ 'message' => 'Unauthorized administrator access.' ] );
+		}
+
+		if ( ! class_exists( 'Exacoat_WhatsApp_Service' ) ) {
+			wp_send_json_error( [ 'message' => 'WhatsApp service engine not loaded.' ] );
+		}
+
+		$to_phone = sanitize_text_field( wp_unslash( $_POST['phone'] ?? '' ) );
+		$template = sanitize_text_field( wp_unslash( $_POST['template'] ?? 'notif_order_confirmed' ) );
+
+		if ( empty( $to_phone ) ) {
+			wp_send_json_error( [ 'message' => 'Please provide a valid destination phone number.' ] );
+		}
+
+		$result = Exacoat_WhatsApp_Service::send_test_message( $to_phone, $template );
+
+		if ( $result['success'] ) {
+			wp_send_json_success( $result );
+		} else {
+			wp_send_json_error( $result );
+		}
+	}
+
+	/**
+	 * AJAX Handler: Add Tracking Numbers to Pool
+	 */
+	public static function ajax_add_tracking_numbers() {
+		if ( ! current_user_can( 'manage_woocommerce' ) && ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( [ 'message' => 'Unauthorized administrator access.' ] );
+		}
+
+		if ( ! class_exists( 'Exacoat_Tracking_Pool' ) ) {
+			wp_send_json_error( [ 'message' => 'Tracking pool engine not loaded.' ] );
+		}
+
+		$carrier = sanitize_text_field( wp_unslash( $_POST['carrier'] ?? '' ) );
+		$numbers = sanitize_textarea_field( wp_unslash( $_POST['numbers'] ?? '' ) );
+
+		if ( empty( $carrier ) || empty( $numbers ) ) {
+			wp_send_json_error( [ 'message' => 'Carrier and tracking numbers are required.' ] );
+		}
+
+		$result = Exacoat_Tracking_Pool::add_tracking_numbers( $carrier, $numbers );
+
+		if ( $result['success'] ) {
+			wp_send_json_success( $result );
+		} else {
+			wp_send_json_error( $result );
+		}
+	}
+
+	/**
+	 * AJAX Handler: Get Live Tracking Inventory
+	 */
+	public static function ajax_get_tracking_inventory() {
+		if ( ! current_user_can( 'manage_woocommerce' ) && ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( [ 'message' => 'Unauthorized administrator access.' ] );
+		}
+
+		if ( ! class_exists( 'Exacoat_Tracking_Pool' ) ) {
+			wp_send_json_error( [ 'message' => 'Tracking pool engine not loaded.' ] );
+		}
+
+		$inventory = Exacoat_Tracking_Pool::get_inventory();
+		wp_send_json_success( $inventory );
 	}
 
 	/**

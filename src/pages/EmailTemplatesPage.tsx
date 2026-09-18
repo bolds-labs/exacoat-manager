@@ -90,7 +90,8 @@ export const EmailTemplatesPage: React.FC = () => {
     const targetEvent = eventKey || selectedEvent;
     setPreviewEventName(targetEvent);
     setIsPreviewLoading(true);
-    const res = await previewEmailHtml(targetEvent);
+    const tmpl = ALL_EMAIL_TEMPLATES.find(t => t.key === targetEvent);
+    const res = await previewEmailHtml(targetEvent, tmpl?.defaults || {});
     setIsPreviewLoading(false);
 
     if (res.success && res.html) {

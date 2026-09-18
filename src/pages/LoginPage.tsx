@@ -15,13 +15,15 @@ interface LoginPageProps {
 }
 
 export const LoginPage: React.FC<LoginPageProps> = () => {
-  const { login, loginAsDevAdmin } = useAuth();
+  const { login, loginAsDevAdmin, resetPassword } = useAuth();
   const { showToast } = useToast();
 
   const [email, setEmail] = useState('admin@exacoat.com');
   const [password, setPassword] = useState('••••••••••••');
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,6 +40,26 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
       }
     } catch (err: any) {
       setErrorMsg(err?.message || 'Authentication error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) {
+      setErrorMsg('Please enter your account email address.');
+      return;
+    }
+    setErrorMsg('');
+    setIsSubmitting(true);
+
+    try {
+      await resetPassword(email);
+      setResetSent(true);
+      showToast('success', 'Recovery Dispatched', `If an account exists for ${email}, a reset link has been sent.`);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Failed to request reset link.');
     } finally {
       setIsSubmitting(false);
     }
@@ -85,90 +107,169 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Email Input */}
-          <div className="space-y-1.5">
-            <label htmlFor="login-email" className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 block">
-              Account Email
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
-                <Mail className="w-4 h-4" />
+        {isForgotPassword ? (
+          <form onSubmit={handleResetPassword} className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="reset-email" className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 block">
+                Account Email
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
+                  <Mail className="w-4 h-4" />
+                </div>
+                <input
+                  type="email"
+                  id="reset-email"
+                  name="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="admin@exacoat.com"
+                  className="w-full pl-10 pr-4 py-3 sm:py-3.5 bg-zinc-900/80 border border-white/[0.08] focus:border-[#f3aa18] rounded-2xl text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none transition-all font-sans"
+                />
               </div>
-              <input
-                type="email"
-                id="login-email"
-                name="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="admin@exacoat.com"
-                className="w-full pl-10 pr-4 py-3 sm:py-3.5 bg-zinc-900/80 border border-white/[0.08] focus:border-[#f3aa18] rounded-2xl text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none transition-all font-sans"
-              />
+              <p className="text-[11px] text-zinc-500 font-mono mt-1">
+                Enter your registered administrator or manager email to receive password reset instructions.
+              </p>
             </div>
-          </div>
 
-          {/* Password Input */}
-          <div className="space-y-1.5">
-            <label htmlFor="password-field" className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 block">
-              Password
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
-                <Key className="w-4 h-4" />
+            {resetSent && (
+              <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs space-y-1 text-center font-sans">
+                <p className="font-bold text-amber-300">Recovery Instructions Dispatched</p>
+                <p className="text-zinc-400 text-[11px]">
+                  If that account is registered in Exacoat, a secure reset link has been sent.
+                </p>
               </div>
-              <input
-                type="password"
-                id="password-field"
-                name="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••••••"
-                className="w-full pl-10 pr-4 py-3 sm:py-3.5 bg-zinc-900/80 border border-white/[0.08] focus:border-[#f3aa18] rounded-2xl text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none transition-all font-sans"
-              />
-            </div>
-          </div>
-
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full py-3.5 px-5 rounded-2xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs sm:text-sm shadow-xl transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer mt-3 font-sans"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin text-zinc-950" />
-                <span>Signing In...</span>
-              </>
-            ) : (
-              <>
-                <span>Sign In to Exacoat</span>
-                <ArrowRight className="w-4 h-4" />
-              </>
             )}
-          </button>
 
-          {/* Local Dev Fast Access */}
-          <div className="pt-3 border-t border-white/[0.08] space-y-2">
             <button
-              type="button"
-              onClick={() => {
-                loginAsDevAdmin();
-                showToast('success', 'Admin Session Active', 'Logged in as Exacoat Administrator.');
-              }}
-              className="w-full py-2.5 px-4 rounded-xl bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 border border-[#f3aa18]/25 text-[#f3aa18] font-mono font-bold text-xs shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full py-3.5 px-5 rounded-2xl bg-[#f3aa18] hover:bg-[#f5b838] text-zinc-950 font-bold text-xs sm:text-sm shadow-xl transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer mt-3 font-sans"
             >
-              <ShieldCheck className="w-4 h-4 text-[#f3aa18]" />
-              <span>Quick Access (Admin)</span>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-zinc-950" />
+                  <span>Dispatching Link...</span>
+                </>
+              ) : (
+                <span>Send Password Reset Link</span>
+              )}
             </button>
-            <p className="text-[10px] text-zinc-500 text-center font-mono">
-              Instant local access to Exacoat ERP
-            </p>
-          </div>
-        </form>
+
+            <div className="pt-2 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsForgotPassword(false);
+                  setResetSent(false);
+                  setErrorMsg('');
+                }}
+                className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer font-mono"
+              >
+                Back to Sign In
+              </button>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Email Input */}
+            <div className="space-y-1.5">
+              <label htmlFor="login-email" className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 block">
+                Account Email
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
+                  <Mail className="w-4 h-4" />
+                </div>
+                <input
+                  type="email"
+                  id="login-email"
+                  name="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="admin@exacoat.com"
+                  className="w-full pl-10 pr-4 py-3 sm:py-3.5 bg-zinc-900/80 border border-white/[0.08] focus:border-[#f3aa18] rounded-2xl text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none transition-all font-sans"
+                />
+              </div>
+            </div>
+
+            {/* Password Input */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label htmlFor="password-field" className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 block">
+                  Password
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsForgotPassword(true);
+                    setErrorMsg('');
+                  }}
+                  className="text-xs text-zinc-400 hover:text-[#f3aa18] transition-colors cursor-pointer font-mono"
+                >
+                  Forgot?
+                </button>
+              </div>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
+                  <Key className="w-4 h-4" />
+                </div>
+                <input
+                  type="password"
+                  id="password-field"
+                  name="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="w-full pl-10 pr-4 py-3 sm:py-3.5 bg-zinc-900/80 border border-white/[0.08] focus:border-[#f3aa18] rounded-2xl text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none transition-all font-sans"
+                />
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full py-3.5 px-5 rounded-2xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs sm:text-sm shadow-xl transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer mt-3 font-sans"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-zinc-950" />
+                  <span>Signing In...</span>
+                </>
+              ) : (
+                <>
+                  <span>Sign In to Exacoat</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+
+            {/* Local Dev Fast Access */}
+            <div className="pt-3 border-t border-white/[0.08] space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  loginAsDevAdmin();
+                  showToast('success', 'Admin Session Active', 'Logged in as Exacoat Administrator.');
+                }}
+                className="w-full py-2.5 px-4 rounded-xl bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 border border-[#f3aa18]/25 text-[#f3aa18] font-mono font-bold text-xs shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <ShieldCheck className="w-4 h-4 text-[#f3aa18]" />
+                <span>Quick Access (Admin)</span>
+              </button>
+              <p className="text-[10px] text-zinc-500 text-center font-mono">
+                Instant local access to Exacoat ERP
+              </p>
+            </div>
+          </form>
+        )}
 
         <div className="pt-3 border-t border-white/[0.06] text-center">
           <p className="text-[10px] sm:text-[11px] text-zinc-500 font-mono">

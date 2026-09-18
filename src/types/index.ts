@@ -63,8 +63,9 @@ export interface UserSession {
   role: ExacoatRole;
   fullName?: string;
   name?: string;
-  avatarUrl?: string;
   actualRole?: ExacoatRole;
+  token?: string;
+  expiresAt?: number;
   loginAt?: string;
   [key: string]: any;
 }
@@ -113,17 +114,26 @@ export interface SystemAnomaly {
 export type OrderStatus = 
   | 'wc-pending' 
   | 'pending'
+  | 'wc-on-hold' 
+  | 'on-hold'
   | 'wc-processing' 
   | 'processing'
+  | 'wc-preparing-order'
+  | 'preparing-order'
+  | 'preparing_order'
   | 'wc-in-production' 
   | 'in-production' 
   | 'in_production'
-  | 'wc-quality-check' 
-  | 'quality-check' 
-  | 'quality_check'
+  | 'wc-ready-to-ship'
+  | 'ready-to-ship'
+  | 'ready_to_ship'
   | 'wc-awaiting-pickup'
   | 'awaiting-pickup'
   | 'awaiting_pickup'
+  | 'wc-smb-ready'
+  | 'smb-ready'
+  | 'wc-smb-picked'
+  | 'smb-picked'
   | 'wc-shipped' 
   | 'shipped'
   | 'wc-completed' 
@@ -132,8 +142,6 @@ export type OrderStatus =
   | 'cancelled'
   | 'wc-refunded' 
   | 'refunded'
-  | 'wc-on-hold' 
-  | 'on-hold'
   | string;
 
 export interface OrderItem {
@@ -219,12 +227,21 @@ export interface OrderShipping {
   phone?: string;
 }
 
+export interface OrderTrackingCheckpoint {
+  time: string;
+  description: string;
+  location?: string;
+  stage?: string;
+}
+
 export interface OrderTracking {
   courier: string;
   carrier_id?: string;
   tracking_number: string;
   tracking_url?: string;
   shipped_at?: string;
+  latest_status?: string;
+  checkpoints?: OrderTrackingCheckpoint[];
 }
 
 export interface Order {
@@ -270,6 +287,94 @@ export interface Order {
   review?: OrderReview | null;
   review_invite_scheduled_at?: string | null;
   review_invited_at?: string | null;
+  number?: string;
+  line_items?: OrderItem[];
+  shipping_lines?: Array<{ id?: any; method_id?: string; method_title?: string; total?: string }>;
+  meta_data?: Array<{ id?: number; key: string; value: any }>;
+  rma?: OrderRmaDetails | null;
+}
+
+export interface OrderRmaDetails {
+  order_type?: string;
+  original_order_id?: number | string;
+  original_invoice?: number | string;
+  original_order_number?: string;
+  claim_reason?: string;
+  video_proof_url?: string;
+  video_file_path?: string;
+  status?: string;
+  video_deleted?: boolean;
+  video_deleted_at?: string | null;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  rejection_reason?: string;
+}
+
+export function getOrderRma(order: Order | null): OrderRmaDetails | null {
+  if (!order) return null;
+  if (order.rma) return order.rma;
+
+  const meta = order.meta_data || [];
+  const findMeta = (k: string) => meta.find((m) => m.key === k)?.value;
+
+  const orderType = findMeta('_rma_order_type') || (order as any)._rma_order_type;
+  const originalInvoice = findMeta('_rma_original_invoice') || (order as any)._rma_original_invoice;
+  const originalOrderId = findMeta('_rma_original_order_id') || (order as any)._rma_original_order_id;
+
+  if (!orderType && !originalInvoice && !originalOrderId) return null;
+
+  return {
+    order_type: orderType,
+    original_order_id: originalOrderId ? Number(originalOrderId) : undefined,
+    original_invoice: originalInvoice,
+    original_order_number: findMeta('_rma_original_order_number'),
+    claim_reason: findMeta('_rma_claim_reason'),
+    video_proof_url: findMeta('_rma_video_proof_url'),
+    video_file_path: findMeta('_rma_video_file_path'),
+    status: findMeta('_rma_status') || 'pending_review',
+    video_deleted_at: findMeta('_rma_video_deleted_at'),
+    video_deleted: Boolean(findMeta('_rma_video_deleted_at')),
+    reviewed_by: findMeta('_rma_reviewed_by'),
+    reviewed_at: findMeta('_rma_reviewed_at'),
+    rejection_reason: findMeta('_rma_rejection_reason'),
+  };
+}
+
+export interface OrderGuaranteeDetails {
+  has_claim: boolean;
+  status: 'pending_return' | 'package_received' | 'refunded' | 'rejected';
+  refund_method: 'store_credit' | 'bank_transfer' | 'paypal';
+  refund_amount: number;
+  destination: string;
+  return_courier?: string;
+  return_tracking?: string;
+  received_at?: string;
+  refunded_at?: string;
+  admin_notes?: string;
+  claim_data?: any;
+}
+
+export function getOrderGuarantee(order: Order | null): OrderGuaranteeDetails | null {
+  if (!order) return null;
+  const meta = order.meta_data || [];
+  const findMeta = (k: string) => meta.find((m) => m.key === k)?.value;
+
+  const hasClaim = findMeta('_has_guarantee_claim') === 'yes' || (order as any)._has_guarantee_claim === 'yes';
+  if (!hasClaim) return null;
+
+  return {
+    has_claim: true,
+    status: (findMeta('_guarantee_status') || 'pending_return') as any,
+    refund_method: (findMeta('_guarantee_refund_method') || 'store_credit') as any,
+    refund_amount: Number(findMeta('_guarantee_refund_amount') || 0),
+    destination: String(findMeta('_guarantee_destination') || ''),
+    return_courier: findMeta('_guarantee_return_courier'),
+    return_tracking: findMeta('_guarantee_return_tracking'),
+    received_at: findMeta('_guarantee_received_at'),
+    refunded_at: findMeta('_guarantee_refunded_at'),
+    admin_notes: findMeta('_guarantee_admin_notes'),
+    claim_data: findMeta('_guarantee_claim_data'),
+  };
 }
 
 export interface OrderReviewMedia {

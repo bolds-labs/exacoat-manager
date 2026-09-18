@@ -314,7 +314,210 @@ class Exacoat_Core {
 	 * Secure Verification for Manager ERP & External Bridge API Requests
 	 */
 	public static function verify_bridge_permission( WP_REST_Request $request ): bool {
-		return current_user_can( 'manage_options' ) || self::verify_manager_session( $request );
+		// 1. Native WordPress admin session cookie (wp-admin or authenticated AJAX)
+		if ( current_user_can( 'manage_options' ) || current_user_can( 'manage_woocommerce' ) ) {
+			return true;
+		}
+
+		// 2. WooCommerce REST API Keys (Consumer Key & Consumer Secret via Basic auth or params)
+		if ( self::verify_wc_api_credentials( $request ) ) {
+			return true;
+		}
+
+		// 3. WordPress Application Passwords (HTTP Basic Auth username:app_password)
+		if ( self::verify_application_password( $request ) ) {
+			return true;
+		}
+
+		// 4. Plugin Master Webhook Secret Header
+		if ( self::verify_secret_key( $request ) ) {
+			return true;
+		}
+
+		// 5. Customer / Staff Auth Bearer Session Token (from Exacoat_Customer_Auth)
+		if ( self::verify_customer_auth_session( $request ) ) {
+			return true;
+		}
+
+		// 6. Supabase User Session (if configured)
+		if ( self::verify_manager_session( $request ) ) {
+			return true;
+		}
+
+		// 7. Local development loopback (requests originating from localhost / local Vite dev server)
+		if ( self::is_local_dev_request( $request ) ) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Verify WooCommerce Consumer Key & Secret against wp_woocommerce_api_keys
+	 */
+	public static function verify_wc_api_credentials( WP_REST_Request $request ): bool {
+		global $wpdb;
+
+		$consumer_key = '';
+		$consumer_secret = '';
+
+		// A. Check HTTP Basic Auth header
+		$auth_header = (string) $request->get_header( 'Authorization' );
+		if ( ! empty( $auth_header ) && preg_match( '/^Basic\s+(.+)$/i', $auth_header, $matches ) ) {
+			$decoded = base64_decode( trim( $matches[1] ) );
+			if ( strpos( $decoded, ':' ) !== false ) {
+				list( $consumer_key, $consumer_secret ) = explode( ':', $decoded, 2 );
+			}
+		}
+
+		// B. Check URL query parameters or request body
+		if ( empty( $consumer_key ) ) {
+			$consumer_key = (string) ( $request->get_param( 'consumer_key' ) ?: $request->get_header( 'X-WC-Consumer-Key' ) );
+			$consumer_secret = (string) ( $request->get_param( 'consumer_secret' ) ?: $request->get_header( 'X-WC-Consumer-Secret' ) );
+		}
+
+		if ( empty( $consumer_key ) || empty( $consumer_secret ) ) {
+			return false;
+		}
+
+		$table_name = $wpdb->prefix . 'woocommerce_api_keys';
+		if ( $wpdb->get_var( $wpdb->prepare( "SHOW TABLES LIKE %s", $table_name ) ) !== $table_name ) {
+			return false;
+		}
+
+		$key_hash = function_exists( 'wc_api_hash' ) ? wc_api_hash( $consumer_key ) : hash( 'sha256', $consumer_key );
+		$row = $wpdb->get_row( $wpdb->prepare(
+			"SELECT key_id, user_id, permissions, consumer_secret FROM {$table_name} WHERE consumer_key = %s LIMIT 1",
+			$key_hash
+		) );
+
+		if ( ! $row ) {
+			return false;
+		}
+
+		if ( ! hash_equals( (string) $row->consumer_secret, (string) $consumer_secret ) ) {
+			return false;
+		}
+
+		if ( ! in_array( $row->permissions, [ 'write', 'read_write' ], true ) ) {
+			return false;
+		}
+
+		$user = get_user_by( 'id', (int) $row->user_id );
+		if ( ! $user || ( ! $user->has_cap( 'manage_woocommerce' ) && ! $user->has_cap( 'manage_options' ) && ! in_array( 'shop_manager', (array) $user->roles, true ) ) ) {
+			return false;
+		}
+
+		wp_set_current_user( (int) $row->user_id );
+		return true;
+	}
+
+	/**
+	 * Verify WordPress Application Password
+	 */
+	public static function verify_application_password( WP_REST_Request $request ): bool {
+		$auth_header = (string) $request->get_header( 'Authorization' );
+		if ( empty( $auth_header ) || ! preg_match( '/^Basic\s+(.+)$/i', $auth_header, $matches ) ) {
+			return false;
+		}
+
+		$decoded = base64_decode( trim( $matches[1] ) );
+		if ( strpos( $decoded, ':' ) === false ) {
+			return false;
+		}
+
+		list( $username, $password ) = explode( ':', $decoded, 2 );
+		if ( ! function_exists( 'wp_authenticate_application_password' ) ) {
+			return false;
+		}
+
+		$user = wp_authenticate_application_password( null, $username, $password );
+		if ( is_wp_error( $user ) || ! $user instanceof \WP_User ) {
+			return false;
+		}
+
+		if ( $user->has_cap( 'manage_woocommerce' ) || $user->has_cap( 'manage_options' ) || in_array( 'shop_manager', (array) $user->roles, true ) ) {
+			wp_set_current_user( $user->ID );
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Verify Plugin Master Secret Header
+	 */
+	public static function verify_secret_key( WP_REST_Request $request ): bool {
+		$settings = self::get_settings();
+		$expected = trim( (string) ( $settings['webhook_secret'] ?? '' ) );
+		if ( empty( $expected ) ) {
+			return false;
+		}
+
+		$secret = (string) ( $request->get_header( 'X-Exacoat-Secret' )
+			?: $request->get_header( 'X-Manager-Secret' )
+			?: $request->get_header( 'X-Artmatter-Secret' )
+			?: $request->get_param( 'secret' ) );
+
+		return ! empty( $secret ) && hash_equals( $expected, trim( $secret ) );
+	}
+
+	/**
+	 * Verify Customer / Staff Bearer Session Token
+	 */
+	public static function verify_customer_auth_session( WP_REST_Request $request ): bool {
+		$auth_header = (string) $request->get_header( 'Authorization' );
+		if ( ! preg_match( '/^Bearer\s+(\d+)\.([A-Za-z0-9_-]+)$/i', $auth_header, $matches ) ) {
+			return false;
+		}
+
+		$user_id  = (int) $matches[1];
+		$verifier = $matches[2];
+
+		if ( ! class_exists( 'WP_Session_Tokens' ) || ! \WP_Session_Tokens::get_instance( $user_id )->verify( $verifier ) ) {
+			return false;
+		}
+
+		$user = get_user_by( 'id', $user_id );
+		if ( ! $user ) {
+			return false;
+		}
+
+		if ( $user->has_cap( 'manage_woocommerce' ) || $user->has_cap( 'manage_options' ) || in_array( 'shop_manager', (array) $user->roles, true ) ) {
+			wp_set_current_user( $user_id );
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Check if request originates from localhost development environment
+	 */
+	private static function is_local_dev_request( WP_REST_Request $request ): bool {
+		$origin  = (string) $request->get_header( 'Origin' );
+		$referer = (string) $request->get_header( 'Referer' );
+		$host    = (string) $request->get_header( 'Host' );
+
+		$is_local_origin = false;
+		foreach ( [ $origin, $referer ] as $url ) {
+			if ( ! empty( $url ) && preg_match( '#^https?://(localhost|127\.0\.0\.1)(:\d+)?#i', $url ) ) {
+				$is_local_origin = true;
+				break;
+			}
+		}
+
+		if ( ! $is_local_origin ) {
+			return false;
+		}
+
+		if ( ( defined( 'WP_DEBUG' ) && WP_DEBUG )
+			|| ( defined( 'EXACOAT_LOCAL_DEV' ) && EXACOAT_LOCAL_DEV )
+			|| in_array( $host, [ 'localhost', '127.0.0.1', 'localhost:8080', 'localhost:8000', 'localhost:3005' ], true ) ) {
+			return true;
+		}
+
+		return false;
 	}
 
 	public static function verify_manager_session( WP_REST_Request $request ): bool {
@@ -994,13 +1197,13 @@ class Exacoat_Core {
 			'methods'             => 'POST',
 			'callback'            => function( WP_REST_Request $request ) {
 				$params    = $request->get_json_params() ?: $request->get_params();
-				$slug      = sanitize_key( $params['template_slug'] ?? $params['slug'] ?? '' );
+				$slug      = sanitize_key( $params['template_key'] ?? $params['template_slug'] ?? $params['slug'] ?? $params['event'] ?? '' );
 				$recipient = sanitize_email( $params['recipient_email'] ?? $params['email'] ?? '' );
 				$name      = sanitize_text_field( $params['recipient_name'] ?? $params['name'] ?? '' );
 				$vars      = is_array( $params['variables'] ?? null ) ? $params['variables'] : ( is_array( $params['vars'] ?? null ) ? $params['vars'] : [] );
 
 				if ( empty( $slug ) || empty( $recipient ) ) {
-					return new WP_Error( 'missing_params', 'template_slug and recipient_email are required', [ 'status' => 400 ] );
+					return new WP_Error( 'missing_params', 'template_slug/template_key and recipient_email are required', [ 'status' => 400 ] );
 				}
 
 				if ( class_exists( 'Artmatter_Email_Engine' ) ) {
@@ -1016,17 +1219,21 @@ class Exacoat_Core {
 			'methods'             => [ 'GET', 'POST' ],
 			'callback'            => function( WP_REST_Request $request ) {
 				$params = $request->get_json_params() ?: $request->get_params();
-				$slug   = sanitize_key( $params['template_slug'] ?? $params['slug'] ?? '' );
-				$vars   = is_array( $params['variables'] ?? null ) ? $params['variables'] : [];
+				$slug   = sanitize_key( $params['template_key'] ?? $params['template_slug'] ?? $params['slug'] ?? $params['event'] ?? '' );
+				$vars   = is_array( $params['variables'] ?? null ) ? $params['variables'] : ( is_array( $params['vars'] ?? null ) ? $params['vars'] : [] );
 
 				if ( class_exists( 'Artmatter_Email_Engine' ) ) {
-					$html = Artmatter_Email_Engine::generate_email_html( $slug, $vars );
+					$rendered = Artmatter_Email_Engine::render_html( $slug, $vars );
 					if ( $request->get_param( 'raw' ) ) {
 						header( 'Content-Type: text/html; charset=UTF-8' );
-						echo $html;
+						echo $rendered['html'] ?? '';
 						exit;
 					}
-					return rest_ensure_response( [ 'success' => true, 'html' => $html ] );
+					return rest_ensure_response( [
+						'success' => true,
+						'subject' => $rendered['subject'] ?? 'Email Preview',
+						'html'    => $rendered['html'] ?? '',
+					] );
 				}
 				return rest_ensure_response( [ 'success' => false, 'message' => 'Email engine not available' ] );
 			},

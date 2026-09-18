@@ -31,12 +31,20 @@ class Exacoat_Order_Manager {
 	}
 
 	public static function add_reports_order_statuses( $statuses ) {
+		$statuses[] = 'preparing-order';
+		$statuses[] = 'ready-to-ship';
+		$statuses[] = 'smb-ready';
+		$statuses[] = 'smb-picked';
 		$statuses[] = 'shipped';
 		$statuses[] = 'completed';
 		return array_unique( $statuses );
 	}
 
 	public static function add_paid_order_statuses( $statuses ) {
+		$statuses[] = 'preparing-order';
+		$statuses[] = 'ready-to-ship';
+		$statuses[] = 'smb-ready';
+		$statuses[] = 'smb-picked';
 		$statuses[] = 'shipped';
 		$statuses[] = 'completed';
 		return array_unique( $statuses );
@@ -73,6 +81,42 @@ class Exacoat_Order_Manager {
 			'label_count'               => _n_noop( 'Awaiting Pickup <span class="count">(%s)</span>', 'Awaiting Pickup <span class="count">(%s)</span>', 'exacoat-core' ),
 		] );
 
+		register_post_status( 'wc-preparing-order', [
+			'label'                     => _x( 'Preparing order', 'Order status', 'exacoat-core' ),
+			'public'                    => true,
+			'exclude_from_search'       => false,
+			'show_in_admin_all_list'    => true,
+			'show_in_admin_status_list' => true,
+			'label_count'               => _n_noop( 'Preparing order <span class="count">(%s)</span>', 'Preparing order <span class="count">(%s)</span>', 'exacoat-core' ),
+		] );
+
+		register_post_status( 'wc-ready-to-ship', [
+			'label'                     => _x( 'Waiting for Courier Pickup', 'Order status', 'exacoat-core' ),
+			'public'                    => true,
+			'exclude_from_search'       => false,
+			'show_in_admin_all_list'    => true,
+			'show_in_admin_status_list' => true,
+			'label_count'               => _n_noop( 'Waiting for Courier Pickup <span class="count">(%s)</span>', 'Waiting for Courier Pickup <span class="count">(%s)</span>', 'exacoat-core' ),
+		] );
+
+		register_post_status( 'wc-smb-ready', [
+			'label'                     => _x( 'SMB Ready (Store Pickup)', 'Order status', 'exacoat-core' ),
+			'public'                    => true,
+			'exclude_from_search'       => false,
+			'show_in_admin_all_list'    => true,
+			'show_in_admin_status_list' => true,
+			'label_count'               => _n_noop( 'SMB Ready <span class="count">(%s)</span>', 'SMB Ready <span class="count">(%s)</span>', 'exacoat-core' ),
+		] );
+
+		register_post_status( 'wc-smb-picked', [
+			'label'                     => _x( 'SMB Picked (Store Collected)', 'Order status', 'exacoat-core' ),
+			'public'                    => true,
+			'exclude_from_search'       => false,
+			'show_in_admin_all_list'    => true,
+			'show_in_admin_status_list' => true,
+			'label_count'               => _n_noop( 'SMB Picked <span class="count">(%s)</span>', 'SMB Picked <span class="count">(%s)</span>', 'exacoat-core' ),
+		] );
+
 		register_post_status( 'wc-shipped', [
 			'label'                     => _x( 'Shipped', 'Order status', 'exacoat-core' ),
 			'public'                    => true,
@@ -90,26 +134,30 @@ class Exacoat_Order_Manager {
 		$new_statuses = [];
 		foreach ( $order_statuses as $key => $status ) {
 			if ( 'wc-processing' === $key ) {
-				$new_statuses['wc-processing']       = _x( 'Order Confirmed', 'Order status', 'exacoat-core' );
-				$new_statuses['wc-in-production']   = _x( 'In Production', 'Order status', 'exacoat-core' );
-				$new_statuses['wc-quality-check']   = _x( 'Quality Check', 'Order status', 'exacoat-core' );
-				$new_statuses['wc-awaiting-pickup'] = _x( 'Ready to Ship', 'Order status', 'exacoat-core' );
+				$new_statuses['wc-processing']       = _x( 'Payment confirmed', 'Order status', 'exacoat-core' );
+				$new_statuses['wc-preparing-order'] = _x( 'Preparing order', 'Order status', 'exacoat-core' );
+				$new_statuses['wc-ready-to-ship']   = _x( 'Waiting for Courier Pickup', 'Order status', 'exacoat-core' );
+				$new_statuses['wc-smb-ready']       = _x( 'SMB Ready (Store Pickup)', 'Order status', 'exacoat-core' );
+				$new_statuses['wc-smb-picked']      = _x( 'SMB Picked (Store Collected)', 'Order status', 'exacoat-core' );
 				$new_statuses['wc-shipped']         = _x( 'Shipped', 'Order status', 'exacoat-core' );
 			} elseif ( 'wc-completed' === $key ) {
-				$new_statuses['wc-completed']       = _x( 'Delivered', 'Order status', 'exacoat-core' );
+				$new_statuses['wc-completed']       = _x( 'Completed', 'Order status', 'exacoat-core' );
 			} else {
 				$new_statuses[ $key ] = $status;
 			}
 		}
 
-		if ( ! isset( $new_statuses['wc-in-production'] ) ) {
-			$new_statuses['wc-in-production'] = _x( 'In Production', 'Order status', 'exacoat-core' );
+		if ( ! isset( $new_statuses['wc-preparing-order'] ) ) {
+			$new_statuses['wc-preparing-order'] = _x( 'Preparing order', 'Order status', 'exacoat-core' );
 		}
-		if ( ! isset( $new_statuses['wc-quality-check'] ) ) {
-			$new_statuses['wc-quality-check'] = _x( 'Quality Check', 'Order status', 'exacoat-core' );
+		if ( ! isset( $new_statuses['wc-ready-to-ship'] ) ) {
+			$new_statuses['wc-ready-to-ship'] = _x( 'Waiting for Courier Pickup', 'Order status', 'exacoat-core' );
 		}
-		if ( ! isset( $new_statuses['wc-awaiting-pickup'] ) ) {
-			$new_statuses['wc-awaiting-pickup'] = _x( 'Ready to Ship', 'Order status', 'exacoat-core' );
+		if ( ! isset( $new_statuses['wc-smb-ready'] ) ) {
+			$new_statuses['wc-smb-ready'] = _x( 'SMB Ready', 'Order status', 'exacoat-core' );
+		}
+		if ( ! isset( $new_statuses['wc-smb-picked'] ) ) {
+			$new_statuses['wc-smb-picked'] = _x( 'SMB Picked', 'Order status', 'exacoat-core' );
 		}
 		if ( ! isset( $new_statuses['wc-shipped'] ) ) {
 			$new_statuses['wc-shipped'] = _x( 'Shipped', 'Order status', 'exacoat-core' );
@@ -122,11 +170,12 @@ class Exacoat_Order_Manager {
 	 * Add Custom Statuses to bulk actions in WooCommerce Admin
 	 */
 	public static function add_bulk_actions( $bulk_actions ) {
-		$bulk_actions['mark_in-production']   = __( 'Change status to in production', 'exacoat-core' );
-		$bulk_actions['mark_quality-check']   = __( 'Change status to quality check', 'exacoat-core' );
-		$bulk_actions['mark_awaiting-pickup'] = __( 'Change status to ready to ship', 'exacoat-core' );
+		$bulk_actions['mark_preparing-order'] = __( 'Change status to preparing order', 'exacoat-core' );
+		$bulk_actions['mark_ready-to-ship']   = __( 'Change status to waiting for pickup', 'exacoat-core' );
+		$bulk_actions['mark_smb-ready']       = __( 'Change status to SMB ready', 'exacoat-core' );
+		$bulk_actions['mark_smb-picked']      = __( 'Change status to SMB picked', 'exacoat-core' );
 		$bulk_actions['mark_shipped']         = __( 'Change status to shipped', 'exacoat-core' );
-		$bulk_actions['mark_completed']       = __( 'Change status to delivered', 'exacoat-core' );
+		$bulk_actions['mark_completed']       = __( 'Change status to completed', 'exacoat-core' );
 		return $bulk_actions;
 	}
 
@@ -971,35 +1020,64 @@ class Exacoat_Order_Manager {
 			$product_id = $item->get_product_id();
 			$image_url = '';
 
-			$is_metal_poster = class_exists( 'Artmatter_Artwork_Vault' )
-				? Artmatter_Artwork_Vault::is_metal_poster( $product_id )
-				: true;
+			// Check for configured skin composite image or custom rendered thumbnail
+			$custom_img = $item->get_meta( '_configured_image_url' )
+				?: ( $item->get_meta( '_configurator_image' )
+				?: ( $item->get_meta( 'mkl_pc_thumbnail_url' )
+				?: ( $item->get_meta( '_thumbnail_url' )
+				?: ( $item->get_meta( 'image_url' ) ?: '' ) ) ) );
 
-			if ( $is_metal_poster ) {
-				$image_url = get_post_meta( $product_id, '_artmatter_tactile_flat_url', true )
-					?: ( class_exists( 'Artmatter_Feelform_3D' ) ? Artmatter_Feelform_3D::get_tactile_flat_url( $product_id ) : '' );
-			}
-
-			if ( empty( $image_url ) && $product && $product->get_image_id() ) {
+			if ( ! empty( $custom_img ) ) {
+				$image_url = $custom_img;
+			} elseif ( $product && $product->get_image_id() ) {
 				$image_url = wp_get_attachment_image_url( $product->get_image_id(), 'medium' );
 			}
-			if ( empty( $image_url ) && function_exists( 'get_field' ) ) {
-				$image_url = get_field( 'vault_print_file_url', $product ? $product->get_id() : 0 );
-			}
 			if ( empty( $image_url ) ) {
-				$image_url = 'https://media.artmatter.co/assets/sample-art.jpg';
+				$image_url = 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg';
+			}
+
+			// Configuration / specs parsing
+			$parsed_config = [];
+			$raw_config = $item->get_meta( '_configurator_data_raw' ) ?: $item->get_meta( '_configurator_data' );
+			if ( ! empty( $raw_config ) ) {
+				if ( is_string( $raw_config ) ) {
+					$decoded = json_decode( $raw_config, true );
+					if ( is_array( $decoded ) ) {
+						$raw_config = $decoded;
+					}
+				}
+				if ( is_array( $raw_config ) ) {
+					foreach ( $raw_config as $v ) {
+						$l_name = $v['layer_data']['layer_name'] ?? ( $v['layer_data']['name'] ?? ( $v['layer_name'] ?? 'Layer' ) );
+						$c_name = $v['layer_data']['name'] ?? ( $v['choice_name'] ?? ( $v['name'] ?? '' ) );
+						if ( $c_name ) {
+							$parsed_config[] = [
+								'layer_name'  => $l_name,
+								'choice_name' => $c_name,
+							];
+						}
+					}
+				}
+			}
+
+			$meta_str = '';
+			if ( empty( $parsed_config ) ) {
+				$config_text = $item->get_meta( 'Configuration' );
+				if ( ! empty( $config_text ) ) {
+					$meta_str = (string) $config_text;
+				}
 			}
 
 			$items_data[] = [
-				'name'          => $item->get_name(),
-				'product_id'    => $item->get_product_id(),
-				'image_url'     => $image_url,
-				'quantity'      => $item->get_quantity(),
-				'subtotal'      => wc_price( $item->get_subtotal(), [ 'currency' => $currency ] ),
-				'total'         => wc_price( $item->get_total(), [ 'currency' => $currency ] ),
-				'orientation'   => $item->get_meta( 'pa_orientation' ) ?: ( $item->get_meta( 'orientation' ) ?: '' ),
-				'feelform_mode' => $item->get_meta( 'feelform_mode' ) ?: ( $item->get_meta( 'pa_feelform-mode' ) ?: '' ),
-				'artist_name'   => $item->get_meta( 'artist_name' ) ?: '',
+				'name'                => $item->get_name(),
+				'product_id'          => $item->get_product_id(),
+				'image_url'           => $image_url,
+				'quantity'            => $item->get_quantity(),
+				'subtotal'            => wc_price( $item->get_subtotal(), [ 'currency' => $currency ] ),
+				'total'               => wc_price( $item->get_total(), [ 'currency' => $currency ] ),
+				'parsed_configurator' => $parsed_config,
+				'meta'                => $meta_str,
+				'device_model'        => $item->get_meta( 'device_model' ) ?: ( $item->get_meta( 'pa_device' ) ?: '' ),
 			];
 		}
 
@@ -1121,6 +1199,16 @@ class Exacoat_Order_Manager {
 				self::get_email_order_payload( $order )
 			);
 		} elseif ( 'shipped' === $clean_to ) {
+			// Record shipped_at timestamp if not already set
+			if ( empty( $order->get_meta( '_shipped_at' ) ) ) {
+				$now_mysql = current_time( 'mysql' );
+				$order->update_meta_data( '_shipped_at', $now_mysql );
+				$order->update_meta_data( '_artmatter_shipped_at', $now_mysql );
+				$order->save();
+				update_post_meta( $order_id, '_shipped_at', $now_mysql );
+				update_post_meta( $order_id, '_artmatter_shipped_at', $now_mysql );
+			}
+
 			// Extract tracking number & carrier from ACF / Order Meta / HPOS
 			$tracking_code = $order->get_meta( 'tracking_number' ) 
 				?: ( get_post_meta( $order_id, 'tracking_number', true ) 

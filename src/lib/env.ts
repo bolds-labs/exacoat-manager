@@ -37,9 +37,12 @@ export const getWordPressBaseUrl = (): string => {
 };
 
 export const getWcCredentials = () => {
+  const localKey = typeof localStorage !== 'undefined' ? (localStorage.getItem('exacoat_wc_consumer_key') || localStorage.getItem('wc_consumer_key') || '') : '';
+  const localSecret = typeof localStorage !== 'undefined' ? (localStorage.getItem('exacoat_wc_consumer_secret') || localStorage.getItem('wc_consumer_secret') || '') : '';
+
   return {
-    key: getEnv('VITE_WC_CONSUMER_KEY', ''),
-    secret: getEnv('VITE_WC_CONSUMER_SECRET', ''),
+    key: localKey || getEnv('VITE_WC_CONSUMER_KEY', ''),
+    secret: localSecret || getEnv('VITE_WC_CONSUMER_SECRET', ''),
   };
 };
 
