@@ -17,6 +17,8 @@ import {
   Loader2,
   Copy,
   Check,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -40,13 +42,17 @@ export const ShopeeSettingsModal: React.FC<ShopeeSettingsModalProps> = ({
   // Form State
   const [environment, setEnvironment] = useState<'sandbox' | 'live'>('live');
   const [testPartnerId, setTestPartnerId] = useState<number>(1244885);
-  const [testPartnerKey, setTestPartnerKey] = useState<string>('');
-  const [testPushPartnerKey, setTestPushPartnerKey] = useState<string>('');
+  const [testPartnerKey, setTestPartnerKey] = useState<string>('shpk666c6843537a484142475a44787861767052765558666f635a434f58566e');
+  const [testPushPartnerKey, setTestPushPartnerKey] = useState<string>('aaaaaaaaaaaaaactd5mbgvzd3cjhmhh48v428zpt6ywwnuosz567nweg42ey8pky');
   const [livePartnerId, setLivePartnerId] = useState<number>(2011551);
-  const [livePartnerKey, setLivePartnerKey] = useState<string>('');
-  const [livePushPartnerKey, setLivePushPartnerKey] = useState<string>('');
+  const [livePartnerKey, setLivePartnerKey] = useState<string>('shpk706c666c6f42674755427a546a79445a78417449554e5674616b4b665a4f');
+  const [livePushPartnerKey, setLivePushPartnerKey] = useState<string>('aaaaaaaaaaaaaactd5mbgvzd3cjhmhh48v428zpt6ywwnuosz567nweg42ey8pky');
   const [shopId, setShopId] = useState<number>(0);
   const [shopName, setShopName] = useState<string>('Exacoat Official Store');
+  const [showLiveKey, setShowLiveKey] = useState(false);
+  const [showLivePushKey, setShowLivePushKey] = useState(false);
+  const [showTestKey, setShowTestKey] = useState(false);
+  const [showTestPushKey, setShowTestPushKey] = useState(false);
 
   // Status State
   const [settings, setSettings] = useState<ShopeeSettings | null>(null);
@@ -62,12 +68,19 @@ export const ShopeeSettingsModal: React.FC<ShopeeSettingsModalProps> = ({
       .then((res) => {
         if (!isMounted) return;
         if (res.success && res.settings) {
-          setSettings(res.settings);
-          setEnvironment(res.settings.environment || 'live');
-          setTestPartnerId(res.settings.test_partner_id || 1244885);
-          setLivePartnerId(res.settings.live_partner_id || 2011551);
-          setShopId(res.settings.shop_id || 0);
-          setShopName(res.settings.shop_name || 'Exacoat Official Store');
+          const s = res.settings;
+          setSettings(s);
+          setEnvironment(s.environment || 'live');
+          setTestPartnerId(s.test_partner_id || 1244885);
+          setLivePartnerId(s.live_partner_id || 2011551);
+          setShopId(s.shop_id || 0);
+          setShopName(s.shop_name || 'Exacoat Official Store');
+          if (s.live_partner_key && !s.live_partner_key.includes('...')) {
+            setLivePartnerKey(s.live_partner_key);
+          }
+          if (s.live_push_partner_key && !s.live_push_partner_key.includes('...')) {
+            setLivePushPartnerKey(s.live_push_partner_key);
+          }
         }
       })
       .catch((err) => {
@@ -116,14 +129,10 @@ export const ShopeeSettingsModal: React.FC<ShopeeSettingsModalProps> = ({
 
       const res = await saveShopeeSettingsDirect(payload);
       if (res.success) {
-        showToast('success', 'Shopee Settings Saved', 'Configuration updated successfully.');
+        showToast('success', 'Shopee Settings Saved', res.message || 'Configuration updated successfully.');
         if (res.settings) {
           setSettings(res.settings);
         }
-        setTestPartnerKey('');
-        setTestPushPartnerKey('');
-        setLivePartnerKey('');
-        setLivePushPartnerKey('');
         onSettingsSaved?.();
       } else {
         showToast('error', 'Save Failed', res.error || 'Could not update settings.');
@@ -316,28 +325,60 @@ export const ShopeeSettingsModal: React.FC<ShopeeSettingsModalProps> = ({
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs text-neutral-400 mb-1">
-                        Test API Key (Leave blank to keep current)
-                      </label>
-                      <input
-                        type="password"
-                        value={testPartnerKey}
-                        onChange={(e) => setTestPartnerKey(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-white/10 text-xs text-white focus:outline-none focus:border-orange-500 font-mono"
-                        placeholder={settings?.has_test_key ? 'Key is configured' : 'Enter test API key'}
-                      />
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs text-neutral-300 font-medium">Test API Key</label>
+                        {(settings?.has_test_key || testPartnerKey) && (
+                          <span className="text-[10px] text-orange-400 font-mono flex items-center gap-1">
+                            <Check className="w-3 h-3" />
+                            Configured ({settings?.test_partner_key || 'shpk666c...566e'})
+                          </span>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <input
+                          type={showTestKey ? 'text' : 'password'}
+                          value={testPartnerKey}
+                          onChange={(e) => setTestPartnerKey(e.target.value)}
+                          className="w-full pl-3 pr-10 py-2 rounded-lg bg-neutral-950 border border-white/10 text-xs text-white focus:outline-none focus:border-orange-500 font-mono"
+                          placeholder="shpk666c6843..."
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowTestKey(!showTestKey)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white p-1 cursor-pointer"
+                          title={showTestKey ? 'Hide key' : 'Show key'}
+                        >
+                          {showTestKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
                     </div>
                     <div>
-                      <label className="block text-xs text-neutral-400 mb-1">
-                        Test Push Partner Key (Webhooks)
-                      </label>
-                      <input
-                        type="password"
-                        value={testPushPartnerKey}
-                        onChange={(e) => setTestPushPartnerKey(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-white/10 text-xs text-white focus:outline-none focus:border-orange-500 font-mono"
-                        placeholder={settings?.has_test_push_key ? 'Push key configured' : 'Enter test push key'}
-                      />
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs text-neutral-300 font-medium">Test Push Partner Key (Webhooks)</label>
+                        {(settings?.has_test_push_key || testPushPartnerKey) && (
+                          <span className="text-[10px] text-orange-400 font-mono flex items-center gap-1">
+                            <Check className="w-3 h-3" />
+                            Configured ({settings?.test_push_partner_key || 'aaaa...8pky'})
+                          </span>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <input
+                          type={showTestPushKey ? 'text' : 'password'}
+                          value={testPushPartnerKey}
+                          onChange={(e) => setTestPushPartnerKey(e.target.value)}
+                          className="w-full pl-3 pr-10 py-2 rounded-lg bg-neutral-950 border border-white/10 text-xs text-white focus:outline-none focus:border-orange-500 font-mono"
+                          placeholder="aaaa...8pky"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowTestPushKey(!showTestPushKey)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white p-1 cursor-pointer"
+                          title={showTestPushKey ? 'Hide key' : 'Show key'}
+                        >
+                          {showTestPushKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </>
@@ -345,51 +386,105 @@ export const ShopeeSettingsModal: React.FC<ShopeeSettingsModalProps> = ({
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs text-neutral-400 mb-1">Live Partner ID</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs text-neutral-300 font-medium">Live Partner ID</label>
+                        <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
+                          <Check className="w-3 h-3" />
+                          Official Partner
+                        </span>
+                      </div>
                       <input
                         type="number"
                         value={livePartnerId}
                         onChange={(e) => setLivePartnerId(Number(e.target.value))}
-                        className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-white/10 text-xs text-white focus:outline-none focus:border-orange-500"
+                        className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-white/10 text-xs text-white focus:outline-none focus:border-orange-500 font-mono"
                         placeholder="2011551"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-neutral-400 mb-1">Production Shop ID</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs text-neutral-300 font-medium">Production Shop ID</label>
+                        {settings?.shop_id ? (
+                          <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
+                            <Check className="w-3 h-3" />
+                            Linked: #{settings.shop_id}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-neutral-400">
+                            Auto-set upon OAuth
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="number"
-                        value={shopId}
+                        value={shopId || ''}
                         onChange={(e) => setShopId(Number(e.target.value))}
-                        className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-white/10 text-xs text-white focus:outline-none focus:border-orange-500"
-                        placeholder="Live Shop ID"
+                        className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-white/10 text-xs text-white focus:outline-none focus:border-orange-500 font-mono"
+                        placeholder="Auto-populated upon authorization"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs text-neutral-400 mb-1">
-                        Live API Key (Leave blank to keep current)
-                      </label>
-                      <input
-                        type="password"
-                        value={livePartnerKey}
-                        onChange={(e) => setLivePartnerKey(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-white/10 text-xs text-white focus:outline-none focus:border-orange-500 font-mono"
-                        placeholder={settings?.has_live_key ? 'Key is configured' : 'Enter live API key'}
-                      />
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs text-neutral-300 font-medium">
+                          Live Partner Key
+                        </label>
+                        {(settings?.has_live_key || livePartnerKey) && (
+                          <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
+                            <Check className="w-3 h-3" />
+                            Configured ({settings?.live_partner_key || 'shpk706c...5a4f'})
+                          </span>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <input
+                          type={showLiveKey ? 'text' : 'password'}
+                          value={livePartnerKey}
+                          onChange={(e) => setLivePartnerKey(e.target.value)}
+                          className="w-full pl-3 pr-10 py-2 rounded-lg bg-neutral-950 border border-white/10 text-xs text-white focus:outline-none focus:border-orange-500 font-mono"
+                          placeholder="shpk706c666c..."
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowLiveKey(!showLiveKey)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white p-1 cursor-pointer"
+                          title={showLiveKey ? 'Hide key' : 'Show key'}
+                        >
+                          {showLiveKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
                     </div>
                     <div>
-                      <label className="block text-xs text-neutral-400 mb-1">
-                        Live Push Partner Key (Webhooks)
-                      </label>
-                      <input
-                        type="password"
-                        value={livePushPartnerKey}
-                        onChange={(e) => setLivePushPartnerKey(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-white/10 text-xs text-white focus:outline-none focus:border-orange-500 font-mono"
-                        placeholder={settings?.has_live_push_key ? 'Push key configured' : 'Enter live push key'}
-                      />
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs text-neutral-300 font-medium">
+                          Live Push Partner Key (Webhooks)
+                        </label>
+                        {(settings?.has_live_push_key || livePushPartnerKey) && (
+                          <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
+                            <Check className="w-3 h-3" />
+                            Configured ({settings?.live_push_partner_key || 'aaaa...8pky'})
+                          </span>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <input
+                          type={showLivePushKey ? 'text' : 'password'}
+                          value={livePushPartnerKey}
+                          onChange={(e) => setLivePushPartnerKey(e.target.value)}
+                          className="w-full pl-3 pr-10 py-2 rounded-lg bg-neutral-950 border border-white/10 text-xs text-white focus:outline-none focus:border-orange-500 font-mono"
+                          placeholder="aaaa...8pky"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowLivePushKey(!showLivePushKey)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white p-1 cursor-pointer"
+                          title={showLivePushKey ? 'Hide key' : 'Show key'}
+                        >
+                          {showLivePushKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </>

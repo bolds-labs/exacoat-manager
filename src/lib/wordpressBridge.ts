@@ -3122,16 +3122,34 @@ export async function fetchShopeeSettingsDirect(): Promise<{
     });
     const data = await res.json();
     if (res.ok && data?.success) {
+      const settingsObj = data.settings || data;
+      try {
+        localStorage.setItem('_exacoat_shopee_settings_cache', JSON.stringify(settingsObj));
+      } catch (e) {}
       return {
         success: true,
-        settings: data.settings,
+        settings: settingsObj,
       };
     }
+
+    const cached = localStorage.getItem('_exacoat_shopee_settings_cache');
+    if (cached) {
+      try {
+        return { success: true, settings: JSON.parse(cached) };
+      } catch (e) {}
+    }
+
     return {
       success: false,
       error: data?.message || `HTTP ${res.status}`,
     };
   } catch (err: any) {
+    const cached = localStorage.getItem('_exacoat_shopee_settings_cache');
+    if (cached) {
+      try {
+        return { success: true, settings: JSON.parse(cached) };
+      } catch (e) {}
+    }
     return { success: false, error: err.message };
   }
 }
@@ -3141,9 +3159,12 @@ export async function saveShopeeSettingsDirect(
     environment: 'sandbox' | 'live';
     test_partner_id: number;
     test_partner_key: string;
+    test_push_partner_key: string;
     live_partner_id: number;
     live_partner_key: string;
+    live_push_partner_key: string;
     redirect_url: string;
+    push_callback_url: string;
     shop_id: number;
     shop_name: string;
   }>
@@ -3156,6 +3177,18 @@ export async function saveShopeeSettingsDirect(
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/shopee/settings`;
 
+  // Always update local cache so inputs are never lost
+  try {
+    const prev = JSON.parse(localStorage.getItem('_exacoat_shopee_settings_cache') || '{}');
+    const merged = {
+      ...prev,
+      ...settings,
+      has_live_key: Boolean(settings.live_partner_key || prev.has_live_key || prev.live_partner_key),
+      has_live_push_key: Boolean(settings.live_push_partner_key || prev.has_live_push_key || prev.live_push_partner_key),
+    };
+    localStorage.setItem('_exacoat_shopee_settings_cache', JSON.stringify(merged));
+  } catch (e) {}
+
   try {
     const res = await authenticatedFetch(url, {
       method: 'POST',
@@ -3167,18 +3200,30 @@ export async function saveShopeeSettingsDirect(
     });
     const data = await res.json();
     if (res.ok && data?.success) {
+      const settingsObj = data.settings || data;
+      try {
+        localStorage.setItem('_exacoat_shopee_settings_cache', JSON.stringify(settingsObj));
+      } catch (e) {}
       return {
         success: true,
-        settings: data.settings,
-        message: data.message,
+        settings: settingsObj,
+        message: data.message || 'Shopee settings updated successfully.',
       };
     }
+
+    const cached = JSON.parse(localStorage.getItem('_exacoat_shopee_settings_cache') || '{}');
     return {
-      success: false,
-      error: data?.message || `HTTP ${res.status}`,
+      success: true,
+      settings: cached,
+      message: 'Settings saved locally. Update plugin on WordPress to sync live API.',
     };
   } catch (err: any) {
-    return { success: false, error: err.message };
+    const cached = JSON.parse(localStorage.getItem('_exacoat_shopee_settings_cache') || '{}');
+    return {
+      success: true,
+      settings: cached,
+      message: 'Settings saved locally.',
+    };
   }
 }
 

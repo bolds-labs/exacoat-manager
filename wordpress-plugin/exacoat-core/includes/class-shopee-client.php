@@ -990,9 +990,12 @@ class Exacoat_Shopee_Client {
 
 		self::save_settings( $updates );
 
+		$updated_settings_response = self::rest_get_settings( $request );
+
 		return rest_ensure_response([
-			'success' => true,
-			'message' => 'Shopee settings updated successfully.',
+			'success'  => true,
+			'message'  => 'Shopee settings updated successfully.',
+			'settings' => $updated_settings_response->get_data(),
 		]);
 	}
 
