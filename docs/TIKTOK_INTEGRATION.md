@@ -1,4 +1,4 @@
-﻿# Exacoat TikTok Shop Open Platform API Integration
+# Exacoat TikTok Shop Open Platform API Integration
 
 Comprehensive architectural and technical reference for the TikTok Shop Open Platform API integration (API version 202309) connecting Exacoat Manager and the Exacoat Core WordPress backend engine.
 
@@ -81,46 +81,71 @@ Configuration data is stored in WordPress wp_options under key _exacoat_tiktok_s
 
 ## 3. Cryptographic Signature Rules (HMAC-SHA256)
 
-TikTok Shop Open Platform requires signing every API request using HMAC-SHA256 with pp_secret as the key.
+TikTok Shop Open Platform requires signing every API request using HMAC-SHA256 with `app_secret` as the key.
 
 ### Signature Algorithm Steps
-1. Gather all URL query parameters excluding sign and ccess_token.
+1. Gather all URL query parameters excluding `sign` and `access_token`.
 2. Sort parameter keys in ascending ASCII alphabetical order.
-3. Concatenate each key and value: key1value1key2value2...
+3. Concatenate each key and value: `key1value1key2value2...`
 4. Construct the base message string:
-   `
+   ```text
    base_string = app_secret + api_path + sorted_query_string + request_body + app_secret
-   `
-   *Note: For GET requests or empty bodies, equest_body is an empty string.*
+   ```
+   *Note: For GET requests or empty bodies, request_body is an empty string.*
 5. Calculate the HMAC-SHA256 digest:
-   `php
-    = hash_hmac('sha256', , );
-   `
-6. Send the resulting hex string as query parameter sign.
-7. Pass ccess_token in the HTTP header x-tts-access-token.
+   ```php
+   $sign = hash_hmac('sha256', $base_string, $app_secret);
+   ```
+6. Send the resulting hex string as query parameter `sign`.
+7. Pass `access_token` in the HTTP header `x-tts-access-token`.
 
 ---
 
-## 4. Authentication and Token Lifecycle
+## 4. Authentication, Permissions, and Token Lifecycle
 
-1. **Seller Authorization**:
-   - Admin opens TikTok Settings in Exacoat Manager.
-   - Clicks "Connect TikTok Shop", opening:
-     https://services.tiktokshop.com/open/authorize?service_id=7686433028542351124
-2. **Authorization Code Exchange**:
-   - TikTok redirects to the callback with query parameter code.
-   - Backend calls:
-     GET https://auth.tiktok-shops.com/api/v2/token/get
-     with query params: pp_key, pp_secret, uth_code={code}, grant_type=authorized_code.
-   - Response provides:
-     - ccess_token (valid for 7 days / 604,800 seconds).
-     - efresh_token (valid for 30 days).
-     - seller_name, open_id, shop_cipher.
-3. **Auto-Refresh Engine**:
-   - Before any Open API request, ensure_valid_token() checks if 	oken_expires_at <= time() + 3600 (1-hour safety buffer).
-   - When renewal is required, it automatically calls:
-     GET https://auth.tiktok-shops.com/api/v2/token/refresh
-     with grant_type=refresh_token, updates options, and executes the pending action seamlessly.
+### 4.1 Required Scopes in TikTok Shop Partner Center
+Every endpoint in TikTok Shop Open API 202309 requires specific OAuth scopes. If any scope is missing, the API rejects the request with:
+`Access denied. This app has not been granted any access scope required by this endpoint.`
+
+Configure the following scopes in TikTok Shop Partner Center (`https://partner.tiktokshop.com` > **App & Service** > **My Services / Custom App** > **Permissions / Manage API**):
+
+| Scope Identifier | Required For Endpoint | Description |
+| :--- | :--- | :--- |
+| **`seller.authorization.info`** | `GET /authorization/202309/shops` | Discovers authorized shops and extracts the required `shop_cipher`. |
+| **`seller.order.info`** | `POST /order/202309/orders/search`<br>`GET /order/202309/orders` | Searches orders, fetches line items, customer details, and order status. |
+| **`seller.fulfillment.basic`** | `POST /fulfillment/202309/packages/{id}/ship`<br>`GET /fulfillment/202309/packages/{id}/shipping_documents` | Ships packages, assigns couriers, and downloads official A6 thermal PDF labels. |
+| **`seller.product.basic`** *(Optional)* | `GET /product/202309/products` | Cross-references SKU codes and variation attributes. |
+
+### 4.2 Resolving "Access denied. This app has not been granted any access scope"
+When you see this error during order sync or shop detection:
+
+1. **Add Scopes in Partner Center**:
+   - Log into https://partner.tiktokshop.com
+   - Navigate to **App & Service** > Select your App (Service ID `7686433028542351124`, App Key `6lauu7vv75n01`).
+   - Go to **Permissions** / **Manage API** / **Categories**.
+   - Enable **Shop Authorization** (`seller.authorization.info`), **Order Management** (`seller.order.info`), and **Fulfillment** (`seller.fulfillment.basic`).
+   - Click **Save** / **Submit**.
+
+2. **Re-Authorize the Seller Account (Mandatory)**:
+   - Adding scopes to an app does not update existing tokens. A new token must be issued with seller consent.
+   - Open Exacoat Manager: **Orders > TikTok Shop > Settings** (or click the Settings button).
+   - Click **Connect TikTok Shop** (or **Re-Authorize**).
+   - Sign in with your Exacoat TikTok Shop seller account.
+   - You will see the new permissions requested. Click **Authorize**.
+
+3. **Auto-Discovery of Shop Cipher**:
+   - Upon completing authorization, Exacoat automatically calls `GET /authorization/202309/shops` with the newly scoped token.
+   - The official `shop_cipher` (e.g. `ROW_...`) is automatically retrieved and saved to WordPress database.
+   - Click **Sync Orders** to pull live orders immediately.
+
+### 4.3 Token Lifecycle and Auto-Refresh
+1. **Authorization Code Exchange**:
+   - TikTok redirects to the callback with query parameter `code`.
+   - Backend calls `GET https://auth.tiktok-shops.com/api/v2/token/get` with `app_key`, `app_secret`, and `auth_code`.
+   - Returns `access_token` (valid 7 days) and `refresh_token` (valid 30 days).
+2. **Auto-Refresh Routine**:
+   - Before any Open API request, `ensure_valid_token()` checks if `token_expires_at <= time() + 3600` (1-hour safety buffer).
+   - When renewal is required, it automatically calls `GET https://auth.tiktok-shops.com/api/v2/token/refresh` with `grant_type=refresh_token`, saves the new token to options, and proceeds seamlessly without interrupting work.
 
 ---
 
