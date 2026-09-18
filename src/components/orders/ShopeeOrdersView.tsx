@@ -13,7 +13,9 @@ import { MOCK_SHOPEE_ORDERS } from '../../data/mockShopeeOrders';
 import { matchesPhoneQuery, formatDisplayPhone } from '../../lib/phoneUtils';
 import { ShopeeSettingsModal } from '../settings/ShopeeSettingsModal';
 import { ArrangeShipmentModal } from './ArrangeShipmentModal';
-import { generateShopeeAwbHtml } from '../../lib/shopeeAwbGenerator';
+import { ShopeeOrderDetailModal } from './ShopeeOrderDetailModal';
+import { generateShopeeAwbHtml, generateShopeeBatchAwbHtml } from '../../lib/shopeeAwbGenerator';
+import { downloadCsv } from '../../lib/csvExport';
 import {
   Store,
   RefreshCw,
@@ -23,7 +25,6 @@ import {
   RotateCcw,
   Package,
   Truck,
-  ExternalLink,
   Copy,
   Check,
   AlertTriangle,
@@ -31,13 +32,13 @@ import {
   User,
   MapPin,
   Tag,
-  Layers,
   ChevronRight,
-  Filter,
   MoreVertical,
   Printer,
   Database,
   CheckCircle2,
+  Download,
+  X,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -66,6 +67,11 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   const [activeActionMenuSn, setActiveActionMenuSn] = useState<string | null>(null);
   const [selectedArrangeOrder, setSelectedArrangeOrder] = useState<ShopeeOrder | null>(null);
   const [isArrangeModalOpen, setIsArrangeModalOpen] = useState(false);
+
+  // Selection & Detail Modal state
+  const [selectedSns, setSelectedSns] = useState<Set<string>>(new Set());
+  const [selectedDetailOrder, setSelectedDetailOrder] = useState<ShopeeOrder | null>(null);
+
   const [printedOrderSns, setPrintedOrderSns] = useState<Set<string>>(() => {
     try {
       const cached = localStorage.getItem('_exacoat_shopee_printed_labels');
@@ -132,7 +138,6 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
         setOrders(ordersRes.orders);
         setIsDemoMode(false);
       } else {
-        // Automatically inject realistic mock Shopee orders for testing & inspection
         setOrders(MOCK_SHOPEE_ORDERS);
         setIsDemoMode(true);
         if (!quiet && ordersRes.error) {
@@ -143,8 +148,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
       if (settingsRes.success && settingsRes.settings) {
         setSettings(settingsRes.settings);
       }
-    } catch (err: any) {
-      // Fallback to mock on error
+    } catch {
       setOrders(MOCK_SHOPEE_ORDERS);
       setIsDemoMode(true);
       if (!quiet) {
@@ -194,7 +198,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
-    showToast('info', 'Copied', text);
+    showToast('info', 'Copied to Clipboard', text);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
@@ -225,7 +229,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
         return;
       }
     } catch {
-      // Continue to high-fidelity preview below
+      // Continue to local high-fidelity generator
     }
 
     const printWindow = window.open('', '_blank', 'width=450,height=650');
@@ -260,7 +264,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   // Filtered orders computation
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
-      // Tab filter: READY_TO_SHIP includes both unarranged and arranged-awaiting-courier (PROCESSED)
+      // Tab filter
       if (activeTab === 'READY_TO_SHIP' && !['READY_TO_SHIP', 'PROCESSED'].includes(order.order_status)) return false;
       if (activeTab === 'SHIPPED' && order.order_status !== 'SHIPPED') return false;
       if (activeTab === 'COMPLETED' && order.order_status !== 'COMPLETED') return false;
@@ -295,25 +299,108 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
     });
   }, [orders, activeTab, searchQuery]);
 
-  // Tab counts
-  const tabCounts = useMemo(() => {
-    return {
-      ALL: orders.length,
-      READY_TO_SHIP: orders.filter((o) => ['READY_TO_SHIP', 'PROCESSED'].includes(o.order_status)).length,
-      SHIPPED: orders.filter((o) => o.order_status === 'SHIPPED').length,
-      COMPLETED: orders.filter((o) => o.order_status === 'COMPLETED').length,
-      CLAIMED: orders.filter((o) => o.already_claimed).length,
-      CANCELLED: orders.filter((o) => ['CANCELLED', 'IN_CANCEL'].includes(o.order_status)).length,
-    };
-  }, [orders]);
+  // Selection handlers
+  const isAllSelected = filteredOrders.length > 0 && filteredOrders.every((o) => selectedSns.has(o.order_sn));
+  const isSomeSelected = filteredOrders.some((o) => selectedSns.has(o.order_sn));
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedSns(new Set());
+    } else {
+      setSelectedSns(new Set(filteredOrders.map((o) => o.order_sn)));
+    }
+  };
+
+  const handleToggleSelect = (orderSn: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedSns((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderSn)) next.delete(orderSn);
+      else next.add(orderSn);
+      return next;
+    });
+  };
+
+  const selectedOrdersList = useMemo(() => {
+    return orders.filter((o) => selectedSns.has(o.order_sn));
+  }, [orders, selectedSns]);
+
+  // Bulk Print Shopee Labels
+  const handleBulkPrint = () => {
+    if (selectedOrdersList.length === 0) return;
+    selectedOrdersList.forEach((o) => markLabelPrinted(o.order_sn));
+    const printWindow = window.open('', '_blank', 'width=450,height=650');
+    if (printWindow) {
+      printWindow.document.write(generateShopeeBatchAwbHtml(selectedOrdersList));
+      printWindow.document.close();
+      showToast(
+        'info',
+        'Batch Shopee Label Print',
+        `Opened print window for ${selectedOrdersList.length} Shopee orders.`
+      );
+    }
+  };
+
+  // Bulk Arrange Shipment trigger
+  const handleBulkArrange = () => {
+    const readyOrders = selectedOrdersList.filter((o) => o.order_status === 'READY_TO_SHIP');
+    if (readyOrders.length === 0) {
+      showToast('warning', 'No Orders to Arrange', 'None of the selected orders are in Ready to Ship status.');
+      return;
+    }
+    setSelectedArrangeOrder(readyOrders[0]);
+    setIsArrangeModalOpen(true);
+  };
+
+  // Bulk Export to CSV
+  const handleBulkExport = () => {
+    if (selectedOrdersList.length === 0) return;
+    const headers = [
+      'Order SN',
+      'Create Time',
+      'Buyer Username',
+      'Order Status',
+      'Shipping Carrier',
+      'Tracking Resi',
+      'Recipient Name',
+      'Recipient Phone',
+      'Recipient City',
+      'Recipient Address',
+      'Total Amount (IDR)',
+      'Items Summary',
+    ];
+
+    const rows = selectedOrdersList.map((o) => [
+      o.order_sn,
+      o.create_time,
+      o.buyer_username,
+      o.order_status,
+      o.shipping_carrier,
+      o.tracking_number || '',
+      o.recipient_name,
+      o.recipient_phone,
+      o.recipient_city,
+      o.recipient_address,
+      o.total_amount,
+      (o.items || []).map((i) => `${i.item_name} (${i.model_name || 'Standard'}) x${i.quantity}`).join('; '),
+    ]);
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    downloadCsv(`exacoat-shopee-orders-${dateStr}.csv`, headers, rows);
+    showToast('success', 'CSV Exported', `Exported ${selectedOrdersList.length} orders to CSV.`);
+  };
+
+  const readyToShipCount = orders.filter((o) =>
+    ['READY_TO_SHIP', 'PROCESSED'].includes(o.order_status)
+  ).length;
 
   return (
     <div className="space-y-5 font-sans">
       {/* Shopee Integration Sub-Header */}
       <div className="p-4 sm:p-5 rounded-2xl border border-white/10 bg-neutral-900/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-400 flex items-center justify-center shrink-0">
-            <Store className="w-6 h-6" />
+          <div className="w-11 h-11 rounded-xl bg-orange-500/15 border border-orange-500/25 text-orange-400 flex items-center justify-center shrink-0">
+            <Store className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
@@ -341,7 +428,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
               </span>
             </div>
             <p className="text-xs text-neutral-400 mt-1">
-              Shopee Open API v2 channel. Ingests orders, tracking numbers, and handles warranty claims with duplicate invoice checks.
+              Shopee Indonesia store channel. Ingests orders, tracking numbers, and handles warranty claims with duplicate invoice checks.
             </p>
           </div>
         </div>
@@ -366,7 +453,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
             type="button"
             onClick={handleSync}
             disabled={isSyncing || isLoading}
-            className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+            className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50 shadow-md shadow-orange-500/20"
           >
             <RefreshCw className={clsx('w-3.5 h-3.5', isSyncing && 'animate-spin')} />
             <span>{isSyncing ? 'Syncing...' : 'Sync Shopee'}</span>
@@ -385,124 +472,180 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
 
       {/* Filter Tabs & Search Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-        {/* Status Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-          {[
-            { id: 'ALL', label: 'All Orders' },
-            { id: 'READY_TO_SHIP', label: 'Ready to Ship' },
-            { id: 'SHIPPED', label: 'Shipped' },
-            { id: 'COMPLETED', label: 'Completed' },
-            { id: 'CLAIMED', label: 'In RMA / Claimed' },
-            { id: 'CANCELLED', label: 'Cancelled' },
-          ].map((tab) => (
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-neutral-900 border border-white/10 overflow-x-auto">
+          {(
+            [
+              { id: 'ALL', label: 'All Orders' },
+              { id: 'READY_TO_SHIP', label: 'Ready to Ship', count: readyToShipCount },
+              { id: 'SHIPPED', label: 'Shipped' },
+              { id: 'COMPLETED', label: 'Completed' },
+              { id: 'CLAIMED', label: 'In RMA / Claimed' },
+              { id: 'CANCELLED', label: 'Cancelled' },
+            ] as Array<{ id: StatusTab; label: string; count?: number }>
+          ).map((tab) => (
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id as StatusTab)}
+              onClick={() => setActiveTab(tab.id)}
               className={clsx(
-                'px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer',
+                'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer',
                 activeTab === tab.id
-                  ? 'bg-white/10 text-white border border-white/15'
-                  : 'text-neutral-400 hover:text-white hover:bg-white/5 border border-transparent'
+                  ? 'bg-white text-neutral-950 font-bold shadow-sm'
+                  : 'text-neutral-400 hover:text-white hover:bg-white/5'
               )}
             >
               <span>{tab.label}</span>
-              <span
-                className={clsx(
-                  'text-[10px] px-1.5 py-0.2 rounded-full font-mono font-normal',
-                  activeTab === tab.id
-                    ? 'bg-orange-500/20 text-orange-300'
-                    : 'bg-white/5 text-neutral-500'
-                )}
-              >
-                {tabCounts[tab.id as StatusTab] || 0}
-              </span>
+              {typeof tab.count === 'number' && tab.count > 0 && (
+                <span
+                  className={clsx(
+                    'text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold',
+                    activeTab === tab.id ? 'bg-black/20 text-neutral-950' : 'bg-orange-500/20 text-orange-400'
+                  )}
+                >
+                  {tab.count}
+                </span>
+              )}
             </button>
           ))}
         </div>
 
-        {/* Search Input */}
         <div className="relative w-full sm:w-72">
-          <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search Order SN, buyer, resi, skin..."
-            className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-neutral-900 border border-white/10 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-orange-500/50"
+            placeholder="Search Order SN, Buyer, Resi, Phone..."
+            className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-neutral-900 border border-white/10 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-orange-500"
           />
         </div>
       </div>
 
-      {/* Orders Content Area */}
+      {/* Select-All Control Bar */}
+      {filteredOrders.length > 0 && (
+        <div className="px-4 py-2.5 rounded-xl bg-neutral-900/50 border border-white/5 flex items-center justify-between text-xs">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={isAllSelected}
+              ref={(input) => {
+                if (input) {
+                  input.indeterminate = !isAllSelected && isSomeSelected;
+                }
+              }}
+              onChange={handleToggleSelectAll}
+              className="w-4 h-4 rounded border-white/20 bg-neutral-800 text-orange-500 focus:ring-orange-500 focus:ring-offset-0 cursor-pointer"
+            />
+            <span className="text-neutral-300 font-medium">
+              Select all ({filteredOrders.length})
+            </span>
+          </label>
+
+          {selectedSns.size > 0 && (
+            <span className="text-orange-400 font-mono font-semibold">
+              {selectedSns.size} selected
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Orders List */}
       {isLoading ? (
-        <div className="py-16 flex flex-col items-center justify-center gap-3 text-neutral-400">
-          <RefreshCw className="w-7 h-7 animate-spin text-orange-500" />
-          <p className="text-sm font-medium">Loading Shopee orders...</p>
+        <div className="p-12 text-center rounded-2xl bg-neutral-900/40 border border-white/5 space-y-3">
+          <RefreshCw className="w-6 h-6 text-orange-400 animate-spin mx-auto" />
+          <p className="text-xs text-neutral-400">Loading Shopee orders...</p>
         </div>
       ) : filteredOrders.length === 0 ? (
-        <div className="py-16 px-4 rounded-2xl border border-white/5 bg-neutral-900/30 flex flex-col items-center justify-center text-center gap-3">
-          <Package className="w-10 h-10 text-neutral-600" />
-          <div>
-            <h3 className="text-sm font-bold text-neutral-300">No Shopee Orders Found</h3>
-            <p className="text-xs text-neutral-500 max-w-sm mt-1">
-              {searchQuery
-                ? 'No orders match your search criteria. Try a different keyword.'
-                : 'No orders have been ingested from Shopee yet. Click Sync Shopee to retrieve recent orders.'}
-            </p>
-          </div>
-          {!searchQuery && (
-            <button
-              type="button"
-              onClick={handleSync}
-              disabled={isSyncing}
-              className="mt-2 px-4 py-2 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/20 text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer"
-            >
-              <RefreshCw className={clsx('w-3.5 h-3.5', isSyncing && 'animate-spin')} />
-              <span>Sync Orders from Shopee</span>
-            </button>
-          )}
+        <div className="p-12 text-center rounded-2xl bg-neutral-900/40 border border-white/5 space-y-3">
+          <Package className="w-8 h-8 text-neutral-600 mx-auto" />
+          <p className="text-sm font-semibold text-neutral-300">No Shopee orders match this view</p>
+          <p className="text-xs text-neutral-500">
+            {searchQuery ? 'Try clearing the search query.' : 'Sync orders from Shopee or adjust tab filter.'}
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
           {filteredOrders.map((order) => {
             const statusBadge = getStatusBadge(order.order_status);
             const isClaimed = order.already_claimed;
-            const claim = order.existing_claim;
+            const isReadyToShip = order.order_status === 'READY_TO_SHIP';
+            const isSelected = selectedSns.has(order.order_sn);
+            const isPrinted = printedOrderSns.has(order.order_sn);
 
             return (
               <div
                 key={order.order_sn}
+                onClick={() => setSelectedDetailOrder(order)}
                 className={clsx(
-                  'p-4 sm:p-5 rounded-2xl border transition-all bg-neutral-900/50 hover:bg-neutral-900/80',
-                  isClaimed ? 'border-amber-500/30' : 'border-white/10 hover:border-white/20'
+                  'p-4 sm:p-5 rounded-2xl bg-neutral-900/70 border transition-all cursor-pointer hover:border-white/25 active:scale-[0.999]',
+                  isSelected
+                    ? 'border-orange-500/50 bg-orange-500/[0.03]'
+                    : isClaimed
+                    ? 'border-amber-500/20 bg-amber-500/[0.02]'
+                    : 'border-white/10'
                 )}
               >
-                {/* Card Top: Order SN, Status, Date & Claim Indicator */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-white/5">
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <span className="text-[11px] px-2 py-0.5 rounded font-bold uppercase bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                {/* Top Header Bar */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/5 pb-3 mb-3">
+                  {/* Left: Checkbox, Channel tag, Order SN, Buyer */}
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => handleToggleSelect(order.order_sn, e as any)}
+                      className="w-4 h-4 rounded border-white/20 bg-neutral-800 text-orange-500 focus:ring-orange-500 focus:ring-offset-0 cursor-pointer shrink-0"
+                    />
+
+                    <span className="text-[10px] px-2 py-0.5 rounded-md font-mono font-bold uppercase bg-orange-500/20 text-orange-400 border border-orange-500/30">
                       Shopee
                     </span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-bold text-white font-mono">{order.order_sn}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(order.order_sn, order.order_sn)}
-                        className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
-                        title="Copy Order SN"
-                      >
-                        {copiedId === order.order_sn ? (
-                          <Check className="w-3 h-3 text-emerald-400" />
-                        ) : (
-                          <Copy className="w-3 h-3" />
-                        )}
-                      </button>
+
+                    <span className="text-xs font-mono font-bold text-white">
+                      #{order.order_sn}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopy(order.order_sn, `sn_${order.order_sn}`);
+                      }}
+                      className="text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer"
+                      title="Copy Order SN"
+                    >
+                      {copiedId === `sn_${order.order_sn}` ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+
+                    <span className="text-neutral-600">•</span>
+                    <div className="flex items-center gap-1.5 text-xs text-neutral-400">
+                      <Clock className="w-3.5 h-3.5 text-neutral-500" />
+                      <span>{order.create_time}</span>
                     </div>
 
+                    <span className="text-neutral-600">•</span>
+                    <div className="flex items-center gap-1.5 text-xs text-neutral-300 font-medium">
+                      <User className="w-3.5 h-3.5 text-neutral-500" />
+                      <span>@{order.buyer_username}</span>
+                    </div>
+
+                    {isClaimed && (
+                      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
+                        <ShieldCheck className="w-3 h-3" />
+                        <span>Claimed in #{order.existing_claim?.existing_order_num}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Right: Status badge, Label, Arrange Ship, Menu, Chevron */}
+                  <div className="flex items-center gap-2 self-start lg:self-auto" onClick={(e) => e.stopPropagation()}>
                     <span
                       className={clsx(
-                        'text-[10px] px-2 py-0.5 rounded-full font-semibold border',
+                        'text-[10px] px-2.5 py-1 rounded-full font-semibold border',
                         statusBadge.bg,
                         statusBadge.text,
                         statusBadge.border
@@ -511,76 +654,46 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                       {statusBadge.label}
                     </span>
 
-                    {isClaimed && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                        <AlertTriangle className="w-3 h-3" />
-                        <span>
-                          Claimed in #{claim?.existing_order_num} ({claim?.claim_type})
-                        </span>
-                      </span>
+                    {/* Quick Print Thermal Label */}
+                    <button
+                      type="button"
+                      onClick={() => handlePrintShopeeLabel(order)}
+                      className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                      title="Print Shopee Air Waybill"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-neutral-400" />
+                      <span>Label</span>
+                    </button>
+
+                    {/* Arrange Shipment Button if ready */}
+                    {isReadyToShip && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedArrangeOrder(order);
+                          setIsArrangeModalOpen(true);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm shadow-orange-500/20"
+                      >
+                        <Truck className="w-3.5 h-3.5" />
+                        <span>Arrange Ship</span>
+                      </button>
                     )}
-                  </div>
 
-                  <div className="flex items-center gap-3">
-                    <div className="text-xs text-neutral-400 flex items-center gap-2">
-                      <Clock className="w-3.5 h-3.5 text-neutral-500" />
-                      <span>{order.create_time}</span>
-                    </div>
-
-                    {/* Simple Icon Action Trigger */}
+                    {/* Dropdown Menu for Warranty / Redeem */}
                     <div className="relative" data-action-menu>
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveActionMenuSn(
-                            activeActionMenuSn === order.order_sn ? null : order.order_sn
-                          );
-                        }}
-                        className={clsx(
-                          'p-1.5 rounded-lg border transition-all cursor-pointer flex items-center justify-center',
-                          activeActionMenuSn === order.order_sn
-                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                            : 'bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white border-white/10'
-                        )}
-                        title="Order Actions"
+                        onClick={() =>
+                          setActiveActionMenuSn(activeActionMenuSn === order.order_sn ? null : order.order_sn)
+                        }
+                        className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-white/10 cursor-pointer"
                       >
                         <MoreVertical className="w-4 h-4" />
                       </button>
 
-                      {/* Action Popover Dropdown */}
                       {activeActionMenuSn === order.order_sn && (
-                        <div className="absolute right-0 top-full mt-1.5 w-60 rounded-2xl bg-[#161616] border border-white/15 shadow-2xl p-2 z-30 space-y-1 backdrop-blur-xl">
-                          <div className="px-2.5 py-1 text-[10px] uppercase font-bold text-neutral-400 tracking-wider border-b border-white/5 flex items-center justify-between">
-                            <span>Order Actions</span>
-                            <span className="font-mono text-[9px] text-neutral-500">{order.order_sn.slice(-6)}</span>
-                          </div>
-
-                          {order.order_status === 'READY_TO_SHIP' && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setActiveActionMenuSn(null);
-                                  setSelectedArrangeOrder(order);
-                                  setIsArrangeModalOpen(true);
-                                }}
-                                className="w-full text-left px-2.5 py-2 rounded-xl flex items-center gap-2.5 hover:bg-orange-500/15 text-orange-300 transition-colors text-xs font-medium cursor-pointer"
-                              >
-                                <div className="w-7 h-7 rounded-lg bg-orange-500/15 border border-orange-500/30 flex items-center justify-center shrink-0">
-                                  <Truck className="w-4 h-4 text-orange-400" />
-                                </div>
-                                <div>
-                                  <div className="font-semibold text-white">Arrange Shipment</div>
-                                  <div className="text-[10px] text-neutral-400 font-normal">
-                                    Drop-off or Request Pickup
-                                  </div>
-                                </div>
-                              </button>
-                              <div className="h-px bg-white/5 my-1" />
-                            </>
-                          )}
-
+                        <div className="absolute right-0 top-full mt-1 w-52 rounded-xl bg-neutral-900 border border-white/10 shadow-xl py-1 z-30 font-sans">
                           <button
                             type="button"
                             disabled={isClaimed}
@@ -589,21 +702,14 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                               onClaimWarranty(order);
                             }}
                             className={clsx(
-                              'w-full text-left px-2.5 py-2 rounded-xl flex items-center gap-2.5 transition-colors text-xs font-medium cursor-pointer',
+                              'w-full px-3 py-2 text-left text-xs flex items-center gap-2 cursor-pointer font-medium',
                               isClaimed
                                 ? 'opacity-40 cursor-not-allowed text-neutral-500'
-                                : 'hover:bg-emerald-500/15 text-emerald-300'
+                                : 'text-emerald-400 hover:bg-emerald-500/10'
                             )}
                           >
-                            <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
-                              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                            </div>
-                            <div>
-                              <div className="font-semibold text-white">Claim Warranty</div>
-                              <div className="text-[10px] text-neutral-400 font-normal">
-                                {isClaimed ? 'Claim already filed' : 'Free warranty replacement'}
-                              </div>
-                            </div>
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            <span>Claim Warranty</span>
                           </button>
 
                           <button
@@ -614,282 +720,151 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                               onClaimRedeem(order);
                             }}
                             className={clsx(
-                              'w-full text-left px-2.5 py-2 rounded-xl flex items-center gap-2.5 transition-colors text-xs font-medium cursor-pointer',
+                              'w-full px-3 py-2 text-left text-xs flex items-center gap-2 cursor-pointer font-medium',
                               isClaimed
                                 ? 'opacity-40 cursor-not-allowed text-neutral-500'
-                                : 'hover:bg-amber-500/15 text-amber-300'
+                                : 'text-amber-400 hover:bg-amber-500/10'
                             )}
                           >
-                            <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shrink-0">
-                              <RotateCcw className="w-4 h-4 text-amber-400" />
-                            </div>
-                            <div>
-                              <div className="font-semibold text-white">Factory Redeem</div>
-                              <div className="text-[10px] text-neutral-400 font-normal">
-                                {isClaimed ? 'Claim already filed' : '50% off replacement'}
-                              </div>
-                            </div>
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>Claim Redeem (Defect)</span>
                           </button>
 
-                          <div className="h-px bg-white/5 my-1" />
+                          <div className="my-1 border-t border-white/10" />
 
                           <button
                             type="button"
                             onClick={() => {
                               setActiveActionMenuSn(null);
-                              handlePrintShopeeLabel(order);
+                              handleCopy(order.order_sn, `sn_${order.order_sn}`);
                             }}
-                            className="w-full text-left px-2.5 py-2 rounded-xl flex items-center gap-2.5 hover:bg-sky-500/10 text-neutral-300 hover:text-white transition-colors cursor-pointer text-xs font-medium"
+                            className="w-full px-3 py-2 text-left text-xs text-neutral-300 hover:bg-white/5 flex items-center gap-2 cursor-pointer"
                           >
-                            <div className="w-7 h-7 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center shrink-0">
-                              <Printer className="w-4 h-4 text-sky-400" />
-                            </div>
-                            <div>
-                              <div className="font-semibold text-white">Print Shopee Label</div>
-                              <div className="text-[10px] text-neutral-400 font-normal">
-                                {order.tracking_number ? `AWB: ${order.tracking_number}` : 'Official Thermal AWB (100x150)'}
-                              </div>
-                            </div>
+                            <Copy className="w-3.5 h-3.5 text-neutral-500" />
+                            <span>Copy Order SN</span>
                           </button>
+
+                          {order.tracking_number && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveActionMenuSn(null);
+                                handleCopy(order.tracking_number, `resi_${order.order_sn}`);
+                              }}
+                              className="w-full px-3 py-2 text-left text-xs text-neutral-300 hover:bg-white/5 flex items-center gap-2 cursor-pointer"
+                            >
+                              <Copy className="w-3.5 h-3.5 text-neutral-500" />
+                              <span>Copy Tracking Resi</span>
+                            </button>
+                          )}
                         </div>
                       )}
+                    </div>
+
+                    <div className="pl-1 text-neutral-500 hover:text-white transition-colors">
+                      <ChevronRight className="w-4 h-4" />
                     </div>
                   </div>
                 </div>
 
-                {/* Card Body: Details Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 pt-3 text-xs">
-                  {/* Buyer & Delivery Info */}
-                  <div className="md:col-span-4 space-y-2">
-                    <div className="flex items-start gap-2">
-                      <User className="w-3.5 h-3.5 text-neutral-500 mt-0.5 shrink-0" />
-                      <div>
-                        <div className="font-semibold text-white">
-                          {order.recipient_name || order.buyer_username}
-                        </div>
-                        <div className="text-neutral-400 text-[11px] flex items-center gap-1.5 flex-wrap">
-                          <span>Buyer: @{order.buyer_username}</span>
-                          {order.recipient_phone && (
-                            <>
-                              <span>•</span>
-                              <span className="font-mono text-neutral-300">
-                                {formatDisplayPhone(order.recipient_phone)}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleCopy(order.recipient_phone, `phone-${order.order_sn}`)}
-                                className="p-0.5 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
-                                title="Copy Phone Number"
-                              >
-                                {copiedId === `phone-${order.order_sn}` ? (
-                                  <Check className="w-3 h-3 text-emerald-400" />
-                                ) : (
-                                  <Copy className="w-3 h-3" />
-                                )}
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-2">
-                      <Truck className="w-3.5 h-3.5 text-neutral-500 mt-0.5 shrink-0" />
-                      <div>
-                        <div className="text-neutral-300 font-medium">
-                          {order.shipping_carrier || 'Standard Courier'}
-                        </div>
-                        {order.tracking_number ? (
-                          <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                            <span className="font-mono text-[11px] text-orange-400 font-semibold">
-                              Resi: {order.tracking_number}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleCopy(order.tracking_number, `resi-${order.order_sn}`)}
-                              className="p-0.5 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
-                              title="Copy Resi Tracking Number"
-                            >
-                              {copiedId === `resi-${order.order_sn}` ? (
-                                <Check className="w-3 h-3 text-emerald-400" />
-                              ) : (
-                                <Copy className="w-3 h-3" />
-                              )}
-                            </button>
-                            {printedOrderSns.has(order.order_sn) && (
-                              <span className="ml-1 text-[9px] px-1.5 py-0.5 rounded font-mono font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                                <CheckCircle2 className="w-2.5 h-2.5" />
-                                <span>Printed</span>
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-[11px] text-neutral-500">Resi not issued yet</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {order.recipient_city && (
-                      <div className="flex items-start gap-2">
-                        <MapPin className="w-3.5 h-3.5 text-neutral-500 mt-0.5 shrink-0" />
-                        <div className="text-[11px] text-neutral-400 line-clamp-2">
-                          {order.recipient_city} {order.recipient_postcode ? `(${order.recipient_postcode})` : ''}
-                          {order.recipient_address ? ` - ${order.recipient_address}` : ''}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Purchased Items List */}
-                  <div className="md:col-span-5 space-y-2 border-t md:border-t-0 md:border-l border-white/5 md:pl-4 pt-3 md:pt-0">
-                    <span className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider block">
-                      Purchased Items ({order.items.length})
-                    </span>
-                    <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                      {order.items.map((item, idx) => (
-                        <div
-                          key={`${item.item_id}-${item.model_id}-${idx}`}
-                          className="flex items-start gap-2.5 p-2 rounded-lg bg-neutral-950/40 border border-white/5"
-                        >
+                {/* Items and Delivery Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Column 1 & 2: Items List */}
+                  <div className="md:col-span-2 space-y-2">
+                    {(order.items || []).map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-neutral-950/40 border border-white/5"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
                           {item.image_url ? (
                             <img
                               src={item.image_url}
                               alt={item.item_name}
-                              className="w-10 h-10 rounded object-cover border border-white/10 shrink-0"
+                              className="w-10 h-10 rounded-lg object-cover bg-neutral-800 shrink-0 border border-white/5"
                             />
                           ) : (
-                            <div className="w-10 h-10 rounded bg-neutral-800 flex items-center justify-center text-neutral-500 shrink-0">
-                              <Package className="w-4 h-4" />
+                            <div className="w-10 h-10 rounded-lg bg-neutral-800 flex items-center justify-center shrink-0 border border-white/5">
+                              <Tag className="w-4 h-4 text-neutral-500" />
                             </div>
                           )}
-                          <div className="flex-1 min-w-0">
-                            <div className="text-white font-medium truncate">{item.item_name}</div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-white leading-tight truncate">
+                              {item.item_name}
+                            </p>
                             {item.model_name && (
-                              <div className="text-[11px] text-amber-300/90 font-medium truncate">
-                                Variation: {item.model_name}
-                              </div>
+                              <p className="text-[11px] font-mono text-neutral-400 mt-0.5 truncate">
+                                Variant: <span className="text-neutral-200">{item.model_name}</span>
+                              </p>
                             )}
-                            <div className="text-[10px] text-neutral-400 mt-0.5 flex items-center justify-between">
-                              <span>Qty: {item.quantity}</span>
-                              <span className="font-mono">{formatCurrency(item.price, 'IDR')}</span>
-                            </div>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
 
-                  {/* Pricing & RMA Actions */}
-                  <div className="md:col-span-3 flex flex-col justify-between border-t md:border-t-0 md:border-l border-white/5 md:pl-4 pt-3 md:pt-0">
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider block">
-                        Total Transaction
-                      </span>
-                      <div className="text-sm font-bold text-white font-mono mt-0.5">
-                        {formatCurrency(order.total_amount, 'IDR')}
-                      </div>
-                      {order.buyer_note && (
-                        <div className="mt-1 text-[11px] text-neutral-400 italic line-clamp-2">
-                          Note: "{order.buyer_note}"
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Operational Action Area */}
-                    <div className="pt-3 space-y-1.5">
-                      {isClaimed ? (
-                        <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 space-y-1">
-                          <div className="font-semibold flex items-center justify-between gap-1">
-                            <span className="flex items-center gap-1">
-                              <AlertTriangle className="w-3 h-3 shrink-0" />
-                              Claim Processed
-                            </span>
-                            <span className="font-mono text-[10px] text-amber-400">
-                              #{claim?.existing_order_num}
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-neutral-400">
-                            Replacement order active ({claim?.claim_type}). Duplicate claims blocked.
+                        <div className="text-right shrink-0">
+                          <span className="text-xs font-mono font-bold text-white">
+                            x{item.quantity}
+                          </span>
+                          <p className="text-[11px] font-mono text-neutral-400">
+                            {formatCurrency(item.price, 'IDR')}
                           </p>
                         </div>
-                      ) : order.order_status === 'READY_TO_SHIP' ? (
-                        <div className="space-y-1.5" data-action-menu>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedArrangeOrder(order);
-                              setIsArrangeModalOpen(true);
-                            }}
-                            className="w-full px-3 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
-                          >
-                            <Truck className="w-3.5 h-3.5" />
-                            <span>Arrange Shipment</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveActionMenuSn(
-                                activeActionMenuSn === order.order_sn ? null : order.order_sn
-                              );
-                            }}
-                            className="w-full px-3 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-white/10 text-xs font-medium flex items-center justify-between gap-1.5 transition-all cursor-pointer"
-                          >
-                            <span>More Actions</span>
-                            <MoreVertical className="w-3 h-3 text-neutral-400" />
-                          </button>
-                        </div>
-                      ) : (order.order_status === 'PROCESSED' || order.tracking_number) ? (
-                        <div className="space-y-1.5" data-action-menu>
-                          <button
-                            type="button"
-                            onClick={() => handlePrintShopeeLabel(order)}
-                            className="w-full px-3 py-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                            <span>{printedOrderSns.has(order.order_sn) ? 'Print Label Again' : 'Print Thermal Label (A6)'}</span>
-                          </button>
-                          {printedOrderSns.has(order.order_sn) && (
-                            <div className="flex items-center justify-center gap-1 text-[10px] text-emerald-400 font-medium py-0.5">
-                              <CheckCircle2 className="w-3 h-3" />
-                              <span>Thermal Label Printed</span>
-                            </div>
+                      </div>
+                    ))}
+
+                    <div className="flex items-center justify-between pt-1 text-xs">
+                      <span className="text-neutral-500 font-mono text-[11px]">
+                        {order.items?.length || 0} line item(s)
+                      </span>
+                      <div className="font-mono text-xs font-bold text-white">
+                        Total: <span className="text-orange-400">{formatCurrency(order.total_amount, 'IDR')}</span>
+                      </div>
+                    </div>
+
+                    {order.buyer_note && (
+                      <div className="text-xs p-2 rounded-lg bg-amber-500/5 border border-amber-500/10 text-amber-300/90 italic">
+                        Note: {order.buyer_note}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Column 3: Logistics and Destination */}
+                  <div className="p-3.5 rounded-xl bg-neutral-950/40 border border-white/5 space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono uppercase text-neutral-500">Logistics</span>
+                      <span className="font-semibold text-neutral-200">{order.shipping_carrier || 'Standard Courier'}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono uppercase text-neutral-500">Tracking Resi</span>
+                      {order.tracking_number ? (
+                        <div className="flex items-center gap-1 font-mono font-bold text-orange-400">
+                          <span>{order.tracking_number}</span>
+                          {isPrinted && (
+                            <span className="text-[9px] px-1 py-0.2 rounded font-mono font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-0.5">
+                              <CheckCircle2 className="w-2.5 h-2.5" />
+                              <span>Printed</span>
+                            </span>
                           )}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveActionMenuSn(
-                                activeActionMenuSn === order.order_sn ? null : order.order_sn
-                              );
-                            }}
-                            className="w-full px-3 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-white/10 text-xs font-medium flex items-center justify-between gap-1.5 transition-all cursor-pointer"
-                          >
-                            <span>More Actions</span>
-                            <MoreVertical className="w-3 h-3 text-neutral-400" />
-                          </button>
                         </div>
                       ) : (
-                        <div className="flex items-center justify-end" data-action-menu>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveActionMenuSn(
-                                activeActionMenuSn === order.order_sn ? null : order.order_sn
-                              );
-                            }}
-                            className="w-full px-3 py-2 rounded-xl bg-neutral-900/90 hover:bg-neutral-800 text-neutral-200 border border-white/10 hover:border-white/20 text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer shadow-sm"
-                            title="Order Actions"
-                          >
-                            <div className="flex items-center gap-1.5">
-                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                              <span>Actions</span>
-                            </div>
-                            <MoreVertical className="w-3.5 h-3.5 text-neutral-400" />
-                          </button>
-                        </div>
+                        <span className="text-neutral-500 font-mono">Pending</span>
                       )}
+                    </div>
+
+                    <div className="flex items-start gap-2 pt-2 border-t border-white/5">
+                      <MapPin className="w-3.5 h-3.5 text-neutral-500 shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <p className="font-medium text-neutral-200">{order.recipient_name || order.buyer_username}</p>
+                        {order.recipient_phone && (
+                          <p className="text-[10px] font-mono text-neutral-400">{formatDisplayPhone(order.recipient_phone)}</p>
+                        )}
+                        <p className="text-[11px] text-neutral-400 leading-tight truncate max-w-[200px]" title={order.recipient_address}>
+                          {order.recipient_address}
+                        </p>
+                        <p className="text-[10px] text-neutral-500 font-mono mt-0.5">
+                          {order.recipient_city} {order.recipient_postcode ? `(${order.recipient_postcode})` : ''}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -898,6 +873,69 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
           })}
         </div>
       )}
+
+      {/* Floating Bulk Actions Bar */}
+      {selectedSns.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-y-0 -translate-x-1/2 z-40 bg-[#141414]/95 border border-white/20 shadow-2xl rounded-2xl px-5 py-3 flex items-center gap-3 backdrop-blur-xl max-w-[95vw] overflow-x-auto">
+          <div className="flex items-center gap-2 pr-3 border-r border-white/10 whitespace-nowrap">
+            <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+            <span className="text-xs font-bold text-white">
+              {selectedSns.size} {selectedSns.size === 1 ? 'order' : 'orders'} selected
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleBulkPrint}
+            className="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-orange-500/20 whitespace-nowrap"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>Bulk Print Labels</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleBulkArrange}
+            className="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+          >
+            <Truck className="w-3.5 h-3.5" />
+            <span>Bulk Arrange</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleBulkExport}
+            className="px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+          >
+            <Download className="w-3.5 h-3.5 text-neutral-400" />
+            <span>Export CSV</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSelectedSns(new Set())}
+            className="p-2 rounded-xl hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer ml-1"
+            title="Deselect All"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Shopee Order Detail Modal */}
+      <ShopeeOrderDetailModal
+        order={selectedDetailOrder}
+        isOpen={Boolean(selectedDetailOrder)}
+        onClose={() => setSelectedDetailOrder(null)}
+        onPrintLabel={handlePrintShopeeLabel}
+        onArrangeShipment={(ord) => {
+          setSelectedArrangeOrder(ord);
+          setIsArrangeModalOpen(true);
+        }}
+        onClaimWarranty={onClaimWarranty}
+        onClaimRedeem={onClaimRedeem}
+        isPrinted={selectedDetailOrder ? printedOrderSns.has(selectedDetailOrder.order_sn) : false}
+      />
 
       {/* Shopee Settings Modal */}
       <ShopeeSettingsModal

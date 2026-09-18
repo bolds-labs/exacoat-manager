@@ -77,7 +77,7 @@ function getCourierBadgeHtml(carrier = ''): string {
 /**
  * Generate complete 100mm x 150mm HTML AWB for TikTok Shop thermal printing
  */
-export function generateTikTokAwbHtml(order: TikTokOrder): string {
+function renderTikTokAwbCard(order: TikTokOrder): string {
   const trackingNumber = order.tracking_number || order.order_id || 'PENDING';
   const orderId = order.order_id || order.order_sn || '';
   const carrier = order.shipping_carrier || 'J&T Express';
@@ -117,194 +117,7 @@ export function generateTikTokAwbHtml(order: TikTokOrder): string {
     .join('');
 
   return `
-    <!DOCTYPE html>
-    <html lang="id">
-    <head>
-      <meta charset="UTF-8">
-      <title>TikTok Shop AWB - ${orderId}</title>
-      <style>
-        @page {
-          size: 100mm 150mm;
-          margin: 0;
-        }
-        * {
-          box-sizing: border-box;
-          margin: 0;
-          padding: 0;
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-        }
-        body {
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-          background: #fff;
-          color: #000;
-          font-size: 11px;
-          line-height: 1.3;
-          padding: 4mm;
-          width: 100mm;
-          min-height: 150mm;
-          max-height: 150mm;
-          overflow: hidden;
-          margin: 0 auto;
-        }
-        .awb-container {
-          border: 2px solid #000;
-          display: flex;
-          flex-direction: column;
-          height: 142mm;
-          background: #fff;
-        }
-        .header-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          border-bottom: 2px solid #000;
-          padding: 4px 8px;
-          background: #fafafa;
-        }
-        .logo-box {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-        .tt-badge {
-          background: #000;
-          color: #fff;
-          font-size: 11px;
-          font-weight: 900;
-          padding: 2px 6px;
-          border-radius: 4px;
-          letter-spacing: 0.5px;
-        }
-        .routing-row {
-          display: flex;
-          border-bottom: 2px solid #000;
-        }
-        .routing-city {
-          flex: 1;
-          padding: 6px 8px;
-          border-right: 2px solid #000;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-        }
-        .city-label {
-          font-size: 9px;
-          font-weight: bold;
-          text-transform: uppercase;
-          color: #555;
-        }
-        .city-value {
-          font-size: 16px;
-          font-weight: 900;
-          letter-spacing: 0.5px;
-          line-height: 1.1;
-        }
-        .routing-postcode {
-          width: 80px;
-          padding: 6px 8px;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          align-items: center;
-          background: #f4f4f5;
-        }
-        .postcode-value {
-          font-size: 16px;
-          font-weight: 900;
-          font-family: monospace;
-        }
-        .barcode-section {
-          padding: 6px 8px;
-          border-bottom: 2px solid #000;
-          text-align: center;
-          background: #fff;
-        }
-        .barcode-svg-wrap {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          margin-bottom: 2px;
-        }
-        .tracking-number-text {
-          font-family: monospace;
-          font-size: 14px;
-          font-weight: bold;
-          letter-spacing: 2px;
-        }
-        .parties-row {
-          display: flex;
-          border-bottom: 2px solid #000;
-          flex: 1;
-          min-height: 0;
-        }
-        .recipient-box {
-          flex: 6;
-          padding: 6px 8px;
-          border-right: 1px solid #000;
-          display: flex;
-          flex-direction: column;
-          font-size: 10.5px;
-        }
-        .sender-box {
-          flex: 4;
-          padding: 6px 8px;
-          display: flex;
-          flex-direction: column;
-          font-size: 10px;
-          background: #fafafa;
-        }
-        .box-title {
-          font-size: 8.5px;
-          font-weight: 900;
-          text-transform: uppercase;
-          color: #444;
-          margin-bottom: 3px;
-        }
-        .person-name {
-          font-weight: bold;
-          font-size: 11px;
-          color: #000;
-          margin-bottom: 2px;
-        }
-        .person-phone {
-          font-family: monospace;
-          font-weight: 600;
-          margin-bottom: 3px;
-        }
-        .person-address {
-          line-height: 1.25;
-          color: #222;
-          overflow: hidden;
-          display: -webkit-box;
-          -webkit-line-clamp: 4;
-          -webkit-box-orient: vertical;
-        }
-        .manifest-section {
-          border-bottom: 2px solid #000;
-          max-height: 38mm;
-          overflow: hidden;
-          background: #fff;
-        }
-        .manifest-table {
-          width: 100%;
-          border-collapse: collapse;
-        }
-        .footer-row {
-          padding: 4px 8px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          background: #f9fafb;
-          font-size: 9px;
-        }
-        .order-meta-box {
-          display: flex;
-          flex-direction: column;
-        }
-      </style>
-    </head>
-    <body>
+    <div class="awb-wrapper">
       <div class="awb-container">
         <!-- Header: Platform & Courier -->
         <div class="header-row">
@@ -376,6 +189,234 @@ export function generateTikTokAwbHtml(order: TikTokOrder): string {
           </div>
         </div>
       </div>
+    </div>
+  `;
+}
+
+const COMMON_CSS = `
+  @page {
+    size: 100mm 150mm;
+    margin: 0;
+  }
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: #fff;
+    color: #000;
+    font-size: 11px;
+    line-height: 1.3;
+    margin: 0 auto;
+  }
+  .awb-wrapper {
+    width: 100mm;
+    height: 150mm;
+    max-height: 150mm;
+    padding: 4mm;
+    box-sizing: border-box;
+    overflow: hidden;
+    page-break-after: always;
+    page-break-inside: avoid;
+  }
+  .awb-wrapper:last-child {
+    page-break-after: auto;
+  }
+  .awb-container {
+    border: 2px solid #000;
+    display: flex;
+    flex-direction: column;
+    height: 142mm;
+    background: #fff;
+  }
+  .header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 2px solid #000;
+    padding: 4px 8px;
+    background: #fafafa;
+  }
+  .logo-box {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tt-badge {
+    background: #000;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 900;
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+  }
+  .routing-row {
+    display: flex;
+    border-bottom: 2px solid #000;
+  }
+  .routing-city {
+    flex: 1;
+    padding: 6px 8px;
+    border-right: 2px solid #000;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .city-label {
+    font-size: 9px;
+    font-weight: bold;
+    text-transform: uppercase;
+    color: #555;
+  }
+  .city-value {
+    font-size: 16px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    line-height: 1.1;
+  }
+  .routing-postcode {
+    width: 80px;
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: #f4f4f5;
+  }
+  .postcode-value {
+    font-size: 16px;
+    font-weight: 900;
+    font-family: monospace;
+  }
+  .barcode-section {
+    padding: 6px 8px;
+    border-bottom: 2px solid #000;
+    text-align: center;
+    background: #fff;
+  }
+  .barcode-svg-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 2px;
+  }
+  .tracking-number-text {
+    font-family: monospace;
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 2px;
+  }
+  .parties-row {
+    display: flex;
+    border-bottom: 2px solid #000;
+    flex: 1;
+    min-height: 0;
+  }
+  .recipient-box {
+    flex: 6;
+    padding: 6px 8px;
+    border-right: 1px solid #000;
+    display: flex;
+    flex-direction: column;
+    font-size: 10.5px;
+  }
+  .sender-box {
+    flex: 4;
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    font-size: 10px;
+    background: #fafafa;
+  }
+  .box-title {
+    font-size: 8.5px;
+    font-weight: 900;
+    text-transform: uppercase;
+    color: #444;
+    margin-bottom: 3px;
+  }
+  .person-name {
+    font-weight: bold;
+    font-size: 11px;
+    color: #000;
+    margin-bottom: 2px;
+  }
+  .person-phone {
+    font-family: monospace;
+    font-weight: 600;
+    margin-bottom: 3px;
+  }
+  .person-address {
+    line-height: 1.25;
+    color: #222;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+  }
+  .manifest-section {
+    border-bottom: 2px solid #000;
+    max-height: 38mm;
+    overflow: hidden;
+    background: #fff;
+  }
+  .manifest-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .footer-row {
+    padding: 4px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f9fafb;
+    font-size: 9px;
+  }
+  .order-meta-box {
+    display: flex;
+    flex-direction: column;
+  }
+`;
+
+export function generateTikTokAwbHtml(order: TikTokOrder): string {
+  const orderId = order.order_id || order.order_sn || '';
+  return `
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+      <meta charset="UTF-8">
+      <title>TikTok Shop AWB - ${orderId}</title>
+      <style>${COMMON_CSS}</style>
+    </head>
+    <body>
+      ${renderTikTokAwbCard(order)}
+      <script>
+        window.onload = function() {
+          window.print();
+        };
+      </script>
+    </body>
+    </html>
+  `;
+}
+
+export function generateTikTokBatchAwbHtml(orders: TikTokOrder[]): string {
+  const renderedCards = orders.map((order) => renderTikTokAwbCard(order)).join('');
+  return `
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+      <meta charset="UTF-8">
+      <title>TikTok Shop Batch AWBs (${orders.length} orders)</title>
+      <style>${COMMON_CSS}</style>
+    </head>
+    <body>
+      ${renderedCards}
       <script>
         window.onload = function() {
           window.print();

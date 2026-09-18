@@ -201,16 +201,6 @@ export const OrdersView: React.FC<OrdersViewProps> = () => {
           )}
         >
           <span>Shopee Indonesia</span>
-          <span
-            className={clsx(
-              'text-[10px] px-2 py-0.5 rounded-full font-semibold',
-              activeChannel === 'shopee'
-                ? 'bg-black/25 text-white'
-                : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
-            )}
-          >
-            Open API v2
-          </span>
         </button>
 
         <button
@@ -219,21 +209,11 @@ export const OrdersView: React.FC<OrdersViewProps> = () => {
           className={clsx(
             'px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer',
             activeChannel === 'tiktok'
-              ? 'bg-gradient-to-r from-rose-500 to-pink-600 text-white font-bold shadow-sm'
+              ? 'bg-rose-500 text-white font-bold shadow-sm'
               : 'text-neutral-400 hover:text-white hover:bg-white/5'
           )}
         >
           <span>TikTok Shop</span>
-          <span
-            className={clsx(
-              'text-[10px] px-2 py-0.5 rounded-full font-semibold',
-              activeChannel === 'tiktok'
-                ? 'bg-black/25 text-white'
-                : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-            )}
-          >
-            Open API
-          </span>
         </button>
       </div>
 

@@ -13,7 +13,9 @@ import { useToast } from '../../context/ToastContext';
 import { formatCurrency } from '../../lib/formatters';
 import { MOCK_TIKTOK_ORDERS } from '../../data/mockTikTokOrders';
 import { TikTokSettingsModal } from '../settings/TikTokSettingsModal';
-import { generateTikTokAwbHtml } from '../../lib/tiktokAwbGenerator';
+import { TikTokOrderDetailModal } from './TikTokOrderDetailModal';
+import { generateTikTokAwbHtml, generateTikTokBatchAwbHtml } from '../../lib/tiktokAwbGenerator';
+import { downloadCsv } from '../../lib/csvExport';
 import {
   Store,
   RefreshCw,
@@ -33,7 +35,11 @@ import {
   ChevronRight,
   MoreVertical,
   Printer,
-  ExternalLink,
+  Download,
+  CheckSquare,
+  Square,
+  X,
+  Layers,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -61,6 +67,11 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [isArrangingId, setIsArrangingId] = useState<string | null>(null);
+
+  // Selection & Detail Modal states
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedDetailOrder, setSelectedDetailOrder] = useState<TikTokOrder | null>(null);
+  const [isBulkArranging, setIsBulkArranging] = useState(false);
 
   // Close action dropdown on outside click or Escape key
   useEffect(() => {
@@ -120,7 +131,6 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
     try {
       let res = await syncTikTokOrdersDirect();
 
-      // If sync failed because shop_cipher is missing or rejected, try auto-detecting and retrying once
       if (
         !res.success &&
         res.error &&
@@ -168,7 +178,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
-    showToast('info', 'Copied', text);
+    showToast('info', 'Copied to Clipboard', text);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
@@ -292,17 +302,132 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
     ['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'READY_TO_SHIP'].includes((o.order_status || '').toUpperCase())
   ).length;
 
+  // Selection handlers
+  const isAllSelected = filteredOrders.length > 0 && filteredOrders.every((o) => selectedIds.has(o.order_id));
+  const isSomeSelected = filteredOrders.some((o) => selectedIds.has(o.order_id));
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredOrders.map((o) => o.order_id)));
+    }
+  };
+
+  const handleToggleSelect = (orderId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  };
+
+  const selectedOrdersList = useMemo(() => {
+    return orders.filter((o) => selectedIds.has(o.order_id));
+  }, [orders, selectedIds]);
+
+  // Bulk Print AWBs
+  const handleBulkPrint = () => {
+    if (selectedOrdersList.length === 0) return;
+    const printWindow = window.open('', '_blank', 'width=450,height=650');
+    if (printWindow) {
+      printWindow.document.write(generateTikTokBatchAwbHtml(selectedOrdersList));
+      printWindow.document.close();
+      showToast(
+        'info',
+        'Batch AWB Print',
+        `Opened print window for ${selectedOrdersList.length} TikTok Shop orders.`
+      );
+    }
+  };
+
+  // Bulk Arrange Shipment
+  const handleBulkArrangeShipment = async () => {
+    const readyOrders = selectedOrdersList.filter(
+      (o) =>
+        ['AWAITING_SHIPMENT', 'READY_TO_SHIP'].includes((o.order_status || '').toUpperCase()) &&
+        !o.tracking_number
+    );
+
+    if (readyOrders.length === 0) {
+      showToast('warning', 'No Action Needed', 'Selected orders already have shipment arranged or tracking assigned.');
+      return;
+    }
+
+    setIsBulkArranging(true);
+    showToast('info', 'Arranging Shipments', `Processing shipment arrangement for ${readyOrders.length} orders...`);
+
+    let successCount = 0;
+    for (const ord of readyOrders) {
+      try {
+        const pkgId = ord.package_id || ord.order_id;
+        const res = await arrangeTikTokShipmentDirect(pkgId, { pick_up_type: 1, order_id: ord.order_id });
+        if (res.success) {
+          successCount++;
+          setOrders((prev) =>
+            prev.map((o) => (o.order_id === ord.order_id ? { ...o, order_status: 'AWAITING_COLLECTION' } : o))
+          );
+        }
+      } catch {
+        // Continue processing batch
+      }
+    }
+
+    setIsBulkArranging(false);
+    showToast('success', 'Bulk Shipment Arranged', `Arranged ${successCount} of ${readyOrders.length} packages.`);
+  };
+
+  // Bulk Export to CSV
+  const handleBulkExport = () => {
+    if (selectedOrdersList.length === 0) return;
+    const headers = [
+      'Order ID',
+      'Create Time',
+      'Buyer Username',
+      'Order Status',
+      'Shipping Carrier',
+      'Tracking Resi',
+      'Recipient Name',
+      'Recipient Phone',
+      'Recipient City',
+      'Recipient Address',
+      'Total Amount (IDR)',
+      'Items Summary',
+    ];
+
+    const rows = selectedOrdersList.map((o) => [
+      o.order_id,
+      o.create_time,
+      o.buyer_username,
+      o.order_status,
+      o.shipping_carrier,
+      o.tracking_number || '',
+      o.recipient_name,
+      o.recipient_phone,
+      o.recipient_city,
+      o.recipient_address,
+      o.total_amount,
+      (o.items || []).map((i) => `${i.item_name} (${i.sku_name || 'Standard'}) x${i.quantity}`).join('; '),
+    ]);
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    downloadCsv(`exacoat-tiktok-orders-${dateStr}.csv`, headers, rows);
+    showToast('success', 'CSV Exported', `Exported ${selectedOrdersList.length} orders to CSV.`);
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 font-sans">
       {/* Top Banner and Actions */}
       <div className="p-4 sm:p-5 rounded-2xl bg-neutral-900/60 border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-500/20 to-pink-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 font-bold font-mono text-lg shadow-sm">
+          <div className="w-11 h-11 rounded-xl bg-rose-500/15 border border-rose-500/25 flex items-center justify-center text-rose-400 font-bold font-mono text-base shadow-sm shrink-0">
             TT
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-base font-bold text-white tracking-tight">
                 {settings?.shop_name || 'TikTok Shop Operations'}
               </h2>
               <span
@@ -321,7 +446,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                 </span>
               )}
             </div>
-            <p className="text-xs text-neutral-400 mt-0.5 flex items-center gap-2">
+            <p className="text-xs text-neutral-400 mt-0.5 flex items-center gap-2 flex-wrap">
               <span>Service ID: {settings?.service_id || '7686433028542351124'}</span>
               <span>•</span>
               <span>
@@ -331,7 +456,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0 self-start md:self-auto">
           <button
             type="button"
             onClick={() => setIsSettingsOpen(true)}
@@ -345,7 +470,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
             type="button"
             onClick={handleSync}
             disabled={isSyncing}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white text-xs font-bold flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer shadow-md shadow-rose-500/20"
+            className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer shadow-md shadow-rose-500/20"
           >
             <RefreshCw className={clsx('w-3.5 h-3.5', isSyncing && 'animate-spin')} />
             <span>{isSyncing ? 'Syncing...' : 'Sync Orders'}</span>
@@ -404,6 +529,34 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
         </div>
       </div>
 
+      {/* Select-All Control Bar */}
+      {filteredOrders.length > 0 && (
+        <div className="px-4 py-2.5 rounded-xl bg-neutral-900/50 border border-white/5 flex items-center justify-between text-xs">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={isAllSelected}
+              ref={(input) => {
+                if (input) {
+                  input.indeterminate = !isAllSelected && isSomeSelected;
+                }
+              }}
+              onChange={handleToggleSelectAll}
+              className="w-4 h-4 rounded border-white/20 bg-neutral-800 text-rose-500 focus:ring-rose-500 focus:ring-offset-0 cursor-pointer"
+            />
+            <span className="text-neutral-300 font-medium">
+              Select all ({filteredOrders.length})
+            </span>
+          </label>
+
+          {selectedIds.size > 0 && (
+            <span className="text-rose-400 font-mono font-semibold">
+              {selectedIds.size} selected
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Orders List / Table */}
       {isLoading ? (
         <div className="p-12 text-center rounded-2xl bg-neutral-900/40 border border-white/5 space-y-3">
@@ -425,25 +578,48 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
             const isReadyToShip = ['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'READY_TO_SHIP'].includes(
               (order.order_status || '').toUpperCase()
             );
+            const isSelected = selectedIds.has(order.order_id);
 
             return (
               <div
                 key={order.order_id}
+                onClick={() => setSelectedDetailOrder(order)}
                 className={clsx(
-                  'p-4 sm:p-5 rounded-2xl bg-neutral-900/70 border transition-all hover:border-white/20',
-                  order.already_claimed ? 'border-amber-500/20 bg-amber-500/[0.02]' : 'border-white/10'
+                  'p-4 sm:p-5 rounded-2xl bg-neutral-900/70 border transition-all cursor-pointer hover:border-white/25 active:scale-[0.999]',
+                  isSelected
+                    ? 'border-rose-500/50 bg-rose-500/[0.03]'
+                    : order.already_claimed
+                    ? 'border-amber-500/20 bg-amber-500/[0.02]'
+                    : 'border-white/10'
                 )}
               >
+                {/* Top Header Bar */}
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/5 pb-3 mb-3">
-                  {/* Order ID and Buyer */}
+                  {/* Left: Checkbox, Channel tag, Order ID, Buyer */}
                   <div className="flex flex-wrap items-center gap-2.5">
-                    <span className="text-xs font-mono font-bold text-rose-400">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => handleToggleSelect(order.order_id, e as any)}
+                      className="w-4 h-4 rounded border-white/20 bg-neutral-800 text-rose-500 focus:ring-rose-500 focus:ring-offset-0 cursor-pointer shrink-0"
+                    />
+
+                    <span className="text-[10px] px-2 py-0.5 rounded-md font-mono font-bold uppercase bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                      TikTok
+                    </span>
+
+                    <span className="text-xs font-mono font-bold text-white">
                       #{order.order_id}
                     </span>
+
                     <button
                       type="button"
-                      onClick={() => handleCopy(order.order_id, `id_${order.order_id}`)}
-                      className="text-neutral-500 hover:text-neutral-300 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopy(order.order_id, `id_${order.order_id}`);
+                      }}
+                      className="text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer"
                       title="Copy Order ID"
                     >
                       {copiedId === `id_${order.order_id}` ? (
@@ -454,12 +630,15 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                     </button>
 
                     <span className="text-neutral-600">•</span>
-                    <span className="text-xs text-neutral-400">{order.create_time}</span>
+                    <div className="flex items-center gap-1.5 text-xs text-neutral-400">
+                      <Clock className="w-3.5 h-3.5 text-neutral-500" />
+                      <span>{order.create_time}</span>
+                    </div>
 
                     <span className="text-neutral-600">•</span>
                     <div className="flex items-center gap-1.5 text-xs text-neutral-300 font-medium">
                       <User className="w-3.5 h-3.5 text-neutral-500" />
-                      <span>{order.buyer_username}</span>
+                      <span>@{order.buyer_username}</span>
                     </div>
 
                     {order.already_claimed && (
@@ -470,8 +649,8 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                     )}
                   </div>
 
-                  {/* Status and Actions */}
-                  <div className="flex items-center gap-2 self-start lg:self-auto">
+                  {/* Right: Status badge, AWB, Arrange Ship, Menu, Chevron */}
+                  <div className="flex items-center gap-2 self-start lg:self-auto" onClick={(e) => e.stopPropagation()}>
                     <span
                       className={clsx(
                         'text-[10px] px-2.5 py-1 rounded-full font-semibold border',
@@ -500,7 +679,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                         type="button"
                         onClick={() => handleArrangeShipment(order)}
                         disabled={isArrangingId === order.order_id}
-                        className="px-3 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                        className="px-3 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 shadow-sm shadow-rose-500/20"
                       >
                         {isArrangingId === order.order_id ? (
                           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -579,6 +758,10 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                         </div>
                       )}
                     </div>
+
+                    <div className="pl-1 text-neutral-500 hover:text-white transition-colors">
+                      <ChevronRight className="w-4 h-4" />
+                    </div>
                   </div>
                 </div>
 
@@ -591,25 +774,25 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                         key={idx}
                         className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-neutral-950/40 border border-white/5"
                       >
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
                           {item.image_url ? (
                             <img
                               src={item.image_url}
                               alt={item.item_name}
-                              className="w-10 h-10 rounded-lg object-cover bg-neutral-800 shrink-0"
+                              className="w-10 h-10 rounded-lg object-cover bg-neutral-800 shrink-0 border border-white/5"
                             />
                           ) : (
-                            <div className="w-10 h-10 rounded-lg bg-neutral-800 flex items-center justify-center shrink-0">
+                            <div className="w-10 h-10 rounded-lg bg-neutral-800 flex items-center justify-center shrink-0 border border-white/5">
                               <Tag className="w-4 h-4 text-neutral-500" />
                             </div>
                           )}
-                          <div>
-                            <p className="text-xs font-semibold text-white leading-tight">
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-white leading-tight truncate">
                               {item.item_name}
                             </p>
                             {item.sku_name && (
-                              <p className="text-[11px] font-mono text-neutral-400 mt-0.5">
-                                Variant: {item.sku_name}
+                              <p className="text-[11px] font-mono text-neutral-400 mt-0.5 truncate">
+                                Variant: <span className="text-neutral-200">{item.sku_name}</span>
                               </p>
                             )}
                           </div>
@@ -620,11 +803,20 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                             x{item.quantity}
                           </span>
                           <p className="text-[11px] font-mono text-neutral-400">
-                            {formatCurrency(item.price)}
+                            {formatCurrency(item.price, order.currency || 'IDR')}
                           </p>
                         </div>
                       </div>
                     ))}
+
+                    <div className="flex items-center justify-between pt-1 text-xs">
+                      <span className="text-neutral-500 font-mono text-[11px]">
+                        {order.items?.length || 0} line item(s)
+                      </span>
+                      <div className="font-mono text-xs font-bold text-white">
+                        Total: <span className="text-rose-400">{formatCurrency(order.total_amount, order.currency || 'IDR')}</span>
+                      </div>
+                    </div>
 
                     {order.buyer_note && (
                       <div className="text-xs p-2 rounded-lg bg-amber-500/5 border border-amber-500/10 text-amber-300/90 italic">
@@ -634,10 +826,10 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                   </div>
 
                   {/* Column 3: Logistics and Destination */}
-                  <div className="p-3 rounded-xl bg-neutral-950/40 border border-white/5 space-y-2 text-xs">
+                  <div className="p-3.5 rounded-xl bg-neutral-950/40 border border-white/5 space-y-2 text-xs">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-mono uppercase text-neutral-500">Logistics</span>
-                      <span className="font-semibold text-neutral-200">{order.shipping_carrier}</span>
+                      <span className="font-semibold text-neutral-200">{order.shipping_carrier || 'Standard Courier'}</span>
                     </div>
 
                     <div className="flex items-center justify-between">
@@ -647,11 +839,11 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                       </span>
                     </div>
 
-                    <div className="flex items-start gap-1.5 pt-1 border-t border-white/5">
+                    <div className="flex items-start gap-2 pt-2 border-t border-white/5">
                       <MapPin className="w-3.5 h-3.5 text-neutral-500 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="font-medium text-neutral-300">{order.recipient_name}</p>
-                        <p className="text-[11px] text-neutral-500 leading-tight">
+                      <div className="min-w-0">
+                        <p className="font-medium text-neutral-200">{order.recipient_name}</p>
+                        <p className="text-[11px] text-neutral-400 leading-tight truncate max-w-[200px]" title={order.recipient_address}>
                           {order.recipient_address}
                         </p>
                         <p className="text-[10px] text-neutral-500 font-mono mt-0.5">
@@ -666,6 +858,66 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
           })}
         </div>
       )}
+
+      {/* Floating Bulk Actions Bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-y-0 -translate-x-1/2 z-40 bg-[#141414]/95 border border-white/20 shadow-2xl rounded-2xl px-5 py-3 flex items-center gap-3 backdrop-blur-xl max-w-[95vw] overflow-x-auto">
+          <div className="flex items-center gap-2 pr-3 border-r border-white/10 whitespace-nowrap">
+            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+            <span className="text-xs font-bold text-white">
+              {selectedIds.size} {selectedIds.size === 1 ? 'order' : 'orders'} selected
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleBulkPrint}
+            className="px-3.5 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-rose-500/20 whitespace-nowrap"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>Bulk Print AWBs</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleBulkArrangeShipment}
+            disabled={isBulkArranging}
+            className="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
+          >
+            <Truck className={clsx('w-3.5 h-3.5', isBulkArranging && 'animate-spin')} />
+            <span>{isBulkArranging ? 'Arranging...' : 'Bulk Arrange'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleBulkExport}
+            className="px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+          >
+            <Download className="w-3.5 h-3.5 text-neutral-400" />
+            <span>Export CSV</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSelectedIds(new Set())}
+            className="p-2 rounded-xl hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer ml-1"
+            title="Deselect All"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Order Detail Modal */}
+      <TikTokOrderDetailModal
+        order={selectedDetailOrder}
+        isOpen={Boolean(selectedDetailOrder)}
+        onClose={() => setSelectedDetailOrder(null)}
+        onPrintAwb={handlePrintLabel}
+        onArrangeShipment={handleArrangeShipment}
+        onClaimWarranty={onClaimWarranty}
+        onClaimRedeem={onClaimRedeem}
+      />
 
       {/* Settings Modal */}
       <TikTokSettingsModal
