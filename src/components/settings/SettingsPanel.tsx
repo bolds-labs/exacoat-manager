@@ -34,7 +34,7 @@ import {
   WordPressPluginSettings,
   PrivateSettingStatus
 } from '../../lib/wordpressBridge';
-import { getWordPressBaseUrl, setWordPressBaseUrl, getWcCredentials } from '../../lib/env';
+import { getWordPressBaseUrl, setWordPressBaseUrl, getWcCredentials, setWcCredentials } from '../../lib/env';
 import { PLUGIN_VERSION, PLUGIN_ZIP_NAME } from '../../config/version';
 import { TeamRolesManager } from './TeamRolesManager';
 import { WhatsAppAutomationSection } from './WhatsAppAutomationSection';
@@ -67,6 +67,26 @@ export const SettingsPanel: React.FC = () => {
     setCurrentWpUrl(updated);
     setWpUrlInput(updated);
     showToast('info', 'Target Reset', `Restored environment default: ${updated}`);
+  };
+
+  const [wcKeyInput, setWcKeyInput] = useState(wcCredentials.key);
+  const [wcSecretInput, setWcSecretInput] = useState(wcCredentials.secret);
+  const [showWcSecret, setShowWcSecret] = useState(false);
+
+  const handleSaveWcCredentials = (k?: string, s?: string) => {
+    const kVal = (k !== undefined ? k : wcKeyInput).trim();
+    const sVal = (s !== undefined ? s : wcSecretInput).trim();
+    setWcCredentials(kVal, sVal);
+    setWcKeyInput(kVal);
+    setWcSecretInput(sVal);
+    showToast('success', 'Credentials Saved', 'WooCommerce API keys stored in local browser storage.');
+  };
+
+  const handleClearWcCredentials = () => {
+    setWcCredentials('', '');
+    setWcKeyInput('');
+    setWcSecretInput('');
+    showToast('info', 'Credentials Cleared', 'Reset to container environment default.');
   };
 
   // Remote WordPress Plugin Settings State
@@ -217,17 +237,38 @@ export const SettingsPanel: React.FC = () => {
     setIsTestingWcApi(true);
     setWcApiTestResult(null);
     const startTime = Date.now();
+    const activeKey = (wcKeyInput || wcCredentials.key).trim();
+    const activeSecret = (wcSecretInput || wcCredentials.secret).trim();
+
+    if (!activeKey || !activeSecret) {
+      setIsTestingWcApi(false);
+      setWcApiTestResult({
+        status: 'error',
+        message: 'Consumer Key and Secret are required to test the WooCommerce API.',
+      });
+      showToast('error', 'Missing Keys', 'Please enter and save your Consumer Key and Secret first.');
+      return;
+    }
 
     try {
-      const basicAuth = btoa(`${wcCredentials.key}:${wcCredentials.secret}`);
+      const basicAuth = btoa(`${activeKey}:${activeSecret}`);
       const endpoint = `${wpBaseUrl}/wp-json/wc/v3/system_status`;
 
-      const response = await fetch(endpoint, {
+      let response = await fetch(endpoint, {
         headers: {
           'Authorization': `Basic ${basicAuth}`,
           'Content-Type': 'application/json',
         },
       });
+
+      // Fallback: If Basic Auth returned 401 (often caused by LiteSpeed stripping Authorization headers), retry with query parameters
+      if (response.status === 401 && wpBaseUrl.startsWith('https://')) {
+        const queryEndpoint = `${wpBaseUrl}/wp-json/wc/v3/system_status?consumer_key=${encodeURIComponent(activeKey)}&consumer_secret=${encodeURIComponent(activeSecret)}`;
+        const fallbackRes = await fetch(queryEndpoint);
+        if (fallbackRes.ok) {
+          response = fallbackRes;
+        }
+      }
 
       const latency = Date.now() - startTime;
 
@@ -243,7 +284,7 @@ export const SettingsPanel: React.FC = () => {
         setWcApiTestResult({
           status: 'error',
           latency,
-          message: `HTTP ${response.status}: ${text.slice(0, 120)}`,
+          message: `HTTP ${response.status}: ${text.slice(0, 150)}`,
         });
         showToast('error', 'Connection Refused', `HTTP ${response.status}`);
       }
@@ -893,35 +934,96 @@ export const SettingsPanel: React.FC = () => {
 
           {/* Credentials Card */}
           <div className="p-5 rounded-2xl bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/[0.06] space-y-4">
-            <h4 className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono">
-              Store Credentials & Authentication
-            </h4>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
-              <div className="p-3 rounded-xl bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-white/10 space-y-1">
-                <span className="text-[10px] text-zinc-500 uppercase block">Consumer Key</span>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-zinc-900 dark:text-zinc-200 font-bold truncate">
-                    {wcCredentials.key.slice(0, 10)}•••••••••••••••••••••••••
-                  </span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Configured</span>
-                </div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h4 className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono flex items-center gap-2">
+                  <span>Store Credentials & Authentication</span>
+                  {wcKeyInput ? (
+                    <span className="text-[10px] font-normal px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 lowercase">
+                      configured
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-normal px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 lowercase">
+                      not set
+                    </span>
+                  )}
+                </h4>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono mt-1">
+                  Configure WooCommerce REST API keys for order synchronization and operations.
+                </p>
               </div>
 
-              <div className="p-3 rounded-xl bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-white/10 space-y-1">
-                <span className="text-[10px] text-zinc-500 uppercase block">Consumer Secret</span>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-zinc-900 dark:text-zinc-200 font-bold truncate">
-                    {wcCredentials.secret.slice(0, 10)}•••••••••••••••••••••••••
-                  </span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Configured</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => handleSaveWcCredentials(
+                    'ck_c6898072346d5098a584e142d19ab0cbd03700d6',
+                    'cs_96cfb9b7614b309919f778686988f7f102de5029'
+                  )}
+                  className="px-2.5 py-1 rounded-lg text-xs font-mono font-medium bg-[#f3aa18]/15 border border-[#f3aa18]/40 text-[#f3aa18] hover:bg-[#f3aa18]/25 transition-colors cursor-pointer"
+                  title="Fill in the verified staging keys"
+                >
+                  Pre-fill Staging Keys
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearWcCredentials}
+                  className="px-2.5 py-1 rounded-lg text-xs font-mono font-medium bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:text-rose-400 transition-colors cursor-pointer"
+                >
+                  Clear Keys
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+              <div className="p-3.5 rounded-xl bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-white/10 space-y-2">
+                <label className="text-[10px] text-zinc-500 uppercase font-bold block">
+                  Consumer Key (ck_...)
+                </label>
+                <input
+                  type="text"
+                  value={wcKeyInput}
+                  onChange={(e) => setWcKeyInput(e.target.value)}
+                  placeholder="ck_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-xs font-mono text-zinc-900 dark:text-white focus:outline-none focus:border-[#f3aa18]"
+                />
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-white/10 space-y-2">
+                <label className="text-[10px] text-zinc-500 uppercase font-bold block">
+                  Consumer Secret (cs_...)
+                </label>
+                <div className="relative flex items-center">
+                  <input
+                    type={showWcSecret ? 'text' : 'password'}
+                    value={wcSecretInput}
+                    onChange={(e) => setWcSecretInput(e.target.value)}
+                    placeholder="cs_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                    className="w-full px-3 py-2 pr-10 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-xs font-mono text-zinc-900 dark:text-white focus:outline-none focus:border-[#f3aa18]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowWcSecret(!showWcSecret)}
+                    className="absolute right-2 text-zinc-400 hover:text-white p-1 cursor-pointer"
+                  >
+                    {showWcSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
                 </div>
               </div>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-zinc-100 dark:bg-zinc-900/40 border border-zinc-200 dark:border-white/[0.06] text-[11px] text-zinc-500 leading-relaxed font-sans">
-              <strong className="text-zinc-800 dark:text-zinc-300">Authentication Protocol: </strong>
-              All requests to WooCommerce REST endpoints use HTTP Basic Authentication over TLS with Consumer Key and Consumer Secret credentials provisioned in WooCommerce Settings &gt; Advanced &gt; REST API.
+            <div className="flex items-center justify-between pt-1">
+              <div className="text-[11px] text-zinc-500 font-sans">
+                Credentials are saved securely in your local browser storage and used for all direct WooCommerce REST calls.
+              </div>
+              <button
+                type="button"
+                onClick={() => handleSaveWcCredentials()}
+                className="px-4 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-zinc-950 font-bold text-xs font-mono transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>Save Credentials</span>
+              </button>
             </div>
           </div>
 

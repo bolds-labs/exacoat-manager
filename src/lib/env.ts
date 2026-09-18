@@ -63,3 +63,23 @@ export const getWcCredentials = () => {
   };
 };
 
+export const setWcCredentials = (key: string, secret: string) => {
+  if (typeof localStorage !== 'undefined') {
+    if (!key && !secret) {
+      localStorage.removeItem('exacoat_wc_consumer_key');
+      localStorage.removeItem('wc_consumer_key');
+      localStorage.removeItem('exacoat_wc_consumer_secret');
+      localStorage.removeItem('wc_consumer_secret');
+    } else {
+      if (key) {
+        localStorage.setItem('exacoat_wc_consumer_key', key.trim());
+        localStorage.setItem('wc_consumer_key', key.trim());
+      }
+      if (secret) {
+        localStorage.setItem('exacoat_wc_consumer_secret', secret.trim());
+        localStorage.setItem('wc_consumer_secret', secret.trim());
+      }
+    }
+  }
+};
+
