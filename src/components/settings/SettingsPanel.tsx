@@ -34,7 +34,7 @@ import {
   WordPressPluginSettings,
   PrivateSettingStatus
 } from '../../lib/wordpressBridge';
-import { getWordPressBaseUrl, getWcCredentials } from '../../lib/env';
+import { getWordPressBaseUrl, setWordPressBaseUrl, getWcCredentials } from '../../lib/env';
 import { PLUGIN_VERSION, PLUGIN_ZIP_NAME } from '../../config/version';
 import { TeamRolesManager } from './TeamRolesManager';
 import { WhatsAppAutomationSection } from './WhatsAppAutomationSection';
@@ -46,8 +46,28 @@ export const SettingsPanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  const wpBaseUrl = getWordPressBaseUrl();
+  const [currentWpUrl, setCurrentWpUrl] = useState(getWordPressBaseUrl());
+  const [wpUrlInput, setWpUrlInput] = useState(getWordPressBaseUrl());
+  const wpBaseUrl = currentWpUrl;
   const wcCredentials = getWcCredentials();
+
+  const handleSaveWpUrl = (urlToSet?: string) => {
+    const target = (urlToSet !== undefined ? urlToSet : wpUrlInput).trim();
+    if (!target) return;
+    setWordPressBaseUrl(target);
+    const updated = getWordPressBaseUrl();
+    setCurrentWpUrl(updated);
+    setWpUrlInput(updated);
+    showToast('success', 'WordPress Target Updated', `Active API target set to: ${updated}`);
+  };
+
+  const handleResetWpUrl = () => {
+    setWordPressBaseUrl('');
+    const updated = getWordPressBaseUrl();
+    setCurrentWpUrl(updated);
+    setWpUrlInput(updated);
+    showToast('info', 'Target Reset', `Restored environment default: ${updated}`);
+  };
 
   // Remote WordPress Plugin Settings State
   const [wpSettings, setWpSettings] = useState<WordPressPluginSettings>({
@@ -763,6 +783,76 @@ export const SettingsPanel: React.FC = () => {
               )}
             </div>
           )}
+
+          {/* WordPress Target Instance Switcher */}
+          <div className="p-5 rounded-2xl bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/[0.06] space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h4 className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono flex items-center gap-2">
+                  <span>Target WordPress Instance</span>
+                  <span className="text-[10px] font-normal px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 lowercase">
+                    active: {wpBaseUrl}
+                  </span>
+                </h4>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono mt-1">
+                  Point Exacoat Manager to your staging server or live production store. Changes take effect instantly in this browser session.
+                </p>
+              </div>
+
+              {/* Presets */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => handleSaveWpUrl('https://staging.exacoat.com')}
+                  className={clsx(
+                    "px-2.5 py-1 rounded-lg text-xs font-mono font-medium border transition-colors cursor-pointer",
+                    wpBaseUrl === 'https://staging.exacoat.com'
+                      ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18] font-bold"
+                      : "bg-zinc-100 dark:bg-zinc-800/80 border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400"
+                  )}
+                >
+                  staging.exacoat.com
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveWpUrl('https://exacoat.com')}
+                  className={clsx(
+                    "px-2.5 py-1 rounded-lg text-xs font-mono font-medium border transition-colors cursor-pointer",
+                    wpBaseUrl === 'https://exacoat.com'
+                      ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18] font-bold"
+                      : "bg-zinc-100 dark:bg-zinc-800/80 border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400"
+                  )}
+                >
+                  exacoat.com (live)
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="url"
+                value={wpUrlInput}
+                onChange={(e) => setWpUrlInput(e.target.value)}
+                placeholder="https://staging.exacoat.com"
+                className="flex-1 px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs font-mono text-zinc-900 dark:text-white focus:outline-none focus:border-[#f3aa18]"
+              />
+              <button
+                type="button"
+                onClick={() => handleSaveWpUrl()}
+                className="px-4 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-zinc-950 font-bold text-xs font-mono transition-colors cursor-pointer"
+              >
+                Apply URL
+              </button>
+              <button
+                type="button"
+                onClick={handleResetWpUrl}
+                title="Reset to environment variable default"
+                className="px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 text-xs font-mono border border-zinc-300 dark:border-zinc-700 cursor-pointer"
+              >
+                Reset Default
+              </button>
+            </div>
+          </div>
 
           {/* Core Endpoints Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

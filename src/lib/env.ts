@@ -30,10 +30,27 @@ export const getEnv = (key: string, defaultValue: string = ''): string => {
 };
 
 export const getWordPressBaseUrl = (): string => {
+  if (typeof localStorage !== 'undefined') {
+    const localUrl = localStorage.getItem('exacoat_wordpress_url') || localStorage.getItem('wordpress_url');
+    if (localUrl && localUrl.trim()) {
+      return localUrl.trim().replace(/\/$/, '');
+    }
+  }
   if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
     return window.location.origin;
   }
   return getEnv('VITE_WORDPRESS_URL', 'https://exacoat.com').replace(/\/$/, '');
+};
+
+export const setWordPressBaseUrl = (url: string) => {
+  if (typeof localStorage !== 'undefined') {
+    if (!url || !url.trim()) {
+      localStorage.removeItem('exacoat_wordpress_url');
+      localStorage.removeItem('wordpress_url');
+    } else {
+      localStorage.setItem('exacoat_wordpress_url', url.trim().replace(/\/$/, ''));
+    }
+  }
 };
 
 export const getWcCredentials = () => {
