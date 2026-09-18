@@ -230,6 +230,36 @@ class Exacoat_Email_Engine {
 				'type'           => 'customer_order',
 				'defaults'       => self::get_mock_order_defaults( '14589' ),
 			],
+			'customer_order_store_pickup_ready' => [
+				'category'       => 'Orders',
+				'label'          => 'Store Pickup Ready (SMB)',
+				'subject'        => '{customer_first_name}, your order (#{order_number}) is ready for pick up',
+				'preheader'      => 'Ready to protect your device?',
+				'badge'          => 'Ready for pick up',
+				'icon'           => 'document_verified',
+				'title'          => 'Your order is ready for pick up',
+				'body_primary'   => 'Your order <b>(#{order_number})</b> is ready for pick up.<br>Bring your order number and get it installed for free on:',
+				'body_secondary' => '',
+				'is_store_pickup'=> true,
+				'pickup_ready'   => true,
+				'type'           => 'customer_order',
+				'defaults'       => self::get_mock_order_defaults( '14589' ),
+			],
+			'customer_order_store_pickup_completed' => [
+				'category'       => 'Orders',
+				'label'          => 'Store Pickup Completed',
+				'subject'        => '{customer_first_name}, your order has been picked up',
+				'preheader'      => 'Thank you for coming!',
+				'badge'          => 'Picked up',
+				'icon'           => 'document_verified',
+				'title'          => 'Order picked up',
+				'body_primary'   => 'Your order <b>(#{order_number})</b> has been picked up.<br>Leave a review and tell us about your experience!',
+				'body_secondary' => '',
+				'is_store_pickup'=> true,
+				'pickup_review'  => true,
+				'type'           => 'customer_order',
+				'defaults'       => self::get_mock_order_defaults( '14589' ),
+			],
 			'customer_order_review_invitation' => [
 				'category'       => 'Orders',
 				'label'          => 'Product Review Invitation',
@@ -1005,6 +1035,40 @@ class Exacoat_Email_Engine {
 		$body_primary= preg_replace( $tag_pattern, '', $body_primary );
 		$body_secondary = preg_replace( $tag_pattern, '', $body_secondary );
 
+		$preheader = $tmpl['preheader'] ?? $data['preheader'] ?? '';
+		if ( ! empty( $preheader ) ) {
+			$preheader = str_replace( array_keys( $replacements ), array_values( $replacements ), $preheader );
+			$preheader = preg_replace( $tag_pattern, '', $preheader );
+		}
+
+		$is_store_pickup = ! empty( $tmpl['is_store_pickup'] ) || ! empty( $data['is_store_pickup'] );
+
+		$pickup_action_html = '';
+		if ( ! empty( $tmpl['pickup_ready'] ) || ! empty( $data['pickup_ready'] ) ) {
+			$pickup_action_html = '
+			<table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:16px;margin:24px 0;">
+				<tr>
+					<td style="padding:22px 24px;">
+						<p style="margin:0 0 4px;font-size:16px;font-weight:700;color:#111827;letter-spacing:-0.2px;">Exacoat Store Bekasi</p>
+						<p style="margin:0 0 16px;font-size:13.5px;color:#4b5563;line-height:1.5;">Ruby Commercial TB-12, Summarecon Bekasi, Bekasi Utara</p>
+						<a href="https://maps.app.goo.gl/B9Z2n98o5kM33k4q9" target="_blank" style="display:inline-block;padding:10px 20px;background:#111111;color:#ffffff;font-size:13px;font-weight:600;border-radius:100px;text-decoration:none;letter-spacing:0.2px;">Open in Google Maps &rarr;</a>
+					</td>
+				</tr>
+			</table>
+			<p style="margin:16px 0 0;font-size:13px;color:#71717a;">Need help? <a href="https://exacoat.com/cs" style="color:#f3aa18;text-decoration:underline;font-weight:600;">Contact admin</a></p>';
+		} elseif ( ! empty( $tmpl['pickup_review'] ) || ! empty( $data['pickup_review'] ) ) {
+			$pickup_action_html = '
+			<table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:16px;margin:24px 0;">
+				<tr>
+					<td style="padding:24px;text-align:center;">
+						<p style="margin:0 0 16px;font-size:14.5px;color:#374151;font-weight:500;">Leave a review and tell us about your experience!</p>
+						<a href="https://g.page/r/CZZ440l0WvPWEBM/review" target="_blank" style="display:inline-block;padding:12px 28px;background:#111111;color:#ffffff;font-size:13.5px;font-weight:700;border-radius:100px;text-decoration:none;letter-spacing:0.2px;">Write a review &rarr;</a>
+					</td>
+				</tr>
+			</table>
+			<p style="margin:16px 0 0;font-size:13px;color:#71717a;text-align:center;">Need help? <a href="https://exacoat.com/cs" style="color:#f3aa18;text-decoration:underline;font-weight:600;">Contact admin</a></p>';
+		}
+
 		if ( ! empty( $data['customer_note'] ) ) {
 			$note_content = esc_html( (string) $data['customer_note'] );
 			$body_secondary .= "
@@ -1194,6 +1258,7 @@ class Exacoat_Email_Engine {
   </style>
 </head>
 <body bgcolor=\"#f7f7f7\" style=\"margin:0;padding:0;background-color:#f7f7f7;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;\">
+  " . ( ! empty( $preheader ) ? "<div style=\"display:none;font-size:1px;color:#333333;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;mso-hide:all;\">" . esc_html( $preheader ) . "</div>" : "" ) . "
   <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#f7f7f7\" style=\"background-color:#f7f7f7;padding:44px 16px;\">
     <tr>
       <td align=\"center\">
@@ -1225,6 +1290,7 @@ class Exacoat_Email_Engine {
                 " . ( $body_secondary ? "<p style=\"margin:0 0 24px;font-size:14.5px;line-height:1.7;color:#52525b;\">{$body_secondary}</p>" : "" ) . "
                 
                 {$shipment_html}
+                {$pickup_action_html}
 
                 <!-- Dedicated Spacer above Order Summary -->
                 <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">
@@ -1266,8 +1332,12 @@ class Exacoat_Email_Engine {
                 <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#fafafa;border:1px solid #eaeaea;border-radius:16px;margin-bottom:32px;\">
                   <tr>
                     <td class=\"address-col\" width=\"58%\" valign=\"top\" style=\"padding:22px 24px;border-right:1px solid #eaeaea;\">
-                      <p style=\"margin:0 0 8px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#71717a;\">Shipping Address</p>
-                      <p style=\"margin:0;font-size:13px;line-height:1.65;color:#3f3f46;\">{$shipping_addr}</p>
+                      " . ( $is_store_pickup
+                        ? "<p style=\"margin:0 0 8px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#71717a;\">Store Pickup Location</p>
+                           <p style=\"margin:0;font-size:13px;line-height:1.65;color:#3f3f46;\">Exacoat Store Bekasi<br>Ruby Commercial TB-12, Summarecon Bekasi, Bekasi Utara</p>"
+                        : "<p style=\"margin:0 0 8px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#71717a;\">Shipping Address</p>
+                           <p style=\"margin:0;font-size:13px;line-height:1.65;color:#3f3f46;\">{$shipping_addr}</p>"
+                      ) . "
                     </td>
                     <td class=\"address-col\" width=\"42%\" valign=\"top\" style=\"padding:22px 24px;\">
                       <p style=\"margin:0 0 8px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#71717a;\">Payment Method</p>

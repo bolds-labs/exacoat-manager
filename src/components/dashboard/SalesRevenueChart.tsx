@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { GlassCard } from '../ui/GlassCard';
 import { Order } from '../../types';
-import { formatCurrency, formatDate } from '../../lib/formatters';
+import { formatCurrency, formatDate, convertToIdr, isRevenueOrder } from '../../lib/formatters';
 import { 
   AreaChart, 
   Area, 
@@ -18,11 +18,14 @@ interface SalesRevenueChartProps {
 }
 
 export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({ orders }) => {
-  // Aggregate daily revenue and order volume
+  // Aggregate daily revenue and order volume in base currency (IDR)
   const chartData = useMemo(() => {
     const map: Record<string, { date: string; label: string; revenue: number; orders: number }> = {};
 
     orders.forEach(order => {
+      // Strictly exclude cancelled, refunded, failed orders from revenue
+      if (!isRevenueOrder(order)) return;
+
       const d = order.created_at ? new Date(order.created_at) : new Date();
       const key = d.toISOString().split('T')[0];
       const label = d.toLocaleDateString('default', { month: 'short', day: 'numeric' });
@@ -30,7 +33,8 @@ export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({ orders }) 
       if (!map[key]) {
         map[key] = { date: key, label, revenue: 0, orders: 0 };
       }
-      map[key].revenue += Number(order.total) || 0;
+      const orderRevenue = (order as any).total_idr || convertToIdr(order.total, order.currency);
+      map[key].revenue += orderRevenue;
       map[key].orders += 1;
     });
 
@@ -38,7 +42,7 @@ export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({ orders }) 
     return sorted.slice(-14); // Last 14 active days
   }, [orders]);
 
-  const currency = orders[0]?.currency || 'USD';
+  const currency = 'IDR';
   const totalRevenue = chartData.reduce((acc, d) => acc + d.revenue, 0);
 
   return (
@@ -82,9 +86,11 @@ export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({ orders }) 
               />
               <YAxis 
                 tick={{ fill: '#71717a', fontSize: 10, fontFamily: 'monospace' }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v) => `$${v}`}
+                tickFormatter={(v) => {
+                  if (v >= 1000000) return `Rp ${(v / 1000000).toFixed(1)}M`;
+                  if (v >= 1000) return `Rp ${(v / 1000).toFixed(0)}k`;
+                  return `Rp ${v}`;
+                }}
               />
               <Tooltip 
                 content={({ active, payload }) => {

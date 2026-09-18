@@ -3,6 +3,7 @@ import { SlideDrawer } from '../ui/SlideDrawer';
 import { Badge } from '../ui/Badge';
 import { Tooltip } from '../ui/Tooltip';
 import { Modal } from '../ui/Modal';
+import { ConfirmationModal } from '../ui/ConfirmationModal';
 import {
   Select,
   SelectTrigger,
@@ -134,6 +135,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   const [isManualWarrantyModalOpen, setIsManualWarrantyModalOpen] = useState(false);
   const [manualClaimType, setManualClaimType] = useState<'Warranty' | 'Redeem'>('Warranty');
   const [previewCustomItem, setPreviewCustomItem] = useState<any | null>(null);
+  const [showManualCompletedModal, setShowManualCompletedModal] = useState(false);
 
   // 30-Day Money Back Guarantee state
   const [isProcessingGuaranteeAction, setIsProcessingGuaranteeAction] = useState(false);
@@ -478,7 +480,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
             {rmaDetails?.order_type === 'Redeem' && (
               <span className="inline-flex h-6 items-center whitespace-nowrap text-[11px] leading-none font-mono font-bold text-amber-400 bg-amber-500/20 px-2.5 rounded-full border border-amber-500/40 shadow-xs">
                 <RotateCcw className="w-3.5 h-3.5 mr-1 text-amber-400" />
-                REDEEM (COMPANY FAULT)
+                REDEEM
               </span>
             )}
             {rmaDetails?.order_type === 'Warranty' && (
@@ -538,7 +540,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-bold text-white font-sans">
                       {rmaDetails.order_type === 'Redeem'
-                        ? 'Redeem Replacement Order (Exacoat Fault - Free Shipping)'
+                        ? 'Redeem Replacement Order'
                         : '48-Hour Installation Warranty Replacement'}
                     </span>
                     <span className={clsx(
@@ -630,7 +632,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
             <div className="flex items-center gap-2.5">
               <RotateCcw className="w-4 h-4 text-amber-400 shrink-0" />
               <div className="text-xs font-sans text-neutral-300">
-                <span>Redeem Replacement order filed (Exacoat Fault - Free Shipping): </span>
+                <span>Redeem Replacement order filed: </span>
                 {onSelectOrderById ? (
                   <button
                     type="button"
@@ -826,34 +828,48 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                     title="Issue free redeem replacement order (Exacoat factory defect / error)"
                   >
                     <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Redeem (Fault)</span>
+                    <span>Redeem</span>
                   </button>
                 </>
               )}
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
-            {[
-              { key: 'on-hold', label: 'Waiting for Payment', icon: Clock },
-              { key: 'processing', label: 'Payment confirmed', icon: Clock },
-              { key: 'preparing-order', label: 'Preparing order', icon: Layers },
-              { key: isStorePickup ? 'smb-ready' : 'ready-to-ship', label: isStorePickup ? 'Ready for Pickup' : 'Waiting for Courier Pickup', icon: Package },
-              { key: isStorePickup ? 'smb-picked' : 'shipped', label: isStorePickup ? 'Picked Up' : 'Shipped', icon: isStorePickup ? CheckCircle2 : Truck },
-              { key: 'completed', label: 'Completed', icon: CheckCircle2 },
-            ].map(stage => {
+          <div className={clsx("grid gap-2", isStorePickup ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-6")}>
+            {(isStorePickup
+              ? [
+                  { key: 'on-hold', label: 'Waiting for Payment', icon: Clock },
+                  { key: 'processing', label: 'Payment confirmed', icon: Clock },
+                  { key: 'preparing-order', label: 'Preparing order', icon: Layers },
+                  { key: 'smb-ready', label: 'Ready for Pickup', icon: Package },
+                  { key: 'completed', label: 'Picked Up', icon: CheckCircle2 },
+                ]
+              : [
+                  { key: 'on-hold', label: 'Waiting for Payment', icon: Clock },
+                  { key: 'processing', label: 'Payment confirmed', icon: Clock },
+                  { key: 'preparing-order', label: 'Preparing order', icon: Layers },
+                  { key: 'ready-to-ship', label: 'Waiting for Courier Pickup', icon: Package },
+                  { key: 'shipped', label: 'Shipped', icon: Truck },
+                  { key: 'completed', label: 'Completed', icon: CheckCircle2 },
+                ]
+            ).map(stage => {
               const isActive = (currentStatusClean === stage.key) || 
-                (stage.key === 'completed' && (currentStatusClean === 'delivered' || currentStatusClean === 'completed')) || 
+                (stage.key === 'completed' && (currentStatusClean === 'delivered' || currentStatusClean === 'completed' || (isStorePickup && currentStatusClean === 'smb-picked'))) || 
                 (stage.key === 'ready-to-ship' && (currentStatusClean === 'awaiting-pickup' || currentStatusClean === 'awaiting_pickup' || currentStatusClean === 'ready-to-ship' || currentStatusClean === 'ready_to_ship')) ||
                 (stage.key === 'smb-ready' && (currentStatusClean === 'smb-ready' || currentStatusClean === 'ready-to-ship' || currentStatusClean === 'awaiting-pickup')) ||
-                (stage.key === 'smb-picked' && (currentStatusClean === 'smb-picked' || currentStatusClean === 'completed')) ||
                 (stage.key === 'preparing-order' && (currentStatusClean === 'in-production' || currentStatusClean === 'in_production' || currentStatusClean === 'preparing-order' || currentStatusClean === 'preparing_order'));
               const Icon = stage.icon;
               return (
                 <button
                   key={stage.key}
                   disabled={isUpdatingStatus}
-                  onClick={() => handleStatusChange(stage.key)}
+                  onClick={() => {
+                    if (!isStorePickup && stage.key === 'completed') {
+                      setShowManualCompletedModal(true);
+                    } else {
+                      handleStatusChange(stage.key);
+                    }
+                  }}
                   className={clsx(
                     'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all duration-200',
                     isActive 
@@ -2221,6 +2237,21 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
           </div>
         </Modal>
       )}
+
+      {/* Manual Completed Override Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showManualCompletedModal}
+        onClose={() => setShowManualCompletedModal(false)}
+        onConfirm={() => {
+          setShowManualCompletedModal(false);
+          handleStatusChange('completed');
+        }}
+        title="Manual Override: Mark Order as Completed"
+        description="Courier delivery status is normally updated automatically once the courier confirms delivery via tracking webhooks. Are you sure you want to manually mark this order as Completed?"
+        confirmText="Override to Completed"
+        cancelText="Cancel"
+        variant="warning"
+      />
     </SlideDrawer>
   );
 };

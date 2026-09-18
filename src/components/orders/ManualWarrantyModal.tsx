@@ -798,10 +798,10 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
             <span className="text-base font-bold text-white tracking-tight">
               {isExisting
                 ? claimType === 'Redeem'
-                  ? `Redeem Claim: Exacoat Fault (Order #${existingOrder?.order_number || existingOrder?.id})`
+                  ? `Redeem Claim (Order #${existingOrder?.order_number || existingOrder?.id})`
                   : `Installation Warranty Claim (Order #${existingOrder?.order_number || existingOrder?.id})`
                 : claimType === 'Redeem'
-                ? 'Create Marketplace Redeem Order (Exacoat Fault)'
+                ? 'Create Marketplace Redeem Order'
                 : 'Create Marketplace Warranty Claim'}
             </span>
           </div>
@@ -901,7 +901,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
           >
             <RotateCcw className="w-4 h-4 text-amber-400" />
             <div className="text-left">
-              <div className="font-bold">Redeem (Company Fault)</div>
+              <div className="font-bold">Redeem</div>
               <div className="text-[10px] font-normal text-amber-300/80">Cut defect, wrong skin (Free Shipping)</div>
             </div>
           </button>

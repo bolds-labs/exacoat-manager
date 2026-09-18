@@ -34,13 +34,60 @@ export const OrderTable: React.FC<OrderTableProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  const warrantyCount = useMemo(() => {
-    return orders.filter(o => getOrderRma(o)?.order_type === 'Warranty').length;
+  const statusCounts = useMemo(() => {
+    let onHold = 0;
+    let confirmed = 0;
+    let preparing = 0;
+    let readyToShip = 0;
+    let storePickup = 0;
+    let shipped = 0;
+    let completed = 0;
+    let warranty = 0;
+    let redeem = 0;
+
+    orders.forEach(o => {
+      const cleanStatus = String(o.status || '').replace('wc-', '').toLowerCase();
+      const rma = getOrderRma(o);
+      if (rma?.order_type === 'Warranty') warranty++;
+      if (rma?.order_type === 'Redeem') redeem++;
+
+      if (['on-hold', 'pending-payment', 'pending'].includes(cleanStatus)) {
+        onHold++;
+      } else if (cleanStatus === 'processing') {
+        confirmed++;
+      } else if (['preparing-order', 'preparing_order', 'in-production', 'in_production'].includes(cleanStatus)) {
+        preparing++;
+      }
+
+      if (['ready-to-ship', 'ready_to_ship', 'awaiting-pickup', 'awaiting_pickup', 'smb-ready'].includes(cleanStatus)) {
+        readyToShip++;
+      }
+
+      const shippingMethodName = String((o as any).shipping_method || (o as any).shipping_lines?.[0]?.method_title || '').toLowerCase();
+      const shippingAddressStr = `${o.shipping?.address_1 || ''} ${o.shipping?.city || ''} ${o.shipping?.postcode || ''}`.toLowerCase();
+      const isPickup = shippingMethodName.includes('pickup') || 
+        shippingMethodName.includes('store') || 
+        shippingAddressStr.includes('summarecon') || 
+        shippingAddressStr.includes('bekasi store') || 
+        shippingAddressStr.includes('ruby commercial') ||
+        cleanStatus === 'smb-ready' ||
+        cleanStatus === 'smb-picked';
+      if (isPickup) {
+        storePickup++;
+      }
+
+      if (cleanStatus === 'shipped') {
+        shipped++;
+      } else if (cleanStatus === 'completed' || cleanStatus === 'delivered') {
+        completed++;
+      }
+    });
+
+    return { onHold, confirmed, preparing, readyToShip, storePickup, shipped, completed, warranty, redeem };
   }, [orders]);
 
-  const redeemCount = useMemo(() => {
-    return orders.filter(o => getOrderRma(o)?.order_type === 'Redeem').length;
-  }, [orders]);
+  const warrantyCount = statusCounts.warranty;
+  const redeemCount = statusCounts.redeem;
 
   const filteredOrders = useMemo(() => {
     return orders.filter(order => {
@@ -110,15 +157,15 @@ export const OrderTable: React.FC<OrderTableProps> = ({
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 custom-scrollbar">
             {[
               { key: 'all', label: 'All Orders' },
-              { key: 'on-hold', label: 'Waiting for Payment' },
-              { key: 'processing', label: 'Payment confirmed' },
-              { key: 'preparing-order', label: 'Preparing order' },
-              { key: 'ready-to-ship', label: 'Waiting for Pickup' },
-              { key: 'store-pickup', label: 'Store Pickup (SMB)' },
-              { key: 'shipped', label: 'Shipped' },
-              { key: 'completed', label: 'Completed' },
-              { key: 'warranty', label: 'Warranty Claims', count: warrantyCount },
-              { key: 'redeem', label: 'Redeem (Fault)', count: redeemCount },
+              { key: 'on-hold', label: 'Waiting for Payment', count: statusCounts.onHold },
+              { key: 'processing', label: 'Confirmed', count: statusCounts.confirmed },
+              { key: 'preparing-order', label: 'Preparing order', count: statusCounts.preparing },
+              { key: 'ready-to-ship', label: 'Waiting for Pickup', count: statusCounts.readyToShip },
+              { key: 'store-pickup', label: 'Store Pickup (SMB)', count: statusCounts.storePickup },
+              { key: 'shipped', label: 'Shipped', count: statusCounts.shipped },
+              { key: 'completed', label: 'Completed', count: statusCounts.completed },
+              { key: 'warranty', label: 'Warranty Claims', count: statusCounts.warranty },
+              { key: 'redeem', label: 'Redeem', count: statusCounts.redeem },
             ].map(tab => (
               <button
                 key={tab.key}
@@ -136,10 +183,10 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                   <span className={clsx(
                     "px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold",
                     statusFilter === tab.key
-                      ? tab.key === 'redeem' ? "bg-amber-500 text-black font-extrabold" : "bg-emerald-500 text-white dark:bg-emerald-600"
+                      ? tab.key === 'redeem' ? "bg-amber-500 text-black font-extrabold" : "bg-white/20 text-white dark:bg-black/20 dark:text-black"
                       : tab.key === 'redeem'
                       ? "bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-500/30"
-                      : "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                      : "bg-zinc-200 dark:bg-white/10 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-white/10"
                   )}>
                     {tab.count}
                   </span>
@@ -298,7 +345,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                           {getOrderRma(order)?.order_type === 'Redeem' && (
                             <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30 whitespace-nowrap">
                               <RotateCcw className="w-2.5 h-2.5 text-amber-400" />
-                              Redeem (Fault)
+                              Redeem
                             </span>
                           )}
                           {getOrderRma(order)?.order_type === 'Warranty' && (

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Order } from '../../types';
-import { formatCurrency } from '../../lib/formatters';
+import { formatCurrency, convertToIdr, isRevenueOrder } from '../../lib/formatters';
 import { GlassCard } from '../ui/GlassCard';
 import { 
   DollarSign, 
@@ -22,34 +22,44 @@ export const SalesMetricsOverview: React.FC<SalesMetricsOverviewProps> = ({
   orders,
   onNavigateToOrders,
 }) => {
-  // Aggregate sales by currency
+  // Aggregate sales by currency (excluding cancelled, refunded, failed orders)
   const currencyTotals: Record<string, { total: number; count: number }> = {};
+  let totalRevenueIdr = 0;
   let totalUnits = 0;
   let processingCount = 0;
   let readyToShipCount = 0;
   let deliveredCount = 0;
 
   orders.forEach(order => {
-    const curr = (order.currency || 'USD').toUpperCase().trim();
-    if (!currencyTotals[curr]) {
-      currencyTotals[curr] = { total: 0, count: 0 };
-    }
+    const isRev = isRevenueOrder(order);
+    const curr = (order.currency || 'IDR').toUpperCase().trim();
     const val = Number(order.total) || 0;
-    currencyTotals[curr].total += val;
-    currencyTotals[curr].count += 1;
 
-    totalUnits += order.item_count || (order.items?.reduce((s, it) => s + (it.quantity || 1), 0)) || 1;
+    if (isRev) {
+      if (!currencyTotals[curr]) {
+        currencyTotals[curr] = { total: 0, count: 0 };
+      }
+      currencyTotals[curr].total += val;
+      currencyTotals[curr].count += 1;
+
+      const idrVal = (order as any).total_idr || convertToIdr(order.total, order.currency);
+      totalRevenueIdr += idrVal;
+    }
+
+    if (isRev) {
+      totalUnits += order.item_count || (order.items?.reduce((s, it) => s + (it.quantity || 1), 0)) || 1;
+    }
 
     const st = String(order.status || '').replace('wc-', '').toLowerCase();
     if (st === 'processing' || st === 'in-production') processingCount++;
-    if (st === 'ready-to-ship' || st === 'awaiting-pickup') readyToShipCount++;
-    if (st === 'completed' || st === 'delivered') deliveredCount++;
+    if (st === 'ready-to-ship' || st === 'awaiting-pickup' || st === 'smb-ready') readyToShipCount++;
+    if (st === 'completed' || st === 'delivered' || st === 'smb-picked') deliveredCount++;
   });
 
   const currencies = Object.keys(currencyTotals);
-  const primaryCurrency = currencies.includes('USD') ? 'USD' : (currencies[0] || 'USD');
-  const primaryTotal = currencyTotals[primaryCurrency]?.total || 0;
-  const secondaryCurrency = currencies.find(c => c !== primaryCurrency);
+  const primaryCurrency = 'IDR';
+  const primaryTotal = totalRevenueIdr;
+  const foreignCurrencies = currencies.filter(c => c !== 'IDR');
 
   const totalOrdersCount = orders.length;
   const aov = totalOrdersCount > 0 ? Math.round(primaryTotal / totalOrdersCount) : 0;
@@ -68,9 +78,9 @@ export const SalesMetricsOverview: React.FC<SalesMetricsOverviewProps> = ({
           <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white">
             {formatCurrency(primaryTotal, primaryCurrency)}
           </p>
-          {secondaryCurrency && currencyTotals[secondaryCurrency] && (
+          {foreignCurrencies.length > 0 && (
             <p className="text-[10px] font-mono text-neutral-400 mt-0.5">
-              + {formatCurrency(currencyTotals[secondaryCurrency].total, secondaryCurrency)}
+              Includes {foreignCurrencies.map(c => `${formatCurrency(currencyTotals[c].total, c)} (${currencyTotals[c].count})`).join(', ')}
             </p>
           )}
         </div>

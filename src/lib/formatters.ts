@@ -321,3 +321,42 @@ export function getOrderStatusInfo(status: string | null | undefined) {
       return { label: clean ? clean.replace('-', ' ') : 'Pending', color: 'text-zinc-400', bg: 'bg-zinc-800/50 border-zinc-700/50' };
   }
 }
+
+export const DEFAULT_EXCHANGE_RATES: Record<string, number> = {
+  USD: 0.000059, // 1 USD ~ 16,950 IDR
+  EUR: 0.000051, // 1 EUR ~ 19,600 IDR
+  AUD: 0.000089, // 1 AUD ~ 11,236 IDR
+  SGD: 0.000076, // 1 SGD ~ 13,158 IDR
+  JPY: 0.009350, // 1 JPY ~ 107 IDR
+  GBP: 0.000044, // 1 GBP ~ 22,727 IDR
+  CAD: 0.000082, // 1 CAD ~ 12,195 IDR
+  CHF: 0.000047, // 1 CHF ~ 21,276 IDR
+  HKD: 0.000462, // 1 HKD ~ 2,165 IDR
+  THB: 0.001866, // 1 THB ~ 536 IDR
+  KRW: 0.086400, // 1 KRW ~ 11.57 IDR
+  MYR: 0.000263, // 1 MYR ~ 3,802 IDR
+};
+
+/**
+ * Converts any order amount to store base currency (IDR)
+ */
+export function convertToIdr(amount: number | string | null | undefined, currency: string = 'IDR'): number {
+  const val = Number(amount) || 0;
+  if (val === 0) return 0;
+  const code = (currency || 'IDR').toUpperCase().trim();
+  if (code === 'IDR') return val;
+
+  const rate = DEFAULT_EXCHANGE_RATES[code];
+  if (rate && rate > 0) {
+    return Math.round(val / rate);
+  }
+  return val;
+}
+
+/**
+ * Determines whether an order should be counted towards store revenue
+ */
+export function isRevenueOrder(order: { status?: string }): boolean {
+  const st = String(order.status || '').replace('wc-', '').toLowerCase().trim();
+  return !['cancelled', 'refunded', 'failed', 'trash', 'auto-draft'].includes(st);
+}

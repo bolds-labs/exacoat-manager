@@ -69,6 +69,26 @@ class Exacoat_Store_Enhancements {
 
 		// 21. Selective WooCommerce Asset Decoupling on Non-Shop Pages
 		add_action( 'wp_enqueue_scripts', [ __CLASS__, 'maybe_unload_wc_assets_on_non_shop' ], 99 );
+
+		// 22. Shortlink Redirects (/cs, /wa, /whatsapp -> WhatsApp Customer Support)
+		add_action( 'template_redirect', [ __CLASS__, 'handle_shortlink_redirects' ], 1 );
+	}
+
+	/**
+	 * Shortlink redirect handler: /cs, /wa, /whatsapp -> WhatsApp customer support
+	 */
+	public static function handle_shortlink_redirects() {
+		if ( is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+			return;
+		}
+
+		$request_uri = untrailingslashit( strtolower( parse_url( $_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH ) ?: '' ) );
+
+		if ( in_array( $request_uri, [ '/cs', '/wa', '/whatsapp' ], true ) ) {
+			$wa_url = 'https://api.whatsapp.com/send?phone=628975556000';
+			wp_redirect( $wa_url, 302 );
+			exit;
+		}
 	}
 
 	public static function redirect_cart_to_checkout() {

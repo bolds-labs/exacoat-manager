@@ -884,6 +884,18 @@ class Exacoat_Order_Manager {
 			}
 		}
 
+		$currency_code = strtoupper( (string) $order->get_currency() );
+		$raw_order_total = floatval( $order->get_total() );
+		$calculated_total_idr = $raw_order_total;
+		if ( 'IDR' !== $currency_code && class_exists( 'Exacoat_Store_Enhancements' ) && method_exists( 'Exacoat_Store_Enhancements', 'get_currency_rates' ) ) {
+			$all_rates = Exacoat_Store_Enhancements::get_currency_rates();
+			$fx_entry = $all_rates[ $currency_code ] ?? null;
+			$fx_rate = is_array( $fx_entry ) ? floatval( $fx_entry['rate'] ?? 0 ) : floatval( $fx_entry );
+			if ( $fx_rate > 0 ) {
+				$calculated_total_idr = round( $raw_order_total / $fx_rate );
+			}
+		}
+
 		return [
 			'id'                            => $order_id,
 			'order_number'                  => '#' . $order->get_order_number(),
@@ -901,6 +913,7 @@ class Exacoat_Order_Manager {
 			'shipping_method_name'          => $order->get_shipping_method() ?: 'Standard Tracked Delivery',
 			'total_tax'                     => floatval( $order->get_total_tax() ),
 			'total'                         => floatval( $order->get_total() ),
+			'total_idr'                     => $calculated_total_idr,
 			'total_refunded'                => $total_refunded,
 			'remaining_refund_available'    => $available_refund,
 			'refunds'                       => $refunds_data,
@@ -1208,6 +1221,20 @@ class Exacoat_Order_Manager {
 
 		$clean_to = str_replace( 'wc-', '', $to_status );
 
+		$shipping_method = '';
+		$shipping_methods = $order->get_shipping_methods();
+		if ( ! empty( $shipping_methods ) ) {
+			$first_shipping = reset( $shipping_methods );
+			$shipping_method = strtolower( $first_shipping->get_name() . ' ' . $first_shipping->get_method_title() );
+		}
+		$shipping_address = strtolower( (string) $order->get_shipping_address_1() . ' ' . (string) $order->get_shipping_city() . ' ' . (string) $order->get_shipping_postcode() );
+		$is_store_pickup = str_contains( $shipping_method, 'pickup' ) ||
+			str_contains( $shipping_method, 'store' ) ||
+			str_contains( $shipping_address, 'summarecon' ) ||
+			str_contains( $shipping_address, 'bekasi store' ) ||
+			str_contains( $shipping_address, 'ruby commercial' ) ||
+			in_array( $clean_to, [ 'smb-ready', 'smb-picked' ], true );
+
 		if ( 'processing' === $clean_to ) {
 			self::send_order_confirmation_once( $order );
 		} elseif ( 'in-production' === $clean_to ) {
@@ -1216,6 +1243,16 @@ class Exacoat_Order_Manager {
 				$customer_email,
 				$customer_name,
 				self::get_email_order_payload( $order )
+			);
+		} elseif ( 'smb-ready' === $clean_to ) {
+			Artmatter_Email_Engine::send_email(
+				'customer_order_store_pickup_ready',
+				$customer_email,
+				$customer_name,
+				self::get_email_order_payload( $order, [
+					'is_store_pickup' => true,
+					'pickup_ready'    => true,
+				] )
 			);
 		} elseif ( in_array( $clean_to, [ 'awaiting-pickup', 'awaiting_pickup' ], true ) ) {
 			Artmatter_Email_Engine::send_email(
@@ -1297,7 +1334,7 @@ class Exacoat_Order_Manager {
 			if ( class_exists( 'Artmatter_Shipping_Tracker' ) && ! empty( $tracking_code ) ) {
 				Artmatter_Shipping_Tracker::register_with_17track( $tracking_code, $carrier_key, $order_id );
 			}
-		} elseif ( in_array( $clean_to, [ 'completed', 'delivered' ], true ) ) {
+		} elseif ( in_array( $clean_to, [ 'completed', 'delivered', 'smb-picked' ], true ) ) {
 			// Delivery confirmed! Record delivered_at and begin 14-day commission clearance
 			$delivered_time = current_time( 'mysql' );
 			$order->update_meta_data( '_artmatter_delivered_at', $delivered_time );
@@ -1320,15 +1357,27 @@ class Exacoat_Order_Manager {
 				$carrier_display = $order->get_meta( '_artmatter_courier' ) ?: ( $order->get_meta( 'carrier_id' ) ?: 'Express Courier' );
 				$tracking_num    = $order->get_meta( 'tracking_number' ) ?: $order->get_meta( '_artmatter_tracking_number' );
 
-				Artmatter_Email_Engine::send_email(
-					'customer_order_delivered',
-					$customer_email,
-					$customer_name,
-					self::get_email_order_payload( $order, [
-						'courier'         => (string) $carrier_display,
-						'tracking_number' => (string) $tracking_num,
-					] )
-				);
+				if ( $is_store_pickup ) {
+					Artmatter_Email_Engine::send_email(
+						'customer_order_store_pickup_completed',
+						$customer_email,
+						$customer_name,
+						self::get_email_order_payload( $order, [
+							'is_store_pickup' => true,
+							'pickup_review'   => true,
+						] )
+					);
+				} else {
+					Artmatter_Email_Engine::send_email(
+						'customer_order_delivered',
+						$customer_email,
+						$customer_name,
+						self::get_email_order_payload( $order, [
+							'courier'         => (string) $carrier_display,
+							'tracking_number' => (string) $tracking_num,
+						] )
+					);
+				}
 			}
 
 			// Automatically schedule post-delivery Collector Review Invitation (default: 36h)
