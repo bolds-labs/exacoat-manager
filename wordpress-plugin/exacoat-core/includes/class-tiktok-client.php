@@ -37,12 +37,12 @@ class Exacoat_TikTok_Client {
 		$defaults = [
 			'environment'      => 'live', // 'sandbox' | 'live'
 			'service_id'       => self::DEFAULT_SERVICE_ID,
-			'app_key'          => '',
-			'app_secret'       => '',
+			'app_key'          => '6lauu7vv75n01',
+			'app_secret'       => '8ddf6cf5571d6c09168bed1b62b60ef56e448e5e',
 			'shop_cipher'      => '',
 			'shop_id'          => '',
 			'shop_name'        => 'Exacoat TikTok Shop',
-			'redirect_url'     => 'https://manager.exacoat.com/tiktok/callback',
+			'redirect_url'     => 'https://manager.exacoat.com',
 			'webhook_url'      => self::DEFAULT_WEBHOOK_URL,
 			'access_token'     => '',
 			'refresh_token'    => '',

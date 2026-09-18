@@ -4,7 +4,7 @@ import { useToast } from './context/ToastContext';
 import { Layout } from './components/layout/Layout';
 import { NavItemKey } from './components/layout/Sidebar';
 import { LoginPage } from './pages/LoginPage';
-import { fetchOrdersDirect } from './lib/wordpressBridge';
+import { fetchOrdersDirect, handleShopeeCallbackDirect, handleTikTokCallbackDirect } from './lib/wordpressBridge';
 import { Order, AuditLog } from './types';
 import { Loader2 } from 'lucide-react';
 
@@ -94,6 +94,40 @@ export const App: React.FC = () => {
       window.removeEventListener('hashchange', handlePopState);
     };
   }, []);
+
+  // Listen for marketplace OAuth callback params (?code=...&shop_id=...)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const shopId = params.get('shop_id');
+    const authCode = params.get('auth_code');
+    const path = window.location.pathname.toLowerCase();
+
+    if (code) {
+      if (shopId || path.includes('shopee')) {
+        handleShopeeCallbackDirect(code, Number(shopId) || 0).then((res) => {
+          if (res.success) {
+            showToast('success', 'Shopee Connected', 'Shopee store connected successfully!');
+            window.history.replaceState({}, document.title, window.location.pathname + '#orders');
+            setCurrentTab('orders');
+          } else {
+            showToast('error', 'Shopee Authorization Failed', res.error || 'Failed to authorize Shopee store');
+          }
+        });
+      } else {
+        handleTikTokCallbackDirect(code, shopId || undefined, authCode || undefined).then((res) => {
+          if (res.success) {
+            showToast('success', 'TikTok Connected', 'TikTok Shop connected successfully!');
+            window.history.replaceState({}, document.title, window.location.pathname + '#orders');
+            setCurrentTab('orders');
+          } else {
+            showToast('error', 'TikTok Authorization Failed', res.error || 'Failed to authorize TikTok Shop');
+          }
+        });
+      }
+    }
+  }, [showToast]);
 
   const handleTabChange = useCallback((tab: NavItemKey) => {
     setCurrentTab(tab);

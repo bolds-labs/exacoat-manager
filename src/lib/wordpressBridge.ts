@@ -3216,6 +3216,42 @@ export async function getShopeeAuthUrlDirect(): Promise<{
   }
 }
 
+export async function handleShopeeCallbackDirect(
+  code: string,
+  shop_id: number
+): Promise<{
+  success: boolean;
+  access_token?: string;
+  shop_id?: number;
+  message?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/callback?code=${encodeURIComponent(code)}&shop_id=${encodeURIComponent(shop_id)}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        access_token: data.access_token,
+        shop_id: data.shop_id,
+        message: 'Shopee store connected successfully.',
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function fetchShopeeShippingParameterDirect(order_sn: string): Promise<{
   success: boolean;
   parameters?: ShopeeShippingParameter;
@@ -3491,6 +3527,48 @@ export async function getTikTokAuthUrlDirect(): Promise<{
     return {
       success: false,
       error: data?.message || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function handleTikTokCallbackDirect(
+  code: string,
+  shop_id?: string,
+  auth_code?: string
+): Promise<{
+  success: boolean;
+  access_token?: string;
+  shop_id?: string;
+  message?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const query = new URLSearchParams({
+    code,
+    ...(shop_id ? { shop_id } : {}),
+    ...(auth_code ? { auth_code } : {}),
+  }).toString();
+  const url = `${base}/wp-json/exacoat-core/v1/tiktok/callback?${query}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        access_token: data.access_token,
+        shop_id: data.shop_id,
+        message: 'TikTok Shop connected successfully.',
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || data?.error || `HTTP ${res.status}`,
     };
   } catch (err: any) {
     return { success: false, error: err.message };

@@ -35,17 +35,17 @@ class Exacoat_Shopee_Client {
 	 */
 	public static function get_settings(): array {
 		$defaults = [
-			'environment'           => 'sandbox', // 'sandbox' | 'live'
+			'environment'           => 'live', // 'sandbox' | 'live'
 			'test_partner_id'       => self::DEFAULT_TEST_PID,
 			'test_partner_key'      => 'shpk666c6843537a484142475a44787861767052765558666f635a434f58566e',
 			'test_push_partner_key' => self::DEFAULT_TEST_PUSH_KEY,
 			'live_partner_id'       => self::DEFAULT_LIVE_PID,
 			'live_partner_key'      => 'shpk706c666c6f42674755427a546a79445a78417449554e5674616b4b665a4f',
-			'live_push_partner_key' => '',
+			'live_push_partner_key' => 'aaaaaaaaaaaaaactd5mbgvzd3cjhmhh48v428zpt6ywwnuosz567nweg42ey8pky',
 			'redirect_url'          => 'https://manager.exacoat.com/shopee/callback',
 			'push_callback_url'     => self::DEFAULT_WEBHOOK_URL,
-			'shop_id'               => 227918647,
-			'shop_name'             => 'Sandbox Exacoat ID',
+			'shop_id'               => 0,
+			'shop_name'             => 'Exacoat Official Store',
 			'access_token'          => '',
 			'refresh_token'         => '',
 			'token_expires_at'      => 0,

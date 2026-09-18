@@ -38,15 +38,15 @@ export const ShopeeSettingsModal: React.FC<ShopeeSettingsModalProps> = ({
   const [isGeneratingAuth, setIsGeneratingAuth] = useState(false);
 
   // Form State
-  const [environment, setEnvironment] = useState<'sandbox' | 'live'>('sandbox');
+  const [environment, setEnvironment] = useState<'sandbox' | 'live'>('live');
   const [testPartnerId, setTestPartnerId] = useState<number>(1244885);
   const [testPartnerKey, setTestPartnerKey] = useState<string>('');
   const [testPushPartnerKey, setTestPushPartnerKey] = useState<string>('');
   const [livePartnerId, setLivePartnerId] = useState<number>(2011551);
   const [livePartnerKey, setLivePartnerKey] = useState<string>('');
   const [livePushPartnerKey, setLivePushPartnerKey] = useState<string>('');
-  const [shopId, setShopId] = useState<number>(227918647);
-  const [shopName, setShopName] = useState<string>('');
+  const [shopId, setShopId] = useState<number>(0);
+  const [shopName, setShopName] = useState<string>('Exacoat Official Store');
 
   // Status State
   const [settings, setSettings] = useState<ShopeeSettings | null>(null);
@@ -63,11 +63,11 @@ export const ShopeeSettingsModal: React.FC<ShopeeSettingsModalProps> = ({
         if (!isMounted) return;
         if (res.success && res.settings) {
           setSettings(res.settings);
-          setEnvironment(res.settings.environment || 'sandbox');
+          setEnvironment(res.settings.environment || 'live');
           setTestPartnerId(res.settings.test_partner_id || 1244885);
           setLivePartnerId(res.settings.live_partner_id || 2011551);
-          setShopId(res.settings.shop_id || 227918647);
-          setShopName(res.settings.shop_name || '');
+          setShopId(res.settings.shop_id || 0);
+          setShopName(res.settings.shop_name || 'Exacoat Official Store');
         }
       })
       .catch((err) => {
