@@ -3,6 +3,7 @@ import { Order, getOrderRma } from '../../types';
 import { Badge } from '../ui/Badge';
 import { GlassCard } from '../ui/GlassCard';
 import { formatCurrency, formatDateTime } from '../../lib/formatters';
+import { matchesPhoneQuery } from '../../lib/phoneUtils';
 import { 
   Search, 
   RefreshCw, 
@@ -83,6 +84,8 @@ export const OrderTable: React.FC<OrderTableProps> = ({
         const custName = String(order.customer_name || '').toLowerCase();
         const custEmail = String(order.customer_email || '').toLowerCase();
         const trackNum = String(order.tracking?.tracking_number || '').toLowerCase();
+        const phone = order.customer_phone || order.billing?.phone || order.shipping?.phone;
+        const phoneMatch = matchesPhoneQuery(phone, q);
         const itemNames = (order.items || []).map(i => i.name.toLowerCase()).join(' ');
 
         return (
@@ -90,6 +93,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
           custName.includes(q) ||
           custEmail.includes(q) ||
           trackNum.includes(q) ||
+          phoneMatch ||
           itemNames.includes(q)
         );
       }

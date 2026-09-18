@@ -225,7 +225,8 @@ class Exacoat_Warranty_Manager {
 
 		$order_id = $order->get_id();
 		$billing_email = strtolower( trim( $order->get_billing_email() ) );
-		$billing_phone = preg_replace( '/[^0-9]/', '', $order->get_billing_phone() );
+		$raw_phone = $order->get_billing_phone() ?: $order->get_shipping_phone() ?: $order->get_meta( '_shipping_phone' );
+		$billing_phone = preg_replace( '/[^0-9]/', '', (string) $raw_phone );
 
 		if ( ! empty( $verification ) ) {
 			$norm_verif = strtolower( trim( $verification ) );
@@ -234,7 +235,10 @@ class Exacoat_Warranty_Manager {
 			$digits_verif = preg_replace( '/[^0-9]/', '', $verification );
 			$is_phone_match = false;
 			if ( strlen( $digits_verif ) >= 6 ) {
-				$is_phone_match = ( substr( $billing_phone, -8 ) === substr( $digits_verif, -8 ) );
+				$norm_order_phone = self::normalize_phone( $billing_phone );
+				$norm_verif_phone = self::normalize_phone( $digits_verif );
+				$is_phone_match = ( ! empty( $norm_order_phone ) && $norm_order_phone === $norm_verif_phone )
+					|| ( substr( $billing_phone, -8 ) === substr( $digits_verif, -8 ) );
 			}
 
 			if ( ! $is_email_match && ! $is_phone_match ) {
@@ -1822,6 +1826,23 @@ class Exacoat_Warranty_Manager {
 			default:
 				return 'Unknown upload error occurred.';
 		}
+	}
+
+	/**
+	 * Normalize Indonesian phone numbers to standard 628... digits format.
+	 * Handles 08..., +628..., 628..., 8...
+	 */
+	public static function normalize_phone( $phone ): string {
+		$digits = preg_replace( '/[^0-9]/', '', (string) $phone );
+		if ( empty( $digits ) ) {
+			return '';
+		}
+		if ( strpos( $digits, '08' ) === 0 ) {
+			return '62' . substr( $digits, 1 );
+		} elseif ( strpos( $digits, '8' ) === 0 && strlen( $digits ) >= 9 ) {
+			return '62' . $digits;
+		}
+		return $digits;
 	}
 }
 
