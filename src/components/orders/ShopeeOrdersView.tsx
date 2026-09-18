@@ -37,6 +37,7 @@ import {
   MoreVertical,
   Printer,
   Database,
+  CheckCircle2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -65,6 +66,26 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   const [activeActionMenuSn, setActiveActionMenuSn] = useState<string | null>(null);
   const [selectedArrangeOrder, setSelectedArrangeOrder] = useState<ShopeeOrder | null>(null);
   const [isArrangeModalOpen, setIsArrangeModalOpen] = useState(false);
+  const [printedOrderSns, setPrintedOrderSns] = useState<Set<string>>(() => {
+    try {
+      const cached = localStorage.getItem('_exacoat_shopee_printed_labels');
+      return cached ? new Set(JSON.parse(cached)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const markLabelPrinted = useCallback((orderSn: string) => {
+    setPrintedOrderSns((prev) => {
+      const next = new Set(prev).add(orderSn);
+      try {
+        localStorage.setItem('_exacoat_shopee_printed_labels', JSON.stringify(Array.from(next)));
+      } catch {
+        // Continue gracefully
+      }
+      return next;
+    });
+  }, []);
 
   const handleShipmentArranged = (orderSn: string, trackingNumber: string) => {
     setOrders((prev) =>
@@ -195,6 +216,8 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
       `Loading official 100x150mm Air Waybill label for ${order.order_sn}.`
     );
 
+    markLabelPrinted(order.order_sn);
+
     try {
       const res = await downloadShopeeShippingLabelDirect(order.order_sn);
       if (res.success && res.url) {
@@ -237,8 +260,8 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   // Filtered orders computation
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
-      // Tab filter
-      if (activeTab === 'READY_TO_SHIP' && order.order_status !== 'READY_TO_SHIP') return false;
+      // Tab filter: READY_TO_SHIP includes both unarranged and arranged-awaiting-courier (PROCESSED)
+      if (activeTab === 'READY_TO_SHIP' && !['READY_TO_SHIP', 'PROCESSED'].includes(order.order_status)) return false;
       if (activeTab === 'SHIPPED' && order.order_status !== 'SHIPPED') return false;
       if (activeTab === 'COMPLETED' && order.order_status !== 'COMPLETED') return false;
       if (activeTab === 'CLAIMED' && !order.already_claimed) return false;
@@ -276,7 +299,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   const tabCounts = useMemo(() => {
     return {
       ALL: orders.length,
-      READY_TO_SHIP: orders.filter((o) => o.order_status === 'READY_TO_SHIP').length,
+      READY_TO_SHIP: orders.filter((o) => ['READY_TO_SHIP', 'PROCESSED'].includes(o.order_status)).length,
       SHIPPED: orders.filter((o) => o.order_status === 'SHIPPED').length,
       COMPLETED: orders.filter((o) => o.order_status === 'COMPLETED').length,
       CLAIMED: orders.filter((o) => o.already_claimed).length,
@@ -677,8 +700,8 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                           {order.shipping_carrier || 'Standard Courier'}
                         </div>
                         {order.tracking_number ? (
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <span className="font-mono text-[11px] text-orange-400">
+                          <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                            <span className="font-mono text-[11px] text-orange-400 font-semibold">
                               Resi: {order.tracking_number}
                             </span>
                             <button
@@ -693,6 +716,12 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                                 <Copy className="w-3 h-3" />
                               )}
                             </button>
+                            {printedOrderSns.has(order.order_sn) && (
+                              <span className="ml-1 text-[9px] px-1.5 py-0.5 rounded font-mono font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                                <CheckCircle2 className="w-2.5 h-2.5" />
+                                <span>Printed</span>
+                              </span>
+                            )}
                           </div>
                         ) : (
                           <span className="text-[11px] text-neutral-500">Resi not issued yet</span>
@@ -796,6 +825,36 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                             <Truck className="w-3.5 h-3.5" />
                             <span>Arrange Shipment</span>
                           </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveActionMenuSn(
+                                activeActionMenuSn === order.order_sn ? null : order.order_sn
+                              );
+                            }}
+                            className="w-full px-3 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-white/10 text-xs font-medium flex items-center justify-between gap-1.5 transition-all cursor-pointer"
+                          >
+                            <span>More Actions</span>
+                            <MoreVertical className="w-3 h-3 text-neutral-400" />
+                          </button>
+                        </div>
+                      ) : (order.order_status === 'PROCESSED' || order.tracking_number) ? (
+                        <div className="space-y-1.5" data-action-menu>
+                          <button
+                            type="button"
+                            onClick={() => handlePrintShopeeLabel(order)}
+                            className="w-full px-3 py-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                            <span>{printedOrderSns.has(order.order_sn) ? 'Print Label Again' : 'Print Thermal Label (A6)'}</span>
+                          </button>
+                          {printedOrderSns.has(order.order_sn) && (
+                            <div className="flex items-center justify-center gap-1 text-[10px] text-emerald-400 font-medium py-0.5">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>Thermal Label Printed</span>
+                            </div>
+                          )}
                           <button
                             type="button"
                             onClick={(e) => {
