@@ -418,6 +418,17 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                   const rawTrackingNum = String(order.tracking?.tracking_number || '').trim();
                   const hasValidTracking = rawTrackingNum.length > 0 && !rawTrackingNum.startsWith('field_');
                   const isSelected = selectedIds.has(order.id);
+                  const shipMethod = String((order as any).shipping_method || (order as any).shipping_lines?.[0]?.method_title || '').toLowerCase();
+                  const shipAddr = `${order.shipping?.address_1 || ''} ${order.shipping?.city || ''} ${order.shipping?.postcode || ''}`.toLowerCase();
+                  const cleanStatus = String(order.status || '').replace('wc-', '');
+                  const isPickup =
+                    shipMethod.includes('pickup') ||
+                    shipMethod.includes('store') ||
+                    shipAddr.includes('summarecon') ||
+                    shipAddr.includes('bekasi store') ||
+                    shipAddr.includes('ruby commercial') ||
+                    cleanStatus === 'smb-ready' ||
+                    cleanStatus === 'smb-picked';
 
                   return (
                     <tr
@@ -467,9 +478,15 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                         <span className="font-semibold text-zinc-900 dark:text-white block">
                           {order.customer_name || 'Customer'}
                         </span>
-                        <span className="text-[11px] text-zinc-500 dark:text-zinc-400 block truncate max-w-[180px]">
-                          {order.shipping?.city ? `${order.shipping.city}, ` : ''}{order.shipping?.country || 'Indonesia'}
-                        </span>
+                        {isPickup ? (
+                          <span className="text-[11px] text-[#f3aa18] font-medium block truncate max-w-[180px]">
+                            Summarecon Bekasi Store
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-zinc-500 dark:text-zinc-400 block truncate max-w-[180px]">
+                            {order.shipping?.city ? `${order.shipping.city}, ` : ''}{order.shipping?.country || 'Indonesia'}
+                          </span>
+                        )}
                       </td>
 
                       {/* Items & Skin Config */}
@@ -532,27 +549,26 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                               Warranty Claim
                             </span>
                           )}
-                          {(() => {
-                            const shipMethod = String((order as any).shipping_method || (order as any).shipping_lines?.[0]?.method_title || '').toLowerCase();
-                            const shipAddr = `${order.shipping?.address_1 || ''} ${order.shipping?.city || ''}`.toLowerCase();
-                            const isPickup =
-                              shipMethod.includes('pickup') ||
-                              shipMethod.includes('store') ||
-                              shipAddr.includes('summarecon') ||
-                              shipAddr.includes('bekasi store') ||
-                              shipAddr.includes('ruby commercial');
-                            return isPickup ? (
-                              <span className="inline-flex items-center text-[9px] font-mono font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-1.5 py-0.5 rounded border border-[#f3aa18]/20 whitespace-nowrap">
-                                Store Pickup (SMB)
-                              </span>
-                            ) : null;
-                          })()}
+                          {isPickup && (
+                            <span className="inline-flex items-center text-[9px] font-mono font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-1.5 py-0.5 rounded border border-[#f3aa18]/20 whitespace-nowrap">
+                              Store Pickup (SMB)
+                            </span>
+                          )}
                         </div>
                       </td>
 
                       {/* Tracking Resi & Courier */}
                       <td className="py-3.5 px-4">
-                        {hasValidTracking ? (
+                        {isPickup ? (
+                          <div className="space-y-0.5">
+                            <span className="inline-flex items-center text-[10px] font-mono font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-2 py-0.5 rounded border border-[#f3aa18]/20 whitespace-nowrap">
+                              Store Pickup
+                            </span>
+                            <span className="text-[10px] text-zinc-500 block truncate max-w-[140px]">
+                              Summarecon Bekasi
+                            </span>
+                          </div>
+                        ) : hasValidTracking ? (
                           <div className="space-y-1">
                             <div className="flex items-center gap-1.5">
                               <span className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">

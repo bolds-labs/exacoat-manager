@@ -77,6 +77,23 @@ function generateBarcodeSvgData(code: string, height: number = 44) {
   };
 }
 
+export function isStorePickupOrder(ord: any): boolean {
+  if (!ord) return false;
+  const shipMethod = String(ord.shipping_method || ord.shipping_lines?.[0]?.method_title || '').toLowerCase();
+  const shp = ord.shipping || {};
+  const shipAddr = `${shp.address_1 || ''} ${shp.city || ''} ${shp.postcode || ''}`.toLowerCase();
+  const cleanStatus = String(ord.status || '').replace('wc-', '');
+  return (
+    shipMethod.includes('pickup') ||
+    shipMethod.includes('store') ||
+    shipAddr.includes('summarecon') ||
+    shipAddr.includes('bekasi store') ||
+    shipAddr.includes('ruby commercial') ||
+    cleanStatus === 'smb-ready' ||
+    cleanStatus === 'smb-picked'
+  );
+}
+
 // Split items across multiple label pages if items count exceeds single sheet capacity
 function chunkOrderItems(items: any[]): { pages: any[][]; totalPages: number } {
   if (!items || items.length === 0) {
@@ -113,6 +130,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
 
   // Active current order
   const activeOrder = activeOrdersList[currentIndex] || activeOrdersList[0] || null;
+  const isActivePickup = isStorePickupOrder(activeOrder);
 
   // Reset indices when orders list changes
   useEffect(() => {
@@ -169,6 +187,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
 
   // Generate single label HTML for print document (handles multi-page orders automatically)
   const renderSingleOrderHtml = (ord: Order, isLastOrder: boolean) => {
+    const isPickup = isStorePickupOrder(ord);
     const cOrderNum = String(ord.order_number || ord.id || '').replace(/^#+/, '');
     const shp = ord.shipping || {};
     const rName = ord.customer_name || `${shp.first_name || ''} ${shp.last_name || ''}`.trim() || 'Customer';
@@ -204,7 +223,9 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
 
         return `
           <tr style="border-bottom: 1px solid #e5e7eb;">
-            <td style="padding: 3px 5px; font-weight: 900; width: 26px; text-align: center; font-size: 10.5px; vertical-align: top; font-variant-numeric: tabular-nums;">${item.quantity}x</td>
+            <td style="padding: 3px 5px; font-weight: 900; width: 26px; text-align: center; font-size: 10.5px; vertical-align: top; font-variant-numeric: tabular-nums;">
+              ${item.quantity > 1 ? `<u style="text-decoration: underline; text-underline-offset: 2px;">${item.quantity}x</u>` : `${item.quantity}x`}
+            </td>
             <td style="padding: 3px 5px; vertical-align: top;">
               <div style="font-size: 10px; font-weight: 800; color: #111; line-height: 1.2;">${item.name || 'Precision Device Skin'}</div>
               ${specsStr ? `<div style="font-size: 8px; color: #444; font-weight: 600; margin-top: 1.5px; line-height: 1.2;">${specsStr}</div>` : ''}
@@ -224,7 +245,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
       if (pageIdx === 0) {
         return `
           <div class="label-container ${pageBreakClass}">
-            <!-- Header: Real Exacoat Logo on Left, Bold Courier on Right -->
+            <!-- Header: Real Exacoat Logo on Left, Bold Courier or Store Pickup on Right -->
             <div>
               <div class="header-row">
                 <div style="display: flex; align-items: center;">
@@ -232,17 +253,23 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                 </div>
                 <div style="text-align: right; display: flex; align-items: center; gap: 6px;">
                   ${totalPages > 1 ? `<span style="font-size: 10px; font-weight: 900; border: 1.5px solid #000; padding: 1px 5px; border-radius: 2px; font-variant-numeric: tabular-nums;">1/${totalPages}</span>` : ''}
-                  <span style="font-size: 13.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${cCourier.toUpperCase()}</span>
+                  <span style="font-size: 13.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">
+                    ${isPickup ? 'STORE PICKUP (SMB)' : cCourier.toUpperCase()}
+                  </span>
                 </div>
               </div>
 
               <!-- Recipient Section -->
               <div class="recipient-box">
-                <div style="font-size: 8px; font-weight: 800; color: #555; text-transform: uppercase; letter-spacing: 0.5px;">SHIP TO / DELIVER TO:</div>
+                <div style="font-size: 8px; font-weight: 800; color: #555; text-transform: uppercase; letter-spacing: 0.5px;">
+                  ${isPickup ? 'CUSTOMER PICKUP (WORKSHOP MANIFEST):' : 'SHIP TO / DELIVER TO:'}
+                </div>
                 <div class="recipient-name">${rName}</div>
                 <div class="recipient-phone">Tel: ${rPhone}</div>
                 <div class="recipient-address">
-                  ${rAddrLines.join('<br />')}
+                  ${isPickup
+                    ? `<strong style="color: #000; font-size: 10px;">PICKUP LOCATION:</strong><br />Exacoat Store Summarecon Bekasi (Ruko Ruby Commercial TB12)<br /><span style="color: #555; font-size: 8.5px;">Customer Self-Pickup &bull; Ready for Workshop Handover</span>`
+                    : rAddrLines.join('<br />')}
                 </div>
               </div>
             </div>
@@ -259,7 +286,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
               </div>
 
               <div class="barcode-subcol">
-                ${validTrk ? `
+                ${!isPickup && validTrk ? `
                   <div class="barcode-track">
                     <span>TRACKING:</span> <strong>${validTrk}</strong>
                   </div>
@@ -286,10 +313,10 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
               </table>
             </div>
 
-            <!-- Shorter Fragile Caution Strip (Footer text removed) -->
+            <!-- Shorter Fragile or Store Pickup Caution Strip -->
             <div>
               <div class="caution-bar">
-                &#9650; ${handlingNote} &#9650;
+                &#9650; ${isPickup ? 'STORE PICKUP - SUMMARECON BEKASI' : handlingNote} &#9650;
               </div>
             </div>
           </div>
@@ -308,12 +335,12 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
               </div>
               <div style="text-align: right; display: flex; align-items: center; gap: 6px;">
                 <span style="font-size: 10px; font-weight: 900; border: 1.5px solid #000; padding: 1px 5px; border-radius: 2px; font-variant-numeric: tabular-nums;">${pageIdx + 1}/${totalPages}</span>
-                <span style="font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${cCourier.toUpperCase()}</span>
+                <span style="font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${isPickup ? 'STORE PICKUP' : cCourier.toUpperCase()}</span>
               </div>
             </div>
 
             <div style="font-size: 9.5px; font-weight: 800; padding: 4px 0; border-bottom: 1.5px solid #000; display: flex; justify-content: space-between;">
-              <span>SHIP TO: <strong>${rName}</strong></span>
+              <span>${isPickup ? 'CUSTOMER:' : 'SHIP TO:'} <strong>${rName}</strong></span>
               <span>Tel: ${rPhone}</span>
             </div>
           </div>
@@ -331,10 +358,10 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
             </table>
           </div>
 
-          <!-- Shorter Fragile Caution Strip -->
+          <!-- Shorter Fragile or Store Pickup Caution Strip -->
           <div>
             <div class="caution-bar">
-              &#9650; ${handlingNote} &#9650;
+              &#9650; ${isPickup ? 'STORE PICKUP - SUMMARECON BEKASI' : handlingNote} &#9650;
             </div>
           </div>
         </div>
@@ -753,7 +780,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                         </span>
                       )}
                       <span className="font-sans font-black text-xs uppercase tracking-tight text-black">
-                        {courierName.toUpperCase()}
+                        {isActivePickup ? 'STORE PICKUP (SMB)' : courierName.toUpperCase()}
                       </span>
                     </div>
                   </div>
@@ -761,16 +788,24 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                   {/* Recipient Section */}
                   <div className="py-2 leading-snug">
                     <span className="font-extrabold text-[8px] text-neutral-500 uppercase tracking-wide block">
-                      SHIP TO / DELIVER TO:
+                      {isActivePickup ? 'CUSTOMER PICKUP (WORKSHOP MANIFEST):' : 'SHIP TO / DELIVER TO:'}
                     </span>
                     <p className="font-black text-[14px] uppercase tracking-tight text-black mt-0.5">
                       {recipientName}
                     </p>
                     <p className="font-extrabold text-[10.5px] text-black">Tel: {recipientPhone}</p>
                     <div className="text-[10.5px] text-neutral-900 font-bold mt-0.5 leading-tight">
-                      {fullAddressLines.map((line, idx) => (
-                        <span key={idx} className="block">{line}</span>
-                      ))}
+                      {isActivePickup ? (
+                        <>
+                          <span className="block text-black font-black">PICKUP LOCATION:</span>
+                          <span className="block">Exacoat Store Summarecon Bekasi (Ruko Ruby Commercial TB12)</span>
+                          <span className="block text-[8.5px] text-neutral-600 font-semibold mt-0.5">Customer Self-Pickup • Workshop Production Manifest</span>
+                        </>
+                      ) : (
+                        fullAddressLines.map((line, idx) => (
+                          <span key={idx} className="block">{line}</span>
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>
@@ -793,7 +828,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
 
                   {/* Right: Barcode + Order Ref */}
                   <div className="w-[58%] pl-2 flex flex-col justify-center">
-                    {trackingNo ? (
+                    {!isActivePickup && trackingNo ? (
                       <div className="text-[7.5px] font-sans font-bold text-neutral-800 uppercase tracking-tight mb-0.5 flex items-center justify-between tabular-nums">
                         <span>TRACKING:</span>
                         <span className="font-black text-black">{trackingNo}</span>
@@ -828,10 +863,13 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                       return (
                         <div key={idx} className="border-b border-neutral-100 pb-0.5">
                           <div className="flex items-start justify-between font-medium">
-                            <span className="font-black text-black">
-                              {item.quantity}x {item.name || 'Precision Device Skin'}
+                            <span className={clsx("font-black text-black", item.quantity > 1 && "underline decoration-2 underline-offset-2")}>
+                              {item.quantity}x
                             </span>
-                            <span className="text-[7.5px] text-neutral-700 font-sans font-bold shrink-0 ml-1 tabular-nums">{itemSku}</span>
+                            <span className="font-bold text-black ml-1">
+                              {item.name || 'Precision Device Skin'}
+                            </span>
+                            <span className="text-[7.5px] text-neutral-700 font-sans font-bold shrink-0 ml-auto pl-1 tabular-nums">{itemSku}</span>
                           </div>
                           {specsStr && (
                             <p className="text-[7.5px] text-neutral-600 font-semibold leading-tight mt-0.5">
@@ -844,10 +882,10 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                   </div>
                 </div>
 
-                {/* Shorter Bottom Caution Strip (Footer text omitted) */}
+                {/* Shorter Bottom Caution Strip */}
                 <div>
                   <div className="bg-black text-white text-[8px] font-black text-center py-1 tracking-wider uppercase rounded-xs">
-                    ▲ {handlingNote} ▲
+                    ▲ {isActivePickup ? 'STORE PICKUP - SUMMARECON BEKASI' : handlingNote} ▲
                   </div>
                 </div>
               </>
@@ -865,13 +903,13 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                         {previewPageIndex + 1}/{activeTotalPages}
                       </span>
                       <span className="font-sans font-black text-[11px] uppercase tracking-tight text-black">
-                        {courierName.toUpperCase()}
+                        {isActivePickup ? 'STORE PICKUP' : courierName.toUpperCase()}
                       </span>
                     </div>
                   </div>
 
                   <div className="py-1 text-[9px] font-bold border-b border-black flex items-center justify-between">
-                    <span>SHIP TO: <strong>{recipientName}</strong></span>
+                    <span>{isActivePickup ? 'CUSTOMER:' : 'SHIP TO:'} <strong>{recipientName}</strong></span>
                     <span>Tel: {recipientPhone}</span>
                   </div>
                 </div>
@@ -891,10 +929,13 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                       return (
                         <div key={idx} className="border-b border-neutral-100 pb-0.5">
                           <div className="flex items-start justify-between font-medium">
-                            <span className="font-black text-black">
-                              {item.quantity}x {item.name || 'Precision Device Skin'}
+                            <span className={clsx("font-black text-black", item.quantity > 1 && "underline decoration-2 underline-offset-2")}>
+                              {item.quantity}x
                             </span>
-                            <span className="text-[7.5px] text-neutral-700 font-sans font-bold shrink-0 ml-1 tabular-nums">{itemSku}</span>
+                            <span className="font-bold text-black ml-1">
+                              {item.name || 'Precision Device Skin'}
+                            </span>
+                            <span className="text-[7.5px] text-neutral-700 font-sans font-bold shrink-0 ml-auto pl-1 tabular-nums">{itemSku}</span>
                           </div>
                           {specsStr && (
                             <p className="text-[7.5px] text-neutral-600 font-semibold leading-tight mt-0.5">
@@ -909,7 +950,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
 
                 <div>
                   <div className="bg-black text-white text-[8px] font-black text-center py-1 tracking-wider uppercase rounded-xs">
-                    ▲ {handlingNote} ▲
+                    ▲ {isActivePickup ? 'STORE PICKUP - SUMMARECON BEKASI' : handlingNote} ▲
                   </div>
                 </div>
               </>

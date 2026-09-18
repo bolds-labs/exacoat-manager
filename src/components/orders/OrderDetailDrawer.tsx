@@ -50,7 +50,8 @@ import {
   RefreshCw,
   ChevronDown,
   ChevronUp,
-  Plane
+  Plane,
+  Store
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { extractItemSpecs } from '../../lib/orderItems';
@@ -949,18 +950,33 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
               )}
             </div>
 
-            {/* Right: Full Destination Address */}
-            <div className="space-y-1.5 p-3.5 rounded-xl border border-white/[0.04] bg-[#141414]">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 flex items-center gap-1.5 mb-1">
-                <MapPin className="w-3.5 h-3.5 text-[#f3aa18]" />
-                Destination Address
+            {/* Right: Destination Address or Store Pickup Location */}
+            <div className={clsx(
+              "space-y-1.5 p-3.5 rounded-xl border",
+              isStorePickup ? "border-[#f3aa18]/25 bg-[#f3aa18]/5" : "border-white/[0.04] bg-[#141414]"
+            )}>
+              <span className={clsx(
+                "text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 mb-1",
+                isStorePickup ? "text-[#f3aa18]" : "text-neutral-500"
+              )}>
+                {isStorePickup ? <Store className="w-3.5 h-3.5 text-[#f3aa18]" /> : <MapPin className="w-3.5 h-3.5 text-[#f3aa18]" />}
+                {isStorePickup ? 'Pickup Location' : 'Destination Address'}
               </span>
-              <p className="text-xs text-neutral-300 font-sans leading-relaxed">
-                {order.shipping.address_1}
-                {order.shipping.address_2 ? `, ${order.shipping.address_2}` : ''}<br />
-                {order.shipping.city}, {order.shipping.state} {order.shipping.postcode}<br />
-                <strong className="text-white">{order.shipping.country}</strong>
-              </p>
+              {isStorePickup ? (
+                <p className="text-xs text-neutral-300 font-sans leading-relaxed">
+                  <strong className="text-white">Exacoat Store Summarecon Bekasi</strong><br />
+                  Ruko Ruby Commercial TB12, Jl. Bulevar Selatan<br />
+                  Summarecon Bekasi, Kota Bekasi 17142<br />
+                  <span className="text-[11px] text-[#f3aa18]/90 font-medium block mt-0.5">Store Collection • Direct Handover</span>
+                </p>
+              ) : (
+                <p className="text-xs text-neutral-300 font-sans leading-relaxed">
+                  {order.shipping.address_1}
+                  {order.shipping.address_2 ? `, ${order.shipping.address_2}` : ''}<br />
+                  {order.shipping.city}, {order.shipping.state} {order.shipping.postcode}<br />
+                  <strong className="text-white">{order.shipping.country}</strong>
+                </p>
+              )}
             </div>
           </div>
 
@@ -1180,7 +1196,8 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
           </div>
         )}
 
-        {/* Section 3: Courier Tracking & Fulfillment Dispatch Card */}
+        {/* Section 3: Courier Tracking & Fulfillment Dispatch Card (Omitted for Store Pickup) */}
+        {!isStorePickup ? (
         <div className="p-5 rounded-2xl border border-white/[0.06] bg-[#111111] space-y-4">
           <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
             <div className="flex items-center gap-2">
@@ -1455,6 +1472,27 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
             </div>
           )}
         </div>
+        ) : (
+          <div className="p-4 rounded-2xl border border-[#f3aa18]/25 bg-[#f3aa18]/5 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[#f3aa18]/15 border border-[#f3aa18]/30 flex items-center justify-center shrink-0">
+                <Store className="w-5 h-5 text-[#f3aa18]" />
+              </div>
+              <div>
+                <span className="text-xs font-bold text-white block">Summarecon Bekasi Store Pickup</span>
+                <span className="text-[11px] text-neutral-400">Direct store handover at Ruko Ruby Commercial TB12. Courier dispatch and shipping tracking are not applicable.</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsLabelModalOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-[#f3aa18] hover:bg-[#d9940c] text-[#0a0a0a] text-xs font-bold font-sans flex items-center gap-1.5 shrink-0 shadow-sm transition-all"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Workshop Label</span>
+            </button>
+          </div>
+        )}
 
         {/* Section 4: Financial Summary */}
         <div className="p-5 rounded-2xl border border-white/[0.06] bg-[#111111] space-y-3">

@@ -87,7 +87,44 @@ export interface WordPressPluginSettings {
   webhook_secret_key?: string;
   gemini_api_key?: string;
   openai_api_key?: string;
+  currency_rates?: Record<string, CurrencyRateConfig>;
+  currency_global_markup?: number;
+  shipping_zones?: Record<string, ShippingZoneConfig>;
+  shipping_target_method_ids?: string;
+  logistics_carriers?: Record<string, LogisticsCarrierConfig>;
   [key: string]: any;
+}
+
+export interface CurrencyRateConfig {
+  code?: string;
+  symbol: string;
+  rate: number;
+  rounding: '9_end' | '90_end' | '50_step' | '500_step' | 'none';
+}
+
+export interface CurrencySettings {
+  currency_rates: Record<string, CurrencyRateConfig>;
+  currency_global_markup: number;
+}
+
+export interface ShippingZoneConfig {
+  name: string;
+  countries: string;
+  currency: string;
+  free: number;
+  filter_text?: string;
+}
+
+export interface LogisticsCarrierConfig {
+  key?: string;
+  name: string;
+  url: string;
+}
+
+export interface ShippingSettings {
+  shipping_zones: Record<string, ShippingZoneConfig>;
+  shipping_target_method_ids: string;
+  logistics_carriers: Record<string, LogisticsCarrierConfig>;
 }
 
 export interface PrivateSettingStatus {
@@ -688,6 +725,145 @@ export async function savePluginSettings(settings: Partial<WordPressPluginSettin
       return { success: true };
     }
     return { success: false, error: `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export function calculateSimulatedPrice(
+  amountIdr: number,
+  rate: number,
+  markup: number,
+  rounding: CurrencyRateConfig['rounding']
+): number {
+  if (amountIdr <= 0 || rate <= 0) return 0;
+  const raw = amountIdr * rate * markup;
+  switch (rounding) {
+    case '90_end':
+      return Math.max(0, Math.ceil(raw / 100) * 100 - 10);
+    case '500_step':
+      return Math.max(0, Math.ceil(raw / 500) * 500);
+    case '50_step':
+      return Math.max(0, Math.ceil(raw / 50) * 50);
+    case 'none':
+      return Math.max(0, Number(raw.toFixed(2)));
+    case '9_end':
+    default:
+      return Math.max(0, Math.ceil(raw / 10) * 10 - 1);
+  }
+}
+
+export async function fetchCurrencySettingsDirect(): Promise<{
+  success: boolean;
+  currency_rates?: Record<string, CurrencyRateConfig>;
+  currency_global_markup?: number;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/settings/currency?_t=${Date.now()}`;
+
+  try {
+    const res = await authenticatedFetch(url, { headers: { Accept: 'application/json' } });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        currency_rates: data.currency_rates,
+        currency_global_markup: data.currency_global_markup,
+      };
+    }
+    return { success: false, error: data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function saveCurrencySettingsDirect(payload: Partial<CurrencySettings>): Promise<{
+  success: boolean;
+  message?: string;
+  currency_rates?: Record<string, CurrencyRateConfig>;
+  currency_global_markup?: number;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/settings/currency`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        message: data.message,
+        currency_rates: data.currency_rates,
+        currency_global_markup: data.currency_global_markup,
+      };
+    }
+    return { success: false, error: data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchShippingSettingsDirect(): Promise<{
+  success: boolean;
+  shipping_zones?: Record<string, ShippingZoneConfig>;
+  shipping_target_method_ids?: string;
+  logistics_carriers?: Record<string, LogisticsCarrierConfig>;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/settings/shipping?_t=${Date.now()}`;
+
+  try {
+    const res = await authenticatedFetch(url, { headers: { Accept: 'application/json' } });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        shipping_zones: data.shipping_zones,
+        shipping_target_method_ids: data.shipping_target_method_ids,
+        logistics_carriers: data.logistics_carriers,
+      };
+    }
+    return { success: false, error: data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function saveShippingSettingsDirect(payload: Partial<ShippingSettings>): Promise<{
+  success: boolean;
+  message?: string;
+  shipping_zones?: Record<string, ShippingZoneConfig>;
+  shipping_target_method_ids?: string;
+  logistics_carriers?: Record<string, LogisticsCarrierConfig>;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/settings/shipping`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        message: data.message,
+        shipping_zones: data.shipping_zones,
+        shipping_target_method_ids: data.shipping_target_method_ids,
+        logistics_carriers: data.logistics_carriers,
+      };
+    }
+    return { success: false, error: data?.message || `HTTP ${res.status}` };
   } catch (err: any) {
     return { success: false, error: err.message };
   }

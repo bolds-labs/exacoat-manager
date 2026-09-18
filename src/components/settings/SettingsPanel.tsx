@@ -38,8 +38,10 @@ import { getWordPressBaseUrl, setWordPressBaseUrl, getWcCredentials, setWcCreden
 import { PLUGIN_VERSION, PLUGIN_ZIP_NAME } from '../../config/version';
 import { TeamRolesManager } from './TeamRolesManager';
 import { WhatsAppAutomationSection } from './WhatsAppAutomationSection';
+import { CurrencySettingsSection } from './CurrencySettingsSection';
+import { ShippingSettingsSection } from './ShippingSettingsSection';
 
-type SettingsTab = 'general' | 'team' | 'automation' | 'integrations' | 'database';
+type SettingsTab = 'general' | 'currency' | 'shipping' | 'team' | 'automation' | 'integrations' | 'database';
 
 export const SettingsPanel: React.FC = () => {
   const { showToast } = useToast();
@@ -267,7 +269,7 @@ export const SettingsPanel: React.FC = () => {
         setWcApiTestResult({
           status: 'success',
           latency,
-          message: `HTTP ${response.status} OK — WooCommerce Core REST API responsive`,
+          message: `HTTP ${response.status} OK: WooCommerce Core REST API responsive`,
         });
         showToast('success', 'WooCommerce Connected', `System Status responded in ${latency}ms`);
       } else {
@@ -319,6 +321,8 @@ export const SettingsPanel: React.FC = () => {
 
   const tabs: { id: SettingsTab; label: string }[] = [
     { id: 'general', label: 'General' },
+    { id: 'currency', label: 'Store & Currency' },
+    { id: 'shipping', label: 'Shipping & Carriers' },
     { id: 'team', label: 'Team Roles' },
     { id: 'automation', label: 'WhatsApp & Automation' },
     { id: 'integrations', label: 'Integrations' },
@@ -347,6 +351,16 @@ export const SettingsPanel: React.FC = () => {
       />
 
       <Tabs tabs={tabs} activeTab={activeTab} onChange={tab => setActiveTab(tab as SettingsTab)} className="w-full" />
+
+      {/* TAB: Store & Currency Exchange */}
+      {activeTab === 'currency' && (
+        <CurrencySettingsSection />
+      )}
+
+      {/* TAB: Shipping & Logistics Carriers */}
+      {activeTab === 'shipping' && (
+        <ShippingSettingsSection />
+      )}
 
       {/* TAB: Team & Staff Roles */}
       {activeTab === 'team' && (

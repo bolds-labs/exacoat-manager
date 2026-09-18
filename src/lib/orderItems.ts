@@ -32,15 +32,56 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
       return;
     }
 
-    const signature = `${cleanLabel.toLowerCase()}:${cleanVal.toLowerCase()}`;
+    // Strip legacy price adjustments like (+Rp 0) or (+Rp 25.000)
+    const normalizedVal = cleanVal.replace(/\s*\(\+[^)]+\)\s*$/i, '').trim();
+    if (!normalizedVal) return;
+
+    const signature = `${cleanLabel.toLowerCase()}:${normalizedVal.toLowerCase()}`;
     if (!seen.has(signature)) {
       seen.add(signature);
-      specs.push({ label: cleanLabel, value: cleanVal });
+      specs.push({ label: cleanLabel, value: normalizedVal });
     }
   };
 
-  // 1. Check parsed_configurator
-  if (Array.isArray(item.parsed_configurator) && item.parsed_configurator.length > 0) {
+  // Helper to parse legacy addons objects or arrays (e.g. WooCommerce Custom Product Add-ons / Acowebs)
+  const parseAddonsList = (list: any) => {
+    if (!list) return;
+    let target = list;
+    if (typeof target === 'string') {
+      try {
+        target = JSON.parse(target);
+      } catch {
+        return;
+      }
+    }
+    if (Array.isArray(target)) {
+      for (const entry of target) {
+        if (!entry) continue;
+        const lbl = entry.label || entry.name || entry.title || entry.fieldName || '';
+        let val = entry.value || entry.display_value || entry.displayValue || '';
+        if (typeof val === 'object' && val !== null) {
+          val = val.label || val.value || val.name || JSON.stringify(val);
+        }
+        if (lbl && val) {
+          addSpec(String(lbl), String(val));
+        }
+      }
+    } else if (typeof target === 'object') {
+      for (const [k, v] of Object.entries(target)) {
+        if (!k.startsWith('_') && typeof v === 'string' && v.trim()) {
+          addSpec(k, v);
+        }
+      }
+    }
+  };
+
+  // 1. Check custom_addons array (prepared by backend parser)
+  if (Array.isArray(item.custom_addons) && item.custom_addons.length > 0) {
+    parseAddonsList(item.custom_addons);
+  }
+
+  // 2. Check parsed_configurator
+  if (specs.length === 0 && Array.isArray(item.parsed_configurator) && item.parsed_configurator.length > 0) {
     for (const c of item.parsed_configurator) {
       const layer = String(c.layer_name || c.name || '').trim();
       const choice = String(c.choice_name || c.choice_title || c.name || '').trim();
@@ -52,7 +93,7 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
     }
   }
 
-  // 2. Check formatted_meta
+  // 3. Check formatted_meta
   if (specs.length === 0 && Array.isArray(item.formatted_meta) && item.formatted_meta.length > 0) {
     for (const m of item.formatted_meta) {
       const key = String(m.label || m.key || '').trim();
@@ -73,7 +114,7 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
     }
   }
 
-  // 3. Check meta_data
+  // 4. Check meta_data (including legacy WooCommerce Product Add-ons & Acowebs WCPA)
   if (specs.length === 0 && Array.isArray(item.meta_data) && item.meta_data.length > 0) {
     // Check raw configurator data
     const rawConfig = item.meta_data.find((m: any) => m.key === '_configurator_data_raw' || m.key === '_configurator_data');
@@ -83,6 +124,23 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
         const choiceName = v.layer_data?.name || v.choice_title || v.name || '';
         if (choiceName) {
           addSpec(layerName, choiceName);
+        }
+      }
+    }
+
+    // Check legacy WooCommerce Custom Product Add-ons keys (e.g. Order #542240 Everything Skins)
+    if (specs.length === 0) {
+      for (const m of item.meta_data) {
+        const key = String(m.key || '').trim().toLowerCase();
+        if (
+          key === '_wcpa_order_meta_data' ||
+          key === 'wcpa_data' ||
+          key === '_pao_addon_values' ||
+          key === 'addons' ||
+          key === '_addons' ||
+          key === '_custom_product_addons'
+        ) {
+          parseAddonsList(m.value);
         }
       }
     }
@@ -108,7 +166,7 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
     }
   }
 
-  // 4. Check item.meta string (e.g. Back: Swarm • Camera: Black Camo)
+  // 5. Check item.meta string (e.g. Back: Swarm • Camera: Black Camo)
   if (specs.length === 0 && item.meta) {
     const parts = String(item.meta).split(/\s*(?:&bull;|•|<br\s*\/?>|\r?\n|\|)\s*/i).filter(Boolean);
     for (const p of parts) {
@@ -123,7 +181,7 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
     }
   }
 
-  // 5. Fallback device model if present
+  // 6. Fallback device model if present
   if (specs.length === 0 && item.device_model) {
     addSpec('Model', String(item.device_model).trim());
   }
@@ -131,8 +189,10 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
   return specs;
 }
 
-export function formatItemSpecsSummary(item: any): string {
+export function formatItemSpecsSummary(item: any, options?: { excludeKeys?: string[] }): string {
   const specs = extractItemSpecs(item);
   if (specs.length === 0) return '';
-  return specs.map(s => `${s.label}: ${s.value}`).join(' • ');
+  const excludeList = (options?.excludeKeys || ['part', 'device', 'device type']).map(k => k.toLowerCase());
+  const filtered = specs.filter(s => !excludeList.includes(s.label.trim().toLowerCase()));
+  return filtered.map(s => `${s.label}: ${s.value}`).join(' • ');
 }

@@ -51,7 +51,8 @@ class Exacoat_Store_Enhancements {
 		add_action( 'woocommerce_after_product_object_save', [ __CLASS__, 'auto_set_aelia_currency_prices_after_save' ], 20, 2 );
 		add_filter( 'woocommerce_price_num_decimals', [ __CLASS__, 'get_active_currency_decimals' ], 999 );
 
-		// 15. Checkout Shipping Rules (Disabled: WooCommerce shipping settings are authoritative)
+		// 15. Checkout Shipping Rules (#14577)
+		add_filter( 'woocommerce_package_rates', [ __CLASS__, 'apply_zone_tiered_shipping_discount' ], 100, 2 );
 
 		// 18. Virtual Upload Folder Path Resolver & 404 Prevention
 		add_action( 'init', [ __CLASS__, 'resolve_virtual_upload' ], 1 );
@@ -500,9 +501,11 @@ class Exacoat_Store_Enhancements {
 	}
 
 	public static function get_active_currency_decimals( $decimals ): int {
-		$currency = class_exists( 'Artmatter_Checkout_Engine' )
-			? Artmatter_Checkout_Engine::get_active_currency()
-			: ( function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'IDR' );
+		$currency = class_exists( 'Exacoat_Checkout_Engine' )
+			? Exacoat_Checkout_Engine::get_active_currency()
+			: ( class_exists( 'Artmatter_Checkout_Engine' )
+				? Artmatter_Checkout_Engine::get_active_currency()
+				: ( function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'IDR' ) );
 		return self::get_currency_decimals( $currency );
 	}
 
@@ -718,9 +721,154 @@ class Exacoat_Store_Enhancements {
 	}
 
 	/**
-	 * Pass-through package rates to respect native WooCommerce and carrier settings.
+	 * Apply Multi-Zone Tiered Free Shipping Discount (#14577)
 	 */
 	public static function apply_zone_tiered_shipping_discount( $rates, $package ) {
+		if ( is_admin() && ! defined( 'DOING_AJAX' ) ) return $rates;
+
+		$config     = self::get_shipping_config();
+		$target_ids = $config['target_method_ids'];
+		$zones      = $config['zones'];
+
+		$country    = strtoupper( trim( $package['destination']['country'] ?? 'ID' ) );
+		$cart_total = ( function_exists( 'WC' ) && WC()->cart ) ? (float) WC()->cart->get_displayed_subtotal() : 0.0;
+
+		$active_currency = class_exists( 'Exacoat_Checkout_Engine' )
+			? Exacoat_Checkout_Engine::get_active_currency()
+			: ( class_exists( 'Artmatter_Checkout_Engine' )
+				? Artmatter_Checkout_Engine::get_active_currency()
+				: ( function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'IDR' ) );
+
+		// Normalize cart total to IDR base currency for comparison against IDR-configured zone thresholds
+		$cart_total_idr = $cart_total;
+		if ( 'IDR' !== $active_currency ) {
+			$currencies = self::get_currency_rates();
+			$rate_val   = floatval( $currencies[ $active_currency ]['rate'] ?? 0 );
+			if ( $rate_val > 0 ) {
+				$cart_total_idr = $cart_total / $rate_val;
+			}
+		}
+
+		// Match destination country
+		$matched_zone = null;
+		foreach ( $zones as $z_key => $zone ) {
+			if ( empty( $zone['countries'] ) ) continue;
+			$c_list = array_map( 'trim', explode( ',', strtoupper( $zone['countries'] ) ) );
+			if ( in_array( $country, $c_list, true ) ) {
+				$matched_zone = $zone;
+				break;
+			}
+		}
+
+		// Fallback to default
+		if ( ! $matched_zone && isset( $zones['default'] ) ) {
+			$matched_zone = $zones['default'];
+		}
+
+		if ( ! $matched_zone ) {
+			return $rates;
+		}
+		$free_thresh = floatval( $matched_zone['free'] ?? 0 );
+		$zone_curr   = strtoupper( trim( $matched_zone['currency'] ?? '' ) );
+		if ( empty( $zone_curr ) ) {
+			$zone_curr = ( $free_thresh > 50000 ) ? 'IDR' : 'USD';
+		}
+
+		$effective_threshold = $free_thresh;
+		if ( $zone_curr !== $active_currency ) {
+			if ( 'IDR' === $zone_curr ) {
+				$converted = apply_filters( 'wc_aelia_cs_convert', $free_thresh, 'IDR', $active_currency );
+				if ( (float) $converted === (float) $free_thresh && $active_currency !== 'IDR' ) {
+					$currencies = self::get_currency_rates();
+					$rate_val   = floatval( $currencies[ $active_currency ]['rate'] ?? 0 );
+					$effective_threshold = $rate_val > 0 ? ( $free_thresh * $rate_val ) : $free_thresh;
+				} else {
+					$effective_threshold = (float) $converted;
+				}
+			} else {
+				$thresh_idr = (float) apply_filters( 'wc_aelia_cs_convert', $free_thresh, $zone_curr, 'IDR' );
+				if ( (float) $thresh_idr === (float) $free_thresh && $zone_curr !== 'IDR' ) {
+					$currencies = self::get_currency_rates();
+					$rate_val   = floatval( $currencies[ $zone_curr ]['rate'] ?? 0 );
+					$thresh_idr = $rate_val > 0 ? ( $free_thresh / $rate_val ) : $free_thresh;
+				}
+				$converted = apply_filters( 'wc_aelia_cs_convert', $thresh_idr, 'IDR', $active_currency );
+				if ( (float) $converted === (float) $thresh_idr && $active_currency !== 'IDR' ) {
+					$currencies = self::get_currency_rates();
+					$rate_val   = floatval( $currencies[ $active_currency ]['rate'] ?? 0 );
+					$effective_threshold = $rate_val > 0 ? ( $thresh_idr * $rate_val ) : $thresh_idr;
+				} else {
+					$effective_threshold = (float) $converted;
+				}
+			}
+		}
+
+		$is_free_qualified = ( $effective_threshold > 0 && $cart_total >= $effective_threshold );
+		$filter_text       = trim( strtolower( (string) ( $matched_zone['filter_text'] ?? '' ) ) );
+
+		foreach ( $rates as $rate_id => $rate ) {
+			$is_biteship = ( strpos( $rate->id, 'biteship_shipping' ) !== false || ( isset( $rate->method_id ) && 'biteship_shipping' === $rate->method_id ) );
+
+			// Target method ID verification
+			if ( ! empty( $target_ids ) ) {
+				$matched_method = false;
+				foreach ( $target_ids as $tid ) {
+					if ( strpos( $rate->id, $tid ) !== false || ( isset( $rate->method_id ) && $rate->method_id === $tid ) ) {
+						$matched_method = true;
+						break;
+					}
+				}
+				// Biteship rates always pass method ID verification so filter_text applies cleanly
+				if ( ! $matched_method && $is_biteship ) {
+					$matched_method = true;
+				}
+				if ( ! $matched_method ) continue;
+			}
+
+			// Filter text check (e.g. 'goorita')
+			if ( ! empty( $filter_text ) ) {
+				$rate_label   = strtolower( (string) $rate->label );
+				$rate_id_s    = strtolower( (string) $rate->id );
+				$is_flat_rate = ( isset( $rate->method_id ) && 'flat_rate' === $rate->method_id ) || ( strpos( $rate_id_s, 'flat_rate' ) !== false );
+				$matches_text = ( strpos( $rate_label, $filter_text ) !== false || strpos( $rate_id_s, $filter_text ) !== false );
+
+				// If zone filter is 'goorita', also match any standard international flat_rate method unless it is DHL
+				if ( ! $matches_text && 'goorita' === $filter_text && $is_flat_rate && false === strpos( $rate_label, 'dhl' ) && false === strpos( $rate_id_s, 'dhl' ) ) {
+					$matches_text = true;
+				}
+
+				if ( ! $matches_text ) {
+					continue;
+				}
+			}
+
+			// 100% Free Shipping Rule
+			$existing_meta = method_exists( $rate, 'get_meta_data' ) ? $rate->get_meta_data() : [];
+			$orig_cost     = null;
+			if ( ! empty( $existing_meta ) && is_array( $existing_meta ) ) {
+				foreach ( $existing_meta as $mk => $mv ) {
+					if ( 'original_cost' === $mk || ( is_object( $mv ) && isset( $mv->key ) && 'original_cost' === $mv->key ) ) {
+						$orig_cost = is_object( $mv ) ? $mv->value : $mv;
+						break;
+					}
+				}
+			}
+			if ( null === $orig_cost && floatval( $rate->cost ) > 0 ) {
+				$orig_cost = floatval( $rate->cost );
+			}
+
+			if ( $is_free_qualified ) {
+				if ( $orig_cost > 0 && method_exists( $rate, 'add_meta_data' ) ) {
+					$rate->add_meta_data( 'original_cost', (string) $orig_cost, true );
+					$rate->add_meta_data( 'is_free_shipping', '1', true );
+				}
+				$rate->cost = 0;
+				if ( strpos( $rate->label, 'Free Shipping' ) === false ) {
+					$rate->label .= ' (Free Shipping)';
+				}
+			}
+		}
+
 		return $rates;
 	}
 

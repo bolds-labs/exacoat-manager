@@ -771,6 +771,18 @@ class Exacoat_Core {
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 
+		$register( '/settings/currency', [
+			'methods'             => [ 'GET', 'POST' ],
+			'callback'            => [ $this, 'rest_handle_currency_settings' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/settings/shipping', [
+			'methods'             => [ 'GET', 'POST' ],
+			'callback'            => [ $this, 'rest_handle_shipping_settings' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
 		$register( '/settings/feelform', [
 			'methods'             => 'GET',
 			'callback'            => [ $this, 'rest_get_public_feelform_settings' ],
@@ -1491,10 +1503,145 @@ class Exacoat_Core {
 		foreach ( [ 'gemini_api_key', 'openai_api_key', 'r2_access_key', 'r2_secret_key', 'cloudflare_api_token', 'drime_access_token', 'drime_access_key', 'drime_secret_key', 'zeptomail_token', 'pushover_app_token', 'pushover_user_key', 'supabase_service_role_key', 'webhook_secret' ] as $secret_key ) {
 			unset( $settings[ $secret_key ] );
 		}
+
+		if ( empty( $settings['currency_rates'] ) && class_exists( 'Exacoat_Store_Enhancements' ) ) {
+			$settings['currency_rates'] = Exacoat_Store_Enhancements::get_currency_rates();
+		}
+		if ( ! isset( $settings['currency_global_markup'] ) ) {
+			$settings['currency_global_markup'] = 1.15;
+		}
+		if ( ( empty( $settings['shipping_zones'] ) || empty( $settings['shipping_target_method_ids'] ) ) && class_exists( 'Exacoat_Store_Enhancements' ) ) {
+			$ship_cfg = Exacoat_Store_Enhancements::get_shipping_config();
+			if ( empty( $settings['shipping_zones'] ) ) {
+				$settings['shipping_zones'] = $ship_cfg['zones'];
+			}
+			if ( empty( $settings['shipping_target_method_ids'] ) ) {
+				$settings['shipping_target_method_ids'] = implode( ', ', $ship_cfg['target_method_ids'] );
+			}
+		}
+		if ( empty( $settings['logistics_carriers'] ) && class_exists( 'Exacoat_Shipping_Tracker' ) ) {
+			$settings['logistics_carriers'] = Exacoat_Shipping_Tracker::get_carrier_registry();
+		}
+
 		return rest_ensure_response( [
 			'success'  => true,
 			'settings' => $settings,
 			'secret_status' => $secret_status,
+		] );
+	}
+
+	public function rest_handle_currency_settings( WP_REST_Request $request ) {
+		if ( $request->get_method() === 'POST' ) {
+			$params = $request->get_json_params() ?: $request->get_params();
+			$current = self::get_settings();
+
+			if ( isset( $params['currency_rates'] ) && is_array( $params['currency_rates'] ) ) {
+				$clean_rates = [];
+				foreach ( $params['currency_rates'] as $code => $data ) {
+					$clean_code = strtoupper( sanitize_text_field( $code ) );
+					if ( empty( $clean_code ) ) continue;
+					$clean_rates[ $clean_code ] = [
+						'symbol'   => sanitize_text_field( $data['symbol'] ?? '$' ),
+						'rate'     => floatval( $data['rate'] ?? 0 ),
+						'rounding' => sanitize_text_field( $data['rounding'] ?? '9_end' ),
+					];
+				}
+				$current['currency_rates'] = $clean_rates;
+			}
+
+			if ( isset( $params['currency_global_markup'] ) ) {
+				$current['currency_global_markup'] = max( 1.0, floatval( $params['currency_global_markup'] ) );
+			}
+
+			update_option( 'exacoat_core_settings', $current );
+			update_option( 'artmatter_core_settings', $current );
+			self::clear_settings_cache();
+
+			$rates = $current['currency_rates'] ?? ( class_exists( 'Exacoat_Store_Enhancements' ) ? Exacoat_Store_Enhancements::get_currency_rates() : [] );
+			$markup = floatval( $current['currency_global_markup'] ?? 1.15 );
+
+			return rest_ensure_response( [
+				'success'                => true,
+				'message'                => 'Currency settings saved successfully',
+				'currency_rates'         => $rates,
+				'currency_global_markup' => $markup,
+			] );
+		}
+
+		$current = self::get_settings();
+		$rates = $current['currency_rates'] ?? ( class_exists( 'Exacoat_Store_Enhancements' ) ? Exacoat_Store_Enhancements::get_currency_rates() : [] );
+		$markup = floatval( $current['currency_global_markup'] ?? 1.15 );
+
+		return rest_ensure_response( [
+			'success'                => true,
+			'currency_rates'         => $rates,
+			'currency_global_markup' => $markup,
+		] );
+	}
+
+	public function rest_handle_shipping_settings( WP_REST_Request $request ) {
+		if ( $request->get_method() === 'POST' ) {
+			$params = $request->get_json_params() ?: $request->get_params();
+			$current = self::get_settings();
+
+			if ( isset( $params['shipping_zones'] ) && is_array( $params['shipping_zones'] ) ) {
+				$clean_zones = [];
+				foreach ( $params['shipping_zones'] as $key => $zone ) {
+					$clean_key = sanitize_key( $key );
+					if ( empty( $clean_key ) ) continue;
+					$clean_zones[ $clean_key ] = [
+						'name'        => sanitize_text_field( $zone['name'] ?? ucfirst( $clean_key ) ),
+						'countries'   => sanitize_text_field( $zone['countries'] ?? '' ),
+						'currency'    => strtoupper( sanitize_text_field( $zone['currency'] ?? 'USD' ) ),
+						'free'        => floatval( $zone['free'] ?? 0 ),
+						'filter_text' => sanitize_text_field( $zone['filter_text'] ?? '' ),
+					];
+				}
+				$current['shipping_zones'] = $clean_zones;
+			}
+
+			if ( isset( $params['shipping_target_method_ids'] ) ) {
+				$current['shipping_target_method_ids'] = sanitize_text_field( $params['shipping_target_method_ids'] );
+			}
+
+			if ( isset( $params['logistics_carriers'] ) && is_array( $params['logistics_carriers'] ) ) {
+				$clean_carriers = [];
+				foreach ( $params['logistics_carriers'] as $key => $carrier ) {
+					$clean_key = sanitize_key( $key );
+					if ( empty( $clean_key ) ) continue;
+					$clean_carriers[ $clean_key ] = [
+						'name' => sanitize_text_field( $carrier['name'] ?? ucfirst( $clean_key ) ),
+						'url'  => esc_url_raw( $carrier['url'] ?? '' ),
+					];
+				}
+				$current['logistics_carriers'] = $clean_carriers;
+			}
+
+			update_option( 'exacoat_core_settings', $current );
+			update_option( 'artmatter_core_settings', $current );
+			self::clear_settings_cache();
+
+			$ship_cfg = class_exists( 'Exacoat_Store_Enhancements' ) ? Exacoat_Store_Enhancements::get_shipping_config() : [ 'zones' => [], 'target_method_ids' => [] ];
+			$carriers = class_exists( 'Exacoat_Shipping_Tracker' ) ? Exacoat_Shipping_Tracker::get_carrier_registry() : [];
+
+			return rest_ensure_response( [
+				'success'                    => true,
+				'message'                    => 'Shipping settings saved successfully',
+				'shipping_zones'             => $current['shipping_zones'] ?? $ship_cfg['zones'],
+				'shipping_target_method_ids' => $current['shipping_target_method_ids'] ?? implode( ', ', $ship_cfg['target_method_ids'] ),
+				'logistics_carriers'         => $current['logistics_carriers'] ?? $carriers,
+			] );
+		}
+
+		$current  = self::get_settings();
+		$ship_cfg = class_exists( 'Exacoat_Store_Enhancements' ) ? Exacoat_Store_Enhancements::get_shipping_config() : [ 'zones' => [], 'target_method_ids' => [] ];
+		$carriers = class_exists( 'Exacoat_Shipping_Tracker' ) ? Exacoat_Shipping_Tracker::get_carrier_registry() : [];
+
+		return rest_ensure_response( [
+			'success'                    => true,
+			'shipping_zones'             => $current['shipping_zones'] ?? $ship_cfg['zones'],
+			'shipping_target_method_ids' => $current['shipping_target_method_ids'] ?? implode( ', ', $ship_cfg['target_method_ids'] ),
+			'logistics_carriers'         => $current['logistics_carriers'] ?? $carriers,
 		] );
 	}
 

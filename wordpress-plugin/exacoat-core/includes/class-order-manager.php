@@ -592,6 +592,90 @@ class Exacoat_Order_Manager {
 	}
 
 	/**
+	 * Extract legacy custom product addons (e.g. WooCommerce Product Add-ons, Acowebs WCPA, Order #542240)
+	 */
+	public static function extract_custom_addons( $item ): array {
+		$addons = [];
+		if ( ! $item || ! method_exists( $item, 'get_meta_data' ) ) {
+			return $addons;
+		}
+
+		$seen = [];
+		$add_entry = function( $label, $value ) use ( &$addons, &$seen ) {
+			$l = trim( wp_strip_all_tags( (string) $label ) );
+			$v = trim( wp_strip_all_tags( (string) $value ) );
+			if ( empty( $l ) || empty( $v ) ) return;
+			// Strip legacy price adjustments e.g. (+Rp 0), (+Rp 25.000)
+			$v = preg_replace( '/\s*\(\+[^)]+\)\s*$/i', '', $v );
+			$sig = strtolower( $l . ':' . $v );
+			if ( ! isset( $seen[ $sig ] ) ) {
+				$seen[ $sig ] = true;
+				$addons[] = [
+					'label'         => $l,
+					'name'          => $l,
+					'value'         => $v,
+					'display_value' => $v,
+				];
+			}
+		};
+
+		foreach ( $item->get_meta_data() as $m ) {
+			$m_data = is_object( $m ) && method_exists( $m, 'get_data' ) ? $m->get_data() : (array) $m;
+			$key    = strtolower( trim( (string) ( $m_data['key'] ?? '' ) ) );
+			$val    = maybe_unserialize( $m_data['value'] ?? '' );
+
+			if ( empty( $key ) ) continue;
+
+			// Check Acowebs WCPA (_wcpa_order_meta_data)
+			if ( str_contains( $key, 'wcpa' ) ) {
+				if ( is_array( $val ) ) {
+					foreach ( $val as $entry ) {
+						if ( is_array( $entry ) ) {
+							$lbl = $entry['label'] ?? ( $entry['name'] ?? '' );
+							$v   = $entry['value'] ?? ( $entry['display_value'] ?? '' );
+							if ( is_array( $v ) ) {
+								$v = implode( ', ', array_map( 'strval', $v ) );
+							}
+							$add_entry( $lbl, $v );
+						}
+					}
+				}
+			}
+
+			// Check official WooCommerce Product Add-Ons (_pao_ids, _pao_addon_values, addons)
+			if ( str_contains( $key, 'pao' ) || $key === 'addons' || $key === '_addons' || $key === '_custom_product_addons' ) {
+				if ( is_array( $val ) ) {
+					foreach ( $val as $entry ) {
+						if ( is_array( $entry ) ) {
+							$lbl = $entry['name'] ?? ( $entry['label'] ?? ( $entry['title'] ?? '' ) );
+							$v   = $entry['value'] ?? ( $entry['display_value'] ?? '' );
+							if ( is_array( $v ) ) {
+								$v = implode( ', ', array_map( 'strval', $v ) );
+							}
+							$add_entry( $lbl, $v );
+						}
+					}
+				}
+			}
+
+			// Check exacoat configurator custom addons
+			if ( $key === 'exacoat_addons' || $key === '_exacoat_addons' ) {
+				if ( is_array( $val ) ) {
+					foreach ( $val as $entry ) {
+						if ( is_array( $entry ) ) {
+							$lbl = $entry['label'] ?? ( $entry['name'] ?? '' );
+							$v   = $entry['value'] ?? '';
+							$add_entry( $lbl, $v );
+						}
+					}
+				}
+			}
+		}
+
+		return $addons;
+	}
+
+	/**
 	 * Helper: Format WooCommerce Order object into rich ERP JSON structure
 	 */
 	public static function format_order_for_manager( $order ): array {
@@ -766,14 +850,28 @@ class Exacoat_Order_Manager {
 				}
 			}
 
+			// Extract legacy custom product addons (WooCommerce Product Add-ons / Acowebs WCPA, e.g. Order #542240)
+			$custom_addons = self::extract_custom_addons( $item );
+			if ( ! empty( $custom_addons ) ) {
+				foreach ( $custom_addons as $ca ) {
+					$formatted_meta[] = [
+						'key'           => $ca['label'],
+						'label'         => $ca['label'],
+						'value'         => $ca['value'],
+						'display_value' => $ca['display_value'],
+					];
+				}
+			}
+
 			$meta_data = [];
 			if ( method_exists( $item, 'get_meta_data' ) ) {
 				foreach ( $item->get_meta_data() as $m ) {
 					$m_data = is_object( $m ) && method_exists( $m, 'get_data' ) ? $m->get_data() : (array) $m;
+					$raw_val = $m_data['value'] ?? '';
 					$meta_data[] = [
 						'id'    => $m_data['id'] ?? null,
 						'key'   => $m_data['key'] ?? '',
-						'value' => $m_data['value'] ?? '',
+						'value' => maybe_unserialize( $raw_val ),
 					];
 				}
 			}
@@ -804,6 +902,7 @@ class Exacoat_Order_Manager {
 				'commission_amount'    => 0,
 				'meta_data'            => $meta_data,
 				'formatted_meta'       => $formatted_meta,
+				'custom_addons'        => $custom_addons,
 			];
 		}
 
