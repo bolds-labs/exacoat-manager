@@ -107,6 +107,8 @@ export interface ShopeeOrderItem {
   quantity: number;
   price: number;
   image_url: string;
+  item_sku?: string;
+  model_sku?: string;
 }
 
 export interface ShopeeExistingClaim {
@@ -134,6 +136,7 @@ export interface ShopeeOrder {
   recipient_phone: string;
   recipient_address: string;
   recipient_city: string;
+  recipient_district?: string;
   recipient_postcode: string;
   items: ShopeeOrderItem[];
   already_claimed: boolean;

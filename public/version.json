@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://exacoat.com/exacoat-core-v0.0.16.zip?v=0.0.16",
   "homepage": "https://exacoat.com",
-  "last_updated": "2026-09-18T05:53:20.008Z",
+  "last_updated": "2026-09-18T06:08:11.080Z",
   "sections": {
     "description": "The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.",
     "changelog": "### Version 0.0.16\n- High-speed order management & ready-to-ship custom status\n- Integrated courier tracking and A6 label metadata synchronization"

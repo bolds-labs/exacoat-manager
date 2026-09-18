@@ -13,6 +13,7 @@ import { MOCK_SHOPEE_ORDERS } from '../../data/mockShopeeOrders';
 import { matchesPhoneQuery, formatDisplayPhone } from '../../lib/phoneUtils';
 import { ShopeeSettingsModal } from '../settings/ShopeeSettingsModal';
 import { ArrangeShipmentModal } from './ArrangeShipmentModal';
+import { generateShopeeAwbHtml } from '../../lib/shopeeAwbGenerator';
 import {
   Store,
   RefreshCw,
@@ -206,63 +207,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
 
     const printWindow = window.open('', '_blank', 'width=450,height=650');
     if (printWindow) {
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Shopee AWB - ${order.order_sn}</title>
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; margin: 0; padding: 15px; color: #000; background: #fff; width: 100mm; box-sizing: border-box; }
-            .label-box { border: 2px solid #000; padding: 10px; border-radius: 4px; }
-            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 8px; }
-            .logo { font-size: 18px; font-weight: 900; }
-            .carrier { font-size: 13px; font-weight: bold; }
-            .barcode-area { text-align: center; margin: 12px 0; border: 1px dashed #666; padding: 8px; font-family: monospace; }
-            .barcode { font-size: 22px; letter-spacing: 3px; font-weight: bold; }
-            .section { margin-bottom: 8px; font-size: 11px; }
-            .title { font-weight: bold; text-transform: uppercase; font-size: 10px; color: #555; margin-bottom: 2px; }
-            .items-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 10px; }
-            .items-table th, .items-table td { border: 1px solid #ccc; padding: 4px; text-align: left; }
-            @media print { body { width: 100mm; height: 150mm; padding: 5mm; } }
-          </style>
-        </head>
-        <body>
-          <div class="label-box">
-            <div class="header">
-              <div class="logo">SHOPEE</div>
-              <div class="carrier">${order.shipping_carrier || 'STANDARD'}</div>
-            </div>
-            <div class="barcode-area">
-              <div class="title">Tracking Resi Number</div>
-              <div class="barcode">${order.tracking_number || order.order_sn}</div>
-              <div style="font-size: 10px; margin-top: 4px;">Order: ${order.order_sn}</div>
-            </div>
-            <div class="section">
-              <div class="title">Penerima (Recipient):</div>
-              <strong>${order.recipient_name || order.buyer_username}</strong> (${order.recipient_phone || '-' })<br/>
-              ${order.recipient_address || ''} ${order.recipient_city || ''} ${order.recipient_postcode ? `(${order.recipient_postcode})` : ''}
-            </div>
-            <div class="section">
-              <div class="title">Pengirim (Sender):</div>
-              <strong>EXACOAT OFFICIAL SHOP</strong> (Jakarta Pusat)
-            </div>
-            <div class="section">
-              <div class="title">Daftar Barang (Items):</div>
-              <table class="items-table">
-                <tr><th>Produk</th><th>Varian</th><th>Qty</th></tr>
-                ${order.items.map(it => `<tr><td>${it.item_name}</td><td>${it.model_name || '-'}</td><td>${it.quantity}</td></tr>`).join('')}
-              </table>
-            </div>
-            <div style="font-size: 9px; text-align: center; margin-top: 15px; color: #777;">
-              Official Shopee Open Platform Thermal Air Waybill Preview
-            </div>
-          </div>
-          <script>
-            setTimeout(() => { window.print(); }, 400);
-          </script>
-        </body>
-        </html>
-      `);
+      printWindow.document.write(generateShopeeAwbHtml(order));
       printWindow.document.close();
     }
   };
