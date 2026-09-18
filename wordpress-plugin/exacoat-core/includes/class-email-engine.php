@@ -67,7 +67,7 @@ class Exacoat_Email_Engine {
 	}
 
 	public static function get_config(): array {
-		$settings = Artmatter_Core::get_settings();
+		$settings = Exacoat_Core::get_settings();
 		return [
 			'zeptomail_token' => trim( $settings['zeptomail_token'] ?? '' ),
 			'from_email'      => trim( $settings['email_from_address'] ?? 'support@exacoat.com' ),

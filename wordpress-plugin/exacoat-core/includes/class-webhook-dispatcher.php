@@ -30,12 +30,12 @@ class Exacoat_Webhook_Dispatcher {
 	}
 
 	public static function get_webhook_url() {
-		$url = defined( 'AM_EMAIL_WEBHOOK_URL' ) ? AM_EMAIL_WEBHOOK_URL : Artmatter_Core::get_setting( 'email_webhook_url', '' );
-		return ! empty( $url ) ? trim( $url ) : 'https://node.exacoat.com/webhook/artmatter/email';
+		$url = defined( 'EXA_EMAIL_WEBHOOK_URL' ) ? EXA_EMAIL_WEBHOOK_URL : ( defined( 'AM_EMAIL_WEBHOOK_URL' ) ? AM_EMAIL_WEBHOOK_URL : Exacoat_Core::get_setting( 'email_webhook_url', '' ) );
+		return ! empty( $url ) ? trim( $url ) : 'https://node.exacoat.com/webhook/exacoat/email';
 	}
 
 	public static function get_secret_key() {
-		return defined( 'AM_WEBHOOK_SECRET' ) ? AM_WEBHOOK_SECRET : ( getenv( 'AM_WEBHOOK_SECRET' ) ?: Artmatter_Core::get_setting( 'webhook_secret_key', Artmatter_Core::get_setting( 'webhook_secret', '' ) ) );
+		return defined( 'EXA_WEBHOOK_SECRET' ) ? EXA_WEBHOOK_SECRET : ( defined( 'AM_WEBHOOK_SECRET' ) ? AM_WEBHOOK_SECRET : ( getenv( 'EXA_WEBHOOK_SECRET' ) ?: Exacoat_Core::get_setting( 'webhook_secret_key', Exacoat_Core::get_setting( 'webhook_secret', '' ) ) ) );
 	}
 
 	public static function dispatch( $event, $recipient_email, $recipient_name = '', $data = [] ) {
@@ -100,7 +100,7 @@ class Exacoat_Webhook_Dispatcher {
 	}
 
 	public static function execute_order_webhook_send( $order_id ) {
-		$payload = Artmatter_Core::build_order_payload( $order_id );
+		$payload = Exacoat_Core::build_order_payload( $order_id );
 		if ( ! $payload ) return;
 
 		$logger      = function_exists( 'wc_get_logger' ) ? wc_get_logger() : null;

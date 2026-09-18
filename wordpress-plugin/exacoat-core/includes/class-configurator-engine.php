@@ -432,9 +432,6 @@ class Exacoat_Configurator_Engine {
 		if ( class_exists( 'Exacoat_Core' ) && method_exists( 'Exacoat_Core', 'verify_bridge_permission' ) ) {
 			return Exacoat_Core::verify_bridge_permission( $request );
 		}
-		if ( class_exists( 'Artmatter_Core' ) && method_exists( 'Artmatter_Core', 'verify_bridge_permission' ) ) {
-			return Artmatter_Core::verify_bridge_permission( $request );
-		}
 		return current_user_can( 'manage_options' );
 	}
 

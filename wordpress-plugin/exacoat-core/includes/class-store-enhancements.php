@@ -21,12 +21,12 @@ class Exacoat_Store_Enhancements {
 		add_filter( 'cfw_disable_email_domain_validation', '__return_true' );
 
 		// Cart to checkout redirect, disabled by default to preserve standard WooCommerce cart behavior
-		if ( Artmatter_Core::get_setting( 'redirect_cart_checkout', 0 ) ) {
+		if ( Exacoat_Core::get_setting( 'redirect_cart_checkout', 0 ) ) {
 			add_action( 'template_redirect', [ __CLASS__, 'redirect_cart_to_checkout' ] );
 		}
 
 		// Optional login page redirect
-		if ( Artmatter_Core::get_setting( 'redirect_wp_login', 0 ) ) {
+		if ( Exacoat_Core::get_setting( 'redirect_wp_login', 0 ) ) {
 			add_action( 'init', [ __CLASS__, 'redirect_wp_login_page' ] );
 		}
 
@@ -72,7 +72,7 @@ class Exacoat_Store_Enhancements {
 	}
 
 	public static function redirect_cart_to_checkout() {
-		if ( ! Artmatter_Core::get_setting( 'redirect_cart_checkout', 1 ) ) return;
+		if ( ! Exacoat_Core::get_setting( 'redirect_cart_checkout', 1 ) ) return;
 
 		if ( function_exists( 'is_cart' ) && is_cart() ) {
 			wp_safe_redirect( wc_get_checkout_url() );
@@ -356,7 +356,7 @@ class Exacoat_Store_Enhancements {
 			return $slug;
 		}
 
-		if ( ! Artmatter_Core::get_setting( 'enable_product_id_slugs', 1 ) ) return $slug;
+		if ( ! Exacoat_Core::get_setting( 'enable_product_id_slugs', 1 ) ) return $slug;
 
 		if ( get_post_meta( $post_ID, '_artmatter_custom_product', true ) ) {
 			return $slug;
@@ -379,7 +379,7 @@ class Exacoat_Store_Enhancements {
 	}
 
 	public static function lockdown_users_rest_api( $result ) {
-		if ( ! Artmatter_Core::get_setting( 'lockdown_users_api', 1 ) ) return $result;
+		if ( ! Exacoat_Core::get_setting( 'lockdown_users_api', 1 ) ) return $result;
 
 		if ( ! empty( $result ) ) return $result;
 		$route = $GLOBALS['wp']->query_vars['rest_route'] ?? '';
@@ -397,7 +397,7 @@ class Exacoat_Store_Enhancements {
 	 * Dynamic Currency Registry (#11889)
 	 */
 	public static function get_currency_rates(): array {
-		$settings = Artmatter_Core::get_settings();
+		$settings = Exacoat_Core::get_settings();
 		$default_currencies = [
 			'USD' => [ 'symbol' => '$',   'rate' => 0.000059, 'rounding' => '9_end' ],
 			'EUR' => [ 'symbol' => '€',   'rate' => 0.000051, 'rounding' => '9_end' ],
@@ -434,7 +434,7 @@ class Exacoat_Store_Enhancements {
 			return (float) $amount_idr;
 		}
 
-		$settings   = Artmatter_Core::get_settings();
+		$settings   = Exacoat_Core::get_settings();
 		$markup     = floatval( $settings['currency_global_markup'] ?? 1.15 );
 		$currencies = self::get_currency_rates();
 
@@ -578,7 +578,7 @@ class Exacoat_Store_Enhancements {
 	 * Get Shipping Zones Configuration (#14577)
 	 */
 	public static function get_shipping_config(): array {
-		$settings = Artmatter_Core::get_settings();
+		$settings = Exacoat_Core::get_settings();
 
 		$default_zones = [
 			'indonesia' => [

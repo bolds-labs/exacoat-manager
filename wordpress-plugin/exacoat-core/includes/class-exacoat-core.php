@@ -1592,8 +1592,3 @@ class Exacoat_Core {
 }
 
 }
-
-// Backward compatibility alias
-if ( ! class_exists( 'Artmatter_Core', false ) ) {
-	class_alias( 'Exacoat_Core', 'Artmatter_Core' );
-}

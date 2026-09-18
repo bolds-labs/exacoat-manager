@@ -6,7 +6,7 @@
  * Cloudflare R2 mirroring, Action Scheduler post-delivery invitations,
  * WooCommerce product rating synchronization, and front-end museum widgets.
  *
- * @package Artmatter_Core
+ * @package Exacoat_Core
  * @version 7.10.0
  */
 
@@ -237,7 +237,7 @@ class Exacoat_Review_Manager {
 		}
 
 		// Configurable delay: default 36 hours (range 12h to 72h)
-		$settings     = Artmatter_Core::get_settings();
+		$settings     = Exacoat_Core::get_settings();
 		$delay_hours  = (int) ( $settings['review_invitation_delay_hours'] ?? 36 );
 		if ( $delay_hours < 6 ) {
 			$delay_hours = 36;
@@ -642,35 +642,35 @@ class Exacoat_Review_Manager {
 		register_rest_route( $namespace, '/reviews', [
 			'methods'             => [ 'GET' ],
 			'callback'            => [ __CLASS__, 'api_get_reviews' ],
-			'permission_callback' => [ 'Artmatter_Core', 'verify_bridge_permission' ],
+			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
 		] );
 
 		// 2. Get reviews for a single order
 		register_rest_route( $namespace, '/reviews/order/(?P<id>\d+)', [
 			'methods'             => [ 'GET' ],
 			'callback'            => [ __CLASS__, 'api_get_order_review' ],
-			'permission_callback' => [ 'Artmatter_Core', 'verify_bridge_permission' ],
+			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
 		] );
 
 		// 3. Update review status (approve, feature, reject)
 		register_rest_route( $namespace, '/reviews/(?P<id>\d+)/status', [
 			'methods'             => [ 'POST' ],
 			'callback'            => [ __CLASS__, 'api_update_review_status' ],
-			'permission_callback' => [ 'Artmatter_Core', 'verify_bridge_permission' ],
+			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
 		] );
 
 		// 4. Edit review content / rating
 		register_rest_route( $namespace, '/reviews/(?P<id>\d+)/edit', [
 			'methods'             => [ 'POST' ],
 			'callback'            => [ __CLASS__, 'api_edit_review' ],
-			'permission_callback' => [ 'Artmatter_Core', 'verify_bridge_permission' ],
+			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
 		] );
 
 		// 5. Delete review
 		register_rest_route( $namespace, '/reviews/(?P<id>\d+)/delete', [
 			'methods'             => [ 'POST' ],
 			'callback'            => [ __CLASS__, 'api_delete_review' ],
-			'permission_callback' => [ 'Artmatter_Core', 'verify_bridge_permission' ],
+			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
 		] );
 
 		// 6. Public signed review submission
@@ -684,35 +684,35 @@ class Exacoat_Review_Manager {
 		register_rest_route( $namespace, '/reviews/invite', [
 			'methods'             => [ 'POST' ],
 			'callback'            => [ __CLASS__, 'api_manual_invite' ],
-			'permission_callback' => [ 'Artmatter_Core', 'verify_bridge_permission' ],
+			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
 		] );
 
 		// 8. Admin manual review creation
 		register_rest_route( $namespace, '/reviews/create', [
 			'methods'             => [ 'POST' ],
 			'callback'            => [ __CLASS__, 'api_create_review' ],
-			'permission_callback' => [ 'Artmatter_Core', 'verify_bridge_permission' ],
+			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
 		] );
 
 		// 9. Get review coupon reward settings
 		register_rest_route( $namespace, '/reviews/reward-settings', [
 			'methods'             => [ 'GET' ],
 			'callback'            => [ __CLASS__, 'api_get_reward_settings' ],
-			'permission_callback' => [ 'Artmatter_Core', 'verify_bridge_permission' ],
+			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
 		] );
 
 		// 10. Update review coupon reward settings
 		register_rest_route( $namespace, '/reviews/reward-settings', [
 			'methods'             => [ 'POST' ],
 			'callback'            => [ __CLASS__, 'api_update_reward_settings' ],
-			'permission_callback' => [ 'Artmatter_Core', 'verify_bridge_permission' ],
+			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
 		] );
 
 		// 11. Direct media upload for customer reviews (photos & videos)
 		register_rest_route( $namespace, '/reviews/upload-media', [
 			'methods'             => [ 'POST' ],
 			'callback'            => [ __CLASS__, 'api_upload_media' ],
-			'permission_callback' => [ 'Artmatter_Core', 'verify_bridge_permission' ],
+			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
 		] );
 
 		// 12. Public order verification for headless /review page

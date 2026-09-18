@@ -87,8 +87,8 @@ class Exacoat_Diagnostics {
 		);
 
 		// 2b. Cloudflare Cache API & Edge Purge
-		$cf_zone = defined( 'AM_CLOUDFLARE_ZONE_ID' ) ? AM_CLOUDFLARE_ZONE_ID : ( getenv( 'AM_CLOUDFLARE_ZONE_ID' ) ?: Artmatter_Core::get_setting( 'cloudflare_zone_id', '' ) );
-		$cf_token = defined( 'AM_CLOUDFLARE_API_TOKEN' ) ? AM_CLOUDFLARE_API_TOKEN : ( getenv( 'AM_CLOUDFLARE_API_TOKEN' ) ?: Artmatter_Core::get_setting( 'cloudflare_api_token', '' ) );
+		$cf_zone = defined( 'AM_CLOUDFLARE_ZONE_ID' ) ? AM_CLOUDFLARE_ZONE_ID : ( getenv( 'AM_CLOUDFLARE_ZONE_ID' ) ?: Exacoat_Core::get_setting( 'cloudflare_zone_id', '' ) );
+		$cf_token = defined( 'AM_CLOUDFLARE_API_TOKEN' ) ? AM_CLOUDFLARE_API_TOKEN : ( getenv( 'AM_CLOUDFLARE_API_TOKEN' ) ?: Exacoat_Core::get_setting( 'cloudflare_api_token', '' ) );
 		$cf_configured = ! empty( $cf_zone ) && ! empty( $cf_token );
 		$results['cloudflare_cache'] = [
 			'service' => 'Cloudflare Cache & Edge API',
@@ -290,7 +290,7 @@ class Exacoat_Diagnostics {
 	 * Send Safe Test Email Webhook
 	 */
 	public static function test_email_webhook( string $event, string $recipient_email, array $custom_params = [] ): array {
-		$settings = Artmatter_Core::get_settings();
+		$settings = Exacoat_Core::get_settings();
 		$webhook_url = trim( $settings['email_webhook_url'] ?? 'https://node.exacoat.com/webhook/artmatter/email' );
 		$secret_key  = trim( defined( 'AM_WEBHOOK_SECRET' ) ? AM_WEBHOOK_SECRET : ( getenv( 'AM_WEBHOOK_SECRET' ) ?: ( $settings['webhook_secret_key'] ?? '' ) ) );
 
@@ -486,7 +486,7 @@ class Exacoat_Diagnostics {
 	}
 
 	public static function test_r2(): array {
-		$settings = Artmatter_Core::get_settings();
+		$settings = Exacoat_Core::get_settings();
 		$r2_id     = trim( $settings['r2_account_id'] ?? '' );
 		$r2_bucket = trim( $settings['r2_bucket'] ?? 'artmatter' );
 		$r2_key    = trim( $settings['r2_access_key'] ?? '' );
@@ -521,8 +521,8 @@ class Exacoat_Diagnostics {
 	}
 
 	public static function test_cloudflare_cache( string $zone_id = '', string $api_token = '' ): array {
-		$zone_id   = ! empty( $zone_id ) ? trim( $zone_id ) : ( defined( 'AM_CLOUDFLARE_ZONE_ID' ) ? AM_CLOUDFLARE_ZONE_ID : ( getenv( 'AM_CLOUDFLARE_ZONE_ID' ) ?: Artmatter_Core::get_setting( 'cloudflare_zone_id', '' ) ) );
-		$api_token = ! empty( $api_token ) ? trim( $api_token ) : ( defined( 'AM_CLOUDFLARE_API_TOKEN' ) ? AM_CLOUDFLARE_API_TOKEN : ( getenv( 'AM_CLOUDFLARE_API_TOKEN' ) ?: Artmatter_Core::get_setting( 'cloudflare_api_token', '' ) ) );
+		$zone_id   = ! empty( $zone_id ) ? trim( $zone_id ) : ( defined( 'AM_CLOUDFLARE_ZONE_ID' ) ? AM_CLOUDFLARE_ZONE_ID : ( getenv( 'AM_CLOUDFLARE_ZONE_ID' ) ?: Exacoat_Core::get_setting( 'cloudflare_zone_id', '' ) ) );
+		$api_token = ! empty( $api_token ) ? trim( $api_token ) : ( defined( 'AM_CLOUDFLARE_API_TOKEN' ) ? AM_CLOUDFLARE_API_TOKEN : ( getenv( 'AM_CLOUDFLARE_API_TOKEN' ) ?: Exacoat_Core::get_setting( 'cloudflare_api_token', '' ) ) );
 
 		if ( empty( $zone_id ) || empty( $api_token ) ) {
 			return [
@@ -671,7 +671,7 @@ class Exacoat_Diagnostics {
 	}
 
 	public static function test_openai( string $api_key = '' ): array {
-		$settings = Artmatter_Core::get_settings();
+		$settings = Exacoat_Core::get_settings();
 		$api_key  = $api_key ?: trim( $settings['openai_api_key'] ?? '' );
 		if ( empty( $api_key ) ) {
 			$api_key = defined( 'AM_OPENAI_API_KEY' ) ? AM_OPENAI_API_KEY : ( defined( 'OPENAI_API_KEY' ) ? OPENAI_API_KEY : ( getenv( 'AM_OPENAI_API_KEY' ) ?: '' ) );

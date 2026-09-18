@@ -113,8 +113,20 @@ class Exacoat_WhatsApp_Service {
 		] );
 	}
 
-	public static function check_permission(): bool {
-		return current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' );
+	public static function check_permission( $request = null ): bool {
+		if ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) {
+			return true;
+		}
+
+		if ( $request instanceof \WP_REST_Request ) {
+			if ( class_exists( 'Exacoat_Core' ) && method_exists( 'Exacoat_Core', 'verify_bridge_permission' ) ) {
+				if ( Exacoat_Core::verify_bridge_permission( $request ) ) {
+					return true;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	/**

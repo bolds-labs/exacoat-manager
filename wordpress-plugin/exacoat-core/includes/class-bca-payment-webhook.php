@@ -69,10 +69,7 @@ class Exacoat_BCA_Payment_Webhook {
 		// Route 2: Dedicated Exacoat Core REST endpoint
 		register_rest_route( 'exacoat-core/v1', '/bca-webhook', $endpoint_args );
 
-		// Route 3: Dedicated Artmatter Core REST endpoint
-		register_rest_route( 'artmatter-core/v1', '/bca-webhook', $endpoint_args );
-
-		// Route 4: Status and unmatched mutations inspector
+		// Route 3: Status and unmatched mutations inspector
 		register_rest_route( 'exacoat-core/v1', '/bca/status', [
 			[
 				'methods'             => \WP_REST_Server::READABLE,
@@ -90,9 +87,15 @@ class Exacoat_BCA_Payment_Webhook {
 			return true;
 		}
 
-		$token = $request->get_header( 'X-Exacoat-Token' ) ?: $request->get_header( 'X-Artmatter-Token' );
+		if ( class_exists( 'Exacoat_Core' ) && method_exists( 'Exacoat_Core', 'verify_bridge_permission' ) ) {
+			if ( Exacoat_Core::verify_bridge_permission( $request ) ) {
+				return true;
+			}
+		}
+
+		$token = $request->get_header( 'X-Exacoat-Token' );
 		if ( ! empty( $token ) ) {
-			$expected = get_option( 'exacoat_api_secret', '' ) ?: get_option( 'artmatter_api_secret', '' );
+			$expected = get_option( 'exacoat_api_secret', '' );
 			if ( ! empty( $expected ) && hash_equals( (string) $expected, (string) $token ) ) {
 				return true;
 			}

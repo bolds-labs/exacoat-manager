@@ -51,7 +51,7 @@ class Exacoat_Checkout_Engine {
 
 		// Headless checkout templates, asset enqueues, and external redirects are strictly opt-in.
 		// When disabled (default 0), standard WooCommerce and Bricks checkout and cart templates operate normally.
-		if ( Artmatter_Core::get_setting( 'enable_headless_checkout', 0 ) ) {
+		if ( Exacoat_Core::get_setting( 'enable_headless_checkout', 0 ) ) {
 			add_filter( 'woocommerce_locate_template', [ __CLASS__, 'locate_checkout_templates' ], 999, 3 );
 			add_filter( 'wc_get_template', [ __CLASS__, 'intercept_checkout_templates' ], 999, 5 );
 			add_action( 'wp_enqueue_scripts', [ __CLASS__, 'enqueue_checkout_assets' ], 20 );

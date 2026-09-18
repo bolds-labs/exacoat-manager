@@ -18,11 +18,11 @@ class Exacoat_Pushover_Service {
 	 * Get Pushover Configuration from Settings
 	 */
 	public static function get_config(): array {
-		$settings = Artmatter_Core::get_settings();
+		$settings = Exacoat_Core::get_settings();
 		return [
 			'enabled'              => (bool) ( $settings['enable_pushover'] ?? $settings['pushover_enabled'] ?? 1 ),
-			'user_key'             => trim( defined( 'AM_PUSHOVER_USER_KEY' ) ? AM_PUSHOVER_USER_KEY : ( getenv( 'AM_PUSHOVER_USER_KEY' ) ?: ( $settings['pushover_user_key'] ?? '' ) ) ),
-			'app_token'            => trim( defined( 'AM_PUSHOVER_APP_TOKEN' ) ? AM_PUSHOVER_APP_TOKEN : ( getenv( 'AM_PUSHOVER_APP_TOKEN' ) ?: ( $settings['pushover_app_token'] ?? '' ) ) ),
+			'user_key'             => trim( defined( 'EXA_PUSHOVER_USER_KEY' ) ? EXA_PUSHOVER_USER_KEY : ( getenv( 'EXA_PUSHOVER_USER_KEY' ) ?: ( $settings['pushover_user_key'] ?? '' ) ) ),
+			'app_token'            => trim( defined( 'EXA_PUSHOVER_APP_TOKEN' ) ? EXA_PUSHOVER_APP_TOKEN : ( getenv( 'EXA_PUSHOVER_APP_TOKEN' ) ?: ( $settings['pushover_app_token'] ?? '' ) ) ),
 												'notify_new_sale'      => (bool) ( $settings['pushover_notify_new_sale'] ?? 1 ),
 									'notify_errors'        => (bool) ( $settings['pushover_notify_errors'] ?? 1 ),
 		];

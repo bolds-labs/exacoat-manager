@@ -3,7 +3,7 @@
  * Plugin Name:       Exacoat Core Platform
  * Plugin URI:        https://exacoat.com
  * Description:       Proprietary e-commerce core engine, configurator manager, and ERP workstation integration for Exacoat.
- * Version:           0.0.22
+ * Version:           0.0.23
  * Author:            Exacoat
  * Author URI:        https://exacoat.com
  * License:           Proprietary
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'EXACOAT_CORE_VERSION' ) ) {
-	define( 'EXACOAT_CORE_VERSION', '0.0.22' );
+	define( 'EXACOAT_CORE_VERSION', '0.0.23' );
 }
 
 // Authenticate WooCommerce API keys across custom REST endpoints before WordPress Application Passwords (prio 20) triggers invalid_username
@@ -36,11 +36,12 @@ add_filter( 'determine_current_user', function( $user ) {
 	if ( ! $key && ! empty( $_GET['consumer_key'] ) ) {
 		$key = sanitize_text_field( wp_unslash( $_GET['consumer_key'] ) );
 	}
-	if ( $key && function_exists( 'wc_api_hash' ) ) {
+	if ( $key ) {
 		global $wpdb;
+		$hash = function_exists( 'wc_api_hash' ) ? wc_api_hash( $key ) : hash_hmac( 'sha256', $key, 'wc-api' );
 		$user_id = $wpdb->get_var( $wpdb->prepare(
 			"SELECT user_id FROM {$wpdb->prefix}woocommerce_api_keys WHERE consumer_key = %s OR truncated_key = %s LIMIT 1",
-			wc_api_hash( $key ),
+			$hash,
 			substr( $key, -7 )
 		) );
 		if ( $user_id ) {
@@ -91,24 +92,6 @@ if ( ! defined( 'EXACOAT_WEB_URL' ) ) {
 if ( ! defined( 'EXACOAT_MEDIA_URL' ) ) {
 	define( 'EXACOAT_MEDIA_URL', getenv( 'EXACOAT_MEDIA_URL' ) ?: 'https://exacoat.com' );
 }
-if ( ! defined( 'ARTMATTER_CORE_PATH' ) ) {
-	define( 'ARTMATTER_CORE_PATH', EXACOAT_CORE_PATH );
-}
-if ( ! defined( 'ARTMATTER_CORE_VERSION' ) ) {
-	define( 'ARTMATTER_CORE_VERSION', EXACOAT_CORE_VERSION );
-}
-if ( ! defined( 'ARTMATTER_CORE_FILE' ) ) {
-	define( 'ARTMATTER_CORE_FILE', EXACOAT_CORE_FILE );
-}
-if ( ! defined( 'ARTMATTER_CORE_URL' ) ) {
-	define( 'ARTMATTER_CORE_URL', EXACOAT_CORE_URL );
-}
-if ( ! defined( 'ARTMATTER_WEB_URL' ) ) {
-	define( 'ARTMATTER_WEB_URL', EXACOAT_WEB_URL );
-}
-if ( ! defined( 'ARTMATTER_MEDIA_URL' ) ) {
-	define( 'ARTMATTER_MEDIA_URL', EXACOAT_MEDIA_URL );
-}
 
 if ( ! function_exists( 'exacoat_storefront_url' ) ) {
 	function exacoat_storefront_url( string $path = '/' ): string {
@@ -136,12 +119,6 @@ if ( ! function_exists( 'exacoat_media_url' ) ) {
 			}
 		}
 		return $url;
-	}
-}
-
-if ( ! function_exists( 'artmatter_media_url' ) ) {
-	function artmatter_media_url( string $url ): string {
-		return exacoat_media_url( $url );
 	}
 }
 
@@ -307,7 +284,7 @@ if ( ! function_exists( 'get_sub_field' ) ) {
 
 require_once EXACOAT_CORE_PATH . 'includes/class-logger.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-pushover-service.php';
-require_once EXACOAT_CORE_PATH . 'includes/class-artmatter-core.php';
+require_once EXACOAT_CORE_PATH . 'includes/class-exacoat-core.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-shipping-tracker.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-biteship-shipping.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-store-enhancements.php';
@@ -458,16 +435,7 @@ if ( ! function_exists( 'exacoat_core' ) ) {
 		if ( class_exists( 'Exacoat_Core' ) ) {
 			return Exacoat_Core::instance();
 		}
-		if ( class_exists( 'Artmatter_Core' ) ) {
-			return Artmatter_Core::instance();
-		}
 		return null;
-	}
-}
-
-if ( ! function_exists( 'artmatter_core' ) ) {
-	function artmatter_core() {
-		return exacoat_core();
 	}
 }
 

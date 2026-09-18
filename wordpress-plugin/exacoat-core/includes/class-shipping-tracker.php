@@ -62,7 +62,7 @@ class Exacoat_Shipping_Tracker {
 	 * Get Dynamic Carrier Registry
 	 */
 	public static function get_carrier_registry(): array {
-		$settings = class_exists( 'Artmatter_Core' ) ? Artmatter_Core::get_settings() : [];
+		$settings = class_exists( 'Exacoat_Core' ) ? Exacoat_Core::get_settings() : [];
 		$default_carriers = [
 			'jne' => [
 				'name' => 'JNE Express',
@@ -444,8 +444,8 @@ class Exacoat_Shipping_Tracker {
 		}
 
 		// 2. Check Plugin Settings
-		if ( empty( $key ) && class_exists( 'Artmatter_Core' ) ) {
-			$settings = Artmatter_Core::get_settings();
+		if ( empty( $key ) && class_exists( 'Exacoat_Core' ) ) {
+			$settings = Exacoat_Core::get_settings();
 			$key = trim( (string) ( $settings['biteship_api_key'] ?? '' ) );
 		}
 
@@ -512,8 +512,8 @@ class Exacoat_Shipping_Tracker {
 	 */
 	public static function get_trackingmore_api_key(): string {
 		$key = '';
-		if ( class_exists( 'Artmatter_Core' ) ) {
-			$settings = Artmatter_Core::get_settings();
+		if ( class_exists( 'Exacoat_Core' ) ) {
+			$settings = Exacoat_Core::get_settings();
 			$key = trim( $settings['trackingmore_api_key'] ?? ( $settings['17track_api_key'] ?? '' ) );
 		}
 		return ! empty( $key ) ? $key : 'bkows1gc-6uu5-si5b-f4st-bqvk3lae9u5c';
