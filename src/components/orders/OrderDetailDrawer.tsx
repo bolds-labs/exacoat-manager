@@ -477,7 +477,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
             <Badge type="orderStatus" value={order.status} size="sm" />
             {rmaDetails?.order_type === 'Redeem' && (
               <span className="inline-flex h-6 items-center whitespace-nowrap text-[11px] leading-none font-mono font-bold text-amber-400 bg-amber-500/20 px-2.5 rounded-full border border-amber-500/40 shadow-xs">
-                <Sparkles className="w-3.5 h-3.5 mr-1 text-amber-400" />
+                <RotateCcw className="w-3.5 h-3.5 mr-1 text-amber-400" />
                 REDEEM (COMPANY FAULT)
               </span>
             )}
@@ -532,7 +532,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                     ? "bg-amber-500/15 border-amber-500/30 text-amber-400"
                     : "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
                 )}>
-                  {rmaDetails.order_type === 'Redeem' ? <Sparkles className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
+                  {rmaDetails.order_type === 'Redeem' ? <RotateCcw className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -628,7 +628,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         {parentRedeemClaimId && (
           <div className="p-3.5 rounded-2xl border border-amber-500/30 bg-amber-950/20 flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2.5">
-              <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+              <RotateCcw className="w-4 h-4 text-amber-400 shrink-0" />
               <div className="text-xs font-sans text-neutral-300">
                 <span>Redeem Replacement order filed (Exacoat Fault - Free Shipping): </span>
                 {onSelectOrderById ? (
@@ -825,7 +825,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                     className="px-3 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 cursor-pointer"
                     title="Issue free redeem replacement order (Exacoat factory defect / error)"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
                     <span>Redeem (Fault)</span>
                   </button>
                 </>
@@ -1001,7 +1001,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                         </h5>
                         {rmaDetails?.order_type === 'Redeem' && (
                           <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0 flex items-center gap-1 shadow-xs">
-                            <Sparkles className="w-3 h-3 text-amber-400" />
+                            <RotateCcw className="w-3 h-3 text-amber-400" />
                             <span>Redeem Replacement (Free)</span>
                           </span>
                         )}

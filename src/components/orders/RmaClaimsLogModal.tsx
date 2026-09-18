@@ -13,7 +13,7 @@ import {
 import { formatCurrency } from '../../lib/formatters';
 import {
   ShieldCheck,
-  Sparkles,
+  RotateCcw,
   Search,
   RefreshCw,
   Filter,
@@ -29,7 +29,6 @@ import {
   VideoOff,
   Video,
   Plus,
-  RotateCcw,
   MapPin,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -305,7 +304,7 @@ export const RmaClaimsLogModal: React.FC<RmaClaimsLogModalProps> = ({
                   onClick={() => onOpenManualClaim('Redeem')}
                   className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
+                  <RotateCcw className="w-3.5 h-3.5" />
                   <span>Manual Redeem (Fault)</span>
                 </button>
               </div>
@@ -328,7 +327,7 @@ export const RmaClaimsLogModal: React.FC<RmaClaimsLogModalProps> = ({
 
           <div className="p-3 rounded-2xl bg-amber-950/20 border border-amber-500/20">
             <div className="text-[11px] font-medium text-amber-400 uppercase tracking-wider flex items-center gap-1">
-              <Sparkles className="w-3 h-3" />
+              <RotateCcw className="w-3 h-3" />
               <span>Redeem (Fault)</span>
             </div>
             <div className="text-xl font-bold font-mono text-amber-300 mt-1">{stats.redeem_count}</div>

@@ -17,7 +17,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
-  Sparkles,
+  RotateCcw,
   Package,
   Truck,
   ExternalLink,
@@ -31,6 +31,9 @@ import {
   Layers,
   ChevronRight,
   Filter,
+  MoreVertical,
+  Printer,
+  Database,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -56,6 +59,28 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isDemoMode, setIsDemoMode] = useState(false);
+  const [activeActionMenuSn, setActiveActionMenuSn] = useState<string | null>(null);
+
+  // Close action dropdown on outside click or Escape key
+  useEffect(() => {
+    const handleDocumentClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-action-menu]')) {
+        setActiveActionMenuSn(null);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setActiveActionMenuSn(null);
+      }
+    };
+    document.addEventListener('click', handleDocumentClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('click', handleDocumentClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   // Load orders and settings
   const loadData = useCallback(async (quiet = false) => {
@@ -135,6 +160,75 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
     setCopiedId(id);
     showToast('info', 'Copied', text);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handlePrintShopeeLabel = (order: ShopeeOrder) => {
+    showToast(
+      'info',
+      'Shopee Thermal Label',
+      `Opening 100x150mm Air Waybill label for ${order.order_sn}.`
+    );
+    const printWindow = window.open('', '_blank', 'width=450,height=650');
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Shopee AWB - ${order.order_sn}</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; margin: 0; padding: 15px; color: #000; background: #fff; width: 100mm; box-sizing: border-box; }
+            .label-box { border: 2px solid #000; padding: 10px; border-radius: 4px; }
+            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 8px; }
+            .logo { font-size: 18px; font-weight: 900; }
+            .carrier { font-size: 13px; font-weight: bold; }
+            .barcode-area { text-align: center; margin: 12px 0; border: 1px dashed #666; padding: 8px; font-family: monospace; }
+            .barcode { font-size: 22px; letter-spacing: 3px; font-weight: bold; }
+            .section { margin-bottom: 8px; font-size: 11px; }
+            .title { font-weight: bold; text-transform: uppercase; font-size: 10px; color: #555; margin-bottom: 2px; }
+            .items-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 10px; }
+            .items-table th, .items-table td { border: 1px solid #ccc; padding: 4px; text-align: left; }
+            @media print { body { width: 100mm; height: 150mm; padding: 5mm; } }
+          </style>
+        </head>
+        <body>
+          <div class="label-box">
+            <div class="header">
+              <div class="logo">SHOPEE</div>
+              <div class="carrier">${order.shipping_carrier || 'STANDARD'}</div>
+            </div>
+            <div class="barcode-area">
+              <div class="title">Tracking Resi Number</div>
+              <div class="barcode">${order.tracking_number || order.order_sn}</div>
+              <div style="font-size: 10px; margin-top: 4px;">Order: ${order.order_sn}</div>
+            </div>
+            <div class="section">
+              <div class="title">Penerima (Recipient):</div>
+              <strong>${order.recipient_name || order.buyer_username}</strong> (${order.recipient_phone || '-' })<br/>
+              ${order.recipient_address || ''} ${order.recipient_city || ''} ${order.recipient_postcode ? `(${order.recipient_postcode})` : ''}
+            </div>
+            <div class="section">
+              <div class="title">Pengirim (Sender):</div>
+              <strong>EXACOAT OFFICIAL SHOP</strong> (Jakarta Pusat)
+            </div>
+            <div class="section">
+              <div class="title">Daftar Barang (Items):</div>
+              <table class="items-table">
+                <tr><th>Produk</th><th>Varian</th><th>Qty</th></tr>
+                ${order.items.map(it => `<tr><td>${it.item_name}</td><td>${it.model_name || '-'}</td><td>${it.quantity}</td></tr>`).join('')}
+              </table>
+            </div>
+            <div style="font-size: 9px; text-align: center; margin-top: 15px; color: #777;">
+              Official Shopee Open Platform Thermal Air Waybill Preview
+            </div>
+          </div>
+          <script>
+            setTimeout(() => { window.print(); }, 400);
+          </script>
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
   };
 
   // Status mapping and badge helper
@@ -234,7 +328,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
               </span>
               {isDemoMode && (
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  <Database className="w-3 h-3 text-amber-400" />
                   <span>Simulated Sample Data</span>
                 </span>
               )}
@@ -259,7 +353,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
               className="px-3.5 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
               title="Reset Sample Data"
             >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
               <span>Reset Samples</span>
             </button>
           )}
@@ -423,9 +517,114 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                     )}
                   </div>
 
-                  <div className="text-xs text-neutral-400 flex items-center gap-2">
-                    <Clock className="w-3.5 h-3.5 text-neutral-500" />
-                    <span>{order.create_time}</span>
+                  <div className="flex items-center gap-3">
+                    <div className="text-xs text-neutral-400 flex items-center gap-2">
+                      <Clock className="w-3.5 h-3.5 text-neutral-500" />
+                      <span>{order.create_time}</span>
+                    </div>
+
+                    {/* Simple Icon Action Trigger */}
+                    <div className="relative" data-action-menu>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveActionMenuSn(
+                            activeActionMenuSn === order.order_sn ? null : order.order_sn
+                          );
+                        }}
+                        className={clsx(
+                          'p-1.5 rounded-lg border transition-all cursor-pointer flex items-center justify-center',
+                          activeActionMenuSn === order.order_sn
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                            : 'bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white border-white/10'
+                        )}
+                        title="Order Actions"
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+
+                      {/* Action Popover Dropdown */}
+                      {activeActionMenuSn === order.order_sn && (
+                        <div className="absolute right-0 top-full mt-1.5 w-60 rounded-2xl bg-[#161616] border border-white/15 shadow-2xl p-2 z-30 space-y-1 backdrop-blur-xl">
+                          <div className="px-2.5 py-1 text-[10px] uppercase font-bold text-neutral-400 tracking-wider border-b border-white/5 flex items-center justify-between">
+                            <span>Order Actions</span>
+                            <span className="font-mono text-[9px] text-neutral-500">{order.order_sn.slice(-6)}</span>
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={isClaimed}
+                            onClick={() => {
+                              setActiveActionMenuSn(null);
+                              onClaimWarranty(order);
+                            }}
+                            className={clsx(
+                              'w-full text-left px-2.5 py-2 rounded-xl flex items-center gap-2.5 transition-colors text-xs font-medium cursor-pointer',
+                              isClaimed
+                                ? 'opacity-40 cursor-not-allowed text-neutral-500'
+                                : 'hover:bg-emerald-500/15 text-emerald-300'
+                            )}
+                          >
+                            <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                            </div>
+                            <div>
+                              <div className="font-semibold text-white">Claim Warranty</div>
+                              <div className="text-[10px] text-neutral-400 font-normal">
+                                {isClaimed ? 'Claim already filed' : 'Free warranty replacement'}
+                              </div>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={isClaimed}
+                            onClick={() => {
+                              setActiveActionMenuSn(null);
+                              onClaimRedeem(order);
+                            }}
+                            className={clsx(
+                              'w-full text-left px-2.5 py-2 rounded-xl flex items-center gap-2.5 transition-colors text-xs font-medium cursor-pointer',
+                              isClaimed
+                                ? 'opacity-40 cursor-not-allowed text-neutral-500'
+                                : 'hover:bg-amber-500/15 text-amber-300'
+                            )}
+                          >
+                            <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shrink-0">
+                              <RotateCcw className="w-4 h-4 text-amber-400" />
+                            </div>
+                            <div>
+                              <div className="font-semibold text-white">Factory Redeem</div>
+                              <div className="text-[10px] text-neutral-400 font-normal">
+                                {isClaimed ? 'Claim already filed' : '50% off replacement'}
+                              </div>
+                            </div>
+                          </button>
+
+                          <div className="h-px bg-white/5 my-1" />
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveActionMenuSn(null);
+                              handlePrintShopeeLabel(order);
+                            }}
+                            className="w-full text-left px-2.5 py-2 rounded-xl flex items-center gap-2.5 hover:bg-sky-500/10 text-neutral-300 hover:text-white transition-colors cursor-pointer text-xs font-medium"
+                          >
+                            <div className="w-7 h-7 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center shrink-0">
+                              <Printer className="w-4 h-4 text-sky-400" />
+                            </div>
+                            <div>
+                              <div className="font-semibold text-white">Print Shopee Label</div>
+                              <div className="text-[10px] text-neutral-400 font-normal">
+                                {order.tracking_number ? `AWB: ${order.tracking_number}` : 'Official Thermal AWB (100x150)'}
+                              </div>
+                            </div>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -561,38 +760,43 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                       )}
                     </div>
 
-                    {/* Operational Action Buttons: Warranty Claim & Factory Redeem */}
-                    <div className="space-y-1.5 pt-3">
+                    {/* Operational Action Area */}
+                    <div className="pt-3 space-y-1.5">
                       {isClaimed ? (
                         <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 space-y-1">
-                          <div className="font-semibold flex items-center gap-1">
-                            <AlertTriangle className="w-3 h-3" />
-                            <span>Claim Processed</span>
+                          <div className="font-semibold flex items-center justify-between gap-1">
+                            <span className="flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3 shrink-0" />
+                              Claim Processed
+                            </span>
+                            <span className="font-mono text-[10px] text-amber-400">
+                              #{claim?.existing_order_num}
+                            </span>
                           </div>
                           <p className="text-[10px] text-neutral-400">
-                            This Shopee order invoice already has an active replacement order (#{claim?.existing_order_num}). Duplicate claims cannot be submitted.
+                            Replacement order active ({claim?.claim_type}). Duplicate claims blocked.
                           </p>
                         </div>
                       ) : (
-                        <>
+                        <div className="flex items-center justify-end" data-action-menu>
                           <button
                             type="button"
-                            onClick={() => onClaimWarranty(order)}
-                            className="w-full px-3 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveActionMenuSn(
+                                activeActionMenuSn === order.order_sn ? null : order.order_sn
+                              );
+                            }}
+                            className="w-full px-3 py-2 rounded-xl bg-neutral-900/90 hover:bg-neutral-800 text-neutral-200 border border-white/10 hover:border-white/20 text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer shadow-sm"
+                            title="Order Actions"
                           >
-                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>Claim Warranty</span>
+                            <div className="flex items-center gap-1.5">
+                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>Actions</span>
+                            </div>
+                            <MoreVertical className="w-3.5 h-3.5 text-neutral-400" />
                           </button>
-
-                          <button
-                            type="button"
-                            onClick={() => onClaimRedeem(order)}
-                            className="w-full px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                          >
-                            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                            <span>Factory Redeem</span>
-                          </button>
-                        </>
+                        </div>
                       )}
                     </div>
                   </div>

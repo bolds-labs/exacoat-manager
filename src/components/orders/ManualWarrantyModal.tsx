@@ -132,7 +132,7 @@ import {
   Truck,
   Package,
   Layers,
-  Sparkles,
+  RotateCcw,
   CheckCircle2,
   AlertCircle,
   Loader2,
@@ -792,7 +792,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                 : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
             )}
           >
-            {claimType === 'Redeem' ? <Sparkles className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+            {claimType === 'Redeem' ? <RotateCcw className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
           </div>
           <div>
             <span className="text-base font-bold text-white tracking-tight">
@@ -899,7 +899,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                 : 'text-neutral-400 hover:text-white'
             )}
           >
-            <Sparkles className="w-4 h-4 text-amber-400" />
+            <RotateCcw className="w-4 h-4 text-amber-400" />
             <div className="text-left">
               <div className="font-bold">Redeem (Company Fault)</div>
               <div className="text-[10px] font-normal text-amber-300/80">Cut defect, wrong skin (Free Shipping)</div>
@@ -1578,7 +1578,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
             </label>
             {claimType === 'Redeem' ? (
               <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5" />
+                <RotateCcw className="w-3.5 h-3.5" />
                 <span>Free Shipping (Locked Rp 0 - Borne by Exacoat)</span>
               </span>
             ) : (

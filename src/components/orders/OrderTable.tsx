@@ -13,7 +13,7 @@ import {
   Calendar,
   Layers,
   ShieldCheck,
-  Sparkles
+  RotateCcw
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -221,7 +221,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                           </span>
                           {getOrderRma(order)?.order_type === 'Redeem' && (
                             <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/15 border border-amber-500/30 px-1 py-0.5 rounded shadow-xs">
-                              <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                              <RotateCcw className="w-2.5 h-2.5 text-amber-400" />
                               REDEEM
                             </span>
                           )}
@@ -297,7 +297,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                           <Badge type="orderStatus" value={order.status} size="xs" />
                           {getOrderRma(order)?.order_type === 'Redeem' && (
                             <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30 whitespace-nowrap">
-                              <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                              <RotateCcw className="w-2.5 h-2.5 text-amber-400" />
                               Redeem (Fault)
                             </span>
                           )}
@@ -381,7 +381,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                     </span>
                     {getOrderRma(order)?.order_type === 'Redeem' && (
                       <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/20 border border-amber-500/40 px-1 py-0.2 rounded">
-                        <Sparkles className="w-2 h-2 text-amber-400" />
+                        <RotateCcw className="w-2 h-2 text-amber-400" />
                         REDEEM
                       </span>
                     )}

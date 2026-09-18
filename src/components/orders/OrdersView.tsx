@@ -10,7 +10,7 @@ import { ShopeeOrdersView } from './ShopeeOrdersView';
 import { fetchOrdersDirect, fetchOrderDetailDirect, ShopeeOrder } from '../../lib/wordpressBridge';
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency } from '../../lib/formatters';
-import { RefreshCw, FileSpreadsheet, Package, ShieldCheck, Sparkles, Layers } from 'lucide-react';
+import { RefreshCw, FileSpreadsheet, Package, ShieldCheck, RotateCcw, Layers } from 'lucide-react';
 import { GlassCard } from '../ui/GlassCard';
 import { PageHeroHeader } from '../ui/PageHeroHeader';
 import { clsx } from 'clsx';
@@ -121,7 +121,7 @@ export const OrdersView: React.FC<OrdersViewProps> = () => {
               className="px-4 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 text-xs font-semibold font-sans flex items-center gap-2 transition-all shrink-0 self-start sm:self-auto cursor-pointer"
             >
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span>+ Warranty</span>
+              <span>Warranty</span>
             </button>
             <button
               type="button"
@@ -131,8 +131,8 @@ export const OrdersView: React.FC<OrdersViewProps> = () => {
               }}
               className="px-4 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 text-xs font-semibold font-sans flex items-center gap-2 transition-all shrink-0 self-start sm:self-auto cursor-pointer"
             >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>+ Redeem</span>
+              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+              <span>Redeem</span>
             </button>
             <button
               type="button"
