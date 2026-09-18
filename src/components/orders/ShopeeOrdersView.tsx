@@ -5,12 +5,14 @@ import {
   fetchShopeeOrdersDirect,
   syncShopeeOrdersDirect,
   fetchShopeeSettingsDirect,
+  downloadShopeeShippingLabelDirect,
 } from '../../lib/wordpressBridge';
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency } from '../../lib/formatters';
 import { MOCK_SHOPEE_ORDERS } from '../../data/mockShopeeOrders';
 import { matchesPhoneQuery, formatDisplayPhone } from '../../lib/phoneUtils';
 import { ShopeeSettingsModal } from '../settings/ShopeeSettingsModal';
+import { ArrangeShipmentModal } from './ArrangeShipmentModal';
 import {
   Store,
   RefreshCw,
@@ -60,6 +62,18 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [activeActionMenuSn, setActiveActionMenuSn] = useState<string | null>(null);
+  const [selectedArrangeOrder, setSelectedArrangeOrder] = useState<ShopeeOrder | null>(null);
+  const [isArrangeModalOpen, setIsArrangeModalOpen] = useState(false);
+
+  const handleShipmentArranged = (orderSn: string, trackingNumber: string) => {
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.order_sn === orderSn
+          ? { ...o, order_status: 'PROCESSED', tracking_number: trackingNumber }
+          : o
+      )
+    );
+  };
 
   // Close action dropdown on outside click or Escape key
   useEffect(() => {
@@ -162,12 +176,34 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handlePrintShopeeLabel = (order: ShopeeOrder) => {
+  const handlePrintShopeeLabel = async (order: ShopeeOrder) => {
+    if (!order.tracking_number && order.order_status === 'READY_TO_SHIP') {
+      showToast(
+        'warning',
+        'Shipment Not Arranged',
+        `Order ${order.order_sn} must be arranged first to allocate a tracking resi before printing label.`
+      );
+      setSelectedArrangeOrder(order);
+      setIsArrangeModalOpen(true);
+      return;
+    }
+
     showToast(
       'info',
       'Shopee Thermal Label',
-      `Opening 100x150mm Air Waybill label for ${order.order_sn}.`
+      `Loading official 100x150mm Air Waybill label for ${order.order_sn}.`
     );
+
+    try {
+      const res = await downloadShopeeShippingLabelDirect(order.order_sn);
+      if (res.success && res.url) {
+        window.open(res.url, '_blank');
+        return;
+      }
+    } catch {
+      // Continue to high-fidelity preview below
+    }
+
     const printWindow = window.open('', '_blank', 'width=450,height=650');
     if (printWindow) {
       printWindow.document.write(`
@@ -552,6 +588,31 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                             <span className="font-mono text-[9px] text-neutral-500">{order.order_sn.slice(-6)}</span>
                           </div>
 
+                          {order.order_status === 'READY_TO_SHIP' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveActionMenuSn(null);
+                                  setSelectedArrangeOrder(order);
+                                  setIsArrangeModalOpen(true);
+                                }}
+                                className="w-full text-left px-2.5 py-2 rounded-xl flex items-center gap-2.5 hover:bg-orange-500/15 text-orange-300 transition-colors text-xs font-medium cursor-pointer"
+                              >
+                                <div className="w-7 h-7 rounded-lg bg-orange-500/15 border border-orange-500/30 flex items-center justify-center shrink-0">
+                                  <Truck className="w-4 h-4 text-orange-400" />
+                                </div>
+                                <div>
+                                  <div className="font-semibold text-white">Arrange Shipment</div>
+                                  <div className="text-[10px] text-neutral-400 font-normal">
+                                    Drop-off or Request Pickup
+                                  </div>
+                                </div>
+                              </button>
+                              <div className="h-px bg-white/5 my-1" />
+                            </>
+                          )}
+
                           <button
                             type="button"
                             disabled={isClaimed}
@@ -777,6 +838,33 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                             Replacement order active ({claim?.claim_type}). Duplicate claims blocked.
                           </p>
                         </div>
+                      ) : order.order_status === 'READY_TO_SHIP' ? (
+                        <div className="space-y-1.5" data-action-menu>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedArrangeOrder(order);
+                              setIsArrangeModalOpen(true);
+                            }}
+                            className="w-full px-3 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                          >
+                            <Truck className="w-3.5 h-3.5" />
+                            <span>Arrange Shipment</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveActionMenuSn(
+                                activeActionMenuSn === order.order_sn ? null : order.order_sn
+                              );
+                            }}
+                            className="w-full px-3 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-white/10 text-xs font-medium flex items-center justify-between gap-1.5 transition-all cursor-pointer"
+                          >
+                            <span>More Actions</span>
+                            <MoreVertical className="w-3 h-3 text-neutral-400" />
+                          </button>
+                        </div>
                       ) : (
                         <div className="flex items-center justify-end" data-action-menu>
                           <button
@@ -812,6 +900,17 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onSettingsSaved={() => loadData(true)}
+      />
+
+      {/* Shopee Arrange Shipment Modal */}
+      <ArrangeShipmentModal
+        isOpen={isArrangeModalOpen}
+        onClose={() => {
+          setIsArrangeModalOpen(false);
+          setSelectedArrangeOrder(null);
+        }}
+        order={selectedArrangeOrder}
+        onShipmentArranged={handleShipmentArranged}
       />
     </div>
   );

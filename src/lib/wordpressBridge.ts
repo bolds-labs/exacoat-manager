@@ -140,6 +140,52 @@ export interface ShopeeOrder {
   existing_claim?: ShopeeExistingClaim;
 }
 
+export interface ShopeePickupAddress {
+  address_id: number;
+  region?: string;
+  state?: string;
+  city?: string;
+  address?: string;
+  zipcode?: string;
+  district?: string;
+  town?: string;
+}
+
+export interface ShopeePickupTimeSlot {
+  pickup_time_id: string;
+  date: number;
+  time_text: string;
+}
+
+export interface ShopeeDropoffBranch {
+  branch_id: number;
+  branch_name: string;
+  address?: string;
+}
+
+export interface ShopeeShippingParameter {
+  dropoff?: {
+    branch_list?: ShopeeDropoffBranch[];
+    slug_list?: string[];
+  };
+  pickup?: {
+    address_list?: ShopeePickupAddress[];
+    time_slot_list?: ShopeePickupTimeSlot[];
+  };
+}
+
+export interface ArrangeShipmentPayload {
+  dropoff?: {
+    branch_id?: number;
+    sender_real_name?: string;
+    tracking_number?: string;
+  };
+  pickup?: {
+    address_id?: number;
+    pickup_time_id?: string;
+  };
+}
+
 export interface ShopeeSettings {
   environment: 'sandbox' | 'live';
   test_partner_id: number;
@@ -3105,6 +3151,118 @@ export async function getShopeeAuthUrlDirect(): Promise<{
     return {
       success: false,
       error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchShopeeShippingParameterDirect(order_sn: string): Promise<{
+  success: boolean;
+  parameters?: ShopeeShippingParameter;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/shipping-parameter?order_sn=${encodeURIComponent(order_sn)}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        parameters: data.response || data.parameters || {},
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function arrangeShopeeShipmentDirect(
+  order_sn: string,
+  payload: ArrangeShipmentPayload
+): Promise<{
+  success: boolean;
+  order_sn?: string;
+  order_status?: string;
+  tracking_number?: string;
+  message?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/ship-order`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        order_sn,
+        ship_data: payload,
+      }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        order_sn: data.order_sn,
+        order_status: data.order_status,
+        tracking_number: data.tracking_number,
+        message: data.message,
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export function getShopeeShippingDocumentUrl(order_sn: string, doc_type = 'THERMAL_AIR_WAYBILL'): string {
+  const base = getWordPressBaseUrl();
+  return `${base}/wp-json/exacoat-core/v1/shopee/shipping-document?order_sn=${encodeURIComponent(order_sn)}&document_type=${encodeURIComponent(doc_type)}`;
+}
+
+export async function downloadShopeeShippingLabelDirect(order_sn: string): Promise<{
+  success: boolean;
+  blob?: Blob;
+  url?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/shipping-document?order_sn=${encodeURIComponent(order_sn)}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/pdf, application/json' },
+    });
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/pdf')) {
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      return {
+        success: true,
+        blob,
+        url: objectUrl,
+      };
+    }
+
+    const data = await res.json();
+    return {
+      success: false,
+      error: data?.message || data?.error || 'Could not download PDF from Shopee.',
     };
   } catch (err: any) {
     return { success: false, error: err.message };

@@ -605,6 +605,230 @@ class Exacoat_Shopee_Client {
 	}
 
 	/**
+	 * Generic Shop API caller with auto-token management and HMAC-SHA256 signature
+	 */
+	public static function call_shop_api( string $path, string $method = 'GET', array $params = [], array $body = [] ): array {
+		$token_res = self::ensure_valid_token();
+		if ( ! $token_res['success'] ) {
+			return $token_res;
+		}
+
+		$access_token = $token_res['access_token'];
+		$shop_id      = (int) $token_res['shop_id'];
+		$partner_id   = self::get_active_partner_id();
+		$partner_key  = self::get_active_partner_key();
+		$base_url     = self::get_base_url();
+
+		$timestamp = time();
+		$sign = self::sign_shop( $path, $timestamp, $partner_id, $partner_key, $access_token, $shop_id );
+
+		$common_params = [
+			'partner_id'   => $partner_id,
+			'timestamp'    => $timestamp,
+			'access_token' => $access_token,
+			'shop_id'      => $shop_id,
+			'sign'         => $sign,
+		];
+
+		$all_params = array_merge( $common_params, $params );
+		$url = $base_url . $path . '?' . http_build_query( $all_params );
+
+		$args = [
+			'headers' => [ 'Content-Type' => 'application/json' ],
+			'timeout' => 25,
+		];
+
+		if ( strtoupper( $method ) === 'POST' ) {
+			$args['body'] = ! empty( $body ) ? wp_json_encode( $body ) : '{}';
+			$res = wp_remote_post( $url, $args );
+		} else {
+			$res = wp_remote_get( $url, $args );
+		}
+
+		if ( is_wp_error( $res ) ) {
+			return [
+				'success' => false,
+				'error'   => $res->get_error_message(),
+			];
+		}
+
+		$raw_body = wp_remote_retrieve_body( $res );
+		$content_type = wp_remote_retrieve_header( $res, 'content-type' );
+
+		// Check if response is raw PDF binary stream
+		if ( str_contains( (string) $content_type, 'application/pdf' ) || str_starts_with( $raw_body, '%PDF' ) ) {
+			return [
+				'success'      => true,
+				'is_pdf'       => true,
+				'content_type' => 'application/pdf',
+				'pdf_data'     => $raw_body,
+			];
+		}
+
+		$data = json_decode( $raw_body, true );
+		if ( ! is_array( $data ) ) {
+			return [
+				'success' => false,
+				'error'   => 'Non-JSON response returned from Shopee API.',
+				'raw'     => substr( $raw_body, 0, 300 ),
+			];
+		}
+
+		if ( ! empty( $data['error'] ) ) {
+			return [
+				'success' => false,
+				'error'   => $data['error'],
+				'message' => $data['message'] ?? 'Shopee API call failed.',
+				'raw'     => $data,
+			];
+		}
+
+		return [
+			'success'  => true,
+			'response' => $data['response'] ?? $data,
+		];
+	}
+
+	/**
+	 * Get shipping parameters (dropoff / pickup options) for an order
+	 */
+	public static function get_shipping_parameter( string $order_sn ): array {
+		$clean_sn = trim( preg_replace( '/^#+/', '', $order_sn ) );
+		if ( empty( $clean_sn ) ) {
+			return [ 'success' => false, 'error' => 'Order SN is required.' ];
+		}
+
+		return self::call_shop_api( '/api/v2/logistics/get_shipping_parameter', 'GET', [
+			'order_sn' => $clean_sn,
+		]);
+	}
+
+	/**
+	 * Arrange shipment (Atur Pengiriman) for ready-to-ship order
+	 */
+	public static function ship_order( string $order_sn, array $ship_data ): array {
+		$clean_sn = trim( preg_replace( '/^#+/', '', $order_sn ) );
+		if ( empty( $clean_sn ) ) {
+			return [ 'success' => false, 'error' => 'Order SN is required.' ];
+		}
+
+		$body = [ 'order_sn' => $clean_sn ];
+		if ( ! empty( $ship_data['dropoff'] ) ) {
+			$body['dropoff'] = $ship_data['dropoff'];
+		} elseif ( ! empty( $ship_data['pickup'] ) ) {
+			$body['pickup'] = $ship_data['pickup'];
+		}
+
+		$res = self::call_shop_api( '/api/v2/logistics/ship_order', 'POST', [], $body );
+		if ( ! $res['success'] ) {
+			return $res;
+		}
+
+		// Retrieve tracking number immediately
+		$tracking_res = self::get_tracking_number( $clean_sn );
+		$tracking_number = '';
+		if ( $tracking_res['success'] && ! empty( $tracking_res['response']['tracking_number'] ) ) {
+			$tracking_number = $tracking_res['response']['tracking_number'];
+		}
+
+		// Update order in local cache to PROCESSED
+		$updates = [ 'order_status' => 'PROCESSED' ];
+		if ( ! empty( $tracking_number ) ) {
+			$updates['tracking_number'] = $tracking_number;
+		}
+		self::update_order_cache_field( $clean_sn, $updates );
+
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log(
+				'info',
+				'shopee_logistics',
+				sprintf( 'Arranged shipment for Shopee order %s (Resi: %s)', $clean_sn, $tracking_number ?: 'Pending' ),
+				[
+					'order_sn'        => $clean_sn,
+					'tracking_number' => $tracking_number,
+					'ship_data'       => $ship_data,
+				]
+			);
+		}
+
+		return [
+			'success'         => true,
+			'order_sn'        => $clean_sn,
+			'order_status'    => 'PROCESSED',
+			'tracking_number' => $tracking_number,
+			'message'         => 'Shipment arranged successfully.',
+		];
+	}
+
+	/**
+	 * Get allocated tracking number for an order
+	 */
+	public static function get_tracking_number( string $order_sn ): array {
+		$clean_sn = trim( preg_replace( '/^#+/', '', $order_sn ) );
+		if ( empty( $clean_sn ) ) {
+			return [ 'success' => false, 'error' => 'Order SN is required.' ];
+		}
+
+		return self::call_shop_api( '/api/v2/logistics/get_tracking_number', 'GET', [
+			'order_sn' => $clean_sn,
+		]);
+	}
+
+	/**
+	 * Request creation of thermal shipping document (100x150mm AWB)
+	 */
+	public static function create_shipping_document( string $order_sn, string $doc_type = 'THERMAL_AIR_WAYBILL' ): array {
+		$clean_sn = trim( preg_replace( '/^#+/', '', $order_sn ) );
+		if ( empty( $clean_sn ) ) {
+			return [ 'success' => false, 'error' => 'Order SN is required.' ];
+		}
+
+		$body = [
+			'order_list'             => [ [ 'order_sn' => $clean_sn ] ],
+			'shipping_document_type' => $doc_type,
+		];
+
+		return self::call_shop_api( '/api/v2/logistics/create_shipping_document', 'POST', [], $body );
+	}
+
+	/**
+	 * Get shipping document generation status
+	 */
+	public static function get_shipping_document_result( string $order_sn, string $doc_type = 'THERMAL_AIR_WAYBILL' ): array {
+		$clean_sn = trim( preg_replace( '/^#+/', '', $order_sn ) );
+		if ( empty( $clean_sn ) ) {
+			return [ 'success' => false, 'error' => 'Order SN is required.' ];
+		}
+
+		$body = [
+			'order_list'             => [ [ 'order_sn' => $clean_sn ] ],
+			'shipping_document_type' => $doc_type,
+		];
+
+		return self::call_shop_api( '/api/v2/logistics/get_shipping_document_result', 'POST', [], $body );
+	}
+
+	/**
+	 * Download official Shopee shipping document PDF
+	 */
+	public static function download_shipping_document( string $order_sn, string $doc_type = 'THERMAL_AIR_WAYBILL' ): array {
+		$clean_sn = trim( preg_replace( '/^#+/', '', $order_sn ) );
+		if ( empty( $clean_sn ) ) {
+			return [ 'success' => false, 'error' => 'Order SN is required.' ];
+		}
+
+		// Ensure document is requested first
+		self::create_shipping_document( $clean_sn, $doc_type );
+
+		$body = [
+			'shipping_document_type' => $doc_type,
+			'order_list'             => [ [ 'order_sn' => $clean_sn ] ],
+		];
+
+		return self::call_shop_api( '/api/v2/logistics/download_shipping_document', 'POST', [], $body );
+	}
+
+	/**
 	 * Register REST API Routes
 	 */
 	public static function register_routes(): void {
@@ -664,6 +888,27 @@ class Exacoat_Shopee_Client {
 			'methods'             => [ 'GET', 'POST' ],
 			'callback'            => [ __CLASS__, 'rest_handle_webhook' ],
 			'permission_callback' => '__return_true',
+		]);
+
+		// 8. GET /shopee/shipping-parameter
+		register_rest_route( $ns, '/shopee/shipping-parameter', [
+			'methods'             => 'GET',
+			'callback'            => [ __CLASS__, 'rest_get_shipping_parameter' ],
+			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+		]);
+
+		// 9. POST /shopee/ship-order
+		register_rest_route( $ns, '/shopee/ship-order', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_ship_order' ],
+			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+		]);
+
+		// 10. GET /shopee/shipping-document (streams PDF directly)
+		register_rest_route( $ns, '/shopee/shipping-document', [
+			'methods'             => 'GET',
+			'callback'            => [ __CLASS__, 'rest_download_shipping_document' ],
+			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
 		]);
 	}
 
@@ -851,6 +1096,38 @@ class Exacoat_Shopee_Client {
 	public static function rest_sync_orders( \WP_REST_Request $request ): \WP_REST_Response {
 		$days = (int) ( $request->get_param( 'days' ) ?: 15 );
 		$res = self::sync_orders( $days );
+		return rest_ensure_response( $res );
+	}
+
+	public static function rest_get_shipping_parameter( \WP_REST_Request $request ): \WP_REST_Response {
+		$order_sn = trim( (string) $request->get_param( 'order_sn' ) );
+		$res = self::get_shipping_parameter( $order_sn );
+		return rest_ensure_response( $res );
+	}
+
+	public static function rest_ship_order( \WP_REST_Request $request ): \WP_REST_Response {
+		$params = $request->get_json_params() ?: [];
+		$order_sn = trim( (string) ( $params['order_sn'] ?? $request->get_param( 'order_sn' ) ) );
+		$ship_data = $params['ship_data'] ?? $params;
+
+		$res = self::ship_order( $order_sn, $ship_data );
+		return rest_ensure_response( $res );
+	}
+
+	public static function rest_download_shipping_document( \WP_REST_Request $request ) {
+		$order_sn = trim( (string) $request->get_param( 'order_sn' ) );
+		$doc_type = sanitize_text_field( $request->get_param( 'document_type' ) ?: 'THERMAL_AIR_WAYBILL' );
+
+		$res = self::download_shipping_document( $order_sn, $doc_type );
+
+		if ( ! empty( $res['is_pdf'] ) && ! empty( $res['pdf_data'] ) ) {
+			header( 'Content-Type: application/pdf' );
+			header( 'Content-Disposition: inline; filename="shopee-awb-' . $order_sn . '.pdf"' );
+			header( 'Content-Length: ' . strlen( $res['pdf_data'] ) );
+			echo $res['pdf_data'];
+			exit;
+		}
+
 		return rest_ensure_response( $res );
 	}
 
