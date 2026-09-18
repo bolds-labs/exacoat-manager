@@ -204,12 +204,12 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
 
         return `
           <tr style="border-bottom: 1px solid #e5e7eb;">
-            <td style="padding: 3px 5px; font-weight: 900; width: 26px; text-align: center; font-size: 10.5px; vertical-align: top;">${item.quantity}x</td>
+            <td style="padding: 3px 5px; font-weight: 900; width: 26px; text-align: center; font-size: 10.5px; vertical-align: top; font-variant-numeric: tabular-nums;">${item.quantity}x</td>
             <td style="padding: 3px 5px; vertical-align: top;">
               <div style="font-size: 10px; font-weight: 800; color: #111; line-height: 1.2;">${item.name || 'Precision Device Skin'}</div>
               ${specsStr ? `<div style="font-size: 8px; color: #444; font-weight: 600; margin-top: 1.5px; line-height: 1.2;">${specsStr}</div>` : ''}
             </td>
-            <td style="padding: 3px 5px; font-size: 9px; text-align: right; color: #333; font-family: monospace; font-weight: 800; vertical-align: top; white-space: nowrap;">${itemSku}</td>
+            <td style="padding: 3px 5px; font-size: 9px; text-align: right; color: #333; font-weight: 800; vertical-align: top; white-space: nowrap; font-variant-numeric: tabular-nums;">${itemSku}</td>
           </tr>
         `;
       }).join('');
@@ -231,8 +231,8 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                   <img src="${EXACOAT_LOGO_BASE64}" alt="EXACOAT" style="height: 19px; max-width: 140px; object-fit: contain; display: block;" />
                 </div>
                 <div style="text-align: right; display: flex; align-items: center; gap: 6px;">
-                  ${totalPages > 1 ? `<span style="font-size: 10.5px; font-weight: 900; font-family: monospace; border: 1.5px solid #000; padding: 1px 5px; border-radius: 2px;">1/${totalPages}</span>` : ''}
-                  <span style="font-size: 14px; font-weight: 900; text-transform: uppercase; font-family: monospace; letter-spacing: 0.5px;">${cCourier.toUpperCase()}</span>
+                  ${totalPages > 1 ? `<span style="font-size: 10px; font-weight: 900; border: 1.5px solid #000; padding: 1px 5px; border-radius: 2px; font-variant-numeric: tabular-nums;">1/${totalPages}</span>` : ''}
+                  <span style="font-size: 13.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${cCourier.toUpperCase()}</span>
                 </div>
               </div>
 
@@ -304,11 +304,11 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
             <div class="header-row" style="padding-bottom: 4px;">
               <div style="display: flex; align-items: baseline; gap: 8px;">
                 <span style="font-size: 13px; font-weight: 900; text-transform: uppercase;">EXACOAT</span>
-                <span style="font-size: 12px; font-weight: 900; font-family: monospace;">ORDER REF #${cOrderNum}</span>
+                <span style="font-size: 11px; font-weight: 900; font-variant-numeric: tabular-nums;">ORDER REF #${cOrderNum}</span>
               </div>
               <div style="text-align: right; display: flex; align-items: center; gap: 6px;">
-                <span style="font-size: 11px; font-weight: 900; font-family: monospace; border: 1.5px solid #000; padding: 1px 5px; border-radius: 2px;">${pageIdx + 1}/${totalPages}</span>
-                <span style="font-size: 12px; font-weight: 900; text-transform: uppercase; font-family: monospace;">${cCourier.toUpperCase()}</span>
+                <span style="font-size: 10px; font-weight: 900; border: 1.5px solid #000; padding: 1px 5px; border-radius: 2px; font-variant-numeric: tabular-nums;">${pageIdx + 1}/${totalPages}</span>
+                <span style="font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${cCourier.toUpperCase()}</span>
               </div>
             </div>
 
@@ -473,18 +473,18 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
           .barcode-track {
             font-size: 7.5px;
             font-weight: 800;
-            font-family: monospace;
             color: #222;
             margin-bottom: 1px;
+            font-variant-numeric: tabular-nums;
           }
           .barcode-ref {
             font-size: 10px;
-            font-family: monospace;
             font-weight: 900;
             color: #000;
             letter-spacing: 0.3px;
             line-height: 1.1;
             margin-bottom: 1px;
+            font-variant-numeric: tabular-nums;
           }
           .barcode-svg-wrap {
             width: 100%;
@@ -512,12 +512,21 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
       <body>
         ${allLabelsHtml}
         <script>
-          window.onload = function() {
+          function executePrint() {
             window.print();
             setTimeout(function() {
               window.close();
-            }, 500);
-          };
+            }, 600);
+          }
+          if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(function() {
+              setTimeout(executePrint, 60);
+            });
+          } else {
+            window.onload = function() {
+              setTimeout(executePrint, 60);
+            };
+          }
         </script>
       </body>
       </html>
@@ -739,11 +748,11 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                     </div>
                     <div className="text-right flex items-center gap-1.5">
                       {activeTotalPages > 1 && (
-                        <span className="font-mono font-black text-[9px] border border-black px-1 rounded-xs">
+                        <span className="font-sans font-black text-[9px] border border-black px-1 rounded-xs tabular-nums">
                           1/{activeTotalPages}
                         </span>
                       )}
-                      <span className="font-mono font-black text-xs uppercase tracking-tight text-black">
+                      <span className="font-sans font-black text-xs uppercase tracking-tight text-black">
                         {courierName.toUpperCase()}
                       </span>
                     </div>
@@ -774,7 +783,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                       <span className="text-[7px] font-bold text-neutral-500 uppercase">FROM:</span>
                       <span className="font-black text-[10px] uppercase leading-tight">EXACOAT</span>
                     </div>
-                    <span className="text-[7.5px] text-neutral-700 font-mono mt-0.5 leading-tight">
+                    <span className="text-[7.5px] text-neutral-700 font-sans mt-0.5 leading-tight tabular-nums">
                       Tel: +62-813-800-9060
                     </span>
                     <span className="text-[7.5px] text-neutral-600 font-sans leading-tight">
@@ -785,12 +794,12 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                   {/* Right: Barcode + Order Ref */}
                   <div className="w-[58%] pl-2 flex flex-col justify-center">
                     {trackingNo ? (
-                      <div className="text-[7.5px] font-mono font-bold text-neutral-800 uppercase tracking-tight mb-0.5 flex items-center justify-between">
+                      <div className="text-[7.5px] font-sans font-bold text-neutral-800 uppercase tracking-tight mb-0.5 flex items-center justify-between tabular-nums">
                         <span>TRACKING:</span>
                         <span className="font-black text-black">{trackingNo}</span>
                       </div>
                     ) : null}
-                    <div className="font-mono font-black text-[9.5px] text-black tracking-tight mb-0.5">
+                    <div className="font-sans font-black text-[9.5px] text-black tracking-tight mb-0.5 tabular-nums">
                       ORDER REF #{cleanOrderNum}
                     </div>
                     <div className="w-full">
@@ -822,7 +831,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                             <span className="font-black text-black">
                               {item.quantity}x {item.name || 'Precision Device Skin'}
                             </span>
-                            <span className="text-[7.5px] text-neutral-700 font-mono font-bold shrink-0 ml-1">{itemSku}</span>
+                            <span className="text-[7.5px] text-neutral-700 font-sans font-bold shrink-0 ml-1 tabular-nums">{itemSku}</span>
                           </div>
                           {specsStr && (
                             <p className="text-[7.5px] text-neutral-600 font-semibold leading-tight mt-0.5">
@@ -849,13 +858,13 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                   <div className="flex items-center justify-between border-b-2 border-black pb-1.5">
                     <div className="flex items-center gap-1.5">
                       <span className="font-black text-xs uppercase">EXACOAT</span>
-                      <span className="font-mono font-black text-[10.5px]">REF #{cleanOrderNum}</span>
+                      <span className="font-sans font-black text-[10.5px] tabular-nums">REF #{cleanOrderNum}</span>
                     </div>
                     <div className="text-right flex items-center gap-1.5">
-                      <span className="font-mono font-black text-[9px] border border-black px-1 rounded-xs">
+                      <span className="font-sans font-black text-[9px] border border-black px-1 rounded-xs tabular-nums">
                         {previewPageIndex + 1}/{activeTotalPages}
                       </span>
-                      <span className="font-mono font-black text-[11px] uppercase tracking-tight text-black">
+                      <span className="font-sans font-black text-[11px] uppercase tracking-tight text-black">
                         {courierName.toUpperCase()}
                       </span>
                     </div>
@@ -885,7 +894,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                             <span className="font-black text-black">
                               {item.quantity}x {item.name || 'Precision Device Skin'}
                             </span>
-                            <span className="text-[7.5px] text-neutral-700 font-mono font-bold shrink-0 ml-1">{itemSku}</span>
+                            <span className="text-[7.5px] text-neutral-700 font-sans font-bold shrink-0 ml-1 tabular-nums">{itemSku}</span>
                           </div>
                           {specsStr && (
                             <p className="text-[7.5px] text-neutral-600 font-semibold leading-tight mt-0.5">

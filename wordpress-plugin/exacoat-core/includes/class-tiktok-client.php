@@ -348,7 +348,10 @@ class Exacoat_TikTok_Client {
 		$time_from = $time_to - ( $days_back * 86400 );
 
 		// Step 1: Search orders via /order/202309/orders/search
-		$search_res = self::call_api( '/order/202309/orders/search', 'POST', [], [
+		// page_size is a mandatory URL query parameter in TikTok Shop API 202309 (1-100)
+		$search_res = self::call_api( '/order/202309/orders/search', 'POST', [
+			'page_size' => 50,
+		], [
 			'page_size'      => 50,
 			'create_time_ge' => $time_from,
 			'create_time_lt' => $time_to,
