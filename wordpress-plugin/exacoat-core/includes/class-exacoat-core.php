@@ -1296,43 +1296,43 @@ class Exacoat_Core {
 		// Order Management & Fulfillment Routes
 		$register( '/orders', [
 			'methods'             => [ 'GET', 'POST' ],
-			'callback'            => [ 'Artmatter_Order_Manager', 'get_orders' ],
+			'callback'            => [ 'Exacoat_Order_Manager', 'get_orders' ],
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 
 		$register( '/orders/analytics', [
 			'methods'             => 'GET',
-			'callback'            => [ 'Artmatter_Order_Manager', 'get_sales_analytics' ],
+			'callback'            => [ 'Exacoat_Order_Manager', 'get_sales_analytics' ],
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 
 		$register( '/orders/(?P<id>\d+)', [
 			'methods'             => [ 'GET' ],
-			'callback'            => [ 'Artmatter_Order_Manager', 'get_single_order' ],
+			'callback'            => [ 'Exacoat_Order_Manager', 'get_single_order' ],
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 
 		$register( '/orders/(?P<id>\d+)/status', [
 			'methods'             => [ 'POST' ],
-			'callback'            => [ 'Artmatter_Order_Manager', 'update_order_status' ],
+			'callback'            => [ 'Exacoat_Order_Manager', 'update_order_status' ],
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 
 		$register( '/orders/(?P<id>\d+)/fulfill', [
 			'methods'             => [ 'POST' ],
-			'callback'            => [ 'Artmatter_Order_Manager', 'fulfill_order' ],
+			'callback'            => [ 'Exacoat_Order_Manager', 'fulfill_order' ],
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 
 		$register( '/orders/(?P<id>\d+)/notes', [
 			'methods'             => [ 'GET', 'POST' ],
-			'callback'            => [ 'Artmatter_Order_Manager', 'handle_order_notes' ],
+			'callback'            => [ 'Exacoat_Order_Manager', 'handle_order_notes' ],
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 
 		$register( '/orders/(?P<id>\d+)/refund', [
 			'methods'             => [ 'POST' ],
-			'callback'            => [ 'Artmatter_Order_Manager', 'process_refund' ],
+			'callback'            => [ 'Exacoat_Order_Manager', 'process_refund' ],
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 	}

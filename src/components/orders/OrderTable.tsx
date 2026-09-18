@@ -185,7 +185,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
               <tr className="border-b border-zinc-200 dark:border-white/[0.06] bg-zinc-50 dark:bg-[#0d0d0d]/80 text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider text-[10px]">
                 <th className="py-3.5 px-4">Order</th>
                 <th className="py-3.5 px-4">Customer & Destination</th>
-                <th className="py-3.5 px-4">Precision Skins & Items</th>
+                <th className="py-3.5 px-4">Items</th>
                 <th className="py-3.5 px-4 text-right">Total</th>
                 <th className="py-3.5 px-4 text-center">Status</th>
                 <th className="py-3.5 px-4">Courier & Tracking</th>
@@ -217,7 +217,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-mono font-bold text-zinc-900 dark:text-white">
-                            {order.order_number || `#${order.id}`}
+                            #{String(order.order_number || order.id).replace(/^#+/, '')}
                           </span>
                           {getOrderRma(order)?.order_type === 'Redeem' && (
                             <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/15 border border-amber-500/30 px-1 py-0.5 rounded shadow-xs">
@@ -377,7 +377,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="font-mono font-bold text-xs text-zinc-900 dark:text-white">
-                      {order.order_number || `#${order.id}`}
+                      #{String(order.order_number || order.id).replace(/^#+/, '')}
                     </span>
                     {getOrderRma(order)?.order_type === 'Redeem' && (
                       <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/20 border border-amber-500/40 px-1 py-0.2 rounded">

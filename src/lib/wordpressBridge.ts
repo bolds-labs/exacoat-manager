@@ -487,9 +487,13 @@ function enrichOrder(order: any): Order {
   const subdistrictMeta = metaList.find((m: any) => m.key === '_shipping_subdistrict');
   const phoneMeta = metaList.find((m: any) => m.key === '_shipping_phone_formatted' || m.key === '_billing_phone');
 
-  const lineItems = (order.line_items || []).map((item: any) => ({
+  const rawItems = (Array.isArray(order.items) && order.items.length > 0)
+    ? order.items
+    : (Array.isArray(order.line_items) ? order.line_items : (Array.isArray(order.items) ? order.items : []));
+
+  const lineItems = rawItems.map((item: any) => ({
     ...item,
-    parsed_configurator: parseConfiguratorFromItem(item),
+    parsed_configurator: item.parsed_configurator || parseConfiguratorFromItem(item),
   }));
 
   const tracking: OrderTracking | null = trackingMeta?.value && trackingMeta.value !== '⚠️' ? {
@@ -498,17 +502,21 @@ function enrichOrder(order: any): Order {
     tracking_number: String(trackingMeta.value),
     latest_status: latestStatusMeta?.value ? String(latestStatusMeta.value) : undefined,
     checkpoints: Array.isArray(checkpointsMeta?.value) ? checkpointsMeta.value : undefined,
-  } : null;
+  } : (order.tracking || null);
+
+  const rawOrderNumber = order.order_number || order.number || String(order.id);
+  const cleanOrderNumber = `#${String(rawOrderNumber).replace(/^#+/, '')}`;
 
   return {
     ...order,
-    order_number: order.number || String(order.id),
+    order_number: cleanOrderNumber,
     items: lineItems,
+    line_items: lineItems,
     item_count: lineItems.reduce((acc: number, it: any) => acc + (it.quantity || 1), 0),
     tracking,
-    shipping_district: districtMeta?.value ? String(districtMeta.value) : undefined,
-    shipping_subdistrict: subdistrictMeta?.value ? String(subdistrictMeta.value) : undefined,
-    formatted_phone: phoneMeta?.value ? String(phoneMeta.value) : undefined,
+    shipping_district: districtMeta?.value ? String(districtMeta.value) : (order.shipping_district || undefined),
+    shipping_subdistrict: subdistrictMeta?.value ? String(subdistrictMeta.value) : (order.shipping_subdistrict || undefined),
+    formatted_phone: phoneMeta?.value ? String(phoneMeta.value) : (order.formatted_phone || undefined),
   };
 }
 

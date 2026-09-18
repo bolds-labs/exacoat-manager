@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useToast } from '../../context/ToastContext';
+import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
 
 interface ShippingLabelA6ModalProps {
   order?: Order | null;
@@ -178,8 +179,8 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
         <div>
           <!-- Header Row: Logo & Date -->
           <div class="header-row">
-            <div>
-              <div style="font-size: 14px; font-weight: 900; font-family: monospace; letter-spacing: 1px;">EXACOAT</div>
+            <div style="display: flex; align-items: center;">
+              <img src="${EXACOAT_LOGO_BASE64}" alt="EXACOAT" style="height: 17px; max-width: 130px; object-fit: contain; display: block;" />
             </div>
             <div style="text-align: right;">
               <div style="font-size: 13px; font-weight: 900; font-family: monospace;">#${cOrderNum}</div>
@@ -201,9 +202,11 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
         <!-- Mid Section: FROM on Left, CARRIER on Right -->
         <div class="mid-row">
           <div class="mid-from">
-            <div class="tag-label">FROM:</div>
-            <div class="from-brand">EXACOAT</div>
-            <div class="from-contact">support@exacoat.com &bull; exacoat.com</div>
+            <div style="display: flex; align-items: baseline; gap: 4px;">
+              <span class="tag-label">FROM:</span>
+              <span class="from-brand">EXACOAT</span>
+            </div>
+            <div class="from-contact">support@exacoat.com &bull; +62-813-800-9060</div>
           </div>
 
           <div class="mid-carrier">
@@ -350,22 +353,23 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
             border-top: 2px solid #000;
             border-bottom: 2px solid #000;
             display: flex;
-            min-height: 56px;
+            min-height: 38px;
           }
           .mid-from {
             width: 50%;
             border-right: 2px solid #000;
-            padding: 5px 8px;
+            padding: 3px 6px;
             display: flex;
             flex-direction: column;
             justify-content: center;
           }
           .mid-carrier {
             width: 50%;
-            padding: 5px 8px;
+            padding: 3px 6px;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
+            justify-content: center;
+            gap: 2px;
             background: #fbfbfb;
           }
           .tag-label {
@@ -375,25 +379,29 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
             text-transform: uppercase;
           }
           .from-brand {
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 900;
             text-transform: uppercase;
-            margin: 1px 0;
+            margin: 0;
+            line-height: 1.1;
           }
           .from-contact {
-            font-size: 9.5px;
+            font-size: 8.5px;
             color: #222;
+            margin-top: 1px;
+            line-height: 1.1;
           }
           .carrier-badge {
             background: #000;
             color: #fff;
-            font-size: 9.5px;
+            font-size: 8.5px;
             font-weight: 900;
-            padding: 2px 6px;
-            border-radius: 3px;
+            padding: 1.5px 5px;
+            border-radius: 2px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             display: inline-block;
+            line-height: 1.1;
           }
           .carrier-meta {
             display: flex;
@@ -401,7 +409,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
             font-size: 7.5px;
             font-weight: 700;
             color: #333;
-            margin-top: 2px;
+            margin-top: 1px;
           }
           .barcode-section {
             border-bottom: 2px solid #000;
@@ -643,8 +651,8 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
             <div>
               {/* Header: Minimalist Logo + Order Ref */}
               <div className="flex items-center justify-between border-b-2 border-black pb-2">
-                <div>
-                  <span className="font-mono font-black text-sm tracking-wider uppercase">EXACOAT</span>
+                <div className="flex items-center">
+                  <img src={EXACOAT_LOGO_BASE64} alt="EXACOAT" className="h-4.5 max-w-[125px] object-contain block" />
                 </div>
                 <div className="text-right">
                   <span className="font-mono font-black text-xs block leading-tight">#{cleanOrderNum}</span>
@@ -670,23 +678,25 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
             </div>
 
             {/* Mid Section: FROM on Left, CARRIER on Right */}
-            <div className="my-1 border-y-2 border-black flex min-h-[56px]">
+            <div className="my-1 border-y-2 border-black flex min-h-[38px]">
               {/* Left: FROM */}
-              <div className="w-[50%] border-r-2 border-black p-1.5 flex flex-col justify-center">
-                <span className="text-[7px] font-bold text-neutral-500 uppercase block">FROM:</span>
-                <span className="font-black text-[10px] uppercase block">EXACOAT</span>
-                <span className="text-[8.5px] text-neutral-800 font-mono block">Tel: <strong>+62-813-800-9060</strong></span>
+              <div className="w-[50%] border-r-2 border-black p-1 flex flex-col justify-center">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[7px] font-bold text-neutral-500 uppercase">FROM:</span>
+                  <span className="font-black text-[10px] uppercase leading-tight">EXACOAT</span>
+                </div>
+                <span className="text-[8px] text-neutral-700 font-mono mt-0.5 leading-tight">Tel: +62-813-800-9060</span>
               </div>
 
               {/* Right: CARRIER */}
-              <div className="w-[50%] p-1.5 bg-neutral-50/60 flex flex-col justify-between">
+              <div className="w-[50%] p-1 bg-neutral-50/60 flex flex-col justify-center gap-0.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[7px] font-bold text-neutral-500 uppercase">CARRIER:</span>
-                  <span className="px-1.5 py-0.5 rounded bg-black text-white text-[8px] font-black uppercase tracking-wider">
+                  <span className="px-1 py-0.5 rounded bg-black text-white text-[8px] font-black uppercase tracking-wider leading-none">
                     {courierName}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-[7px] font-bold text-neutral-700 mt-1">
+                <div className="flex items-center justify-between text-[7px] font-bold text-neutral-700">
                   <span>STD AIR / ROAD</span>
                   <span>DEST: {country}</span>
                 </div>

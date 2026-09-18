@@ -765,6 +765,30 @@ class Exacoat_Order_Manager {
 				}
 			}
 
+			$formatted_meta = [];
+			if ( method_exists( $item, 'get_formatted_meta_data' ) ) {
+				foreach ( $item->get_formatted_meta_data() as $m ) {
+					$formatted_meta[] = [
+						'key'           => $m->key,
+						'label'         => $m->display_key,
+						'value'         => wp_strip_all_tags( $m->display_value ),
+						'display_value' => wp_strip_all_tags( $m->display_value ),
+					];
+				}
+			}
+
+			$meta_data = [];
+			if ( method_exists( $item, 'get_meta_data' ) ) {
+				foreach ( $item->get_meta_data() as $m ) {
+					$m_data = is_object( $m ) && method_exists( $m, 'get_data' ) ? $m->get_data() : (array) $m;
+					$meta_data[] = [
+						'id'    => $m_data['id'] ?? null,
+						'key'   => $m_data['key'] ?? '',
+						'value' => $m_data['value'] ?? '',
+					];
+				}
+			}
+
 			$items_data[] = [
 				'id'                   => $item_id,
 				'product_id'           => $product_id,
@@ -789,6 +813,8 @@ class Exacoat_Order_Manager {
 				'artist_username'      => null,
 				'commission_rate'      => 0,
 				'commission_amount'    => 0,
+				'meta_data'            => $meta_data,
+				'formatted_meta'       => $formatted_meta,
 			];
 		}
 

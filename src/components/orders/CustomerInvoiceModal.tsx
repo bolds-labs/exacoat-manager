@@ -4,6 +4,7 @@ import { Order } from '../../types';
 import { formatCurrency, formatDate, formatDateTime } from '../../lib/formatters';
 import { Printer, Download, FileText, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
+import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
 
 interface CustomerInvoiceModalProps {
   order: Order | null;
@@ -236,7 +237,7 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
           <!-- Header -->
           <div class="header-row">
             <div>
-              <div style="font-size: 18px; font-weight: 900; font-family: monospace; letter-spacing: 1px;">EXACOAT</div>
+              <img src="${EXACOAT_LOGO_BASE64}" alt="EXACOAT" style="height: 22px; max-width: 140px; object-fit: contain; display: block; margin-bottom: 6px;" />
               <div class="brand-sub">Exacoat &bull; Premium Custom Device Skins & Protection</div>
               <div class="brand-sub">support@exacoat.com &bull; https://exacoat.com</div>
             </div>
@@ -391,7 +392,7 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
           {/* Header */}
           <div className="flex items-start justify-between border-b-2 border-black pb-4 mb-4">
             <div>
-              <span className="text-lg font-mono font-black tracking-tight text-black block mb-0.5">EXACOAT</span>
+              <img src={EXACOAT_LOGO_BASE64} alt="EXACOAT" className="h-6 max-w-[140px] object-contain block mb-1" />
               <p className="text-[11px] text-neutral-600 font-medium">Exacoat &bull; Premium Custom Device Skins & Protection</p>
               <p className="text-[10px] text-neutral-500 font-mono">support@exacoat.com &bull; https://exacoat.com</p>
             </div>
