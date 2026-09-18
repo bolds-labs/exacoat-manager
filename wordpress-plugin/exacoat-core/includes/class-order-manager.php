@@ -683,27 +683,16 @@ class Exacoat_Order_Manager {
 
 			$img_url = '';
 			if ( $product ) {
-				$is_metal_poster = class_exists( 'Artmatter_Artwork_Vault' )
-					? Artmatter_Artwork_Vault::is_metal_poster( $product_id )
-					: true;
-
-				if ( $is_metal_poster ) {
-					$img_url = get_post_meta( $product_id, '_artmatter_tactile_flat_url', true )
-						?: ( class_exists( 'Artmatter_Feelform_3D' ) ? Artmatter_Feelform_3D::get_tactile_flat_url( $product_id ) : '' );
-				}
-
-				if ( empty( $img_url ) ) {
-					$img_id = $product->get_image_id();
-					if ( $img_id ) {
-						$img_url = wp_get_attachment_image_url( $img_id, 'medium' ) ?: '';
-					}
+				$img_id = $product->get_image_id();
+				if ( $img_id ) {
+					$img_url = wp_get_attachment_image_url( $img_id, 'medium' ) ?: '';
 				}
 			}
 
-			$orientation = get_post_meta( $product_id, 'artwork_orientation', true ) ?: 'portrait';
-			$feelform    = get_post_meta( $product_id, 'artwork_feelform', true ) ?: 'auto';
+			$orientation = get_post_meta( $product_id, 'artwork_orientation', true ) ?: '';
+			$feelform    = get_post_meta( $product_id, 'artwork_feelform', true ) ?: '';
 
-			// Check line item metadata for customer selected finish (e.g. print_finish, Print Finish, Finish, feelform_mode, Addons)
+			// Check line item metadata for customer selected finish (if any)
 			$item_finish = $item->get_meta( 'print_finish' )
 				?: ( $item->get_meta( 'Print Finish' )
 				?: ( $item->get_meta( 'finish' )
@@ -713,7 +702,7 @@ class Exacoat_Order_Manager {
 				?: '' ) ) ) ) );
 
 			if ( ! empty( $item_finish ) ) {
-				$feelform = ( stripos( (string) $item_finish, 'flat' ) !== false ) ? 'flat' : 'feelform';
+				$feelform = ( stripos( (string) $item_finish, 'flat' ) !== false ) ? 'flat' : (string) $item_finish;
 			}
 
 			// Vault / Master Print File URL resolver (if attached to product)
@@ -1641,8 +1630,8 @@ class Exacoat_Order_Manager {
 		$invoice_num    = 'INV-' . $clean_num;
 		$date           = $order->get_date_created() ? $order->get_date_created()->date_i18n( 'F j, Y' ) : date( 'F j, Y' );
 		$billing_name   = $order->get_formatted_billing_full_name() ?: ( $order->get_formatted_shipping_full_name() ?: 'Valued Collector' );
-		$billing_email  = $order->get_billing_email() ?: '—';
-		$billing_phone  = $order->get_billing_phone() ?: ( $order->get_shipping_phone() ?: '—' );
+		$billing_email  = $order->get_billing_email() ?: '-';
+		$billing_phone  = $order->get_billing_phone() ?: ( $order->get_shipping_phone() ?: '-' );
 		$billing_addr   = $order->get_formatted_billing_address() ?: 'Address on file';
 		$shipping_addr  = $order->get_formatted_shipping_address() ?: $billing_addr;
 		$currency       = $order->get_currency();
@@ -2056,7 +2045,7 @@ class Exacoat_Order_Manager {
 
 				function cleanCheckpointLocation(loc, desc) {
 					if (!loc) return '';
-					var parts = loc.split(/\s*[-–—,\/|]\s*/);
+					var parts = loc.split(/\s*[-,\/|]\s*/);
 					var seen = {};
 					var cleaned = [];
 					var isoMap = { de:'germany', id:'indonesia', us:'united states', gb:'united kingdom', uk:'united kingdom', fr:'france', nl:'netherlands', au:'australia', sg:'singapore', jp:'japan', cn:'china', ch:'switzerland', at:'austria', it:'italy', es:'spain', ca:'canada' };

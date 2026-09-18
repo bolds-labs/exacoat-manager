@@ -7,6 +7,7 @@
 import { getEnv, getWordPressBaseUrl, getWcCredentials } from './env';
 import { CreateReviewPayload, Order, OrderItem, OrderTracking, DeviceConfiguratorProfile, ConfiguratorProfileSummary, DeviceFamily } from '../types';
 import { renderEmailHtmlLocally } from './emailRenderer';
+import { extractItemSpecs } from './orderItems';
 
 
 // ==========================================
@@ -444,34 +445,32 @@ function setCachedPluginSettings(settings: Partial<WordPressPluginSettings>): vo
 // ==========================================
 
 function parseConfiguratorFromItem(item: any): any[] {
-  if (!item.meta_data || !Array.isArray(item.meta_data)) return [];
+  if (!item) return [];
 
-  const rawMeta = item.meta_data.find((m: any) => m.key === '_configurator_data_raw' || m.key === '_configurator_data');
-  if (rawMeta && rawMeta.value) {
-    if (Array.isArray(rawMeta.value)) {
-      return rawMeta.value.map((v: any) => ({
-        layer_id: v.layer_data?.layer_id || v.layer_id,
-        layer_name: v.layer_data?.layer_name || v.layer_data?.name || v.layer_name || 'Layer',
-        choice_id: v.layer_data?.choice_id || v.choice_id,
-        name: v.layer_data?.name || v.name || 'Custom',
-        image: v.layer_data?.image || v.image,
-        is_choice: v.is_choice,
-      }));
-    }
+  // 1. Raw configurator array check
+  const metaList = Array.isArray(item.meta_data) ? item.meta_data : [];
+  const rawMeta = metaList.find((m: any) => m.key === '_configurator_data_raw' || m.key === '_configurator_data');
+  if (rawMeta && rawMeta.value && Array.isArray(rawMeta.value)) {
+    return rawMeta.value.map((v: any) => ({
+      layer_id: v.layer_data?.layer_id || v.layer_id,
+      layer_name: v.layer_data?.layer_name || v.layer_data?.name || v.layer_name || 'Part',
+      choice_id: v.layer_data?.choice_id || v.choice_id,
+      name: v.layer_data?.name || v.choice_title || v.name || 'Custom',
+      image: v.layer_data?.image || v.image,
+      is_choice: v.is_choice,
+    }));
   }
 
-  const configMeta = item.meta_data.find((m: any) => m.key === 'Configuration');
-  if (configMeta && configMeta.display_value) {
-    const text = String(configMeta.display_value);
-    const parts = text.split(/(?=Back:|Accents:|Camera:|Additional Camera:|Model:|Frame:|Trackpad:|Logo:)/i);
-    return parts.map((p, idx) => {
-      const [key, ...rest] = p.split(':');
-      return {
-        layer_id: idx,
-        layer_name: (key || 'Layer').trim(),
-        name: rest.join(':').trim(),
-      };
-    }).filter(c => c.name);
+  // 2. Extract item specs from configuration string, formatted_meta, or meta_data
+  const specs = extractItemSpecs(item);
+  if (specs.length > 0) {
+    return specs.map((s, idx) => ({
+      layer_id: idx,
+      layer_name: s.label,
+      choice_id: idx,
+      name: s.value,
+      choice_title: s.value,
+    }));
   }
 
   return [];

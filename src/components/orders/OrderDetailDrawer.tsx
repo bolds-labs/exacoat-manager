@@ -53,6 +53,7 @@ import {
   Plane
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
+import { extractItemSpecs } from '../../lib/orderItems';
 import { getWpBaseUrl } from '../../lib/wordpressBridge';
 import { formatGooritaShipmentText, openGooritaWhatsApp } from '../../lib/exportManager';
 import { 
@@ -971,92 +972,103 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
           )}
         </div>
 
-        {/* Section 2: Ordered Metal Posters & Item Discounts */}
-        <div className="p-5 rounded-2xl border border-white/[0.06] bg-[#111111] space-y-4">
-          <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-2">
-              <Package className="w-4 h-4 text-[#f3aa18]" />
-              Production Items ({order.items.length})
-            </h4>
-            <span className="text-[11px] font-mono text-neutral-400">
-              Total Units: {order.items.reduce((acc, it) => acc + (it.quantity || 1), 0)}
-            </span>
-          </div>
+        {/* Section 2: Ordered Precision Skins & Items */}
+        {(() => {
+          const displayItems = (order.items && order.items.length > 0)
+            ? order.items
+            : (order.line_items && order.line_items.length > 0 ? order.line_items : []);
 
-          <div className="space-y-3">
-            {order.items.map((item, idx) => {
-              const itemDiscount = Number(item.discount || 0);
-              const itemTax = Number(item.tax || 0);
+          return (
+            <div className="p-5 rounded-2xl border border-white/[0.06] bg-[#111111] space-y-4">
+              <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-2">
+                  <Package className="w-4 h-4 text-[#f3aa18]" />
+                  Items ({displayItems.length})
+                </h4>
+                <span className="text-[11px] font-mono text-neutral-400">
+                  Total Units: {displayItems.reduce((acc, it) => acc + (it.quantity || 1), 0)}
+                </span>
+              </div>
 
-              return (
-                <div 
-                  key={item.id || idx}
-                  className="p-4 rounded-xl border border-white/[0.04] bg-[#141414] flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                >
-                  {/* Left: Thumbnail & Item Meta */}
-                  <div className="flex items-center gap-3.5 min-w-0">
-                    <div className="w-14 h-18 rounded-lg overflow-hidden bg-black border border-white/[0.08] shrink-0 relative flex items-center justify-center">
-                      {item.image_url ? (
-                        <img 
-                          src={item.image_url} 
-                          alt={item.name}
-                          className="w-full h-full object-cover" 
-                        />
-                      ) : (
-                        <Package className="w-6 h-6 text-neutral-600" />
-                      )}
-                      <span className="absolute bottom-1 right-1 px-1 py-0.2 text-[9px] font-mono font-bold bg-black/80 text-white rounded border border-white/10">
-                        {item.quantity}x
-                      </span>
-                    </div>
+              <div className="space-y-3">
+                {displayItems.map((item, idx) => {
+                  const itemDiscount = Number(item.discount || 0);
+                  const itemTax = Number(item.tax || 0);
+                  const itemSpecs = extractItemSpecs(item);
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h5 className={clsx("text-xs font-bold font-sans", item.is_refunded ? "text-neutral-500 line-through" : "text-white")}>
-                          {item.name}
-                        </h5>
-                        {rmaDetails?.order_type === 'Redeem' && (
-                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0 flex items-center gap-1 shadow-xs">
-                            <RotateCcw className="w-3 h-3 text-amber-400" />
-                            <span>Redeem Replacement (Free)</span>
+                  return (
+                    <div 
+                      key={item.id || idx}
+                      className="p-4 rounded-xl border border-white/[0.04] bg-[#141414] flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    >
+                      {/* Left: Thumbnail & Item Meta */}
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="w-14 h-16 rounded-lg overflow-hidden bg-black border border-white/[0.08] shrink-0 relative flex items-center justify-center">
+                          {item.image_url ? (
+                            <img 
+                              src={item.image_url} 
+                              alt={item.name}
+                              className="w-full h-full object-cover" 
+                            />
+                          ) : (
+                            <Package className="w-6 h-6 text-neutral-600" />
+                          )}
+                          <span className="absolute bottom-1 right-1 px-1 py-0.2 text-[9px] font-mono font-bold bg-black/80 text-white rounded border border-white/10">
+                            {item.quantity}x
                           </span>
-                        )}
-                        {rmaDetails?.order_type === 'Warranty' && (
-                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40 shrink-0 flex items-center gap-1 shadow-xs">
-                            <ShieldCheck className="w-3 h-3 text-sky-400" />
-                            <span>Warranty Replacement</span>
-                          </span>
-                        )}
-                        {(item.name.toLowerCase().startsWith('custom order') || (item as any).is_custom) && (
-                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0 flex items-center gap-1">
-                            <span className="text-[#f3aa18] font-bold">✦</span>
-                            <span>Custom Order</span>
-                          </span>
-                        )}
-                        {item.qty_refunded && item.qty_refunded > 0 ? (
-                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 shrink-0">
-                            Refunded ({item.qty_refunded}x)
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                        <span className="text-[10px] font-mono text-neutral-500">ID #{item.product_id}</span>
-                        {item.orientation && (
-                          <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded bg-white/[0.04] text-neutral-400 border border-white/[0.06] tracking-wider">
-                            {item.orientation}
-                          </span>
-                        )}
-                        {(item.finish_type || (item as any).feelform_mode) && (
-                          <span className={clsx(
-                            "text-[9px] uppercase font-mono px-1.5 py-0.5 rounded border tracking-wider",
-                            (item.finish_type || (item as any).feelform_mode || '').toLowerCase().includes('flat')
-                              ? "bg-zinc-800 text-neutral-300 border-white/10"
-                              : "bg-[#f3aa18]/10 text-[#f3aa18] border-[#f3aa18]/20"
-                          )}>
-                            Finish: {item.finish_type || (item as any).feelform_mode}
-                          </span>
-                        )}
-                      </div>
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h5 className={clsx("text-xs font-bold font-sans", item.is_refunded ? "text-neutral-500 line-through" : "text-white")}>
+                              {item.name}
+                            </h5>
+                            {rmaDetails?.order_type === 'Redeem' && (
+                              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0 flex items-center gap-1 shadow-xs">
+                                <RotateCcw className="w-3 h-3 text-amber-400" />
+                                <span>Redeem Replacement (Free)</span>
+                              </span>
+                            )}
+                            {rmaDetails?.order_type === 'Warranty' && (
+                              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40 shrink-0 flex items-center gap-1 shadow-xs">
+                                <ShieldCheck className="w-3 h-3 text-sky-400" />
+                                <span>Warranty Replacement</span>
+                              </span>
+                            )}
+                            {(item.name.toLowerCase().startsWith('custom order') || (item as any).is_custom) && (
+                              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0 flex items-center gap-1">
+                                <span className="text-[#f3aa18] font-bold">✦</span>
+                                <span>Custom Order</span>
+                              </span>
+                            )}
+                            {item.qty_refunded && item.qty_refunded > 0 ? (
+                              <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 shrink-0">
+                                Refunded ({item.qty_refunded}x)
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            <span className="text-[10px] font-mono text-neutral-500">ID #{item.product_id}</span>
+                            {item.sku && (
+                              <span className="text-[10px] font-mono text-neutral-400">SKU: {item.sku}</span>
+                            )}
+                          </div>
+
+                          {/* Item Customization Specs / Attributes */}
+                          {itemSpecs.length > 0 && (
+                            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                              {itemSpecs.map((sp, sIdx) => (
+                                <span 
+                                  key={sIdx}
+                                  className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/[0.05] text-neutral-300 border border-white/[0.08]"
+                                >
+                                  <span className="text-neutral-400">{sp.label}: </span>
+                                  <span className="text-white font-semibold">{sp.value}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
 
                       {/* Quick Inspect Button for Custom Skins */}
                       {(item.name.toLowerCase().startsWith('custom order') || (item as any).is_custom) && item.image_url && (
@@ -1116,6 +1128,8 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
             })}
           </div>
         </div>
+      );
+    })()}
 
         {/* Section 2B: Applied Coupons & Fee Lines (if any) */}
         {((order.coupon_codes && order.coupon_codes.length > 0) || (order.fees && order.fees.length > 0)) && (

@@ -1,18 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Modal } from '../ui/Modal';
 import { Order } from '../../types';
-import { formatDate } from '../../lib/formatters';
 import { 
   Printer, 
   Truck, 
   ShieldAlert,
   ChevronLeft,
   ChevronRight,
-  Layers
+  Layers,
+  FileText
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useToast } from '../../context/ToastContext';
 import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
+import { formatItemSpecsSummary } from '../../lib/orderItems';
 
 interface ShippingLabelA6ModalProps {
   order?: Order | null;
@@ -21,7 +22,7 @@ interface ShippingLabelA6ModalProps {
   onClose: () => void;
 }
 
-// Generate realistic Code-128 SVG barcode pattern from numeric/alphanumeric code with dynamic totalWidth for 100% full width edge-to-edge stretching
+// Generate realistic Code-128 SVG barcode pattern from numeric/alphanumeric code with dynamic totalWidth
 function generateBarcodeSvgData(code: string, height: number = 44) {
   const clean = (code || '10001').toUpperCase().replace(/[^A-Z0-9]/g, '');
   const bars: { width: number; isBlack: boolean }[] = [];
@@ -76,6 +77,27 @@ function generateBarcodeSvgData(code: string, height: number = 44) {
   };
 }
 
+// Split items across multiple label pages if items count exceeds single sheet capacity
+function chunkOrderItems(items: any[]): { pages: any[][]; totalPages: number } {
+  if (!items || items.length === 0) {
+    return { pages: [[]], totalPages: 1 };
+  }
+  // Up to 4 items with skin specs comfortably fit on page 1
+  if (items.length <= 4) {
+    return { pages: [items], totalPages: 1 };
+  }
+  // Page 1 gets first 3 items to preserve breathing room for header, recipient and inline FROM/barcode
+  const pages: any[][] = [];
+  pages.push(items.slice(0, 3));
+  let remaining = items.slice(3);
+  // Subsequent pages can hold up to 7 items each since page 2 has a minimal header
+  while (remaining.length > 0) {
+    pages.push(remaining.slice(0, 7));
+    remaining = remaining.slice(7);
+  }
+  return { pages, totalPages: pages.length };
+}
+
 export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
   order,
   orders,
@@ -87,13 +109,15 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
 
   const activeOrdersList = (orders && orders.length > 0) ? orders : (order ? [order] : []);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [previewPageIndex, setPreviewPageIndex] = useState(0);
 
   // Active current order
   const activeOrder = activeOrdersList[currentIndex] || activeOrdersList[0] || null;
 
-  // Reset index when orders list changes
+  // Reset indices when orders list changes
   useEffect(() => {
     setCurrentIndex(0);
+    setPreviewPageIndex(0);
   }, [orders, order]);
 
   // Editable label fields
@@ -107,6 +131,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
       setCourierName(activeOrder.tracking?.courier || 'JNE Express');
       const rawTrack = String(activeOrder.tracking?.tracking_number || '').trim();
       setTrackingNo(rawTrack && !rawTrack.startsWith('field_') ? rawTrack : '');
+      setPreviewPageIndex(0);
     }
   }, [activeOrder]);
 
@@ -116,7 +141,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
 
   // Format recipient full address
   const shipping = activeOrder.shipping || {};
-  const recipientName = activeOrder.customer_name || `${shipping.first_name || ''} ${shipping.last_name || ''}`.trim() || 'Collector';
+  const recipientName = activeOrder.customer_name || `${shipping.first_name || ''} ${shipping.last_name || ''}`.trim() || 'Customer';
   const recipientPhone = activeOrder.customer_phone || shipping.phone || '-';
   const addressLine1 = shipping.address_1 || 'Address on file';
   const addressLine2 = shipping.address_2 || shipping.address_2_extra || '';
@@ -134,13 +159,19 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
 
   // Barcode ALWAYS encodes the clean order reference
   const orderBarcodeVal = cleanOrderNum;
-  const barcodeData = generateBarcodeSvgData(orderBarcodeVal, 44);
+  const barcodeData = generateBarcodeSvgData(orderBarcodeVal, 36);
 
-  // Generate single label HTML for print document
-  const renderSingleLabelHtml = (ord: Order, index: number) => {
+  // Order items resolution
+  const activeOrderItems = (activeOrder.items && activeOrder.items.length > 0)
+    ? activeOrder.items
+    : (activeOrder.line_items && activeOrder.line_items.length > 0 ? activeOrder.line_items : []);
+  const { pages: activePages, totalPages: activeTotalPages } = chunkOrderItems(activeOrderItems);
+
+  // Generate single label HTML for print document (handles multi-page orders automatically)
+  const renderSingleOrderHtml = (ord: Order, isLastOrder: boolean) => {
     const cOrderNum = String(ord.order_number || ord.id || '').replace(/^#+/, '');
     const shp = ord.shipping || {};
-    const rName = ord.customer_name || `${shp.first_name || ''} ${shp.last_name || ''}`.trim() || 'Collector';
+    const rName = ord.customer_name || `${shp.first_name || ''} ${shp.last_name || ''}`.trim() || 'Customer';
     const rPhone = ord.customer_phone || shp.phone || '-';
     const rAddrLines = [
       shp.address_1 || 'Address on file',
@@ -149,121 +180,166 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
       shp.country || 'ID',
     ].filter(Boolean);
 
-    const cCourier = (index === currentIndex ? courierName : (ord.tracking?.courier || courierName)) || 'JNE Express';
-    const rawTrk = (index === currentIndex ? trackingNo : (ord.tracking?.tracking_number || ''));
+    const cCourier = (ord.id === activeOrder.id ? courierName : (ord.tracking?.courier || courierName)) || 'JNE Express';
+    const rawTrk = (ord.id === activeOrder.id ? trackingNo : (ord.tracking?.tracking_number || ''));
     const validTrk = rawTrk && !rawTrk.startsWith('field_') ? rawTrk : '';
 
-    const bData = generateBarcodeSvgData(cOrderNum, 44);
+    const bData = generateBarcodeSvgData(cOrderNum, 36);
     const bSvgRects = bData.elements
-      .map(el => `<rect x="${el.x}" y="0" width="${el.width}" height="44" fill="#000" />`)
+      .map(el => `<rect x="${el.x}" y="0" width="${el.width}" height="36" fill="#000" />`)
       .join('');
 
-    const itmsHtml = (ord.items || []).map((item) => {
-      const itemSku = item.sku 
-        ? item.sku 
-        : (item.product_id ? `SKU${item.product_id}` : `SKU${item.id || '72572'}`);
+    const ordItems = (ord.items && ord.items.length > 0)
+      ? ord.items
+      : (ord.line_items && ord.line_items.length > 0 ? ord.line_items : []);
+    const { pages, totalPages } = chunkOrderItems(ordItems);
+    const totalUnitsCount = ord.item_count || ordItems.reduce((acc: number, it: any) => acc + (it.quantity || 1), 0);
 
+    const renderItemRowsHtml = (itemsList: any[]) => {
+      return (itemsList || []).map((item) => {
+        const itemSku = item.sku 
+          ? item.sku 
+          : (item.product_id ? `SKU${item.product_id}` : `SKU${item.id || '72572'}`);
+        const specsStr = formatItemSpecsSummary(item);
+
+        return `
+          <tr style="border-bottom: 1px solid #e5e7eb;">
+            <td style="padding: 3px 5px; font-weight: 900; width: 26px; text-align: center; font-size: 10.5px; vertical-align: top;">${item.quantity}x</td>
+            <td style="padding: 3px 5px; vertical-align: top;">
+              <div style="font-size: 10px; font-weight: 800; color: #111; line-height: 1.2;">${item.name || 'Precision Device Skin'}</div>
+              ${specsStr ? `<div style="font-size: 8px; color: #444; font-weight: 600; margin-top: 1.5px; line-height: 1.2;">${specsStr}</div>` : ''}
+            </td>
+            <td style="padding: 3px 5px; font-size: 9px; text-align: right; color: #333; font-family: monospace; font-weight: 800; vertical-align: top; white-space: nowrap;">${itemSku}</td>
+          </tr>
+        `;
+      }).join('');
+    };
+
+    return pages.map((pageItems, pageIdx) => {
+      const isLastSheetOfOrder = pageIdx === pages.length - 1;
+      const isAbsoluteLastSheet = isLastOrder && isLastSheetOfOrder;
+      const pageBreakClass = isAbsoluteLastSheet ? '' : 'page-break';
+
+      // Page 1: Comprehensive shipping label
+      if (pageIdx === 0) {
+        return `
+          <div class="label-container ${pageBreakClass}">
+            <!-- Header: Real Exacoat Logo on Left, Bold Courier on Right -->
+            <div>
+              <div class="header-row">
+                <div style="display: flex; align-items: center;">
+                  <img src="${EXACOAT_LOGO_BASE64}" alt="EXACOAT" style="height: 19px; max-width: 140px; object-fit: contain; display: block;" />
+                </div>
+                <div style="text-align: right; display: flex; align-items: center; gap: 6px;">
+                  ${totalPages > 1 ? `<span style="font-size: 10.5px; font-weight: 900; font-family: monospace; border: 1.5px solid #000; padding: 1px 5px; border-radius: 2px;">1/${totalPages}</span>` : ''}
+                  <span style="font-size: 14px; font-weight: 900; text-transform: uppercase; font-family: monospace; letter-spacing: 0.5px;">${cCourier.toUpperCase()}</span>
+                </div>
+              </div>
+
+              <!-- Recipient Section -->
+              <div class="recipient-box">
+                <div style="font-size: 8px; font-weight: 800; color: #555; text-transform: uppercase; letter-spacing: 0.5px;">SHIP TO / DELIVER TO:</div>
+                <div class="recipient-name">${rName}</div>
+                <div class="recipient-phone">Tel: ${rPhone}</div>
+                <div class="recipient-address">
+                  ${rAddrLines.join('<br />')}
+                </div>
+              </div>
+            </div>
+
+            <!-- Inline Section: FROM on Left, ORDER REF & BARCODE on Right -->
+            <div class="inline-from-barcode-row">
+              <div class="from-subcol">
+                <div class="tag-label">FROM:</div>
+                <div class="from-brand">EXACOAT</div>
+                <div class="from-contact">
+                  Tel: +62-813-800-9060<br />
+                  support@exacoat.com
+                </div>
+              </div>
+
+              <div class="barcode-subcol">
+                ${validTrk ? `
+                  <div class="barcode-track">
+                    <span>TRACKING:</span> <strong>${validTrk}</strong>
+                  </div>
+                ` : ''}
+                <div class="barcode-ref">ORDER REF #${cOrderNum}</div>
+                <div class="barcode-svg-wrap">
+                  <svg width="100%" height="32" viewBox="0 0 ${bData.totalWidth} 36" preserveAspectRatio="none" style="display: block; width: 100%;">
+                    ${bSvgRects}
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <!-- Manifest Declaration Table with Custom Skin Specs -->
+            <div style="margin: 2px 0; flex: 1;">
+              <div style="display: flex; justify-content: space-between; font-size: 8px; font-weight: 900; text-transform: uppercase; border-bottom: 1.5px solid #000; padding-bottom: 2px;">
+                <span>MANIFEST DECLARATION (${totalUnitsCount} PCS)</span>
+                <span>PREMIUM DEVICE SKINS</span>
+              </div>
+              <table class="manifest-table">
+                <tbody>
+                  ${renderItemRowsHtml(pageItems)}
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Shorter Fragile Caution Strip (Footer text removed) -->
+            <div>
+              <div class="caution-bar">
+                &#9650; ${handlingNote} &#9650;
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      // Page 2+: Minimal header, order ref, page number, and remaining manifest items
       return `
-        <tr style="border-bottom: 1px solid #e5e7eb;">
-          <td style="padding: 4px 6px; font-weight: 800; width: 32px; text-align: center; font-size: 11px;">${item.quantity}x</td>
-          <td style="padding: 4px 6px; font-size: 11px; font-weight: 700; color: #111;">${item.name || 'Precision Device Skin'}</td>
-          <td style="padding: 4px 6px; font-size: 10.5px; text-align: right; color: #333; font-family: monospace; font-weight: 800;">${itemSku}</td>
-        </tr>
+        <div class="label-container ${pageBreakClass}">
+          <!-- Minimal Header for Page 2+ -->
+          <div>
+            <div class="header-row" style="padding-bottom: 4px;">
+              <div style="display: flex; align-items: baseline; gap: 8px;">
+                <span style="font-size: 13px; font-weight: 900; text-transform: uppercase;">EXACOAT</span>
+                <span style="font-size: 12px; font-weight: 900; font-family: monospace;">ORDER REF #${cOrderNum}</span>
+              </div>
+              <div style="text-align: right; display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 11px; font-weight: 900; font-family: monospace; border: 1.5px solid #000; padding: 1px 5px; border-radius: 2px;">${pageIdx + 1}/${totalPages}</span>
+                <span style="font-size: 12px; font-weight: 900; text-transform: uppercase; font-family: monospace;">${cCourier.toUpperCase()}</span>
+              </div>
+            </div>
+
+            <div style="font-size: 9.5px; font-weight: 800; padding: 4px 0; border-bottom: 1.5px solid #000; display: flex; justify-content: space-between;">
+              <span>SHIP TO: <strong>${rName}</strong></span>
+              <span>Tel: ${rPhone}</span>
+            </div>
+          </div>
+
+          <!-- Remaining Manifest Items with Specs -->
+          <div style="margin: 4px 0; flex: 1;">
+            <div style="display: flex; justify-content: space-between; font-size: 8px; font-weight: 900; text-transform: uppercase; border-bottom: 1.5px solid #000; padding-bottom: 2px;">
+              <span>MANIFEST CONTINUED (${pageItems.length} ITEMS)</span>
+              <span>PREMIUM DEVICE SKINS</span>
+            </div>
+            <table class="manifest-table">
+              <tbody>
+                ${renderItemRowsHtml(pageItems)}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Shorter Fragile Caution Strip -->
+          <div>
+            <div class="caution-bar">
+              &#9650; ${handlingNote} &#9650;
+            </div>
+          </div>
+        </div>
       `;
     }).join('');
-
-    return `
-      <div class="label-container ${index < activeOrdersList.length - 1 ? 'page-break' : ''}">
-        
-        <!-- Top Section: Minimalist Logo Header + VERY TOP SHIP TO -->
-        <div>
-          <!-- Header Row: Logo & Date -->
-          <div class="header-row">
-            <div style="display: flex; align-items: center;">
-              <img src="${EXACOAT_LOGO_BASE64}" alt="EXACOAT" style="height: 17px; max-width: 130px; object-fit: contain; display: block;" />
-            </div>
-            <div style="text-align: right;">
-              <div style="font-size: 13px; font-weight: 900; font-family: monospace;">#${cOrderNum}</div>
-              <div style="font-size: 9px; color: #444; font-weight: 700;">${formatDate(ord.created_at)}</div>
-            </div>
-          </div>
-
-          <!-- VERY TOP: Recipient Section (Large Address Text) -->
-          <div class="recipient-box">
-            <div style="font-size: 8.5px; font-weight: 800; color: #555; text-transform: uppercase; letter-spacing: 0.5px;">SHIP TO / DELIVER TO:</div>
-            <div class="recipient-name">${rName}</div>
-            <div class="recipient-phone">Tel: ${rPhone}</div>
-            <div class="recipient-address">
-              ${rAddrLines.join('<br />')}
-            </div>
-          </div>
-        </div>
-
-        <!-- Mid Section: FROM on Left, CARRIER on Right -->
-        <div class="mid-row">
-          <div class="mid-from">
-            <div style="display: flex; align-items: baseline; gap: 4px;">
-              <span class="tag-label">FROM:</span>
-              <span class="from-brand">EXACOAT</span>
-            </div>
-            <div class="from-contact">support@exacoat.com &bull; +62-813-800-9060</div>
-          </div>
-
-          <div class="mid-carrier">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span class="tag-label">CARRIER:</span>
-              <span class="carrier-badge">${cCourier.toUpperCase()}</span>
-            </div>
-            <div class="carrier-meta">
-              <span>STD AIR / ROAD</span>
-              <span>DEST: <strong>${shp.country || 'ID'}</strong></span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Order Ref Barcode (ALWAYS Order Reference, with optional Tracking Header) -->
-        <div class="barcode-section">
-          ${validTrk ? `
-            <div style="font-size: 8.5px; font-weight: 800; font-family: monospace; color: #222; text-transform: uppercase; margin-bottom: 2px; border-bottom: 1px dashed #ccc; padding-bottom: 2px; display: flex; justify-content: space-between;">
-              <span>TRACKING NUMBER:</span>
-              <strong>${validTrk}</strong>
-            </div>
-          ` : ''}
-          <div class="barcode-header">ORDER REF #${cOrderNum}</div>
-          <div class="barcode-wrapper">
-            <svg width="100%" height="42" viewBox="0 0 ${bData.totalWidth} 44" preserveAspectRatio="none" style="display: block; width: 100%;">
-              ${bSvgRects}
-            </svg>
-          </div>
-        </div>
-
-        <!-- Manifest / Contents Declaration (Item Name + Quantity + SKU) -->
-        <div style="margin: 2px 0;">
-          <div style="display: flex; justify-content: space-between; font-size: 8.5px; font-weight: 900; text-transform: uppercase; border-bottom: 1px solid #000; padding-bottom: 2px;">
-            <span>MANIFEST DECLARATION (${ord.item_count || ord.items?.length || 1} PCS)</span>
-            <span>PREMIUM DEVICE SKINS</span>
-          </div>
-          <table class="manifest-table">
-            <tbody>
-              ${itmsHtml}
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Bottom Caution Strip & Footer -->
-        <div>
-          <div class="caution-bar">
-            &#9650; ${handlingNote} &#9650;
-          </div>
-          <div class="footer-box">
-            <span>EXACOAT VERIFIED</span>
-            <span>ORDER #${cOrderNum}</span>
-            <span>HANDLE WITH CARE</span>
-          </div>
-        </div>
-
-      </div>
-    `;
   };
 
   const handlePrint = () => {
@@ -273,7 +349,10 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
       return;
     }
 
-    const allLabelsHtml = activeOrdersList.map((ord, idx) => renderSingleLabelHtml(ord, idx)).join('');
+    const allLabelsHtml = activeOrdersList.map((ord, idx) => {
+      const isLastOrder = idx === activeOrdersList.length - 1;
+      return renderSingleOrderHtml(ord, isLastOrder);
+    }).join('');
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -308,7 +387,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
           .label-container {
             width: 4in;
             height: 6in;
-            padding: 4.5mm;
+            padding: 4mm;
             background: #ffffff;
             display: flex;
             flex-direction: column;
@@ -324,53 +403,53 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
             align-items: center;
             justify-content: space-between;
             border-bottom: 2px solid #000;
-            padding-bottom: 6px;
+            padding-bottom: 5px;
           }
           .recipient-box {
-            padding: 7px 0 6px;
-            line-height: 1.35;
+            padding: 5px 0 4px;
+            line-height: 1.3;
           }
           .recipient-name {
-            font-size: 17px;
+            font-size: 16px;
             font-weight: 900;
             text-transform: uppercase;
             letter-spacing: -0.2px;
-            margin-top: 2px;
+            margin-top: 1px;
           }
           .recipient-phone {
-            font-size: 12.5px;
+            font-size: 11.5px;
             font-weight: 800;
-            margin: 2px 0;
+            margin: 1px 0;
           }
           .recipient-address {
-            font-size: 12.5px;
+            font-size: 11.5px;
             font-weight: 700;
-            margin-top: 2px;
+            margin-top: 1px;
             color: #111;
-            line-height: 1.35;
+            line-height: 1.3;
           }
-          .mid-row {
+          .inline-from-barcode-row {
             border-top: 2px solid #000;
             border-bottom: 2px solid #000;
             display: flex;
-            min-height: 38px;
+            align-items: stretch;
+            padding: 3.5px 0;
+            margin: 2px 0 3px 0;
           }
-          .mid-from {
-            width: 50%;
+          .from-subcol {
+            width: 42%;
             border-right: 2px solid #000;
-            padding: 3px 6px;
+            padding-right: 6px;
             display: flex;
             flex-direction: column;
             justify-content: center;
           }
-          .mid-carrier {
-            width: 50%;
-            padding: 3px 6px;
+          .barcode-subcol {
+            width: 58%;
+            padding-left: 8px;
             display: flex;
             flex-direction: column;
             justify-content: center;
-            gap: 2px;
-            background: #fbfbfb;
           }
           .tag-label {
             font-size: 7.5px;
@@ -379,80 +458,54 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
             text-transform: uppercase;
           }
           .from-brand {
-            font-size: 10px;
+            font-size: 11px;
             font-weight: 900;
             text-transform: uppercase;
-            margin: 0;
             line-height: 1.1;
           }
           .from-contact {
-            font-size: 8.5px;
+            font-size: 8px;
+            font-weight: 600;
             color: #222;
             margin-top: 1px;
-            line-height: 1.1;
+            line-height: 1.2;
           }
-          .carrier-badge {
-            background: #000;
-            color: #fff;
-            font-size: 8.5px;
-            font-weight: 900;
-            padding: 1.5px 5px;
-            border-radius: 2px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            display: inline-block;
-            line-height: 1.1;
-          }
-          .carrier-meta {
-            display: flex;
-            justify-content: space-between;
+          .barcode-track {
             font-size: 7.5px;
-            font-weight: 700;
-            color: #333;
-            margin-top: 1px;
+            font-weight: 800;
+            font-family: monospace;
+            color: #222;
+            margin-bottom: 1px;
           }
-          .barcode-section {
-            border-bottom: 2px solid #000;
-            padding: 2px 0 5px;
-          }
-          .barcode-header {
-            font-size: 11px;
+          .barcode-ref {
+            font-size: 10px;
             font-family: monospace;
             font-weight: 900;
             color: #000;
-            letter-spacing: 0.5px;
-            margin: 0 0 2px 0;
+            letter-spacing: 0.3px;
+            line-height: 1.1;
+            margin-bottom: 1px;
           }
-          .barcode-wrapper {
+          .barcode-svg-wrap {
             width: 100%;
           }
           .manifest-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 10.5px;
-            margin-top: 3px;
+            font-size: 10px;
+            margin-top: 2px;
           }
           .caution-bar {
             background: #000;
             color: #fff;
-            padding: 7px 8px;
-            font-size: 10px;
+            padding: 3.5px 6px;
+            font-size: 8px;
             font-weight: 900;
             text-align: center;
-            letter-spacing: 1.2px;
+            letter-spacing: 0.8px;
             text-transform: uppercase;
-            margin-bottom: 4px;
-            border-radius: 2px;
-          }
-          .footer-box {
-            border-top: 1.5px solid #000;
-            padding-top: 4px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 9px;
-            font-weight: 800;
-            letter-spacing: 0.5px;
+            border-radius: 1px;
+            line-height: 1.2;
           }
         </style>
       </head>
@@ -485,7 +538,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
           <span className="text-base font-bold text-white font-sans">
             {activeOrdersList.length > 1
               ? `Bulk Shipping Labels (${activeOrdersList.length} Orders)`
-              : `Shipping Label &bull; Order #${cleanOrderNum}`}
+              : `Shipping Label • Order #${cleanOrderNum}`}
           </span>
           <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/20">
             4&times;6" Thermal
@@ -542,7 +595,10 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                   <button
                     type="button"
                     disabled={currentIndex === 0}
-                    onClick={() => setCurrentIndex(i => Math.max(0, i - 1))}
+                    onClick={() => {
+                      setCurrentIndex(i => Math.max(0, i - 1));
+                      setPreviewPageIndex(0);
+                    }}
                     className="p-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] disabled:opacity-30 text-white transition-all"
                     title="Previous Order"
                   >
@@ -551,7 +607,10 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                   <button
                     type="button"
                     disabled={currentIndex === activeOrdersList.length - 1}
-                    onClick={() => setCurrentIndex(i => Math.min(activeOrdersList.length - 1, i + 1))}
+                    onClick={() => {
+                      setCurrentIndex(i => Math.min(activeOrdersList.length - 1, i + 1));
+                      setPreviewPageIndex(0);
+                    }}
                     className="p-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] disabled:opacity-30 text-white transition-all"
                     title="Next Order"
                   >
@@ -581,7 +640,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                 type="text"
                 value={courierName}
                 onChange={e => setCourierName(e.target.value)}
-                placeholder="e.g. JNE Express, DHL, FedEx, SiCepat"
+                placeholder="e.g. JNE Express, SiCepat, J&T"
                 className="w-full px-3 py-2 rounded-lg bg-[#1a1a1a] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-[#f3aa18] transition-colors font-sans font-medium"
               />
             </div>
@@ -623,6 +682,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
             <div className="text-xs text-neutral-300 font-sans leading-relaxed">
               <p className="font-bold text-white uppercase">Exacoat</p>
               <p className="font-mono text-[#f3aa18] font-bold">support@exacoat.com</p>
+              <p className="text-neutral-400 text-[11px]">+62-813-800-9060</p>
             </div>
           </div>
         </div>
@@ -630,139 +690,221 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
         {/* Right Column: Live 4x6 Label Preview Identical to Print Output */}
         <div className="md:col-span-7 flex flex-col items-center">
           <div className="w-full flex items-center justify-between mb-2 px-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 font-sans">
-              Print Preview {activeOrdersList.length > 1 ? `(${currentIndex + 1} of ${activeOrdersList.length})` : '(4×6" Format)'}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 font-sans">
+                Print Preview {activeOrdersList.length > 1 ? `(${currentIndex + 1} of ${activeOrdersList.length})` : '(4×6" Thermal)'}
+              </span>
+              {activeTotalPages > 1 && (
+                <div className="flex items-center gap-1 ml-2">
+                  {activePages.map((_, pIdx) => (
+                    <button
+                      key={pIdx}
+                      type="button"
+                      onClick={() => setPreviewPageIndex(pIdx)}
+                      className={clsx(
+                        "px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-all",
+                        previewPageIndex === pIdx
+                          ? "bg-[#f3aa18] text-black"
+                          : "bg-white/[0.06] hover:bg-white/[0.12] text-neutral-300"
+                      )}
+                    >
+                      {pIdx + 1}/{activeTotalPages}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <span className="text-[10px] font-mono text-neutral-500">
-              100mm &times; 150mm &bull; Border-Free Thermal
+              100mm &times; 150mm • Border-Free Thermal
             </span>
           </div>
 
           {/* Clean 4x6 White Canvas Label Card (NO Outer Border, Identical Layout) */}
           <div 
             ref={labelRef}
-            className="w-full max-w-[340px] bg-white text-black p-4 rounded-md shadow-2xl flex flex-col justify-between select-none"
+            className="w-full max-w-[340px] bg-white text-black p-3.5 rounded-md shadow-2xl flex flex-col justify-between select-none"
             style={{ 
               aspectRatio: '4/6', 
               fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" 
             }}
           >
-            {/* Top Section: Minimalist Logo + VERY TOP SHIP TO */}
-            <div>
-              {/* Header: Minimalist Logo + Order Ref */}
-              <div className="flex items-center justify-between border-b-2 border-black pb-2">
-                <div className="flex items-center">
-                  <img src={EXACOAT_LOGO_BASE64} alt="EXACOAT" className="h-4.5 max-w-[125px] object-contain block" />
-                </div>
-                <div className="text-right">
-                  <span className="font-mono font-black text-xs block leading-tight">#{cleanOrderNum}</span>
-                  <span className="text-[8.5px] text-neutral-600 font-bold">{formatDate(activeOrder.created_at)}</span>
-                </div>
-              </div>
-
-              {/* VERY TOP: Recipient Section (Large Address Text) */}
-              <div className="py-2.5 leading-snug">
-                <span className="font-extrabold text-[8px] text-neutral-500 uppercase tracking-wide block">
-                  SHIP TO / DELIVER TO:
-                </span>
-                <p className="font-black text-[15px] uppercase tracking-tight text-black mt-0.5">
-                  {recipientName}
-                </p>
-                <p className="font-extrabold text-[11px] text-black">Tel: {recipientPhone}</p>
-                <div className="text-[11px] text-neutral-900 font-bold mt-1 leading-tight">
-                  {fullAddressLines.map((line, idx) => (
-                    <span key={idx} className="block">{line}</span>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Mid Section: FROM on Left, CARRIER on Right */}
-            <div className="my-1 border-y-2 border-black flex min-h-[38px]">
-              {/* Left: FROM */}
-              <div className="w-[50%] border-r-2 border-black p-1 flex flex-col justify-center">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[7px] font-bold text-neutral-500 uppercase">FROM:</span>
-                  <span className="font-black text-[10px] uppercase leading-tight">EXACOAT</span>
-                </div>
-                <span className="text-[8px] text-neutral-700 font-mono mt-0.5 leading-tight">Tel: +62-813-800-9060</span>
-              </div>
-
-              {/* Right: CARRIER */}
-              <div className="w-[50%] p-1 bg-neutral-50/60 flex flex-col justify-center gap-0.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[7px] font-bold text-neutral-500 uppercase">CARRIER:</span>
-                  <span className="px-1 py-0.5 rounded bg-black text-white text-[8px] font-black uppercase tracking-wider leading-none">
-                    {courierName}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-[7px] font-bold text-neutral-700">
-                  <span>STD AIR / ROAD</span>
-                  <span>DEST: {country}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Order Ref Barcode (ALWAYS Order Reference, with optional Tracking Header) */}
-            <div className="border-b-2 border-black pb-1.5 mb-1 pt-0.5">
-              {trackingNo ? (
-                <div className="text-[8px] font-mono font-bold text-neutral-800 uppercase tracking-tight mb-0.5 border-b border-dashed border-neutral-300 pb-0.5 flex items-center justify-between">
-                  <span>TRACKING NUMBER:</span>
-                  <span className="font-black text-black">{trackingNo}</span>
-                </div>
-              ) : null}
-              <div className="font-mono font-black text-[10px] text-black tracking-tight mb-0.5">
-                ORDER REF #{cleanOrderNum}
-              </div>
-              <div className="w-full">
-                <svg width="100%" height="36" viewBox={`0 0 ${barcodeData.totalWidth} 44`} preserveAspectRatio="none" className="w-full block">
-                  {barcodeData.elements.map(el => (
-                    <rect key={el.key} x={el.x} y={0} width={el.width} height={44} fill="#000000" />
-                  ))}
-                </svg>
-              </div>
-            </div>
-
-            {/* Package Contents Declaration (Product Name + Quantity + SKU) */}
-            <div className="my-1">
-              <div className="flex items-center justify-between border-b border-black pb-0.5 text-[7.5px] font-black uppercase">
-                <span>MANIFEST DECLARATION ({activeOrder.item_count || activeOrder.items?.length || 1} PCS)</span>
-                <span>ORIGINAL EXACOAT PRODUCTS</span>
-              </div>
-              <div className="space-y-1 mt-1 max-h-24 overflow-hidden text-[8.5px]">
-                {(activeOrder.items || []).slice(0, 3).map((item, idx) => {
-                  const itemSku = item.sku 
-                    ? item.sku 
-                    : (item.product_id ? `SKU${item.product_id}` : `SKU${item.id || '72572'}`);
-
-                  return (
-                    <div key={idx} className="flex items-center justify-between font-medium">
-                      <span className="font-bold truncate max-w-[200px] text-black">
-                        {item.quantity}x {item.name || 'Precision Device Skin'}
-                      </span>
-                      <span className="text-[7.5px] text-neutral-700 font-mono font-bold">{itemSku}</span>
+            {previewPageIndex === 0 ? (
+              // PAGE 1: Complete primary shipping label
+              <>
+                <div>
+                  {/* Header: Authentic Exacoat Vector Logo + Plain Courier Name */}
+                  <div className="flex items-center justify-between border-b-2 border-black pb-1.5">
+                    <div className="flex items-center">
+                      <img src={EXACOAT_LOGO_BASE64} alt="EXACOAT" className="h-5 max-w-[135px] object-contain block" />
                     </div>
-                  );
-                })}
-                {(activeOrder.items || []).length > 3 && (
-                  <div className="text-[7.5px] text-neutral-500 italic">
-                    + {(activeOrder.items || []).length - 3} more items...
+                    <div className="text-right flex items-center gap-1.5">
+                      {activeTotalPages > 1 && (
+                        <span className="font-mono font-black text-[9px] border border-black px-1 rounded-xs">
+                          1/{activeTotalPages}
+                        </span>
+                      )}
+                      <span className="font-mono font-black text-xs uppercase tracking-tight text-black">
+                        {courierName.toUpperCase()}
+                      </span>
+                    </div>
                   </div>
-                )}
-              </div>
-            </div>
 
-            {/* Bottom Caution Strip (Taller & Bigger) & Non-Bendable Art Footer */}
-            <div>
-              <div className="bg-black text-white text-[9px] font-black text-center py-2 tracking-wider uppercase rounded-xs">
-                ▲ {handlingNote} ▲
-              </div>
-              <div className="flex items-center justify-between pt-1 text-[7.5px] font-black text-neutral-600">
-                <span>EXACOAT VERIFIED</span>
-                <span>ORDER #{cleanOrderNum}</span>
-                <span>PREMIUM SKINS & COATINGS</span>
-              </div>
-            </div>
+                  {/* Recipient Section */}
+                  <div className="py-2 leading-snug">
+                    <span className="font-extrabold text-[8px] text-neutral-500 uppercase tracking-wide block">
+                      SHIP TO / DELIVER TO:
+                    </span>
+                    <p className="font-black text-[14px] uppercase tracking-tight text-black mt-0.5">
+                      {recipientName}
+                    </p>
+                    <p className="font-extrabold text-[10.5px] text-black">Tel: {recipientPhone}</p>
+                    <div className="text-[10.5px] text-neutral-900 font-bold mt-0.5 leading-tight">
+                      {fullAddressLines.map((line, idx) => (
+                        <span key={idx} className="block">{line}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Inline FROM & Order Ref Barcode Row */}
+                <div className="my-1 border-y-2 border-black flex items-stretch py-1">
+                  {/* Left: FROM */}
+                  <div className="w-[42%] border-r-2 border-black pr-1.5 flex flex-col justify-center">
+                    <div className="flex items-center gap-1">
+                      <span className="text-[7px] font-bold text-neutral-500 uppercase">FROM:</span>
+                      <span className="font-black text-[10px] uppercase leading-tight">EXACOAT</span>
+                    </div>
+                    <span className="text-[7.5px] text-neutral-700 font-mono mt-0.5 leading-tight">
+                      Tel: +62-813-800-9060
+                    </span>
+                    <span className="text-[7.5px] text-neutral-600 font-sans leading-tight">
+                      support@exacoat.com
+                    </span>
+                  </div>
+
+                  {/* Right: Barcode + Order Ref */}
+                  <div className="w-[58%] pl-2 flex flex-col justify-center">
+                    {trackingNo ? (
+                      <div className="text-[7.5px] font-mono font-bold text-neutral-800 uppercase tracking-tight mb-0.5 flex items-center justify-between">
+                        <span>TRACKING:</span>
+                        <span className="font-black text-black">{trackingNo}</span>
+                      </div>
+                    ) : null}
+                    <div className="font-mono font-black text-[9.5px] text-black tracking-tight mb-0.5">
+                      ORDER REF #{cleanOrderNum}
+                    </div>
+                    <div className="w-full">
+                      <svg width="100%" height="28" viewBox={`0 0 ${barcodeData.totalWidth} 36`} preserveAspectRatio="none" className="w-full block">
+                        {barcodeData.elements.map(el => (
+                          <rect key={el.key} x={el.x} y={0} width={el.width} height={36} fill="#000000" />
+                        ))}
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Package Contents Declaration with Skin Metadata */}
+                <div className="my-1 flex-1">
+                  <div className="flex items-center justify-between border-b border-black pb-0.5 text-[7px] font-black uppercase">
+                    <span>MANIFEST DECLARATION ({activeOrder.item_count || activeOrderItems.reduce((acc, it) => acc + (it.quantity || 1), 0)} PCS)</span>
+                    <span>PREMIUM DEVICE SKINS</span>
+                  </div>
+                  <div className="space-y-1 mt-1 text-[8px]">
+                    {activePages[0].map((item, idx) => {
+                      const itemSku = item.sku 
+                        ? item.sku 
+                        : (item.product_id ? `SKU${item.product_id}` : `SKU${item.id || '72572'}`);
+                      const specsStr = formatItemSpecsSummary(item);
+
+                      return (
+                        <div key={idx} className="border-b border-neutral-100 pb-0.5">
+                          <div className="flex items-start justify-between font-medium">
+                            <span className="font-black text-black">
+                              {item.quantity}x {item.name || 'Precision Device Skin'}
+                            </span>
+                            <span className="text-[7.5px] text-neutral-700 font-mono font-bold shrink-0 ml-1">{itemSku}</span>
+                          </div>
+                          {specsStr && (
+                            <p className="text-[7.5px] text-neutral-600 font-semibold leading-tight mt-0.5">
+                              {specsStr}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Shorter Bottom Caution Strip (Footer text omitted) */}
+                <div>
+                  <div className="bg-black text-white text-[8px] font-black text-center py-1 tracking-wider uppercase rounded-xs">
+                    ▲ {handlingNote} ▲
+                  </div>
+                </div>
+              </>
+            ) : (
+              // PAGE 2+: Minimal header and remaining manifest items
+              <>
+                <div>
+                  <div className="flex items-center justify-between border-b-2 border-black pb-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-black text-xs uppercase">EXACOAT</span>
+                      <span className="font-mono font-black text-[10.5px]">REF #{cleanOrderNum}</span>
+                    </div>
+                    <div className="text-right flex items-center gap-1.5">
+                      <span className="font-mono font-black text-[9px] border border-black px-1 rounded-xs">
+                        {previewPageIndex + 1}/{activeTotalPages}
+                      </span>
+                      <span className="font-mono font-black text-[11px] uppercase tracking-tight text-black">
+                        {courierName.toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="py-1 text-[9px] font-bold border-b border-black flex items-center justify-between">
+                    <span>SHIP TO: <strong>{recipientName}</strong></span>
+                    <span>Tel: {recipientPhone}</span>
+                  </div>
+                </div>
+
+                <div className="my-1 flex-1">
+                  <div className="flex items-center justify-between border-b border-black pb-0.5 text-[7px] font-black uppercase">
+                    <span>MANIFEST CONTINUED ({activePages[previewPageIndex].length} ITEMS)</span>
+                    <span>PREMIUM DEVICE SKINS</span>
+                  </div>
+                  <div className="space-y-1 mt-1 text-[8px]">
+                    {activePages[previewPageIndex].map((item, idx) => {
+                      const itemSku = item.sku 
+                        ? item.sku 
+                        : (item.product_id ? `SKU${item.product_id}` : `SKU${item.id || '72572'}`);
+                      const specsStr = formatItemSpecsSummary(item);
+
+                      return (
+                        <div key={idx} className="border-b border-neutral-100 pb-0.5">
+                          <div className="flex items-start justify-between font-medium">
+                            <span className="font-black text-black">
+                              {item.quantity}x {item.name || 'Precision Device Skin'}
+                            </span>
+                            <span className="text-[7.5px] text-neutral-700 font-mono font-bold shrink-0 ml-1">{itemSku}</span>
+                          </div>
+                          {specsStr && (
+                            <p className="text-[7.5px] text-neutral-600 font-semibold leading-tight mt-0.5">
+                              {specsStr}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="bg-black text-white text-[8px] font-black text-center py-1 tracking-wider uppercase rounded-xs">
+                    ▲ {handlingNote} ▲
+                  </div>
+                </div>
+              </>
+            )}
 
           </div>
         </div>
