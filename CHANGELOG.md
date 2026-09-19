@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.39] - 2026-09-19
+
+### RMA Duplicate Claim Admin Override & Packing Slip Enhancements
+- **RMA Duplicate Claim Admin Override**:
+  - Added "Allow duplicate claim (Admin Override)" checkbox to `ManualWarrantyModal` when an external marketplace invoice has already been claimed or redeemed under a prior replacement order.
+  - Added "Allow secondary RMA claim (Admin Override)" toggle for existing WooCommerce orders that were previously processed for an RMA replacement.
+  - Enabled authorized operators to submit replacement orders even if prior orders exist (e.g., for multi-item orders, staging test orders, or customer service approved exceptions).
+  - Enhanced backend `Exacoat_Warranty_Manager::rest_create_manual_claim` to accept `allow_duplicate` and `override_duplicate` parameters.
+  - Stored `_rma_duplicate_override = 'yes'`, `_rma_prior_order_number`, and logged an audit note in order history when an override is authorized.
+- **Packing Slip Customization Summary Fix**:
+  - Corrected `ItemCustomizationSpec` array formatting in `PackingSlipModal` print templates and interactive previews.
+  - Rendered clean dot-separated attribute summaries (Back, Frame, Camera, Model, Texture) for precision skins.
+
+---
+
 ## [0.0.38] - 2026-09-19
 
 ### Decimal Psychological Rounding & Exacoat Skin Pricing Alignment

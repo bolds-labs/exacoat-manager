@@ -81,7 +81,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       description: 'The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.',
-      changelog: `### Version ${version}\n- Added decimal psychological rounding regimes (90_decimal, 99_decimal, 50_decimal) tailored for Exacoat skin product pricing\n- Defaulted USD, EUR, AUD, SGD, GBP, CAD, CHF, HKD to 90_decimal (e.g. 129K IDR -> $14.90 USD)\n- Updated admin currency simulator with skin presets (129K, 149K, 199K, 299K) and two-decimal currency formatting\n- Preserved zero-decimal step rounding for IDR, JPY, KRW, and THB\n- Updated default multi-zone free shipping thresholds for Exacoat skin portfolio`,
+      changelog: `### Version ${version}\n- Added Admin Override bypass for duplicate warranty and redeem claims on marketplace invoices and existing orders\n- Recorded _rma_duplicate_override metadata and audit trail order notes when duplicate claims are authorized\n- Fixed packing slip precision skin specifications summary rendering`,
     },
   };
 
