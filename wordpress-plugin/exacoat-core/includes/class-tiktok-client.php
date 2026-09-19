@@ -477,19 +477,21 @@ class Exacoat_TikTok_Client {
 	/**
 	 * Synchronize orders from TikTok Shop Open Platform
 	 */
-	public static function sync_orders( int $days_back = 15 ): array {
+	public static function sync_orders( int $days_back = 15, int $max_orders = 100 ): array {
 		$start_time = microtime( true );
 		$s = self::get_settings();
+		$max_fetch = min( 250, max( 50, $max_orders ) );
 
 		if ( class_exists( 'Exacoat_Logger' ) ) {
 			Exacoat_Logger::log(
 				'info',
 				'tiktok_sync',
-				sprintf( 'Initiating TikTok order sync (days_back: %d, env: %s)', $days_back, $s['environment'] ),
+				sprintf( 'Initiating TikTok order sync (days_back: %d, max_orders: %d, env: %s)', $days_back, $max_fetch, $s['environment'] ),
 				[
 					'service_id'  => $s['service_id'],
 					'shop_cipher' => $s['shop_cipher'],
 					'days_back'   => $days_back,
+					'max_fetch'   => $max_fetch,
 				]
 			);
 		}
@@ -512,115 +514,204 @@ class Exacoat_TikTok_Client {
 		$time_to = time();
 		$time_from = $time_to - ( $days_back * 86400 );
 
-		// Step 1: Search orders via /order/202309/orders/search
-		// page_size is a mandatory URL query parameter in TikTok Shop API 202309 (1-100)
-		$search_res = self::call_api( '/order/202309/orders/search', 'POST', [
-			'page_size' => 50,
-		], [
-			'page_size'      => 50,
-			'create_time_ge' => $time_from,
-			'create_time_lt' => $time_to,
-		]);
+		// Step 1: Search orders via /order/202309/orders/search with pagination
+		$order_ids = [];
+		$page_token = '';
 
-		if ( ! $search_res['success'] ) {
-			return $search_res;
-		}
+		do {
+			$query_params = [ 'page_size' => 50 ];
+			$body_params  = [
+				'page_size'      => 50,
+				'create_time_ge' => $time_from,
+				'create_time_lt' => $time_to,
+			];
+			if ( ! empty( $page_token ) ) {
+				$query_params['page_token'] = $page_token;
+				$body_params['page_token']  = $page_token;
+			}
 
-		$raw_list = $search_res['response']['orders'] ?? ( $search_res['response']['order_list'] ?? [] );
-		if ( empty( $raw_list ) ) {
+			$search_res = self::call_api( '/order/202309/orders/search', 'POST', $query_params, $body_params );
+			if ( ! $search_res['success'] ) {
+				if ( empty( $order_ids ) ) {
+					return $search_res;
+				}
+				break;
+			}
+
+			$raw_list = $search_res['response']['orders'] ?? ( $search_res['response']['order_list'] ?? [] );
+			if ( empty( $raw_list ) ) {
+				break;
+			}
+
+			foreach ( $raw_list as $item ) {
+				$oid = (string) ( $item['id'] ?? '' );
+				if ( ! empty( $oid ) && ! in_array( $oid, $order_ids, true ) ) {
+					$order_ids[] = $oid;
+				}
+			}
+
+			$page_token = (string) ( $search_res['response']['next_page_token'] ?? '' );
+		} while ( ! empty( $page_token ) && count( $order_ids ) < $max_fetch );
+
+		if ( empty( $order_ids ) ) {
+			$cached = get_option( self::ORDERS_CACHE_KEY, [] );
 			return [
 				'success'      => true,
-				'orders'       => [],
+				'orders'       => is_array( $cached ) ? $cached : [],
 				'total_synced' => 0,
 				'message'      => 'No recent TikTok orders found in the selected time range.',
 			];
 		}
 
-		$order_ids = array_column( $raw_list, 'id' );
-		$order_ids = array_filter( $order_ids );
+		// Step 2: Fetch detailed order objects via /order/202309/orders in chunks of 50
+		$raw_detailed_orders = [];
+		$chunks = array_chunk( $order_ids, 50 );
 
-		if ( empty( $order_ids ) ) {
-			return [
-				'success'      => true,
-				'orders'       => [],
-				'total_synced' => 0,
-				'message'      => 'No valid order IDs returned from TikTok search.',
-			];
+		foreach ( $chunks as $chunk_ids ) {
+			$detail_res = self::call_api( '/order/202309/orders', 'GET', [
+				'ids' => implode( ',', $chunk_ids ),
+			]);
+
+			if ( $detail_res['success'] ) {
+				$chunk_orders = $detail_res['response']['orders'] ?? [];
+				if ( is_array( $chunk_orders ) ) {
+					$raw_detailed_orders = array_merge( $raw_detailed_orders, $chunk_orders );
+				}
+			}
 		}
 
-		// Step 2: Fetch detailed order objects via /order/202309/orders
-		$detail_res = self::call_api( '/order/202309/orders', 'GET', [
-			'ids' => implode( ',', array_slice( $order_ids, 0, 50 ) ),
-		]);
-
-		$detailed_orders = $detail_res['success'] ? ( $detail_res['response']['orders'] ?? $raw_list ) : $raw_list;
 		$normalized_orders = [];
-
-		foreach ( $detailed_orders as $ord ) {
-			$order_id = (string) ( $ord['id'] ?? '' );
-			if ( empty( $order_id ) ) {
-				continue;
+		foreach ( $raw_detailed_orders as $ord ) {
+			$norm = self::normalize_tiktok_order( $ord );
+			if ( $norm ) {
+				$normalized_orders[] = $norm;
 			}
-
-			$claim_info = self::check_existing_claim( $order_id );
-
-			$items = [];
-			foreach ( ( $ord['line_items'] ?? ( $ord['item_list'] ?? [] ) ) as $item ) {
-				$items[] = [
-					'item_id'    => (string) ( $item['id'] ?? ( $item['item_id'] ?? '' ) ),
-					'item_name'  => trim( (string) ( $item['product_name'] ?? ( $item['item_name'] ?? 'Exacoat Skin' ) ) ),
-					'sku_id'     => (string) ( $item['sku_id'] ?? '' ),
-					'sku_name'   => trim( (string) ( $item['sku_name'] ?? ( $item['model_name'] ?? '' ) ) ),
-					'quantity'   => (int) ( $item['quantity'] ?? 1 ),
-					'price'      => (float) ( $item['sale_price'] ?? ( $item['item_price'] ?? 0 ) ),
-					'image_url'  => (string) ( $item['sku_image'] ?? ( $item['image_url'] ?? '' ) ),
-				];
-			}
-
-			$rec = $ord['recipient_address'] ?? [];
-			$packages = $ord['packages'] ?? ( $ord['package_list'] ?? [] );
-			$package = $packages[0] ?? [];
-
-			$raw_status = (string) ( $ord['status'] ?? ( $ord['order_status'] ?? 'UNKNOWN' ) );
-
-			$normalized_orders[] = [
-				'order_id'           => $order_id,
-				'order_sn'           => $order_id,
-				'order_status'       => $raw_status,
-				'create_time'        => ! empty( $ord['create_time'] ) ? date( 'Y-m-d H:i:s', is_numeric( $ord['create_time'] ) && strlen( (string) $ord['create_time'] ) > 10 ? (int) ( $ord['create_time'] / 1000 ) : (int) $ord['create_time'] ) : date( 'Y-m-d H:i:s' ),
-				'create_timestamp'   => ! empty( $ord['create_time'] ) && is_numeric( $ord['create_time'] ) && strlen( (string) $ord['create_time'] ) > 10 ? (int) ( $ord['create_time'] / 1000 ) : (int) ( $ord['create_time'] ?? time() ),
-				'pay_time'           => ! empty( $ord['paid_time'] ) ? date( 'Y-m-d H:i:s', (int) ( $ord['paid_time'] / 1000 ) ) : null,
-				'buyer_username'     => (string) ( $ord['buyer_email'] ?? ( $rec['name'] ?? 'TikTok Customer' ) ),
-				'buyer_uid'          => (string) ( $ord['buyer_uid'] ?? '' ),
-				'total_amount'       => (float) ( $ord['payment']['total_amount'] ?? ( $ord['total_amount'] ?? 0 ) ),
-				'currency'           => (string) ( $ord['payment']['currency'] ?? 'IDR' ),
-				'shipping_carrier'   => (string) ( $package['shipping_provider_name'] ?? ( $ord['shipping_provider'] ?? 'J&T / Ninja Van' ) ),
-				'tracking_number'    => (string) ( $package['tracking_number'] ?? ( $ord['tracking_number'] ?? '' ) ),
-				'package_id'         => (string) ( $package['id'] ?? ( $package['package_id'] ?? '' ) ),
-				'buyer_note'         => (string) ( $ord['buyer_message'] ?? ( $ord['note'] ?? '' ) ),
-				'recipient_name'     => (string) ( $rec['name'] ?? 'TikTok Customer' ),
-				'recipient_phone'    => (string) ( $rec['phone_number'] ?? ( $rec['phone'] ?? '' ) ),
-				'recipient_address'  => (string) ( $rec['full_address'] ?? ( $rec['address_line1'] ?? '' ) ),
-				'recipient_city'     => (string) ( $rec['district_info'][2]['address_name'] ?? ( $rec['city'] ?? '' ) ),
-				'recipient_postcode' => (string) ( $rec['postal_code'] ?? ( $rec['zipcode'] ?? '' ) ),
-				'items'              => $items,
-				'already_claimed'    => $claim_info['already_claimed'],
-				'existing_claim'     => $claim_info,
-			];
 		}
 
-		update_option( self::ORDERS_CACHE_KEY, $normalized_orders );
+		// Merge with existing cached orders so older orders are preserved
+		$existing_cached = get_option( self::ORDERS_CACHE_KEY, [] );
+		if ( ! is_array( $existing_cached ) ) {
+			$existing_cached = [];
+		}
+
+		$order_map = [];
+		foreach ( $existing_cached as $old_ord ) {
+			$oid = (string) ( $old_ord['order_id'] ?? ( $old_ord['order_sn'] ?? '' ) );
+			if ( ! empty( $oid ) ) {
+				$order_map[ $oid ] = $old_ord;
+			}
+		}
+		foreach ( $normalized_orders as $new_ord ) {
+			$oid = (string) ( $new_ord['order_id'] ?? ( $new_ord['order_sn'] ?? '' ) );
+			if ( ! empty( $oid ) ) {
+				$order_map[ $oid ] = $new_ord;
+			}
+		}
+
+		$all_cached_orders = array_values( $order_map );
+		usort( $all_cached_orders, function( $a, $b ) {
+			return ( $b['create_timestamp'] ?? 0 ) <=> ( $a['create_timestamp'] ?? 0 );
+		});
+		$all_cached_orders = array_slice( $all_cached_orders, 0, 1000 ); // Retain up to 1,000 orders
+
+		update_option( self::ORDERS_CACHE_KEY, $all_cached_orders );
 		self::save_settings([ 'last_synced_at' => time() ]);
 
 		$elapsed = round( microtime( true ) - $start_time, 2 );
 
 		return [
 			'success'      => true,
-			'orders'       => $normalized_orders,
+			'orders'       => $all_cached_orders,
 			'total_synced' => count( $normalized_orders ),
+			'total_cached' => count( $all_cached_orders ),
 			'synced_at'    => date( 'Y-m-d H:i:s' ),
 			'elapsed'      => $elapsed,
 		];
+	}
+
+	/**
+	 * Normalize raw TikTok order
+	 */
+	public static function normalize_tiktok_order( array $ord ): ?array {
+		$order_id = (string) ( $ord['id'] ?? '' );
+		if ( empty( $order_id ) ) {
+			return null;
+		}
+
+		$claim_info = self::check_existing_claim( $order_id );
+
+		$items = [];
+		foreach ( ( $ord['line_items'] ?? ( $ord['item_list'] ?? [] ) ) as $item ) {
+			$items[] = [
+				'item_id'    => (string) ( $item['id'] ?? ( $item['item_id'] ?? '' ) ),
+				'item_name'  => trim( (string) ( $item['product_name'] ?? ( $item['item_name'] ?? 'Exacoat Skin' ) ) ),
+				'sku_id'     => (string) ( $item['sku_id'] ?? '' ),
+				'sku_name'   => trim( (string) ( $item['sku_name'] ?? ( $item['model_name'] ?? '' ) ) ),
+				'quantity'   => (int) ( $item['quantity'] ?? 1 ),
+				'price'      => (float) ( $item['sale_price'] ?? ( $item['item_price'] ?? 0 ) ),
+				'image_url'  => (string) ( $item['sku_image'] ?? ( $item['image_url'] ?? '' ) ),
+			];
+		}
+
+		$rec = $ord['recipient_address'] ?? [];
+		$packages = $ord['packages'] ?? ( $ord['package_list'] ?? [] );
+		$package = $packages[0] ?? [];
+
+		$raw_status = (string) ( $ord['status'] ?? ( $ord['order_status'] ?? 'UNKNOWN' ) );
+
+		return [
+			'order_id'           => $order_id,
+			'order_sn'           => $order_id,
+			'order_status'       => $raw_status,
+			'create_time'        => ! empty( $ord['create_time'] ) ? date( 'Y-m-d H:i:s', is_numeric( $ord['create_time'] ) && strlen( (string) $ord['create_time'] ) > 10 ? (int) ( $ord['create_time'] / 1000 ) : (int) $ord['create_time'] ) : date( 'Y-m-d H:i:s' ),
+			'create_timestamp'   => ! empty( $ord['create_time'] ) && is_numeric( $ord['create_time'] ) && strlen( (string) $ord['create_time'] ) > 10 ? (int) ( $ord['create_time'] / 1000 ) : (int) ( $ord['create_time'] ?? time() ),
+			'pay_time'           => ! empty( $ord['paid_time'] ) ? date( 'Y-m-d H:i:s', (int) ( $ord['paid_time'] / 1000 ) ) : null,
+			'buyer_username'     => (string) ( $ord['buyer_email'] ?? ( $rec['name'] ?? 'TikTok Customer' ) ),
+			'buyer_uid'          => (string) ( $ord['buyer_uid'] ?? '' ),
+			'total_amount'       => (float) ( $ord['payment']['total_amount'] ?? ( $ord['total_amount'] ?? 0 ) ),
+			'currency'           => (string) ( $ord['payment']['currency'] ?? 'IDR' ),
+			'shipping_carrier'   => (string) ( $package['shipping_provider_name'] ?? ( $ord['shipping_provider'] ?? 'J&T / Ninja Van' ) ),
+			'tracking_number'    => (string) ( $package['tracking_number'] ?? ( $ord['tracking_number'] ?? '' ) ),
+			'package_id'         => (string) ( $package['id'] ?? ( $package['package_id'] ?? '' ) ),
+			'buyer_note'         => (string) ( $ord['buyer_message'] ?? ( $ord['note'] ?? '' ) ),
+			'recipient_name'     => (string) ( $rec['name'] ?? 'TikTok Customer' ),
+			'recipient_phone'    => (string) ( $rec['phone_number'] ?? ( $rec['phone'] ?? '' ) ),
+			'recipient_address'  => (string) ( $rec['full_address'] ?? ( $rec['address_line1'] ?? '' ) ),
+			'recipient_city'     => (string) ( $rec['district_info'][2]['address_name'] ?? ( $rec['city'] ?? '' ) ),
+			'recipient_postcode' => (string) ( $rec['postal_code'] ?? ( $rec['zipcode'] ?? '' ) ),
+			'items'              => $items,
+			'already_claimed'    => $claim_info['already_claimed'],
+			'existing_claim'     => $claim_info,
+		];
+	}
+
+	/**
+	 * Fetch a single order live on-demand from TikTok Shop API
+	 */
+	public static function fetch_single_order_live( string $order_id ): ?array {
+		$clean_id = trim( preg_replace( '/^#+/', '', $order_id ) );
+		if ( empty( $clean_id ) ) {
+			return null;
+		}
+
+		$detail_res = self::call_api( '/order/202309/orders', 'GET', [
+			'ids' => $clean_id,
+		]);
+
+		if ( ! $detail_res['success'] ) {
+			return null;
+		}
+
+		$orders = $detail_res['response']['orders'] ?? [];
+		if ( empty( $orders[0] ) ) {
+			return null;
+		}
+
+		$norm = self::normalize_tiktok_order( $orders[0] );
+		if ( $norm ) {
+			self::update_order_cache_field( $clean_id, $norm );
+		}
+		return $norm;
 	}
 
 	/**
@@ -650,6 +741,10 @@ class Exacoat_TikTok_Client {
 		unset( $ord );
 
 		if ( $found ) {
+			update_option( self::ORDERS_CACHE_KEY, $cached );
+			return true;
+		} elseif ( ! empty( $fields['order_id'] ) || ! empty( $fields['order_sn'] ) ) {
+			$cached[] = $fields;
 			update_option( self::ORDERS_CACHE_KEY, $cached );
 			return true;
 		}
@@ -992,6 +1087,14 @@ class Exacoat_TikTok_Client {
 				}
 				return str_contains( $oid, $search_lower ) || str_contains( $buyer, $search_lower ) || str_contains( $resi, $search_lower ) || str_contains( $prod, $search_lower );
 			});
+
+			// If no match in cache and search string looks like a TikTok order ID, attempt on-demand live lookup
+			if ( empty( $filtered ) && strlen( $search ) >= 6 && ! str_contains( $search, ' ' ) ) {
+				$live_order = self::fetch_single_order_live( $search );
+				if ( $live_order ) {
+					$filtered = [ $live_order ];
+				}
+			}
 		}
 
 		usort( $filtered, function( $a, $b ) {
@@ -1012,7 +1115,8 @@ class Exacoat_TikTok_Client {
 
 	public static function rest_sync_orders( \WP_REST_Request $request ): \WP_REST_Response {
 		$days = (int) ( $request->get_param( 'days' ) ?: 15 );
-		$res = self::sync_orders( $days );
+		$limit = (int) ( $request->get_param( 'limit' ) ?: 100 );
+		$res = self::sync_orders( $days, $limit );
 		return rest_ensure_response( $res );
 	}
 

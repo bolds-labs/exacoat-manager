@@ -81,7 +81,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       description: 'The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.',
-      changelog: `### Version ${version}\n- Added server-side courier filtering in get_orders REST handler across shipping order items and carrier metadata\n- Synchronized pagination and total counts for filtered order queries\n- Updated 4x6 shipping label button to display amber when unprinted and normal grey when printed\n- Restricted shop manager role permissions to orders management only`,
+      changelog: `### Version ${version}\n- Fixed PHP fatal error in manual warranty and redeem claim creation\n- Added timespan RMA analytics with Warranty and Redeem breakdowns across channels\n- Separated Warranty and Redeem claims into dedicated tabs\n- Expanded Shopee and TikTok synchronization limits up to 250 orders, cache retention up to 1,000, and live on-demand order lookups`,
     },
   };
 

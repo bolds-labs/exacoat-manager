@@ -1348,7 +1348,7 @@ class Exacoat_Warranty_Manager {
 			if ( 'existing_order' === $source_type ) {
 				$parent_order_id = absint( $request->get_param( 'parent_order_id' ) );
 				$parent_order    = wc_get_order( $parent_order_id );
-				if ( ! parent_order ) {
+				if ( ! $parent_order ) {
 					return new \WP_REST_Response( [
 						'success' => false,
 						'message' => 'Original order not found.',
@@ -2214,6 +2214,46 @@ class Exacoat_Warranty_Manager {
 			'waived_count'   => 0,
 		];
 
+		$now_ts        = current_time( 'timestamp' );
+		$today_start   = strtotime( 'today midnight', $now_ts );
+		$week_start    = strtotime( 'monday this week', $now_ts );
+		$month_start   = strtotime( 'first day of this month 00:00:00', $now_ts );
+		$days_30_start = $now_ts - ( 30 * 86400 );
+
+		$init_period = function() {
+			return [
+				'warranty' => [
+					'total'    => 0,
+					'pending'  => 0,
+					'approved' => 0,
+					'rejected' => 0,
+					'channels' => [ 'web' => 0, 'shopee' => 0, 'tiktok' => 0, 'other' => 0 ],
+				],
+				'redeem'   => [
+					'total'    => 0,
+					'pending'  => 0,
+					'approved' => 0,
+					'rejected' => 0,
+					'channels' => [ 'web' => 0, 'shopee' => 0, 'tiktok' => 0, 'other' => 0 ],
+				],
+				'channel_totals' => [
+					'web'    => 0,
+					'shopee' => 0,
+					'tiktok' => 0,
+					'other'  => 0,
+					'total'  => 0,
+				],
+			];
+		};
+
+		$analytics = [
+			'today'        => $init_period(),
+			'this_week'    => $init_period(),
+			'this_month'   => $init_period(),
+			'last_30_days' => $init_period(),
+			'all_time'     => $init_period(),
+		];
+
 		$all_rma = self::query_order_ids_by_meta( [
 			[
 				'key'     => '_rma_order_type',
@@ -2229,9 +2269,21 @@ class Exacoat_Warranty_Manager {
 				if ( ! $rma_order ) {
 					continue;
 				}
-				$o_type = $rma_order->get_meta( '_rma_order_type' ) ?: 'Warranty';
-				$o_stat = $rma_order->get_meta( '_rma_status' );
-				$o_ship = (float) $rma_order->get_shipping_total();
+				$o_type   = $rma_order->get_meta( '_rma_order_type' ) ?: 'Warranty';
+				$o_stat   = $rma_order->get_meta( '_rma_status' );
+				$o_ship   = (float) $rma_order->get_shipping_total();
+				$order_ts = $rma_order->get_date_created() ? $rma_order->get_date_created()->getTimestamp() : 0;
+
+				$raw_chan = strtolower( (string) $rma_order->get_meta( '_rma_marketplace_channel' ) );
+				if ( str_contains( $raw_chan, 'shopee' ) ) {
+					$chan_key = 'shopee';
+				} elseif ( str_contains( $raw_chan, 'tiktok' ) ) {
+					$chan_key = 'tiktok';
+				} elseif ( empty( $raw_chan ) || 'web' === $raw_chan ) {
+					$chan_key = 'web';
+				} else {
+					$chan_key = 'other';
+				}
 
 				if ( 'Redeem' === $o_type ) {
 					$stats['redeem_count']++;
@@ -2250,6 +2302,23 @@ class Exacoat_Warranty_Manager {
 				} else {
 					$stats['pending_count']++;
 				}
+
+				$type_key = ( 'Redeem' === $o_type ) ? 'redeem' : 'warranty';
+				$stat_key = ( 'approved' === $o_stat ) ? 'approved' : ( ( 'rejected' === $o_stat ) ? 'rejected' : 'pending' );
+
+				$periods_to_update = [ 'all_time' ];
+				if ( $order_ts >= $today_start )   $periods_to_update[] = 'today';
+				if ( $order_ts >= $week_start )    $periods_to_update[] = 'this_week';
+				if ( $order_ts >= $month_start )   $periods_to_update[] = 'this_month';
+				if ( $order_ts >= $days_30_start ) $periods_to_update[] = 'last_30_days';
+
+				foreach ( $periods_to_update as $p_key ) {
+					$analytics[ $p_key ][ $type_key ]['total']++;
+					$analytics[ $p_key ][ $type_key ][ $stat_key ]++;
+					$analytics[ $p_key ][ $type_key ]['channels'][ $chan_key ]++;
+					$analytics[ $p_key ]['channel_totals'][ $chan_key ]++;
+					$analytics[ $p_key ]['channel_totals']['total']++;
+				}
 			}
 		}
 
@@ -2257,6 +2326,7 @@ class Exacoat_Warranty_Manager {
 			'success'    => true,
 			'claims'     => $claims,
 			'stats'      => $stats,
+			'analytics'  => $analytics,
 			'pagination' => [
 				'page'        => $page,
 				'per_page'    => $per_page,

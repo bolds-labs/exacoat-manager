@@ -3123,10 +3123,40 @@ export interface RmaClaimsStats {
   waived_count: number;
 }
 
+export interface RmaChannelCounts {
+  web: number;
+  shopee: number;
+  tiktok: number;
+  other: number;
+}
+
+export interface RmaTypeAnalytics {
+  total: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+  channels: RmaChannelCounts;
+}
+
+export interface RmaPeriodMetrics {
+  warranty: RmaTypeAnalytics;
+  redeem: RmaTypeAnalytics;
+  channel_totals: RmaChannelCounts & { total: number };
+}
+
+export interface RmaAnalyticsData {
+  today: RmaPeriodMetrics;
+  this_week: RmaPeriodMetrics;
+  this_month: RmaPeriodMetrics;
+  last_30_days: RmaPeriodMetrics;
+  all_time: RmaPeriodMetrics;
+}
+
 export interface RmaClaimsLogResponse {
   success: boolean;
   claims: RmaClaimLogEntry[];
   stats: RmaClaimsStats;
+  analytics?: RmaAnalyticsData;
   pagination: {
     page: number;
     per_page: number;
@@ -3221,6 +3251,7 @@ export async function fetchRmaClaimsLogDirect(params?: {
           rejected_count: 0,
           waived_count: 0,
         },
+        analytics: data.analytics,
         pagination: data.pagination || {
           page: 1,
           per_page: 20,
@@ -3444,14 +3475,21 @@ export async function processGuaranteeActionDirect(
 // Shopee Open Platform API v2 Bridge
 // ==========================================
 
-export async function fetchShopeeOrdersDirect(): Promise<{
+export async function fetchShopeeOrdersDirect(params?: {
+  status?: string;
+  search?: string;
+}): Promise<{
   success: boolean;
   orders?: ShopeeOrder[];
   total?: number;
   error?: string;
 }> {
   const base = getWordPressBaseUrl();
-  const url = `${base}/wp-json/exacoat-core/v1/shopee/orders`;
+  const searchParams = new URLSearchParams();
+  if (params?.status) searchParams.set('status', params.status);
+  if (params?.search) searchParams.set('search', params.search);
+  const qs = searchParams.toString();
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/orders${qs ? '?' + qs : ''}`;
 
   try {
     const res = await authenticatedFetch(url, {
@@ -3474,10 +3512,11 @@ export async function fetchShopeeOrdersDirect(): Promise<{
   }
 }
 
-export async function syncShopeeOrdersDirect(): Promise<{
+export async function syncShopeeOrdersDirect(days = 15, limit = 100): Promise<{
   success: boolean;
   orders?: ShopeeOrder[];
   total_synced?: number;
+  total_cached?: number;
   synced_at?: string;
   error?: string;
 }> {
@@ -3491,13 +3530,15 @@ export async function syncShopeeOrdersDirect(): Promise<{
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
+      body: JSON.stringify({ days, limit }),
     });
     const data = await res.json();
     if (res.ok && data?.success) {
       return {
         success: true,
         orders: data.orders || [],
-        total_synced: data.total_synced || (data.orders || []).length,
+        total_synced: data.total_synced ?? (data.orders || []).length,
+        total_cached: data.total_cached ?? (data.orders || []).length,
         synced_at: data.synced_at,
       };
     }
@@ -3815,14 +3856,21 @@ export async function downloadShopeeShippingLabelDirect(order_sn: string): Promi
 // TikTok Shop Open Platform API Bridge
 // ==========================================
 
-export async function fetchTikTokOrdersDirect(): Promise<{
+export async function fetchTikTokOrdersDirect(params?: {
+  status?: string;
+  search?: string;
+}): Promise<{
   success: boolean;
   orders?: TikTokOrder[];
   total?: number;
   error?: string;
 }> {
   const base = getWordPressBaseUrl();
-  const url = `${base}/wp-json/exacoat-core/v1/tiktok/orders`;
+  const searchParams = new URLSearchParams();
+  if (params?.status) searchParams.set('status', params.status);
+  if (params?.search) searchParams.set('search', params.search);
+  const qs = searchParams.toString();
+  const url = `${base}/wp-json/exacoat-core/v1/tiktok/orders${qs ? '?' + qs : ''}`;
 
   try {
     const res = await authenticatedFetch(url, {
@@ -3845,10 +3893,11 @@ export async function fetchTikTokOrdersDirect(): Promise<{
   }
 }
 
-export async function syncTikTokOrdersDirect(days = 15): Promise<{
+export async function syncTikTokOrdersDirect(days = 15, limit = 100): Promise<{
   success: boolean;
   orders?: TikTokOrder[];
   total_synced?: number;
+  total_cached?: number;
   synced_at?: string;
   error?: string;
 }> {
@@ -3862,14 +3911,15 @@ export async function syncTikTokOrdersDirect(days = 15): Promise<{
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      body: JSON.stringify({ days }),
+      body: JSON.stringify({ days, limit }),
     });
     const data = await res.json();
     if (res.ok && data?.success) {
       return {
         success: true,
         orders: data.orders || [],
-        total_synced: data.total_synced || (data.orders || []).length,
+        total_synced: data.total_synced ?? (data.orders || []).length,
+        total_cached: data.total_cached ?? (data.orders || []).length,
         synced_at: data.synced_at,
       };
     }

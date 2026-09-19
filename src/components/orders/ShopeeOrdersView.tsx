@@ -99,6 +99,8 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   // Selection & Detail Modal state
   const [selectedSns, setSelectedSns] = useState<Set<string>>(new Set());
   const [selectedDetailOrder, setSelectedDetailOrder] = useState<ShopeeOrder | null>(null);
+  const [syncDays, setSyncDays] = useState<number>(30);
+  const [isLiveSearching, setIsLiveSearching] = useState(false);
 
   const [printedOrderSns, setPrintedOrderSns] = useState<Set<string>>(() => {
     try {
@@ -201,10 +203,10 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   }, [loadData]);
 
   // Sync directly from Shopee API
-  const handleSync = async () => {
+  const handleSync = async (days = syncDays) => {
     setIsSyncing(true);
     try {
-      const res = await syncShopeeOrdersDirect();
+      const res = await syncShopeeOrdersDirect(days, 200);
       if (res.success && Array.isArray(res.orders)) {
         if (res.orders.length > 0) {
           setOrders(res.orders);
@@ -212,13 +214,13 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
           showToast(
             'success',
             'Shopee Synced',
-            `Successfully synchronized ${res.total_synced || res.orders.length} orders from Shopee.`
+            `Successfully synchronized ${res.total_synced || res.orders.length} orders (${res.total_cached || res.orders.length} total orders in cache).`
           );
         } else {
           showToast(
             'info',
             'Shopee Sync',
-            '0 live orders found on Shopee shop. Preserving simulated sample orders for UI inspection.'
+            '0 live orders found on Shopee shop for selected range. Preserving cached orders.'
           );
         }
         loadData(true);
@@ -229,6 +231,29 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
       showToast('error', 'Shopee Sync Error', err.message);
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleLiveSearch = async () => {
+    const q = searchQuery.trim();
+    if (!q) return;
+    setIsLiveSearching(true);
+    try {
+      const res = await fetchShopeeOrdersDirect({ search: q });
+      if (res.success && res.orders && res.orders.length > 0) {
+        setOrders((prev) => {
+          const map = new Map(prev.map((o) => [o.order_sn, o]));
+          res.orders!.forEach((o) => map.set(o.order_sn, o));
+          return Array.from(map.values());
+        });
+        showToast('success', 'Order Found', `Found order #${q} directly from Shopee API.`);
+      } else {
+        showToast('info', 'Order Not Found', `No live order found on Shopee for "${q}".`);
+      }
+    } catch (err: any) {
+      showToast('error', 'Live Search Error', err.message);
+    } finally {
+      setIsLiveSearching(false);
     }
   };
 
@@ -505,6 +530,9 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
               <span className="text-[11px] text-neutral-400 font-mono">
                 Shop ID: {settings?.shop_id || 227918647}
               </span>
+              <span className="text-[11px] text-orange-400/90 font-mono">
+                • {orders.length} cached orders
+              </span>
             </div>
             <p className="text-xs text-neutral-400 mt-1">
               Shopee Indonesia store channel. Ingests orders, tracking numbers, and handles warranty claims with duplicate invoice checks.
@@ -528,15 +556,29 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={handleSync}
-            disabled={isSyncing || isLoading}
-            className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50 shadow-md shadow-orange-500/20"
-          >
-            <RefreshCw className={clsx('w-3.5 h-3.5', isSyncing && 'animate-spin')} />
-            <span>{isSyncing ? 'Syncing...' : 'Sync Shopee'}</span>
-          </button>
+          <div className="flex items-center rounded-xl bg-orange-500 overflow-hidden shadow-md shadow-orange-500/20">
+            <button
+              type="button"
+              onClick={() => handleSync(syncDays)}
+              disabled={isSyncing || isLoading}
+              className="px-3.5 py-2 hover:bg-orange-600 text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={clsx('w-3.5 h-3.5', isSyncing && 'animate-spin')} />
+              <span>{isSyncing ? 'Syncing...' : 'Sync Shopee'}</span>
+            </button>
+            <select
+              value={syncDays}
+              onChange={(e) => setSyncDays(Number(e.target.value))}
+              disabled={isSyncing}
+              className="bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold py-2 px-2 border-l border-orange-400/30 outline-none cursor-pointer"
+              title="Days of orders to fetch"
+            >
+              <option value={15}>15d</option>
+              <option value={30}>30d</option>
+              <option value={60}>60d</option>
+              <option value={90}>90d</option>
+            </select>
+          </div>
 
           <button
             type="button"
@@ -726,8 +768,19 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
           <Package className="w-8 h-8 text-neutral-600 mx-auto" />
           <p className="text-sm font-semibold text-neutral-300">No Shopee orders match this view</p>
           <p className="text-xs text-neutral-500">
-            {searchQuery ? 'Try clearing the search query.' : 'Sync orders from Shopee or adjust tab filter.'}
+            {searchQuery ? 'Try clearing the search query or query live from Shopee API.' : 'Sync orders from Shopee or adjust tab filter.'}
           </p>
+          {searchQuery.trim().length >= 6 && (
+            <button
+              type="button"
+              onClick={handleLiveSearch}
+              disabled={isLiveSearching}
+              className="mt-2 px-4 py-2 rounded-xl bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/40 text-xs font-semibold inline-flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <Search className={clsx('w-3.5 h-3.5', isLiveSearching && 'animate-spin')} />
+              <span>{isLiveSearching ? 'Searching Shopee API...' : `Search Live Shopee API for "${searchQuery.trim()}"`}</span>
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -1092,6 +1145,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
               onChange={(val) => handlePageSizeChange(Number(val))}
               dropUp={true}
               options={[
+                { value: '25', label: '25' },
                 { value: '50', label: '50' },
                 { value: '100', label: '100' },
                 { value: '200', label: '200' },

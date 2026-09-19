@@ -6,6 +6,7 @@ import {
   fetchRmaClaimsLogDirect,
   RmaClaimLogEntry,
   RmaClaimsStats,
+  RmaAnalyticsData,
   fetchGuaranteeClaimsDirect,
   GuaranteeClaimEntry,
   GuaranteeClaimsStats,
@@ -38,17 +39,21 @@ import {
   Copy,
   Check,
   CheckCheck,
+  BarChart2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
 export const RmaClaimsPage: React.FC = () => {
   const { showToast } = useToast();
 
-  // Active Tab: Replacements (Warranty & Redeem) vs 30-Day Guarantee Returns
-  const [activeTab, setActiveTab] = useState<'replacements' | 'guarantee'>('replacements');
+  // Active Tab: Warranty Claims vs Redeem Claims vs 30-Day Guarantee Returns
+  const [activeTab, setActiveTab] = useState<'warranty' | 'redeem' | 'guarantee'>('warranty');
 
-  // Filter States for Replacements
-  const [typeFilter, setTypeFilter] = useState<'all' | 'Warranty' | 'Redeem'>('all');
+  // Analytics State
+  const [analyticsData, setAnalyticsData] = useState<RmaAnalyticsData | null>(null);
+  const [analyticsPeriod, setAnalyticsPeriod] = useState<'this_month' | 'this_week' | 'today' | 'last_30_days' | 'all_time'>('this_month');
+
+  // Filter States for Warranty & Redeem
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending_review' | 'approved' | 'rejected'>('all');
   const [channelFilter, setChannelFilter] = useState<string>('all');
 
@@ -102,9 +107,10 @@ export const RmaClaimsPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      if (activeTab === 'replacements') {
+      if (activeTab === 'warranty' || activeTab === 'redeem') {
+        const claimType = activeTab === 'warranty' ? 'Warranty' : 'Redeem';
         const res = await fetchRmaClaimsLogDirect({
-          type: typeFilter,
+          type: claimType,
           status: statusFilter,
           channel: channelFilter,
           search: searchQuery.trim(),
@@ -116,6 +122,9 @@ export const RmaClaimsPage: React.FC = () => {
           setClaims(res.claims || []);
           if (res.stats) {
             setStats(res.stats);
+          }
+          if (res.analytics) {
+            setAnalyticsData(res.analytics);
           }
           if (res.pagination) {
             setTotalPages(res.pagination.total_pages || 1);
@@ -131,6 +140,15 @@ export const RmaClaimsPage: React.FC = () => {
           page,
           per_page: perPage,
         });
+
+        // Background fetch of RMA analytics if not loaded yet
+        if (!analyticsData) {
+          fetchRmaClaimsLogDirect({ per_page: 1 }).then((rmaRes) => {
+            if (rmaRes.success && rmaRes.analytics) {
+              setAnalyticsData(rmaRes.analytics);
+            }
+          }).catch(() => {});
+        }
 
         if (res.success) {
           // Strict Safeguard: Exclude regular orders from appearing in 30-day guarantee returns.
@@ -213,7 +231,7 @@ export const RmaClaimsPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [activeTab, typeFilter, statusFilter, channelFilter, guaranteeStatusFilter, searchQuery, page, perPage, showToast]);
+  }, [activeTab, statusFilter, channelFilter, guaranteeStatusFilter, searchQuery, page, perPage, showToast, analyticsData]);
 
   useEffect(() => {
     loadClaims();
@@ -282,7 +300,6 @@ export const RmaClaimsPage: React.FC = () => {
   };
 
   const handleResetFilters = () => {
-    setTypeFilter('all');
     setStatusFilter('all');
     setChannelFilter('all');
     setGuaranteeStatusFilter('all');
@@ -298,14 +315,26 @@ export const RmaClaimsPage: React.FC = () => {
         subtitle="Review, approve, and track warranty claims, fault redeems, and 30-day guarantee return submissions."
         actions={
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => handleOpenManualClaim('Warranty')}
-              className="px-3.5 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-            >
-              <Plus className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Manual Claim</span>
-            </button>
+            {activeTab === 'warranty' && (
+              <button
+                type="button"
+                onClick={() => handleOpenManualClaim('Warranty')}
+                className="px-3.5 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                <span>New Warranty Claim</span>
+              </button>
+            )}
+            {activeTab === 'redeem' && (
+              <button
+                type="button"
+                onClick={() => handleOpenManualClaim('Redeem')}
+                className="px-3.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5 text-amber-400" />
+                <span>New Redeem Claim</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={loadClaims}
@@ -319,32 +348,183 @@ export const RmaClaimsPage: React.FC = () => {
         }
       />
 
+      {/* RMA Timespan Analytics Dashboard */}
+      <GlassCard className="p-4 sm:p-5 rounded-2xl border-zinc-200 dark:border-white/[0.08] bg-white dark:bg-[#111111] space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-200 dark:border-white/[0.06]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
+              <BarChart2 className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white">RMA Claims Analytics</h3>
+              <p className="text-[11px] text-zinc-500 dark:text-neutral-400">
+                Performance breakdown for warranty claims, skin redeems, and channel volume.
+              </p>
+            </div>
+          </div>
+
+          {/* Timespan Selector */}
+          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-neutral-950 p-1 rounded-xl border border-zinc-200 dark:border-white/[0.08] self-start sm:self-auto flex-wrap">
+            {(
+              [
+                { id: 'today', label: 'Today' },
+                { id: 'this_week', label: 'This Week' },
+                { id: 'this_month', label: 'This Month' },
+                { id: 'last_30_days', label: 'Last 30 Days' },
+                { id: 'all_time', label: 'All Time' },
+              ] as const
+            ).map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setAnalyticsPeriod(t.id)}
+                className={clsx(
+                  'px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer',
+                  analyticsPeriod === t.id
+                    ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 font-bold shadow-xs'
+                    : 'text-zinc-600 dark:text-neutral-400 hover:text-zinc-900 dark:hover:text-white'
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Analytics Numbers Grid */}
+        {(() => {
+          const p = analyticsData?.[analyticsPeriod] || {
+            warranty: { total: 0, pending: 0, approved: 0, rejected: 0, channels: { web: 0, shopee: 0, tiktok: 0, other: 0 } },
+            redeem: { total: 0, pending: 0, approved: 0, rejected: 0, channels: { web: 0, shopee: 0, tiktok: 0, other: 0 } },
+            channel_totals: { web: 0, shopee: 0, tiktok: 0, other: 0, total: 0 },
+          };
+
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              {/* Card 1: Warranty Claims */}
+              <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-neutral-950/60 border border-zinc-200/80 dark:border-white/[0.05] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Warranty Claims</span>
+                  </span>
+                  <span className="text-lg font-bold font-mono text-zinc-900 dark:text-white">
+                    {p.warranty.total}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-[11px] pt-1 border-t border-zinc-200/60 dark:border-white/[0.04] text-zinc-500 dark:text-neutral-400 font-mono">
+                  <span className="text-emerald-500 font-medium">{p.warranty.approved} approved</span>
+                  <span>•</span>
+                  <span className="text-sky-500 font-medium">{p.warranty.pending} pending</span>
+                  <span>•</span>
+                  <span className="text-rose-500 font-medium">{p.warranty.rejected} rejected</span>
+                </div>
+              </div>
+
+              {/* Card 2: Redeem Claims */}
+              <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-neutral-950/60 border border-zinc-200/80 dark:border-white/[0.05] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Redeem Claims</span>
+                  </span>
+                  <span className="text-lg font-bold font-mono text-zinc-900 dark:text-white">
+                    {p.redeem.total}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-[11px] pt-1 border-t border-zinc-200/60 dark:border-white/[0.04] text-zinc-500 dark:text-neutral-400 font-mono">
+                  <span className="text-emerald-500 font-medium">{p.redeem.approved} approved</span>
+                  <span>•</span>
+                  <span className="text-sky-500 font-medium">{p.redeem.pending} pending</span>
+                  <span>•</span>
+                  <span className="text-rose-500 font-medium">{p.redeem.rejected} rejected</span>
+                </div>
+              </div>
+
+              {/* Card 3: Channel Breakdown */}
+              <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-neutral-950/60 border border-zinc-200/80 dark:border-white/[0.05] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-zinc-700 dark:text-neutral-200 flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-zinc-400" />
+                    <span>Channel Breakdown</span>
+                  </span>
+                  <span className="text-xs font-mono font-bold text-zinc-500 dark:text-neutral-400">
+                    Sum: {p.channel_totals.total}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-zinc-200/60 dark:border-white/[0.04] text-center font-mono">
+                  <div className="p-1.5 rounded-lg bg-zinc-100 dark:bg-white/[0.03]">
+                    <div className="text-[10px] text-zinc-500 dark:text-neutral-400">Web</div>
+                    <div className="text-xs font-bold text-zinc-900 dark:text-white">{p.channel_totals.web}</div>
+                  </div>
+                  <div className="p-1.5 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                    <div className="text-[10px] text-orange-500">Shopee</div>
+                    <div className="text-xs font-bold text-orange-400">{p.channel_totals.shopee}</div>
+                  </div>
+                  <div className="p-1.5 rounded-lg bg-sky-500/10 border border-sky-500/20">
+                    <div className="text-[10px] text-sky-500">TikTok</div>
+                    <div className="text-xs font-bold text-sky-400">{p.channel_totals.tiktok}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </GlassCard>
+
       {/* Module Mode Switcher Tabs */}
-      <div className="flex items-center gap-2 p-1 rounded-2xl bg-zinc-200/70 dark:bg-neutral-900/80 border border-zinc-300 dark:border-white/10 w-fit">
+      <div className="flex items-center gap-2 p-1 rounded-2xl bg-zinc-200/70 dark:bg-neutral-900/80 border border-zinc-300 dark:border-white/10 w-fit flex-wrap">
         <button
           type="button"
           onClick={() => {
-            setActiveTab('replacements');
+            setActiveTab('warranty');
             setPage(1);
           }}
           className={clsx(
             'px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer',
-            activeTab === 'replacements'
-              ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 font-bold shadow-xs'
+            activeTab === 'warranty'
+              ? 'bg-emerald-600 text-white font-bold shadow-xs'
               : 'text-zinc-600 dark:text-neutral-400 hover:text-zinc-900 dark:hover:text-white'
           )}
         >
-          <Layers className={clsx('w-3.5 h-3.5', activeTab === 'replacements' ? 'text-amber-500 dark:text-amber-600' : 'text-zinc-400')} />
+          <ShieldCheck className={clsx('w-3.5 h-3.5', activeTab === 'warranty' ? 'text-emerald-200' : 'text-emerald-500')} />
           <span>Warranty Claims</span>
           <span
             className={clsx(
               'text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold',
-              activeTab === 'replacements'
-                ? 'bg-zinc-800 text-white dark:bg-zinc-200 dark:text-zinc-950'
+              activeTab === 'warranty'
+                ? 'bg-emerald-800 text-white'
                 : 'bg-zinc-300 dark:bg-white/10 text-zinc-600 dark:text-neutral-400'
             )}
           >
-            {stats.total}
+            {stats.warranty_count}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('redeem');
+            setPage(1);
+          }}
+          className={clsx(
+            'px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer',
+            activeTab === 'redeem'
+              ? 'bg-amber-600 text-neutral-950 font-bold shadow-xs'
+              : 'text-zinc-600 dark:text-neutral-400 hover:text-zinc-900 dark:hover:text-white'
+          )}
+        >
+          <RotateCcw className={clsx('w-3.5 h-3.5', activeTab === 'redeem' ? 'text-neutral-950' : 'text-amber-500')} />
+          <span>Redeem Claims</span>
+          <span
+            className={clsx(
+              'text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold',
+              activeTab === 'redeem'
+                ? 'bg-amber-800 text-amber-100'
+                : 'bg-zinc-300 dark:bg-white/10 text-zinc-600 dark:text-neutral-400'
+            )}
+          >
+            {stats.redeem_count}
           </span>
         </button>
 
@@ -376,55 +556,57 @@ export const RmaClaimsPage: React.FC = () => {
         </button>
       </div>
 
-      {/* 1. Warranty Claims View */}
-      {activeTab === 'replacements' && (
+      {/* 1. Warranty Claims & Redeem Claims View */}
+      {(activeTab === 'warranty' || activeTab === 'redeem') && (
         <div className="space-y-4">
           {/* KPI Stat Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <GlassCard className="p-4 flex flex-col justify-between min-h-[90px]">
+            <GlassCard className={clsx('p-4 flex flex-col justify-between min-h-[90px]', activeTab === 'warranty' ? 'border-emerald-500/20' : 'border-amber-500/20')}>
               <span className="text-[11px] font-medium text-zinc-500 dark:text-neutral-400 uppercase tracking-wider font-mono">
-                Total Claims
+                {activeTab === 'warranty' ? 'Total Warranty' : 'Total Redeem'}
               </span>
-              <div className="text-2xl font-bold font-mono text-zinc-900 dark:text-white mt-1">{stats.total}</div>
-            </GlassCard>
-
-            <GlassCard className="p-4 flex flex-col justify-between min-h-[90px] border-emerald-500/20">
-              <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 uppercase tracking-wider font-mono flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3" />
-                <span>Warranty</span>
-              </span>
-              <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-300 mt-1">
-                {stats.warranty_count}
-              </div>
-            </GlassCard>
-
-            <GlassCard className="p-4 flex flex-col justify-between min-h-[90px] border-amber-500/20">
-              <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wider font-mono flex items-center gap-1">
-                <RotateCcw className="w-3 h-3" />
-                <span>Redeem</span>
-              </span>
-              <div className="text-2xl font-bold font-mono text-amber-600 dark:text-amber-300 mt-1">
-                {stats.redeem_count}
+              <div className="text-2xl font-bold font-mono text-zinc-900 dark:text-white mt-1">
+                {activeTab === 'warranty' ? stats.warranty_count : stats.redeem_count}
               </div>
             </GlassCard>
 
             <GlassCard className="p-4 flex flex-col justify-between min-h-[90px] border-sky-500/20">
               <span className="text-[11px] font-medium text-sky-600 dark:text-sky-400 uppercase tracking-wider font-mono flex items-center gap-1">
                 <Clock className="w-3 h-3" />
-                <span>Pending</span>
+                <span>Pending Review</span>
               </span>
               <div className="text-2xl font-bold font-mono text-sky-600 dark:text-sky-300 mt-1">
                 {stats.pending_count}
               </div>
             </GlassCard>
 
+            <GlassCard className="p-4 flex flex-col justify-between min-h-[90px] border-emerald-500/20">
+              <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 uppercase tracking-wider font-mono flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" />
+                <span>Approved</span>
+              </span>
+              <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-300 mt-1">
+                {stats.approved_count}
+              </div>
+            </GlassCard>
+
+            <GlassCard className="p-4 flex flex-col justify-between min-h-[90px] border-rose-500/20">
+              <span className="text-[11px] font-medium text-rose-600 dark:text-rose-400 uppercase tracking-wider font-mono flex items-center gap-1">
+                <XCircle className="w-3 h-3" />
+                <span>Rejected</span>
+              </span>
+              <div className="text-2xl font-bold font-mono text-rose-600 dark:text-rose-300 mt-1">
+                {stats.rejected_count}
+              </div>
+            </GlassCard>
+
             <GlassCard className="p-4 flex flex-col justify-between min-h-[90px]">
               <span className="text-[11px] font-medium text-zinc-500 dark:text-neutral-400 uppercase tracking-wider font-mono flex items-center gap-1">
                 <Truck className="w-3 h-3 text-zinc-400" />
-                <span>Free Shipping</span>
+                <span>{activeTab === 'warranty' ? 'Free Shipping' : 'Company Borne'}</span>
               </span>
               <div className="text-2xl font-bold font-mono text-zinc-900 dark:text-white mt-1">
-                {stats.waived_count}
+                {activeTab === 'warranty' ? stats.waived_count : stats.redeem_count}
               </div>
             </GlassCard>
           </div>
@@ -436,7 +618,7 @@ export const RmaClaimsPage: React.FC = () => {
                 <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Search order, invoice, customer, phone..."
+                  placeholder={`Search ${activeTab === 'warranty' ? 'warranty' : 'redeem'} claims, invoice, customer, phone...`}
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
@@ -445,32 +627,6 @@ export const RmaClaimsPage: React.FC = () => {
                   className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-neutral-950 border border-zinc-200 dark:border-white/[0.08] text-zinc-900 dark:text-white text-xs placeholder:text-zinc-500 focus:outline-none focus:border-amber-400"
                 />
               </div>
-            </div>
-
-            {/* Type Filter */}
-            <div className="flex items-center gap-1 bg-zinc-100 dark:bg-neutral-950 p-0.5 rounded-xl border border-zinc-200 dark:border-white/[0.08]">
-              {(['all', 'Warranty', 'Redeem'] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => {
-                    setTypeFilter(t);
-                    setPage(1);
-                  }}
-                  className={clsx(
-                    'px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer',
-                    typeFilter === t
-                      ? t === 'Redeem'
-                        ? 'bg-amber-500 text-neutral-950 font-bold'
-                        : t === 'Warranty'
-                        ? 'bg-emerald-500 text-neutral-950 font-bold'
-                        : 'bg-zinc-900 text-white dark:bg-white/20 dark:text-white font-bold'
-                      : 'text-zinc-600 dark:text-neutral-400 hover:text-zinc-900 dark:hover:text-white'
-                  )}
-                >
-                  {t === 'all' ? 'All Types' : t}
-                </button>
-              ))}
             </div>
 
             {/* Status Select */}
@@ -534,7 +690,9 @@ export const RmaClaimsPage: React.FC = () => {
                     <tr>
                       <td colSpan={8} className="py-16 text-center text-zinc-500 dark:text-neutral-400">
                         <Layers className="w-8 h-8 mx-auto mb-2 opacity-30 text-zinc-400" />
-                        <div className="font-semibold text-zinc-800 dark:text-neutral-300">No Warranty Claims Found</div>
+                        <div className="font-semibold text-zinc-800 dark:text-neutral-300">
+                          {activeTab === 'warranty' ? 'No Warranty Claims Found' : 'No Redeem Claims Found'}
+                        </div>
                         <div className="text-xs text-zinc-500 mt-1">No claims matching your filter or search query.</div>
                         <button
                           type="button"
