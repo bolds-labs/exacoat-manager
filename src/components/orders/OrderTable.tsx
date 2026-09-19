@@ -844,18 +844,6 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                       <td className="py-3.5 px-4 text-center">
                         <div className="flex flex-col items-center gap-1">
                           <Badge type="orderStatus" value={order.status} size="xs" />
-                          {getOrderRma(order)?.order_type === 'Redeem' && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30 whitespace-nowrap">
-                              <RotateCcw className="w-2.5 h-2.5 text-amber-400" />
-                              Redeem
-                            </span>
-                          )}
-                          {getOrderRma(order)?.order_type === 'Warranty' && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30 whitespace-nowrap">
-                              <ShieldCheck className="w-2.5 h-2.5" />
-                              Warranty Claim
-                            </span>
-                          )}
                           {isPickup && (
                             <span className="inline-flex items-center text-[9px] font-mono font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-1.5 py-0.5 rounded border border-[#f3aa18]/20 whitespace-nowrap">
                               Store Pickup (SMB)

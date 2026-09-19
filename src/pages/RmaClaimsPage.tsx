@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { PageHeroHeader } from '../components/ui/PageHeroHeader';
 import { GlassCard } from '../components/ui/GlassCard';
 import { useToast } from '../context/ToastContext';
@@ -52,6 +52,7 @@ export const RmaClaimsPage: React.FC = () => {
   // Analytics State
   const [analyticsData, setAnalyticsData] = useState<RmaAnalyticsData | null>(null);
   const [analyticsPeriod, setAnalyticsPeriod] = useState<'this_month' | 'this_week' | 'today' | 'last_30_days' | 'all_time'>('this_month');
+  const analyticsFetchedRef = useRef(false);
 
   // Filter States for Warranty & Redeem
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending_review' | 'approved' | 'rejected'>('all');
@@ -142,7 +143,8 @@ export const RmaClaimsPage: React.FC = () => {
         });
 
         // Background fetch of RMA analytics if not loaded yet
-        if (!analyticsData) {
+        if (!analyticsFetchedRef.current) {
+          analyticsFetchedRef.current = true;
           fetchRmaClaimsLogDirect({ per_page: 1 }).then((rmaRes) => {
             if (rmaRes.success && rmaRes.analytics) {
               setAnalyticsData(rmaRes.analytics);
@@ -231,7 +233,7 @@ export const RmaClaimsPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [activeTab, statusFilter, channelFilter, guaranteeStatusFilter, searchQuery, page, perPage, showToast, analyticsData]);
+  }, [activeTab, statusFilter, channelFilter, guaranteeStatusFilter, searchQuery, page, perPage, showToast]);
 
   useEffect(() => {
     loadClaims();

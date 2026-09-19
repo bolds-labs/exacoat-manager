@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.61] - 2026-09-20
+
+### Order List Status Column Streamlining & RMA Claims Infinite Loop Fix
+- **Order List Status Column Cleanup**:
+  - Removed redundant "Redeem" and "Warranty Claim" badges from the Status column in `OrderTable`, as these badges are already clearly displayed in the primary Order Number column.
+  - Keeps the Status column strictly focused on actual order fulfillment states (e.g. processing, completed, cancelled, store pickup).
+- **RMA & Redeem Claims Re-render Loop Fix**:
+  - Resolved infinite re-fetch and loading spinner flicker on `RmaClaimsPage`.
+  - Root cause: `analyticsData` state was included in the `loadClaims` callback dependency array; setting analytics data on each fetch recreated `loadClaims` and immediately triggered another fetch cycle.
+  - Decoupled `analyticsData` from `loadClaims` dependencies and introduced `analyticsFetchedRef` to track one-time background analytics loading.
+
+---
+
 ## [0.0.60] - 2026-09-20
 
 ### Marketplace SLA Deadline Guarding & Hourly Courier Time Slots
