@@ -151,10 +151,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       title: 'Workspace',
       items: [
-        { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { key: 'orders', label: 'Orders', icon: ShoppingBag },
-        { key: 'configurator', label: 'Configurator Studio', icon: Sliders },
-        { key: 'materials', label: 'Materials & Stock', icon: Layers },
       ]
     }
   ];

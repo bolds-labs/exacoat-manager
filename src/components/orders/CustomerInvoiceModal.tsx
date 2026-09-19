@@ -244,7 +244,6 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
           <div class="header-row">
             <div>
               <img src="${EXACOAT_LOGO_BASE64}" alt="EXACOAT" style="height: 22px; max-width: 140px; object-fit: contain; display: block; margin-bottom: 6px;" />
-              <div class="brand-sub">Exacoat &bull; Premium Custom Device Skins & Protection</div>
               <div class="brand-sub">support@exacoat.com &bull; https://exacoat.com</div>
             </div>
             <div>
@@ -258,22 +257,13 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
             </div>
           </div>
 
-          <!-- Billing & Shipping Information -->
-          <div class="grid-2">
-            <div class="grid-col">
-              <div class="col-label">BILLED TO</div>
-              <div class="col-name">${customerName}</div>
-              <div class="col-text">Email: ${customerEmail}</div>
-              <div class="col-text">Tel: ${customerPhone}</div>
-              <div class="col-text" style="margin-top: 4px;">${billingAddress.join('<br />')}</div>
-            </div>
-            <div class="grid-col">
-              <div class="col-label">SHIPPED TO</div>
-              <div class="col-name">${customerName}</div>
-              <div class="col-text">Tel: ${customerPhone}</div>
-              <div class="col-text" style="margin-top: 4px;">${shippingAddress.join('<br />')}</div>
-              ${order.tracking?.courier ? `<div class="col-text" style="margin-top: 4px; font-weight: 700;">Carrier: ${order.tracking.courier}</div>` : ''}
-            </div>
+          <!-- Customer & Delivery Details -->
+          <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px 16px; margin-bottom: 20px;">
+            <div class="col-label">CUSTOMER &amp; DELIVERY DETAILS</div>
+            <div class="col-name">${customerName}</div>
+            <div class="col-text">Email: ${customerEmail} &bull; Tel: ${customerPhone}</div>
+            <div class="col-text" style="margin-top: 4px;">${(shippingAddress.length > 0 ? shippingAddress : billingAddress).join('<br />')}</div>
+            ${order.tracking?.courier ? `<div class="col-text" style="margin-top: 4px; font-weight: 700;">Carrier: ${order.tracking.courier}</div>` : ''}
           </div>
 
           <!-- Line Items Table -->
@@ -328,7 +318,7 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
           <!-- Footer & Support -->
           <div class="footer-note">
             <div>
-              <span>Thank you for choosing Exacoat precision skins.</span>
+              <span>Thank you for your order.</span>
             </div>
             <div>
               <span>Authorized Official Electronic Receipt</span>
@@ -399,7 +389,6 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
           <div className="flex items-start justify-between border-b-2 border-black pb-4 mb-4">
             <div>
               <img src={EXACOAT_LOGO_BASE64} alt="EXACOAT" className="h-6 max-w-[140px] object-contain block mb-1" />
-              <p className="text-[11px] text-neutral-600 font-medium">Exacoat &bull; Premium Custom Device Skins & Protection</p>
               <p className="text-[10px] text-neutral-500 font-mono">support@exacoat.com &bull; https://exacoat.com</p>
             </div>
             <div className="text-right">
@@ -412,39 +401,25 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
             </div>
           </div>
 
-          {/* Billing & Shipping Details Grid */}
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div className="p-3 rounded-lg bg-neutral-50 border border-neutral-200">
-              <span className="text-[9px] font-black uppercase text-neutral-500 tracking-wider block mb-1">
-                BILLED TO
-              </span>
-              <p className="font-extrabold text-xs text-black">{customerName}</p>
-              <p className="text-[11px] text-neutral-700">{customerEmail}</p>
-              <p className="text-[11px] text-neutral-700">{customerPhone}</p>
-              <div className="text-[10.5px] text-neutral-600 mt-1 leading-snug">
-                {billingAddress.map((line, i) => (
-                  <span key={i} className="block">{line}</span>
-                ))}
-              </div>
+          {/* Customer & Delivery Details */}
+          <div className="p-3.5 rounded-lg bg-neutral-50 border border-neutral-200 mb-4">
+            <span className="text-[9px] font-black uppercase text-neutral-500 tracking-wider block mb-1">
+              CUSTOMER &amp; DELIVERY DETAILS
+            </span>
+            <p className="font-extrabold text-xs text-black">{customerName}</p>
+            <p className="text-[11px] text-neutral-700 font-mono mt-0.5">
+              Email: {customerEmail} &bull; Tel: {customerPhone}
+            </p>
+            <div className="text-[10.5px] text-neutral-600 mt-1 leading-snug">
+              {(shippingAddress.length > 0 ? shippingAddress : billingAddress).map((line, i) => (
+                <span key={i} className="block">{line}</span>
+              ))}
             </div>
-
-            <div className="p-3 rounded-lg bg-neutral-50 border border-neutral-200">
-              <span className="text-[9px] font-black uppercase text-neutral-500 tracking-wider block mb-1">
-                SHIPPED TO
-              </span>
-              <p className="font-extrabold text-xs text-black">{customerName}</p>
-              <p className="text-[11px] text-neutral-700">{customerPhone}</p>
-              <div className="text-[10.5px] text-neutral-600 mt-1 leading-snug">
-                {shippingAddress.map((line, i) => (
-                  <span key={i} className="block">{line}</span>
-                ))}
-              </div>
-              {order.tracking?.courier && (
-                <p className="text-[10.5px] font-bold text-neutral-900 mt-1.5">
-                  Courier: {order.tracking.courier}
-                </p>
-              )}
-            </div>
+            {order.tracking?.courier && (
+              <p className="text-[10.5px] font-bold text-neutral-900 mt-1.5">
+                Courier: {order.tracking.courier}
+              </p>
+            )}
           </div>
 
           {/* Line Items Table */}
@@ -520,7 +495,7 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
 
           {/* Footer Note */}
           <div className="border-t border-neutral-200 pt-3 flex items-center justify-between text-[9.5px] text-neutral-500">
-            <span>Thank you for choosing Exacoat precision skins.</span>
+            <span>Thank you for your order.</span>
             <span>Electronic Tax Receipt</span>
           </div>
 

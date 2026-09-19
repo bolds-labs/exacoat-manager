@@ -190,6 +190,7 @@ class Exacoat_Order_Manager {
 
 			$status   = sanitize_text_field( $request->get_param( 'status' ) ?: 'any' );
 			$search   = sanitize_text_field( $request->get_param( 'search' ) ?: '' );
+			$courier  = sanitize_text_field( $request->get_param( 'courier' ) ?: '' );
 			$page     = max( 1, intval( $request->get_param( 'page' ) ?: 1 ) );
 			$per_page = max( 1, min( 250, intval( $request->get_param( 'per_page' ) ?: 50 ) ) );
 
@@ -203,7 +204,100 @@ class Exacoat_Order_Manager {
 
 			if ( 'any' !== $status && ! empty( $status ) ) {
 				$clean_status = str_replace( 'wc-', '', $status );
-				$args['status'] = $clean_status;
+				if ( 'ready-to-ship' === $clean_status ) {
+					$args['status'] = [ 'ready-to-ship', 'awaiting-pickup', 'smb-ready' ];
+				} elseif ( 'preparing-order' === $clean_status ) {
+					$args['status'] = [ 'preparing-order', 'in-production' ];
+				} elseif ( 'store-pickup' === $clean_status ) {
+					$args['status'] = [ 'smb-ready', 'smb-picked' ];
+				} elseif ( 'on-hold' === $clean_status ) {
+					$args['status'] = [ 'on-hold', 'pending' ];
+				} elseif ( 'warranty' === $clean_status ) {
+					$args['meta_key'] = '_is_warranty_claim';
+					$args['meta_value'] = 'yes';
+				} elseif ( 'redeem' === $clean_status ) {
+					$args['meta_key'] = '_is_redeem_claim';
+					$args['meta_value'] = 'yes';
+				} else {
+					$args['status'] = $clean_status;
+				}
+			}
+
+			if ( ! empty( $courier ) && 'all' !== strtolower( $courier ) ) {
+				global $wpdb;
+				$courier_raw = strtolower( trim( $courier ) );
+
+				if ( in_array( $courier_raw, [ 'pickup', 'store-pickup', 'store pickup', 'smb' ], true ) ) {
+					$pickup_order_ids = $wpdb->get_col(
+						"SELECT DISTINCT order_id FROM {$wpdb->prefix}woocommerce_order_items 
+						 WHERE order_item_type = 'shipping' 
+						   AND (order_item_name LIKE '%pickup%' OR order_item_name LIKE '%smb%' OR order_item_name LIKE '%ambil%')"
+					);
+					$matched_ids = array_unique( array_filter( array_map( 'intval', $pickup_order_ids ?: [] ) ) );
+				} else {
+					$courier_map = [
+						'pos'      => 'pos',
+						'jne'      => 'jne',
+						'sicepat'  => 'sicepat',
+						'goorita'  => 'goorita',
+						'dhl'      => 'dhl',
+						'fedex'    => 'fedex',
+						'lion'     => 'lion',
+						'jnt'      => 'j&t',
+						'biteship' => 'biteship',
+					];
+
+					$keyword = $courier_raw;
+					foreach ( $courier_map as $k => $term ) {
+						if ( false !== strpos( $courier_raw, $k ) ) {
+							$keyword = $term;
+							break;
+						}
+					}
+
+					$like_keyword = '%' . $wpdb->esc_like( $keyword ) . '%';
+					$like_raw     = '%' . $wpdb->esc_like( $courier_raw ) . '%';
+
+					// 1. Check shipping method in woocommerce_order_items
+					$shipping_order_ids = $wpdb->get_col( $wpdb->prepare(
+						"SELECT DISTINCT order_id FROM {$wpdb->prefix}woocommerce_order_items 
+						 WHERE order_item_type = 'shipping' 
+						   AND (order_item_name LIKE %s OR order_item_name LIKE %s)",
+						$like_keyword,
+						$like_raw
+					) );
+
+					// 2. Check carrier metadata in postmeta or HPOS wc_orders_meta
+					$meta_table = $wpdb->postmeta;
+					$meta_id_col = 'post_id';
+					$hpos_table = "{$wpdb->prefix}wc_orders_meta";
+					if ( $wpdb->get_var( "SHOW TABLES LIKE '{$hpos_table}'" ) === $hpos_table ) {
+						$meta_table = $hpos_table;
+						$meta_id_col = 'order_id';
+					}
+
+					$meta_order_ids = $wpdb->get_col( $wpdb->prepare(
+						"SELECT DISTINCT {$meta_id_col} FROM {$meta_table} 
+						 WHERE (meta_key IN ('carrier_id', '_tracking_provider', '_ywot_carrier_id', 'tracking_courier') AND (meta_value LIKE %s OR meta_value LIKE %s))
+						    OR (meta_key = '_artmatter_tracking_info' AND (meta_value LIKE %s OR meta_value LIKE %s))",
+						$like_keyword,
+						$like_raw,
+						$like_keyword,
+						$like_raw
+					) );
+
+					$matched_ids = array_unique( array_filter( array_merge( 
+						array_map( 'intval', $shipping_order_ids ?: [] ), 
+						array_map( 'intval', $meta_order_ids ?: [] ) 
+					) ) );
+				}
+
+				if ( empty( $matched_ids ) ) {
+					$args['post__in'] = [ 0 ];
+					$args['include']  = [ 0 ];
+				} else {
+					$args['include'] = $matched_ids;
+				}
 			}
 
 			if ( ! empty( $search ) ) {

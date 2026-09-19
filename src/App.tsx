@@ -76,15 +76,33 @@ export const App: React.FC = () => {
   const { user, isLoading: isAuthLoading } = useAuth();
   const { showToast } = useToast();
 
-  const [currentTab, setCurrentTab] = useState<NavItemKey>(getTabFromUrl());
+  const isShopManager = user?.role === 'shop_manager';
+  const [currentTab, setCurrentTab] = useState<NavItemKey>(() => {
+    const tabFromUrl = getTabFromUrl();
+    return tabFromUrl;
+  });
   const [orders, setOrders] = useState<Order[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Keep shop_manager strictly locked to orders
+  useEffect(() => {
+    if (isShopManager && currentTab !== 'orders') {
+      setCurrentTab('orders');
+      if (window.location.hash !== '#orders') {
+        window.history.replaceState(null, '', '#orders');
+      }
+    }
+  }, [isShopManager, currentTab]);
+
   // Sync tab with URL hash
   useEffect(() => {
     const handlePopState = () => {
+      if (user?.role === 'shop_manager') {
+        setCurrentTab('orders');
+        return;
+      }
       setCurrentTab(getTabFromUrl());
     };
     window.addEventListener('popstate', handlePopState);
@@ -93,7 +111,7 @@ export const App: React.FC = () => {
       window.removeEventListener('popstate', handlePopState);
       window.removeEventListener('hashchange', handlePopState);
     };
-  }, []);
+  }, [user?.role]);
 
   // Listen for marketplace OAuth callback params (?code=...&shop_id=...)
   useEffect(() => {
@@ -130,9 +148,12 @@ export const App: React.FC = () => {
   }, [showToast]);
 
   const handleTabChange = useCallback((tab: NavItemKey) => {
+    if (user?.role === 'shop_manager' && tab !== 'orders') {
+      return;
+    }
     setCurrentTab(tab);
     window.location.hash = `#${tab}`;
-  }, []);
+  }, [user?.role]);
 
   // Load store orders and audit logs
   const loadWorkspaceData = useCallback(async (quiet = false) => {
@@ -186,6 +207,9 @@ export const App: React.FC = () => {
   };
 
   const renderActiveTab = () => {
+    if (user?.role === 'shop_manager') {
+      return <OrdersView />;
+    }
     switch (currentTab) {
       case 'dashboard':
         return (

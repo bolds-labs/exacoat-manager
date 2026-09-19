@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Order, getOrderRma } from '../../types';
 import { Badge } from '../ui/Badge';
 import { GlassCard } from '../ui/GlassCard';
@@ -40,6 +40,12 @@ export interface OrderTableProps {
   pageSize?: number;
   onPageChange?: (page: number) => void;
   onPageSizeChange?: (size: number) => void;
+  statusFilter?: string;
+  onStatusFilterChange?: (status: string) => void;
+  courierFilter?: string;
+  onCourierFilterChange?: (courier: string) => void;
+  searchQuery?: string;
+  onSearchQueryChange?: (query: string) => void;
 }
 
 export const OrderTable: React.FC<OrderTableProps> = ({
@@ -54,13 +60,62 @@ export const OrderTable: React.FC<OrderTableProps> = ({
   pageSize = 50,
   onPageChange,
   onPageSizeChange,
+  statusFilter: propStatusFilter,
+  onStatusFilterChange,
+  courierFilter: propCourierFilter,
+  onCourierFilterChange,
+  searchQuery: propSearchQuery,
+  onSearchQueryChange,
 }) => {
   const { showToast } = useToast();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [courierFilter, setCourierFilter] = useState('all');
+  const [internalSearch, setInternalSearch] = useState(propSearchQuery ?? '');
+  const [internalStatus, setInternalStatus] = useState('all');
+  const [internalCourier, setInternalCourier] = useState('all');
   const [printFilter, setPrintFilter] = useState<'all' | 'printed' | 'unprinted'>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const activeStatus = propStatusFilter !== undefined ? propStatusFilter : internalStatus;
+  const activeCourier = propCourierFilter !== undefined ? propCourierFilter : internalCourier;
+  const activeSearch = propSearchQuery !== undefined ? propSearchQuery : internalSearch;
+
+  // Sync propSearchQuery changes to internalSearch
+  useEffect(() => {
+    if (propSearchQuery !== undefined) {
+      setInternalSearch(propSearchQuery);
+    }
+  }, [propSearchQuery]);
+
+  // Debounced search trigger for server-side search
+  useEffect(() => {
+    if (onSearchQueryChange) {
+      const handler = setTimeout(() => {
+        if (internalSearch !== (propSearchQuery ?? '')) {
+          onSearchQueryChange(internalSearch);
+        }
+      }, 350);
+      return () => clearTimeout(handler);
+    }
+  }, [internalSearch, onSearchQueryChange, propSearchQuery]);
+
+  const handleStatusChange = (status: string) => {
+    if (onStatusFilterChange) {
+      onStatusFilterChange(status);
+    } else {
+      setInternalStatus(status);
+    }
+  };
+
+  const handleCourierChange = (courier: string) => {
+    if (onCourierFilterChange) {
+      onCourierFilterChange(courier);
+    } else {
+      setInternalCourier(courier);
+    }
+  };
+
+  const handleSearchChange = (query: string) => {
+    setInternalSearch(query);
+  };
 
   // Printed tracking state
   const [printedOrderIds, setPrintedOrderIds] = useState<Set<number>>(() => {
@@ -71,6 +126,22 @@ export const OrderTable: React.FC<OrderTableProps> = ({
       return new Set();
     }
   });
+
+  // Listen to cross-component print events
+  useEffect(() => {
+    const handlePrintedEvent = (e: any) => {
+      const ids = e?.detail?.orderIds;
+      if (Array.isArray(ids) && ids.length > 0) {
+        setPrintedOrderIds((prev) => {
+          const next = new Set(prev);
+          ids.forEach((id: number) => next.add(id));
+          return next;
+        });
+      }
+    };
+    window.addEventListener('exacoat_order_printed', handlePrintedEvent);
+    return () => window.removeEventListener('exacoat_order_printed', handlePrintedEvent);
+  }, []);
 
   const markOrderPrinted = (orderId: number) => {
     setPrintedOrderIds((prev) => {
@@ -158,10 +229,23 @@ export const OrderTable: React.FC<OrderTableProps> = ({
 
   const availableCouriers = useMemo(() => {
     const map = new Map<string, string>();
+    // Default preset couriers so standard carriers are always selectable
+    const presets = [
+      { key: 'JNE', name: 'JNE Express' },
+      { key: 'POS INDONESIA', name: 'POS Indonesia' },
+      { key: 'GOORITA', name: 'Goorita' },
+      { key: 'LION PARCEL', name: 'Lion Parcel' },
+      { key: 'SICEPAT', name: 'SiCepat' },
+      { key: 'J&T', name: 'J&T Express' },
+      { key: 'ANTERAJA', name: 'Anteraja' },
+      { key: 'PAXEL', name: 'Paxel' },
+    ];
+    presets.forEach((p) => map.set(p.key, p.name));
+
     orders.forEach((o) => {
       const raw = String(o.tracking?.courier || (o as any).shipping_lines?.[0]?.method_title || o.shipping_method_name || '').trim();
       if (!raw) return;
-      const clean = raw.replace(/[-–—:].*$/, '').trim();
+      const clean = raw.split('-')[0].split(':')[0].trim();
       if (clean && !clean.startsWith('field_') && clean.toUpperCase() !== 'UNKNOWN') {
         const key = clean.toUpperCase();
         if (!map.has(key)) {
@@ -176,50 +260,50 @@ export const OrderTable: React.FC<OrderTableProps> = ({
 
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
-      // Status filter
-      if (statusFilter !== 'all') {
-        if (statusFilter === 'warranty') {
+      // If parent didn't handle status filtering on server, filter client-side:
+      if (!onStatusFilterChange && activeStatus !== 'all') {
+        if (activeStatus === 'warranty') {
           const rma = getOrderRma(order);
           if (rma?.order_type !== 'Warranty') return false;
-        } else if (statusFilter === 'redeem') {
+        } else if (activeStatus === 'redeem') {
           const rma = getOrderRma(order);
           if (rma?.order_type !== 'Redeem') return false;
         } else {
           const cleanStatus = String(order.status || '').replace('wc-', '').toLowerCase();
-          if (statusFilter === 'store-pickup') {
+          if (activeStatus === 'store-pickup') {
             if (!isStorePickupOrder(order)) return false;
-          } else if (statusFilter === 'ready-to-ship') {
+          } else if (activeStatus === 'ready-to-ship') {
             if (!['ready-to-ship', 'ready_to_ship', 'awaiting-pickup', 'awaiting_pickup', 'smb-ready'].includes(cleanStatus)) return false;
-          } else if (statusFilter === 'preparing-order') {
+          } else if (activeStatus === 'preparing-order') {
             if (!['preparing-order', 'preparing_order', 'in-production', 'in_production'].includes(cleanStatus)) return false;
-          } else if (statusFilter === 'on-hold') {
+          } else if (activeStatus === 'on-hold') {
             if (!['on-hold', 'pending-payment', 'pending'].includes(cleanStatus)) return false;
-          } else if (cleanStatus !== statusFilter) {
+          } else if (cleanStatus !== activeStatus) {
             return false;
           }
         }
       }
 
-      // Courier filter
-      if (courierFilter !== 'all') {
+      // If parent didn't handle courier filtering on server, filter client-side:
+      if (!onCourierFilterChange && activeCourier !== 'all') {
         const orderCourier = String(order.tracking?.courier || (order as any).shipping_lines?.[0]?.method_title || order.shipping_method_name || '').toUpperCase();
-        if (courierFilter === 'PICKUP') {
+        if (activeCourier === 'PICKUP') {
           if (!isStorePickupOrder(order)) return false;
-        } else if (!orderCourier.includes(courierFilter)) {
+        } else if (!orderCourier.includes(activeCourier)) {
           return false;
         }
       }
 
-      // Print status filter
+      // Print status filter is ALWAYS evaluated client-side based on printedOrderIds
       if (printFilter !== 'all') {
         const isPrinted = printedOrderIds.has(order.id);
         if (printFilter === 'printed' && !isPrinted) return false;
         if (printFilter === 'unprinted' && isPrinted) return false;
       }
 
-      // Text query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
+      // If parent didn't handle search on server, or while user is typing before debounce:
+      if (!onSearchQueryChange && internalSearch.trim()) {
+        const q = internalSearch.toLowerCase().trim();
         const num = String(order.order_number || order.id || '').toLowerCase();
         const custName = String(order.customer_name || '').toLowerCase();
         const custEmail = String(order.customer_email || '').toLowerCase();
@@ -239,7 +323,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
       }
       return true;
     });
-  }, [orders, statusFilter, courierFilter, printFilter, printedOrderIds, searchQuery]);
+  }, [orders, activeStatus, activeCourier, printFilter, printedOrderIds, internalSearch, onStatusFilterChange, onCourierFilterChange, onSearchQueryChange]);
 
   // Selection handlers
   const isAllSelected = filteredOrders.length > 0 && filteredOrders.every((o) => selectedIds.has(o.id));
@@ -384,10 +468,10 @@ export const OrderTable: React.FC<OrderTableProps> = ({
             <button
               key={tab.key}
               type="button"
-              onClick={() => setStatusFilter(tab.key)}
+              onClick={() => handleStatusChange(tab.key)}
               className={clsx(
                 'px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer border flex items-center gap-1.5',
-                statusFilter === tab.key
+                activeStatus === tab.key
                   ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 border-zinc-900 dark:border-white shadow-xs'
                   : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-transparent'
               )}
@@ -397,7 +481,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                 <span
                   className={clsx(
                     'px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold',
-                    statusFilter === tab.key
+                    activeStatus === tab.key
                       ? tab.key === 'redeem'
                         ? 'bg-amber-500 text-black font-extrabold'
                         : 'bg-white/20 text-white dark:bg-black/20 dark:text-black'
@@ -419,8 +503,8 @@ export const OrderTable: React.FC<OrderTableProps> = ({
             {/* Courier Filter */}
             <FilterSelect
               label="Courier"
-              value={courierFilter}
-              onChange={setCourierFilter}
+              value={activeCourier}
+              onChange={handleCourierChange}
               icon={<Truck className="w-3.5 h-3.5" />}
               options={[
                 { value: 'all', label: 'All Couriers' },
@@ -443,13 +527,15 @@ export const OrderTable: React.FC<OrderTableProps> = ({
             />
 
             {/* Clear Filters */}
-            {(courierFilter !== 'all' || printFilter !== 'all' || statusFilter !== 'all') && (
+            {(activeCourier !== 'all' || printFilter !== 'all' || activeStatus !== 'all' || activeSearch.trim() !== '') && (
               <button
                 type="button"
                 onClick={() => {
-                  setCourierFilter('all');
+                  handleCourierChange('all');
+                  handleStatusChange('all');
                   setPrintFilter('all');
-                  setStatusFilter('all');
+                  if (onSearchQueryChange) onSearchQueryChange('');
+                  setInternalSearch('');
                 }}
                 className="px-2 py-1 rounded-lg text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white text-xs underline cursor-pointer"
               >
@@ -465,8 +551,8 @@ export const OrderTable: React.FC<OrderTableProps> = ({
               <input
                 type="text"
                 placeholder="Search orders, phone, customer..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={internalSearch}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="w-full pl-9 pr-3.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-xs text-zinc-900 dark:text-white placeholder-zinc-500 focus:outline-none focus:border-[#f3aa18]"
               />
             </div>
@@ -752,21 +838,21 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* Print Thermal Label - Subtle difference if printed vs unprinted */}
+                          {/* Print Thermal Label - Amber if not printed yet, normal grey if already printed */}
                           <button
                             type="button"
                             onClick={(e) => handleSinglePrintA6(order, e)}
                             className={clsx(
                               'p-1.5 rounded-lg border transition-all cursor-pointer relative',
-                              isPrinted
-                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-                                : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-400 dark:text-zinc-500 hover:text-zinc-950 dark:hover:text-white border-transparent hover:border-zinc-300 dark:hover:border-white/10'
+                              !isPrinted
+                                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/25'
+                                : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-400 dark:text-zinc-500 border-transparent hover:border-zinc-300 dark:hover:border-white/10 hover:text-zinc-700 dark:hover:text-zinc-300'
                             )}
-                            title={isPrinted ? 'A6 Shipping Label (Printed - Click to print again)' : 'Print A6 Shipping Label'}
+                            title={!isPrinted ? 'Print 4x6 Label (Not printed yet)' : 'Print 4x6 Label (Already printed)'}
                           >
                             <Printer className="w-3.5 h-3.5" />
-                            {isPrinted && (
-                              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500 ring-1 ring-white dark:ring-neutral-900" />
+                            {!isPrinted && (
+                              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500 ring-1 ring-white dark:ring-neutral-900" />
                             )}
                           </button>
                           <button
@@ -864,21 +950,21 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                           {rawTrackingNum}
                         </span>
                       )}
-                      {/* Subtle Print Quick Action */}
+                      {/* Print 4x6 Label - Amber if not printed yet, normal grey if already printed */}
                       <button
                         type="button"
                         onClick={(e) => handleSinglePrintA6(order, e)}
                         className={clsx(
                           'p-1.5 rounded-lg border transition-all cursor-pointer relative',
-                          printedOrderIds.has(order.id)
-                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-                            : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-400 dark:text-zinc-500 border-transparent hover:border-zinc-300 dark:hover:border-white/10'
+                          !printedOrderIds.has(order.id)
+                            ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/25'
+                            : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-400 dark:text-zinc-500 border-transparent hover:border-zinc-300 dark:hover:border-white/10 hover:text-zinc-700 dark:hover:text-zinc-300'
                         )}
-                        title={printedOrderIds.has(order.id) ? 'A6 Shipping Label (Printed - Click to print again)' : 'Print A6 Shipping Label'}
+                        title={!printedOrderIds.has(order.id) ? 'Print 4x6 Label (Not printed yet)' : 'Print 4x6 Label (Already printed)'}
                       >
                         <Printer className="w-3.5 h-3.5" />
-                        {printedOrderIds.has(order.id) && (
-                          <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500 ring-1 ring-white dark:ring-neutral-900" />
+                        {!printedOrderIds.has(order.id) && (
+                          <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500 ring-1 ring-white dark:ring-neutral-900" />
                         )}
                       </button>
                     </div>
@@ -895,9 +981,9 @@ export const OrderTable: React.FC<OrderTableProps> = ({
             <span>
               Showing <span className="font-mono font-bold text-zinc-900 dark:text-white">{filteredOrders.length === 0 ? 0 : ((currentPage - 1) * pageSize) + 1}</span> to{' '}
               <span className="font-mono font-bold text-zinc-900 dark:text-white">
-                {Math.min(currentPage * pageSize, totalOrders ?? filteredOrders.length)}
+                {filteredOrders.length === 0 ? 0 : Math.min(((currentPage - 1) * pageSize) + filteredOrders.length, totalOrders ?? (((currentPage - 1) * pageSize) + filteredOrders.length))}
               </span>{' '}
-              of <span className="font-mono font-bold text-zinc-900 dark:text-white">{totalOrders ?? orders.length}</span> orders
+              of <span className="font-mono font-bold text-zinc-900 dark:text-white">{totalOrders ?? filteredOrders.length}</span> orders
             </span>
           </div>
 
@@ -948,6 +1034,13 @@ export const OrderTable: React.FC<OrderTableProps> = ({
         onClose={() => {
           setIsPrintModalOpen(false);
           setPrintModalOrders([]);
+        }}
+        onPrinted={(orderIds) => {
+          setPrintedOrderIds((prev) => {
+            const next = new Set(prev);
+            orderIds.forEach((id) => next.add(id));
+            return next;
+          });
         }}
       />
     </div>

@@ -37,6 +37,8 @@ export const Layout: React.FC<LayoutProps> = ({
   const { user } = useAuth();
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
+  const isShopManager = user?.role === 'shop_manager';
+
   return (
     <div className="manager-workspace h-screen w-screen bg-[#f6f6f3] dark:bg-[#080808] text-zinc-900 dark:text-zinc-100 flex relative overflow-hidden font-sans transition-colors duration-200">
       {/* Ambient background glows */}
@@ -68,7 +70,7 @@ export const Layout: React.FC<LayoutProps> = ({
         />
 
         {/* Scroll container on the far right edge (with padding for mobile bottom nav) */}
-        <div className="flex-1 overflow-y-auto w-full pb-16 lg:pb-0 scroll-smooth">
+        <div className={clsx("flex-1 overflow-y-auto w-full scroll-smooth", !isShopManager ? "pb-16 lg:pb-0" : "pb-0")}>
           <main className="manager-content">
             <div key={currentTab} className="animate-page-enter space-y-4 sm:space-y-6">
               {children}
@@ -77,7 +79,8 @@ export const Layout: React.FC<LayoutProps> = ({
         </div>
       </div>
 
-      {/* Mobile Fixed Bottom Navigation Bar (Visible only on < lg screens) */}
+      {/* Mobile Fixed Bottom Navigation Bar (Visible only on < lg screens for non-shop managers) */}
+      {!isShopManager && (
       <nav 
         aria-label="Mobile Navigation" 
         className="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/95 dark:bg-[#0c0c0e]/95 border-t border-zinc-200 dark:border-white/10 backdrop-blur-2xl z-30 grid grid-cols-4 items-center px-3 font-sans select-none shadow-[0_-10px_30px_rgba(0,0,0,0.28)] pb-safe"
@@ -160,6 +163,7 @@ export const Layout: React.FC<LayoutProps> = ({
           <span className="text-[10px] font-mono mt-1 font-medium tracking-tight">Reports</span>
         </button>
       </nav>
+      )}
     </div>
   );
 };

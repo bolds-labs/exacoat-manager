@@ -158,6 +158,41 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   const [isGooritaCopied, setIsGooritaCopied] = useState(false);
   const [showGooritaPreview, setShowGooritaPreview] = useState(false);
 
+  // Printed tracking state
+  const [isPrinted, setIsPrinted] = useState<boolean>(() => {
+    if (!order) return false;
+    try {
+      const cached = localStorage.getItem('_exacoat_direct_printed_orders');
+      const list = cached ? JSON.parse(cached) : [];
+      return list.includes(order.id);
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    if (order) {
+      try {
+        const cached = localStorage.getItem('_exacoat_direct_printed_orders');
+        const list = cached ? JSON.parse(cached) : [];
+        setIsPrinted(list.includes(order.id));
+      } catch {
+        setIsPrinted(false);
+      }
+    }
+  }, [order]);
+
+  useEffect(() => {
+    const handlePrintedEvt = (e: any) => {
+      const ids = e?.detail?.orderIds;
+      if (order && Array.isArray(ids) && ids.includes(order.id)) {
+        setIsPrinted(true);
+      }
+    };
+    window.addEventListener('exacoat_order_printed', handlePrintedEvt);
+    return () => window.removeEventListener('exacoat_order_printed', handlePrintedEvt);
+  }, [order]);
+
   const isUsOrder = Boolean(
     (order?.shipping?.country || order?.billing?.country || '').toUpperCase() === 'US' ||
     courier === 'goorita' ||
@@ -788,14 +823,17 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                 type="button"
                 onClick={() => setIsLabelModalOpen(true)}
                 className={clsx(
-                  "p-2 rounded-xl text-xs font-bold font-sans flex items-center justify-center transition-all shadow-sm active:scale-95 cursor-pointer",
-                  currentStatusClean === 'processing'
-                    ? "bg-[#f3aa18] hover:bg-[#d9940c] text-[#0a0a0a] ring-2 ring-[#f3aa18]/30"
-                    : "bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/[0.08]"
+                  "p-2 rounded-xl text-xs font-bold font-sans flex items-center justify-center transition-all shadow-sm active:scale-95 cursor-pointer relative",
+                  !isPrinted
+                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30"
+                    : "bg-white/[0.06] hover:bg-white/[0.1] text-zinc-400 border border-white/[0.08]"
                 )}
-                title={isStorePickup ? "Print Workshop Label" : "Print A6 Shipping Label"}
+                title={!isPrinted ? (isStorePickup ? "Print Workshop Label (Not printed yet)" : "Print 4x6 Label (Not printed yet)") : (isStorePickup ? "Print Workshop Label (Already printed)" : "Print 4x6 Label (Already printed)")}
               >
                 <Printer className="w-3.5 h-3.5" />
+                {!isPrinted && (
+                  <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500 ring-1 ring-neutral-900" />
+                )}
               </button>
 
               <button
@@ -2121,19 +2159,6 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         </div>
       )}
 
-      {/* A6 Shipping Label Modal */}
-      <ShippingLabelA6Modal
-        order={order}
-        isOpen={isLabelModalOpen}
-        onClose={() => setIsLabelModalOpen(false)}
-      />
-
-      {/* Customer Invoice Modal */}
-      <CustomerInvoiceModal
-        order={order}
-        isOpen={isInvoiceModalOpen}
-        onClose={() => setIsInvoiceModalOpen(false)}
-      />
 
       {/* 48-Hour Installation Warranty Review Modal */}
       {order && (
@@ -2336,6 +2361,10 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         orders={order ? [order] : []}
         isOpen={isLabelModalOpen}
         onClose={() => setIsLabelModalOpen(false)}
+        onPrinted={(orderIds) => {
+          setIsPrinted(true);
+          if (onOrderUpdated) onOrderUpdated();
+        }}
       />
 
       {/* Official Customer Tax Invoice Modal */}

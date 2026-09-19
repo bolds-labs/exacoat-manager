@@ -46,13 +46,29 @@ export const OrdersView: React.FC<OrdersViewProps> = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
   const [maxPages, setMaxPages] = useState(1);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [courierFilter, setCourierFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const loadOrders = useCallback(async (quiet = false, page = currentPage, limit = pageSize) => {
+  const loadOrders = useCallback(async (
+    quiet = false,
+    page = currentPage,
+    limit = pageSize,
+    status = statusFilter,
+    courier = courierFilter,
+    search = searchQuery
+  ) => {
     try {
       if (!quiet) setIsLoading(true);
       else setIsRefreshing(true);
 
-      const res = await fetchOrdersDirect({ page, per_page: limit });
+      const res = await fetchOrdersDirect({
+        page,
+        per_page: limit,
+        status: status !== 'all' ? status : undefined,
+        courier: courier !== 'all' ? courier : undefined,
+        search: search.trim() ? search.trim() : undefined,
+      });
       if (res.success && Array.isArray(res.orders)) {
         setOrders(res.orders as Order[]);
         if (typeof res.total_orders === 'number') setTotalOrders(res.total_orders);
@@ -70,12 +86,12 @@ export const OrdersView: React.FC<OrdersViewProps> = () => {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [currentPage, pageSize, showToast]);
+  }, [currentPage, pageSize, statusFilter, courierFilter, searchQuery, showToast]);
 
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || (maxPages > 0 && newPage > maxPages) || newPage === currentPage) return;
     setCurrentPage(newPage);
-    loadOrders(false, newPage, pageSize);
+    loadOrders(false, newPage, pageSize, statusFilter, courierFilter, searchQuery);
   };
 
   const handlePageSizeChange = (newSize: number) => {
@@ -86,11 +102,29 @@ export const OrdersView: React.FC<OrdersViewProps> = () => {
     } catch {
       // ignore
     }
-    loadOrders(false, 1, newSize);
+    loadOrders(false, 1, newSize, statusFilter, courierFilter, searchQuery);
+  };
+
+  const handleStatusFilterChange = (status: string) => {
+    setStatusFilter(status);
+    setCurrentPage(1);
+    loadOrders(false, 1, pageSize, status, courierFilter, searchQuery);
+  };
+
+  const handleCourierFilterChange = (courier: string) => {
+    setCourierFilter(courier);
+    setCurrentPage(1);
+    loadOrders(false, 1, pageSize, statusFilter, courier, searchQuery);
+  };
+
+  const handleSearchQueryChange = (query: string) => {
+    setSearchQuery(query);
+    setCurrentPage(1);
+    loadOrders(false, 1, pageSize, statusFilter, courierFilter, query);
   };
 
   useEffect(() => {
-    loadOrders(false, currentPage, pageSize);
+    loadOrders(false, 1, pageSize, 'all', 'all', '');
   }, []);
 
   const handleSelectOrder = async (order: Order) => {
@@ -398,13 +432,19 @@ export const OrdersView: React.FC<OrdersViewProps> = () => {
         orders={orders}
         isLoading={isLoading}
         onSelectOrder={handleSelectOrder}
-        onRefresh={() => loadOrders(false, currentPage, pageSize)}
+        onRefresh={() => loadOrders(false, currentPage, pageSize, statusFilter, courierFilter, searchQuery)}
         currentPage={currentPage}
         maxPages={maxPages}
         totalOrders={totalOrders}
         pageSize={pageSize}
         onPageChange={handlePageChange}
         onPageSizeChange={handlePageSizeChange}
+        statusFilter={statusFilter}
+        onStatusFilterChange={handleStatusFilterChange}
+        courierFilter={courierFilter}
+        onCourierFilterChange={handleCourierFilterChange}
+        searchQuery={searchQuery}
+        onSearchQueryChange={handleSearchQueryChange}
       />
         </>
       )}

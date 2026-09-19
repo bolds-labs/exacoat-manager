@@ -5,7 +5,7 @@
  */
 
 import { getEnv, getWordPressBaseUrl, getWcCredentials } from './env';
-import { CreateReviewPayload, Order, OrderItem, OrderTracking, DeviceConfiguratorProfile, ConfiguratorProfileSummary, DeviceFamily } from '../types';
+import { CreateReviewPayload, Order, OrderItem, OrderTracking, DeviceConfiguratorProfile, ConfiguratorProfileSummary, DeviceFamily, AdminUser, ExacoatRole } from '../types';
 import { renderEmailHtmlLocally } from './emailRenderer';
 import { extractItemSpecs } from './orderItems';
 
@@ -1264,6 +1264,7 @@ export async function clearWordPressLogs(): Promise<{ success: boolean; message?
 export async function fetchOrdersDirect(params?: {
   status?: string;
   search?: string;
+  courier?: string;
   page?: number;
   per_page?: number;
 }): Promise<{
@@ -1278,6 +1279,7 @@ export async function fetchOrdersDirect(params?: {
   const url = new URL(`${base}/wp-json/exacoat-core/v1/orders`, window.location.origin);
   if (params?.status && params.status !== 'all') url.searchParams.set('status', params.status);
   if (params?.search) url.searchParams.set('search', params.search);
+  if (params?.courier && params.courier !== 'all') url.searchParams.set('courier', params.courier);
   if (params?.page) url.searchParams.set('page', String(params.page));
   if (params?.per_page) url.searchParams.set('per_page', String(params.per_page));
   url.searchParams.set('_t', String(Date.now()));
@@ -1856,6 +1858,188 @@ export async function fetchCustomersDirect(params?: { search?: string; page?: nu
     return { success: true, customers: Array.isArray(data) ? data : [], total_customers: total, max_pages: pages };
   } catch (err: any) {
     return { success: false, customers: [], total_customers: 0, max_pages: 1, error: err.message };
+  }
+}
+
+// ==========================================
+// WordPress Staff & Team Management Bridge
+// ==========================================
+
+export async function fetchWordPressTeamDirect(): Promise<{
+  success: boolean;
+  users: AdminUser[];
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/team`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data && Array.isArray(data.users)) {
+        return { success: true, users: data.users };
+      }
+    }
+
+    // Fallback: If exacoat-core team endpoint is not active, check WooCommerce customers with role=all
+    const wcUrl = new URL(`${base}/wp-json/wc/v3/customers`, window.location.origin);
+    wcUrl.searchParams.set('role', 'all');
+    wcUrl.searchParams.set('per_page', '100');
+
+    const wcRes = await authenticatedFetch(wcUrl.toString(), {
+      headers: { Accept: 'application/json' },
+    });
+
+    if (wcRes.ok) {
+      const customers = await wcRes.json();
+      if (Array.isArray(customers)) {
+        const staff = customers
+          .filter((c: any) => c.role === 'administrator' || c.role === 'shop_manager')
+          .map((c: any): AdminUser => ({
+            id: String(c.id),
+            email: c.email || '',
+            full_name: `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.username || c.email?.split('@')[0] || 'Staff User',
+            role: c.role === 'administrator' ? 'super_admin' : 'shop_manager',
+            avatar_url: c.avatar_url,
+            created_at: c.date_created || new Date().toISOString(),
+            email_confirmed_at: c.date_created || new Date().toISOString(),
+            wp_roles: [c.role],
+          }));
+
+        if (staff.length > 0) {
+          return { success: true, users: staff };
+        }
+      }
+    }
+
+    return { success: false, users: [], error: `Failed to load team from WordPress (HTTP ${res.status})` };
+  } catch (err: any) {
+    return { success: false, users: [], error: err?.message || 'Network error fetching team' };
+  }
+}
+
+export async function updateWordPressUserRoleDirect(
+  userId: string,
+  newRole: ExacoatRole
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/team/${userId}/role`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ role: newRole }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.success) {
+      return { success: true, message: data.message };
+    }
+
+    // Fallback: WooCommerce customers update
+    const wcUrl = `${base}/wp-json/wc/v3/customers/${userId}`;
+    const wpRole = newRole === 'super_admin' ? 'administrator' : 'shop_manager';
+    const wcRes = await authenticatedFetch(wcUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ role: wpRole }),
+    });
+
+    if (wcRes.ok) {
+      return { success: true, message: 'WordPress role updated' };
+    }
+
+    return { success: false, error: data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to update user role' };
+  }
+}
+
+export async function createWordPressStaffUserDirect(
+  email: string,
+  password: string,
+  fullName: string,
+  role: ExacoatRole
+): Promise<{ success: boolean; user?: AdminUser; message?: string; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/team`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ email, password, full_name: fullName, role }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.success && data?.user) {
+      return { success: true, user: data.user, message: data.message };
+    }
+
+    // Fallback: WooCommerce customer creation with role
+    const wcUrl = `${base}/wp-json/wc/v3/customers`;
+    const wpRole = role === 'super_admin' ? 'administrator' : 'shop_manager';
+    const names = fullName.trim().split(/\s+/);
+    const wcRes = await authenticatedFetch(wcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        email,
+        password,
+        first_name: names[0] || '',
+        last_name: names.slice(1).join(' ') || '',
+        role: wpRole,
+      }),
+    });
+
+    if (wcRes.ok) {
+      const created = await wcRes.json();
+      return {
+        success: true,
+        user: {
+          id: String(created.id),
+          email: created.email,
+          full_name: `${created.first_name || ''} ${created.last_name || ''}`.trim() || email.split('@')[0],
+          role,
+          avatar_url: created.avatar_url,
+          created_at: created.date_created || new Date().toISOString(),
+          email_confirmed_at: created.date_created || new Date().toISOString(),
+          wp_roles: [wpRole],
+        },
+      };
+    }
+
+    return { success: false, error: data?.message || (await wcRes.json().catch(() => ({})))?.message || 'Failed to create user in WordPress' };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to connect to WordPress' };
+  }
+}
+
+export async function deleteWordPressStaffUserDirect(
+  userId: string
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/team/${userId}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'DELETE',
+      headers: { Accept: 'application/json' },
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.success) {
+      return { success: true, message: data.message };
+    }
+
+    return { success: false, error: data?.message || `Failed to delete WordPress user (HTTP ${res.status})` };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to delete WordPress user' };
   }
 }
 

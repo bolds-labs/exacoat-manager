@@ -20,6 +20,7 @@ interface ShippingLabelA6ModalProps {
   orders?: Order[];
   isOpen: boolean;
   onClose: () => void;
+  onPrinted?: (orderIds: number[]) => void;
 }
 
 // Generate realistic Code-128 SVG barcode pattern from numeric/alphanumeric code with dynamic totalWidth
@@ -106,6 +107,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
   orders,
   isOpen,
   onClose,
+  onPrinted,
 }) => {
   const { showToast } = useToast();
   const labelRef = useRef<HTMLDivElement>(null);
@@ -352,6 +354,23 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
   };
 
   const handlePrint = () => {
+    // Record printed order IDs in localStorage and notify listeners
+    const printedIds = activeOrdersList.map(o => o.id).filter(Boolean);
+    if (printedIds.length > 0) {
+      try {
+        const stored = localStorage.getItem('_exacoat_direct_printed_orders');
+        const currentList: number[] = stored ? JSON.parse(stored) : [];
+        const updatedList = Array.from(new Set([...currentList, ...printedIds]));
+        localStorage.setItem('_exacoat_direct_printed_orders', JSON.stringify(updatedList));
+        window.dispatchEvent(new CustomEvent('exacoat_order_printed', { detail: { orderIds: printedIds } }));
+      } catch (e) {
+        console.warn('Failed to save printed orders status', e);
+      }
+      if (onPrinted) {
+        onPrinted(printedIds);
+      }
+    }
+
     const printWindow = window.open('', '_blank', 'width=800,height=950');
     if (!printWindow) {
       showToast('error', 'Popup Blocked', 'Please allow popups to print shipping labels.');

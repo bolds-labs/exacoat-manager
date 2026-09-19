@@ -6,7 +6,6 @@ import {
   Key, 
   ArrowRight, 
   AlertCircle, 
-  ShieldCheck, 
   Loader2
 } from 'lucide-react';
 
@@ -15,11 +14,11 @@ interface LoginPageProps {
 }
 
 export const LoginPage: React.FC<LoginPageProps> = () => {
-  const { login, loginAsDevAdmin, resetPassword } = useAuth();
+  const { login, resetPassword } = useAuth();
   const { showToast } = useToast();
 
-  const [email, setEmail] = useState('admin@exacoat.com');
-  const [password, setPassword] = useState('••••••••••••');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
@@ -70,7 +69,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
       {/* Subtle ambient luxury studio glow */}
       <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[720px] h-[520px] bg-gradient-to-b from-white/[0.025] via-[#f3aa18]/[0.015] to-transparent rounded-full blur-[140px] pointer-events-none -z-10" />
 
-      {/* Main Studio Card (440–450px wide) */}
+      {/* Main Studio Card (440-450px wide) */}
       <div className="w-full max-w-[440px] p-8 sm:p-10 rounded-3xl space-y-6 shadow-[0_32px_80px_-16px_rgba(0,0,0,0.95),0_0_0_1px_rgba(255,255,255,0.08)] bg-[#0e0e10]/95 border border-white/[0.1] relative overflow-hidden backdrop-blur-2xl">
         {/* Header Branding */}
         <div className="text-center space-y-3">
@@ -125,7 +124,6 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                   required
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  placeholder="admin@exacoat.com"
                   className="w-full pl-10 pr-4 py-3 sm:py-3.5 bg-zinc-900/80 border border-white/[0.08] focus:border-[#f3aa18] rounded-2xl text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none transition-all font-sans"
                 />
               </div>
@@ -191,7 +189,6 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                   required
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  placeholder="admin@exacoat.com"
                   className="w-full pl-10 pr-4 py-3 sm:py-3.5 bg-zinc-900/80 border border-white/[0.08] focus:border-[#f3aa18] rounded-2xl text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none transition-all font-sans"
                 />
               </div>
@@ -226,7 +223,6 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                   required
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
                   className="w-full pl-10 pr-4 py-3 sm:py-3.5 bg-zinc-900/80 border border-white/[0.08] focus:border-[#f3aa18] rounded-2xl text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none transition-all font-sans"
                 />
               </div>
@@ -250,24 +246,6 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                 </>
               )}
             </button>
-
-            {/* Local Dev Fast Access */}
-            <div className="pt-3 border-t border-white/[0.08] space-y-2">
-              <button
-                type="button"
-                onClick={() => {
-                  loginAsDevAdmin();
-                  showToast('success', 'Admin Session Active', 'Logged in as Exacoat Administrator.');
-                }}
-                className="w-full py-2.5 px-4 rounded-xl bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 border border-[#f3aa18]/25 text-[#f3aa18] font-mono font-bold text-xs shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <ShieldCheck className="w-4 h-4 text-[#f3aa18]" />
-                <span>Quick Access (Admin)</span>
-              </button>
-              <p className="text-[10px] text-zinc-500 text-center font-mono">
-                Instant local access to Exacoat ERP
-              </p>
-            </div>
           </form>
         )}
 

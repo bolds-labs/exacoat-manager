@@ -140,13 +140,13 @@ export const TeamRolesManager: React.FC<TeamRolesManagerProps> = () => {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-[#f3aa18]" />
-            <h3 className="font-semibold text-sm text-zinc-900 dark:text-white">Team Access</h3>
+            <h3 className="font-semibold text-sm text-zinc-900 dark:text-white">WordPress Staff & Team</h3>
             <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-zinc-200 dark:bg-white/[0.06] text-zinc-700 dark:text-[#f3aa18]">
               {users.length} Staff Member{users.length === 1 ? '' : 's'}
             </span>
           </div>
           <p className="text-sm text-zinc-500">
-            Manage workspace access and permissions.
+            Manage WordPress administrators and shop managers with access to this platform.
           </p>
         </div>
 
@@ -155,7 +155,7 @@ export const TeamRolesManager: React.FC<TeamRolesManagerProps> = () => {
             type="button"
             onClick={loadUsers}
             className="p-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
-            title="Refresh Users"
+            title="Refresh Users from WordPress"
           >
             <RefreshCw className={clsx('w-4 h-4', isLoading && 'animate-spin')} />
           </button>
@@ -176,7 +176,7 @@ export const TeamRolesManager: React.FC<TeamRolesManagerProps> = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-mono text-xs">
         <div className="flex items-center gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.08] rounded-2xl w-fit">
           <div className="px-3 py-1.5 rounded-xl font-bold bg-[#f3aa18] text-zinc-950 shadow-sm">
-            Active Team Members ({users.length})
+            Active Accounts ({users.length})
           </div>
         </div>
 
@@ -207,13 +207,13 @@ export const TeamRolesManager: React.FC<TeamRolesManagerProps> = () => {
               {isLoading ? (
                 <tr>
                   <td colSpan={6} className="py-8 text-center text-zinc-500 font-mono">
-                    Loading team accounts...
+                    Loading WordPress staff accounts...
                   </td>
                 </tr>
               ) : filteredUsers.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-8 text-center text-zinc-500 font-mono">
-                    No team members found matching criteria.
+                    No staff accounts found.
                   </td>
                 </tr>
               ) : (
@@ -248,7 +248,7 @@ export const TeamRolesManager: React.FC<TeamRolesManagerProps> = () => {
 
                       <td className="py-3 px-4">
                         {isSuperAdmin && !isCurrent ? (
-                          <div className="w-48">
+                          <div className="w-56">
                             <Select
                               value={u.role || 'manager'}
                               disabled={updatingUserId === u.id}
@@ -258,9 +258,9 @@ export const TeamRolesManager: React.FC<TeamRolesManagerProps> = () => {
                                 <SelectValue placeholder="Select Role" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="super_admin">👑 Super Admin</SelectItem>
-                                <SelectItem value="manager">🛡️ Operations Manager</SelectItem>
-                                <SelectItem value="shop_manager">🛍️ Shop Manager (Orders Only)</SelectItem>
+                                <SelectItem value="super_admin">WordPress Administrator</SelectItem>
+                                <SelectItem value="shop_manager">WooCommerce Shop Manager</SelectItem>
+                                <SelectItem value="manager">Operations Manager</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -274,12 +274,12 @@ export const TeamRolesManager: React.FC<TeamRolesManagerProps> = () => {
                             {u.role === 'super_admin' ? <Crown className="w-3 h-3" /> :
                              u.role === 'manager' ? <Shield className="w-3 h-3" /> :
                              <ShoppingBag className="w-3 h-3" />}
-                            <span className="capitalize">
-                              {u.role === 'shop_manager'
-                                ? 'Shop Manager (Orders Only)'
-                                : u.role === 'manager'
-                                ? 'Operations Manager'
-                                : (u.role?.replace('_', ' ') || 'Staff')}
+                            <span>
+                              {u.role === 'super_admin'
+                                ? 'WordPress Administrator'
+                                : u.role === 'shop_manager'
+                                ? 'WooCommerce Shop Manager'
+                                : 'Operations Manager'}
                             </span>
                           </span>
                         )}
@@ -303,7 +303,7 @@ export const TeamRolesManager: React.FC<TeamRolesManagerProps> = () => {
                                 onClick={() => handleVerifyEmail(u.id)}
                                 disabled={verifyingUserId === u.id}
                                 className="px-2 py-0.5 rounded bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 text-[#f3aa18] border border-[#f3aa18]/30 text-[10px] font-mono font-bold cursor-pointer transition-all disabled:opacity-50 flex items-center gap-1 shadow-sm"
-                                title="Instantly mark email as verified to unlock login"
+                                title="Mark email as verified to unlock immediate login"
                               >
                                 {verifyingUserId === u.id ? (
                                   <>
@@ -311,7 +311,7 @@ export const TeamRolesManager: React.FC<TeamRolesManagerProps> = () => {
                                     <span>Verifying...</span>
                                   </>
                                 ) : (
-                                  <span>✅ Mark Verified</span>
+                                  <span>Mark Verified</span>
                                 )}
                               </button>
                             )}
@@ -362,48 +362,21 @@ export const TeamRolesManager: React.FC<TeamRolesManagerProps> = () => {
         <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.08] space-y-1.5">
           <div className="flex items-center gap-2 text-amber-500">
             <Crown className="w-4 h-4" />
-            <strong className="text-xs font-bold text-zinc-900 dark:text-white">Super Admin</strong>
+            <strong className="text-xs font-bold text-zinc-900 dark:text-white">WordPress Administrator</strong>
           </div>
           <p className="text-[11px] text-zinc-500 leading-relaxed">
-            Full control over store settings, API tokens, team accounts, and database synchronization.
+            Full control across WordPress and Exacoat Manager, including system settings, credentials, team roles, and catalog configurations.
           </p>
-        </div>
-
-        <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.08] flex flex-col justify-between space-y-1.5">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2 text-sky-400">
-              <Shield className="w-4 h-4" />
-              <strong className="text-xs font-bold text-zinc-900 dark:text-white">Operations Manager</strong>
-            </div>
-            <p className="text-[11px] text-zinc-500 leading-relaxed">
-              Can manage precision skin products, customer reviews, order fulfillment, and store reports. Restricted from credentials and core system configuration.
-            </p>
-          </div>
-          {canSimulateRoles && (
-            <button
-              type="button"
-              onClick={() => setSimulatedRole(simulatedRole === 'manager' ? null : 'manager')}
-              className={clsx(
-                "mt-3 w-full py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer border active:scale-98 shadow-xs",
-                simulatedRole === 'manager'
-                  ? "bg-sky-500/20 text-sky-300 border-sky-500/40 font-bold"
-                  : "bg-white dark:bg-white/[0.04] text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white border-zinc-200 dark:border-white/[0.08]"
-              )}
-            >
-              <Eye className="w-3.5 h-3.5 text-sky-400" />
-              <span>{simulatedRole === 'manager' ? 'Active Simulation' : 'Simulate View'}</span>
-            </button>
-          )}
         </div>
 
         <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.08] flex flex-col justify-between space-y-1.5">
           <div className="space-y-1.5">
             <div className="flex items-center gap-2 text-violet-400">
               <ShoppingBag className="w-4 h-4" />
-              <strong className="text-xs font-bold text-zinc-900 dark:text-white">Shop Manager</strong>
+              <strong className="text-xs font-bold text-zinc-900 dark:text-white">WooCommerce Shop Manager</strong>
             </div>
             <p className="text-[11px] text-zinc-500 leading-relaxed">
-              Fulfillment operations only. Restricted exclusively to customer orders, parcel tracking, and shipping updates.
+              Customer orders and fulfillment only. Restricted from catalog management, analytics, system settings, and team roles.
             </p>
           </div>
           {canSimulateRoles && (
@@ -422,6 +395,33 @@ export const TeamRolesManager: React.FC<TeamRolesManagerProps> = () => {
             </button>
           )}
         </div>
+
+        <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.08] flex flex-col justify-between space-y-1.5">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 text-sky-400">
+              <Shield className="w-4 h-4" />
+              <strong className="text-xs font-bold text-zinc-900 dark:text-white">Operations Manager</strong>
+            </div>
+            <p className="text-[11px] text-zinc-500 leading-relaxed">
+              Catalog products, reviews, order fulfillment, and reports. Restricted from API tokens and security credentials.
+            </p>
+          </div>
+          {canSimulateRoles && (
+            <button
+              type="button"
+              onClick={() => setSimulatedRole(simulatedRole === 'manager' ? null : 'manager')}
+              className={clsx(
+                "mt-3 w-full py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer border active:scale-98 shadow-xs",
+                simulatedRole === 'manager'
+                  ? "bg-sky-500/20 text-sky-300 border-sky-500/40 font-bold"
+                  : "bg-white dark:bg-white/[0.04] text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white border-zinc-200 dark:border-white/[0.08]"
+              )}
+            >
+              <Eye className="w-3.5 h-3.5 text-sky-400" />
+              <span>{simulatedRole === 'manager' ? 'Active Simulation' : 'Simulate View'}</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Add Staff Modal */}
@@ -434,7 +434,7 @@ export const TeamRolesManager: React.FC<TeamRolesManagerProps> = () => {
             <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
               <UserPlus className="w-4 h-4" />
             </div>
-            <h2 className="text-base font-bold text-white">Add Staff Member</h2>
+            <h2 className="text-base font-bold text-white">Add WordPress Staff Member</h2>
           </div>
         }
       >
@@ -448,7 +448,7 @@ export const TeamRolesManager: React.FC<TeamRolesManagerProps> = () => {
               required
               value={newFullName}
               onChange={e => setNewFullName(e.target.value)}
-              placeholder="e.g. Sarah Connor"
+              placeholder="Full name"
               className="w-full px-3.5 py-2.5 bg-zinc-900 border border-white/10 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-primary"
             />
           </div>
@@ -462,7 +462,7 @@ export const TeamRolesManager: React.FC<TeamRolesManagerProps> = () => {
               required
               value={newEmail}
               onChange={e => setNewEmail(e.target.value)}
-              placeholder="manager@exacoat.com"
+              placeholder="name@company.com"
               className="w-full px-3.5 py-2.5 bg-zinc-900 border border-white/10 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-primary"
             />
           </div>
@@ -476,7 +476,7 @@ export const TeamRolesManager: React.FC<TeamRolesManagerProps> = () => {
               required
               value={newPassword}
               onChange={e => setNewPassword(e.target.value)}
-              placeholder="••••••••••••"
+              placeholder="At least 8 characters"
               className="w-full px-3.5 py-2.5 bg-zinc-900 border border-white/10 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-primary"
             />
           </div>
@@ -490,9 +490,9 @@ export const TeamRolesManager: React.FC<TeamRolesManagerProps> = () => {
                 <SelectValue placeholder="Assign Role" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="manager">🛡️ Operations Manager</SelectItem>
-                <SelectItem value="shop_manager">🛍️ Shop Manager (Orders Only)</SelectItem>
-                <SelectItem value="super_admin">👑 Super Admin (Full Access)</SelectItem>
+                <SelectItem value="super_admin">WordPress Administrator (Full Access)</SelectItem>
+                <SelectItem value="shop_manager">WooCommerce Shop Manager (Fulfillment Only)</SelectItem>
+                <SelectItem value="manager">Operations Manager</SelectItem>
               </SelectContent>
             </Select>
           </div>

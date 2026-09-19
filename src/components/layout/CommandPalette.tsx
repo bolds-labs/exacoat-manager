@@ -55,7 +55,12 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
   const filteredPages = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const available = WORKSPACE_PAGES.filter(p => !isShopManager || !p.roleRestricted);
+    const available = WORKSPACE_PAGES.filter(p => {
+      if (isShopManager) {
+        return p.tab === 'orders';
+      }
+      return !p.roleRestricted;
+    });
 
     if (!q) return available;
     return available.filter(

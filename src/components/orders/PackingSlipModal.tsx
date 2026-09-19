@@ -98,9 +98,6 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
           <td style="padding: 10px 12px; text-align: center; font-weight: 800; font-size: 14px; color: #111827; font-family: monospace; vertical-align: top; width: 70px;">
             ${item.quantity || 1}x
           </td>
-          <td style="padding: 10px 12px; text-align: center; width: 90px; color: #4b5563; font-size: 11px; vertical-align: top;">
-            <span style="display: inline-block; padding: 2px 8px; background: #f3f4f6; border-radius: 4px; font-weight: 600;">Verified [ &nbsp; ]</span>
-          </td>
         </tr>
       `;
       })
@@ -218,30 +215,6 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
             letter-spacing: 0.5px;
             border-bottom: 2px solid #e5e7eb;
           }
-          .qc-section {
-            display: flex;
-            gap: 16px;
-            background: #fdfdfd;
-            border: 1px dashed #d1d5db;
-            border-radius: 8px;
-            padding: 14px 18px;
-            margin-bottom: 24px;
-          }
-          .qc-col {
-            flex: 1;
-          }
-          .qc-label {
-            font-size: 10px;
-            font-weight: 700;
-            color: #6b7280;
-            text-transform: uppercase;
-            margin-bottom: 6px;
-          }
-          .qc-line {
-            border-bottom: 1px solid #9ca3af;
-            height: 18px;
-            margin-top: 4px;
-          }
           .footer-note {
             border-top: 1px solid #e5e7eb;
             padding-top: 14px;
@@ -308,33 +281,12 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
                 <th style="text-align: center; width: 40px;">Pick</th>
                 <th style="text-align: left;">Item Description &amp; Specifications</th>
                 <th style="text-align: center; width: 70px;">Qty</th>
-                <th style="text-align: center; width: 90px;">Status</th>
               </tr>
             </thead>
             <tbody>
               ${itemsRowsHtml}
             </tbody>
           </table>
-
-          <!-- Quality Control Sign-Off -->
-          <div class="qc-section">
-            <div class="qc-col">
-              <div class="qc-label">Picked by (Staff Name)</div>
-              <div class="qc-line"></div>
-            </div>
-            <div class="qc-col">
-              <div class="qc-label">Packed &amp; Sealed by</div>
-              <div class="qc-line"></div>
-            </div>
-            <div class="qc-col">
-              <div class="qc-label">QC Inspector Signature</div>
-              <div class="qc-line"></div>
-            </div>
-            <div class="qc-col">
-              <div class="qc-label">Fulfillment Date</div>
-              <div style="font-size: 12px; font-weight: 700; padding-top: 4px;">${new Date().toISOString().slice(0, 10)}</div>
-            </div>
-          </div>
 
           <!-- Customer Instructions Footer -->
           <div class="footer-note">
@@ -371,7 +323,7 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
           <span>Packing Slip &bull; Order #{cleanOrderNum}</span>
         </div>
       }
-      subtitle="Warehouse picking checklist, product verification, and customer dispatch manifest."
+      subtitle="Warehouse picking checklist and customer dispatch manifest."
       footer={
         <div className="flex items-center justify-between w-full font-sans">
           <div className="flex items-center gap-2 text-xs text-neutral-400">
@@ -471,7 +423,6 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
                 <th className="py-2 px-3 text-center w-10">Pick</th>
                 <th className="py-2 px-3">Item Description &amp; Model</th>
                 <th className="py-2 px-3 text-center w-16">Qty</th>
-                <th className="py-2 px-3 text-center w-24">QC Check</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-200">
@@ -495,32 +446,11 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
                     <td className="py-2.5 px-3 text-center font-mono font-bold text-xs text-neutral-900">
                       {item.quantity || 1}x
                     </td>
-                    <td className="py-2.5 px-3 text-center">
-                      <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-neutral-100 text-neutral-600 border border-neutral-200">
-                        [ &nbsp; ] OK
-                      </span>
-                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-
-          {/* Quality Control Sign-Off Grid */}
-          <div className="grid grid-cols-3 gap-3 p-3 rounded-lg bg-neutral-50 border border-neutral-200 mb-4 text-[10px]">
-            <div>
-              <span className="text-neutral-500 font-bold uppercase block">Picked By:</span>
-              <div className="border-b border-neutral-400 h-5 mt-1" />
-            </div>
-            <div>
-              <span className="text-neutral-500 font-bold uppercase block">Packed &amp; Sealed By:</span>
-              <div className="border-b border-neutral-400 h-5 mt-1" />
-            </div>
-            <div>
-              <span className="text-neutral-500 font-bold uppercase block">QC Verification:</span>
-              <div className="border-b border-neutral-400 h-5 mt-1" />
-            </div>
-          </div>
 
           {/* Footer Note */}
           <div className="border-t border-neutral-200 pt-3 flex items-center justify-between text-[10px] text-neutral-500">

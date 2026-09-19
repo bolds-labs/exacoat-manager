@@ -1347,6 +1347,31 @@ class Exacoat_Core {
 			'callback'            => [ 'Exacoat_Order_Manager', 'process_refund' ],
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
+
+		// Staff and Team Role Management Routes
+		$register( '/team', [
+			'methods'             => 'GET',
+			'callback'            => [ $this, 'rest_get_team_members' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/team', [
+			'methods'             => 'POST',
+			'callback'            => [ $this, 'rest_create_team_member' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/team/(?P<id>\d+)/role', [
+			'methods'             => 'POST',
+			'callback'            => [ $this, 'rest_update_team_user_role' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/team/(?P<id>\d+)', [
+			'methods'             => 'DELETE',
+			'callback'            => [ $this, 'rest_delete_team_member' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
 	}
 
 	public function rest_get_health_status( WP_REST_Request $request ) {
@@ -1718,6 +1743,188 @@ class Exacoat_Core {
 			'success'  => true,
 			'message'  => 'Plugin settings saved successfully',
 			'settings' => $current,
+		] );
+	}
+
+	/**
+	 * Retrieve WordPress staff accounts (administrators and shop managers)
+	 */
+	public function rest_get_team_members( WP_REST_Request $request ) {
+		$wp_users = get_users( [
+			'role__in' => [ 'administrator', 'shop_manager', 'manager', 'editor' ],
+			'orderby'  => 'registered',
+			'order'    => 'ASC',
+		] );
+
+		$members = [];
+		foreach ( $wp_users as $user ) {
+			$roles = (array) $user->roles;
+			$role = 'manager';
+			if ( in_array( 'administrator', $roles, true ) ) {
+				$role = 'super_admin';
+			} elseif ( in_array( 'shop_manager', $roles, true ) ) {
+				$role = 'shop_manager';
+			} elseif ( in_array( 'editor', $roles, true ) || in_array( 'manager', $roles, true ) ) {
+				$role = 'manager';
+			}
+
+			$full_name = trim( $user->first_name . ' ' . $user->last_name );
+			if ( empty( $full_name ) ) {
+				$full_name = $user->display_name ?: $user->user_login;
+			}
+
+			$members[] = [
+				'id'                 => (string) $user->ID,
+				'email'              => $user->user_email,
+				'full_name'          => $full_name,
+				'role'               => $role,
+				'wp_roles'           => array_values( $roles ),
+				'avatar_url'         => get_avatar_url( $user->ID ),
+				'created_at'         => $user->user_registered ? gmdate( 'c', strtotime( $user->user_registered ) ) : gmdate( 'c' ),
+				'email_confirmed_at' => $user->user_registered ? gmdate( 'c', strtotime( $user->user_registered ) ) : gmdate( 'c' ),
+				'last_sign_in_at'    => get_user_meta( $user->ID, '_last_login', true ) ?: ( get_user_meta( $user->ID, 'last_login', true ) ?: null ),
+			];
+		}
+
+		return rest_ensure_response( [
+			'success' => true,
+			'users'   => $members,
+			'total'   => count( $members ),
+		] );
+	}
+
+	/**
+	 * Update WordPress staff user role
+	 */
+	public function rest_update_team_user_role( WP_REST_Request $request ) {
+		$user_id = (int) $request->get_param( 'id' );
+		$params  = $request->get_json_params() ?: $request->get_params();
+		$new_role = sanitize_key( $params['role'] ?? '' );
+
+		$user = get_user_by( 'id', $user_id );
+		if ( ! $user instanceof WP_User ) {
+			return new WP_Error( 'user_not_found', 'WordPress user not found.', [ 'status' => 404 ] );
+		}
+
+		$wp_role = 'shop_manager';
+		if ( 'super_admin' === $new_role ) {
+			$wp_role = 'administrator';
+		} elseif ( 'shop_manager' === $new_role ) {
+			$wp_role = 'shop_manager';
+		} elseif ( 'manager' === $new_role ) {
+			$wp_role = 'shop_manager';
+		}
+
+		$user->set_role( $wp_role );
+
+		return rest_ensure_response( [
+			'success' => true,
+			'message' => "WordPress user {$user->user_email} role updated to {$wp_role}.",
+			'user_id' => $user_id,
+			'role'    => $new_role,
+			'wp_role' => $wp_role,
+		] );
+	}
+
+	/**
+	 * Create a new WordPress staff user account
+	 */
+	public function rest_create_team_member( WP_REST_Request $request ) {
+		$params    = $request->get_json_params() ?: $request->get_params();
+		$email     = sanitize_email( (string) ( $params['email'] ?? '' ) );
+		$password  = (string) ( $params['password'] ?? '' );
+		$full_name = sanitize_text_field( (string) ( $params['full_name'] ?? $params['fullName'] ?? '' ) );
+		$role      = sanitize_key( (string) ( $params['role'] ?? 'shop_manager' ) );
+
+		if ( ! $email || ! is_email( $email ) ) {
+			return new WP_Error( 'invalid_email', 'A valid email address is required.', [ 'status' => 400 ] );
+		}
+
+		if ( strlen( $password ) < 8 ) {
+			return new WP_Error( 'weak_password', 'Password must be at least 8 characters.', [ 'status' => 400 ] );
+		}
+
+		if ( email_exists( $email ) ) {
+			return new WP_Error( 'email_exists', 'A WordPress account with this email already exists.', [ 'status' => 409 ] );
+		}
+
+		$wp_role = 'shop_manager';
+		if ( 'super_admin' === $role ) {
+			$wp_role = 'administrator';
+		} elseif ( 'shop_manager' === $role ) {
+			$wp_role = 'shop_manager';
+		}
+
+		$username = sanitize_user( current( explode( '@', $email ) ), true );
+		if ( username_exists( $username ) ) {
+			$username .= '_' . wp_rand( 100, 999 );
+		}
+
+		$name_parts  = preg_split( '/\s+/', trim( $full_name ), 2 );
+		$first_name  = $name_parts[0] ?? '';
+		$last_name   = $name_parts[1] ?? '';
+
+		$user_id = wp_insert_user( [
+			'user_login'   => $username,
+			'user_email'   => $email,
+			'user_pass'    => $password,
+			'display_name' => $full_name ?: $username,
+			'first_name'   => $first_name,
+			'last_name'    => $last_name,
+			'role'         => $wp_role,
+		] );
+
+		if ( is_wp_error( $user_id ) ) {
+			return new WP_Error( 'create_failed', $user_id->get_error_message(), [ 'status' => 400 ] );
+		}
+
+		$new_user = get_user_by( 'id', $user_id );
+
+		return rest_ensure_response( [
+			'success' => true,
+			'message' => "WordPress staff account created for {$email}.",
+			'user'    => [
+				'id'                 => (string) $new_user->ID,
+				'email'              => $new_user->user_email,
+				'full_name'          => $full_name ?: $username,
+				'role'               => $role,
+				'wp_roles'           => (array) $new_user->roles,
+				'avatar_url'         => get_avatar_url( $new_user->ID ),
+				'created_at'         => gmdate( 'c', strtotime( $new_user->user_registered ) ),
+				'email_confirmed_at' => gmdate( 'c', strtotime( $new_user->user_registered ) ),
+			],
+		] );
+	}
+
+	/**
+	 * Delete a WordPress staff user account
+	 */
+	public function rest_delete_team_member( WP_REST_Request $request ) {
+		$user_id = (int) $request->get_param( 'id' );
+		$user = get_user_by( 'id', $user_id );
+		if ( ! $user instanceof WP_User ) {
+			return new WP_Error( 'user_not_found', 'WordPress user not found.', [ 'status' => 404 ] );
+		}
+
+		if ( in_array( 'administrator', (array) $user->roles, true ) ) {
+			$admins = get_users( [ 'role' => 'administrator' ] );
+			if ( count( $admins ) <= 1 ) {
+				return new WP_Error( 'cannot_delete_last_admin', 'Cannot delete the primary administrator account.', [ 'status' => 403 ] );
+			}
+		}
+
+		require_once ABSPATH . 'wp-admin/includes/user.php';
+		$admin_users = get_users( [ 'role' => 'administrator', 'number' => 1 ] );
+		$reassign_id = ! empty( $admin_users ) ? (int) $admin_users[0]->ID : null;
+
+		$deleted = wp_delete_user( $user_id, $reassign_id );
+		if ( ! $deleted ) {
+			return new WP_Error( 'delete_failed', 'Could not delete WordPress user.', [ 'status' => 500 ] );
+		}
+
+		return rest_ensure_response( [
+			'success' => true,
+			'message' => "WordPress user {$user->user_email} deleted.",
 		] );
 	}
 
