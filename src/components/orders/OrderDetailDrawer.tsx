@@ -12,7 +12,7 @@ import {
   SelectItem
 } from '../ui/Select';
 import { Order, OrderStatus, OrderNote, OrderReview, OrderReviewMedia, getOrderRma, getOrderGuarantee } from '../../types';
-import { formatCurrency, formatDateTime, formatDate } from '../../lib/formatters';
+import { formatCurrency, formatDateTime, formatDate, formatFeeLabel } from '../../lib/formatters';
 import { 
   Package, 
   Truck, 
@@ -1589,15 +1589,30 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
               </div>
             )}
 
-            {/* Fees */}
-            {order.fee_total !== undefined && order.fee_total !== 0 && (
+            {/* Fees & Adjustments */}
+            {order.fees && order.fees.length > 0 ? (
+              order.fees.map((f) => {
+                const label = formatFeeLabel(f.name, order);
+                const isNegative = f.total < 0;
+                return (
+                  <div key={f.id} className="flex items-center justify-between text-neutral-400">
+                    <span className={isNegative ? 'text-amber-400' : ''}>{label}</span>
+                    <span className={clsx('font-mono', isNegative ? 'text-amber-400' : 'text-white')}>
+                      {isNegative ? '-' : '+'}{formatCurrency(Math.abs(f.total), order.currency)}
+                    </span>
+                  </div>
+                );
+              })
+            ) : order.fee_total !== undefined && order.fee_total !== 0 ? (
               <div className="flex items-center justify-between text-neutral-400">
-                <span>Adjustments</span>
+                <span className={order.fee_total < 0 ? 'text-amber-400' : ''}>
+                  {order.fee_total < 0 ? 'Discount' : 'Adjustment'}
+                </span>
                 <span className={clsx('font-mono', order.fee_total < 0 ? 'text-amber-400' : 'text-white')}>
-                  {formatCurrency(order.fee_total, order.currency)}
+                  {order.fee_total < 0 ? '-' : '+'}{formatCurrency(Math.abs(order.fee_total), order.currency)}
                 </span>
               </div>
-            )}
+            ) : null}
 
             {/* Shipping */}
             <div className="flex items-center justify-between text-neutral-400">
@@ -1727,21 +1742,25 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
             {/* Fees Breakdown */}
             {order.fees && order.fees.length > 0 && (
               <div className="space-y-1.5 pt-1">
-                {order.fees.map(f => (
-                  <div key={f.id} className="flex items-center justify-between text-xs font-sans text-neutral-300">
-                    <span>{f.name}</span>
-                    <div className="text-right font-mono">
-                      <span className={clsx(f.total < 0 ? 'text-amber-400' : 'text-white')}>
-                        {formatCurrency(f.total, order.currency)}
-                      </span>
-                      {f.tax !== 0 && (
-                        <span className="text-[10px] text-neutral-500 block">
-                          DDP: {formatCurrency(f.tax, order.currency)}
+                {order.fees.map(f => {
+                  const label = formatFeeLabel(f.name, order);
+                  const isNegative = f.total < 0;
+                  return (
+                    <div key={f.id} className="flex items-center justify-between text-xs font-sans text-neutral-300">
+                      <span className={isNegative ? 'text-amber-400 font-medium' : ''}>{label}</span>
+                      <div className="text-right font-mono">
+                        <span className={clsx(isNegative ? 'text-amber-400 font-semibold' : 'text-white')}>
+                          {isNegative ? '-' : '+'}{formatCurrency(Math.abs(f.total), order.currency)}
                         </span>
-                      )}
+                        {f.tax !== 0 && (
+                          <span className="text-[10px] text-neutral-500 block">
+                            DDP: {formatCurrency(f.tax, order.currency)}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

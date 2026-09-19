@@ -360,3 +360,62 @@ export function isRevenueOrder(order: { status?: string }): boolean {
   const st = String(order.status || '').replace('wc-', '').toLowerCase().trim();
   return !['cancelled', 'refunded', 'failed', 'trash', 'auto-draft'].includes(st);
 }
+
+/**
+ * Resolves a human-readable label for order fee lines
+ * (e.g. converting generic 'Price Adjustment' to 'Installation Warranty' or 'Redeem Discount').
+ */
+export function formatFeeLabel(feeName: string, order?: { rma?: any; meta_data?: any[]; coupon_codes?: string[] } | null): string {
+  const name = (feeName || '').trim();
+  const nameLower = name.toLowerCase();
+
+  // Price adjustment handler
+  if (nameLower === 'price adjustment' || nameLower.includes('price adjustment')) {
+    const meta = order?.meta_data || [];
+    const findMeta = (k: string) => meta.find(m => m.key === k)?.value;
+
+    const rmaType = (
+      order?.rma?.order_type ||
+      findMeta('_rma_order_type') ||
+      (order as any)?._rma_order_type ||
+      ''
+    ).toLowerCase();
+
+    const isWarranty =
+      rmaType === 'warranty' ||
+      findMeta('_is_warranty') === 'yes' ||
+      findMeta('_order_badge') === 'WARRANTY';
+
+    const isRedeem =
+      rmaType === 'redeem' ||
+      findMeta('_is_redeem') === 'yes' ||
+      findMeta('_order_badge') === 'REDEEM';
+
+    if (isWarranty) {
+      return 'Installation Warranty';
+    }
+    if (isRedeem) {
+      return 'Redeem Discount';
+    }
+    if (order?.coupon_codes && order.coupon_codes.length > 0) {
+      return `Coupon Discount (${order.coupon_codes.join(', ')})`;
+    }
+    return 'Warranty / Claim Discount';
+  }
+
+  // Common fee labels
+  if (nameLower === 'unique code' || nameLower === 'kode unik') {
+    return 'Kode Unik Pembayaran';
+  }
+  if (nameLower === 'via wallet' || nameLower.includes('wallet')) {
+    return 'Store Credit / Wallet';
+  }
+  if (nameLower === 'shipping discount') {
+    return 'Shipping Discount';
+  }
+  if (nameLower === 'insurance (3 months)') {
+    return 'Shipping Insurance (3 Months)';
+  }
+
+  return name;
+}

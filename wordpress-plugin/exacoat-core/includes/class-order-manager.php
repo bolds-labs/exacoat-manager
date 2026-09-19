@@ -1000,16 +1000,32 @@ class Exacoat_Order_Manager {
 			];
 		}
 
-		// Fee items (e.g. Shipping Privilege discount, custom surcharges)
+		// Fee items (e.g. Shipping Privilege discount, custom surcharges, RMA adjustments)
 		$fees_data = [];
 		$fee_total = 0;
 		foreach ( $order->get_fees() as $fee_id => $fee ) {
 			$f_total = floatval( $fee->get_total() );
 			$f_tax   = floatval( $fee->get_total_tax() );
 			$fee_total += $f_total;
+			$fee_name = $fee->get_name();
+
+			if ( strtolower( trim( $fee_name ) ) === 'price adjustment' ) {
+				$rma_type = strtolower( (string) $order->get_meta( '_rma_order_type' ) );
+				$is_warranty = ( 'warranty' === $rma_type ) || ( 'yes' === (string) $order->get_meta( '_is_warranty' ) ) || ( 'WARRANTY' === (string) $order->get_meta( '_order_badge' ) );
+				$is_redeem   = ( 'redeem' === $rma_type ) || ( 'yes' === (string) $order->get_meta( '_is_redeem' ) ) || ( 'REDEEM' === (string) $order->get_meta( '_order_badge' ) );
+
+				if ( $is_warranty ) {
+					$fee_name = __( 'Installation Warranty', 'exacoat-core' );
+				} elseif ( $is_redeem ) {
+					$fee_name = __( 'Redeem Discount', 'exacoat-core' );
+				} else {
+					$fee_name = __( 'Warranty / Claim Discount', 'exacoat-core' );
+				}
+			}
+
 			$fees_data[] = [
 				'id'    => $fee_id,
-				'name'  => $fee->get_name(),
+				'name'  => $fee_name,
 				'total' => $f_total,
 				'tax'   => $f_tax,
 			];
