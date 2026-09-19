@@ -556,6 +556,8 @@ class Exacoat_Guarantee_Manager {
 
 	/**
 	 * REST Endpoint: Admin Claims Log Feed
+	 * Strictly returns orders that submitted the /money-back-guarantee form.
+	 * Automatically expires pending return claims where the customer has not sent back the item within 30 days.
 	 */
 	public static function rest_get_claims_log( \WP_REST_Request $request ): \WP_REST_Response {
 		global $wpdb;
@@ -564,24 +566,34 @@ class Exacoat_Guarantee_Manager {
 		$page          = max( 1, (int) ( $request->get_param( 'page' ) ?: 1 ) );
 		$per_page      = max( 1, min( 100, (int) ( $request->get_param( 'per_page' ) ?: 20 ) ) );
 
-		// 1. Gather all order IDs that explicitly have _has_guarantee_claim = 'yes'
+		// 1. Gather all order IDs that explicitly have 30-day guarantee claim metadata
 		$guarantee_order_ids = [];
+
+		$guarantee_meta_keys = [
+			'_guarantee_claim_status',
+			'_guarantee_claimed_at',
+			'_has_guarantee_claim',
+			'_guarantee_payout_details',
+			'_guarantee_returned_items',
+		];
+		$keys_sql = "'" . implode( "','", array_map( 'esc_sql', $guarantee_meta_keys ) ) . "'";
 
 		$hpos_meta_table = "{$wpdb->prefix}wc_orders_meta";
 		if ( $wpdb->get_var( "SHOW TABLES LIKE '{$hpos_meta_table}'" ) === $hpos_meta_table ) {
-			$hpos_ids = $wpdb->get_col( "SELECT DISTINCT order_id FROM {$hpos_meta_table} WHERE meta_key = '_has_guarantee_claim' AND meta_value = 'yes'" );
+			$hpos_ids = $wpdb->get_col( "SELECT DISTINCT order_id FROM {$hpos_meta_table} WHERE (meta_key IN ({$keys_sql}) AND meta_value != '' AND meta_value != 'no') OR (meta_key = '_rma_order_type' AND meta_value = 'guarantee_return')" );
 			if ( ! empty( $hpos_ids ) ) {
 				$guarantee_order_ids = array_merge( $guarantee_order_ids, array_map( 'intval', $hpos_ids ) );
 			}
 		}
 
-		$postmeta_ids = $wpdb->get_col( "SELECT DISTINCT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_has_guarantee_claim' AND meta_value = 'yes'" );
+		$postmeta_ids = $wpdb->get_col( "SELECT DISTINCT post_id FROM {$wpdb->postmeta} WHERE (meta_key IN ({$keys_sql}) AND meta_value != '' AND meta_value != 'no') OR (meta_key = '_rma_order_type' AND meta_value = 'guarantee_return')" );
 		if ( ! empty( $postmeta_ids ) ) {
 			$guarantee_order_ids = array_merge( $guarantee_order_ids, array_map( 'intval', $postmeta_ids ) );
 		}
 
 		$guarantee_order_ids = array_values( array_unique( array_filter( $guarantee_order_ids ) ) );
 
+		// If no orders match the guarantee meta keys, return immediately with zeroed stats
 		if ( empty( $guarantee_order_ids ) ) {
 			return new \WP_REST_Response( [
 				'success'    => true,
@@ -592,6 +604,7 @@ class Exacoat_Guarantee_Manager {
 					'package_received' => 0,
 					'refunded'         => 0,
 					'rejected'         => 0,
+					'expired'          => 0,
 				],
 				'pagination' => [
 					'page'        => $page,
@@ -602,106 +615,183 @@ class Exacoat_Guarantee_Manager {
 			], 200 );
 		}
 
-		// 2. Query only matching guarantee orders
-		$query_args = [
-			'limit'    => $per_page,
-			'page'     => $page,
-			'paginate' => true,
-			'include'  => $guarantee_order_ids,
-			'orderby'  => 'date',
-			'order'    => 'DESC',
+		// 2. Process all candidate guarantee orders and strictly verify them
+		$all_verified_claims = [];
+		$stats = [
+			'total'            => 0,
+			'pending_return'   => 0,
+			'package_received' => 0,
+			'refunded'         => 0,
+			'rejected'         => 0,
+			'expired'          => 0,
 		];
 
-		if ( ! empty( $status_filter ) && 'all' !== $status_filter ) {
-			$query_args['meta_key']   = '_guarantee_status';
-			$query_args['meta_value'] = $status_filter;
-		}
+		$now_ts = time();
 
-		if ( ! empty( $search_query ) ) {
-			if ( is_numeric( $search_query ) ) {
-				$target_id = (int) $search_query;
-				$query_args['include'] = in_array( $target_id, $guarantee_order_ids, true ) ? [ $target_id ] : [ 0 ];
-			} else {
-				$query_args['s'] = $search_query;
-			}
-		}
-
-		$results = wc_get_orders( $query_args );
-		$orders  = $results->orders ?? [];
-		$total   = $results->total ?? 0;
-		$pages   = $results->max_num_pages ?? 1;
-
-		$claims = [];
-		foreach ( $orders as $order ) {
-			/** @var \WC_Order $order */
+		foreach ( $guarantee_order_ids as $order_id ) {
+			$order = wc_get_order( $order_id );
 			if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
 				continue;
 			}
 
-			// Strict verification: only actual submitted claims
-			$has_claim = $order->get_meta( '_has_guarantee_claim' ) ?: get_post_meta( $order->get_id(), '_has_guarantee_claim', true );
-			if ( 'yes' !== $has_claim ) {
+			// Extract metadata
+			$claim_status   = $order->get_meta( '_guarantee_claim_status' ) ?: ( $order->get_meta( '_guarantee_status' ) ?: '' );
+			$claimed_at_raw = $order->get_meta( '_guarantee_claimed_at' ) ?: '';
+			$rma_type       = $order->get_meta( '_rma_order_type' );
+			$has_claim_flag = $order->get_meta( '_has_guarantee_claim' );
+			$claim_data     = $order->get_meta( '_guarantee_claim_data' ) ?: [];
+			$payout_details = $order->get_meta( '_guarantee_payout_details' ) ?: ( $order->get_meta( '_guarantee_destination' ) ?: ( $claim_data['destination_desc'] ?? '' ) );
+			$refund_amount  = (float) (
+				$order->get_meta( '_guarantee_total_refund' )
+				?: ( $order->get_meta( '_guarantee_refund_amount' )
+				?: ( $order->get_meta( '_guarantee_est_refund_store_credit' )
+				?: ( $claim_data['refund_amount'] ?? 0 ) ) )
+			);
+			$reason         = $order->get_meta( '_guarantee_claim_reason' ) ?: ( $claim_data['reason'] ?? '' );
+			$returned_meta  = $order->get_meta( '_guarantee_returned_items' );
+			$claimed_items  = [];
+			if ( ! empty( $returned_meta ) ) {
+				$decoded = is_string( $returned_meta ) ? json_decode( $returned_meta, true ) : $returned_meta;
+				if ( is_array( $decoded ) ) {
+					$claimed_items = $decoded;
+				}
+			}
+			if ( empty( $claimed_items ) && ! empty( $claim_data['claimed_items'] ) ) {
+				$claimed_items = $claim_data['claimed_items'];
+			}
+
+			// Strict verification:
+			// Must have at least one genuine guarantee field indicating a submission from /money-back-guarantee
+			$is_genuine_claim = (
+				! empty( $claimed_at_raw ) ||
+				'guarantee_return' === $rma_type ||
+				'yes' === $has_claim_flag ||
+				! empty( $payout_details ) ||
+				! empty( $claimed_items ) ||
+				( ! empty( $reason ) && ! empty( $claim_status ) ) ||
+				( $refund_amount > 0 && ! empty( $claim_status ) )
+			);
+
+			if ( ! $is_genuine_claim ) {
 				continue;
 			}
 
-			$claim_data       = $order->get_meta( '_guarantee_claim_data' ) ?: [];
-			$shipped_ts       = self::get_order_shipped_timestamp( $order );
-			$currency_sym     = get_woocommerce_currency_symbol( $order->get_currency() );
-			$refund_amount    = (float) ( $order->get_meta( '_guarantee_refund_amount' ) ?: ( $claim_data['refund_amount'] ?? 0 ) );
+			// Calculate submission timestamp
+			$claimed_ts = 0;
+			if ( ! empty( $claimed_at_raw ) ) {
+				$claimed_ts = strtotime( $claimed_at_raw );
+			} elseif ( ! empty( $claim_data['submitted_at'] ) ) {
+				$claimed_ts = strtotime( $claim_data['submitted_at'] );
+			} elseif ( 'yes' === $has_claim_flag && $order->get_date_created() ) {
+				$claimed_ts = $order->get_date_created()->getTimestamp();
+			}
 
-			$claims[] = [
-				'order_id'              => $order->get_id(),
-				'order_number'          => $order->get_order_number(),
-				'order_status'          => $order->get_status(),
-				'customer_name'         => $order->get_formatted_billing_full_name() ?: 'Customer',
-				'customer_email'        => $order->get_billing_email(),
-				'customer_phone'        => $order->get_billing_phone(),
-				'shipped_at'            => $shipped_ts ? date( 'M j, Y', $shipped_ts ) : 'Unknown',
-				'days_since_shipped'    => $shipped_ts ? max( 0, (int) floor( ( time() - $shipped_ts ) / 86400 ) ) : 0,
-				'guarantee_status'      => $order->get_meta( '_guarantee_status' ) ?: 'pending_return',
-				'refund_method'         => $order->get_meta( '_guarantee_refund_method' ) ?: ( $claim_data['refund_method'] ?? 'store_credit' ),
-				'refund_amount'         => $refund_amount,
-				'refund_amount_fmt'     => $currency_sym . ' ' . number_format( $refund_amount, 0, ',', '.' ),
-				'refund_destination'    => $order->get_meta( '_guarantee_destination' ) ?: ( $claim_data['destination_desc'] ?? '' ),
-				'return_courier'        => $order->get_meta( '_guarantee_return_courier' ) ?: ( $claim_data['return_courier'] ?? '' ),
-				'return_tracking_number'=> $order->get_meta( '_guarantee_return_tracking' ) ?: ( $claim_data['return_tracking_number'] ?? '' ),
-				'submitted_at'          => $claim_data['submitted_at'] ?? ( $order->get_date_created() ? $order->get_date_created()->date( 'Y-m-d H:i:s' ) : '' ),
-				'reason'                => $claim_data['reason'] ?? '',
-				'claimed_items'         => $claim_data['claimed_items'] ?? [],
+			$days_since_claim = $claimed_ts > 0 ? max( 0, (int) floor( ( $now_ts - $claimed_ts ) / 86400 ) ) : 0;
+
+			// Resolve claim status
+			if ( empty( $claim_status ) ) {
+				$claim_status = 'pending_return';
+			}
+
+			// AUTO-REMOVE / AUTO-EXPIRE OVERDUE CLAIMS:
+			// If customer submitted the return form but hasn't sent back the item within 30 days:
+			if ( 'pending_return' === $claim_status && $claimed_ts > 0 && $days_since_claim > 30 ) {
+				$claim_status = 'expired';
+				$order->update_meta_data( '_guarantee_claim_status', 'expired' );
+				$order->update_meta_data( '_guarantee_status', 'expired' );
+				$order->update_meta_data( '_guarantee_expired_at', current_time( 'mysql' ) );
+				$order->save();
+				update_post_meta( $order->get_id(), '_guarantee_claim_status', 'expired' );
+				update_post_meta( $order->get_id(), '_guarantee_status', 'expired' );
+
+				$order->add_order_note( sprintf(
+					"⏰ [30-DAY GUARANTEE AUTO-EXPIRED] Return authorization expired automatically. Customer filed claim %d days ago (%s) but did not return the item within 30 days.",
+					$days_since_claim,
+					$claimed_at_raw ? date( 'M j, Y', $claimed_ts ) : '30+ days ago'
+				) );
+			}
+
+			// Tally stats across verified claims
+			$stats['total']++;
+			if ( isset( $stats[ $claim_status ] ) ) {
+				$stats[ $claim_status ]++;
+			} else {
+				$stats['pending_return']++;
+			}
+
+			// Filter check
+			if ( ! empty( $status_filter ) && 'all' !== $status_filter && $claim_status !== $status_filter ) {
+				continue;
+			}
+
+			// Search query check
+			if ( ! empty( $search_query ) ) {
+				$sq = strtolower( trim( $search_query ) );
+				$order_num = strtolower( (string) $order->get_order_number() );
+				$cust_name = strtolower( (string) $order->get_formatted_billing_full_name() );
+				$cust_mail = strtolower( (string) $order->get_billing_email() );
+				$ret_resi  = strtolower( (string) ( $order->get_meta( '_guarantee_return_tracking' ) ?: ( $claim_data['return_tracking_number'] ?? '' ) ) );
+
+				$matches = (
+					str_contains( $order_num, str_replace( '#', '', $sq ) ) ||
+					str_contains( $cust_name, $sq ) ||
+					str_contains( $cust_mail, $sq ) ||
+					str_contains( $ret_resi, $sq )
+				);
+
+				if ( ! $matches ) {
+					continue;
+				}
+			}
+
+			$shipped_ts   = self::get_order_shipped_timestamp( $order );
+			$currency_sym = get_woocommerce_currency_symbol( $order->get_currency() );
+
+			$all_verified_claims[] = [
+				'order_id'                 => $order->get_id(),
+				'order_number'             => $order->get_order_number(),
+				'order_status'             => $order->get_status(),
+				'customer_name'            => $order->get_formatted_billing_full_name() ?: 'Customer',
+				'customer_email'           => $order->get_billing_email(),
+				'customer_phone'           => $order->get_billing_phone(),
+				'shipped_at'               => $shipped_ts ? date( 'M j, Y', $shipped_ts ) : 'Unknown',
+				'days_since_shipped'       => $shipped_ts ? max( 0, (int) floor( ( $now_ts - $shipped_ts ) / 86400 ) ) : 0,
+				'guarantee_status'         => $claim_status,
+				'refund_method'            => $order->get_meta( '_guarantee_refund_method' ) ?: ( $claim_data['refund_method'] ?? 'store_credit' ),
+				'refund_amount'            => $refund_amount,
+				'refund_amount_fmt'        => $currency_sym . ' ' . number_format( $refund_amount, 0, ',', '.' ),
+				'refund_destination'       => $payout_details,
+				'return_courier'           => $order->get_meta( '_guarantee_return_courier' ) ?: ( $claim_data['return_courier'] ?? '' ),
+				'return_tracking_number'   => $order->get_meta( '_guarantee_return_tracking' ) ?: ( $claim_data['return_tracking_number'] ?? '' ),
+				'submitted_at'             => $claimed_at_raw ?: ( $claimed_ts ? date( 'Y-m-d H:i:s', $claimed_ts ) : '' ),
+				'days_since_claim'         => $days_since_claim,
+				'days_remaining_to_return' => max( 0, 30 - $days_since_claim ),
+				'is_expired'               => 'expired' === $claim_status || $days_since_claim > 30,
+				'reason'                   => $reason,
+				'claimed_items'            => $claimed_items,
+				'created_ts'               => $claimed_ts ?: ( $order->get_date_created() ? $order->get_date_created()->getTimestamp() : 0 ),
 			];
 		}
 
-		// Calculate overview stats strictly across valid guarantee order IDs
-		$pending_count  = 0;
-		$received_count = 0;
-		$refunded_count = 0;
-		$rejected_count = 0;
+		// Sort claims by submission timestamp descending
+		usort( $all_verified_claims, function( $a, $b ) {
+			return ( $b['created_ts'] ?? 0 ) <=> ( $a['created_ts'] ?? 0 );
+		} );
 
-		foreach ( $guarantee_order_ids as $gid ) {
-			$g_order = wc_get_order( $gid );
-			if ( ! $g_order ) continue;
-			$st = $g_order->get_meta( '_guarantee_status' ) ?: 'pending_return';
-			if ( 'pending_return' === $st ) $pending_count++;
-			elseif ( 'package_received' === $st ) $received_count++;
-			elseif ( 'refunded' === $st ) $refunded_count++;
-			elseif ( 'rejected' === $st ) $rejected_count++;
-		}
+		$total_filtered = count( $all_verified_claims );
+		$total_pages    = max( 1, (int) ceil( $total_filtered / $per_page ) );
+		$offset         = ( $page - 1 ) * $per_page;
+		$paged_claims   = array_slice( $all_verified_claims, $offset, $per_page );
 
 		return new \WP_REST_Response( [
 			'success'    => true,
-			'claims'     => $claims,
-			'stats'      => [
-				'total'            => count( $guarantee_order_ids ),
-				'pending_return'   => $pending_count,
-				'package_received' => $received_count,
-				'refunded'         => $refunded_count,
-				'rejected'         => $rejected_count,
-			],
+			'claims'     => $paged_claims,
+			'stats'      => $stats,
 			'pagination' => [
 				'page'        => $page,
 				'per_page'    => $per_page,
-				'total_items' => $total,
-				'total_pages' => $pages,
+				'total_items' => $total_filtered,
+				'total_pages' => $total_pages,
 			],
 		], 200 );
 	}
@@ -711,16 +801,78 @@ class Exacoat_Guarantee_Manager {
 	 * - mark_received: Package received & inspected at Ruby Commercial TB12
 	 * - approve_refund: Approve refund, set status refunded, and dispatch light-theme refund email
 	 * - reject: Reject claim with notes
+	 * - expire: Expire return authorization
+	 * - auto_expire_overdue: Sweep all pending claims older than 30 days
 	 */
 	public static function rest_process_action( \WP_REST_Request $request ): \WP_REST_Response {
-		$order_id = (int) $request->get_param( 'order_id' );
 		$action   = sanitize_text_field( $request->get_param( 'action' ) ?: '' );
+		$order_id = (int) $request->get_param( 'order_id' );
 		$notes    = sanitize_textarea_field( $request->get_param( 'notes' ) ?: '' );
 
-		if ( ! $order_id || empty( $action ) ) {
+		if ( empty( $action ) ) {
 			return new \WP_REST_Response( [
 				'success' => false,
-				'message' => 'Missing order ID or action.',
+				'message' => 'Missing action parameter.',
+			], 400 );
+		}
+
+		// Batch sweep action for auto-expiring overdue claims
+		if ( 'auto_expire_overdue' === $action ) {
+			global $wpdb;
+			$hpos_meta_table = "{$wpdb->prefix}wc_orders_meta";
+			$candidate_ids = [];
+
+			if ( $wpdb->get_var( "SHOW TABLES LIKE '{$hpos_meta_table}'" ) === $hpos_meta_table ) {
+				$ids = $wpdb->get_col( "SELECT DISTINCT order_id FROM {$hpos_meta_table} WHERE meta_key IN ('_guarantee_claim_status', '_guarantee_status') AND meta_value = 'pending_return'" );
+				if ( ! empty( $ids ) ) {
+					$candidate_ids = array_merge( $candidate_ids, array_map( 'intval', $ids ) );
+				}
+			}
+
+			$post_ids = $wpdb->get_col( "SELECT DISTINCT post_id FROM {$wpdb->postmeta} WHERE meta_key IN ('_guarantee_claim_status', '_guarantee_status') AND meta_value = 'pending_return'" );
+			if ( ! empty( $post_ids ) ) {
+				$candidate_ids = array_merge( $candidate_ids, array_map( 'intval', $post_ids ) );
+			}
+
+			$candidate_ids = array_values( array_unique( array_filter( $candidate_ids ) ) );
+			$now_ts = time();
+			$expired_count = 0;
+
+			foreach ( $candidate_ids as $cid ) {
+				$c_order = wc_get_order( $cid );
+				if ( ! $c_order ) continue;
+
+				$c_raw = $c_order->get_meta( '_guarantee_claimed_at' );
+				$c_ts  = $c_raw ? strtotime( $c_raw ) : ( $c_order->get_date_created() ? $c_order->get_date_created()->getTimestamp() : 0 );
+				$days  = $c_ts ? max( 0, (int) floor( ( $now_ts - $c_ts ) / 86400 ) ) : 0;
+
+				if ( $days > 30 ) {
+					$c_order->update_meta_data( '_guarantee_claim_status', 'expired' );
+					$c_order->update_meta_data( '_guarantee_status', 'expired' );
+					$c_order->update_meta_data( '_guarantee_expired_at', current_time( 'mysql' ) );
+					$c_order->save();
+					update_post_meta( $cid, '_guarantee_claim_status', 'expired' );
+					update_post_meta( $cid, '_guarantee_status', 'expired' );
+
+					$c_order->add_order_note( sprintf(
+						"⏰ [30-DAY GUARANTEE AUTO-EXPIRED] Claim submitted %d days ago expired. Package was not returned within 30 days.",
+						$days
+					) );
+					$expired_count++;
+				}
+			}
+
+			return new \WP_REST_Response( [
+				'success'       => true,
+				'expired_count' => $expired_count,
+				'message'       => sprintf( 'Swept overdue claims: %d return request(s) auto-expired.', $expired_count ),
+			], 200 );
+		}
+
+		if ( ! $order_id ) {
+			return new \WP_REST_Response( [
+				'success' => false,
+				'message' => 'Missing order ID.',
 			], 400 );
 		}
 
@@ -733,15 +885,21 @@ class Exacoat_Guarantee_Manager {
 		}
 
 		$currency_sym  = get_woocommerce_currency_symbol( $order->get_currency() );
-		$refund_amount = (float) $order->get_meta( '_guarantee_refund_amount' );
+		$refund_amount = (float) (
+			$order->get_meta( '_guarantee_total_refund' )
+			?: ( $order->get_meta( '_guarantee_refund_amount' )
+			?: ( $order->get_meta( '_guarantee_est_refund_store_credit' ) ?: 0 ) )
+		);
 		$method        = $order->get_meta( '_guarantee_refund_method' ) ?: 'store_credit';
-		$destination   = $order->get_meta( '_guarantee_destination' ) ?: '';
+		$destination   = $order->get_meta( '_guarantee_payout_details' ) ?: ( $order->get_meta( '_guarantee_destination' ) ?: '' );
 
 		if ( 'mark_received' === $action ) {
 			$order->update_meta_data( '_guarantee_status', 'package_received' );
+			$order->update_meta_data( '_guarantee_claim_status', 'package_received' );
 			$order->update_meta_data( '_guarantee_received_at', current_time( 'mysql' ) );
 			$order->save();
 			update_post_meta( $order_id, '_guarantee_status', 'package_received' );
+			update_post_meta( $order_id, '_guarantee_claim_status', 'package_received' );
 
 			$note = sprintf(
 				"📦 [30-DAY GUARANTEE] Return package received and inspected at Ruby Commercial TB12.%s",
@@ -758,6 +916,7 @@ class Exacoat_Guarantee_Manager {
 
 		if ( 'approve_refund' === $action ) {
 			$order->update_meta_data( '_guarantee_status', 'refunded' );
+			$order->update_meta_data( '_guarantee_claim_status', 'refunded' );
 			$order->update_meta_data( '_guarantee_refunded_at', current_time( 'mysql' ) );
 			if ( ! empty( $notes ) ) {
 				$order->update_meta_data( '_guarantee_admin_notes', $notes );
@@ -765,6 +924,7 @@ class Exacoat_Guarantee_Manager {
 			$order->save();
 
 			update_post_meta( $order_id, '_guarantee_status', 'refunded' );
+			update_post_meta( $order_id, '_guarantee_claim_status', 'refunded' );
 			update_post_meta( $order_id, '_guarantee_refunded_at', current_time( 'mysql' ) );
 
 			// Update WooCommerce status to refunded
@@ -778,7 +938,7 @@ class Exacoat_Guarantee_Manager {
 
 			$amount_fmt = $currency_sym . ' ' . number_format( $refund_amount, 0, ',', '.' );
 
-			// DISPATCH LIGHT-THEMED EMAIL via Exacoat Email Engine
+			// Dispatch light-theme refund email via Exacoat Email Engine
 			$email_dispatched = false;
 			if ( class_exists( 'Exacoat_Email_Engine' ) || class_exists( 'Artmatter_Email_Engine' ) ) {
 				$email_class = class_exists( 'Exacoat_Email_Engine' ) ? 'Exacoat_Email_Engine' : 'Artmatter_Email_Engine';
@@ -802,7 +962,6 @@ class Exacoat_Guarantee_Manager {
 						'customer_note'       => "Return verified at Ruby Commercial TB12. Funds will reflect within 1 to 3 business days for bank transfers, or instantly in your store credit wallet.",
 					];
 
-					// Merge standard order payload
 					if ( class_exists( 'Artmatter_Order_Manager' ) ) {
 						$payload = Artmatter_Order_Manager::get_email_order_payload( $order, $payload );
 					}
@@ -832,10 +991,12 @@ class Exacoat_Guarantee_Manager {
 
 		if ( 'reject' === $action ) {
 			$order->update_meta_data( '_guarantee_status', 'rejected' );
+			$order->update_meta_data( '_guarantee_claim_status', 'rejected' );
 			$order->update_meta_data( '_guarantee_admin_notes', $notes );
 			$order->save();
 
 			update_post_meta( $order_id, '_guarantee_status', 'rejected' );
+			update_post_meta( $order_id, '_guarantee_claim_status', 'rejected' );
 
 			$order->add_order_note( sprintf(
 				"❌ [30-DAY GUARANTEE REJECTED] Claim was rejected.%s",
@@ -846,6 +1007,30 @@ class Exacoat_Guarantee_Manager {
 				'success' => true,
 				'status'  => 'rejected',
 				'message' => 'Guarantee claim marked as rejected.',
+			], 200 );
+		}
+
+		if ( 'expire' === $action ) {
+			$order->update_meta_data( '_guarantee_status', 'expired' );
+			$order->update_meta_data( '_guarantee_claim_status', 'expired' );
+			$order->update_meta_data( '_guarantee_expired_at', current_time( 'mysql' ) );
+			if ( ! empty( $notes ) ) {
+				$order->update_meta_data( '_guarantee_admin_notes', $notes );
+			}
+			$order->save();
+
+			update_post_meta( $order_id, '_guarantee_status', 'expired' );
+			update_post_meta( $order_id, '_guarantee_claim_status', 'expired' );
+
+			$order->add_order_note( sprintf(
+				"⏰ [30-DAY GUARANTEE EXPIRED] Customer return authorization was closed/expired.%s",
+				! empty( $notes ) ? "\nAdmin Notes: {$notes}" : ''
+			) );
+
+			return new \WP_REST_Response( [
+				'success' => true,
+				'status'  => 'expired',
+				'message' => 'Guarantee return authorization marked as expired.',
 			], 200 );
 		}
 

@@ -54,7 +54,7 @@ export const RmaClaimsPage: React.FC = () => {
 
   // Filter States for 30-Day Guarantee
   const [guaranteeStatusFilter, setGuaranteeStatusFilter] = useState<
-    'all' | 'pending_return' | 'package_received' | 'refunded' | 'rejected'
+    'all' | 'pending_return' | 'package_received' | 'refunded' | 'rejected' | 'expired'
   >('all');
 
   // Common Search & Paging
@@ -81,6 +81,7 @@ export const RmaClaimsPage: React.FC = () => {
     package_received: 0,
     refunded: 0,
     rejected: 0,
+    expired: 0,
   });
 
   const [totalPages, setTotalPages] = useState(1);
@@ -132,17 +133,76 @@ export const RmaClaimsPage: React.FC = () => {
         });
 
         if (res.success) {
-          // Safeguard: Ensure only genuine user-submitted claims appear
-          const verifiedClaims = (res.claims || []).filter(
-            (c) => c && c.order_id && Boolean(c.submitted_at || c.reason || c.refund_destination)
-          );
-          setGuaranteeClaims(verifiedClaims);
-          if (res.stats) {
+          // Strict Safeguard: Exclude regular orders from appearing in 30-day guarantee returns.
+          // Real submissions from /money-back-guarantee ALWAYS have:
+          // 1. Non-empty refund_destination OR non-empty reason OR claimed items OR return tracking resi OR refund amount > 0.
+          // 2. An order with 0 refund amount, no destination, no reason, and no items is a standard order and must NEVER be shown.
+          const verifiedClaims = (res.claims || []).filter((c) => {
+            if (!c || !c.order_id) return false;
+            const hasGuaranteeDetails = Boolean(
+              (c.refund_amount && c.refund_amount > 0) ||
+              (c.refund_destination && c.refund_destination !== '-' && c.refund_destination.trim() !== '') ||
+              (c.reason && c.reason.trim() !== '') ||
+              (c.claimed_items && c.claimed_items.length > 0) ||
+              (c.return_tracking_number && c.return_tracking_number.trim() !== '')
+            );
+            return hasGuaranteeDetails;
+          });
+
+          // Check for overdue returns (>30 days since customer submitted return claim without sending back package)
+          const now = Date.now();
+          const processedClaims: GuaranteeClaimEntry[] = verifiedClaims.map((claim) => {
+            let daysSinceClaim = claim.days_since_claim;
+            if (daysSinceClaim === undefined && claim.submitted_at) {
+              const subTs = new Date(claim.submitted_at).getTime();
+              if (!isNaN(subTs) && subTs > 0) {
+                daysSinceClaim = Math.max(0, Math.floor((now - subTs) / (1000 * 60 * 60 * 24)));
+              }
+            }
+
+            const isOverdue = Boolean(daysSinceClaim !== undefined && daysSinceClaim > 30);
+            const effectiveStatus =
+              claim.guarantee_status === 'pending_return' && isOverdue ? 'expired' : claim.guarantee_status;
+
+            return {
+              ...claim,
+              days_since_claim: daysSinceClaim,
+              days_remaining_to_return: Math.max(0, 30 - (daysSinceClaim || 0)),
+              is_expired: isOverdue || claim.guarantee_status === 'expired',
+              guarantee_status: effectiveStatus,
+            };
+          });
+
+          // Filter by active status if client-side post-processing adjusted statuses
+          const filteredClaims = processedClaims.filter((c) => {
+            if (guaranteeStatusFilter === 'all') return true;
+            return c.guarantee_status === guaranteeStatusFilter;
+          });
+
+          setGuaranteeClaims(filteredClaims);
+
+          // Recompute stats strictly from genuine claims to avoid bogus counts (e.g. 18653 from unindexed legacy endpoints):
+          const isBogusStats =
+            !res.stats ||
+            res.stats.pending_return > 500 ||
+            (res.stats.total === 0 && res.stats.pending_return > 0) ||
+            res.stats.pending_return === res.stats.package_received;
+
+          if (isBogusStats) {
+            setGuaranteeStats({
+              total: processedClaims.length,
+              pending_return: processedClaims.filter((c) => c.guarantee_status === 'pending_return').length,
+              package_received: processedClaims.filter((c) => c.guarantee_status === 'package_received').length,
+              refunded: processedClaims.filter((c) => c.guarantee_status === 'refunded').length,
+              rejected: processedClaims.filter((c) => c.guarantee_status === 'rejected').length,
+              expired: processedClaims.filter((c) => c.guarantee_status === 'expired').length,
+            });
+            setTotalItems(filteredClaims.length);
+            setTotalPages(Math.max(1, Math.ceil(filteredClaims.length / perPage)));
+          } else {
             setGuaranteeStats(res.stats);
-          }
-          if (res.pagination) {
-            setTotalPages(res.pagination.total_pages || 1);
-            setTotalItems(res.pagination.total_items || verifiedClaims.length);
+            setTotalItems(res.pagination?.total_items ?? filteredClaims.length);
+            setTotalPages(res.pagination?.total_pages ?? 1);
           }
         } else {
           showToast('error', 'Guarantee Fetch Failed', res.error || 'Failed to load guarantee returns');
@@ -183,15 +243,24 @@ export const RmaClaimsPage: React.FC = () => {
     setIsManualModalOpen(true);
   };
 
-  const handleGuaranteeAction = async (orderId: number, action: 'mark_received' | 'approve_refund') => {
+  const handleGuaranteeAction = async (
+    orderId: number,
+    action: 'mark_received' | 'approve_refund' | 'reject' | 'expire' | 'auto_expire_overdue'
+  ) => {
     try {
       setIsActioningGuarantee(orderId);
       const res = await processGuaranteeActionDirect(orderId, action);
       if (res.success) {
         if (action === 'approve_refund') {
           showToast('success', 'Refund Approved and Paid', res.message || 'Refund issued and customer email dispatched.');
-        } else {
+        } else if (action === 'mark_received') {
           showToast('success', 'Package Received', 'Return marked as received at Ruby Commercial TB12.');
+        } else if (action === 'expire') {
+          showToast('info', 'Return Authorization Expired', 'Claim marked as expired (closed).');
+        } else if (action === 'auto_expire_overdue') {
+          showToast('success', 'Sweep Complete', res.message || 'All overdue return claims older than 30 days expired.');
+        } else {
+          showToast('info', 'Claim Rejected', 'Guarantee claim marked as rejected.');
         }
         await loadClaims();
       } else {
@@ -668,7 +737,7 @@ export const RmaClaimsPage: React.FC = () => {
       {activeTab === 'guarantee' && (
         <div className="space-y-4">
           {/* KPI Stat Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
             <GlassCard className="p-4 flex flex-col justify-between min-h-[90px]">
               <span className="text-[11px] font-medium text-zinc-500 dark:text-neutral-400 uppercase tracking-wider font-mono">
                 Total Returns
@@ -715,9 +784,19 @@ export const RmaClaimsPage: React.FC = () => {
                 {guaranteeStats.rejected}
               </div>
             </GlassCard>
+
+            <GlassCard className="p-4 flex flex-col justify-between min-h-[90px] border-zinc-500/20">
+              <span className="text-[11px] font-medium text-zinc-500 dark:text-neutral-400 uppercase tracking-wider font-mono flex items-center gap-1">
+                <Clock className="w-3 h-3 text-zinc-400" />
+                <span>Expired (&gt;30d)</span>
+              </span>
+              <div className="text-2xl font-bold font-mono text-zinc-500 dark:text-neutral-300 mt-1">
+                {guaranteeStats.expired ?? 0}
+              </div>
+            </GlassCard>
           </div>
 
-          {/* Filter Bar with Hub location */}
+          {/* Filter Bar with Hub location & Sweep Overdue */}
           <GlassCard className="p-3 sm:p-4 rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] flex items-center justify-between flex-wrap gap-2.5">
             <div className="flex items-center gap-2 flex-1 min-w-[240px]">
               <div className="relative flex-1">
@@ -743,6 +822,7 @@ export const RmaClaimsPage: React.FC = () => {
                 { key: 'package_received', label: 'Package Received' },
                 { key: 'refunded', label: 'Refund Paid' },
                 { key: 'rejected', label: 'Rejected' },
+                { key: 'expired', label: 'Expired (>30d)' },
               ].map((s) => (
                 <button
                   key={s.key}
@@ -763,9 +843,22 @@ export const RmaClaimsPage: React.FC = () => {
               ))}
             </div>
 
-            <div className="px-2.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/[0.08] text-[11px] font-mono text-zinc-600 dark:text-neutral-400 flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-[#f3aa18]" />
-              <span>Hub: Ruby Commercial TB12</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleGuaranteeAction(0, 'auto_expire_overdue')}
+                disabled={isActioningGuarantee !== null}
+                className="px-2.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-neutral-900 hover:bg-zinc-200 dark:hover:bg-white/[0.08] text-zinc-600 dark:text-neutral-300 border border-zinc-200 dark:border-white/[0.08] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                title="Automatically scan and mark pending claims older than 30 days as expired"
+              >
+                <Clock className="w-3.5 h-3.5 text-amber-500" />
+                <span>Sweep Overdue (&gt;30d)</span>
+              </button>
+
+              <div className="px-2.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/[0.08] text-[11px] font-mono text-zinc-600 dark:text-neutral-400 flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-[#f3aa18]" />
+                <span>Hub: Ruby Commercial TB12</span>
+              </div>
             </div>
           </GlassCard>
 
@@ -777,7 +870,7 @@ export const RmaClaimsPage: React.FC = () => {
                   <tr className="border-b border-zinc-200 dark:border-white/[0.06] bg-zinc-50 dark:bg-neutral-900/60 text-zinc-500 dark:text-neutral-400 font-semibold uppercase tracking-wider text-[10px]">
                     <th className="py-3.5 px-4">Order / Submitted</th>
                     <th className="py-3.5 px-4">Customer</th>
-                    <th className="py-3.5 px-4">Shipment Date</th>
+                    <th className="py-3.5 px-4">Return Window</th>
                     <th className="py-3.5 px-4">Refund Payout</th>
                     <th className="py-3.5 px-4">Destination</th>
                     <th className="py-3.5 px-4">Return Resi</th>
@@ -799,7 +892,7 @@ export const RmaClaimsPage: React.FC = () => {
                         <RotateCcw className="w-8 h-8 mx-auto mb-2 opacity-30 text-purple-400" />
                         <div className="font-semibold text-zinc-800 dark:text-neutral-300">No Guarantee Returns Submitted</div>
                         <div className="text-xs text-zinc-500 mt-1">
-                          Only requests submitted by users through the 30-day guarantee portal will appear here for review.
+                          Only requests submitted by customers through the /money-back-guarantee portal will appear here for review.
                         </div>
                         <button
                           type="button"
@@ -825,7 +918,7 @@ export const RmaClaimsPage: React.FC = () => {
                               #{claim.order_number}
                             </button>
                             <div className="text-[10px] text-zinc-500 mt-0.5">
-                              {claim.submitted_at ? claim.submitted_at.split(' ')[0] : ''}
+                              {claim.submitted_at ? claim.submitted_at.split(' ')[0] : 'Online Claim'}
                             </div>
                           </td>
 
@@ -839,12 +932,32 @@ export const RmaClaimsPage: React.FC = () => {
                             </div>
                           </td>
 
-                          {/* Shipment Date */}
+                          {/* Return Window */}
                           <td className="py-3.5 px-4 font-mono text-xs text-zinc-700 dark:text-neutral-300">
-                            <div>{claim.shipped_at}</div>
-                            <div className="text-[10px] text-zinc-500 mt-0.5">
-                              {claim.days_since_shipped}d elapsed
-                            </div>
+                            {claim.is_expired || claim.guarantee_status === 'expired' ? (
+                              <div>
+                                <span className="text-rose-500 dark:text-rose-400 font-bold">Expired (&gt;30d)</span>
+                                <div className="text-[10px] text-zinc-500 mt-0.5">
+                                  {claim.days_since_claim ? `${claim.days_since_claim}d since claim` : 'Window closed'}
+                                </div>
+                              </div>
+                            ) : claim.guarantee_status === 'pending_return' ? (
+                              <div>
+                                <span className="text-amber-500 dark:text-amber-400 font-bold">
+                                  {claim.days_remaining_to_return ?? Math.max(0, 30 - (claim.days_since_claim || 0))}d left to return
+                                </span>
+                                <div className="text-[10px] text-zinc-500 mt-0.5">
+                                  Claimed {claim.days_since_claim ?? 0}d ago
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                <div className="text-zinc-900 dark:text-white font-medium">{claim.shipped_at || 'Shipped'}</div>
+                                <div className="text-[10px] text-zinc-500 mt-0.5">
+                                  {claim.days_since_shipped}d since shipping
+                                </div>
+                              </div>
+                            )}
                           </td>
 
                           {/* Refund Payout */}
@@ -859,7 +972,7 @@ export const RmaClaimsPage: React.FC = () => {
 
                           {/* Destination */}
                           <td className="py-3.5 px-4 max-w-[160px]">
-                            <span className="text-xs text-zinc-800 dark:text-neutral-300 truncate block">
+                            <span className="text-xs text-zinc-800 dark:text-neutral-300 truncate block" title={claim.refund_destination}>
                               {claim.refund_destination || '-'}
                             </span>
                           </td>
@@ -903,6 +1016,8 @@ export const RmaClaimsPage: React.FC = () => {
                                   ? 'bg-sky-500/15 border-sky-500/30 text-sky-600 dark:text-sky-300'
                                   : claim.guarantee_status === 'rejected'
                                   ? 'bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-300'
+                                  : claim.guarantee_status === 'expired'
+                                  ? 'bg-zinc-500/15 border-zinc-500/30 text-zinc-500 dark:text-neutral-400'
                                   : 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-300'
                               )}
                             >
@@ -912,6 +1027,8 @@ export const RmaClaimsPage: React.FC = () => {
                                 ? 'Package Received'
                                 : claim.guarantee_status === 'rejected'
                                 ? 'Rejected'
+                                : claim.guarantee_status === 'expired'
+                                ? 'Expired (>30d)'
                                 : 'Awaiting Package'}
                             </span>
                           </td>
@@ -920,26 +1037,64 @@ export const RmaClaimsPage: React.FC = () => {
                           <td className="py-3.5 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
                               {claim.guarantee_status === 'pending_return' && (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={isActioning}
+                                    onClick={() => handleGuaranteeAction(claim.order_id, 'mark_received')}
+                                    className="px-2.5 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-300 border border-sky-500/30 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 inline-flex items-center gap-1"
+                                    title="Mark physical package as received at Ruby Commercial TB12"
+                                  >
+                                    <Package className="w-3 h-3" />
+                                    <span>Mark Received</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isActioning}
+                                    onClick={() => handleGuaranteeAction(claim.order_id, 'expire')}
+                                    className="px-2 py-1 rounded-lg bg-zinc-100 hover:bg-rose-500/10 text-zinc-500 hover:text-rose-600 dark:bg-neutral-800 dark:hover:bg-rose-500/20 dark:text-neutral-400 dark:hover:text-rose-300 border border-zinc-200 dark:border-white/10 text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 inline-flex items-center gap-1"
+                                    title="Close return authorization (customer did not send item)"
+                                  >
+                                    <Clock className="w-3 h-3" />
+                                    <span>Expire</span>
+                                  </button>
+                                </>
+                              )}
+
+                              {claim.guarantee_status === 'package_received' && (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={isActioning}
+                                    onClick={() => handleGuaranteeAction(claim.order_id, 'approve_refund')}
+                                    className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-300 border border-emerald-500/40 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 inline-flex items-center gap-1"
+                                  >
+                                    <CheckCheck className="w-3 h-3" />
+                                    <span>Approve Refund</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isActioning}
+                                    onClick={() => handleGuaranteeAction(claim.order_id, 'reject')}
+                                    className="px-2 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/30 text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 inline-flex items-center gap-1"
+                                    title="Reject claim"
+                                  >
+                                    <XCircle className="w-3 h-3" />
+                                    <span>Reject</span>
+                                  </button>
+                                </>
+                              )}
+
+                              {claim.guarantee_status === 'expired' && (
                                 <button
                                   type="button"
                                   disabled={isActioning}
                                   onClick={() => handleGuaranteeAction(claim.order_id, 'mark_received')}
-                                  className="px-2.5 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-300 border border-sky-500/30 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 inline-flex items-center gap-1"
+                                  className="px-2 py-1 rounded-lg bg-zinc-100 hover:bg-sky-500/10 text-zinc-500 hover:text-sky-600 dark:bg-neutral-800 dark:hover:bg-sky-500/20 dark:text-neutral-400 dark:hover:text-sky-300 border border-zinc-200 dark:border-white/10 text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 inline-flex items-center gap-1"
+                                  title="Package arrived late, mark received"
                                 >
                                   <Package className="w-3 h-3" />
-                                  <span>Mark Received</span>
-                                </button>
-                              )}
-
-                              {claim.guarantee_status === 'package_received' && (
-                                <button
-                                  type="button"
-                                  disabled={isActioning}
-                                  onClick={() => handleGuaranteeAction(claim.order_id, 'approve_refund')}
-                                  className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-300 border border-emerald-500/40 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 inline-flex items-center gap-1"
-                                >
-                                  <CheckCheck className="w-3 h-3" />
-                                  <span>Approve Refund</span>
+                                  <span>Reopen</span>
                                 </button>
                               )}
 

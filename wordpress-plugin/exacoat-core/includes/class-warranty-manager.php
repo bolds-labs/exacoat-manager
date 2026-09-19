@@ -640,38 +640,192 @@ class Exacoat_Warranty_Manager {
 		$order_id = absint( $request->get_param( 'order_id' ) );
 		$order    = $order_id ? wc_get_order( $order_id ) : null;
 
-		$postcode = sanitize_text_field( trim( (string) $request->get_param( 'postcode' ) ) );
-		if ( empty( $postcode ) && $order ) {
-			$postcode = trim( $order->get_shipping_postcode() ?: $order->get_billing_postcode() );
-		}
-
-		$country = sanitize_text_field( trim( (string) ( $request->get_param( 'destination_country' ) ?: $request->get_param( 'country' ) ) ) );
+		$country = strtoupper( sanitize_text_field( trim( (string) ( $request->get_param( 'destination_country' ) ?: $request->get_param( 'country' ) ) ) ) );
 		if ( empty( $country ) && $order ) {
-			$country = trim( $order->get_shipping_country() ?: $order->get_billing_country() );
+			$country = strtoupper( trim( $order->get_shipping_country() ?: $order->get_billing_country() ) );
 		}
 		if ( empty( $country ) ) {
 			$country = 'ID';
 		}
 
-		if ( empty( $postcode ) ) {
+		$postcode = sanitize_text_field( trim( (string) $request->get_param( 'postcode' ) ) );
+		if ( empty( $postcode ) && $order ) {
+			$postcode = trim( $order->get_shipping_postcode() ?: $order->get_billing_postcode() );
+		}
+
+		$city = sanitize_text_field( trim( (string) $request->get_param( 'city' ) ) );
+		if ( empty( $city ) && $order ) {
+			$city = trim( $order->get_shipping_city() ?: $order->get_billing_city() );
+		}
+
+		$state = sanitize_text_field( trim( (string) $request->get_param( 'state' ) ) );
+		if ( empty( $state ) && $order ) {
+			$state = trim( $order->get_shipping_state() ?: $order->get_billing_state() );
+		}
+
+		$address = sanitize_text_field( trim( (string) ( $request->get_param( 'address' ) ?: $request->get_param( 'address_1' ) ) ) );
+		if ( empty( $address ) && $order ) {
+			$address = trim( $order->get_shipping_address_1() ?: $order->get_billing_address_1() );
+		}
+
+		if ( 'ID' === $country && empty( $postcode ) ) {
 			return new \WP_REST_Response( [
 				'success' => false,
-				'message' => 'Postal code is required.',
+				'message' => 'Postal code is required for domestic shipping calculation.',
 			], 400 );
 		}
 
+		// International Shipping: dynamically query WooCommerce Shipping Zones & active methods (Goorita, POS Indonesia, etc.)
 		if ( 'ID' !== $country ) {
+			$package = [
+				'contents'        => [],
+				'contents_cost'   => 129000,
+				'applied_coupons' => [],
+				'user'            => [ 'ID' => get_current_user_id() ],
+				'destination'     => [
+					'country'   => $country,
+					'state'     => $state,
+					'postcode'  => $postcode,
+					'city'      => $city,
+					'address'   => $address,
+					'address_2' => '',
+				],
+			];
+
+			if ( $order ) {
+				$package['contents_cost'] = (float) ( $order->get_total() ?: 129000 );
+				foreach ( $order->get_items() as $item_id => $item ) {
+					$product = $item->get_product();
+					if ( $product ) {
+						$package['contents'][ $item_id ] = [
+							'product_id'        => $product->get_id(),
+							'variation_id'      => $product->is_type( 'variation' ) ? $product->get_id() : 0,
+							'variation'         => [],
+							'quantity'          => $item->get_quantity(),
+							'data'              => $product,
+							'line_total'        => $item->get_total(),
+							'line_tax'          => $item->get_total_tax(),
+							'line_subtotal'     => $item->get_subtotal(),
+							'line_subtotal_tax' => $item->get_subtotal_tax(),
+						];
+					}
+				}
+			}
+
+			if ( function_exists( 'WC' ) && WC()->shipping() ) {
+				WC()->shipping()->init();
+			}
+
+			$rates = [];
+
+			// 1. Calculate shipping for package through WooCommerce Core shipping engine
+			if ( function_exists( 'WC' ) && WC()->shipping() ) {
+				try {
+					$calc_result = WC()->shipping()->calculate_shipping_for_package( $package );
+					if ( ! empty( $calc_result['rates'] ) && is_array( $calc_result['rates'] ) ) {
+						foreach ( $calc_result['rates'] as $rate_obj ) {
+							if ( is_a( $rate_obj, 'WC_Shipping_Rate' ) ) {
+								$rid = $rate_obj->get_id();
+								$rates[ $rid ] = [
+									'id'       => $rid,
+									'courier'  => $rate_obj->get_method_id(),
+									'service'  => (string) $rate_obj->get_instance_id(),
+									'label'    => $rate_obj->get_label(),
+									'price'    => (float) $rate_obj->get_cost(),
+									'duration' => $rate_obj->get_meta_data()['duration'] ?? '7-14 business days',
+								];
+							}
+						}
+					}
+				} catch ( \Throwable $e ) {
+					error_log( 'WC International calculate_shipping_for_package error: ' . $e->getMessage() );
+				}
+			}
+
+			// 2. Query WooCommerce Shipping Zones directly (matches POS Indonesia, Goorita, Flat Rate, etc.)
+			if ( class_exists( 'WC_Shipping_Zones' ) ) {
+				try {
+					$zone = \WC_Shipping_Zones::get_zone_matching_package( $package );
+					if ( $zone ) {
+						$methods = $zone->get_shipping_methods( true );
+						foreach ( $methods as $method ) {
+							if ( is_object( $method ) && method_exists( $method, 'calculate_shipping' ) ) {
+								$method->rates = [];
+								$method->calculate_shipping( $package );
+								if ( ! empty( $method->rates ) && is_array( $method->rates ) ) {
+									foreach ( $method->rates as $rate_obj ) {
+										if ( is_a( $rate_obj, 'WC_Shipping_Rate' ) ) {
+											$rid = $rate_obj->get_id();
+											if ( ! isset( $rates[ $rid ] ) ) {
+												$rates[ $rid ] = [
+													'id'       => $rid,
+													'courier'  => $rate_obj->get_method_id(),
+													'service'  => (string) $rate_obj->get_instance_id(),
+													'label'    => $rate_obj->get_label(),
+													'price'    => (float) $rate_obj->get_cost(),
+													'duration' => $rate_obj->get_meta_data()['duration'] ?? '7-14 business days',
+												];
+											}
+										}
+									}
+								}
+							}
+
+							if ( is_object( $method ) && method_exists( $method, 'get_option' ) ) {
+								$rate_key = method_exists( $method, 'get_rate_id' ) ? $method->get_rate_id() : ( $method->id . '_' . $method->get_instance_id() );
+								if ( ! isset( $rates[ $rate_key ] ) ) {
+									$cost_val = $method->get_option( 'cost' );
+									if ( '' !== $cost_val && null !== $cost_val ) {
+										$rates[ $rate_key ] = [
+											'id'       => $rate_key,
+											'courier'  => $method->id,
+											'service'  => (string) $method->get_instance_id(),
+											'label'    => $method->get_title() ?: $method->get_method_title(),
+											'price'    => (float) $cost_val,
+											'duration' => '7-14 business days',
+										];
+									}
+								}
+							}
+						}
+					}
+				} catch ( \Throwable $e ) {
+					error_log( 'WC Zone matching error: ' . $e->getMessage() );
+				}
+			}
+
+			// If zone and methods returned real rates, return them dynamically
+			if ( ! empty( $rates ) ) {
+				return new \WP_REST_Response( [
+					'success'     => true,
+					'is_fallback' => false,
+					'country'     => $country,
+					'postcode'    => $postcode,
+					'rates'       => array_values( $rates ),
+				], 200 );
+			}
+
+			// Fallback: If no international zone or methods are configured yet, return standard international carriers in IDR
 			return new \WP_REST_Response( [
 				'success'     => true,
-				'is_fallback' => false,
+				'is_fallback' => true,
+				'country'     => $country,
 				'postcode'    => $postcode,
 				'rates'       => [
 					[
+						'id'       => 'goorita_international',
+						'courier'  => 'goorita',
+						'service'  => 'standard',
+						'label'    => 'Goorita International Express',
+						'price'    => 175000,
+						'duration' => '5-10 business days',
+					],
+					[
 						'id'       => 'pos_international',
 						'courier'  => 'pos',
-						'service'  => 'Standard Registered',
+						'service'  => 'registered',
 						'label'    => 'POS Indonesia International Registered',
-						'price'    => 50000,
+						'price'    => 125000,
 						'duration' => '7-14 business days',
 					],
 				],
@@ -1174,10 +1328,12 @@ class Exacoat_Warranty_Manager {
 		$courier_label        = sanitize_text_field( $request->get_param( 'courier_label' ) ?: 'JNE Regular' );
 		$shipping_cost        = max( 0, floatval( $request->get_param( 'shipping_cost' ) ?: 0 ) );
 		$actual_shipping_cost = max( 0, floatval( $request->get_param( 'actual_shipping_cost' ) ?: $shipping_cost ) );
-		$waive_shipping       = (bool) $request->get_param( 'waive_shipping' );
-		if ( 'Redeem' === $rma_type || $waive_shipping ) {
-			$shipping_cost = 0;
+		if ( $actual_shipping_cost <= 0 && $shipping_cost > 0 ) {
+			$actual_shipping_cost = $shipping_cost;
 		}
+		$waive_shipping = (bool) $request->get_param( 'waive_shipping' );
+		$is_redeem      = ( 'Redeem' === $rma_type );
+		$is_free        = ( $is_redeem || $waive_shipping );
 
 		$is_qc_fault_param = $request->get_param( 'is_qc_fault' );
 		$is_qc_fault       = ( true === $is_qc_fault_param || '1' === $is_qc_fault_param || 'true' === $is_qc_fault_param );
@@ -1241,7 +1397,9 @@ class Exacoat_Warranty_Manager {
 					$curr_ship = $replacement_order->get_address( 'shipping' );
 					$curr_ship['address_1'] = sanitize_text_field( $shipping_addr['address_1'] );
 					$curr_ship['city']      = sanitize_text_field( $shipping_addr['city'] ?? $curr_ship['city'] );
+					$curr_ship['state']     = sanitize_text_field( $shipping_addr['state'] ?? ( $curr_ship['state'] ?? '' ) );
 					$curr_ship['postcode']  = sanitize_text_field( $shipping_addr['postcode'] ?? $curr_ship['postcode'] );
+					$curr_ship['country']   = sanitize_text_field( $shipping_addr['country'] ?? ( $curr_ship['country'] ?? 'ID' ) );
 					$replacement_order->set_address( $curr_ship, 'shipping' );
 				}
 
@@ -1316,12 +1474,27 @@ class Exacoat_Warranty_Manager {
 					], 400 );
 				}
 
-				// Add shipping method line
+				// Add shipping method line with actual courier cost
 				$shipping_item = new \WC_Order_Item_Shipping();
 				$shipping_item->set_method_title( $courier_label );
 				$shipping_item->set_method_id( $courier_id );
-				$shipping_item->set_total( $shipping_cost );
+				$shipping_item->set_total( $actual_shipping_cost );
 				$replacement_order->add_item( $shipping_item );
+
+				// If Redeem or Waived, add a negative fee line to balance out the shipping cost
+				if ( $is_free && $actual_shipping_cost > 0 ) {
+					$waiver_fee = new \WC_Order_Item_Fee();
+					$waiver_title = $is_redeem
+						? 'Redeem Shipping Waiver (Borne by Exacoat)'
+						: 'Shipping Waiver (Borne by Exacoat)';
+					$waiver_fee->set_name( $waiver_title );
+					$waiver_fee->set_amount( -1 * $actual_shipping_cost );
+					$waiver_fee->set_total( -1 * $actual_shipping_cost );
+					$waiver_fee->set_tax_status( 'none' );
+					$waiver_fee->add_meta_data( '_is_shipping_waiver', 'yes', true );
+					$waiver_fee->add_meta_data( '_covered_courier_cost', $actual_shipping_cost, true );
+					$replacement_order->add_item( $waiver_fee );
+				}
 
 				$replacement_order->set_currency( 'IDR' );
 				$replacement_order->calculate_totals();
@@ -1335,6 +1508,8 @@ class Exacoat_Warranty_Manager {
 				$replacement_order->update_meta_data( '_rma_original_order_number', $parent_order->get_order_number() );
 				$replacement_order->update_meta_data( '_rma_claim_reason', $claim_reason );
 				$replacement_order->update_meta_data( '_rma_status', 'approved' );
+				$replacement_order->update_meta_data( '_actual_shipping_cost', $actual_shipping_cost );
+				$replacement_order->update_meta_data( '_shipping_waived', $is_free ? 'yes' : 'no' );
 				$replacement_order->update_meta_data( '_rma_reviewed_by', $admin_name );
 				$replacement_order->update_meta_data( '_rma_reviewed_at', current_time( 'mysql' ) );
 				if ( ! empty( $selected_parts ) ) {
@@ -1347,18 +1522,21 @@ class Exacoat_Warranty_Manager {
 					$parent_order->update_meta_data( '_has_redeem_claim', 'yes' );
 					$parent_order->update_meta_data( '_redeem_replacement_order_id', $rep_id );
 					$parent_order->add_order_note( sprintf(
-						'Redeem (Company Fault) order created by %s. Replacement Order #%d created with courier %s (Free Shipping). Reason: %s',
+						'Redeem (Company Fault) order created by %s. Replacement Order #%d created with courier %s (Rp %s, Waived via Exacoat Expense). Reason: %s',
 						$admin_name,
 						$rep_id,
 						$courier_label,
+						number_format( $actual_shipping_cost, 0, ',', '.' ),
 						$claim_reason
 					) );
 					$parent_order->save();
 
 					$replacement_order->add_order_note( sprintf(
-						'⭐ [REDEEM REPLACEMENT - COMPANY FAULT] For Parent Order #%d. Issued by %s. Free Shipping (Rp 0). Defect: %s. Direct to production queue.',
+						'⭐ [REDEEM REPLACEMENT - COMPANY FAULT] For Parent Order #%d. Issued by %s. Courier: %s (Rp %s, Waived via Exacoat Company Expense). Defect: %s. Direct to production queue.',
 						$parent_order_id,
 						$admin_name,
+						$courier_label,
+						number_format( $actual_shipping_cost, 0, ',', '.' ),
 						$claim_reason
 					) );
 
@@ -1606,12 +1784,27 @@ class Exacoat_Warranty_Manager {
 					], 400 );
 				}
 
-				// Add shipping method line
+				// Add shipping method line with actual courier cost
 				$shipping_item = new \WC_Order_Item_Shipping();
 				$shipping_item->set_method_title( $courier_label );
 				$shipping_item->set_method_id( $courier_id );
-				$shipping_item->set_total( $shipping_cost );
+				$shipping_item->set_total( $actual_shipping_cost );
 				$replacement_order->add_item( $shipping_item );
+
+				// If Redeem or Waived, add a negative fee line to balance out the shipping cost
+				if ( $is_free && $actual_shipping_cost > 0 ) {
+					$waiver_fee = new \WC_Order_Item_Fee();
+					$waiver_title = $is_redeem
+						? 'Redeem Shipping Waiver (Borne by Exacoat)'
+						: 'Shipping Waiver (Borne by Exacoat)';
+					$waiver_fee->set_name( $waiver_title );
+					$waiver_fee->set_amount( -1 * $actual_shipping_cost );
+					$waiver_fee->set_total( -1 * $actual_shipping_cost );
+					$waiver_fee->set_tax_status( 'none' );
+					$waiver_fee->add_meta_data( '_is_shipping_waiver', 'yes', true );
+					$waiver_fee->add_meta_data( '_covered_courier_cost', $actual_shipping_cost, true );
+					$replacement_order->add_item( $waiver_fee );
+				}
 
 				$replacement_order->set_currency( 'IDR' );
 				$replacement_order->calculate_totals();
@@ -1626,18 +1819,21 @@ class Exacoat_Warranty_Manager {
 				$replacement_order->update_meta_data( '_rma_original_order_number', $clean_invoice );
 				$replacement_order->update_meta_data( '_rma_claim_reason', $claim_reason );
 				$replacement_order->update_meta_data( '_rma_status', 'approved' );
+				$replacement_order->update_meta_data( '_actual_shipping_cost', $actual_shipping_cost );
+				$replacement_order->update_meta_data( '_shipping_waived', $is_free ? 'yes' : 'no' );
 				$replacement_order->update_meta_data( '_rma_reviewed_by', $admin_name );
 				$replacement_order->update_meta_data( '_rma_reviewed_at', current_time( 'mysql' ) );
 
 				$hr_webhook_result = null;
 				if ( 'Redeem' === $rma_type ) {
 					$replacement_order->add_order_note( sprintf(
-						'⭐ [REDEEM REPLACEMENT - COMPANY FAULT] Channel: %s | Invoice: %s. Free shipping (Rp 0). Defect: %s. Created manually by %s. Courier: %s. Direct to production queue.',
+						'⭐ [REDEEM REPLACEMENT - COMPANY FAULT] Channel: %s | Invoice: %s. Courier: %s (Rp %s, Waived via Exacoat Company Expense). Defect: %s. Created manually by %s. Direct to production queue.',
 						$channel,
 						$clean_invoice,
+						$courier_label,
+						number_format( $actual_shipping_cost, 0, ',', '.' ),
 						$claim_reason,
-						$admin_name,
-						$courier_label
+						$admin_name
 					) );
 
 					if ( $is_qc_fault ) {

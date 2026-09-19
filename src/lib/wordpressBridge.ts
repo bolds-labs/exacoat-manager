@@ -2994,8 +2994,11 @@ export interface ShippingRateOption {
 export async function fetchShippingRatesDirect(
   postcode: string,
   country: string = 'ID',
-  orderId?: number
-): Promise<{ success: boolean; is_fallback?: boolean; rates?: ShippingRateOption[]; postcode?: string; error?: string }> {
+  orderId?: number,
+  city?: string,
+  address?: string,
+  state?: string
+): Promise<{ success: boolean; is_fallback?: boolean; rates?: ShippingRateOption[]; postcode?: string; country?: string; error?: string }> {
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/warranty/shipping-rates`;
 
@@ -3009,7 +3012,11 @@ export async function fetchShippingRatesDirect(
       body: JSON.stringify({
         postcode,
         destination_country: country,
+        country,
         order_id: orderId || undefined,
+        city: city || undefined,
+        address: address || undefined,
+        state: state || undefined,
       }),
     });
     const data = await res.json();
@@ -3019,6 +3026,7 @@ export async function fetchShippingRatesDirect(
         is_fallback: data.is_fallback ?? false,
         rates: data.rates || [],
         postcode: data.postcode,
+        country: data.country,
       };
     }
     return { success: false, error: data?.message || `HTTP ${res.status}` };
@@ -3296,16 +3304,19 @@ export interface GuaranteeClaimEntry {
   customer_phone?: string;
   shipped_at: string;
   days_since_shipped: number;
-  guarantee_status: 'pending_return' | 'package_received' | 'refunded' | 'rejected';
-  refund_method: 'store_credit' | 'bank_transfer' | 'paypal';
+  guarantee_status: 'pending_return' | 'package_received' | 'refunded' | 'rejected' | 'expired';
+  refund_method: 'store_credit' | 'bank_transfer' | 'paypal' | string;
   refund_amount: number;
   refund_amount_fmt: string;
   refund_destination: string;
   return_courier?: string;
   return_tracking_number?: string;
   submitted_at: string;
+  days_since_claim?: number;
+  days_remaining_to_return?: number;
+  is_expired?: boolean;
   reason?: string;
-  claimed_items: string[];
+  claimed_items: any[];
 }
 
 export interface GuaranteeClaimsStats {
@@ -3314,6 +3325,7 @@ export interface GuaranteeClaimsStats {
   package_received: number;
   refunded: number;
   rejected: number;
+  expired?: number;
 }
 
 export interface GuaranteeClaimsLogResponse {
@@ -3354,14 +3366,14 @@ export async function fetchGuaranteeClaimsDirect(params?: {
       return {
         success: true,
         claims: data.claims || [],
-        stats: data.stats || { total: 0, pending_return: 0, package_received: 0, refunded: 0, rejected: 0 },
+        stats: data.stats || { total: 0, pending_return: 0, package_received: 0, refunded: 0, rejected: 0, expired: 0 },
         pagination: data.pagination || { page: 1, per_page: 20, total_items: 0, total_pages: 1 },
       };
     }
     return {
       success: false,
       claims: [],
-      stats: { total: 0, pending_return: 0, package_received: 0, refunded: 0, rejected: 0 },
+      stats: { total: 0, pending_return: 0, package_received: 0, refunded: 0, rejected: 0, expired: 0 },
       pagination: { page: 1, per_page: 20, total_items: 0, total_pages: 1 },
       error: data?.message || `HTTP ${res.status}`,
     };
@@ -3369,7 +3381,7 @@ export async function fetchGuaranteeClaimsDirect(params?: {
     return {
       success: false,
       claims: [],
-      stats: { total: 0, pending_return: 0, package_received: 0, refunded: 0, rejected: 0 },
+      stats: { total: 0, pending_return: 0, package_received: 0, refunded: 0, rejected: 0, expired: 0 },
       pagination: { page: 1, per_page: 20, total_items: 0, total_pages: 1 },
       error: err.message,
     };
@@ -3378,13 +3390,14 @@ export async function fetchGuaranteeClaimsDirect(params?: {
 
 export async function processGuaranteeActionDirect(
   orderId: number,
-  action: 'mark_received' | 'approve_refund' | 'reject',
+  action: 'mark_received' | 'approve_refund' | 'reject' | 'expire' | 'auto_expire_overdue',
   notes?: string
 ): Promise<{
   success: boolean;
   status?: string;
   refund_amount?: string;
   email_dispatched?: boolean;
+  expired_count?: number;
   message?: string;
   error?: string;
 }> {
@@ -3411,6 +3424,7 @@ export async function processGuaranteeActionDirect(
         status: data.status,
         refund_amount: data.refund_amount,
         email_dispatched: data.email_dispatched,
+        expired_count: data.expired_count,
         message: data.message,
       };
     }

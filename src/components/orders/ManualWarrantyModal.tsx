@@ -232,7 +232,9 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
   const [customerEmail, setCustomerEmail] = useState('');
   const [address1, setAddress1] = useState('');
   const [city, setCity] = useState('');
+  const [state, setState] = useState('');
   const [postcode, setPostcode] = useState('');
+  const [country, setCountry] = useState('ID');
 
   // Existing order items selection & granular multi-part selection
   const [selectedParentItemIds, setSelectedParentItemIds] = useState<number[]>([]);
@@ -338,8 +340,12 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
       setCustomerEmail(existingOrder.shipping?.email || existingOrder.billing?.email || '');
       setAddress1(existingOrder.shipping?.address_1 || '');
       setCity(existingOrder.shipping?.city || '');
+      const stateVal = existingOrder.shipping?.state || existingOrder.billing?.state || '';
+      setState(stateVal);
       const zip = existingOrder.shipping?.postcode || '';
       setPostcode(zip);
+      const countryVal = existingOrder.shipping?.country || existingOrder.billing?.country || 'ID';
+      setCountry(countryVal);
 
       // Pre-select all items and their parts
       const allItemIds = (existingOrder.items || []).map((i) => i.id);
@@ -353,9 +359,9 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
       });
       setSelectedParts(partsMap);
 
-      // Auto-calculate shipping rates if zip exists
-      if (zip.trim().length >= 4) {
-        handleCalculateShipping(zip.trim());
+      // Auto-calculate shipping rates if zip exists or if international
+      if (zip.trim().length >= 3 || countryVal !== 'ID') {
+        handleCalculateShipping(zip.trim(), countryVal);
       }
     } else if (initialShopeeOrder && isOpen) {
       setChannel('Shopee');
@@ -369,6 +375,8 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
       setCustomerEmail('');
       setAddress1(initialShopeeOrder.recipient_address || '');
       setCity(initialShopeeOrder.recipient_city || '');
+      setState('');
+      setCountry('ID');
       const zip = initialShopeeOrder.recipient_postcode || '';
       setPostcode(zip);
 
@@ -402,7 +410,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
 
       // Auto-calculate shipping if zip exists
       if (zip.trim().length >= 4) {
-        handleCalculateShipping(zip.trim());
+        handleCalculateShipping(zip.trim(), 'ID');
       }
     } else if (initialTikTokOrder && isOpen) {
       setChannel('TikTok Shop');
@@ -417,6 +425,8 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
       setCustomerEmail('');
       setAddress1(initialTikTokOrder.recipient_address || '');
       setCity(initialTikTokOrder.recipient_city || '');
+      setState('');
+      setCountry('ID');
       const zip = initialTikTokOrder.recipient_postcode || '';
       setPostcode(zip);
 
@@ -450,7 +460,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
 
       // Auto-calculate shipping if zip exists
       if (zip.trim().length >= 4) {
-        handleCalculateShipping(zip.trim());
+        handleCalculateShipping(zip.trim(), 'ID');
       }
     } else if (isOpen) {
       // Reset form for fresh marketplace claim
@@ -460,7 +470,9 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
       setCustomerEmail('');
       setAddress1('');
       setCity('');
+      setState('');
       setPostcode('');
+      setCountry('ID');
       setSelectedProduct(null);
       setFreeformConfigText('');
       setShippingRates([]);
@@ -647,25 +659,36 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
     return () => clearTimeout(timer);
   }, [marketplaceInvoice, channel, isExisting]);
 
-  // Live Biteship Shipping Rates calculation
-  const handleCalculateShipping = async (zip: string) => {
+  // Live Biteship / WooCommerce International Shipping Rates calculation
+  const handleCalculateShipping = async (zip: string, overrideCountry?: string) => {
+    const activeCountry = (overrideCountry || country || 'ID').toUpperCase().trim();
     const cleanZip = zip.trim();
-    if (!cleanZip || cleanZip.length < 3) {
+    if (activeCountry === 'ID' && (!cleanZip || cleanZip.length < 3)) {
       showToast('warning', 'Postal Code Required', 'Please enter a valid postal code to calculate shipping.');
       return;
     }
 
     setIsLoadingShipping(true);
-    const res = await fetchShippingRatesDirect(cleanZip, 'ID', existingOrder?.id);
+    const res = await fetchShippingRatesDirect(
+      cleanZip,
+      activeCountry,
+      existingOrder?.id,
+      city.trim(),
+      address1.trim(),
+      state.trim()
+    );
     setIsLoadingShipping(false);
 
     if (res.success && res.rates?.length) {
-      // Filter strictly to JNE and SiCepat, no J&T
-      const filteredRates = res.rates.filter((r) => {
-        const c = (r.courier || '').toLowerCase();
-        return c.includes('jne') || c.includes('sicepat');
-      });
-      const finalRates = filteredRates.length ? filteredRates : res.rates;
+      let finalRates = res.rates;
+      if (activeCountry === 'ID') {
+        // Filter strictly to JNE and SiCepat, no J&T
+        const filteredRates = res.rates.filter((r) => {
+          const c = (r.courier || '').toLowerCase();
+          return c.includes('jne') || c.includes('sicepat');
+        });
+        finalRates = filteredRates.length ? filteredRates : res.rates;
+      }
       setShippingRates(finalRates);
       const first = finalRates[0];
       setSelectedCourierId(first.id);
@@ -674,7 +697,8 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
       if (res.is_fallback) {
         showToast('info', 'Standard Rates', 'Using standard courier rate estimates.');
       } else {
-        showToast('success', 'Live Rates Loaded', `Loaded ${finalRates.length} live Biteship rates.`);
+        const sourceLabel = activeCountry === 'ID' ? 'Biteship' : 'WooCommerce';
+        showToast('success', 'Live Rates Loaded', `Loaded ${finalRates.length} live ${sourceLabel} rates.`);
       }
     } else {
       showToast('warning', 'Rates Fallback', 'Using standard courier rate estimates.');
@@ -782,10 +806,11 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
           notes: adminNotes,
           allow_duplicate: allowDuplicateOverride,
           shipping_address: {
-            address_1: address1,
-            city,
-            postcode,
-            country: 'ID',
+            address_1: address1.trim(),
+            city: city.trim(),
+            state: state.trim(),
+            postcode: postcode.trim(),
+            country: country.trim() || 'ID',
           },
         };
 
@@ -855,8 +880,9 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
           shipping_address: {
             address_1: address1.trim(),
             city: city.trim(),
+            state: state.trim(),
             postcode: postcode.trim(),
-            country: 'ID',
+            country: country.trim() || 'ID',
           },
           items: [
             {
@@ -1768,13 +1794,61 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
               />
             </div>
           </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-neutral-400 mb-1 block">State / Province</label>
+              <input
+                type="text"
+                value={state}
+                onChange={(e) => setState(e.target.value)}
+                placeholder="e.g. Jawa Barat, California, Singapore"
+                className="w-full px-3 py-2 rounded-xl bg-[#141414] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-neutral-400 mb-1 block">Destination Country *</label>
+              <select
+                value={country}
+                onChange={(e) => {
+                  const newCountry = e.target.value;
+                  setCountry(newCountry);
+                  setShippingRates([]);
+                  if (postcode.trim() || newCountry !== 'ID') {
+                    handleCalculateShipping(postcode, newCountry);
+                  }
+                }}
+                className="w-full px-3 py-2 rounded-xl bg-[#141414] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-emerald-500 cursor-pointer"
+              >
+                <option value="ID">Indonesia (Domestic - Biteship)</option>
+                <option value="US">United States (Goorita / POS)</option>
+                <option value="SG">Singapore</option>
+                <option value="MY">Malaysia</option>
+                <option value="AU">Australia</option>
+                <option value="GB">United Kingdom</option>
+                <option value="CA">Canada</option>
+                <option value="DE">Germany</option>
+                <option value="NL">Netherlands</option>
+                <option value="FR">France</option>
+                <option value="JP">Japan</option>
+                <option value="KR">South Korea</option>
+                <option value="PH">Philippines</option>
+                <option value="TH">Thailand</option>
+                <option value="VN">Vietnam</option>
+                <option value="AE">United Arab Emirates</option>
+                <option value="OTHER">Other International (WooCommerce Zone)</option>
+              </select>
+            </div>
+          </div>
         </div>
 
-        {/* Section 4: Live Biteship Shipping Calculator */}
+        {/* Section 4: Live Shipping Calculator */}
         <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.08] space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <label className="text-xs font-bold uppercase tracking-wider text-neutral-400">
-              Live Biteship Shipping Calculator
+              {country === 'ID'
+                ? 'Live Biteship Shipping Calculator (Domestic)'
+                : `Live WooCommerce Shipping Calculator (${country})`}
             </label>
             {claimType === 'Redeem' ? (
               <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
@@ -1800,14 +1874,18 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                 type="text"
                 value={postcode}
                 onChange={(e) => setPostcode(e.target.value)}
-                placeholder="Enter 5-digit destination Postal Code (Zipcode)"
+                placeholder={
+                  country === 'ID'
+                    ? 'Enter 5-digit destination Postal Code (Zipcode)'
+                    : 'Enter destination Postal Code / Zipcode (or click calculate)'
+                }
                 className="w-full px-3.5 py-2 rounded-xl bg-[#141414] border border-white/[0.08] text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
               />
             </div>
             <button
               type="button"
               onClick={() => handleCalculateShipping(postcode)}
-              disabled={isLoadingShipping || !postcode.trim()}
+              disabled={isLoadingShipping || (country === 'ID' && !postcode.trim())}
               className="px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/[0.08] text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 disabled:opacity-50"
             >
               {isLoadingShipping ? (
@@ -1818,7 +1896,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
               ) : (
                 <>
                   <Truck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Calculate Shipping</span>
+                  <span>{country === 'ID' ? 'Calculate Shipping' : 'Calculate International Rates'}</span>
                 </>
               )}
             </button>
