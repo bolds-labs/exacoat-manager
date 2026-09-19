@@ -1641,31 +1641,31 @@ class Exacoat_Warranty_Manager {
 
 				// Prevent duplicate claims for external marketplace invoices
 				$clean_invoice = trim( ltrim( trim( $marketplace_invoice ), '#' ) );
-				$existing_claims = wc_get_orders( [
-					'limit'      => 1,
-					'status'     => [ 'pending', 'processing', 'on-hold', 'completed', 'shipped', 'ready-to-ship', 'delivered' ],
-					'meta_query' => [
-						[
-							'key'     => '_rma_original_invoice',
-							'value'   => $clean_invoice,
-							'compare' => '=',
-						],
+				$existing_claim_ids = self::query_order_ids_by_meta( [
+					[
+						'key'     => '_rma_original_invoice',
+						'value'   => $clean_invoice,
+						'compare' => '=',
 					],
+				], [
+					'limit'  => 1,
+					'status' => [ 'pending', 'processing', 'on-hold', 'completed', 'shipped', 'ready-to-ship', 'delivered' ],
 				] );
 
-				if ( empty( $existing_claims ) && $clean_invoice !== trim( $marketplace_invoice ) ) {
-					$existing_claims = wc_get_orders( [
-						'limit'      => 1,
-						'status'     => [ 'pending', 'processing', 'on-hold', 'completed', 'shipped', 'ready-to-ship', 'delivered' ],
-						'meta_query' => [
-							[
-								'key'     => '_rma_original_invoice',
-								'value'   => trim( $marketplace_invoice ),
-								'compare' => '=',
-							],
+				if ( empty( $existing_claim_ids ) && $clean_invoice !== trim( $marketplace_invoice ) ) {
+					$existing_claim_ids = self::query_order_ids_by_meta( [
+						[
+							'key'     => '_rma_original_invoice',
+							'value'   => trim( $marketplace_invoice ),
+							'compare' => '=',
 						],
+					], [
+						'limit'  => 1,
+						'status' => [ 'pending', 'processing', 'on-hold', 'completed', 'shipped', 'ready-to-ship', 'delivered' ],
 					] );
 				}
+
+				$existing_claims = array_filter( array_map( 'wc_get_order', $existing_claim_ids ) );
 
 				$allow_duplicate = ! empty( $request->get_param( 'allow_duplicate' ) ) || ! empty( $request->get_param( 'override_duplicate' ) );
 
@@ -1934,6 +1934,40 @@ class Exacoat_Warranty_Manager {
 	}
 
 	/**
+	 * Safe query for order IDs matching meta criteria across HPOS and Classic CPT
+	 */
+	public static function query_order_ids_by_meta( array $meta_query, array $args = [] ): array {
+		if ( class_exists( '\Automattic\WooCommerce\Utilities\OrderUtil' ) && \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled() ) {
+			$q_args = array_merge( [
+				'limit'      => -1,
+				'return'     => 'ids',
+				'meta_query' => $meta_query,
+			], $args );
+			return wc_get_orders( $q_args );
+		}
+
+		$wp_query_args = [
+			'post_type'      => 'shop_order',
+			'post_status'    => $args['status'] ?? 'any',
+			'posts_per_page' => $args['limit'] ?? -1,
+			'fields'         => 'ids',
+			'meta_query'     => $meta_query,
+			'orderby'        => $args['orderby'] ?? 'date',
+			'order'          => $args['order'] ?? 'DESC',
+		];
+
+		if ( ! empty( $args['paged'] ) ) {
+			$wp_query_args['paged'] = $args['paged'];
+		}
+		if ( ! empty( $args['s'] ) ) {
+			$wp_query_args['s'] = $args['s'];
+		}
+
+		$query = new \WP_Query( $wp_query_args );
+		return is_array( $query->posts ) ? array_map( 'intval', $query->posts ) : [];
+	}
+
+	/**
 	 * Admin / Manager: Check marketplace invoice availability to prevent duplicates
 	 */
 	public static function rest_check_invoice( \WP_REST_Request $request ): \WP_REST_Response {
@@ -1958,31 +1992,31 @@ class Exacoat_Warranty_Manager {
 		}
 
 		// Query existing active RMA claims with this original invoice
-		$existing_orders = wc_get_orders( [
-			'limit'      => 1,
-			'status'     => [ 'pending', 'processing', 'on-hold', 'completed', 'shipped', 'ready-to-ship', 'delivered' ],
-			'meta_query' => [
-				[
-					'key'     => '_rma_original_invoice',
-					'value'   => $clean_invoice,
-					'compare' => '=',
-				],
+		$existing_order_ids = self::query_order_ids_by_meta( [
+			[
+				'key'     => '_rma_original_invoice',
+				'value'   => $clean_invoice,
+				'compare' => '=',
 			],
+		], [
+			'limit'  => 1,
+			'status' => [ 'pending', 'processing', 'on-hold', 'completed', 'shipped', 'ready-to-ship', 'delivered' ],
 		] );
 
-		if ( empty( $existing_orders ) && $clean_invoice !== trim( $invoice ) ) {
-			$existing_orders = wc_get_orders( [
-				'limit'      => 1,
-				'status'     => [ 'pending', 'processing', 'on-hold', 'completed', 'shipped', 'ready-to-ship', 'delivered' ],
-				'meta_query' => [
-					[
-						'key'     => '_rma_original_invoice',
-						'value'   => trim( $invoice ),
-						'compare' => '=',
-					],
+		if ( empty( $existing_order_ids ) && $clean_invoice !== trim( $invoice ) ) {
+			$existing_order_ids = self::query_order_ids_by_meta( [
+				[
+					'key'     => '_rma_original_invoice',
+					'value'   => trim( $invoice ),
+					'compare' => '=',
 				],
+			], [
+				'limit'  => 1,
+				'status' => [ 'pending', 'processing', 'on-hold', 'completed', 'shipped', 'ready-to-ship', 'delivered' ],
 			] );
 		}
+
+		$existing_orders = array_filter( array_map( 'wc_get_order', $existing_order_ids ) );
 
 		if ( ! empty( $existing_orders ) ) {
 			$existing_order = reset( $existing_orders );
@@ -2085,12 +2119,32 @@ class Exacoat_Warranty_Manager {
 			$query_args['s'] = $search;
 		}
 
-		$results = wc_get_orders( $query_args );
+		if ( class_exists( '\Automattic\WooCommerce\Utilities\OrderUtil' ) && \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled() ) {
+			$results      = wc_get_orders( $query_args );
+			$orders_list  = is_object( $results ) && isset( $results->orders ) ? $results->orders : ( is_array( $results ) ? $results : [] );
+			$total_claims = is_object( $results ) && isset( $results->total ) ? $results->total : count( $orders_list );
+			$max_pages    = is_object( $results ) && isset( $results->max_num_pages ) ? $results->max_num_pages : 1;
+		} else {
+			$cpt_args = [
+				'post_type'      => 'shop_order',
+				'post_status'    => 'any',
+				'posts_per_page' => $per_page,
+				'paged'          => $page,
+				'orderby'        => 'date',
+				'order'          => 'DESC',
+				'meta_query'     => $meta_query,
+				'fields'         => 'ids',
+			];
+			if ( ! empty( $search ) ) {
+				$cpt_args['s'] = $search;
+			}
+			$cpt_query    = new \WP_Query( $cpt_args );
+			$total_claims = (int) $cpt_query->found_posts;
+			$max_pages    = (int) $cpt_query->max_num_pages;
+			$orders_list  = array_filter( array_map( 'wc_get_order', $cpt_query->posts ) );
+		}
 
 		$claims = [];
-		$orders_list  = is_object( $results ) && isset( $results->orders ) ? $results->orders : ( is_array( $results ) ? $results : [] );
-		$total_claims = is_object( $results ) && isset( $results->total ) ? $results->total : count( $orders_list );
-		$max_pages    = is_object( $results ) && isset( $results->max_num_pages ) ? $results->max_num_pages : 1;
 
 		foreach ( $orders_list as $order ) {
 			if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
@@ -2160,15 +2214,11 @@ class Exacoat_Warranty_Manager {
 			'waived_count'   => 0,
 		];
 
-		$all_rma = wc_get_orders( [
-			'limit'      => -1,
-			'return'     => 'ids',
-			'meta_query' => [
-				[
-					'key'     => '_rma_order_type',
-					'value'   => [ 'Warranty', 'Redeem' ],
-					'compare' => 'IN',
-				],
+		$all_rma = self::query_order_ids_by_meta( [
+			[
+				'key'     => '_rma_order_type',
+				'value'   => [ 'Warranty', 'Redeem' ],
+				'compare' => 'IN',
 			],
 		] );
 

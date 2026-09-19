@@ -152,6 +152,10 @@ class Exacoat_Core {
 		header( 'Access-Control-Allow-Methods: OPTIONS, GET, POST, PUT, PATCH, DELETE, HEAD' );
 		header( 'Access-Control-Allow-Headers: Authorization, Content-Type, X-WP-Nonce, Cache-Control, Pragma, X-Requested-With, sent_from, x-api-key, X-Api-Key, apikey, Accept, Origin, Cart-Token, Nonce, X-Exacoat-Currency, X-Artmatter-Currency, X-Exacoat-Client-IP, X-Artmatter-Client-IP, x-secret-key, X-Secret-Key, X-Exacoat-Secret, x_exacoat_secret' );
 		header( 'Access-Control-Expose-Headers: Cart-Token, Nonce, X-WP-Total, X-WP-TotalPages, X-Exacoat-Currency, X-Artmatter-Currency' );
+		header( 'Cache-Control: no-cache, no-store, must-revalidate, max-age=0' );
+		header( 'Pragma: no-cache' );
+		header( 'Expires: 0' );
+		header( 'X-LiteSpeed-Cache-Control: no-cache' );
 	}
 
 	private function init_modules() {

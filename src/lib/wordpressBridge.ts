@@ -468,7 +468,7 @@ function getAuthHeader(): Record<string, string> {
   return {};
 }
 
-async function authenticatedFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+export async function authenticatedFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.href : (input as any).url;
   const baseUrl = getWordPressBaseUrl();

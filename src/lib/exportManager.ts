@@ -6,6 +6,7 @@
 
 import { Order } from '../types';
 import { getWordPressBaseUrl } from './env';
+import { authenticatedFetch } from './wordpressBridge';
 
 export interface ExportStatus {
   jne: {
@@ -108,14 +109,20 @@ export async function fetchExportStatus(): Promise<{ success: boolean; status?: 
   const url = `${base}/wp-json/exacoat-core/v1/exports/status?_t=${Date.now()}`;
 
   try {
-    const res = await fetch(url, {
+    const res = await authenticatedFetch(url, {
       headers: { Accept: 'application/json' },
     });
-    const data = await res.json();
+    const text = await res.text();
+    let data: any;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return { success: false, error: 'Invalid response from server' };
+    }
     if (res.ok && data?.success) {
       return { success: true, status: data };
     }
-    return { success: false, error: data?.error || 'Failed to fetch export status' };
+    return { success: false, error: data?.error || data?.message || 'Failed to fetch export status' };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Network error fetching export status' };
   }
@@ -129,7 +136,7 @@ export async function generateJneExportDirect(): Promise<ExportGenerationResult>
   const url = `${base}/wp-json/exacoat-core/v1/exports/generate-jne`;
 
   try {
-    const res = await fetch(url, {
+    const res = await authenticatedFetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -138,7 +145,13 @@ export async function generateJneExportDirect(): Promise<ExportGenerationResult>
       body: JSON.stringify({}),
     });
 
-    const data = await res.json();
+    const text = await res.text();
+    let data: any;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return { success: false, error: 'Invalid response from server' };
+    }
     if (res.ok && data?.success) {
       return {
         success: true,
@@ -147,7 +160,7 @@ export async function generateJneExportDirect(): Promise<ExportGenerationResult>
         count: data.count,
       };
     }
-    return { success: false, error: data?.error || 'Failed to generate JNE export' };
+    return { success: false, error: data?.error || data?.message || 'Failed to generate JNE export' };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Network error generating JNE export' };
   }
@@ -161,7 +174,7 @@ export async function generateGooritaExportDirect(): Promise<ExportGenerationRes
   const url = `${base}/wp-json/exacoat-core/v1/exports/generate-goorita`;
 
   try {
-    const res = await fetch(url, {
+    const res = await authenticatedFetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -170,7 +183,13 @@ export async function generateGooritaExportDirect(): Promise<ExportGenerationRes
       body: JSON.stringify({}),
     });
 
-    const data = await res.json();
+    const text = await res.text();
+    let data: any;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return { success: false, error: 'Invalid response from server' };
+    }
     if (res.ok && data?.success) {
       return {
         success: true,
@@ -178,7 +197,7 @@ export async function generateGooritaExportDirect(): Promise<ExportGenerationRes
         count: data.count,
       };
     }
-    return { success: false, error: data?.error || 'Failed to generate Goorita export' };
+    return { success: false, error: data?.error || data?.message || 'Failed to generate Goorita export' };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Network error generating Goorita export' };
   }
