@@ -10,6 +10,7 @@ import {
   loadJneEmailConfig,
   saveJneEmailConfig,
   sendJneEmailDirect,
+  clearJneEmailSentLog,
   buildJneMailtoUrl,
   getFormattedExportDate,
   DEFAULT_JNE_EMAIL_CONFIG,
@@ -28,6 +29,8 @@ import {
   Settings2,
   RotateCcw,
   Send,
+  X,
+  AlertTriangle,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -90,7 +93,30 @@ export const ExportShipmentsPage: React.FC = () => {
     }
   };
 
+  const handleClearEmailLog = async () => {
+    try {
+      const res = await clearJneEmailSentLog();
+      if (res.success) {
+        showToast('info', 'Riwayat Email Direset', 'Catatan pengiriman email JNE berhasil dihapus.');
+        loadStatus();
+      } else {
+        showToast('error', 'Gagal Reset', res.error || 'Tidak dapat menghapus riwayat.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Gagal Reset', err?.message || 'Error saat mereset riwayat.');
+    }
+  };
+
   const handleSendJneEmail = async () => {
+    if (status?.jne.mailService && !status.jne.mailService.ready) {
+      showToast(
+        'error',
+        'Layanan Email Nonaktif',
+        'Plugin ZeptoMail / SMTP di server staging sedang nonaktif. Silakan aktifkan kembali plugin ZeptoMail di WordPress admin.'
+      );
+      return;
+    }
+
     setIsSendingJneEmail(true);
     try {
       showToast('info', 'Sending Email', 'Dispatching JNE export email with attachments from server...');
@@ -409,12 +435,28 @@ export const ExportShipmentsPage: React.FC = () => {
                     </button>
                   </div>
                 </div>
+                {status?.jne.mailService && !status.jne.mailService.ready && (
+                  <div className="text-[11px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                    <span>Layanan ZeptoMail / SMTP nonaktif di WordPress staging.</span>
+                  </div>
+                )}
                 {status.jne.lastEmailSent && (
-                  <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-mono flex items-center gap-1.5 pt-1 border-t border-zinc-200/50 dark:border-white/[0.04]">
-                    <CheckCircle2 className="w-3 h-3 shrink-0" />
-                    <span>
-                      Email sent on {status.jne.lastEmailSent.time} (To: {status.jne.lastEmailSent.to.join(', ')} • CC: {status.jne.lastEmailSent.cc.join(', ')})
-                    </span>
+                  <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-mono flex items-center justify-between gap-2 pt-1 border-t border-zinc-200/50 dark:border-white/[0.04]">
+                    <div className="flex items-center gap-1.5 min-w-0 truncate">
+                      <CheckCircle2 className="w-3 h-3 shrink-0" />
+                      <span className="truncate">
+                        Email sent on {status.jne.lastEmailSent.time} (To: {status.jne.lastEmailSent.to.join(', ')} • CC: {status.jne.lastEmailSent.cc.join(', ')})
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleClearEmailLog}
+                      title="Reset catatan pengiriman email ini"
+                      className="text-zinc-400 hover:text-rose-400 p-0.5 transition-colors shrink-0 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 )}
               </div>

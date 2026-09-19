@@ -4,6 +4,7 @@ import { clsx } from 'clsx';
 
 interface ShipCountdownBadgeProps {
   shipByTimestamp?: number | null;
+  shipByDate?: string | null;
   orderStatus?: string;
   className?: string;
   showIcon?: boolean;
@@ -11,6 +12,7 @@ interface ShipCountdownBadgeProps {
 
 export const ShipCountdownBadge: React.FC<ShipCountdownBadgeProps> = ({
   shipByTimestamp,
+  shipByDate,
   orderStatus = '',
   className,
   showIcon = true,
@@ -27,7 +29,15 @@ export const ShipCountdownBadge: React.FC<ShipCountdownBadgeProps> = ({
   const st = orderStatus.toUpperCase();
   const isFinished = ['COMPLETED', 'SHIPPED', 'TO_CONFIRM_RECEIVE', 'CANCELLED', 'IN_CANCEL', 'TO_RETURN'].includes(st);
 
-  if (!shipByTimestamp) {
+  let effectiveTimestamp = shipByTimestamp;
+  if (!effectiveTimestamp && shipByDate) {
+    const parsed = Date.parse(shipByDate);
+    if (!isNaN(parsed)) {
+      effectiveTimestamp = Math.floor(parsed / 1000);
+    }
+  }
+
+  if (!effectiveTimestamp) {
     if (isFinished) {
       return null;
     }
@@ -45,7 +55,7 @@ export const ShipCountdownBadge: React.FC<ShipCountdownBadgeProps> = ({
     );
   }
 
-  const diff = shipByTimestamp - now;
+  const diff = effectiveTimestamp - now;
 
   if (isFinished) {
     return null;
@@ -60,7 +70,7 @@ export const ShipCountdownBadge: React.FC<ShipCountdownBadgeProps> = ({
 
     return (
       <span
-        title={`Batas pengiriman telah terlewat pada ${new Date(shipByTimestamp * 1000).toLocaleString('id-ID')}`}
+        title={`Batas pengiriman telah terlewat pada ${new Date(effectiveTimestamp * 1000).toLocaleString('id-ID')}`}
         className={clsx(
           'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold border bg-rose-500/15 text-rose-300 border-rose-500/30',
           className
@@ -79,7 +89,7 @@ export const ShipCountdownBadge: React.FC<ShipCountdownBadgeProps> = ({
 
     return (
       <span
-        title={`Batas pengiriman: ${new Date(shipByTimestamp * 1000).toLocaleString('id-ID')}`}
+        title={`Batas pengiriman: ${new Date(effectiveTimestamp * 1000).toLocaleString('id-ID')}`}
         className={clsx(
           'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold border bg-rose-500/10 text-rose-300 border-rose-500/25',
           className
@@ -98,7 +108,7 @@ export const ShipCountdownBadge: React.FC<ShipCountdownBadgeProps> = ({
 
     return (
       <span
-        title={`Batas pengiriman: ${new Date(shipByTimestamp * 1000).toLocaleString('id-ID')}`}
+        title={`Batas pengiriman: ${new Date(effectiveTimestamp * 1000).toLocaleString('id-ID')}`}
         className={clsx(
           'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border bg-amber-500/10 text-amber-300 border-amber-500/25',
           className
@@ -116,7 +126,7 @@ export const ShipCountdownBadge: React.FC<ShipCountdownBadgeProps> = ({
 
   return (
     <span
-      title={`Batas pengiriman: ${new Date(shipByTimestamp * 1000).toLocaleString('id-ID')}`}
+      title={`Batas pengiriman: ${new Date(effectiveTimestamp * 1000).toLocaleString('id-ID')}`}
       className={clsx(
         'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border bg-neutral-800/80 text-neutral-300 border-white/10',
         className

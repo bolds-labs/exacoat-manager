@@ -235,7 +235,7 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
                 )}
               >
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>{order.already_claimed ? 'Claimed' : 'Warranty Claim'}</span>
+                <span>{order.already_claimed ? 'Telah Diklaim' : 'Klaim Garansi'}</span>
               </button>
             )}
 
@@ -252,7 +252,7 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
                 )}
               >
                 <RotateCcw className="w-4 h-4 text-amber-400" />
-                <span>{order.already_claimed ? 'Claimed' : 'Factory Redeem'}</span>
+                <span>{order.already_claimed ? 'Telah Diklaim' : 'Redeem Hadiah (Cacat)'}</span>
               </button>
             )}
           </div>
@@ -263,8 +263,8 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
           <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
             <span>
-              This Shopee order has already been recorded in RMA claim system
-              {order.existing_claim?.existing_order_num ? ` under replacement order #${order.existing_claim.existing_order_num}` : ''}.
+              Pesanan Shopee ini telah tercatat dalam sistem klaim garansi RMA
+              {order.existing_claim?.existing_order_num ? ` dengan nomor klaim #${order.existing_claim.existing_order_num}` : ''}.
             </span>
           </div>
         )}
@@ -274,10 +274,10 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
               <Package className="w-4 h-4 text-orange-400" />
-              <span>Purchased Line Items ({order.items?.length || 0})</span>
+              <span>Daftar Produk ({order.items?.length || 0})</span>
             </h3>
             <span className="text-xs text-neutral-400 font-mono">
-              Total Units: {order.items?.reduce((acc, i) => acc + (i.quantity || 1), 0) || 0}
+              Total Kuantitas: {order.items?.reduce((acc, i) => acc + (i.quantity || 1), 0) || 0}
             </span>
           </div>
 
@@ -306,7 +306,7 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
                     </p>
                     {item.model_name && (
                       <p className="text-[11px] font-mono text-neutral-400 mt-0.5">
-                        Variation: <span className="text-neutral-200">{item.model_name}</span>
+                        Varian: <span className="text-neutral-200">{item.model_name}</span>
                       </p>
                     )}
                     {(item.item_sku || item.model_sku) && (
@@ -335,7 +335,7 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
           {order.buyer_note && (
             <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs">
               <span className="font-bold uppercase tracking-wider text-[10px] text-amber-400 block mb-1">
-                Buyer Message / Note
+                Catatan Pembeli
               </span>
               <p className="italic">{order.buyer_note}</p>
             </div>
@@ -346,17 +346,17 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
         <div className="space-y-3">
           <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
             <Truck className="w-4 h-4 text-sky-400" />
-            <span>Shipping & Logistics</span>
+            <span>Informasi Pengiriman</span>
           </h3>
 
           <div className="p-4 rounded-xl bg-neutral-900/60 border border-white/10 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             <div>
-              <span className="text-[10px] uppercase font-mono text-neutral-500 block">Shipping Carrier</span>
-              <span className="font-semibold text-white mt-0.5 block">{order.shipping_carrier || 'Standard Courier'}</span>
+              <span className="text-[10px] uppercase font-mono text-neutral-500 block">Jasa Kirim</span>
+              <span className="font-semibold text-white mt-0.5 block">{order.shipping_carrier || 'Jasa Kirim Standar'}</span>
             </div>
 
             <div>
-              <span className="text-[10px] uppercase font-mono text-neutral-500 block">Tracking Number (Resi)</span>
+              <span className="text-[10px] uppercase font-mono text-neutral-500 block">No. Resi</span>
               {order.tracking_number ? (
                 <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                   <span className="font-mono font-bold text-orange-400">{order.tracking_number}</span>
@@ -364,7 +364,7 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
                     type="button"
                     onClick={() => handleCopy(order.tracking_number, 'resi')}
                     className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
-                    title="Copy Resi"
+                    title="Salin No. Resi"
                   >
                     {copiedKey === 'resi' ? (
                       <Check className="w-3.5 h-3.5 text-emerald-400" />
@@ -372,46 +372,59 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
                       <Copy className="w-3.5 h-3.5" />
                     )}
                   </button>
-                  {isPrinted && (
+                  {isOrderPrinted && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded font-mono font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
                       <CheckCircle2 className="w-2.5 h-2.5" />
-                      <span>Printed</span>
+                      <span>Tercetak</span>
                     </span>
                   )}
                 </div>
               ) : (
-                <span className="text-neutral-500 font-mono mt-0.5 block">Resi not yet allocated</span>
+                <span className="text-neutral-500 font-mono mt-0.5 block">N/A</span>
               )}
             </div>
 
             <div>
-              <span className="text-[10px] uppercase font-mono text-neutral-500 block">Shipment State</span>
+              <span className="text-[10px] uppercase font-mono text-neutral-500 block">Status Pengiriman</span>
               {isOrderDelivered || ['COMPLETED', 'DELIVERED', 'TO_CONFIRM_RECEIVE'].includes((order.order_status || '').toUpperCase()) ? (
-                <span className="text-emerald-400 font-semibold mt-0.5 block flex items-center gap-1 text-xs">
+                <span className="text-emerald-400 font-semibold mt-0.5 flex items-center gap-1 text-xs">
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Delivered</span>
+                  <span>Telah Diterima</span>
                 </span>
               ) : (order.order_status || '').toUpperCase() === 'SHIPPED' ? (
-                <span className="text-blue-400 font-semibold mt-0.5 block flex items-center gap-1 text-xs">
+                <span className="text-blue-400 font-semibold mt-0.5 flex items-center gap-1 text-xs">
                   <Truck className="w-3.5 h-3.5" />
-                  <span>In Transit</span>
+                  <span>Dalam Pengiriman</span>
                 </span>
               ) : isArranged ? (
-                <span className="text-sky-400 font-semibold mt-0.5 block flex items-center gap-1 text-xs">
+                <span className="text-sky-400 font-semibold mt-0.5 flex items-center gap-1 text-xs">
                   <Truck className="w-3.5 h-3.5" />
-                  <span>Scheduled / Ready for Courier</span>
+                  <span>Telah Diatur / Siap Diambil Kurir</span>
                 </span>
               ) : (
-                <span className="text-amber-400 font-semibold mt-0.5 block flex items-center gap-1 text-xs">
+                <span className="text-amber-400 font-semibold mt-0.5 flex items-center gap-1 text-xs">
                   <AlertCircle className="w-3.5 h-3.5" />
-                  <span>Needs Arrangement</span>
+                  <span>Perlu Diatur Pengiriman</span>
                 </span>
               )}
             </div>
 
             <div>
-              <span className="text-[10px] uppercase font-mono text-neutral-500 block">Status</span>
+              <span className="text-[10px] uppercase font-mono text-neutral-500 block">Status Pesanan</span>
               <span className="text-neutral-300 mt-0.5 block font-medium">{badge.label}</span>
+            </div>
+
+            <div className="sm:col-span-2 pt-2 border-t border-white/5">
+              <span className="text-[10px] uppercase font-mono text-neutral-500 block">Batas Waktu Pengiriman</span>
+              <div className="flex items-center gap-2.5 mt-1 flex-wrap">
+                <span className="text-xs font-mono font-semibold text-neutral-200">
+                  {order.ship_by_date || 'N/A'}
+                </span>
+                <ShipCountdownBadge
+                  shipByTimestamp={order.ship_by_timestamp}
+                  orderStatus={order.order_status}
+                />
+              </div>
             </div>
           </div>
 
@@ -420,10 +433,10 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
             <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-start gap-3">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
               <div className="space-y-0.5 text-xs">
-                <span className="font-bold text-emerald-300 block">Package Delivered</span>
+                <span className="font-bold text-emerald-300 block">Paket Telah Diterima</span>
                 <p className="text-emerald-400/90 text-[11px] leading-relaxed">
-                  Delivered on <span className="font-semibold text-emerald-200">{deliveredTime || 'recent courier update'}</span>.
-                  The 48-hour warranty countdown starts from this delivery timestamp.
+                  Diterima pada <span className="font-semibold text-emerald-200">{deliveredTime || 'pembaruan kurir'}</span>.
+                  Batas klaim garansi 48 jam dihitung sejak waktu penerimaan ini.
                 </p>
               </div>
             </div>
@@ -434,30 +447,30 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
             <div className="flex items-center justify-between">
               <span className="text-[10px] uppercase font-mono tracking-wider text-neutral-400 flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-orange-400" />
-                <span>Carrier Checkpoints ({trackingCheckpoints.length})</span>
+                <span>Riwayat Pengiriman ({trackingCheckpoints.length})</span>
               </span>
               <button
                 type="button"
                 onClick={() => loadTracking(order.order_sn)}
                 disabled={isLoadingTracking}
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono text-neutral-400 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-50 cursor-pointer"
-                title="Refresh Tracking"
+                title="Segarkan Riwayat"
               >
                 <RefreshCw className={clsx('w-3 h-3', isLoadingTracking && 'animate-spin')} />
-                <span>Refresh</span>
+                <span>Segarkan</span>
               </button>
             </div>
 
             {isLoadingTracking && trackingCheckpoints.length === 0 ? (
               <div className="py-4 flex items-center justify-center gap-2 text-xs text-neutral-400">
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-400" />
-                <span>Loading tracking timeline...</span>
+                <span>Memuat riwayat pengiriman...</span>
               </div>
             ) : trackingCheckpoints.length === 0 ? (
               <div className="py-2 text-neutral-500 text-xs italic">
                 {trackingLoaded
-                  ? 'No courier checkpoints recorded yet.'
-                  : 'Tracking updates will appear once courier records movement.'}
+                  ? 'Belum ada riwayat pergerakan dari kurir.'
+                  : 'Riwayat pengiriman akan muncul setelah kurir memperbarui status.'}
               </div>
             ) : (
               <div className="space-y-2 pt-1">
@@ -513,12 +526,12 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
                       {showAllCheckpoints ? (
                         <>
                           <ChevronUp className="w-3.5 h-3.5" />
-                          <span>Hide earlier checkpoints</span>
+                          <span>Sembunyikan riwayat sebelumnya</span>
                         </>
                       ) : (
                         <>
                           <ChevronDown className="w-3.5 h-3.5" />
-                          <span>View earlier checkpoints ({trackingCheckpoints.length - 1} more)</span>
+                          <span>Lihat riwayat sebelumnya ({trackingCheckpoints.length - 1} lainnya)</span>
                         </>
                       )}
                     </button>
@@ -533,33 +546,33 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
         <div className="space-y-3">
           <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
             <User className="w-4 h-4 text-indigo-400" />
-            <span>Buyer & Destination</span>
+            <span>Pembeli & Alamat Pengiriman</span>
           </h3>
 
           <div className="p-4 rounded-xl bg-neutral-900/60 border border-white/10 space-y-3 text-xs">
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-[10px] uppercase font-mono text-neutral-500 block">Recipient Name</span>
+                <span className="text-[10px] uppercase font-mono text-neutral-500 block">Nama Penerima</span>
                 <span className="font-semibold text-white text-sm mt-0.5 block">
                   {order.recipient_name || order.buyer_username}
                 </span>
               </div>
               <div className="text-right">
-                <span className="text-[10px] uppercase font-mono text-neutral-500 block">Shopee Buyer</span>
+                <span className="text-[10px] uppercase font-mono text-neutral-500 block">Akun Shopee</span>
                 <span className="text-neutral-300 font-mono mt-0.5 block">@{order.buyer_username}</span>
               </div>
             </div>
 
             {order.recipient_phone && (
               <div>
-                <span className="text-[10px] uppercase font-mono text-neutral-500 block">Phone Number</span>
+                <span className="text-[10px] uppercase font-mono text-neutral-500 block">No. Telepon</span>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className="font-mono text-neutral-300">{formatDisplayPhone(order.recipient_phone)}</span>
                   <button
                     type="button"
                     onClick={() => handleCopy(order.recipient_phone, 'phone')}
                     className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
-                    title="Copy Phone"
+                    title="Salin No. HP"
                   >
                     {copiedKey === 'phone' ? (
                       <Check className="w-3.5 h-3.5 text-emerald-400" />
@@ -574,7 +587,7 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
             <div className="pt-2 border-t border-white/5">
               <span className="text-[10px] uppercase font-mono text-neutral-500 block flex items-center gap-1">
                 <MapPin className="w-3.5 h-3.5 text-neutral-400" />
-                <span>Delivery Address</span>
+                <span>Alamat Pengiriman</span>
               </span>
               <p className="text-neutral-200 mt-1 leading-relaxed">
                 {order.recipient_address}
@@ -590,22 +603,22 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
         <div className="space-y-3">
           <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
             <CreditCard className="w-4 h-4 text-emerald-400" />
-            <span>Order Financials</span>
+            <span>Rincian Pembayaran</span>
           </h3>
 
           <div className="p-4 rounded-xl bg-neutral-900/60 border border-white/10 space-y-2 text-xs">
             <div className="flex items-center justify-between text-neutral-400">
-              <span>Items Total ({order.items?.length || 0} line items)</span>
+              <span>Total Belanja ({order.items?.length || 0} produk)</span>
               <span className="font-mono text-neutral-200">
                 {formatCurrency(order.total_amount, 'IDR')}
               </span>
             </div>
             <div className="flex items-center justify-between text-neutral-400">
-              <span>Shipping Fee</span>
+              <span>Ongkos Kirim</span>
               <span className="font-mono text-neutral-200">Rp 0 (Cashless)</span>
             </div>
             <div className="pt-2 border-t border-white/10 flex items-center justify-between text-sm">
-              <span className="font-bold text-white">Total Order Value</span>
+              <span className="font-bold text-white">Total Pembayaran</span>
               <span className="font-mono font-bold text-orange-400 text-base">
                 {formatCurrency(order.total_amount, 'IDR')}
               </span>

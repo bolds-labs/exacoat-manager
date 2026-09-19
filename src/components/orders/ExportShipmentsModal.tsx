@@ -7,6 +7,7 @@ import {
   generateGooritaExportDirect,
   loadJneEmailConfig,
   sendJneEmailDirect,
+  clearJneEmailSentLog,
   buildJneMailtoUrl,
   DEFAULT_JNE_EMAIL_CONFIG,
   JneEmailConfig,
@@ -22,7 +23,9 @@ import {
   Truck, 
   Plane,
   FolderOpen,
-  Send
+  Send,
+  AlertTriangle,
+  X
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -54,7 +57,30 @@ export const ExportShipmentsModal: React.FC<ExportShipmentsModalProps> = ({
 
   const [emailConfig, setEmailConfig] = useState<JneEmailConfig>(DEFAULT_JNE_EMAIL_CONFIG);
 
+  const handleClearEmailLog = async () => {
+    try {
+      const res = await clearJneEmailSentLog();
+      if (res.success) {
+        showToast('info', 'Riwayat Email Direset', 'Catatan pengiriman email JNE berhasil dihapus.');
+        loadStatus();
+      } else {
+        showToast('error', 'Gagal Reset', res.error || 'Tidak dapat menghapus riwayat.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Gagal Reset', err?.message || 'Error saat mereset riwayat.');
+    }
+  };
+
   const handleSendJneEmail = async () => {
+    if (status?.jne.mailService && !status.jne.mailService.ready) {
+      showToast(
+        'error',
+        'Layanan Email Nonaktif',
+        'Plugin ZeptoMail / SMTP di server staging sedang nonaktif. Silakan aktifkan kembali plugin ZeptoMail di WordPress admin.'
+      );
+      return;
+    }
+
     setIsSendingJneEmail(true);
     try {
       showToast('info', 'Sending Email', 'Dispatching JNE export email with attachments from server...');
@@ -282,6 +308,32 @@ export const ExportShipmentsModal: React.FC<ExportShipmentsModalProps> = ({
                     Simpan di laptop: <code>\Exacoat CS\Resi (JNE SICEPAT)\JNE Ruby E-Connote (untuk email)</code>
                   </span>
                 </div>
+              </div>
+            )}
+
+            {status?.jne?.mailService && !status.jne.mailService.ready && (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center gap-2 text-xs text-amber-400">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+                <span>Plugin ZeptoMail / SMTP nonaktif di staging. Aktifkan kembali plugin di WordPress admin untuk mengirim email otomatis.</span>
+              </div>
+            )}
+
+            {status?.jne?.lastEmailSent && (
+              <div className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/20 flex items-center justify-between gap-2 text-xs text-emerald-400 font-mono">
+                <div className="flex items-center gap-2 min-w-0 truncate">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">
+                    Email sent on {status.jne.lastEmailSent.time} (To: {status.jne.lastEmailSent.to.join(', ')} • CC: {status.jne.lastEmailSent.cc.join(', ')})
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleClearEmailLog}
+                  title="Reset status pengiriman email"
+                  className="text-zinc-400 hover:text-rose-400 p-0.5 transition-colors shrink-0 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
             )}
 

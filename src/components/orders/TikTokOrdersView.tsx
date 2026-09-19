@@ -11,10 +11,10 @@ import {
 } from '../../lib/wordpressBridge';
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency } from '../../lib/formatters';
-import { MOCK_TIKTOK_ORDERS } from '../../data/mockTikTokOrders';
 import { TikTokSettingsModal } from '../settings/TikTokSettingsModal';
 import { TikTokOrderDetailModal } from './TikTokOrderDetailModal';
 import { FilterSelect } from '../ui/FilterSelect';
+import { ShipCountdownBadge } from './ShipCountdownBadge';
 import { generateTikTokAwbHtml, generateTikTokBatchAwbHtml } from '../../lib/tiktokAwbGenerator';
 import { downloadCsv } from '../../lib/csvExport';
 import {
@@ -66,7 +66,6 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
   const [activeTab, setActiveTab] = useState<StatusTab>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [isDemoMode, setIsDemoMode] = useState(false);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [isArrangingId, setIsArrangingId] = useState<string | null>(null);
   const [courierFilter, setCourierFilter] = useState<string>('all');
@@ -133,12 +132,13 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
         fetchTikTokSettingsDirect(),
       ]);
 
-      if (ordersRes.success && Array.isArray(ordersRes.orders) && ordersRes.orders.length > 0) {
+      if (ordersRes.success && Array.isArray(ordersRes.orders)) {
         setOrders(ordersRes.orders);
-        setIsDemoMode(false);
       } else {
-        setOrders(MOCK_TIKTOK_ORDERS);
-        setIsDemoMode(true);
+        setOrders([]);
+        if (!quiet && ordersRes.error) {
+          showToast('error', 'Gagal Memuat Pesanan', ordersRes.error);
+        }
       }
 
       if (settingsRes.success && settingsRes.settings) {
@@ -148,18 +148,19 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
           syncTikTokOrdersDirect().then((syncRes) => {
             if (syncRes.success && Array.isArray(syncRes.orders) && syncRes.orders.length > 0) {
               setOrders(syncRes.orders);
-              setIsDemoMode(false);
             }
           }).catch(() => {});
         }
       }
-    } catch {
-      setOrders(MOCK_TIKTOK_ORDERS);
-      setIsDemoMode(true);
+    } catch (err: any) {
+      setOrders([]);
+      if (!quiet) {
+        showToast('error', 'Gagal Memuat Pesanan', err?.message || 'Tidak dapat menghubungi server.');
+      }
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     loadData();
@@ -175,13 +176,13 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
         res.error &&
         (res.error.toLowerCase().includes('shop_cipher') || res.error.toLowerCase().includes('cipher'))
       ) {
-        showToast('info', 'Detecting Shop Credentials', 'Retrieving authorized shop cipher from TikTok...');
+        showToast('info', 'Mendeteksi Kredensial Toko', 'Mengambil cipher toko terotorisasi dari TikTok...');
         const detectRes = await refreshTikTokShopsDirect();
         if (detectRes.success && detectRes.shop_cipher) {
           showToast(
             'success',
-            'Shop Cipher Linked',
-            `Connected cipher: ${detectRes.shop_cipher}. Retrying order sync...`
+            'Cipher Toko Terhubung',
+            `Cipher terhubung: ${detectRes.shop_cipher}. Mengulang sinkronisasi pesanan...`
           );
           res = await syncTikTokOrdersDirect(days, 200);
         }
@@ -190,25 +191,24 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
       if (res.success && Array.isArray(res.orders)) {
         if (res.orders.length > 0) {
           setOrders(res.orders);
-          setIsDemoMode(false);
           showToast(
             'success',
-            'TikTok Synced',
-            `Synchronized ${res.total_synced || res.orders.length} orders (${res.total_cached || res.orders.length} total orders in cache).`
+            'TikTok Tersinkronisasi',
+            `Berhasil menyinkronkan ${res.total_synced || res.orders.length} pesanan (${res.total_cached || res.orders.length} total pesanan di cache).`
           );
         } else {
           showToast(
             'info',
-            'TikTok Sync',
-            'No new orders found. Preserving cached orders.'
+            'Sinkronisasi TikTok',
+            'Tidak ada pesanan baru ditemukan pada rentang waktu ini. Menyimpan data cache yang ada.'
           );
         }
         loadData(true);
       } else {
-        showToast('error', 'TikTok Sync Failed', res.error || 'Could not sync orders from TikTok.');
+        showToast('error', 'Sinkronisasi TikTok Gagal', res.error || 'Gagal menyinkronkan pesanan dari TikTok Shop.');
       }
     } catch (err: any) {
-      showToast('error', 'TikTok Sync Error', err.message);
+      showToast('error', 'Kesalahan Sinkronisasi', err.message);
     } finally {
       setIsSyncing(false);
     }
@@ -226,12 +226,12 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
           res.orders!.forEach((o) => map.set(o.order_id, o));
           return Array.from(map.values());
         });
-        showToast('success', 'Order Found', `Found order #${q} directly from TikTok Shop API.`);
+        showToast('success', 'Pesanan Ditemukan', `Ditemukan pesanan #${q} langsung dari API TikTok Shop.`);
       } else {
-        showToast('info', 'Order Not Found', `No live order found on TikTok Shop for "${q}".`);
+        showToast('info', 'Pesanan Tidak Ditemukan', `Tidak ditemukan pesanan langsung dari TikTok Shop untuk "${q}".`);
       }
     } catch (err: any) {
-      showToast('error', 'Live Search Error', err.message);
+      showToast('error', 'Kesalahan Pencarian', err.message);
     } finally {
       setIsLiveSearching(false);
     }
@@ -240,7 +240,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
-    showToast('info', 'Copied to Clipboard', text);
+    showToast('info', 'Tersalin ke Clipboard', text);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
@@ -249,8 +249,8 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
 
     showToast(
       'info',
-      'TikTok Thermal Label',
-      `Loading Air Waybill label for Order #${order.order_id}.`
+      'Label Thermal TikTok',
+      `Memuat dokumen Air Waybill untuk Pesanan #${order.order_id}...`
     );
 
     try {
@@ -285,7 +285,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
       });
 
       if (res.success) {
-        showToast('success', 'Shipment Arranged', `Order #${order.order_id} marked as ready for courier handover.`);
+        showToast('success', 'Pengiriman Diatur', `Pesanan #${order.order_id} siap diserahkan ke kurir.`);
         setOrders((prev) =>
           prev.map((o) =>
             o.order_id === order.order_id
@@ -294,10 +294,10 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
           )
         );
       } else {
-        showToast('error', 'Shipment Arrangement Failed', res.error || 'Check TikTok Shop courier settings.');
+        showToast('error', 'Gagal Mengatur Pengiriman', res.error || 'Periksa konfigurasi kurir TikTok Shop.');
       }
     } catch (err: any) {
-      showToast('error', 'Error', err.message);
+      showToast('error', 'Kesalahan', err.message);
     } finally {
       setIsArrangingId(null);
     }
@@ -308,19 +308,20 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
     switch (s) {
       case 'AWAITING_SHIPMENT':
       case 'READY_TO_SHIP':
-        return { label: 'Ready to Ship', bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-500/20' };
+        return { label: 'Perlu Diproses', bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-500/20' };
       case 'AWAITING_COLLECTION':
-        return { label: 'Awaiting Pickup', bg: 'bg-sky-500/10', text: 'text-sky-300', border: 'border-sky-500/20' };
+        return { label: 'Menunggu Penjemputan', bg: 'bg-sky-500/10', text: 'text-sky-300', border: 'border-sky-500/20' };
       case 'IN_TRANSIT':
       case 'SHIPPED':
-        return { label: 'In Transit', bg: 'bg-indigo-500/10', text: 'text-indigo-300', border: 'border-indigo-500/20' };
+        return { label: 'Dalam Pengiriman', bg: 'bg-indigo-500/10', text: 'text-indigo-300', border: 'border-indigo-500/20' };
       case 'DELIVERED':
+        return { label: 'Telah Sampai', bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/20' };
       case 'COMPLETED':
-        return { label: 'Completed', bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/20' };
+        return { label: 'Selesai', bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/20' };
       case 'CANCELLED':
-        return { label: 'Cancelled', bg: 'bg-rose-500/10', text: 'text-rose-300', border: 'border-rose-500/20' };
+        return { label: 'Dibatalkan', bg: 'bg-rose-500/10', text: 'text-rose-300', border: 'border-rose-500/20' };
       default:
-        return { label: status || 'Pending', bg: 'bg-neutral-800', text: 'text-neutral-300', border: 'border-white/10' };
+        return { label: status || 'N/A', bg: 'bg-neutral-800', text: 'text-neutral-300', border: 'border-white/10' };
     }
   };
 
@@ -427,8 +428,8 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
       printWindow.document.close();
       showToast(
         'info',
-        'Batch AWB Print',
-        `Opened print window for ${selectedOrdersList.length} TikTok Shop orders.`
+        'Cetak Label Massal',
+        `Membuka jendela cetak untuk ${selectedOrdersList.length} pesanan TikTok Shop.`
       );
     }
   };
@@ -442,12 +443,12 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
     );
 
     if (readyOrders.length === 0) {
-      showToast('warning', 'No Action Needed', 'Selected orders already have shipment arranged or tracking assigned.');
+      showToast('warning', 'Tidak Ada Tindakan', 'Pesanan yang dipilih sudah diatur pengiriman atau memiliki nomor resi.');
       return;
     }
 
     setIsBulkArranging(true);
-    showToast('info', 'Arranging Shipments', `Processing shipment arrangement for ${readyOrders.length} orders...`);
+    showToast('info', 'Mengatur Pengiriman', `Memproses pengiriman untuk ${readyOrders.length} pesanan...`);
 
     let successCount = 0;
     for (const ord of readyOrders) {
@@ -466,45 +467,47 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
     }
 
     setIsBulkArranging(false);
-    showToast('success', 'Bulk Shipment Arranged', `Arranged ${successCount} of ${readyOrders.length} packages.`);
+    showToast('success', 'Pengiriman Massal Berhasil', `Berhasil mengatur ${successCount} dari ${readyOrders.length} paket.`);
   };
 
   // Bulk Export to CSV
   const handleBulkExport = () => {
     if (selectedOrdersList.length === 0) return;
     const headers = [
-      'Order ID',
-      'Create Time',
-      'Buyer Username',
-      'Order Status',
-      'Shipping Carrier',
-      'Tracking Resi',
-      'Recipient Name',
-      'Recipient Phone',
-      'Recipient City',
-      'Recipient Address',
-      'Total Amount (IDR)',
-      'Items Summary',
+      'No. Pesanan',
+      'Waktu Dibuat',
+      'Batas Kirim',
+      'Username Pembeli',
+      'Status Pesanan',
+      'Jasa Kirim',
+      'No. Resi',
+      'Nama Penerima',
+      'No. HP Penerima',
+      'Kota Penerima',
+      'Alamat Penerima',
+      'Total Biaya (IDR)',
+      'Ringkasan Produk',
     ];
 
     const rows = selectedOrdersList.map((o) => [
       o.order_id,
       o.create_time,
+      o.ship_by_date || 'N/A',
       o.buyer_username,
       o.order_status,
-      o.shipping_carrier,
-      o.tracking_number || '',
+      o.shipping_carrier || 'N/A',
+      o.tracking_number || 'N/A',
       o.recipient_name,
       o.recipient_phone,
       o.recipient_city,
       o.recipient_address,
       o.total_amount,
-      (o.items || []).map((i) => `${i.item_name} (${i.sku_name || 'Standard'}) x${i.quantity}`).join('; '),
+      (o.items || []).map((i) => `${i.item_name} (${i.sku_name || 'Standar'}) x${i.quantity}`).join('; '),
     ]);
 
     const dateStr = new Date().toISOString().slice(0, 10);
     downloadCsv(`exacoat-tiktok-orders-${dateStr}.csv`, headers, rows);
-    showToast('success', 'CSV Exported', `Exported ${selectedOrdersList.length} orders to CSV.`);
+    showToast('success', 'Ekspor CSV Berhasil', `Berhasil mengekspor ${selectedOrdersList.length} pesanan ke CSV.`);
   };
 
   return (
@@ -518,7 +521,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-base font-bold text-white tracking-tight">
-                {settings?.shop_name || 'TikTok Shop Operations'}
+                {settings?.shop_name || 'Operasional TikTok Shop'}
               </h2>
               <span
                 className={clsx(
@@ -528,23 +531,18 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                     : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                 )}
               >
-                {settings?.is_connected ? 'Connected' : 'Not Linked'}
+                {settings?.is_connected ? 'Terhubung' : 'Belum Terhubung'}
               </span>
-              {isDemoMode && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-semibold">
-                  Sandbox Preview
-                </span>
-              )}
             </div>
             <p className="text-xs text-neutral-400 mt-0.5 flex items-center gap-2 flex-wrap">
-              <span>Service ID: {settings?.service_id || '7686433028542351124'}</span>
+              <span>ID Layanan: {settings?.service_id || 'N/A'}</span>
               <span>•</span>
               <span>
-                Last Synced: {settings?.last_synced_at || 'Just now'}
+                Sinkronisasi Terakhir: {settings?.last_synced_at || 'Baru saja'}
               </span>
               <span>•</span>
               <span className="text-rose-400 font-mono">
-                {orders.length} cached orders
+                {orders.length} pesanan tersimpan
               </span>
             </p>
           </div>
@@ -557,7 +555,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
             className="px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-white/10 text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer"
           >
             <Settings className="w-3.5 h-3.5 text-neutral-400" />
-            <span>Settings</span>
+            <span>Pengaturan</span>
           </button>
 
           <div className="flex items-center rounded-xl bg-rose-500 overflow-hidden shadow-md shadow-rose-500/20">
@@ -568,19 +566,19 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
               className="px-3.5 py-2 hover:bg-rose-600 text-white text-xs font-bold flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
             >
               <RefreshCw className={clsx('w-3.5 h-3.5', isSyncing && 'animate-spin')} />
-              <span>{isSyncing ? 'Syncing...' : 'Sync Orders'}</span>
+              <span>{isSyncing ? 'Menyinkronkan...' : 'Sinkronkan Pesanan'}</span>
             </button>
             <select
               value={syncDays}
               onChange={(e) => setSyncDays(Number(e.target.value))}
               disabled={isSyncing}
               className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold py-2 px-2 border-l border-rose-400/30 outline-none cursor-pointer"
-              title="Days of orders to fetch"
+              title="Pilih rentang hari pesanan"
             >
-              <option value={15}>15d</option>
-              <option value={30}>30d</option>
-              <option value={60}>60d</option>
-              <option value={90}>90d</option>
+              <option value={15}>15 hari</option>
+              <option value={30}>30 hari</option>
+              <option value={60}>60 hari</option>
+              <option value={90}>90 hari</option>
             </select>
           </div>
         </div>
@@ -591,12 +589,12 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-neutral-900 border border-white/10 overflow-x-auto">
           {(
             [
-              { id: 'ALL', label: 'All' },
-              { id: 'READY_TO_SHIP', label: 'Ready to Ship', count: readyToShipCount },
-              { id: 'SHIPPED', label: 'Shipped' },
-              { id: 'COMPLETED', label: 'Completed' },
-              { id: 'CLAIMED', label: 'Claimed' },
-              { id: 'CANCELLED', label: 'Cancelled' },
+              { id: 'ALL', label: 'Semua' },
+              { id: 'READY_TO_SHIP', label: 'Perlu Dikirim', count: readyToShipCount },
+              { id: 'SHIPPED', label: 'Dikirim' },
+              { id: 'COMPLETED', label: 'Selesai' },
+              { id: 'CLAIMED', label: 'Klaim Garansi' },
+              { id: 'CANCELLED', label: 'Dibatalkan' },
             ] as Array<{ id: StatusTab; label: string; count?: number }>
           ).map((tab) => (
             <button
@@ -631,7 +629,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search Order ID, Buyer, Resi..."
+            placeholder="Cari No. Pesanan, Pembeli, Resi..."
             className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-neutral-900 border border-white/10 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-rose-500"
           />
         </div>
@@ -642,26 +640,26 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
         <div className="flex flex-wrap items-center gap-3">
           {/* Courier Filter */}
           <FilterSelect
-            label="Courier"
+            label="Jasa Kirim"
             value={courierFilter}
             onChange={setCourierFilter}
             icon={<Truck className="w-3.5 h-3.5" />}
             options={[
-              { value: 'all', label: 'All Couriers' },
+              { value: 'all', label: 'Semua Jasa Kirim' },
               ...availableCouriers.map((c) => ({ value: c.key, label: c.name })),
             ]}
           />
 
           {/* Tracking Resi Filter */}
           <FilterSelect
-            label="Tracking"
+            label="Status Resi"
             value={trackingFilter}
             onChange={(val) => setTrackingFilter(val as any)}
             icon={<Printer className="w-3.5 h-3.5" />}
             options={[
-              { value: 'all', label: 'All Tracking' },
-              { value: 'has-resi', label: 'Has Resi' },
-              { value: 'no-resi', label: 'Missing Resi' },
+              { value: 'all', label: 'Semua Status Resi' },
+              { value: 'has-resi', label: 'Ada No. Resi' },
+              { value: 'no-resi', label: 'Belum Ada Resi' },
             ]}
           />
 
@@ -677,7 +675,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
               }}
               className="text-xs text-neutral-400 hover:text-white underline cursor-pointer"
             >
-              Reset filters
+              Reset filter
             </button>
           )}
         </div>
@@ -697,7 +695,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
               className="w-4 h-4 rounded border-white/20 bg-neutral-800 text-rose-500 focus:ring-rose-500 focus:ring-offset-0 cursor-pointer"
             />
             <span className="text-neutral-300 font-medium">
-              Select all ({filteredOrders.length})
+              Pilih semua ({filteredOrders.length})
             </span>
           </label>
         )}
@@ -709,7 +707,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
             <span className="font-bold text-white">
-              {selectedIds.size} {selectedIds.size === 1 ? 'order' : 'orders'} selected
+              {selectedIds.size} pesanan dipilih
             </span>
             <span className="text-neutral-600">|</span>
             <button
@@ -717,7 +715,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
               onClick={() => setSelectedIds(new Set())}
               className="text-neutral-400 hover:text-white underline cursor-pointer"
             >
-              Deselect All
+              Batalkan Pilihan
             </button>
           </div>
 
@@ -728,7 +726,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
               className="px-3 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs whitespace-nowrap"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>Bulk Print AWBs</span>
+              <span>Cetak Label Massal</span>
             </button>
 
             <button
@@ -738,7 +736,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
               className="px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-600 text-white font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
             >
               <Truck className={clsx('w-3.5 h-3.5', isBulkArranging && 'animate-spin')} />
-              <span>{isBulkArranging ? 'Arranging...' : 'Bulk Arrange'}</span>
+              <span>{isBulkArranging ? 'Memproses...' : 'Atur Pengiriman Massal'}</span>
             </button>
 
             <button
@@ -747,7 +745,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
               className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-white/10 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
             >
               <Download className="w-3.5 h-3.5 text-neutral-400" />
-              <span>Export CSV</span>
+              <span>Ekspor CSV</span>
             </button>
           </div>
         </div>
@@ -757,14 +755,14 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
       {isLoading ? (
         <div className="p-12 text-center rounded-2xl bg-neutral-900/40 border border-white/5 space-y-3">
           <RefreshCw className="w-6 h-6 text-rose-400 animate-spin mx-auto" />
-          <p className="text-xs text-neutral-400">Loading TikTok Shop orders...</p>
+          <p className="text-xs text-neutral-400">Memuat pesanan TikTok Shop...</p>
         </div>
       ) : filteredOrders.length === 0 ? (
         <div className="p-12 text-center rounded-2xl bg-neutral-900/40 border border-white/5 space-y-3">
           <Package className="w-8 h-8 text-neutral-600 mx-auto" />
-          <p className="text-sm font-semibold text-neutral-300">No orders found</p>
+          <p className="text-sm font-semibold text-neutral-300">Tidak ada pesanan ditemukan</p>
           <p className="text-xs text-neutral-500">
-            {searchQuery ? 'Try clearing the search filter or query live from TikTok Shop API.' : 'Sync orders from TikTok Shop or adjust filters.'}
+            {searchQuery ? 'Coba ubah kata kunci pencarian atau cari langsung dari API TikTok Shop.' : 'Sinkronkan pesanan dari TikTok Shop atau sesuaikan filter.'}
           </p>
           {searchQuery.trim().length >= 6 && (
             <button
@@ -774,7 +772,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
               className="mt-2 px-4 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/40 text-xs font-semibold inline-flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
             >
               <Search className={clsx('w-3.5 h-3.5', isLiveSearching && 'animate-spin')} />
-              <span>{isLiveSearching ? 'Searching TikTok Shop API...' : `Search Live TikTok API for "${searchQuery.trim()}"`}</span>
+              <span>{isLiveSearching ? 'Mencari di API TikTok Shop...' : `Cari di API TikTok untuk "${searchQuery.trim()}"`}</span>
             </button>
           )}
         </div>
@@ -802,7 +800,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
               >
                 {/* Top Header Bar */}
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/5 pb-3 mb-3">
-                  {/* Left: Checkbox, Channel tag, Order ID, Buyer */}
+                  {/* Left: Checkbox, Channel tag, Order ID, Countdown, Buyer */}
                   <div className="flex flex-wrap items-center gap-2.5">
                     <input
                       type="checkbox"
@@ -820,6 +818,11 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                       #{order.order_id}
                     </span>
 
+                    <ShipCountdownBadge
+                      shipByDate={order.ship_by_date}
+                      shipByTimestamp={order.ship_by_timestamp}
+                    />
+
                     <button
                       type="button"
                       onClick={(e) => {
@@ -827,7 +830,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                         handleCopy(order.order_id, `id_${order.order_id}`);
                       }}
                       className="text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer"
-                      title="Copy Order ID"
+                      title="Salin No. Pesanan"
                     >
                       {copiedId === `id_${order.order_id}` ? (
                         <Check className="w-3.5 h-3.5 text-emerald-400" />
@@ -851,7 +854,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                     {order.already_claimed && (
                       <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
                         <ShieldCheck className="w-3 h-3" />
-                        <span>Claimed</span>
+                        <span>Garansi Tercatat</span>
                       </span>
                     )}
                   </div>
@@ -874,10 +877,10 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                       type="button"
                       onClick={() => handlePrintLabel(order)}
                       className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                      title="Print Air Waybill"
+                      title="Cetak Label Pengiriman"
                     >
                       <Printer className="w-3.5 h-3.5 text-neutral-400" />
-                      <span>AWB</span>
+                      <span>Cetak Label</span>
                     </button>
 
                     {/* Arrange Shipment Button if ready */}
@@ -893,7 +896,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                         ) : (
                           <Truck className="w-3.5 h-3.5" />
                         )}
-                        <span>Arrange Ship</span>
+                        <span>Atur Pengiriman</span>
                       </button>
                     )}
 
@@ -920,7 +923,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                             className="w-full px-3 py-2 text-left text-xs text-emerald-400 hover:bg-emerald-500/10 flex items-center gap-2 cursor-pointer font-medium"
                           >
                             <ShieldCheck className="w-3.5 h-3.5" />
-                            <span>Claim Warranty</span>
+                            <span>Klaim Garansi</span>
                           </button>
 
                           <button
@@ -932,7 +935,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                             className="w-full px-3 py-2 text-left text-xs text-amber-400 hover:bg-amber-500/10 flex items-center gap-2 cursor-pointer font-medium"
                           >
                             <RotateCcw className="w-3.5 h-3.5" />
-                            <span>Claim Redeem (Defect)</span>
+                            <span>Redeem Hadiah (Cacat)</span>
                           </button>
 
                           <div className="my-1 border-t border-white/10" />
@@ -946,7 +949,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                             className="w-full px-3 py-2 text-left text-xs text-neutral-300 hover:bg-white/5 flex items-center gap-2 cursor-pointer"
                           >
                             <Copy className="w-3.5 h-3.5 text-neutral-500" />
-                            <span>Copy Order ID</span>
+                            <span>Salin No. Pesanan</span>
                           </button>
 
                           {order.tracking_number && (
@@ -959,7 +962,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                               className="w-full px-3 py-2 text-left text-xs text-neutral-300 hover:bg-white/5 flex items-center gap-2 cursor-pointer"
                             >
                               <Copy className="w-3.5 h-3.5 text-neutral-500" />
-                              <span>Copy Tracking Resi</span>
+                              <span>Salin No. Resi</span>
                             </button>
                           )}
                         </div>
@@ -999,7 +1002,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                             </p>
                             {item.sku_name && (
                               <p className="text-[11px] font-mono text-neutral-400 mt-0.5 truncate">
-                                Variant: <span className="text-neutral-200">{item.sku_name}</span>
+                                Varian: <span className="text-neutral-200">{item.sku_name}</span>
                               </p>
                             )}
                           </div>
@@ -1018,7 +1021,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
 
                     <div className="flex items-center justify-between pt-1 text-xs">
                       <span className="text-neutral-500 font-mono text-[11px]">
-                        {order.items?.length || 0} line item(s)
+                        {order.items?.length || 0} jenis produk
                       </span>
                       <div className="font-mono text-xs font-bold text-white">
                         Total: <span className="text-rose-400">{formatCurrency(order.total_amount, order.currency || 'IDR')}</span>
@@ -1027,7 +1030,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
 
                     {order.buyer_note && (
                       <div className="text-xs p-2 rounded-lg bg-amber-500/5 border border-amber-500/10 text-amber-300/90 italic">
-                        Note: {order.buyer_note}
+                        Catatan: {order.buyer_note}
                       </div>
                     )}
                   </div>
@@ -1035,26 +1038,33 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                   {/* Column 3: Logistics and Destination */}
                   <div className="p-3.5 rounded-xl bg-neutral-950/40 border border-white/5 space-y-2 text-xs">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono uppercase text-neutral-500">Logistics</span>
-                      <span className="font-semibold text-neutral-200">{order.shipping_carrier || 'Standard Courier'}</span>
+                      <span className="text-[10px] font-mono uppercase text-neutral-500">Jasa Kirim</span>
+                      <span className="font-semibold text-neutral-200">{order.shipping_carrier || 'N/A'}</span>
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono uppercase text-neutral-500">Tracking Resi</span>
+                      <span className="text-[10px] font-mono uppercase text-neutral-500">No. Resi</span>
                       <span className="font-mono font-bold text-rose-400">
-                        {order.tracking_number || 'Pending'}
+                        {order.tracking_number || 'N/A'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono uppercase text-neutral-500">Batas Kirim</span>
+                      <span className="font-mono text-neutral-300">
+                        {order.ship_by_date || 'N/A'}
                       </span>
                     </div>
 
                     <div className="flex items-start gap-2 pt-2 border-t border-white/5">
                       <MapPin className="w-3.5 h-3.5 text-neutral-500 shrink-0 mt-0.5" />
                       <div className="min-w-0">
-                        <p className="font-medium text-neutral-200">{order.recipient_name}</p>
+                        <p className="font-medium text-neutral-200">{order.recipient_name || 'N/A'}</p>
                         <p className="text-[11px] text-neutral-400 leading-tight truncate max-w-[200px]" title={order.recipient_address}>
-                          {order.recipient_address}
+                          {order.recipient_address || 'N/A'}
                         </p>
                         <p className="text-[10px] text-neutral-500 font-mono mt-0.5">
-                          {order.recipient_city} {order.recipient_postcode}
+                          {order.recipient_city || ''} {order.recipient_postcode || ''}
                         </p>
                       </div>
                     </div>
@@ -1070,17 +1080,17 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
       {filteredOrders.length > 0 && (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 rounded-xl bg-neutral-900/60 border border-white/10 text-xs text-neutral-400">
           <div>
-            Showing <span className="font-mono font-bold text-white">{(currentPage - 1) * pageSize + 1}</span> to{' '}
+            Menampilkan <span className="font-mono font-bold text-white">{(currentPage - 1) * pageSize + 1}</span> sampai{' '}
             <span className="font-mono font-bold text-white">
               {Math.min(currentPage * pageSize, filteredOrders.length)}
             </span>{' '}
-            of <span className="font-mono font-bold text-white">{filteredOrders.length}</span> orders
+            dari <span className="font-mono font-bold text-white">{filteredOrders.length}</span> pesanan
           </div>
 
           <div className="flex items-center gap-3">
             {/* Per Page Selector */}
             <FilterSelect
-              label="Per page"
+              label="Per halaman"
               value={String(pageSize)}
               onChange={(val) => handlePageSizeChange(Number(val))}
               dropUp={true}
@@ -1100,10 +1110,10 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                 disabled={currentPage <= 1}
                 className="px-2.5 py-1 rounded-lg border border-white/10 bg-neutral-900 hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
               >
-                Prev
+                Sebelumnya
               </button>
               <span className="px-2 py-1 font-mono text-[11px] text-neutral-300">
-                Page {currentPage} of {totalPages}
+                Halaman {currentPage} dari {totalPages}
               </span>
               <button
                 type="button"
@@ -1111,7 +1121,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                 disabled={currentPage >= totalPages}
                 className="px-2.5 py-1 rounded-lg border border-white/10 bg-neutral-900 hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
               >
-                Next
+                Berikutnya
               </button>
             </div>
           </div>

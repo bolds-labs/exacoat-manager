@@ -21,7 +21,13 @@ export interface ExportStatus {
       cc: string[];
       subject: string;
       attachments_sent: string[];
+      provider?: string;
     } | null;
+    mailService?: {
+      ready: boolean;
+      label: string;
+      type: string;
+    };
   };
   goorita: {
     pendingCount: number;
@@ -416,3 +422,26 @@ export async function sendJneEmailDirect(params?: {
     };
   }
 }
+
+/**
+ * Clear last JNE export email sent log from WordPress database
+ */
+export async function clearJneEmailSentLog(): Promise<{ success: boolean; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/exports/clear-jne-email-log`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+    });
+    const data = await res.json();
+    return { success: Boolean(data?.success) };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Network error while clearing sent log' };
+  }
+}
+

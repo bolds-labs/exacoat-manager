@@ -313,10 +313,10 @@ class Exacoat_Shopee_Client {
 	/**
 	 * Synchronize orders from Shopee Open API v2
 	 */
-	public static function sync_orders( int $days_back = 15, int $max_orders = 100 ): array {
+	public static function sync_orders( int $days_back = 30, int $max_orders = 500 ): array {
 		$start_time = microtime( true );
 		$s = self::get_settings();
-		$max_fetch = min( 250, max( 50, $max_orders ) );
+		$max_fetch = min( 1000, max( 50, $max_orders ) );
 
 		if ( class_exists( 'Exacoat_Logger' ) ) {
 			Exacoat_Logger::log(
@@ -362,67 +362,87 @@ class Exacoat_Shopee_Client {
 		$access_token = $token_res['access_token'];
 		$shop_id = $token_res['shop_id'];
 
-		$time_to = time();
-		$time_from = $time_to - ( $days_back * 86400 );
+		// Shopee API v2 restricts get_order_list time slot to a maximum of 15 days.
+		// To support 30, 60, or 90 days, partition the requested range into 14-day sliding slots.
+		$now = time();
+		$overall_from = $now - ( $days_back * 86400 );
+		$slot_size = 14 * 86400;
+		$windows = [];
+		$curr_to = $now;
 
-		// Step 1: Paginate through /api/v2/order/get_order_list using next_cursor
-		$order_sns = [];
-		$cursor = '';
-
-		do {
-			$list_path = '/api/v2/order/get_order_list';
-			$list_ts = time();
-			$list_sign = self::sign_shop( $list_path, $list_ts, $partner_id, $partner_key, $access_token, $shop_id );
-
-			$query_args = [
-				'partner_id'        => $partner_id,
-				'timestamp'         => $list_ts,
-				'access_token'      => $access_token,
-				'shop_id'           => $shop_id,
-				'sign'              => $list_sign,
-				'time_range_field'  => 'create_time',
-				'time_from'         => $time_from,
-				'time_to'           => $time_to,
-				'page_size'         => 50,
+		while ( $curr_to > $overall_from ) {
+			$curr_from = max( $overall_from, $curr_to - $slot_size );
+			$windows[] = [
+				'time_from' => $curr_from,
+				'time_to'   => $curr_to,
 			];
-			if ( ! empty( $cursor ) ) {
-				$query_args['cursor'] = $cursor;
-			}
+			$curr_to = $curr_from;
+		}
 
-			$list_url = "{$base_url}{$list_path}?" . http_build_query( $query_args );
-			$list_res = wp_remote_get( $list_url, [ 'timeout' => 25 ] );
-			if ( is_wp_error( $list_res ) ) {
-				$err = $list_res->get_error_message();
-				if ( class_exists( 'Exacoat_Logger' ) ) {
-					Exacoat_Logger::log( 'error', 'shopee_sync', 'Shopee get_order_list HTTP transport error: ' . $err );
-				}
+		// Step 1: Iterate through time slots and paginate using next_cursor
+		$order_sns = [];
+
+		foreach ( $windows as $window ) {
+			if ( count( $order_sns ) >= $max_fetch ) {
 				break;
 			}
 
-			$list_data = json_decode( wp_remote_retrieve_body( $list_res ), true );
-			if ( ! empty( $list_data['error'] ) ) {
-				$err = $list_data['message'] ?? $list_data['error'];
-				if ( class_exists( 'Exacoat_Logger' ) ) {
-					Exacoat_Logger::log( 'error', 'shopee_sync', 'Shopee get_order_list API error: ' . $err, $list_data );
+			$cursor = '';
+			do {
+				$list_path = '/api/v2/order/get_order_list';
+				$list_ts = time();
+				$list_sign = self::sign_shop( $list_path, $list_ts, $partner_id, $partner_key, $access_token, $shop_id );
+
+				$query_args = [
+					'partner_id'        => $partner_id,
+					'timestamp'         => $list_ts,
+					'access_token'      => $access_token,
+					'shop_id'           => $shop_id,
+					'sign'              => $list_sign,
+					'time_range_field'  => 'create_time',
+					'time_from'         => $window['time_from'],
+					'time_to'           => $window['time_to'],
+					'page_size'         => 50,
+				];
+				if ( ! empty( $cursor ) ) {
+					$query_args['cursor'] = $cursor;
 				}
-				break;
-			}
 
-			$raw_order_list = $list_data['response']['order_list'] ?? [];
-			if ( empty( $raw_order_list ) ) {
-				break;
-			}
-
-			foreach ( $raw_order_list as $item ) {
-				$sn = $item['order_sn'] ?? '';
-				if ( ! empty( $sn ) && ! in_array( $sn, $order_sns, true ) ) {
-					$order_sns[] = $sn;
+				$list_url = "{$base_url}{$list_path}?" . http_build_query( $query_args );
+				$list_res = wp_remote_get( $list_url, [ 'timeout' => 25 ] );
+				if ( is_wp_error( $list_res ) ) {
+					$err = $list_res->get_error_message();
+					if ( class_exists( 'Exacoat_Logger' ) ) {
+						Exacoat_Logger::log( 'error', 'shopee_sync', 'Shopee get_order_list HTTP transport error: ' . $err );
+					}
+					break;
 				}
-			}
 
-			$has_more = ! empty( $list_data['response']['more'] );
-			$cursor   = (string) ( $list_data['response']['next_cursor'] ?? '' );
-		} while ( $has_more && ! empty( $cursor ) && count( $order_sns ) < $max_fetch );
+				$list_data = json_decode( wp_remote_retrieve_body( $list_res ), true );
+				if ( ! empty( $list_data['error'] ) ) {
+					$err = $list_data['message'] ?? $list_data['error'];
+					if ( class_exists( 'Exacoat_Logger' ) ) {
+						Exacoat_Logger::log( 'error', 'shopee_sync', 'Shopee get_order_list API error: ' . $err, $list_data );
+					}
+					break;
+				}
+
+				$raw_order_list = $list_data['response']['order_list'] ?? [];
+				if ( empty( $raw_order_list ) ) {
+					break;
+				}
+
+				foreach ( $raw_order_list as $item ) {
+					$sn = $item['order_sn'] ?? '';
+					if ( ! empty( $sn ) && ! in_array( $sn, $order_sns, true ) ) {
+						$order_sns[] = $sn;
+					}
+				}
+
+				$has_more = ! empty( $list_data['response']['more'] );
+				$cursor   = (string) ( $list_data['response']['next_cursor'] ?? '' );
+			} while ( $has_more && ! empty( $cursor ) && count( $order_sns ) < $max_fetch );
+		}
 
 		if ( empty( $order_sns ) ) {
 			if ( class_exists( 'Exacoat_Logger' ) ) {

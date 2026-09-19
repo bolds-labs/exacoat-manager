@@ -1054,6 +1054,13 @@ class Exacoat_Export_Manager {
 				'permission_callback' => [ __CLASS__, 'rest_permission_check' ],
 			] );
 
+			// Clear JNE Export Email Sent Log
+			register_rest_route( $ns, '/exports/clear-jne-email-log', [
+				'methods'             => 'POST',
+				'callback'            => [ __CLASS__, 'rest_clear_jne_email_log' ],
+				'permission_callback' => [ __CLASS__, 'rest_permission_check' ],
+			] );
+
 			// Trigger Goorita Export
 			register_rest_route( $ns, '/exports/generate-goorita', [
 				'methods'             => 'POST',
@@ -1112,6 +1119,8 @@ class Exacoat_Export_Manager {
 		$jne_csv  = $output_jne['dir'] . "{$date} Data Loader exacoat.csv";
 		$goo_xlsx = $output_goorita['dir'] . "{$date} Goorita Bulk Shipment.xlsx";
 
+		$mail_service = self::get_active_mail_service();
+
 		return new WP_REST_Response( [
 			'success' => true,
 			'jne'     => [
@@ -1121,6 +1130,11 @@ class Exacoat_Export_Manager {
 				'xlsxUrl'       => file_exists( $jne_xlsx ) ? $output_jne['url'] . rawurlencode( basename( $jne_xlsx ) ) . '?t=' . time() : null,
 				'csvUrl'        => file_exists( $jne_csv ) ? $output_jne['url'] . rawurlencode( basename( $jne_csv ) ) . '?t=' . time() : null,
 				'lastEmailSent' => get_option( 'last_jne_export_email_sent' ) ?: null,
+				'mailService'   => [
+					'ready' => $mail_service['ready'],
+					'label' => $mail_service['label'],
+					'type'  => $mail_service['type'],
+				],
 			],
 			'goorita' => [
 				'pendingCount'  => count( $goorita_orders ),
@@ -1129,6 +1143,17 @@ class Exacoat_Export_Manager {
 				'xlsxUrl'       => file_exists( $goo_xlsx ) ? $output_goorita['url'] . rawurlencode( basename( $goo_xlsx ) ) . '?t=' . time() : null,
 				'uploadPortal'  => 'https://send.goorita.com/panel/shipment/create-bulk?load=10&page=1',
 			],
+		], 200 );
+	}
+
+	/**
+	 * REST: Clear JNE Export Email Sent Log
+	 */
+	public static function rest_clear_jne_email_log( WP_REST_Request $request ): WP_REST_Response {
+		delete_option( 'last_jne_export_email_sent' );
+		return new WP_REST_Response( [
+			'success' => true,
+			'message' => 'JNE export email sent log cleared successfully.',
 		], 200 );
 	}
 
@@ -1146,10 +1171,212 @@ class Exacoat_Export_Manager {
 	}
 
 	/**
+	 * Detect active transactional email provider or SMTP plugin.
+	 * Prevents false positive success when wp_mail falls back to unconfigured PHP mail().
+	 */
+	public static function get_active_mail_service(): array {
+		// 1. Check if direct ZeptoMail token is configured in Exacoat Core
+		$settings     = function_exists( 'Exacoat_Core::get_settings' ) ? Exacoat_Core::get_settings() : get_option( 'exacoat_core_settings', [] );
+		$direct_token = trim( $settings['zeptomail_token'] ?? '' );
+		if ( ! empty( $direct_token ) ) {
+			return [
+				'ready' => true,
+				'type'  => 'zeptomail_api',
+				'label' => 'Zoho ZeptoMail Direct API',
+				'token' => $direct_token,
+			];
+		}
+
+		// 2. Check active plugins in WordPress
+		$active_plugins = (array) get_option( 'active_plugins', [] );
+		if ( is_multisite() ) {
+			$network_active = array_keys( (array) get_site_option( 'active_sitewide_plugins', [] ) );
+			$active_plugins = array_merge( $active_plugins, $network_active );
+		}
+
+		// Check for ZeptoMail plugin
+		$has_zeptomail_plugin = false;
+		foreach ( $active_plugins as $plugin_file ) {
+			if ( stripos( $plugin_file, 'zeptomail' ) !== false ) {
+				$has_zeptomail_plugin = true;
+				break;
+			}
+		}
+
+		if ( $has_zeptomail_plugin || class_exists( 'ZeptoMail' ) || class_exists( 'Zoho_ZeptoMail' ) || defined( 'ZEPTOMAIL_VERSION' ) ) {
+			return [
+				'ready' => true,
+				'type'  => 'zeptomail_plugin',
+				'label' => 'ZeptoMail WordPress Plugin',
+			];
+		}
+
+		// Check other known SMTP plugins
+		$known_smtp = [
+			'wp-mail-smtp' => 'WP Mail SMTP',
+			'fluent-smtp'  => 'FluentSMTP',
+			'post-smtp'    => 'Post SMTP',
+			'easy-wp-smtp' => 'Easy WP SMTP',
+		];
+		foreach ( $known_smtp as $slug => $label ) {
+			foreach ( $active_plugins as $plugin_file ) {
+				if ( stripos( $plugin_file, $slug ) !== false ) {
+					return [
+						'ready' => true,
+						'type'  => 'smtp_plugin',
+						'label' => $label,
+					];
+				}
+			}
+		}
+
+		if ( class_exists( 'WPMailSMTP\Core' ) || class_exists( 'FluentMail\App\App' ) || class_exists( 'Postman' ) ) {
+			return [
+				'ready' => true,
+				'type'  => 'smtp_plugin',
+				'label' => 'SMTP Plugin',
+			];
+		}
+
+		// Check if any custom callback is registered on phpmailer_init
+		if ( has_action( 'phpmailer_init' ) ) {
+			return [
+				'ready' => true,
+				'type'  => 'phpmailer_hook',
+				'label' => 'Custom PHPMailer Configuration',
+			];
+		}
+
+		// No authenticated mail service is active
+		return [
+			'ready' => false,
+			'type'  => 'none',
+			'label' => 'PHP mail() Default (Local Only)',
+		];
+	}
+
+	/**
+	 * Dispatch email directly via Zoho ZeptoMail REST API
+	 */
+	public static function send_via_zeptomail_api( array $args ): array {
+		$token       = $args['token'];
+		$to_list     = $args['to'];
+		$cc_list     = $args['cc'] ?? [];
+		$subject     = $args['subject'];
+		$body        = $args['body'];
+		$attachments = $args['attachments'] ?? [];
+
+		$to_payload = [];
+		foreach ( $to_list as $email ) {
+			$to_payload[] = [
+				'email_address' => [
+					'address' => $email,
+					'name'    => 'Recipient',
+				],
+			];
+		}
+
+		$cc_payload = [];
+		foreach ( $cc_list as $email ) {
+			$cc_payload[] = [
+				'email_address' => [
+					'address' => $email,
+					'name'    => 'Exacoat CS',
+				],
+			];
+		}
+
+		$attachments_payload = [];
+		foreach ( $attachments as $file_path ) {
+			if ( file_exists( $file_path ) ) {
+				$ext  = strtolower( pathinfo( $file_path, PATHINFO_EXTENSION ) );
+				$mime = ( $ext === 'csv' ) ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+				$attachments_payload[] = [
+					'content'   => base64_encode( file_get_contents( $file_path ) ),
+					'mime_type' => $mime,
+					'name'      => basename( $file_path ),
+				];
+			}
+		}
+
+		$payload = [
+			'from'     => [
+				'address' => 'noreply@exacoat.com',
+				'name'    => 'Exacoat Operations',
+			],
+			'to'       => $to_payload,
+			'subject'  => $subject,
+			'htmlbody' => nl2br( esc_html( $body ) ),
+			'textbody' => $body,
+			'reply_to' => [
+				[
+					'address' => 'exacoat.cs@gmail.com',
+					'name'    => 'Exacoat CS',
+				],
+			],
+		];
+
+		if ( ! empty( $cc_payload ) ) {
+			$payload['cc'] = $cc_payload;
+		}
+
+		if ( ! empty( $attachments_payload ) ) {
+			$payload['attachments'] = $attachments_payload;
+		}
+
+		$auth_header = str_starts_with( $token, 'Zoho-enczapikey ' )
+			? $token
+			: 'Zoho-enczapikey ' . $token;
+
+		$start = microtime( true );
+		$response = wp_remote_post( 'https://api.zeptomail.com/v1.1/email', [
+			'headers' => [
+				'Accept'        => 'application/json',
+				'Content-Type'  => 'application/json',
+				'Authorization' => $auth_header,
+			],
+			'body'    => wp_json_encode( $payload ),
+			'timeout' => 25,
+		] );
+		$latency = round( ( microtime( true ) - $start ) * 1000 );
+
+		if ( is_wp_error( $response ) ) {
+			return [
+				'success' => false,
+				'message' => $response->get_error_message(),
+				'latency' => $latency,
+			];
+		}
+
+		$status_code = wp_remote_retrieve_response_code( $response );
+		$body_res    = json_decode( wp_remote_retrieve_body( $response ), true );
+		$is_ok       = ( $status_code >= 200 && $status_code < 300 );
+
+		return [
+			'success'    => $is_ok,
+			'status'     => $status_code,
+			'latency_ms' => $latency,
+			'message'    => $is_ok ? 'Email accepted by ZeptoMail API' : ( $body_res['message'] ?? "HTTP {$status_code}" ),
+			'request_id' => $body_res['data'][0]['request_id'] ?? null,
+			'raw'        => $body_res,
+		];
+	}
+
+	/**
 	 * REST: Send JNE Export Email directly from server with XLSX & CSV attached
 	 */
 	public static function rest_send_jne_email( WP_REST_Request $request ): WP_REST_Response {
 		$plugin_settings = get_option( 'exacoat_core_settings', [] );
+
+		// 0. Verify email delivery service readiness to prevent false positive success
+		$mail_service = self::get_active_mail_service();
+		if ( ! $mail_service['ready'] ) {
+			return new WP_REST_Response( [
+				'success' => false,
+				'error'   => 'Layanan email (Plugin ZeptoMail / SMTP) terdeteksi nonaktif di WordPress. Email tidak dikirim karena server staging tidak memiliki relay email aktif (hanya PHP mail() lokal yang tidak dapat mengirim ke email eksternal). Silakan aktifkan kembali plugin ZeptoMail di WordPress admin.',
+				'service' => $mail_service,
+			], 400 );
+		}
 
 		// 1. Resolve recipients
 		$param_recipients = sanitize_text_field( $request->get_param( 'recipients' ) ?: '' );
@@ -1252,7 +1479,46 @@ class Exacoat_Export_Manager {
 			], 400 );
 		}
 
-		// 5. Build Headers with From: noreply@exacoat.com, Reply-To, and CC
+		// 5. If direct ZeptoMail API token is available, send via ZeptoMail REST API
+		if ( 'zeptomail_api' === $mail_service['type'] && ! empty( $mail_service['token'] ) ) {
+			$api_res = self::send_via_zeptomail_api( [
+				'token'       => $mail_service['token'],
+				'to'          => $to_list,
+				'cc'          => $cc_list,
+				'subject'     => $subject,
+				'body'        => $body,
+				'attachments' => $attachments,
+			] );
+
+			if ( ! $api_res['success'] ) {
+				return new WP_REST_Response( [
+					'success' => false,
+					'error'   => 'ZeptoMail Direct API failed: ' . ( $api_res['message'] ?? 'Unknown error' ),
+				], 500 );
+			}
+
+			// Record sent log in options
+			$sent_info = [
+				'time'             => current_time( 'mysql' ),
+				'to'               => $to_list,
+				'cc'               => $cc_list,
+				'subject'          => $subject,
+				'attachments_sent' => array_map( 'basename', $attachments ),
+				'provider'         => 'zeptomail_api',
+			];
+			update_option( 'last_jne_export_email_sent', $sent_info );
+
+			return new WP_REST_Response( [
+				'success'          => true,
+				'message'          => 'Email sent to JNE via ZeptoMail API with XLSX and CSV attached successfully.',
+				'recipients'       => implode( ', ', $to_list ),
+				'cc'               => implode( ', ', $cc_list ),
+				'attachments_sent' => array_map( 'basename', $attachments ),
+				'sent_at'          => $sent_info['time'],
+			], 200 );
+		}
+
+		// 6. Otherwise send via wp_mail() with active SMTP/ZeptoMail plugin
 		$sender_email = 'noreply@exacoat.com';
 		$sender_name  = 'Exacoat Operations';
 
@@ -1302,6 +1568,7 @@ class Exacoat_Export_Manager {
 			'cc'               => $cc_list,
 			'subject'          => $subject,
 			'attachments_sent' => array_map( 'basename', $attachments ),
+			'provider'         => $mail_service['type'],
 		];
 		update_option( 'last_jne_export_email_sent', $sent_info );
 
