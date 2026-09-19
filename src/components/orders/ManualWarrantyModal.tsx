@@ -616,7 +616,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
     }
 
     setIsLoadingShipping(true);
-    const res = await fetchShippingRatesDirect(cleanZip);
+    const res = await fetchShippingRatesDirect(cleanZip, 'ID', existingOrder?.id);
     setIsLoadingShipping(false);
 
     if (res.success && res.rates?.length) {
@@ -625,6 +625,11 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
       setSelectedCourierId(first.id);
       setSelectedCourierLabel(first.label);
       setSelectedCourierPrice(first.price);
+      if (res.is_fallback) {
+        showToast('info', 'Standard Rates', 'Using standard courier rate estimates.');
+      } else {
+        showToast('success', 'Live Rates Loaded', `Loaded ${res.rates.length} live Biteship rates.`);
+      }
     } else {
       showToast('warning', 'Rates Fallback', 'Using standard courier rate estimates.');
     }

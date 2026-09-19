@@ -11,15 +11,21 @@ import { TikTokOrdersView } from './TikTokOrdersView';
 import { fetchOrdersDirect, fetchOrderDetailDirect, ShopeeOrder, TikTokOrder } from '../../lib/wordpressBridge';
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency } from '../../lib/formatters';
-import { RefreshCw, FileSpreadsheet, Package, ShieldCheck, RotateCcw, Layers } from 'lucide-react';
+import { RefreshCw, FileSpreadsheet, Package, ShieldCheck, RotateCcw, Layers, HelpCircle } from 'lucide-react';
 import { GlassCard } from '../ui/GlassCard';
 import { PageHeroHeader } from '../ui/PageHeroHeader';
+import { Tooltip } from '../ui/Tooltip';
+import { useAuth } from '../../context/AuthContext';
 import { clsx } from 'clsx';
 
 interface OrdersViewProps {}
 
 export const OrdersView: React.FC<OrdersViewProps> = () => {
   const { showToast } = useToast();
+  const { user, simulatedRole } = useAuth();
+  const effectiveRole = simulatedRole || user?.role;
+  const isShopManager = effectiveRole === 'shop_manager';
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -316,7 +322,10 @@ export const OrdersView: React.FC<OrdersViewProps> = () => {
       ) : (
         <>
           {/* Multicurrency Revenue & Status Metrics */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className={clsx(
+            "grid gap-3 sm:gap-4",
+            isShopManager ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2 lg:grid-cols-4"
+          )}>
         {/* Payment Confirmed */}
         <GlassCard className={clsx(
           "p-4 sm:p-5 flex flex-col justify-between font-sans group transition-all min-h-[120px]",
@@ -399,32 +408,57 @@ export const OrdersView: React.FC<OrdersViewProps> = () => {
           </div>
         </GlassCard>
 
-        {/* Gross Revenue */}
-        <GlassCard className="p-4 sm:p-5 flex flex-col justify-between font-sans group transition-all min-h-[120px] col-span-2 sm:col-span-2 lg:col-span-1">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 truncate">
-              Total Sales
-            </p>
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/20 shrink-0">
-              Revenue
-            </span>
-          </div>
-          <div className="my-1 space-y-1">
-            <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-[#f3aa18] font-mono tabular-nums">
-              {formatCurrency(currencyBreakdown[primaryCurrency]?.total || 0, primaryCurrency)}
-            </h3>
-            <div className="flex flex-col gap-0.5 pt-0.5">
-              <span className="text-[10px] text-zinc-400 font-mono">
-                {orders.length} total orders placed
+        {/* Gross Revenue - Only visible to administrators, hidden for shop manager */}
+        {!isShopManager && (
+          <GlassCard className="p-4 sm:p-5 flex flex-col justify-between font-sans group transition-all min-h-[120px] col-span-2 sm:col-span-2 lg:col-span-1">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 truncate">
+                Total Sales
+              </p>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/20 shrink-0">
+                Revenue
               </span>
-              {otherCurrencies.map(curr => (
-                <span key={curr} className="text-[9px] text-zinc-500 font-mono">
-                  + {formatCurrency(currencyBreakdown[curr].total, curr)} ({currencyBreakdown[curr].count} orders)
-                </span>
-              ))}
             </div>
-          </div>
-        </GlassCard>
+            <div className="my-1 space-y-1">
+              <div className="flex items-center gap-2">
+                <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-[#f3aa18] font-mono tabular-nums">
+                  {formatCurrency(currencyBreakdown[primaryCurrency]?.total || 0, primaryCurrency)}
+                </h3>
+                {otherCurrencies.length > 0 && (
+                  <Tooltip
+                    position="top"
+                    content={
+                      <div className="space-y-1.5 p-1 font-mono text-left max-w-xs">
+                        <p className="font-sans font-bold text-[11px] text-zinc-300 border-b border-white/10 pb-1">
+                          Other Currencies
+                        </p>
+                        {otherCurrencies.map((curr) => (
+                          <div key={curr} className="flex items-center justify-between gap-3 text-[10px] text-zinc-200">
+                            <span className="font-semibold text-zinc-400">{curr}:</span>
+                            <span>{formatCurrency(currencyBreakdown[curr].total, curr)} ({currencyBreakdown[curr].count} orders)</span>
+                          </div>
+                        ))}
+                      </div>
+                    }
+                  >
+                    <button
+                      type="button"
+                      className="p-1 rounded-md bg-white/[0.06] hover:bg-white/[0.12] text-zinc-400 hover:text-white transition-colors cursor-pointer border border-white/[0.08]"
+                      title="View currency breakdown"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5 text-amber-400/80" />
+                    </button>
+                  </Tooltip>
+                )}
+              </div>
+              <div className="flex flex-col gap-0.5 pt-0.5">
+                <span className="text-[10px] text-zinc-400 font-mono">
+                  {orders.length} total orders placed
+                </span>
+              </div>
+            </div>
+          </GlassCard>
+        )}
       </div>
 
       {/* Orders Table */}

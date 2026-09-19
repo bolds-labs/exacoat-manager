@@ -325,6 +325,8 @@ export const OrderTable: React.FC<OrderTableProps> = ({
     });
   }, [orders, activeStatus, activeCourier, printFilter, printedOrderIds, internalSearch, onStatusFilterChange, onCourierFilterChange, onSearchQueryChange]);
 
+  const [lastSelectedId, setLastSelectedId] = useState<number | null>(null);
+
   // Selection handlers
   const isAllSelected = filteredOrders.length > 0 && filteredOrders.every((o) => selectedIds.has(o.id));
   const isSomeSelected = filteredOrders.some((o) => selectedIds.has(o.id));
@@ -332,13 +334,37 @@ export const OrderTable: React.FC<OrderTableProps> = ({
   const handleToggleSelectAll = () => {
     if (isAllSelected) {
       setSelectedIds(new Set());
+      setLastSelectedId(null);
     } else {
       setSelectedIds(new Set(filteredOrders.map((o) => o.id)));
+      setLastSelectedId(null);
     }
   };
 
   const handleToggleSelect = (id: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+
+    if (e?.shiftKey && lastSelectedId !== null && lastSelectedId !== id) {
+      const ids = filteredOrders.map((o) => o.id);
+      const lastIdx = ids.indexOf(lastSelectedId);
+      const currIdx = ids.indexOf(id);
+
+      if (lastIdx !== -1 && currIdx !== -1) {
+        const start = Math.min(lastIdx, currIdx);
+        const end = Math.max(lastIdx, currIdx);
+        const rangeIds = ids.slice(start, end + 1);
+
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          rangeIds.forEach((rangeId) => next.add(rangeId));
+          return next;
+        });
+        setLastSelectedId(id);
+        return;
+      }
+    }
+
+    setLastSelectedId(id);
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -355,43 +381,33 @@ export const OrderTable: React.FC<OrderTableProps> = ({
   const handleBulkChangeStatus = async () => {
     if (selectedOrdersList.length === 0) return;
     setIsBulkUpdating(true);
-    showToast(
-      'info',
-      'Updating Status',
-      `Updating status of ${selectedOrdersList.length} orders to "${bulkStatusTarget}"...`
-    );
-
     let successCount = 0;
-    for (const ord of selectedOrdersList) {
+
+    for (const order of selectedOrdersList) {
       try {
-        const res = await updateOrderStatusDirect(ord.id, bulkStatusTarget);
+        const res = await updateOrderStatusDirect(order.id, bulkStatusTarget, false);
         if (res.success) successCount++;
-      } catch {
-        // Continue processing batch
+      } catch (e) {
+        console.error('Failed to update order in bulk', order.id, e);
       }
     }
 
     setIsBulkUpdating(false);
-    showToast(
-      'success',
-      'Bulk Status Updated',
-      `Updated ${successCount} of ${selectedOrdersList.length} orders to ${bulkStatusTarget}.`
-    );
+    showToast('success', 'Bulk Update Complete', `Updated ${successCount} orders to ${bulkStatusTarget}.`);
     setSelectedIds(new Set());
+    setLastSelectedId(null);
     if (onRefresh) onRefresh();
   };
 
   // Bulk Print A6
   const handleBulkPrintA6 = () => {
     if (selectedOrdersList.length === 0) return;
-    selectedOrdersList.forEach((o) => markOrderPrinted(o.id));
     setPrintModalOrders(selectedOrdersList);
     setIsPrintModalOpen(true);
   };
 
   const handleSinglePrintA6 = (order: Order, e: React.MouseEvent) => {
     e.stopPropagation();
-    markOrderPrinted(order.id);
     if (onPrintA6) {
       onPrintA6(order);
     } else {
@@ -700,7 +716,8 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                         <input
                           type="checkbox"
                           checked={isSelected}
-                          onChange={(e) => handleToggleSelect(order.id, e as any)}
+                          onClick={(e) => handleToggleSelect(order.id, e)}
+                          onChange={() => {}}
                           className="w-4 h-4 rounded border-zinc-300 dark:border-white/20 bg-white dark:bg-neutral-800 text-[#f3aa18] focus:ring-[#f3aa18] focus:ring-offset-0 cursor-pointer"
                         />
                       </td>

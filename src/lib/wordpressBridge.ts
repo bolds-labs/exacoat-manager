@@ -2987,8 +2987,9 @@ export interface ShippingRateOption {
 
 export async function fetchShippingRatesDirect(
   postcode: string,
-  country: string = 'ID'
-): Promise<{ success: boolean; rates?: ShippingRateOption[]; postcode?: string; error?: string }> {
+  country: string = 'ID',
+  orderId?: number
+): Promise<{ success: boolean; is_fallback?: boolean; rates?: ShippingRateOption[]; postcode?: string; error?: string }> {
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/warranty/shipping-rates`;
 
@@ -3002,11 +3003,17 @@ export async function fetchShippingRatesDirect(
       body: JSON.stringify({
         postcode,
         destination_country: country,
+        order_id: orderId || undefined,
       }),
     });
     const data = await res.json();
     if (res.ok && data?.success) {
-      return { success: true, rates: data.rates || [], postcode: data.postcode };
+      return {
+        success: true,
+        is_fallback: data.is_fallback ?? false,
+        rates: data.rates || [],
+        postcode: data.postcode,
+      };
     }
     return { success: false, error: data?.message || `HTTP ${res.status}` };
   } catch (err: any) {

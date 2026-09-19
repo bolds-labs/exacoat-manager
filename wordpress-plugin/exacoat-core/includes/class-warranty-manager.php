@@ -588,22 +588,34 @@ class Exacoat_Warranty_Manager {
 	 */
 	public static function rest_get_shipping_rates( \WP_REST_Request $request ): \WP_REST_Response {
 		$order_id = absint( $request->get_param( 'order_id' ) );
-		$order    = wc_get_order( $order_id );
+		$order    = $order_id ? wc_get_order( $order_id ) : null;
 
-		if ( ! $order ) {
-			return new \WP_REST_Response( [
-				'success' => false,
-				'message' => 'Order not found.',
-			], 404 );
+		$postcode = sanitize_text_field( trim( (string) $request->get_param( 'postcode' ) ) );
+		if ( empty( $postcode ) && $order ) {
+			$postcode = trim( $order->get_shipping_postcode() ?: $order->get_billing_postcode() );
 		}
 
-		$postcode = trim( $order->get_shipping_postcode() ?: $order->get_billing_postcode() );
-		$country  = trim( $order->get_shipping_country() ?: $order->get_billing_country() ?: 'ID' );
+		$country = sanitize_text_field( trim( (string) ( $request->get_param( 'destination_country' ) ?: $request->get_param( 'country' ) ) ) );
+		if ( empty( $country ) && $order ) {
+			$country = trim( $order->get_shipping_country() ?: $order->get_billing_country() );
+		}
+		if ( empty( $country ) ) {
+			$country = 'ID';
+		}
 
-		if ( empty( $postcode ) || 'ID' !== $country ) {
+		if ( empty( $postcode ) ) {
 			return new \WP_REST_Response( [
-				'success' => true,
-				'rates'   => [
+				'success' => false,
+				'message' => 'Postal code is required.',
+			], 400 );
+		}
+
+		if ( 'ID' !== $country ) {
+			return new \WP_REST_Response( [
+				'success'     => true,
+				'is_fallback' => false,
+				'postcode'    => $postcode,
+				'rates'       => [
 					[
 						'id'       => 'pos_international',
 						'courier'  => 'pos',
@@ -616,10 +628,28 @@ class Exacoat_Warranty_Manager {
 			], 200 );
 		}
 
-		$biteship_settings = get_option( 'woocommerce_biteship_shipping_settings', [] );
-		$api_key           = $biteship_settings['api_key'] ?? '';
-		$origin_zip        = $biteship_settings['origin_zip'] ?? '17142';
-		$couriers          = $biteship_settings['couriers'] ?? 'jne,sicepat';
+		$api_key = '';
+		if ( class_exists( 'Exacoat_Shipping_Tracker' ) && method_exists( 'Exacoat_Shipping_Tracker', 'get_biteship_api_key' ) ) {
+			$api_key = Exacoat_Shipping_Tracker::get_biteship_api_key();
+		} elseif ( class_exists( 'Exacoat_Biteship_Engine' ) && method_exists( 'Exacoat_Biteship_Engine', 'get_api_key' ) ) {
+			$api_key = Exacoat_Biteship_Engine::get_api_key();
+		}
+		if ( empty( $api_key ) ) {
+			$biteship_settings = get_option( 'woocommerce_biteship_shipping_settings', [] );
+			$api_key           = $biteship_settings['api_key'] ?? '';
+		}
+		if ( empty( $api_key ) && defined( 'BITESHIP_API_KEY' ) ) {
+			$api_key = trim( (string) BITESHIP_API_KEY );
+		}
+		if ( empty( $api_key ) ) {
+			$fallback = 'biteship_live.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiRXhhY29hdCIsInVzZXJJZCI6IjY2ZDM1NmE0OWEyOGQzMDAxMjUyN2Q1NCIsImlhdCI6MTc1ODQ1MTM5Mn0.zAWrMuQusXZc8_V0AyJCRO09Yig4n9uUjqza4E5lXag';
+			$api_key  = $fallback;
+		}
+
+		$origin_zip = '17142';
+		if ( class_exists( 'Exacoat_Biteship_Engine' ) && method_exists( 'Exacoat_Biteship_Engine', 'get_origin_zip' ) ) {
+			$origin_zip = Exacoat_Biteship_Engine::get_origin_zip();
+		}
 
 		$rates = [];
 
@@ -627,11 +657,11 @@ class Exacoat_Warranty_Manager {
 			$body = [
 				'origin_postal_code'      => (int) $origin_zip,
 				'destination_postal_code' => (int) $postcode,
-				'couriers'                => $couriers,
+				'couriers'                => 'jne,sicepat,jnt',
 				'items'                   => [
 					[
 						'name'     => 'Replacement Skin Pack',
-						'value'    => 0,
+						'value'    => 10000,
 						'weight'   => 150,
 						'quantity' => 1,
 					],
@@ -642,6 +672,7 @@ class Exacoat_Warranty_Manager {
 				'headers' => [
 					'Authorization' => $api_key,
 					'Content-Type'  => 'application/json',
+					'Accept'        => 'application/json',
 				],
 				'body'    => json_encode( $body ),
 				'timeout' => 15,
@@ -651,14 +682,14 @@ class Exacoat_Warranty_Manager {
 				$resp_body = json_decode( wp_remote_retrieve_body( $response ), true );
 				if ( ! empty( $resp_body['pricing'] ) && is_array( $resp_body['pricing'] ) ) {
 					foreach ( $resp_body['pricing'] as $rate ) {
-						if ( ( $rate['shipping_type'] ?? '' ) === 'parcel' ) {
+						if ( empty( $rate['shipping_type'] ) || ( $rate['shipping_type'] ?? '' ) === 'parcel' ) {
 							$rates[] = [
 								'id'       => ( $rate['courier_code'] ?? 'courier' ) . '_' . ( $rate['courier_service_code'] ?? 'service' ),
 								'courier'  => $rate['courier_code'] ?? '',
 								'service'  => $rate['courier_service_code'] ?? '',
 								'label'    => sprintf( '%s %s', strtoupper( $rate['courier_name'] ?? '' ), strtoupper( $rate['courier_service_code'] ?? '' ) ),
 								'price'    => (float) ( $rate['price'] ?? 0 ),
-								'duration' => $rate['shipment_duration_range'] ? $rate['shipment_duration_range'] . ' days' : '1-3 days',
+								'duration' => ! empty( $rate['shipment_duration_range'] ) ? $rate['shipment_duration_range'] . ' ' . ( $rate['shipment_duration_unit'] ?? 'days' ) : '1-3 days',
 							];
 						}
 					}
@@ -666,7 +697,9 @@ class Exacoat_Warranty_Manager {
 			}
 		}
 
+		$is_fallback = false;
 		if ( empty( $rates ) ) {
+			$is_fallback = true;
 			$rates = [
 				[
 					'id'       => 'jne_reg',
@@ -696,9 +729,10 @@ class Exacoat_Warranty_Manager {
 		}
 
 		return new \WP_REST_Response( [
-			'success'  => true,
-			'postcode' => $postcode,
-			'rates'    => $rates,
+			'success'     => true,
+			'is_fallback' => $is_fallback,
+			'postcode'    => $postcode,
+			'rates'       => $rates,
 		], 200 );
 	}
 

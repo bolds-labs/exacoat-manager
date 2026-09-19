@@ -1210,54 +1210,6 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
       );
     })()}
 
-        {/* Section 2B: Applied Coupons & Fee Lines (if any) */}
-        {((order.coupon_codes && order.coupon_codes.length > 0) || (order.fees && order.fees.length > 0)) && (
-          <div className="p-4 rounded-2xl border border-white/[0.06] bg-[#111111] space-y-3">
-            <div className="flex items-center justify-between border-b border-white/[0.06] pb-2.5">
-              <span className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-2">
-                <Ticket className="w-4 h-4 text-amber-400" />
-                Coupons & Adjustments
-              </span>
-            </div>
-
-            {/* Coupons Used */}
-            {order.coupon_codes && order.coupon_codes.length > 0 && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[11px] text-neutral-400 font-sans">Coupons applied:</span>
-                {order.coupon_codes.map(code => (
-                  <span 
-                    key={code} 
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/20 text-xs font-mono font-bold"
-                  >
-                    <Tag className="w-3 h-3" />
-                    {code}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Fees Breakdown */}
-            {order.fees && order.fees.length > 0 && (
-              <div className="space-y-1.5 pt-1">
-                {order.fees.map(f => (
-                  <div key={f.id} className="flex items-center justify-between text-xs font-sans text-neutral-300">
-                    <span>{f.name}</span>
-                    <div className="text-right font-mono">
-                      <span className={clsx(f.total < 0 ? 'text-amber-400' : 'text-white')}>
-                        {formatCurrency(f.total, order.currency)}
-                      </span>
-                      {f.tax !== 0 && (
-                        <span className="text-[10px] text-neutral-500 block">
-                          DDP: {formatCurrency(f.tax, order.currency)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Section 3: Courier Tracking & Fulfillment Dispatch Card (Omitted for Store Pickup) */}
         {!isStorePickup ? (
@@ -1713,6 +1665,55 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
             })()}
           </div>
         </div>
+
+        {/* Section 4.5: Applied Coupons & Adjustments (Placed below Order Summary) */}
+        {((order.coupon_codes && order.coupon_codes.length > 0) || (order.fees && order.fees.length > 0)) && (
+          <div className="p-4 rounded-2xl border border-white/[0.06] bg-[#111111] space-y-3">
+            <div className="flex items-center justify-between border-b border-white/[0.06] pb-2.5">
+              <span className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-2">
+                <Ticket className="w-4 h-4 text-amber-400" />
+                Coupons & Adjustments
+              </span>
+            </div>
+
+            {/* Coupons Used */}
+            {order.coupon_codes && order.coupon_codes.length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] text-neutral-400 font-sans">Coupons applied:</span>
+                {order.coupon_codes.map(code => (
+                  <span 
+                    key={code} 
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/20 text-xs font-mono font-bold"
+                  >
+                    <Tag className="w-3 h-3" />
+                    {code}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Fees Breakdown */}
+            {order.fees && order.fees.length > 0 && (
+              <div className="space-y-1.5 pt-1">
+                {order.fees.map(f => (
+                  <div key={f.id} className="flex items-center justify-between text-xs font-sans text-neutral-300">
+                    <span>{f.name}</span>
+                    <div className="text-right font-mono">
+                      <span className={clsx(f.total < 0 ? 'text-amber-400' : 'text-white')}>
+                        {formatCurrency(f.total, order.currency)}
+                      </span>
+                      {f.tax !== 0 && (
+                        <span className="text-[10px] text-neutral-500 block">
+                          DDP: {formatCurrency(f.tax, order.currency)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Section 4B: Collector Review & Feedback */}
         <div className="p-5 rounded-2xl border border-white/[0.06] bg-[#111111] space-y-4">
@@ -2372,13 +2373,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         order={order}
         isOpen={isInvoiceModalOpen}
         onClose={() => setIsInvoiceModalOpen(false)}
-        onPrinted={(orderId) => {
-          try {
-            const cached = localStorage.getItem('_exacoat_direct_printed_orders');
-            const set = cached ? new Set(JSON.parse(cached)) : new Set();
-            set.add(orderId);
-            localStorage.setItem('_exacoat_direct_printed_orders', JSON.stringify(Array.from(set)));
-          } catch {}
+        onPrinted={() => {
           if (onOrderUpdated) onOrderUpdated();
         }}
       />
@@ -2388,13 +2383,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         order={order}
         isOpen={isPackingSlipModalOpen}
         onClose={() => setIsPackingSlipModalOpen(false)}
-        onPrinted={(orderId) => {
-          try {
-            const cached = localStorage.getItem('_exacoat_direct_printed_orders');
-            const set = cached ? new Set(JSON.parse(cached)) : new Set();
-            set.add(orderId);
-            localStorage.setItem('_exacoat_direct_printed_orders', JSON.stringify(Array.from(set)));
-          } catch {}
+        onPrinted={() => {
           if (onOrderUpdated) onOrderUpdated();
         }}
       />
