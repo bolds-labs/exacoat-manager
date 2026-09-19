@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.64] - 2026-09-20
+
+### Multi-Zone Free Shipping Threshold Persistence & 3-Zone Architecture Consolidation
+- **Free Shipping Threshold Save & Persistence Fix**:
+  - Fixed issue where updating shipping zone thresholds (e.g. United States from 50 to 30) did not persist when saved.
+  - Merged posted values with existing settings in `sanitize_settings()` so partial form submissions do not overwrite unposted configuration.
+  - Implemented bi-directional synchronization between `exacoat_core_settings` and legacy `artmatter_core_settings` with recursion guard (`self::$is_syncing`).
+  - Added option synchronization across both `add_option_*` and `update_option_*` hooks.
+  - Deferred disabling of form submit buttons via `setTimeout` to prevent browser aborts of HTTP POST requests.
+  - Added tab state persistence via `sessionStorage` and URL hash (`#shipping`) so the active settings tab is preserved across form redirects.
+- **Consolidation to Official Exacoat Shipping Zones**:
+  - Replaced legacy 10-region Artmatter presets with Exacoat's 3 official shipping zones:
+    1. `indonesia`: Country `ID`, Currency `IDR`, Free shipping threshold: `300,000`.
+    2. `united_states`: Country `US`, Currency `USD`, Free shipping threshold: `30`.
+    3. `default`: Country `*`, Currency `USD`, Free shipping threshold: `50`.
+  - Updated default configurations in both `class-store-enhancements.php` and `ShippingSettingsSection.tsx`.
+- **Decoupled Regional Free Shipping Engine**:
+  - Confirmed and documented independent package country evaluation (`$package['destination']['country']`).
+  - Adding specific country regions (e.g. `SG` with `SGD 30`) immediately applies direct thresholds without requiring WooCommerce shipping zones or exchange rate decimal artifacts.
+- **Order Thumbnail Filters for WooCommerce**:
+  - Filtered order item thumbnails in WooCommerce admin and transactional emails to display custom configured skins.
+
 ## [0.0.63] - 2026-09-20
 
 ### Exacoat Brand Voice System Prompt, Custom Model Entry & Direct AI Fetch

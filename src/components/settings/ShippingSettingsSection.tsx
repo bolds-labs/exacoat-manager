@@ -22,16 +22,9 @@ import {
 } from 'lucide-react';
 
 const DEFAULT_ZONES: Record<string, ShippingZoneConfig> = {
-  indonesia: { name: 'Indonesia', countries: 'ID', currency: 'IDR', free: 2000000, filter_text: '' },
-  asia: { name: 'Asia', countries: 'SG, MY, TH, VN, PH, JP, KR, HK, TW, CN', currency: 'SGD', free: 350, filter_text: 'goorita' },
-  united_states: { name: 'United States', countries: 'US', currency: 'USD', free: 250, filter_text: 'goorita' },
-  australia: { name: 'Australia', countries: 'AU', currency: 'AUD', free: 300, filter_text: 'goorita' },
-  united_kingdom: { name: 'United Kingdom', countries: 'GB', currency: 'GBP', free: 200, filter_text: 'goorita' },
-  europe_zone_1: { name: 'Europe Zone 1', countries: 'DE, FR, NL, BE, LU', currency: 'EUR', free: 240, filter_text: 'goorita' },
-  europe_zone_2: { name: 'Europe Zone 2', countries: 'IT, ES, PT, AT, CH', currency: 'EUR', free: 240, filter_text: 'goorita' },
-  europe_zone_3: { name: 'Europe Zone 3', countries: 'SE, NO, DK, FI, PL, CZ, IE', currency: 'EUR', free: 280, filter_text: 'goorita' },
-  europe_others: { name: 'Europe Others', countries: 'GR, HU, RO, BG, HR', currency: 'EUR', free: 280, filter_text: 'goorita' },
-  default: { name: 'Default (Rest of World)', countries: '*', currency: 'USD', free: 250, filter_text: 'goorita' },
+  indonesia: { name: 'Indonesia', countries: 'ID', currency: 'IDR', free: 300000, filter_text: '' },
+  united_states: { name: 'United States', countries: 'US', currency: 'USD', free: 30, filter_text: 'goorita' },
+  default: { name: 'Default (Rest of World)', countries: '*', currency: 'USD', free: 50, filter_text: 'goorita' },
 };
 
 const DEFAULT_CARRIERS: Record<string, LogisticsCarrierConfig> = {
@@ -61,7 +54,7 @@ export const ShippingSettingsSection: React.FC = () => {
   const [newZoneName, setNewZoneName] = useState('');
   const [newZoneCountries, setNewZoneCountries] = useState('');
   const [newZoneCurrency, setNewZoneCurrency] = useState('USD');
-  const [newZoneFree, setNewZoneFree] = useState('250');
+  const [newZoneFree, setNewZoneFree] = useState('50');
   const [newZoneFilter, setNewZoneFilter] = useState('');
 
   // Add Carrier inline form state

@@ -423,7 +423,15 @@ class Exacoat_Warranty_Manager {
 			}
 
 			$image_url = '';
-			if ( $product ) {
+			$custom_img = $item->get_meta( '_configured_image_url' )
+				?: ( $item->get_meta( '_configurator_image' )
+				?: ( $item->get_meta( 'mkl_pc_thumbnail_url' )
+				?: ( $item->get_meta( '_thumbnail_url' )
+				?: ( $item->get_meta( 'image_url' ) ?: '' ) ) ) );
+
+			if ( ! empty( $custom_img ) ) {
+				$image_url = $custom_img;
+			} elseif ( $product ) {
 				$image_id = $product->get_image_id();
 				if ( $image_id ) {
 					$image_url = wp_get_attachment_image_url( $image_id, 'medium' ) ?: '';

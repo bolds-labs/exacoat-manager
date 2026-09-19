@@ -292,3 +292,29 @@ The following metadata keys are maintained across HPOS and postmeta:
 | `_artmatter_trackingmore_error` | `string` | Last API error message (if any) |
 | `_artmatter_tracking_checkpoints` | `array` | Chronological list of parsed, de-duplicated checkpoints |
 | `_artmatter_17track_*` | *(various)* | Preserved backward-compatibility aliases |
+
+---
+
+## 11. Multi-Zone Free Shipping Threshold Architecture
+
+Exacoat employs a decoupled, zone-tiered free shipping engine that calculates free shipping eligibility independently of WooCommerce shipping zones.
+
+### The 3 Official Shipping Zones
+Exacoat operations maintain three standard delivery regions:
+1. **Indonesia (`indonesia`)**: Country `ID`, Currency `IDR`, Default Free Shipping Threshold: `IDR 300,000`.
+2. **United States (`united_states`)**: Country `US`, Currency `USD`, Default Free Shipping Threshold: `USD 30`.
+3. **Default / Rest of World (`default`)**: Country `*`, Currency `USD`, Default Free Shipping Threshold: `USD 50`.
+
+### Decoupled Country-Level Evaluation
+* **WooCommerce Zone Independence**: The free shipping discount engine (`Exacoat_Store_Enhancements::apply_zone_tiered_shipping_discount()`) inspects the cart package destination country directly (`$package['destination']['country']`).
+* It does **not** depend on whether a separate WooCommerce shipping zone exists for that destination.
+* **Adding Specific Regions (e.g. Singapore / SG)**:
+  * When an operator adds a region with key `singapore`, country `SG`, currency `SGD`, and threshold `30`, any customer shipping to Singapore will immediately see and be evaluated against the exact threshold of `SGD 30`.
+  * Because the country (`SG`) and currency (`SGD`) match the explicit zone definition, the checkout engine avoids conversion rate decimals and applies the clean number directly.
+  * For countries without an explicit zone, the fallback `*` zone is used, and the threshold is dynamically converted to the active currency via exchange rates if needed.
+
+### Settings Persistence & Options Synchronization
+* **Settings Page Tab Persistence**: When saving settings in WordPress admin, the active tab (`data-pane`) is stored in `sessionStorage` and URL hash (`#shipping`), preserving the active view across form POST redirects.
+* **Non-Blocking Form Submission**: Save buttons defer disabling via `setTimeout` during the submit event, preventing browser HTTP request cancellation.
+* **Bi-Directional Synchronization**: Changes to `exacoat_core_settings` are synchronized with `artmatter_core_settings` across both `add_option_*` and `update_option_*` hooks, with recursive loop prevention (`$is_syncing`).
+

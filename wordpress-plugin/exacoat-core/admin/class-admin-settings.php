@@ -17,6 +17,8 @@ class Exacoat_Admin_Settings {
 		add_action( 'admin_head', [ __CLASS__, 'suppress_third_party_notices' ], 1 );
 		add_action( 'update_option_exacoat_core_settings', [ __CLASS__, 'on_settings_updated' ], 10, 2 );
 		add_action( 'update_option_artmatter_core_settings', [ __CLASS__, 'on_settings_updated' ], 10, 2 );
+		add_action( 'add_option_exacoat_core_settings', [ __CLASS__, 'on_settings_added' ], 10, 2 );
+		add_action( 'add_option_artmatter_core_settings', [ __CLASS__, 'on_settings_added' ], 10, 2 );
 		add_action( 'wp_ajax_exacoat_run_health_test', [ __CLASS__, 'ajax_run_health_test' ] );
 		add_action( 'wp_ajax_artmatter_run_health_test', [ __CLASS__, 'ajax_run_health_test' ] );
 		add_action( 'wp_ajax_exacoat_flush_permalinks', [ __CLASS__, 'ajax_flush_permalinks' ] );
@@ -71,22 +73,27 @@ class Exacoat_Admin_Settings {
 	}
 
 	public static function sanitize_settings( $value ): array {
-		$settings = is_array( $value ) ? $value : [];
+		$existing = get_option( 'exacoat_core_settings', [] );
+		if ( empty( $existing ) || ! is_array( $existing ) ) {
+			$existing = get_option( 'artmatter_core_settings', [] );
+		}
+		$settings = is_array( $existing ) ? $existing : [];
+		$input    = is_array( $value ) ? $value : [];
 
 		// Global Currency Markup Multiplier
-		if ( isset( $settings['currency_global_markup'] ) ) {
-			$settings['currency_global_markup'] = floatval( $settings['currency_global_markup'] );
+		if ( isset( $input['currency_global_markup'] ) ) {
+			$settings['currency_global_markup'] = floatval( $input['currency_global_markup'] );
 			if ( $settings['currency_global_markup'] <= 0 ) {
 				$settings['currency_global_markup'] = 1.15;
 			}
 		}
 
 		// Multi-Currency Rates & Rounding Matrix
-		if ( isset( $settings['currency_rates'] ) && is_array( $settings['currency_rates'] ) ) {
+		if ( isset( $input['currency_rates'] ) && is_array( $input['currency_rates'] ) ) {
 			$sanitized_rates = [];
 			$allowed_roundings = [ '90_decimal', '99_decimal', '50_decimal', '9_end', '90_end', '50_step', '500_step', 'none' ];
 
-			foreach ( $settings['currency_rates'] as $raw_code => $curr_data ) {
+			foreach ( $input['currency_rates'] as $raw_code => $curr_data ) {
 				if ( ! is_array( $curr_data ) ) {
 					continue;
 				}
@@ -113,14 +120,14 @@ class Exacoat_Admin_Settings {
 		}
 
 		// Target Shipping Method IDs
-		if ( isset( $settings['shipping_target_method_ids'] ) ) {
-			$settings['shipping_target_method_ids'] = sanitize_text_field( $settings['shipping_target_method_ids'] );
+		if ( isset( $input['shipping_target_method_ids'] ) ) {
+			$settings['shipping_target_method_ids'] = sanitize_text_field( $input['shipping_target_method_ids'] );
 		}
 
 		// Multi-Zone Free Shipping Thresholds
-		if ( isset( $settings['shipping_zones'] ) && is_array( $settings['shipping_zones'] ) ) {
+		if ( isset( $input['shipping_zones'] ) && is_array( $input['shipping_zones'] ) ) {
 			$sanitized_zones = [];
-			foreach ( $settings['shipping_zones'] as $z_key => $zone ) {
+			foreach ( $input['shipping_zones'] as $z_key => $zone ) {
 				if ( ! is_array( $zone ) ) {
 					continue;
 				}
@@ -129,10 +136,25 @@ class Exacoat_Admin_Settings {
 					continue;
 				}
 
+				$c_raw = sanitize_text_field( $zone['countries'] ?? '' );
+				$curr  = strtoupper( sanitize_text_field( $zone['currency'] ?? '' ) );
+				if ( empty( $curr ) ) {
+					$c_upper = strtoupper( $c_raw );
+					if ( strpos( $c_upper, 'US' ) !== false ) {
+						$curr = 'USD';
+					} elseif ( strpos( $c_upper, 'ID' ) !== false ) {
+						$curr = 'IDR';
+					} elseif ( strpos( $c_upper, 'SG' ) !== false ) {
+						$curr = 'SGD';
+					} else {
+						$curr = 'USD';
+					}
+				}
+
 				$sanitized_zones[ $key ] = [
 					'name'        => sanitize_text_field( $zone['name'] ?? ucfirst( $key ) ),
-					'countries'   => sanitize_text_field( $zone['countries'] ?? '' ),
-					'currency'    => strtoupper( sanitize_text_field( $zone['currency'] ?? 'IDR' ) ),
+					'countries'   => $c_raw,
+					'currency'    => $curr,
 					'free'        => floatval( $zone['free'] ?? 0 ),
 					'filter_text' => sanitize_text_field( $zone['filter_text'] ?? '' ),
 				];
@@ -144,10 +166,28 @@ class Exacoat_Admin_Settings {
 		return $settings;
 	}
 
-	public static function on_settings_updated( $old_value, $value ) {
+	private static $is_syncing = false;
+
+	public static function on_settings_added( $option, $value ) {
+		self::on_settings_updated( null, $value, $option );
+	}
+
+	public static function on_settings_updated( $old_value, $value, $option_name = '' ) {
 		if ( class_exists( 'Exacoat_Core' ) && method_exists( 'Exacoat_Core', 'clear_settings_cache' ) ) {
 			Exacoat_Core::clear_settings_cache();
 		}
+
+		// Bi-directional sync between exacoat_core_settings and artmatter_core_settings
+		if ( ! self::$is_syncing && is_array( $value ) ) {
+			self::$is_syncing = true;
+			$current_filter   = function_exists( 'current_filter' ) ? current_filter() : '';
+			$is_artmatter     = ( 'update_option_artmatter_core_settings' === $current_filter || 'add_option_artmatter_core_settings' === $current_filter || 'artmatter_core_settings' === $option_name );
+			$mirror_key       = $is_artmatter ? 'exacoat_core_settings' : 'artmatter_core_settings';
+
+			update_option( $mirror_key, $value );
+			self::$is_syncing = false;
+		}
+
 		flush_rewrite_rules( false );
 	}
 

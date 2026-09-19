@@ -155,7 +155,19 @@ export function cleanItemTitle(name?: string): string {
 
 ---
 
-## 11. Build, Packaging, and Release Workflow
+## 11. Multi-Zone Free Shipping Threshold Architecture
+
+- **3 Official Shipping Zones**: Exacoat maintains 3 official delivery regions:
+  - `indonesia` (Country `ID`, Currency `IDR`, Free threshold: `300000`)
+  - `united_states` (Country `US`, Currency `USD`, Free threshold: `30`)
+  - `default` (Country `*`, Currency `USD`, Free threshold: `50`)
+- **Decoupled from WooCommerce Zones**: Free shipping discount calculations in `Exacoat_Store_Enhancements::apply_zone_tiered_shipping_discount()` evaluate the destination country (`$package['destination']['country']`) directly. Adding a country region (e.g. `SG` with `SGD 30`) immediately applies to checkout without creating a WooCommerce shipping zone.
+- **Bi-directional Synchronization**: Changes to `exacoat_core_settings` are synchronized with `artmatter_core_settings` using recursive loop guards (`$is_syncing`) across both `add_option_*` and `update_option_*` hooks.
+- **Tab State & Form Non-Blocking**: The settings page stores the active tab in `sessionStorage` and URL hash (`#shipping`), and defers submit button disabling via `setTimeout` to prevent browser cancellation of the HTTP POST request.
+
+---
+
+## 12. Build, Packaging, and Release Workflow
 
 Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-core` plugin:
 1. **Bump Version**: Update version in:

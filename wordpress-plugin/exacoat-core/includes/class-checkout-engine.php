@@ -49,7 +49,23 @@ class Exacoat_Checkout_Engine {
 		// Whitelist storefront domain for WordPress safe redirects
 		add_filter( 'allowed_redirect_hosts', [ __CLASS__, 'filter_allowed_redirect_hosts' ] );
 
-		// Headless checkout templates, asset enqueues, and external redirects are strictly opt-in.
+		// Order Received & Cancellation Redirects to Headless Storefront
+		add_action( 'init', [ __CLASS__, 'handle_checkout_cancellation_redirect' ], -50 );
+		add_action( 'template_redirect', [ __CLASS__, 'handle_checkout_cancellation_redirect' ], -50 );
+		add_action( 'template_redirect', [ __CLASS__, 'handle_order_received_redirect' ], 5 );
+		add_action( 'template_redirect', [ __CLASS__, 'handle_view_order_endpoint_redirect' ], 5 );
+
+		// PayPal Payments Experience Context / Cancel URL Rewriting
+		add_filter( 'woocommerce_paypal_payments_order_data', [ __CLASS__, 'filter_paypal_order_data' ], 99, 2 );
+		add_filter( 'woocommerce_paypal_payments_create_order_request', [ __CLASS__, 'filter_paypal_order_data' ], 99, 2 );
+		add_filter( 'woocommerce_get_cancel_order_url', [ __CLASS__, 'filter_cancel_order_url' ], 99, 2 );
+		add_filter( 'woocommerce_get_cancel_order_url_raw', [ __CLASS__, 'filter_cancel_order_url_raw' ], 99, 1 );
+
+		// Order Item Thumbnail for Transactional Emails & Admin
+		add_filter( 'woocommerce_order_item_thumbnail', [ __CLASS__, 'filter_order_item_thumbnail' ], 10, 2 );
+		add_filter( 'woocommerce_admin_order_item_thumbnail', [ __CLASS__, 'filter_order_item_thumbnail' ], 10, 2 );
+
+		// Headless checkout templates, asset enqueues, and legacy overrides are strictly opt-in.
 		// When disabled (default 0), standard WooCommerce and Bricks checkout and cart templates operate normally.
 		if ( Exacoat_Core::get_setting( 'enable_headless_checkout', 0 ) ) {
 			add_filter( 'woocommerce_locate_template', [ __CLASS__, 'locate_checkout_templates' ], 999, 3 );
@@ -67,16 +83,6 @@ class Exacoat_Checkout_Engine {
 
 			add_filter( 'woocommerce_enable_order_notes_field', '__return_false', 99 );
 			add_filter( 'woocommerce_checkout_posted_data', [ __CLASS__, 'filter_checkout_posted_data' ], 99 );
-
-			add_action( 'template_redirect', [ __CLASS__, 'handle_view_order_endpoint_redirect' ], 5 );
-			add_action( 'init', [ __CLASS__, 'handle_checkout_cancellation_redirect' ], -50 );
-			add_action( 'template_redirect', [ __CLASS__, 'handle_checkout_cancellation_redirect' ], -50 );
-			add_action( 'template_redirect', [ __CLASS__, 'handle_order_received_redirect' ], 5 );
-
-			add_filter( 'woocommerce_paypal_payments_order_data', [ __CLASS__, 'filter_paypal_order_data' ], 99, 2 );
-			add_filter( 'woocommerce_paypal_payments_create_order_request', [ __CLASS__, 'filter_paypal_order_data' ], 99, 2 );
-			add_filter( 'woocommerce_get_cancel_order_url', [ __CLASS__, 'filter_cancel_order_url' ], 99, 2 );
-			add_filter( 'woocommerce_get_cancel_order_url_raw', [ __CLASS__, 'filter_cancel_order_url_raw' ], 99, 1 );
 
 			add_action( 'template_redirect', [ __CLASS__, 'handle_empty_cart_redirect' ], 1 );
 			add_filter( 'woocommerce_get_cart_url', [ __CLASS__, 'override_cart_url' ], 99 );
@@ -1356,6 +1362,27 @@ class Exacoat_Checkout_Engine {
 		}
 
 		return $data;
+	}
+
+	/**
+	 * Provide configured skin composite image for WooCommerce transactional emails and admin order screen
+	 */
+	public static function filter_order_item_thumbnail( $image, $item ) {
+		if ( ! is_a( $item, 'WC_Order_Item_Product' ) ) {
+			return $image;
+		}
+
+		$custom_img = $item->get_meta( '_configured_image_url' )
+			?: ( $item->get_meta( '_configurator_image' )
+			?: ( $item->get_meta( 'mkl_pc_thumbnail_url' )
+			?: ( $item->get_meta( '_thumbnail_url' )
+			?: ( $item->get_meta( 'image_url' ) ?: '' ) ) ) );
+
+		if ( ! empty( $custom_img ) ) {
+			return '<img src="' . esc_url( $custom_img ) . '" alt="' . esc_attr( $item->get_name() ) . '" width="64" height="64" style="vertical-align:middle; margin-right: 10px; border-radius: 6px; object-fit: cover;" />';
+		}
+
+		return $image;
 	}
 
 	/**

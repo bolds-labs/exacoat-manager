@@ -1854,10 +1854,12 @@ document.addEventListener('DOMContentLoaded', function() {
 	if (mainForm) {
 		mainForm.addEventListener('submit', function() {
 			const saveButtons = document.querySelectorAll('button[type="submit"][form="exacoatSettingsForm"], button[type="submit"]');
-			saveButtons.forEach(btn => {
-				btn.disabled = true;
-				btn.innerText = '⏳ Saving...';
-			});
+			setTimeout(() => {
+				saveButtons.forEach(btn => {
+					btn.disabled = true;
+					btn.innerText = '⏳ Saving...';
+				});
+			}, 10);
 		});
 	}
 
@@ -2008,27 +2010,50 @@ document.addEventListener('DOMContentLoaded', function() {
 		});
 	}
 
+	function switchPane(paneId) {
+		if (!paneId) return;
+		const navItem = document.querySelector(`.ex-nav-item[data-pane="${paneId}"]`);
+		const targetPane = document.getElementById('pane-' + paneId);
+		if (!targetPane || !navItem) return;
+
+		navItems.forEach(n => n.classList.remove('active'));
+		panes.forEach(p => p.classList.remove('active'));
+
+		navItem.classList.add('active');
+		targetPane.classList.add('active');
+
+		if (paneTitle && titles[paneId]) {
+			paneTitle.textContent = titles[paneId];
+		}
+
+		try {
+			sessionStorage.setItem('exacoat_active_pane', paneId);
+			history.replaceState(null, '', '#' + paneId);
+		} catch (e) {}
+
+		if (paneId === 'logs') {
+			fetchLogs();
+		}
+	}
+
 	navItems.forEach(item => {
 		item.addEventListener('click', function(e) {
 			e.preventDefault();
 			const paneId = this.getAttribute('data-pane');
-
-			navItems.forEach(n => n.classList.remove('active'));
-			panes.forEach(p => p.classList.remove('active'));
-
-			this.classList.add('active');
-			const targetPane = document.getElementById('pane-' + paneId);
-			if (targetPane) targetPane.classList.add('active');
-
-			if (paneTitle && titles[paneId]) {
-				paneTitle.textContent = titles[paneId];
-			}
-
-			if (paneId === 'logs') {
-				fetchLogs();
-			}
+			switchPane(paneId);
 		});
 	});
+
+	// Restore active tab from URL hash or sessionStorage
+	const initialHash = window.location.hash.replace('#', '').replace('pane-', '');
+	let savedPane = null;
+	try {
+		savedPane = sessionStorage.getItem('exacoat_active_pane');
+	} catch (e) {}
+	const activePaneId = initialHash || savedPane;
+	if (activePaneId && document.getElementById('pane-' + activePaneId)) {
+		switchPane(activePaneId);
+	}
 
 	// Flush Permalinks AJAX
 	function flushPermalinks(btn) {

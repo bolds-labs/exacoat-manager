@@ -670,67 +670,18 @@ class Exacoat_Store_Enhancements {
 				'free'        => 300000,
 				'filter_text' => '',
 			],
-			'asia' => [
-				'name'        => 'Asia',
-				'countries'   => 'SG, MY, TH, VN, PH, JP, KR, HK, TW, CN',
-				'currency'    => 'SGD',
-				'free'        => 60,
-				'filter_text' => '',
-			],
 			'united_states' => [
 				'name'        => 'United States',
 				'countries'   => 'US',
 				'currency'    => 'USD',
-				'free'        => 50,
-				'filter_text' => '',
-			],
-			'australia' => [
-				'name'        => 'Australia',
-				'countries'   => 'AU',
-				'currency'    => 'AUD',
-				'free'        => 75,
-				'filter_text' => '',
-			],
-			'united_kingdom' => [
-				'name'        => 'United Kingdom',
-				'countries'   => 'GB',
-				'currency'    => 'GBP',
-				'free'        => 40,
-				'filter_text' => '',
-			],
-			'europe_zone_1' => [
-				'name'        => 'Europe Zone 1',
-				'countries'   => 'DE, FR, NL, BE, LU',
-				'currency'    => 'EUR',
-				'free'        => 50,
-				'filter_text' => '',
-			],
-			'europe_zone_2' => [
-				'name'        => 'Europe Zone 2',
-				'countries'   => 'IT, ES, PT, AT, CH',
-				'currency'    => 'EUR',
-				'free'        => 55,
-				'filter_text' => '',
-			],
-			'europe_zone_3' => [
-				'name'        => 'Europe Zone 3',
-				'countries'   => 'SE, NO, DK, FI, PL, CZ, IE',
-				'currency'    => 'EUR',
-				'free'        => 60,
-				'filter_text' => '',
-			],
-			'europe_others' => [
-				'name'        => 'Europe Others',
-				'countries'   => 'GR, HU, RO, BG, HR',
-				'currency'    => 'EUR',
-				'free'        => 65,
+				'free'        => 30,
 				'filter_text' => '',
 			],
 			'default' => [
 				'name'        => 'Default (Rest of World)',
 				'countries'   => '*',
 				'currency'    => 'USD',
-				'free'        => 60,
+				'free'        => 50,
 				'filter_text' => '',
 			],
 		];
@@ -750,12 +701,12 @@ class Exacoat_Store_Enhancements {
 				$z_curr = strtoupper( trim( $z['currency'] ?? '' ) );
 				if ( empty( $z_curr ) ) {
 					$c_raw = strtoupper( $z['countries'] ?? '' );
-					if ( strpos( $c_raw, 'AU' ) !== false ) $z_curr = 'AUD';
-					elseif ( strpos( $c_raw, 'US' ) !== false ) $z_curr = 'USD';
-					elseif ( strpos( $c_raw, 'GB' ) !== false ) $z_curr = 'GBP';
-					elseif ( strpos( $c_raw, 'SG' ) !== false || strpos( $c_raw, 'MY' ) !== false ) $z_curr = 'SGD';
-					elseif ( strpos( $c_raw, 'DE' ) !== false || strpos( $c_raw, 'FR' ) !== false || strpos( $c_raw, 'IT' ) !== false ) $z_curr = 'EUR';
+					if ( strpos( $c_raw, 'US' ) !== false ) $z_curr = 'USD';
 					elseif ( strpos( $c_raw, 'ID' ) !== false ) $z_curr = 'IDR';
+					elseif ( strpos( $c_raw, 'SG' ) !== false || strpos( $c_raw, 'MY' ) !== false ) $z_curr = 'SGD';
+					elseif ( strpos( $c_raw, 'AU' ) !== false ) $z_curr = 'AUD';
+					elseif ( strpos( $c_raw, 'GB' ) !== false ) $z_curr = 'GBP';
+					elseif ( strpos( $c_raw, 'DE' ) !== false || strpos( $c_raw, 'FR' ) !== false || strpos( $c_raw, 'IT' ) !== false ) $z_curr = 'EUR';
 					else $z_curr = ( (float)( $z['free'] ?? 0 ) > 50000 ) ? 'IDR' : 'USD';
 					$z['currency'] = $z_curr;
 				}
@@ -766,7 +717,7 @@ class Exacoat_Store_Enhancements {
 						$z['free'] = $default_zones[ $k ]['free'];
 					} else {
 						$converted = (float) apply_filters( 'wc_aelia_cs_convert', $free_val, 'IDR', $z_curr );
-						$z['free'] = $converted > 0 ? round( $converted, 2 ) : 50;
+						$z['free'] = $converted > 0 ? round( $converted, 2 ) : 30;
 					}
 				}
 				// If legacy Artmatter threshold (>= 1,500,000 IDR or >= 180 USD/EUR) is found, migrate to Exacoat skin defaults
@@ -776,7 +727,7 @@ class Exacoat_Store_Enhancements {
 					if ( isset( $default_zones[ $k ]['free'] ) ) {
 						$z['free'] = $default_zones[ $k ]['free'];
 					} else {
-						$z['free'] = 50;
+						$z['free'] = ( 'united_states' === $k ) ? 30 : 50;
 					}
 				}
 			}
