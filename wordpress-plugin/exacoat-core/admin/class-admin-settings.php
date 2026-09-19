@@ -72,11 +72,82 @@ class Exacoat_Admin_Settings {
 
 	public static function sanitize_settings( $value ): array {
 		$settings = is_array( $value ) ? $value : [];
+
+		// Global Currency Markup Multiplier
+		if ( isset( $settings['currency_global_markup'] ) ) {
+			$settings['currency_global_markup'] = floatval( $settings['currency_global_markup'] );
+			if ( $settings['currency_global_markup'] <= 0 ) {
+				$settings['currency_global_markup'] = 1.15;
+			}
+		}
+
+		// Multi-Currency Rates & Rounding Matrix
+		if ( isset( $settings['currency_rates'] ) && is_array( $settings['currency_rates'] ) ) {
+			$sanitized_rates = [];
+			$allowed_roundings = [ '9_end', '90_end', '50_step', '500_step', 'none' ];
+
+			foreach ( $settings['currency_rates'] as $raw_code => $curr_data ) {
+				if ( ! is_array( $curr_data ) ) {
+					continue;
+				}
+				$code = strtoupper( preg_replace( '/[^A-Z]/', '', (string) ( $curr_data['code'] ?? $raw_code ) ) );
+				if ( empty( $code ) || strlen( $code ) !== 3 ) {
+					continue;
+				}
+
+				$symbol   = sanitize_text_field( $curr_data['symbol'] ?? '$' );
+				$rate     = floatval( $curr_data['rate'] ?? 0 );
+				$rounding = (string) ( $curr_data['rounding'] ?? '9_end' );
+				if ( ! in_array( $rounding, $allowed_roundings, true ) ) {
+					$rounding = '9_end';
+				}
+
+				$sanitized_rates[ $code ] = [
+					'code'     => $code,
+					'symbol'   => $symbol,
+					'rate'     => $rate,
+					'rounding' => $rounding,
+				];
+			}
+			$settings['currency_rates'] = $sanitized_rates;
+		}
+
+		// Target Shipping Method IDs
+		if ( isset( $settings['shipping_target_method_ids'] ) ) {
+			$settings['shipping_target_method_ids'] = sanitize_text_field( $settings['shipping_target_method_ids'] );
+		}
+
+		// Multi-Zone Free Shipping Thresholds
+		if ( isset( $settings['shipping_zones'] ) && is_array( $settings['shipping_zones'] ) ) {
+			$sanitized_zones = [];
+			foreach ( $settings['shipping_zones'] as $z_key => $zone ) {
+				if ( ! is_array( $zone ) ) {
+					continue;
+				}
+				$key = sanitize_key( (string) $z_key );
+				if ( empty( $key ) ) {
+					continue;
+				}
+
+				$sanitized_zones[ $key ] = [
+					'name'        => sanitize_text_field( $zone['name'] ?? ucfirst( $key ) ),
+					'countries'   => sanitize_text_field( $zone['countries'] ?? '' ),
+					'currency'    => strtoupper( sanitize_text_field( $zone['currency'] ?? 'IDR' ) ),
+					'free'        => floatval( $zone['free'] ?? 0 ),
+					'filter_text' => sanitize_text_field( $zone['filter_text'] ?? '' ),
+				];
+			}
+			$settings['shipping_zones'] = $sanitized_zones;
+		}
+
 		$settings['enable_shipping_tracker'] = 1;
 		return $settings;
 	}
 
 	public static function on_settings_updated( $old_value, $value ) {
+		if ( class_exists( 'Exacoat_Core' ) && method_exists( 'Exacoat_Core', 'clear_settings_cache' ) ) {
+			Exacoat_Core::clear_settings_cache();
+		}
 		flush_rewrite_rules( false );
 	}
 

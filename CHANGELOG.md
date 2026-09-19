@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.37] - 2026-09-19
+
+### Multi-Currency Matrix & Free Shipping Threshold Admin Controls
+- **Interactive Multi-Currency Exchange Rates & Price Matrix**:
+  - Integrated dedicated "Store & Currency" (`pane-currency`) navigation pane in the Exacoat Core WordPress admin dashboard.
+  - Added real-time Base Price FX simulator with quick presets (350K, 450K, 750K, 1.2M) and live converted chip grid reflecting safety markup multiplier (+15% default) and psychological rounding.
+  - Added interactive Currencies Table with inline code, symbol, exchange rate vs IDR, and psychological rounding rules: `9_end`, `90_end`, `50_step`, `500_step`, and `none`.
+  - Added dynamic row addition (`+ Add Custom Currency`) and deletion.
+- **Interactive Multi-Zone Free Shipping Thresholds Table**:
+  - Added dedicated Multi-Zone Free Shipping card in `pane-shipping` with target shipping method IDs configuration (`shipping_target_method_ids`).
+  - Added dynamic Regional Thresholds table allowing administrators to configure zone names, country codes, target currency selector, 100% free qualification threshold, and courier filter matches.
+  - Added dynamic region addition (`+ Add Shipping Region`) and deletion.
+- **WordPress Options Sanitization & Persistence**:
+  - Enhanced `Exacoat_Admin_Settings::sanitize_settings` to validate and persist `currency_global_markup`, `currency_rates`, `shipping_target_method_ids`, and `shipping_zones` under `exacoat_core_settings`.
+  - Wrapped admin panes in primary options form (`options.php`) with header and in-card "Save Changes" triggers.
+  - Added automated memoized settings cache clearing on option update.
+
+---
+
 ## [0.0.36] - 2026-09-19
 
 ### Wishlist Engine Purge, Multi-Currency Rounding & Free Shipping Engine

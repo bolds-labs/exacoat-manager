@@ -81,7 +81,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       description: 'The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.',
-      changelog: `### Version ${version}\n- Completely purged legacy Customer Wishlist Engine from codebase, assets, and admin settings\n- Standardized multi-currency pricing and psychological rounding matrix (9_end, 90_end, 500_step, 50_step, none)\n- Integrated multi-zone free shipping thresholds contract (/checkout/config) powering headless Free Shipping bars\n- Exposed headless checkout endpoints under exacoat-core/v1 and exacoat/v1 namespaces`,
+      changelog: `### Version ${version}\n- Added interactive Multi-Currency Exchange Rates & Price Matrix admin dashboard\n- Added real-time Base Price FX simulator with presets (350K, 450K, 750K, 1.2M) and live converted matrix output\n- Configured currency psychological rounding controls per pair (9_end, 90_end, 50_step, 500_step, none)\n- Added interactive Multi-Zone Free Shipping Thresholds table with regional currency selector and target method IDs\n- Implemented full sanitization and options persistence for exacoat_core_settings`,
     },
   };
 

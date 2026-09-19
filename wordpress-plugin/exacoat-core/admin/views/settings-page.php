@@ -49,6 +49,16 @@ $sicepat_pool_count = isset( $pool_inventory['sicepat']['available'] ) ? (int) $
 $wa_configured      = ! empty( $wa_settings['phone_number_id'] ) && ! empty( $wa_settings['access_token'] );
 $wa_active          = ! empty( $wa_settings['enabled'] ) && $wa_configured;
 
+// Store & Currency Settings
+$settings           = class_exists( 'Exacoat_Core' ) ? Exacoat_Core::get_settings() : get_option( 'exacoat_core_settings', [] );
+if ( ! is_array( $settings ) ) {
+	$settings = [];
+}
+$currencies         = class_exists( 'Exacoat_Store_Enhancements' ) ? Exacoat_Store_Enhancements::get_currency_rates() : [];
+$shipping_cfg       = class_exists( 'Exacoat_Store_Enhancements' ) ? Exacoat_Store_Enhancements::get_shipping_config() : [ 'target_method_ids' => [], 'zones' => [] ];
+$shipping_zones     = $shipping_cfg['zones'] ?? [];
+$target_methods     = implode( ', ', $shipping_cfg['target_method_ids'] ?? [ 'flat_rate', 'biteship_shipping' ] );
+
 // Manager URL
 $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhost:3005';
 ?>
@@ -375,6 +385,126 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 .ex-badge-emerald { background: rgba(16, 185, 129, 0.15); color: #34d399; }
 .ex-badge-sky { background: rgba(14, 165, 233, 0.15); color: #38bdf8; }
 .ex-badge-amber { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+
+/* Custom Inputs & Selects */
+.ex-input, .ex-select {
+	background: #15161c;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	border-radius: 8px;
+	color: #ffffff;
+	padding: 7px 10px;
+	font-size: 12px;
+	box-sizing: border-box;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.ex-input:focus, .ex-select:focus {
+	outline: none;
+	border-color: #f6b328;
+	box-shadow: 0 0 0 2px rgba(246, 179, 40, 0.2);
+}
+.ex-input.mono, .ex-select.mono {
+	font-family: ui-monospace, SFMono-Regular, monospace;
+}
+.ex-sim-bar {
+	background: #0d0e12;
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 12px;
+	padding: 16px 20px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 20px;
+	align-items: flex-end;
+}
+.ex-sim-col {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.ex-sim-label {
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: #a1a1aa;
+}
+.ex-preset-btn {
+	background: rgba(255, 255, 255, 0.06);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	border-radius: 6px;
+	color: #d4d4d8;
+	font-size: 11px;
+	font-weight: 600;
+	padding: 5px 10px;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+.ex-preset-btn:hover {
+	background: rgba(255, 255, 255, 0.12);
+	color: #ffffff;
+}
+.ex-preset-btn.active {
+	background: #f6b328;
+	color: #08090b;
+	border-color: #f6b328;
+	font-weight: 700;
+}
+.ex-sim-results-box {
+	background: #0d0e12;
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 12px;
+	padding: 16px 20px;
+	margin-top: 14px;
+}
+.ex-sim-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+	gap: 10px;
+	margin-top: 12px;
+}
+.ex-sim-chip {
+	padding: 10px 12px;
+	border-radius: 8px;
+	background: #15161c;
+	border: 1px solid rgba(255, 255, 255, 0.06);
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.ex-btn-delete {
+	background: rgba(239, 68, 68, 0.12);
+	border: 1px solid rgba(239, 68, 68, 0.25);
+	color: #f87171;
+	border-radius: 6px;
+	padding: 4px 10px;
+	font-size: 11px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+.ex-btn-delete:hover {
+	background: rgba(239, 68, 68, 0.25);
+	color: #ffffff;
+}
+.ex-btn-add {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	background: rgba(246, 179, 40, 0.12);
+	border: 1px solid rgba(246, 179, 40, 0.3);
+	color: #f6b328;
+	border-radius: 8px;
+	padding: 8px 14px;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	width: fit-content;
+}
+.ex-btn-add:hover {
+	background: rgba(246, 179, 40, 0.22);
+	color: #ffffff;
+	border-color: #f6b328;
+}
 </style>
 
 <div class="ex-app">
@@ -398,6 +528,14 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 				<span class="ex-nav-icon">🧩</span>
 				<span>Platform Modules</span>
 			</a>
+			<a class="ex-nav-item" data-pane="currency">
+				<span class="ex-nav-icon">💱</span>
+				<span>Store &amp; Currency</span>
+			</a>
+			<a class="ex-nav-item" data-pane="shipping">
+				<span class="ex-nav-icon">🚚</span>
+				<span>Fulfillment &amp; Shipping</span>
+			</a>
 			<a class="ex-nav-item" data-pane="automation">
 				<span class="ex-nav-icon">🤖</span>
 				<span>Automation &amp; WhatsApp</span>
@@ -405,10 +543,6 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 			<a class="ex-nav-item" data-pane="headless">
 				<span class="ex-nav-icon">⚡</span>
 				<span>Headless REST API</span>
-			</a>
-			<a class="ex-nav-item" data-pane="shipping">
-				<span class="ex-nav-icon">🚚</span>
-				<span>Fulfillment &amp; Courier</span>
 			</a>
 			<a class="ex-nav-item" data-pane="media">
 				<span class="ex-nav-icon">🖼️</span>
@@ -444,20 +578,31 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 		<header class="ex-topbar">
 			<div class="ex-topbar-title" id="pane-title">Dashboard & Engine Status</div>
 			<div class="ex-topbar-actions">
+				<button type="submit" form="exacoatSettingsForm" id="btn-top-save-settings" class="ex-btn ex-btn-primary" style="display: inline-flex; align-items: center; gap: 6px;">
+					💾 Save Changes
+				</button>
 				<button type="button" id="btn-top-check-updates" class="ex-btn ex-btn-secondary">
 					🔄 Check Updates
 				</button>
 				<button type="button" id="btn-top-update-now" class="ex-btn" style="<?php echo $has_pending_update ? 'display: inline-flex;' : 'display: none;'; ?> align-items: center; gap: 6px; background: #22c55e; color: #08090b; font-weight: 700; border: none; cursor: pointer; padding: 6px 14px; border-radius: 8px; box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);" data-version="<?php echo esc_attr( $pending_version ); ?>">
 					⚡ Update to v<span id="btn-top-update-ver"><?php echo esc_html( $pending_version ); ?></span> Now
 				</button>
-				<a href="<?php echo esc_url( $manager_url ); ?>" target="_blank" class="ex-btn ex-btn-primary">
-					Open Exacoat Manager ERP ↗
+				<a href="<?php echo esc_url( $manager_url ); ?>" target="_blank" class="ex-btn ex-btn-secondary">
+					ERP ↗
 				</a>
 			</div>
 		</header>
 
 		<!-- CONTENT -->
 		<div class="ex-content">
+			<?php if ( ! empty( $_GET['settings-updated'] ) ) : ?>
+			<div style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 10px; padding: 12px 18px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; color: #34d399; font-size: 13px; font-weight: 600;">
+				<span>✓ Exacoat Core settings saved and synchronized successfully.</span>
+			</div>
+			<?php endif; ?>
+
+			<form method="post" action="options.php" id="exacoatSettingsForm" style="display: flex; flex-direction: column; gap: 24px; width: 100%;">
+				<?php settings_fields( 'exacoat_core_settings_group' ); ?>
 
 			<!-- PANE 1: OVERVIEW -->
 			<div class="ex-pane active" id="pane-overview">
@@ -788,6 +933,114 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 				</div>
 			</div>
 
+			<!-- PANE: STORE & CURRENCY -->
+			<div class="ex-pane" id="pane-currency">
+				<!-- Multi-Currency Exchange Rates & Price Matrix Card -->
+				<div class="ex-card">
+					<div class="ex-card-header">
+						<div>
+							<h3 class="ex-card-h3">💱 Multi-Currency Exchange Rates &amp; Price Matrix</h3>
+							<p style="font-size: 12px; color: #a1a1aa; margin: 4px 0 0 0;">
+								Real-time exchange rates against IDR base, safety markup buffer, and ISO psychological rounding rules.
+							</p>
+						</div>
+						<div style="display: flex; align-items: center; gap: 8px;">
+							<span class="ex-badge ex-badge-amber"><?php echo count( $currencies ); ?> FX Pairs</span>
+							<button type="submit" form="exacoatSettingsForm" class="ex-btn ex-btn-primary" style="padding: 5px 12px; font-size: 11px;">
+								💾 Save Changes
+							</button>
+						</div>
+					</div>
+
+					<!-- Simulation & Multiplier Bar -->
+					<div class="ex-sim-bar" style="margin-top: 14px;">
+						<div class="ex-sim-col">
+							<label class="ex-sim-label">Global Markup Multiplier</label>
+							<div style="display: flex; align-items: center; gap: 8px;">
+								<input type="number" step="0.01" name="exacoat_core_settings[currency_global_markup]" id="global-markup-input" value="<?php echo esc_attr( $settings['currency_global_markup'] ?? 1.15 ); ?>" class="ex-input mono" style="width: 110px;" onchange="runLiveCurrencySimulation()">
+								<span class="ex-badge ex-badge-amber" title="Safety markup buffer against FX volatility">+15% Default</span>
+							</div>
+						</div>
+						<div class="ex-sim-col" style="flex: 1; min-width: 280px;">
+							<label class="ex-sim-label">Live Test Base Price (IDR)</label>
+							<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+								<input type="number" id="sim-base-price" value="450000" class="ex-input mono" style="width: 150px;" oninput="runLiveCurrencySimulation()">
+								<div style="display: flex; align-items: center; gap: 6px;">
+									<button type="button" class="ex-preset-btn" onclick="setSimPrice(350000)">350K</button>
+									<button type="button" class="ex-preset-btn active" onclick="setSimPrice(450000)">450K</button>
+									<button type="button" class="ex-preset-btn" onclick="setSimPrice(750000)">750K</button>
+									<button type="button" class="ex-preset-btn" onclick="setSimPrice(1200000)">1.2M</button>
+								</div>
+								<button type="button" class="ex-btn ex-btn-secondary" onclick="runLiveCurrencySimulation()" style="font-size: 11px; padding: 6px 12px;">
+									⚡ Simulate
+								</button>
+							</div>
+						</div>
+					</div>
+
+					<!-- Live Converted Price Matrix Grid Output -->
+					<div id="sim-results-container" class="ex-sim-results-box">
+						<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+							<span style="font-size: 12px; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: 0.04em;">Live Converted Currency Matrix</span>
+							<span style="font-size: 11px; color: #71717a;">Dynamic calculation including markup multiplier &amp; rounding rules</span>
+						</div>
+						<div id="sim-results-grid" class="ex-sim-grid"></div>
+					</div>
+
+					<!-- Currencies Table -->
+					<div style="overflow-x: auto; margin-top: 16px;">
+						<table class="ex-table" id="currencies-table">
+							<thead>
+								<tr>
+									<th style="width: 110px;">Currency</th>
+									<th style="width: 100px;">Symbol</th>
+									<th style="width: 160px;">Rate (vs IDR)</th>
+									<th style="min-width: 220px;">Rounding Engine</th>
+									<th style="width: 80px; text-align: center;">Action</th>
+								</tr>
+							</thead>
+							<tbody id="currencies-tbody">
+								<?php foreach ( $currencies as $curr_code => $curr ) : ?>
+								<tr data-key="<?php echo esc_attr( $curr_code ); ?>">
+									<td>
+										<span class="ex-code" style="font-size: 12px; font-weight: 700; color: #f6b328;"><?php echo esc_html( $curr_code ); ?></span>
+										<input type="hidden" name="exacoat_core_settings[currency_rates][<?php echo esc_attr( $curr_code ); ?>][code]" value="<?php echo esc_attr( $curr_code ); ?>">
+									</td>
+									<td>
+										<input type="text" name="exacoat_core_settings[currency_rates][<?php echo esc_attr( $curr_code ); ?>][symbol]" value="<?php echo esc_attr( $curr['symbol'] ?? '$' ); ?>" class="ex-input mono" style="width: 70px;">
+									</td>
+									<td>
+										<input type="number" step="0.00000001" name="exacoat_core_settings[currency_rates][<?php echo esc_attr( $curr_code ); ?>][rate]" value="<?php echo esc_attr( $curr['rate'] ?? 0 ); ?>" class="ex-input mono" style="width: 140px;" onchange="runLiveCurrencySimulation()">
+									</td>
+									<td>
+										<select name="exacoat_core_settings[currency_rates][<?php echo esc_attr( $curr_code ); ?>][rounding]" class="ex-select mono" style="width: 100%; max-width: 240px;" onchange="runLiveCurrencySimulation()">
+											<option value="9_end" <?php selected( '9_end', $curr['rounding'] ?? '9_end' ); ?>>End in 9 (e.g. $89, $29)</option>
+											<option value="90_end" <?php selected( '90_end', $curr['rounding'] ?? '' ); ?>>End in 90 (e.g. 2,790฿)</option>
+											<option value="50_step" <?php selected( '50_step', $curr['rounding'] ?? '' ); ?>>Step 50 (e.g. ¥13,900)</option>
+											<option value="500_step" <?php selected( '500_step', $curr['rounding'] ?? '' ); ?>>Step 500 (e.g. ₩128,500)</option>
+											<option value="none" <?php selected( 'none', $curr['rounding'] ?? '' ); ?>>Raw Math / No Rounding</option>
+										</select>
+									</td>
+									<td style="text-align: center;">
+										<button type="button" class="ex-btn-delete" onclick="removeTableRow(this); runLiveCurrencySimulation();">Delete</button>
+									</td>
+								</tr>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
+					</div>
+
+					<div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px;">
+						<button type="button" class="ex-btn-add" id="btn-add-currency">
+							+ Add Custom Currency
+						</button>
+						<button type="submit" form="exacoatSettingsForm" class="ex-btn ex-btn-primary" style="padding: 8px 16px;">
+							💾 Save Currency Settings
+						</button>
+					</div>
+				</div>
+			</div>
+
 			<!-- PANE: AUTOMATION & WHATSAPP SERVICE -->
 			<div class="ex-pane" id="pane-automation">
 				<!-- WhatsApp Cloud API Card -->
@@ -1090,6 +1343,100 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 
 			<!-- PANE 3: SHIPPING & FULFILLMENT -->
 			<div class="ex-pane" id="pane-shipping">
+				<!-- Multi-Zone Free Shipping Card -->
+				<div class="ex-card">
+					<div class="ex-card-header">
+						<div>
+							<h3 class="ex-card-h3">🚚 Multi-Zone Free Shipping Thresholds</h3>
+							<p style="font-size: 12px; color: #a1a1aa; margin: 4px 0 0 0;">
+								Autonomous 100% free shipping qualification rules evaluated dynamically per regional currency threshold.
+							</p>
+						</div>
+						<div style="display: flex; align-items: center; gap: 8px;">
+							<span class="ex-badge ex-badge-emerald"><?php echo count( $shipping_zones ); ?> Active Regions</span>
+							<button type="submit" form="exacoatSettingsForm" class="ex-btn ex-btn-primary" style="padding: 5px 12px; font-size: 11px;">
+								💾 Save Changes
+							</button>
+						</div>
+					</div>
+
+					<div style="background: #0d0e12; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 16px 20px; margin-top: 14px;">
+						<label class="ex-sim-label">Target Shipping Method IDs (Comma-Separated)</label>
+						<div style="margin-top: 6px;">
+							<input type="text" name="exacoat_core_settings[shipping_target_method_ids]" value="<?php echo esc_attr( $target_methods ); ?>" class="ex-input mono" style="width: 100%; max-width: 520px;" placeholder="flat_rate, biteship_shipping">
+							<p style="margin: 6px 0 0 0; font-size: 11px; color: #71717a;">Eligible method IDs discounted to 0.00 when the cart subtotal qualifies against the region's threshold.</p>
+						</div>
+					</div>
+
+					<!-- Shipping Zones Table -->
+					<div style="overflow-x: auto; margin-top: 16px;">
+						<table class="ex-table" id="shipping-zones-table">
+							<thead>
+								<tr>
+									<th style="width: 160px;">Zone Name</th>
+									<th style="min-width: 200px;">Country Codes</th>
+									<th style="width: 120px;">Currency</th>
+									<th style="width: 170px;">100% Free Threshold</th>
+									<th style="width: 140px;">Filter Match</th>
+									<th style="width: 70px; text-align: center;">Action</th>
+								</tr>
+							</thead>
+							<tbody id="shipping-zones-tbody">
+								<?php
+								$supported_currencies = [ 'AUD', 'USD', 'EUR', 'GBP', 'SGD', 'CAD', 'IDR', 'NZD', 'MYR', 'JPY', 'CHF', 'HKD', 'THB', 'KRW' ];
+								foreach ( $shipping_zones as $key => $zone ) :
+									$zone_curr = strtoupper( trim( $zone['currency'] ?? '' ) );
+									if ( empty( $zone_curr ) ) {
+										$c_raw = strtoupper( $zone['countries'] ?? '' );
+										if ( strpos( $c_raw, 'AU' ) !== false ) $zone_curr = 'AUD';
+										elseif ( strpos( $c_raw, 'US' ) !== false ) $zone_curr = 'USD';
+										elseif ( strpos( $c_raw, 'GB' ) !== false ) $zone_curr = 'GBP';
+										elseif ( strpos( $c_raw, 'SG' ) !== false || strpos( $c_raw, 'MY' ) !== false ) $zone_curr = 'SGD';
+										elseif ( strpos( $c_raw, 'DE' ) !== false || strpos( $c_raw, 'FR' ) !== false || strpos( $c_raw, 'IT' ) !== false ) $zone_curr = 'EUR';
+										elseif ( strpos( $c_raw, 'ID' ) !== false ) $zone_curr = 'IDR';
+										else $zone_curr = ( (float)( $zone['free'] ?? 0 ) > 50000 ) ? 'IDR' : 'USD';
+									}
+									$free_val = $zone['free'] ?? 0;
+								?>
+								<tr data-key="<?php echo esc_attr( $key ); ?>">
+									<td>
+										<input type="text" name="exacoat_core_settings[shipping_zones][<?php echo esc_attr( $key ); ?>][name]" value="<?php echo esc_attr( $zone['name'] ?? ucfirst( $key ) ); ?>" class="ex-input" style="width: 100%; font-weight: 600;">
+									</td>
+									<td>
+										<input type="text" name="exacoat_core_settings[shipping_zones][<?php echo esc_attr( $key ); ?>][countries]" value="<?php echo esc_attr( $zone['countries'] ?? '' ); ?>" class="ex-input mono" style="width: 100%;" placeholder="e.g. US, CA or * for fallback">
+									</td>
+									<td>
+										<select name="exacoat_core_settings[shipping_zones][<?php echo esc_attr( $key ); ?>][currency]" class="ex-select mono" style="width: 100%;">
+											<?php foreach ( $supported_currencies as $sc ) : ?>
+												<option value="<?php echo esc_attr( $sc ); ?>" <?php selected( $zone_curr, $sc ); ?>><?php echo esc_html( $sc ); ?></option>
+											<?php endforeach; ?>
+										</select>
+									</td>
+									<td>
+										<input type="number" step="any" name="exacoat_core_settings[shipping_zones][<?php echo esc_attr( $key ); ?>][free]" value="<?php echo esc_attr( $free_val ); ?>" class="ex-input mono" style="width: 100%; color: #34d399; font-weight: 700;">
+									</td>
+									<td>
+										<input type="text" name="exacoat_core_settings[shipping_zones][<?php echo esc_attr( $key ); ?>][filter_text]" value="<?php echo esc_attr( $zone['filter_text'] ?? '' ); ?>" class="ex-input mono" style="width: 100%;" placeholder="e.g. biteship">
+									</td>
+									<td style="text-align: center;">
+										<button type="button" class="ex-btn-delete" onclick="removeTableRow(this)">Delete</button>
+									</td>
+								</tr>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
+					</div>
+
+					<div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px;">
+						<button type="button" class="ex-btn-add" id="btn-add-shipping-zone">
+							+ Add Shipping Region
+						</button>
+						<button type="submit" form="exacoatSettingsForm" class="ex-btn ex-btn-primary" style="padding: 8px 16px;">
+							💾 Save Shipping Thresholds
+						</button>
+					</div>
+				</div>
+
 				<div class="ex-grid-2">
 					<div class="ex-card">
 						<div class="ex-card-header">
@@ -1276,11 +1623,164 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 				</div>
 			</div>
 
+			</form>
 		</div>
 	</main>
 </div>
 
 <script>
+window.setSimPrice = function(val) {
+	const el = document.getElementById('sim-base-price');
+	if (el) el.value = val;
+	document.querySelectorAll('.ex-preset-btn').forEach(b => {
+		const label = val >= 1000000 ? (val / 1000000) + 'M' : (val / 1000) + 'K';
+		b.classList.toggle('active', b.textContent.trim() === label);
+	});
+	window.runLiveCurrencySimulation();
+};
+
+window.removeTableRow = function(btn) {
+	const row = btn.closest('tr');
+	if (row) {
+		row.remove();
+	}
+};
+
+window.runLiveCurrencySimulation = function() {
+	const baseInput = document.getElementById('sim-base-price');
+	const markupInput = document.getElementById('global-markup-input');
+	const baseAmount = parseFloat(baseInput?.value || '450000');
+	const markup = parseFloat(markupInput?.value || '1.15');
+	const rows = document.querySelectorAll('#currencies-tbody tr');
+	const grid = document.getElementById('sim-results-grid');
+	if (!grid) return;
+
+	let html = '';
+	rows.forEach(tr => {
+		const code = tr.querySelector('td:nth-child(1) input')?.value || '';
+		const symbol = tr.querySelector('td:nth-child(2) input')?.value || '$';
+		const rate = parseFloat(tr.querySelector('td:nth-child(3) input')?.value || '0');
+		const rounding = tr.querySelector('td:nth-child(4) select')?.value || '9_end';
+
+		if (!code || rate <= 0) return;
+
+		const raw = baseAmount * rate * markup;
+		let val = 0;
+		if (rounding === '90_end' || code === 'THB') {
+			val = (Math.ceil(raw / 100) * 100) - 10;
+		} else if (rounding === '500_step' || code === 'KRW') {
+			val = Math.ceil(raw / 500) * 500;
+		} else if (rounding === '50_step' || code === 'JPY') {
+			val = Math.ceil(raw / 50) * 50;
+		} else if (rounding === '9_end' || code === 'HKD') {
+			val = (Math.ceil(raw / 10) * 10) - 1;
+		} else if (rounding === 'none') {
+			val = Math.round((raw + Number.EPSILON) * 100) / 100;
+		} else {
+			val = (Math.ceil(raw / 10) * 10) - 1;
+		}
+
+		html += `
+			<div class="ex-sim-chip">
+				<div style="font-size: 11px; font-weight: 700; color: #a1a1aa; font-family: monospace;">${code}</div>
+				<div style="font-size: 15px; font-weight: 800; color: #f6b328; margin-top: 2px; font-family: monospace;">${symbol}${val.toLocaleString()}</div>
+			</div>
+		`;
+	});
+
+	grid.innerHTML = html || '<div style="color:#71717a; font-size:12px;">No active currency conversion rates found.</div>';
+};
+
+window.addCurrencyRow = function() {
+	const tbody = document.getElementById('currencies-tbody');
+	if (!tbody) return;
+	const codeInput = prompt('Enter 3-letter currency code (e.g. "NZD"):');
+	if (!codeInput) return;
+	const safeCode = codeInput.toUpperCase().replace(/[^A-Z]/g, '');
+	if (!safeCode || safeCode.length !== 3) {
+		alert('Invalid currency code: must be 3 letters.');
+		return;
+	}
+
+	if (tbody.querySelector(`tr[data-key="${safeCode}"]`)) {
+		alert(`Currency ${safeCode} already exists in matrix.`);
+		return;
+	}
+
+	const tr = document.createElement('tr');
+	tr.setAttribute('data-key', safeCode);
+	tr.innerHTML = `
+		<td>
+			<span class="ex-code" style="font-size: 12px; font-weight: 700; color: #f6b328;">${safeCode}</span>
+			<input type="hidden" name="exacoat_core_settings[currency_rates][${safeCode}][code]" value="${safeCode}">
+		</td>
+		<td>
+			<input type="text" name="exacoat_core_settings[currency_rates][${safeCode}][symbol]" value="$" class="ex-input mono" style="width: 70px;">
+		</td>
+		<td>
+			<input type="number" step="0.00000001" name="exacoat_core_settings[currency_rates][${safeCode}][rate]" value="0.00010000" class="ex-input mono" style="width: 140px;" onchange="runLiveCurrencySimulation()">
+		</td>
+		<td>
+			<select name="exacoat_core_settings[currency_rates][${safeCode}][rounding]" class="ex-select mono" style="width: 100%; max-width: 240px;" onchange="runLiveCurrencySimulation()">
+				<option value="9_end">End in 9 (e.g. $89, $29)</option>
+				<option value="90_end">End in 90 (e.g. 2,790฿)</option>
+				<option value="50_step">Step 50 (e.g. ¥13,900)</option>
+				<option value="500_step">Step 500 (e.g. ₩128,500)</option>
+				<option value="none">Raw Math / No Rounding</option>
+			</select>
+		</td>
+		<td style="text-align: center;">
+			<button type="button" class="ex-btn-delete" onclick="removeTableRow(this); runLiveCurrencySimulation();">Delete</button>
+		</td>
+	`;
+	tbody.appendChild(tr);
+	window.runLiveCurrencySimulation();
+};
+
+window.addShippingZoneRow = function() {
+	const tbody = document.getElementById('shipping-zones-tbody');
+	if (!tbody) return;
+	const newKey = 'region_' + Date.now();
+	const tr = document.createElement('tr');
+	tr.setAttribute('data-key', newKey);
+	tr.innerHTML = `
+		<td>
+			<input type="text" name="exacoat_core_settings[shipping_zones][${newKey}][name]" value="New Region" class="ex-input" style="width: 100%; font-weight: 600;">
+		</td>
+		<td>
+			<input type="text" name="exacoat_core_settings[shipping_zones][${newKey}][countries]" value="" class="ex-input mono" style="width: 100%;" placeholder="e.g. SG, MY or *">
+		</td>
+		<td>
+			<select name="exacoat_core_settings[shipping_zones][${newKey}][currency]" class="ex-select mono" style="width: 100%;">
+				<option value="USD" selected>USD</option>
+				<option value="AUD">AUD</option>
+				<option value="EUR">EUR</option>
+				<option value="GBP">GBP</option>
+				<option value="SGD">SGD</option>
+				<option value="CAD">CAD</option>
+				<option value="IDR">IDR</option>
+				<option value="NZD">NZD</option>
+				<option value="MYR">MYR</option>
+				<option value="JPY">JPY</option>
+				<option value="CHF">CHF</option>
+				<option value="HKD">HKD</option>
+				<option value="THB">THB</option>
+				<option value="KRW">KRW</option>
+			</select>
+		</td>
+		<td>
+			<input type="number" step="any" name="exacoat_core_settings[shipping_zones][${newKey}][free]" value="100" class="ex-input mono" style="width: 100%; color: #34d399; font-weight: 700;">
+		</td>
+		<td>
+			<input type="text" name="exacoat_core_settings[shipping_zones][${newKey}][filter_text]" value="" class="ex-input mono" style="width: 100%;" placeholder="e.g. biteship">
+		</td>
+		<td style="text-align: center;">
+			<button type="button" class="ex-btn-delete" onclick="removeTableRow(this)">Delete</button>
+		</td>
+	`;
+	tbody.appendChild(tr);
+};
+
 document.addEventListener('DOMContentLoaded', function() {
 	// Tab Switching
 	const navItems = document.querySelectorAll('.ex-nav-item');
@@ -1290,12 +1790,35 @@ document.addEventListener('DOMContentLoaded', function() {
 	const titles = {
 		'overview': 'Dashboard & Engine Status',
 		'modules': 'Platform Architecture & Core Modules',
+		'currency': 'Multi-Currency Exchange Rates & Price Matrix',
+		'shipping': 'Fulfillment, Shipping & Regional Thresholds',
 		'automation': 'Automation, BCA & WhatsApp Service',
 		'headless': 'Headless REST API & Bricks Integration',
-		'shipping': 'Fulfillment & Logistics Matrix',
 		'media': 'Media Assets & Thumbnail Optimizer',
 		'logs': 'System Diagnostics & Telemetry'
 	};
+
+	// Connect Add Currency & Add Shipping Zone buttons
+	const btnAddCurr = document.getElementById('btn-add-currency');
+	if (btnAddCurr) btnAddCurr.addEventListener('click', window.addCurrencyRow);
+
+	const btnAddZone = document.getElementById('btn-add-shipping-zone');
+	if (btnAddZone) btnAddZone.addEventListener('click', window.addShippingZoneRow);
+
+	// Run initial currency simulation
+	window.runLiveCurrencySimulation();
+
+	// Handle main settings form submission feedback
+	const mainForm = document.getElementById('exacoatSettingsForm');
+	if (mainForm) {
+		mainForm.addEventListener('submit', function() {
+			const saveButtons = document.querySelectorAll('button[type="submit"][form="exacoatSettingsForm"], button[type="submit"]');
+			saveButtons.forEach(btn => {
+				btn.disabled = true;
+				btn.innerText = '⏳ Saving...';
+			});
+		});
+	}
 
 	// Save WhatsApp Settings AJAX
 	const btnSaveWa = document.getElementById('btn-save-wa');
