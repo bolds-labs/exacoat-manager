@@ -471,13 +471,13 @@ export const OrderTable: React.FC<OrderTableProps> = ({
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
           {[
             { key: 'all', label: 'All Orders' },
-            { key: 'on-hold', label: 'Waiting for Payment', count: statusCounts.onHold },
+            { key: 'on-hold', label: 'Waiting for Payment' },
             { key: 'processing', label: 'Confirmed', count: statusCounts.confirmed },
             { key: 'preparing-order', label: 'Preparing order', count: statusCounts.preparing },
             { key: 'ready-to-ship', label: 'Waiting for Pickup', count: statusCounts.readyToShip },
             { key: 'store-pickup', label: 'Store Pickup (SMB)', count: statusCounts.storePickup },
             { key: 'shipped', label: 'Shipped', count: statusCounts.shipped },
-            { key: 'completed', label: 'Completed', count: statusCounts.completed },
+            { key: 'completed', label: 'Completed' },
             { key: 'warranty', label: 'Warranty Claims', count: statusCounts.warranty },
             { key: 'redeem', label: 'Redeem', count: statusCounts.redeem },
           ].map((tab) => (

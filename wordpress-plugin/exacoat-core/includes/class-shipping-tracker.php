@@ -811,6 +811,28 @@ class Exacoat_Shipping_Tracker {
 			// If Biteship reports 'delivered', transition order to 'completed' (Delivered)
 			$current_status = $order->get_status();
 			if ( 'delivered' === $biteship_status ) {
+				$delivery_time = '';
+				foreach ( $formatted_checkpoints as $cp ) {
+					if ( ( $cp['stage'] ?? '' ) === 'delivered' && ! empty( $cp['time'] ) ) {
+						$delivery_time = $cp['time'];
+						break;
+					}
+				}
+				if ( empty( $delivery_time ) && ! empty( $formatted_checkpoints[0]['time'] ) ) {
+					$delivery_time = $formatted_checkpoints[0]['time'];
+				}
+				if ( ! empty( $delivery_time ) ) {
+					$del_formatted = date( 'Y-m-d H:i:s', strtotime( $delivery_time ) );
+					$order->update_meta_data( '_delivered_at', $del_formatted );
+					$order->update_meta_data( '_artmatter_delivered_at', $del_formatted );
+					$order->update_meta_data( '_biteship_delivery_time', $del_formatted );
+					$order->update_meta_data( 'delivered_time', $del_formatted );
+					update_post_meta( $order_id, '_delivered_at', $del_formatted );
+					update_post_meta( $order_id, '_artmatter_delivered_at', $del_formatted );
+					update_post_meta( $order_id, '_biteship_delivery_time', $del_formatted );
+					update_post_meta( $order_id, 'delivered_time', $del_formatted );
+				}
+
 				if ( 'completed' !== $current_status ) {
 					$note_text = sprintf( 'Biteship: Package delivered by courier %s (%s). %s', $carrier_label, $tracking_number, $latest_note );
 					$order->update_status( 'completed', $note_text );
@@ -934,6 +956,23 @@ class Exacoat_Shipping_Tracker {
 			?: ( function_exists( 'get_field' ) ? (string) get_field( 'carrier_id', $order_id ) : '' ) ) ) );
 
 		$carrier = strtolower( trim( $carrier ) );
+
+		// If delivery data is already saved on the order and status is completed/delivered, return cached tracking
+		$saved_delivered = $order->get_meta( '_delivered_at' ) 
+			?: ( $order->get_meta( '_artmatter_delivered_at' ) 
+			?: $order->get_meta( '_biteship_delivery_time' ) );
+		$saved_checkpoints = $order->get_meta( '_artmatter_tracking_checkpoints' ) ?: get_post_meta( $order_id, '_artmatter_tracking_checkpoints', true );
+		$latest_st = $order->get_meta( '_biteship_latest_status' ) ?: $order->get_meta( '_artmatter_trackingmore_latest_status' );
+
+		if ( ! empty( $saved_delivered ) && ! empty( $saved_checkpoints ) && ( 'delivered' === $latest_st || 'completed' === $order->get_status() ) ) {
+			return [
+				'success'        => true,
+				'source'         => 'cache',
+				'status'         => 'delivered',
+				'checkpoints'    => $saved_checkpoints,
+				'delivered_time' => $saved_delivered,
+			];
+		}
 
 		// 1. If courier is supported by Biteship (SiCepat, JNE, POS, J&T, etc.), query Biteship first
 		$biteship_courier = self::get_biteship_courier_code( $carrier );

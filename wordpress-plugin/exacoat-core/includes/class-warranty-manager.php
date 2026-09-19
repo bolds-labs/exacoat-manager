@@ -266,7 +266,57 @@ class Exacoat_Warranty_Manager {
 
 		// 2. Delivered Status & 48-Hour Window Check
 		$status = $order->get_status();
-		$delivered_at_str = $order->get_meta( '_delivered_at' ) ?: $order->get_meta( '_artmatter_delivered_at' );
+		$delivered_at_str = $order->get_meta( '_delivered_at' ) 
+			?: ( $order->get_meta( '_artmatter_delivered_at' ) 
+			?: ( $order->get_meta( '_biteship_delivery_time' ) 
+			?: $order->get_meta( 'delivered_time' ) ) );
+
+		// If data not added yet in the order, pull from Biteship / tracking
+		if ( empty( $delivered_at_str ) ) {
+			$tracking_number = (string) ( $order->get_meta( 'tracking_number' ) 
+				?: ( $order->get_meta( '_tracking_number' ) 
+				?: ( $order->get_meta( '_artmatter_tracking_number' ) ?: '' ) ) );
+
+			if ( ! empty( $tracking_number ) && class_exists( 'Exacoat_Shipping_Tracker' ) ) {
+				$sync_res = Exacoat_Shipping_Tracker::sync_order_tracking( $order->get_id() );
+				if ( ! empty( $sync_res['success'] ) ) {
+					$st = strtolower( trim( (string) ( $sync_res['status'] ?? '' ) ) );
+					if ( 'delivered' === $st ) {
+						$checkpoints = $sync_res['checkpoints'] ?? [];
+						$delivery_time = '';
+						foreach ( $checkpoints as $cp ) {
+							if ( ( $cp['stage'] ?? '' ) === 'delivered' && ! empty( $cp['time'] ) ) {
+								$delivery_time = $cp['time'];
+								break;
+							}
+						}
+						if ( empty( $delivery_time ) && ! empty( $checkpoints[0]['time'] ) ) {
+							$delivery_time = $checkpoints[0]['time'];
+						}
+						if ( ! empty( $delivery_time ) ) {
+							$delivered_at_str = date( 'Y-m-d H:i:s', strtotime( $delivery_time ) );
+							$order->update_meta_data( '_delivered_at', $delivered_at_str );
+							$order->update_meta_data( '_artmatter_delivered_at', $delivered_at_str );
+							$order->update_meta_data( '_biteship_delivery_time', $delivered_at_str );
+							$order->update_meta_data( 'delivered_time', $delivered_at_str );
+							$order->save();
+							update_post_meta( $order->get_id(), '_delivered_at', $delivered_at_str );
+							update_post_meta( $order->get_id(), '_artmatter_delivered_at', $delivered_at_str );
+							update_post_meta( $order->get_id(), '_biteship_delivery_time', $delivered_at_str );
+							update_post_meta( $order->get_id(), 'delivered_time', $delivered_at_str );
+						}
+					} else {
+						return new \WP_REST_Response( [
+							'success'  => false,
+							'eligible' => false,
+							'reason'   => 'not_delivered',
+							'status'   => $st,
+							'message'  => 'This order has not been marked as delivered by the courier yet. Installation warranty is applicable within 48 hours after receiving your order.',
+						], 200 );
+					}
+				}
+			}
+		}
 
 		if ( empty( $delivered_at_str ) && in_array( $status, [ 'completed', 'delivered' ], true ) ) {
 			$date_completed = $order->get_date_completed();

@@ -171,6 +171,9 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   const [isGooritaCopied, setIsGooritaCopied] = useState(false);
   const [showGooritaPreview, setShowGooritaPreview] = useState(false);
 
+  // Track Order timeline modal state
+  const [isTrackOrderModalOpen, setIsTrackOrderModalOpen] = useState(false);
+
   // Printed tracking state
   const [isPrinted, setIsPrinted] = useState<boolean>(() => {
     if (!order) return false;
@@ -1250,20 +1253,20 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                 </span>
               )}
               {order.tracking?.tracking_number && !order.tracking.tracking_number.startsWith('field_') && (
-                <a
-                  href={getPublicTrackingUrl(
-                    order.tracking.courier || courier,
-                    order.tracking.tracking_number,
-                    order.tracking.tracking_url
-                  )}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-2.5 py-1 rounded-lg bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 text-xs text-[#f3aa18] font-mono font-semibold flex items-center gap-1.5 border border-[#f3aa18]/30 transition-all cursor-pointer shadow-xs"
-                  title="Track shipment on carrier tracking portal"
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsTrackOrderModalOpen(true);
+                    if (!order.tracking?.checkpoints || order.tracking.checkpoints.length === 0) {
+                      handleSyncTracking();
+                    }
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 text-xs text-[#f3aa18] font-sans font-semibold flex items-center gap-1.5 border border-[#f3aa18]/30 transition-all cursor-pointer shadow-xs"
+                  title="Track shipment timeline"
                 >
-                  <ExternalLink className="w-3 h-3" />
-                  <span>{order.tracking.tracking_number}</span>
-                </a>
+                  <MapPin className="w-3 h-3 text-[#f3aa18]" />
+                  <span>Track Order</span>
+                </button>
               )}
               {order.tracking?.tracking_number && !order.tracking.tracking_number.startsWith('field_') && (
                 <button
@@ -2416,6 +2419,181 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
           if (onOrderUpdated) onOrderUpdated();
         }}
       />
+
+      {/* Shipment Tracking Timeline Popup Modal */}
+      {order && (
+        <Modal
+          isOpen={isTrackOrderModalOpen}
+          onClose={() => setIsTrackOrderModalOpen(false)}
+          title={
+            <div className="flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-[#f3aa18]" />
+              <span>Shipment Tracking • Order #{order.order_number}</span>
+            </div>
+          }
+          subtitle="Real-time carrier checkpoints and delivery timeline"
+          maxWidth="lg"
+          headerActions={
+            <button
+              type="button"
+              disabled={isSyncingTracking}
+              onClick={handleSyncTracking}
+              className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-xs text-neutral-300 hover:text-white flex items-center gap-1.5 border border-white/[0.08] transition-colors disabled:opacity-50 cursor-pointer"
+              title="Sync latest live tracking"
+            >
+              <RefreshCw className={clsx("w-3.5 h-3.5", isSyncingTracking && "animate-spin text-[#f3aa18]")} />
+              <span>{isSyncingTracking ? 'Syncing...' : 'Refresh'}</span>
+            </button>
+          }
+        >
+          <div className="space-y-4">
+            {/* Courier & Tracking Resi Summary Card */}
+            <div className="p-3.5 rounded-xl bg-neutral-900/80 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] uppercase font-mono tracking-wider text-neutral-400">Courier</span>
+                  <span className="text-xs font-semibold text-white uppercase">{order.tracking?.courier || courier}</span>
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-sm font-mono font-bold text-[#f3aa18]">
+                    {order.tracking?.tracking_number}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (order.tracking?.tracking_number) {
+                        navigator.clipboard.writeText(order.tracking.tracking_number);
+                        setCopiedField('modal_resi');
+                        showToast('success', 'Copied', 'Tracking number copied to clipboard');
+                        setTimeout(() => setCopiedField(null), 2000);
+                      }
+                    }}
+                    className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                    title="Copy tracking number"
+                  >
+                    {copiedField === 'modal_resi' ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {order.tracking?.latest_status && (
+                  <span className={clsx(
+                    "text-[10px] font-mono font-bold px-2.5 py-1 rounded-full border uppercase tracking-wider",
+                    order.tracking.latest_status === 'delivered'
+                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                      : "bg-[#f3aa18]/10 text-[#f3aa18] border-[#f3aa18]/30"
+                  )}>
+                    {order.tracking.latest_status === 'delivered' ? '✓ Delivered' : order.tracking.latest_status.replace('_', ' ')}
+                  </span>
+                )}
+                {order.tracking?.tracking_number && (
+                  <a
+                    href={getPublicTrackingUrl(
+                      order.tracking.courier || courier,
+                      order.tracking.tracking_number,
+                      order.tracking.tracking_url
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-xs text-neutral-200 font-sans flex items-center gap-1.5 border border-white/[0.1] transition-all cursor-pointer"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    <span>Carrier Portal</span>
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {/* Delivered Banner if Delivered */}
+            {order.tracking?.latest_status === 'delivered' && (
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-start gap-2.5 text-xs text-emerald-300">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block">Package Delivered</span>
+                  <p className="text-[11px] text-emerald-400/90 mt-0.5 leading-relaxed">
+                    The package was confirmed delivered by the carrier. The 48-hour Installation Warranty claim window is active from this delivery date.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Checkpoints Timeline */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h5 className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5 font-sans">
+                  <Clock className="w-3.5 h-3.5 text-[#f3aa18]" />
+                  <span>Tracking Timeline ({order.tracking?.checkpoints?.length || 0} checkpoints)</span>
+                </h5>
+              </div>
+
+              {isSyncingTracking && (!order.tracking?.checkpoints || order.tracking.checkpoints.length === 0) ? (
+                <div className="py-8 flex flex-col items-center justify-center gap-2 text-xs text-neutral-400">
+                  <RefreshCw className="w-5 h-5 animate-spin text-[#f3aa18]" />
+                  <span>Pulling live checkpoints from courier...</span>
+                </div>
+              ) : !order.tracking?.checkpoints || order.tracking.checkpoints.length === 0 ? (
+                <div className="p-4 rounded-xl bg-neutral-900/40 border border-white/5 text-center text-xs text-neutral-400">
+                  <p>No tracking checkpoints recorded yet.</p>
+                  <p className="text-[11px] text-neutral-500 mt-1">Click the Refresh button to fetch live tracking from Biteship.</p>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-neutral-900/60 border border-white/10 space-y-3 max-h-80 overflow-y-auto custom-scrollbar">
+                  {order.tracking.checkpoints.map((cp, idx) => {
+                    const isDeliveredCp = cp.stage === 'delivered' || cp.description.toLowerCase().includes('delivered') || cp.description.toLowerCase().includes('diterima');
+                    const isLatest = idx === 0;
+
+                    return (
+                      <div key={idx} className="relative pl-5 border-l border-white/10 pb-3 last:pb-0">
+                        <span
+                          className={clsx(
+                            'absolute -left-[5px] top-1 w-2.5 h-2.5 rounded-full ring-4 ring-neutral-950',
+                            isDeliveredCp
+                              ? 'bg-emerald-400'
+                              : isLatest
+                              ? 'bg-[#f3aa18]'
+                              : 'bg-neutral-600'
+                          )}
+                        />
+                        <div className="text-xs space-y-0.5">
+                          <p className={clsx('leading-snug', isLatest ? 'text-white font-semibold' : 'text-neutral-300')}>
+                            {cp.description}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2 text-[10px] text-neutral-400 font-mono">
+                            <span>{cp.time}</span>
+                            {cp.location && (
+                              <span>• {cp.location}</span>
+                            )}
+                            {cp.stage && (
+                              <span className="px-1.5 py-0.2 rounded bg-white/5 text-neutral-400 border border-white/5 uppercase text-[9px]">
+                                {cp.stage}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end pt-2 border-t border-white/[0.08]">
+              <button
+                type="button"
+                onClick={() => setIsTrackOrderModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-neutral-400 hover:text-white bg-neutral-800 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </SlideDrawer>
   );
 };
