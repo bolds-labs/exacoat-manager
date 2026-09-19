@@ -71,43 +71,87 @@ class Exacoat_Core {
 		// Register REST API Bridge for Exacoat Manager ERP communication
 		add_action( 'rest_api_init', [ $this, 'register_bridge_routes' ] );
 
-		$allowed_origins = [
-			'https://exacoat.com',
-			'https://web.exacoat.com',
-			'https://manager.exacoat.com',
-			'https://artmatter.co',
-			'https://manager.artmatter.co',
-			'http://localhost:3000',
-			'http://localhost:3001',
-			'http://localhost:3002',
-			'http://localhost:3005',
-			'http://localhost:5173',
-		];
+		// Preflight OPTIONS handler early in request lifecycle
+		add_action( 'init', function() {
+			$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+			if ( ! empty( $origin ) && self::is_cors_origin_allowed( $origin ) ) {
+				self::send_cors_headers( $origin );
+				if ( ( $_SERVER['REQUEST_METHOD'] ?? '' ) === 'OPTIONS' ) {
+					status_header( 200 );
+					exit;
+				}
+			}
+		}, 1 );
 
-		add_filter( 'allowed_http_origins', function( $origins ) use ( $allowed_origins ) {
-			return array_values( array_unique( array_merge( (array) $origins, $allowed_origins ) ) );
+		add_filter( 'allowed_http_origins', function( $origins ) {
+			$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+			if ( ! empty( $origin ) && self::is_cors_origin_allowed( $origin ) ) {
+				$origins[] = $origin;
+			}
+			return array_values( array_unique( (array) $origins ) );
 		} );
 
 		remove_filter( 'rest_pre_serve_request', 'rest_send_cors_headers' );
-		add_filter( 'rest_pre_serve_request', function( $value ) use ( $allowed_origins ) {
+		add_filter( 'rest_pre_serve_request', function( $value ) {
 			$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-			header_remove( 'Access-Control-Allow-Origin' );
-			header_remove( 'Access-Control-Allow-Credentials' );
-			if ( in_array( $origin, $allowed_origins, true ) ) {
-				header( "Access-Control-Allow-Origin: {$origin}" );
-				header( 'Access-Control-Allow-Credentials: true' );
-				header( 'Vary: Origin', false );
-				header( 'Access-Control-Allow-Methods: OPTIONS, GET, POST, PUT, PATCH, DELETE' );
-				header( 'Access-Control-Allow-Headers: Authorization, Content-Type, X-WP-Nonce, Cache-Control, Pragma, X-Requested-With, sent_from, x-api-key, X-Api-Key, apikey, Accept, Origin, Cart-Token, Nonce, X-Exacoat-Currency, X-Artmatter-Currency, X-Exacoat-Client-IP, X-Artmatter-Client-IP' );
-				header( 'Access-Control-Expose-Headers: Cart-Token, Nonce, X-WP-Total, X-WP-TotalPages, X-Exacoat-Currency, X-Artmatter-Currency' );
+			if ( ! empty( $origin ) && self::is_cors_origin_allowed( $origin ) ) {
+				self::send_cors_headers( $origin );
+				if ( ( $_SERVER['REQUEST_METHOD'] ?? '' ) === 'OPTIONS' ) {
+					status_header( 200 );
+					exit;
+				}
 			}
 			return $value;
 		}, 999 );
 
 		add_filter( 'rest_allowed_cors_headers', function( $headers ) {
-			$custom = [ 'Authorization', 'Content-Type', 'X-WP-Nonce', 'Cache-Control', 'Pragma', 'X-Requested-With', 'sent_from', 'x-api-key', 'X-Api-Key', 'apikey', 'Accept', 'Origin', 'Cart-Token', 'Nonce', 'X-Exacoat-Currency', 'X-Artmatter-Currency', 'X-Exacoat-Client-IP', 'X-Artmatter-Client-IP' ];
+			$custom = [ 'Authorization', 'Content-Type', 'X-WP-Nonce', 'Cache-Control', 'Pragma', 'X-Requested-With', 'sent_from', 'x-api-key', 'X-Api-Key', 'apikey', 'Accept', 'Origin', 'Cart-Token', 'Nonce', 'X-Exacoat-Currency', 'X-Artmatter-Currency', 'X-Exacoat-Client-IP', 'X-Artmatter-Client-IP', 'x-secret-key', 'X-Secret-Key', 'X-Exacoat-Secret', 'x_exacoat_secret' ];
 			return array_unique( array_merge( (array) $headers, $custom ) );
 		} );
+	}
+
+	/**
+	 * Check if an origin is permitted for cross-origin resource sharing
+	 */
+	public static function is_cors_origin_allowed( ?string $origin ): bool {
+		if ( empty( $origin ) ) {
+			return false;
+		}
+
+		$parsed = wp_parse_url( $origin );
+		$host   = strtolower( (string) ( $parsed['host'] ?? '' ) );
+		if ( empty( $host ) ) {
+			return false;
+		}
+
+		if ( $host === 'localhost' || $host === '127.0.0.1' ) {
+			return true;
+		}
+
+		if ( preg_match( '/(^|\.)(exacoat\.com|artmatter\.co)$/i', $host ) ) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Send unified CORS response headers
+	 */
+	public static function send_cors_headers( ?string $origin = null ): void {
+		$origin = $origin ?: ( $_SERVER['HTTP_ORIGIN'] ?? '' );
+		if ( empty( $origin ) || ! self::is_cors_origin_allowed( $origin ) ) {
+			return;
+		}
+
+		header_remove( 'Access-Control-Allow-Origin' );
+		header_remove( 'Access-Control-Allow-Credentials' );
+		header( "Access-Control-Allow-Origin: {$origin}" );
+		header( 'Access-Control-Allow-Credentials: true' );
+		header( 'Vary: Origin', false );
+		header( 'Access-Control-Allow-Methods: OPTIONS, GET, POST, PUT, PATCH, DELETE, HEAD' );
+		header( 'Access-Control-Allow-Headers: Authorization, Content-Type, X-WP-Nonce, Cache-Control, Pragma, X-Requested-With, sent_from, x-api-key, X-Api-Key, apikey, Accept, Origin, Cart-Token, Nonce, X-Exacoat-Currency, X-Artmatter-Currency, X-Exacoat-Client-IP, X-Artmatter-Client-IP, x-secret-key, X-Secret-Key, X-Exacoat-Secret, x_exacoat_secret' );
+		header( 'Access-Control-Expose-Headers: Cart-Token, Nonce, X-WP-Total, X-WP-TotalPages, X-Exacoat-Currency, X-Artmatter-Currency' );
 	}
 
 	private function init_modules() {

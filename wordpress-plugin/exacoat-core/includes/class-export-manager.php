@@ -284,6 +284,117 @@ class Exacoat_Export_Manager {
 	}
 
 	/**
+	 * Check if an order is destined for JNE Export (Domestic Indonesia)
+	 */
+	public static function is_jne_order( $order ): bool {
+		if ( ! is_a( $order, 'WC_Order' ) ) {
+			return false;
+		}
+
+		// 1. Check explicit carrier metadata
+		$carrier = strtolower( trim( (string) (
+			$order->get_meta( 'carrier_id' )
+			?: ( $order->get_meta( '_carrier_id' )
+			?: ( ( function_exists( 'get_field' ) ? get_field( 'carrier_id', $order->get_id() ) : '' )
+			?: ( $order->get_meta( '_biteship_courier' )
+			?: ( $order->get_meta( 'courier' ) ?: '' ) ) ) )
+		) ) );
+
+		if ( $carrier === 'jne' ) {
+			return true;
+		}
+
+		if ( in_array( $carrier, [ 'goorita', 'sicepat', 'pos', 'dhl', 'fedex', 'pickup' ], true ) ) {
+			return false;
+		}
+
+		// 2. Check shipping method title and shipping line items
+		$shipping_text = strtolower( (string) $order->get_shipping_method() );
+		if ( method_exists( $order, 'get_shipping_methods' ) ) {
+			foreach ( $order->get_shipping_methods() as $item ) {
+				if ( is_a( $item, 'WC_Order_Item_Shipping' ) ) {
+					$shipping_text .= ' ' . strtolower( (string) $item->get_name() ) . ' ' . strtolower( (string) $item->get_method_id() );
+				}
+			}
+		}
+
+		// Skip store pickup
+		if ( stripos( $shipping_text, 'gandaria' ) !== false || stripos( $shipping_text, 'pickup' ) !== false || stripos( $shipping_text, 'ambil' ) !== false ) {
+			return false;
+		}
+
+		// Skip other couriers
+		if ( stripos( $shipping_text, 'goorita' ) !== false || stripos( $shipping_text, 'sicepat' ) !== false || stripos( $shipping_text, 'pos ind' ) !== false || stripos( $shipping_text, 'dhl' ) !== false || stripos( $shipping_text, 'fedex' ) !== false ) {
+			return false;
+		}
+
+		// Match JNE shipping method
+		if ( stripos( $shipping_text, 'jne' ) !== false ) {
+			return true;
+		}
+
+		// 3. Destination country: domestic orders default to JNE
+		$country = strtoupper( trim( (string) ( $order->get_shipping_country() ?: $order->get_billing_country() ) ) );
+		if ( empty( $country ) || $country === 'ID' ) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Check if an order is destined for Goorita Export (International)
+	 */
+	public static function is_goorita_order( $order ): bool {
+		if ( ! is_a( $order, 'WC_Order' ) ) {
+			return false;
+		}
+
+		// 1. Check explicit carrier metadata
+		$carrier = strtolower( trim( (string) (
+			$order->get_meta( 'carrier_id' )
+			?: ( $order->get_meta( '_carrier_id' )
+			?: ( ( function_exists( 'get_field' ) ? get_field( 'carrier_id', $order->get_id() ) : '' )
+			?: ( $order->get_meta( '_biteship_courier' )
+			?: ( $order->get_meta( 'courier' ) ?: '' ) ) ) )
+		) ) );
+
+		if ( $carrier === 'goorita' ) {
+			return true;
+		}
+
+		if ( in_array( $carrier, [ 'jne', 'sicepat', 'pos', 'dhl', 'fedex', 'pickup' ], true ) ) {
+			return false;
+		}
+
+		// 2. Check shipping methods
+		$shipping_text = strtolower( (string) $order->get_shipping_method() );
+		if ( method_exists( $order, 'get_shipping_methods' ) ) {
+			foreach ( $order->get_shipping_methods() as $item ) {
+				if ( is_a( $item, 'WC_Order_Item_Shipping' ) ) {
+					$shipping_text .= ' ' . strtolower( (string) $item->get_name() ) . ' ' . strtolower( (string) $item->get_method_id() );
+				}
+			}
+		}
+
+		if ( stripos( $shipping_text, 'goorita' ) !== false ) {
+			return true;
+		}
+
+		if ( stripos( $shipping_text, 'gandaria' ) !== false || stripos( $shipping_text, 'pickup' ) !== false ) {
+			return false;
+		}
+
+		// 3. International destination check
+		$country = strtoupper( trim( (string) ( $order->get_shipping_country() ?: $order->get_billing_country() ) ) );
+		if ( ! empty( $country ) && $country !== 'ID' ) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
 	 * Query orders ready for JNE Export
 	 */
 	public static function get_jne_export_orders(): array {
@@ -291,23 +402,24 @@ class Exacoat_Export_Manager {
 			return [];
 		}
 
-		$orders = wc_get_orders( [
-			'limit'      => -1,
-			'status'     => [ 'ready-to-ship', 'wc-ready-to-ship' ],
-			'meta_key'   => 'carrier_id',
-			'meta_value' => 'JNE',
+		$statuses = [ 'ready-to-ship', 'wc-ready-to-ship', 'awaiting-pickup', 'wc-awaiting-pickup', 'smb-ready', 'wc-smb-ready' ];
+		$candidate_orders = wc_get_orders( [
+			'limit'  => -1,
+			'status' => $statuses,
 		] );
 
-		if ( empty( $orders ) ) {
-			$orders = wc_get_orders( [
-				'limit'      => -1,
-				'status'     => [ 'ready-to-ship', 'wc-ready-to-ship' ],
-				'meta_key'   => 'carrier_id',
-				'meta_value' => 'jne',
-			] );
+		if ( empty( $candidate_orders ) || ! is_array( $candidate_orders ) ) {
+			return [];
 		}
 
-		return is_array( $orders ) ? $orders : [];
+		$jne_orders = [];
+		foreach ( $candidate_orders as $order ) {
+			if ( self::is_jne_order( $order ) ) {
+				$jne_orders[] = $order;
+			}
+		}
+
+		return $jne_orders;
 	}
 
 	/**
@@ -318,23 +430,24 @@ class Exacoat_Export_Manager {
 			return [];
 		}
 
-		$orders = wc_get_orders( [
-			'limit'      => -1,
-			'status'     => [ 'ready-to-ship', 'wc-ready-to-ship' ],
-			'meta_key'   => 'carrier_id',
-			'meta_value' => 'goorita',
+		$statuses = [ 'ready-to-ship', 'wc-ready-to-ship', 'awaiting-pickup', 'wc-awaiting-pickup', 'smb-ready', 'wc-smb-ready' ];
+		$candidate_orders = wc_get_orders( [
+			'limit'  => -1,
+			'status' => $statuses,
 		] );
 
-		if ( empty( $orders ) ) {
-			$orders = wc_get_orders( [
-				'limit'      => -1,
-				'status'     => [ 'ready-to-ship', 'wc-ready-to-ship' ],
-				'meta_key'   => 'carrier_id',
-				'meta_value' => 'Goorita',
-			] );
+		if ( empty( $candidate_orders ) || ! is_array( $candidate_orders ) ) {
+			return [];
 		}
 
-		return is_array( $orders ) ? $orders : [];
+		$goorita_orders = [];
+		foreach ( $candidate_orders as $order ) {
+			if ( self::is_goorita_order( $order ) ) {
+				$goorita_orders[] = $order;
+			}
+		}
+
+		return $goorita_orders;
 	}
 
 	/**

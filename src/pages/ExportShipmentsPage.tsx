@@ -131,7 +131,7 @@ export const ExportShipmentsPage: React.FC = () => {
             <span className="text-2xl font-bold font-mono text-zinc-900 dark:text-white">
               {status?.jne.pendingCount ?? 0}
             </span>
-            <span className="text-xs text-zinc-500 dark:text-neutral-400 block mt-0.5">Domestic orders awaiting resi</span>
+            <span className="text-xs text-zinc-500 dark:text-neutral-400 block mt-0.5">Domestic orders awaiting dispatch</span>
           </div>
         </GlassCard>
 
@@ -208,7 +208,7 @@ export const ExportShipmentsPage: React.FC = () => {
             <div className="p-4 rounded-xl bg-zinc-50 dark:bg-neutral-900/60 border border-zinc-200 dark:border-white/[0.06] space-y-2 text-xs text-zinc-600 dark:text-neutral-300">
               <p className="font-semibold text-zinc-800 dark:text-white">Specification Details:</p>
               <ul className="list-disc list-inside space-y-1 text-[11px] text-zinc-500 dark:text-neutral-400">
-                <li>Extracts orders with status: Confirmed, Preparing Order, or Waiting for Pickup.</li>
+                <li>Extracts domestic orders with status Waiting for Courier Pickup.</li>
                 <li>Normalizes receiver phone numbers with Indonesian international prefix (+62).</li>
                 <li>Generates dual formats: Excel (.xlsx) and comma-separated (.csv) for JNE bulk intake.</li>
               </ul>
