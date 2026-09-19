@@ -420,22 +420,31 @@ class Exacoat_Store_Enhancements {
 	public static function get_currency_rates(): array {
 		$settings = Exacoat_Core::get_settings();
 		$default_currencies = [
-			'USD' => [ 'symbol' => '$',   'rate' => 0.000059, 'rounding' => '9_end' ],
-			'EUR' => [ 'symbol' => '€',   'rate' => 0.000051, 'rounding' => '9_end' ],
-			'AUD' => [ 'symbol' => 'A$',  'rate' => 0.000089, 'rounding' => '9_end' ],
-			'SGD' => [ 'symbol' => 'S$',  'rate' => 0.000076, 'rounding' => '9_end' ],
-			'JPY' => [ 'symbol' => '¥',   'rate' => 0.009350, 'rounding' => '50_step' ],
-			'GBP' => [ 'symbol' => '£',   'rate' => 0.000044, 'rounding' => '9_end' ],
-			'CAD' => [ 'symbol' => 'CA$', 'rate' => 0.000082, 'rounding' => '9_end' ],
-			'CHF' => [ 'symbol' => 'CHF', 'rate' => 0.000047, 'rounding' => '9_end' ],
-			'HKD' => [ 'symbol' => 'HK$', 'rate' => 0.000462, 'rounding' => '9_end' ],
-			'THB' => [ 'symbol' => '฿',   'rate' => 0.001866, 'rounding' => '90_end' ],
-			'KRW' => [ 'symbol' => '₩',   'rate' => 0.086400, 'rounding' => '500_step' ],
+			'USD' => [ 'symbol' => '$',   'rate' => 0.000100, 'rounding' => '90_decimal' ],
+			'EUR' => [ 'symbol' => '€',   'rate' => 0.000092, 'rounding' => '90_decimal' ],
+			'AUD' => [ 'symbol' => 'A$',  'rate' => 0.000150, 'rounding' => '90_decimal' ],
+			'SGD' => [ 'symbol' => 'S$',  'rate' => 0.000130, 'rounding' => '90_decimal' ],
+			'JPY' => [ 'symbol' => '¥',   'rate' => 0.015000, 'rounding' => '50_step' ],
+			'GBP' => [ 'symbol' => '£',   'rate' => 0.000078, 'rounding' => '90_decimal' ],
+			'CAD' => [ 'symbol' => 'CA$', 'rate' => 0.000140, 'rounding' => '90_decimal' ],
+			'CHF' => [ 'symbol' => 'CHF', 'rate' => 0.000088, 'rounding' => '90_decimal' ],
+			'HKD' => [ 'symbol' => 'HK$', 'rate' => 0.000780, 'rounding' => '90_decimal' ],
+			'THB' => [ 'symbol' => '฿',   'rate' => 0.003300, 'rounding' => '90_end' ],
+			'KRW' => [ 'symbol' => '₩',   'rate' => 0.140000, 'rounding' => '500_step' ],
 		];
 
 		$currencies = $settings['currency_rates'] ?? $default_currencies;
 		if ( ! is_array( $currencies ) || empty( $currencies ) ) {
 			$currencies = $default_currencies;
+		} else {
+			// Upgrade legacy integer USD/EUR rates if detected
+			if ( isset( $currencies['USD']['rounding'] ) && '9_end' === $currencies['USD']['rounding'] && (float) ( $currencies['USD']['rate'] ?? 0 ) < 0.00008 ) {
+				foreach ( [ 'USD', 'EUR', 'AUD', 'SGD', 'GBP', 'CAD', 'CHF', 'HKD' ] as $c ) {
+					if ( isset( $default_currencies[ $c ] ) ) {
+						$currencies[ $c ] = $default_currencies[ $c ];
+					}
+				}
+			}
 		}
 
 		return $currencies;
@@ -447,11 +456,11 @@ class Exacoat_Store_Enhancements {
 	}
 
 	/**
-	 * Calculate rounded price for a given IDR base amount in any target currency using the official rounding rules
+	 * Calculate rounded price for a given IDR base amount in any target currency using decimal or psychological rounding
 	 */
 	public static function calculate_price_for_currency( $amount_idr, $currency_code = 'IDR' ): float {
 		$currency_code = strtoupper( trim( (string) $currency_code ) );
-		if ( empty( $currency_code ) || $currency_code === 'IDR' ) {
+		if ( empty( $currency_code ) || 'IDR' === $currency_code ) {
 			return (float) $amount_idr;
 		}
 
@@ -460,30 +469,73 @@ class Exacoat_Store_Enhancements {
 		$currencies = self::get_currency_rates();
 
 		if ( ! isset( $currencies[ $currency_code ] ) ) {
-			return (float) round( $amount_idr * 0.000059 * $markup );
+			return (float) round( $amount_idr * 0.000100 * $markup, 2 );
 		}
 
 		$data          = $currencies[ $currency_code ];
 		$rate          = floatval( is_array( $data ) ? ( $data['rate'] ?? 0 ) : $data );
-		$rounding_type = is_array( $data ) ? ( $data['rounding'] ?? '9_end' ) : '9_end';
+		$rounding_type = is_array( $data ) ? ( $data['rounding'] ?? '90_decimal' ) : '90_decimal';
 
 		if ( $rate <= 0 ) {
 			return (float) $amount_idr;
 		}
 
 		$raw = $amount_idr * $rate * $markup;
-		if ( $rounding_type === '90_end' || $currency_code === 'THB' ) {
-			$val = ( ceil( $raw / 100 ) * 100 ) - 10;
-		} elseif ( $rounding_type === '500_step' || $currency_code === 'KRW' ) {
-			$val = ceil( $raw / 500 ) * 500;
-		} elseif ( $rounding_type === '50_step' || $currency_code === 'JPY' ) {
-			$val = ceil( $raw / 50 ) * 50;
-		} elseif ( $rounding_type === '9_end' || $currency_code === 'HKD' ) {
-			$val = ( ceil( $raw / 10 ) * 10 ) - 1;
-		} elseif ( $rounding_type === 'none' ) {
-			$val = round( $raw, 2 );
-		} else {
-			$val = ( ceil( $raw / 10 ) * 10 ) - 1;
+
+		switch ( $rounding_type ) {
+			case '90_decimal':
+				// End in .90 (e.g. 14.90, 19.90, 8.90)
+				$val = ceil( $raw ) - 0.10;
+				if ( $val < $raw ) {
+					$val += 1.0;
+				}
+				$val = round( $val, 2 );
+				break;
+
+			case '99_decimal':
+				// End in .99 (e.g. 14.99, 19.99)
+				$val = ceil( $raw ) - 0.01;
+				if ( $val < $raw ) {
+					$val += 1.0;
+				}
+				$val = round( $val, 2 );
+				break;
+
+			case '50_decimal':
+				// Step 0.50 (e.g. 14.50, 15.00)
+				$val = round( ceil( $raw * 2 ) / 2, 2 );
+				break;
+
+			case '90_end':
+				// Integer End in 90 (e.g. 2,790, 390)
+				$val = ( ceil( $raw / 100 ) * 100 ) - 10;
+				if ( $val < $raw ) {
+					$val += 100;
+				}
+				break;
+
+			case '500_step':
+				// Integer Step 500 (e.g. 19,500, 128,500)
+				$val = ceil( $raw / 500 ) * 500;
+				break;
+
+			case '50_step':
+				// Integer Step 50 (e.g. 1,950, 13,900)
+				$val = ceil( $raw / 50 ) * 50;
+				break;
+
+			case '9_end':
+				// Integer End in 9 (e.g. 19, 89)
+				$val = ( ceil( $raw / 10 ) * 10 ) - 1;
+				if ( $val < $raw ) {
+					$val += 10;
+				}
+				break;
+
+			case 'none':
+			default:
+				$val = round( $raw, 2 );
+				break;
 		}
 
 		return (float) max( 0, $val );
@@ -491,13 +543,20 @@ class Exacoat_Store_Enhancements {
 
 	public static function get_currency_decimals( string $currency_code ): int {
 		$currency_code = strtoupper( trim( $currency_code ) );
-		if ( 'IDR' === $currency_code ) {
+		if ( in_array( $currency_code, [ 'IDR', 'JPY', 'KRW', 'THB', 'VND' ], true ) ) {
 			return 0;
 		}
 
 		$currencies = self::get_currency_rates();
-		$rounding   = $currencies[ $currency_code ]['rounding'] ?? '9_end';
-		return 'none' === $rounding ? 2 : 0;
+		$rounding   = $currencies[ $currency_code ]['rounding'] ?? '90_decimal';
+
+		// Integer-only regimes return 0 decimals
+		if ( in_array( $rounding, [ '9_end', '90_end', '50_step', '500_step' ], true ) ) {
+			return 0;
+		}
+
+		// Decimal regimes (90_decimal, 99_decimal, 50_decimal, none) return 2 decimals
+		return 2;
 	}
 
 	public static function get_active_currency_decimals( $decimals ): int {
@@ -605,73 +664,73 @@ class Exacoat_Store_Enhancements {
 
 		$default_zones = [
 			'indonesia' => [
-				'name'        => 'Indonesia',
+				'name'        => 'Domestic Indonesia',
 				'countries'   => 'ID',
 				'currency'    => 'IDR',
-				'free'        => 2000000,
+				'free'        => 300000,
 				'filter_text' => '',
 			],
 			'asia' => [
 				'name'        => 'Asia',
 				'countries'   => 'SG, MY, TH, VN, PH, JP, KR, HK, TW, CN',
 				'currency'    => 'SGD',
-				'free'        => 350,
+				'free'        => 60,
 				'filter_text' => '',
 			],
 			'united_states' => [
 				'name'        => 'United States',
 				'countries'   => 'US',
 				'currency'    => 'USD',
-				'free'        => 250,
+				'free'        => 50,
 				'filter_text' => '',
 			],
 			'australia' => [
 				'name'        => 'Australia',
 				'countries'   => 'AU',
 				'currency'    => 'AUD',
-				'free'        => 300,
+				'free'        => 75,
 				'filter_text' => '',
 			],
 			'united_kingdom' => [
 				'name'        => 'United Kingdom',
 				'countries'   => 'GB',
 				'currency'    => 'GBP',
-				'free'        => 200,
+				'free'        => 40,
 				'filter_text' => '',
 			],
 			'europe_zone_1' => [
 				'name'        => 'Europe Zone 1',
 				'countries'   => 'DE, FR, NL, BE, LU',
 				'currency'    => 'EUR',
-				'free'        => 240,
+				'free'        => 50,
 				'filter_text' => '',
 			],
 			'europe_zone_2' => [
 				'name'        => 'Europe Zone 2',
 				'countries'   => 'IT, ES, PT, AT, CH',
 				'currency'    => 'EUR',
-				'free'        => 240,
+				'free'        => 55,
 				'filter_text' => '',
 			],
 			'europe_zone_3' => [
 				'name'        => 'Europe Zone 3',
 				'countries'   => 'SE, NO, DK, FI, PL, CZ, IE',
 				'currency'    => 'EUR',
-				'free'        => 280,
+				'free'        => 60,
 				'filter_text' => '',
 			],
 			'europe_others' => [
 				'name'        => 'Europe Others',
 				'countries'   => 'GR, HU, RO, BG, HR',
 				'currency'    => 'EUR',
-				'free'        => 280,
+				'free'        => 65,
 				'filter_text' => '',
 			],
 			'default' => [
 				'name'        => 'Default (Rest of World)',
 				'countries'   => '*',
 				'currency'    => 'USD',
-				'free'        => 250,
+				'free'        => 60,
 				'filter_text' => '',
 			],
 		];
@@ -707,7 +766,17 @@ class Exacoat_Store_Enhancements {
 						$z['free'] = $default_zones[ $k ]['free'];
 					} else {
 						$converted = (float) apply_filters( 'wc_aelia_cs_convert', $free_val, 'IDR', $z_curr );
-						$z['free'] = $converted > 0 ? round( $converted ) : 250;
+						$z['free'] = $converted > 0 ? round( $converted, 2 ) : 50;
+					}
+				}
+				// If legacy Artmatter threshold (>= 1,500,000 IDR or >= 180 USD/EUR) is found, migrate to Exacoat skin defaults
+				if ( 'IDR' === $z_curr && $free_val >= 1500000 ) {
+					$z['free'] = 300000;
+				} elseif ( in_array( $z_curr, [ 'USD', 'EUR', 'GBP', 'AUD', 'SGD' ], true ) && $free_val >= 180 ) {
+					if ( isset( $default_zones[ $k ]['free'] ) ) {
+						$z['free'] = $default_zones[ $k ]['free'];
+					} else {
+						$z['free'] = 50;
 					}
 				}
 			}

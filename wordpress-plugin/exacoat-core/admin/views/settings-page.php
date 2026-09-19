@@ -964,12 +964,12 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 						<div class="ex-sim-col" style="flex: 1; min-width: 280px;">
 							<label class="ex-sim-label">Live Test Base Price (IDR)</label>
 							<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-								<input type="number" id="sim-base-price" value="450000" class="ex-input mono" style="width: 150px;" oninput="runLiveCurrencySimulation()">
+								<input type="number" id="sim-base-price" value="129000" class="ex-input mono" style="width: 150px;" oninput="runLiveCurrencySimulation()">
 								<div style="display: flex; align-items: center; gap: 6px;">
-									<button type="button" class="ex-preset-btn" onclick="setSimPrice(350000)">350K</button>
-									<button type="button" class="ex-preset-btn active" onclick="setSimPrice(450000)">450K</button>
-									<button type="button" class="ex-preset-btn" onclick="setSimPrice(750000)">750K</button>
-									<button type="button" class="ex-preset-btn" onclick="setSimPrice(1200000)">1.2M</button>
+									<button type="button" class="ex-preset-btn active" onclick="setSimPrice(129000)">129K</button>
+									<button type="button" class="ex-preset-btn" onclick="setSimPrice(149000)">149K</button>
+									<button type="button" class="ex-preset-btn" onclick="setSimPrice(199000)">199K</button>
+									<button type="button" class="ex-preset-btn" onclick="setSimPrice(299000)">299K</button>
 								</div>
 								<button type="button" class="ex-btn ex-btn-secondary" onclick="runLiveCurrencySimulation()" style="font-size: 11px; padding: 6px 12px;">
 									⚡ Simulate
@@ -1014,7 +1014,10 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 									</td>
 									<td>
 										<select name="exacoat_core_settings[currency_rates][<?php echo esc_attr( $curr_code ); ?>][rounding]" class="ex-select mono" style="width: 100%; max-width: 240px;" onchange="runLiveCurrencySimulation()">
-											<option value="9_end" <?php selected( '9_end', $curr['rounding'] ?? '9_end' ); ?>>End in 9 (e.g. $89, $29)</option>
+											<option value="90_decimal" <?php selected( '90_decimal', $curr['rounding'] ?? '90_decimal' ); ?>>End in .90 (e.g. $14.90, $19.90)</option>
+											<option value="99_decimal" <?php selected( '99_decimal', $curr['rounding'] ?? '' ); ?>>End in .99 (e.g. $14.99, $19.99)</option>
+											<option value="50_decimal" <?php selected( '50_decimal', $curr['rounding'] ?? '' ); ?>>Step .50 (e.g. $14.50, $15.00)</option>
+											<option value="9_end" <?php selected( '9_end', $curr['rounding'] ?? '' ); ?>>End in 9 Integer (e.g. $89, $29)</option>
 											<option value="90_end" <?php selected( '90_end', $curr['rounding'] ?? '' ); ?>>End in 90 (e.g. 2,790฿)</option>
 											<option value="50_step" <?php selected( '50_step', $curr['rounding'] ?? '' ); ?>>Step 50 (e.g. ¥13,900)</option>
 											<option value="500_step" <?php selected( '500_step', $curr['rounding'] ?? '' ); ?>>Step 500 (e.g. ₩128,500)</option>
@@ -1649,7 +1652,7 @@ window.removeTableRow = function(btn) {
 window.runLiveCurrencySimulation = function() {
 	const baseInput = document.getElementById('sim-base-price');
 	const markupInput = document.getElementById('global-markup-input');
-	const baseAmount = parseFloat(baseInput?.value || '450000');
+	const baseAmount = parseFloat(baseInput?.value || '129000');
 	const markup = parseFloat(markupInput?.value || '1.15');
 	const rows = document.querySelectorAll('#currencies-tbody tr');
 	const grid = document.getElementById('sim-results-grid');
@@ -1660,30 +1663,59 @@ window.runLiveCurrencySimulation = function() {
 		const code = tr.querySelector('td:nth-child(1) input')?.value || '';
 		const symbol = tr.querySelector('td:nth-child(2) input')?.value || '$';
 		const rate = parseFloat(tr.querySelector('td:nth-child(3) input')?.value || '0');
-		const rounding = tr.querySelector('td:nth-child(4) select')?.value || '9_end';
+		const rounding = tr.querySelector('td:nth-child(4) select')?.value || '90_decimal';
 
 		if (!code || rate <= 0) return;
 
 		const raw = baseAmount * rate * markup;
 		let val = 0;
-		if (rounding === '90_end' || code === 'THB') {
+		let decimals = 2;
+
+		if (rounding === '90_decimal') {
+			val = Math.ceil(raw) - 0.10;
+			if (val < raw) val += 1.0;
+			val = Math.round((val + Number.EPSILON) * 100) / 100;
+			decimals = 2;
+		} else if (rounding === '99_decimal') {
+			val = Math.ceil(raw) - 0.01;
+			if (val < raw) val += 1.0;
+			val = Math.round((val + Number.EPSILON) * 100) / 100;
+			decimals = 2;
+		} else if (rounding === '50_decimal') {
+			val = Math.ceil(raw * 2) / 2;
+			val = Math.round((val + Number.EPSILON) * 100) / 100;
+			decimals = 2;
+		} else if (rounding === '90_end' || code === 'THB') {
 			val = (Math.ceil(raw / 100) * 100) - 10;
+			if (val < raw) val += 100;
+			decimals = 0;
 		} else if (rounding === '500_step' || code === 'KRW') {
 			val = Math.ceil(raw / 500) * 500;
+			decimals = 0;
 		} else if (rounding === '50_step' || code === 'JPY') {
 			val = Math.ceil(raw / 50) * 50;
+			decimals = 0;
 		} else if (rounding === '9_end' || code === 'HKD') {
 			val = (Math.ceil(raw / 10) * 10) - 1;
+			if (val < raw) val += 10;
+			decimals = 0;
 		} else if (rounding === 'none') {
 			val = Math.round((raw + Number.EPSILON) * 100) / 100;
+			decimals = ['IDR', 'JPY', 'KRW', 'THB', 'VND'].includes(code) ? 0 : 2;
 		} else {
-			val = (Math.ceil(raw / 10) * 10) - 1;
+			val = Math.round((raw + Number.EPSILON) * 100) / 100;
+			decimals = 2;
 		}
+
+		const formatted = val.toLocaleString(undefined, {
+			minimumFractionDigits: decimals,
+			maximumFractionDigits: decimals
+		});
 
 		html += `
 			<div class="ex-sim-chip">
 				<div style="font-size: 11px; font-weight: 700; color: #a1a1aa; font-family: monospace;">${code}</div>
-				<div style="font-size: 15px; font-weight: 800; color: #f6b328; margin-top: 2px; font-family: monospace;">${symbol}${val.toLocaleString()}</div>
+				<div style="font-size: 15px; font-weight: 800; color: #f6b328; margin-top: 2px; font-family: monospace;">${symbol}${formatted}</div>
 			</div>
 		`;
 	});
@@ -1722,7 +1754,10 @@ window.addCurrencyRow = function() {
 		</td>
 		<td>
 			<select name="exacoat_core_settings[currency_rates][${safeCode}][rounding]" class="ex-select mono" style="width: 100%; max-width: 240px;" onchange="runLiveCurrencySimulation()">
-				<option value="9_end">End in 9 (e.g. $89, $29)</option>
+				<option value="90_decimal" selected>End in .90 (e.g. $14.90, $19.90)</option>
+				<option value="99_decimal">End in .99 (e.g. $14.99, $19.99)</option>
+				<option value="50_decimal">Step .50 (e.g. $14.50, $15.00)</option>
+				<option value="9_end">End in 9 Integer (e.g. $89, $29)</option>
 				<option value="90_end">End in 90 (e.g. 2,790฿)</option>
 				<option value="50_step">Step 50 (e.g. ¥13,900)</option>
 				<option value="500_step">Step 500 (e.g. ₩128,500)</option>

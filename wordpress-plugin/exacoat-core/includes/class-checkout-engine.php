@@ -350,8 +350,8 @@ class Exacoat_Checkout_Engine {
 			}
 
 			// Ensure all supported currencies have a calculated threshold
-			$def_zone   = $zones['default'] ?? [ 'free' => 250, 'currency' => 'USD' ];
-			$def_free   = (float) ( $def_zone['free'] ?? 250 );
+			$def_zone   = $zones['default'] ?? [ 'free' => 60, 'currency' => 'USD' ];
+			$def_free   = (float) ( $def_zone['free'] ?? 60 );
 			$def_curr   = strtoupper( trim( $def_zone['currency'] ?? 'USD' ) );
 			foreach ( array_keys( $currencies ) as $cur_k ) {
 				if ( ! isset( $thresholds_by_currency[ $cur_k ] ) ) {
@@ -361,10 +361,10 @@ class Exacoat_Checkout_Engine {
 						$converted = (float) apply_filters( 'wc_aelia_cs_convert', $def_free, $def_curr, $cur_k );
 						if ( $converted <= 0 || ( $converted === $def_free && $def_curr !== $cur_k ) ) {
 							$rate_val = floatval( $currencies[ $cur_k ]['rate'] ?? 0 );
-							$def_rate = floatval( $currencies[ $def_curr ]['rate'] ?? 0.000059 );
+							$def_rate = floatval( $currencies[ $def_curr ]['rate'] ?? 0.000100 );
 							$converted = ( $def_rate > 0 && $rate_val > 0 ) ? ( $def_free / $def_rate * $rate_val ) : $def_free;
 						}
-						$thresholds_by_currency[ $cur_k ] = round( $converted );
+						$thresholds_by_currency[ $cur_k ] = in_array( $cur_k, [ 'IDR', 'JPY', 'KRW', 'THB', 'VND' ], true ) ? round( $converted ) : round( $converted, 2 );
 					}
 				}
 			}

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.38] - 2026-09-19
+
+### Decimal Psychological Rounding & Exacoat Skin Pricing Alignment
+- **Decimal Psychological Rounding Engine**:
+  - Implemented `90_decimal` (.90 suffix, e.g. 129K IDR converts to $14.90 USD).
+  - Implemented `99_decimal` (.99 suffix, e.g. $14.99 USD) and `50_decimal` (.50 step, e.g. $14.50 USD).
+  - Configured USD, EUR, AUD, SGD, GBP, CAD, CHF, and HKD to default to `90_decimal`.
+  - Preserved zero-decimal step rounding for IDR, JPY (`50_step`), KRW (`500_step`), and THB (`90_end`).
+  - Updated `Exacoat_Store_Enhancements::get_currency_decimals()` to return 2 decimals for decimal regimes and 0 for zero-decimal currencies.
+- **Admin Settings & Simulator Alignment**:
+  - Added decimal regimes (`90_decimal`, `99_decimal`, `50_decimal`) to `$allowed_roundings` in `Exacoat_Admin_Settings::sanitize_settings()`.
+  - Updated simulator base price input to 129,000 IDR with presets calibrated for Exacoat skins: 129K (Base Skin), 149K (Full Skin), 199K (Tablet Skin), and 299K (Laptop Skin).
+  - Updated currency conversion JavaScript to render 2 fixed decimal places for decimal currencies (`$14.90`).
+  - Added decimal rounding options to both the PHP currency table and the client-side row generator (`addCurrencyRow`).
+- **Headless Checkout & Free Shipping Refinement**:
+  - Updated `Exacoat_Checkout_Engine::get_headless_checkout_config()` to preserve 2 decimal places for decimal currencies in `thresholds_by_currency`.
+  - Aligned default zone free shipping thresholds with Exacoat skin order values (Domestic IDR 300,000, US $50, Asia SGD 60, Europe EUR 50, Australia AUD 75, UK GBP 40, Default USD 60).
+
+---
+
 ## [0.0.37] - 2026-09-19
 
 ### Multi-Currency Matrix & Free Shipping Threshold Admin Controls

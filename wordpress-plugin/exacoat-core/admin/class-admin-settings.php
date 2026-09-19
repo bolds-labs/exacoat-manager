@@ -84,7 +84,7 @@ class Exacoat_Admin_Settings {
 		// Multi-Currency Rates & Rounding Matrix
 		if ( isset( $settings['currency_rates'] ) && is_array( $settings['currency_rates'] ) ) {
 			$sanitized_rates = [];
-			$allowed_roundings = [ '9_end', '90_end', '50_step', '500_step', 'none' ];
+			$allowed_roundings = [ '90_decimal', '99_decimal', '50_decimal', '9_end', '90_end', '50_step', '500_step', 'none' ];
 
 			foreach ( $settings['currency_rates'] as $raw_code => $curr_data ) {
 				if ( ! is_array( $curr_data ) ) {
@@ -97,9 +97,9 @@ class Exacoat_Admin_Settings {
 
 				$symbol   = sanitize_text_field( $curr_data['symbol'] ?? '$' );
 				$rate     = floatval( $curr_data['rate'] ?? 0 );
-				$rounding = (string) ( $curr_data['rounding'] ?? '9_end' );
+				$rounding = (string) ( $curr_data['rounding'] ?? '90_decimal' );
 				if ( ! in_array( $rounding, $allowed_roundings, true ) ) {
-					$rounding = '9_end';
+					$rounding = '90_decimal';
 				}
 
 				$sanitized_rates[ $code ] = [

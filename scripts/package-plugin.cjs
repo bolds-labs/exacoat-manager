@@ -81,7 +81,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       description: 'The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.',
-      changelog: `### Version ${version}\n- Added interactive Multi-Currency Exchange Rates & Price Matrix admin dashboard\n- Added real-time Base Price FX simulator with presets (350K, 450K, 750K, 1.2M) and live converted matrix output\n- Configured currency psychological rounding controls per pair (9_end, 90_end, 50_step, 500_step, none)\n- Added interactive Multi-Zone Free Shipping Thresholds table with regional currency selector and target method IDs\n- Implemented full sanitization and options persistence for exacoat_core_settings`,
+      changelog: `### Version ${version}\n- Added decimal psychological rounding regimes (90_decimal, 99_decimal, 50_decimal) tailored for Exacoat skin product pricing\n- Defaulted USD, EUR, AUD, SGD, GBP, CAD, CHF, HKD to 90_decimal (e.g. 129K IDR -> $14.90 USD)\n- Updated admin currency simulator with skin presets (129K, 149K, 199K, 299K) and two-decimal currency formatting\n- Preserved zero-decimal step rounding for IDR, JPY, KRW, and THB\n- Updated default multi-zone free shipping thresholds for Exacoat skin portfolio`,
     },
   };
 
