@@ -9,6 +9,7 @@ import {
   generateGooritaExportDirect,
   loadJneEmailConfig,
   saveJneEmailConfig,
+  sendJneEmailDirect,
   buildJneMailtoUrl,
   getFormattedExportDate,
   DEFAULT_JNE_EMAIL_CONFIG,
@@ -38,6 +39,7 @@ export const ExportShipmentsPage: React.FC = () => {
 
   // JNE State
   const [isGeneratingJne, setIsGeneratingJne] = useState(false);
+  const [isSendingJneEmail, setIsSendingJneEmail] = useState(false);
   const [jneResult, setJneResult] = useState<{ xlsxUrl: string; csvUrl: string; count: number } | null>(null);
   const [emailConfig, setEmailConfig] = useState<JneEmailConfig>(DEFAULT_JNE_EMAIL_CONFIG);
   const [draftConfig, setDraftConfig] = useState<JneEmailConfig>(DEFAULT_JNE_EMAIL_CONFIG);
@@ -85,6 +87,34 @@ export const ExportShipmentsPage: React.FC = () => {
       showToast('error', 'Save Error', err?.message || 'Error saving email configuration.');
     } finally {
       setIsSavingEmailConfig(false);
+    }
+  };
+
+  const handleSendJneEmail = async () => {
+    setIsSendingJneEmail(true);
+    try {
+      showToast('info', 'Sending Email', 'Dispatching JNE export email with attachments from server...');
+      const res = await sendJneEmailDirect({
+        recipients: emailConfig.recipients,
+        cc: emailConfig.cc,
+        subject: emailConfig.subject,
+        body: emailConfig.body,
+      });
+
+      if (res.success) {
+        showToast(
+          'success',
+          'Email Sent Successfully',
+          `Dispatched to JNE (${res.recipients || emailConfig.recipients}) with ${res.attachments_sent?.length || 2} attached files.`
+        );
+        loadStatus();
+      } else {
+        showToast('error', 'Email Dispatch Failed', res.error || 'Failed sending email via server.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Email Error', err?.message || 'Error occurred while sending email.');
+    } finally {
+      setIsSendingJneEmail(false);
     }
   };
 
@@ -286,14 +316,25 @@ export const ExportShipmentsPage: React.FC = () => {
                     <Download className="w-3.5 h-3.5" />
                     <span>Download CSV</span>
                   </a>
+                  <button
+                    type="button"
+                    onClick={handleSendJneEmail}
+                    disabled={isSendingJneEmail}
+                    className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+                    title="Send email directly from WordPress server with XLSX and CSV automatically attached"
+                  >
+                    <Send className={clsx('w-3.5 h-3.5', isSendingJneEmail && 'animate-spin')} />
+                    <span>{isSendingJneEmail ? 'Mengirim...' : 'Kirim Email ke JNE (Auto Attach)'}</span>
+                  </button>
                   <a
                     href={buildJneMailtoUrl(emailConfig)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
+                    className="px-2.5 py-1.5 rounded-lg bg-zinc-100 dark:bg-white/5 hover:bg-zinc-200 dark:hover:bg-white/10 text-zinc-700 dark:text-neutral-300 text-xs font-medium flex items-center gap-1.5 transition-colors border border-zinc-200 dark:border-white/10"
+                    title="Open draft in local email app"
                   >
                     <Mail className="w-3.5 h-3.5" />
-                    <span>Kirim Email ke JNE</span>
+                    <span>Mailto</span>
                   </a>
                   <button
                     type="button"
@@ -302,60 +343,80 @@ export const ExportShipmentsPage: React.FC = () => {
                       setIsConfigModalOpen(true);
                     }}
                     title="Configure JNE Email Template"
-                    className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-white/10 transition-colors"
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-white/10 transition-colors cursor-pointer"
                   >
                     <Settings2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
             ) : status?.jne.hasFiles && (
-              <div className="p-3 rounded-xl bg-zinc-100 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/[0.06] flex items-center justify-between text-xs">
-                <span className="text-zinc-500 dark:text-neutral-400">Previous export available</span>
-                <div className="flex items-center gap-2">
-                  {status.jne.xlsxUrl && (
-                    <a
-                      href={status.jne.xlsxUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-amber-500 hover:underline flex items-center gap-1 text-xs"
+              <div className="p-3 rounded-xl bg-zinc-100 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/[0.06] space-y-2 text-xs">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-zinc-500 dark:text-neutral-400">Previous export available</span>
+                  <div className="flex items-center gap-2">
+                    {status.jne.xlsxUrl && (
+                      <a
+                        href={status.jne.xlsxUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-amber-500 hover:underline flex items-center gap-1 text-xs"
+                      >
+                        <Download className="w-3 h-3" />
+                        <span>XLSX</span>
+                      </a>
+                    )}
+                    {status.jne.csvUrl && (
+                      <a
+                        href={status.jne.csvUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-amber-500 hover:underline flex items-center gap-1 text-xs"
+                      >
+                        <Download className="w-3 h-3" />
+                        <span>CSV</span>
+                      </a>
+                    )}
+                    <span className="text-zinc-300 dark:text-neutral-700">|</span>
+                    <button
+                      type="button"
+                      onClick={handleSendJneEmail}
+                      disabled={isSendingJneEmail}
+                      className="text-amber-500 hover:underline flex items-center gap-1 text-xs font-bold cursor-pointer disabled:opacity-50"
                     >
-                      <Download className="w-3 h-3" />
-                      <span>XLSX</span>
-                    </a>
-                  )}
-                  {status.jne.csvUrl && (
+                      <Send className={clsx('w-3 h-3', isSendingJneEmail && 'animate-spin')} />
+                      <span>{isSendingJneEmail ? 'Mengirim...' : 'Kirim Email ke JNE (Auto Attach)'}</span>
+                    </button>
                     <a
-                      href={status.jne.csvUrl}
+                      href={buildJneMailtoUrl(emailConfig)}
                       target="_blank"
-                      rel="noreferrer"
-                      className="text-amber-500 hover:underline flex items-center gap-1 text-xs"
+                      rel="noopener noreferrer"
+                      className="text-zinc-400 hover:text-zinc-200 flex items-center gap-1 text-xs"
+                      title="Open draft in local email app"
                     >
-                      <Download className="w-3 h-3" />
-                      <span>CSV</span>
+                      <Mail className="w-3 h-3" />
+                      <span>Mailto</span>
                     </a>
-                  )}
-                  <span className="text-zinc-300 dark:text-neutral-700">|</span>
-                  <a
-                    href={buildJneMailtoUrl(emailConfig)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-amber-500 hover:underline flex items-center gap-1 text-xs font-medium"
-                  >
-                    <Mail className="w-3 h-3" />
-                    <span>Kirim Email ke JNE</span>
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDraftConfig({ ...emailConfig });
-                      setIsConfigModalOpen(true);
-                    }}
-                    title="Configure JNE Email Template"
-                    className="text-zinc-400 hover:text-zinc-200 transition-colors p-0.5"
-                  >
-                    <Settings2 className="w-3 h-3" />
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDraftConfig({ ...emailConfig });
+                        setIsConfigModalOpen(true);
+                      }}
+                      title="Configure JNE Email Template"
+                      className="text-zinc-400 hover:text-zinc-200 transition-colors p-0.5 cursor-pointer"
+                    >
+                      <Settings2 className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
+                {status.jne.lastEmailSent && (
+                  <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-mono flex items-center gap-1.5 pt-1 border-t border-zinc-200/50 dark:border-white/[0.04]">
+                    <CheckCircle2 className="w-3 h-3 shrink-0" />
+                    <span>
+                      Email sent on {status.jne.lastEmailSent.time} (To: {status.jne.lastEmailSent.to.join(', ')} • CC: {status.jne.lastEmailSent.cc.join(', ')})
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -516,10 +577,26 @@ export const ExportShipmentsPage: React.FC = () => {
               value={draftConfig.recipients}
               onChange={(e) => setDraftConfig(prev => ({ ...prev, recipients: e.target.value }))}
               placeholder="e.g. bki.project@jne.co.id, bki.ccc1@jne.co.id"
-              className="w-full px-3 py-2 rounded-xl bg-zinc-50 dark:bg-neutral-900 border border-zinc-300 dark:border-white/10 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full px-3 py-2 rounded-xl bg-zinc-50 dark:bg-neutral-900 border border-zinc-300 dark:border-white/10 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono"
             />
             <p className="mt-1 text-[11px] text-zinc-500 dark:text-neutral-400">
               Multiple recipients can be separated by commas.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-zinc-700 dark:text-neutral-200 mb-1.5">
+              CC Email Addresses (comma separated)
+            </label>
+            <input
+              type="text"
+              value={draftConfig.cc}
+              onChange={(e) => setDraftConfig(prev => ({ ...prev, cc: e.target.value }))}
+              placeholder="e.g. exacoat.cs@gmail.com"
+              className="w-full px-3 py-2 rounded-xl bg-zinc-50 dark:bg-neutral-900 border border-zinc-300 dark:border-white/10 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono"
+            />
+            <p className="mt-1 text-[11px] text-zinc-500 dark:text-neutral-400">
+              Sender will be <code className="text-zinc-700 dark:text-neutral-300">noreply@exacoat.com</code>. Customer support is CC'd.
             </p>
           </div>
 
@@ -532,7 +609,7 @@ export const ExportShipmentsPage: React.FC = () => {
               value={draftConfig.subject}
               onChange={(e) => setDraftConfig(prev => ({ ...prev, subject: e.target.value }))}
               placeholder="{date} - econnote exacoat"
-              className="w-full px-3 py-2 rounded-xl bg-zinc-50 dark:bg-neutral-900 border border-zinc-300 dark:border-white/10 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full px-3 py-2 rounded-xl bg-zinc-50 dark:bg-neutral-900 border border-zinc-300 dark:border-white/10 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono"
             />
             <p className="mt-1 text-[11px] text-zinc-500 dark:text-neutral-400">
               Placeholder <code className="text-amber-500">{'{date}'}</code> will be replaced with today's date ({getFormattedExportDate()}).
@@ -559,7 +636,10 @@ export const ExportShipmentsPage: React.FC = () => {
               <span>{getFormattedExportDate()}</span>
             </div>
             <div className="text-zinc-700 dark:text-neutral-200 font-mono text-[11px] space-y-1">
+              <div><span className="text-zinc-400 dark:text-neutral-500">From:</span> Exacoat Operations &lt;noreply@exacoat.com&gt;</div>
               <div><span className="text-zinc-400 dark:text-neutral-500">To:</span> {draftConfig.recipients || '(None)'}</div>
+              <div><span className="text-zinc-400 dark:text-neutral-500">CC:</span> {draftConfig.cc || '(None)'}</div>
+              <div><span className="text-zinc-400 dark:text-neutral-500">Attachments:</span> {getFormattedExportDate()} Master Data exacoat.xlsx, {getFormattedExportDate()} Data Loader exacoat.csv</div>
               <div><span className="text-zinc-400 dark:text-neutral-500">Subject:</span> {draftConfig.subject.replace(/{date}/gi, getFormattedExportDate())}</div>
               <div className="pt-1 text-zinc-600 dark:text-neutral-300 whitespace-pre-wrap font-sans text-xs border-t border-zinc-200 dark:border-white/[0.06]">
                 {draftConfig.body.replace(/{date}/gi, getFormattedExportDate())}

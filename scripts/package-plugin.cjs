@@ -81,7 +81,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       description: 'The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.',
-      changelog: `### Version ${version}\n- Fixed PHP fatal error in manual warranty and redeem claim creation\n- Added timespan RMA analytics with Warranty and Redeem breakdowns across channels\n- Separated Warranty and Redeem claims into dedicated tabs\n- Expanded Shopee and TikTok synchronization limits up to 250 orders, cache retention up to 1,000, and live on-demand order lookups`,
+      changelog: `### Version ${version}\n- Added automated server-side email dispatch for JNE batch exports with XLSX and CSV attached\n- Set sender to noreply@exacoat.com with CC to exacoat.cs@gmail.com\n- Added JNE email dispatch tracking and configurable CC settings`,
     },
   };
 

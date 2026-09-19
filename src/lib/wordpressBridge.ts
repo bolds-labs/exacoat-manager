@@ -93,6 +93,7 @@ export interface WordPressPluginSettings {
   shipping_target_method_ids?: string;
   logistics_carriers?: Record<string, LogisticsCarrierConfig>;
   jne_email_recipients?: string;
+  jne_email_cc?: string;
   jne_email_subject?: string;
   jne_email_body?: string;
   [key: string]: any;
@@ -172,6 +173,7 @@ export interface ShopeeOrder {
   currency: string;
   shipping_carrier: string;
   tracking_number: string;
+  package_number?: string;
   buyer_note: string;
   recipient_name: string;
   recipient_phone: string;
@@ -186,6 +188,8 @@ export interface ShopeeOrder {
   is_printed?: boolean;
   logistics_status?: string;
   shipping_document_status?: string;
+  ship_by_date?: string | null;
+  ship_by_timestamp?: number | null;
   already_claimed: boolean;
   existing_claim?: ShopeeExistingClaim;
 }
@@ -290,6 +294,8 @@ export interface TikTokOrder {
   recipient_city: string;
   recipient_postcode: string;
   items: TikTokOrderItem[];
+  ship_by_date?: string | null;
+  ship_by_timestamp?: number | null;
   already_claimed: boolean;
   existing_claim?: ShopeeExistingClaim;
 }
@@ -3846,6 +3852,40 @@ export async function downloadShopeeShippingLabelDirect(order_sn: string): Promi
     return {
       success: false,
       error: data?.message || data?.error || 'Could not download PDF from Shopee.',
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function downloadShopeeBatchShippingLabelsDirect(order_sns: string[]): Promise<{
+  success: boolean;
+  blob?: Blob;
+  url?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/shipping-document?order_sns=${encodeURIComponent(order_sns.join(','))}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/pdf, application/json' },
+    });
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/pdf')) {
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      return {
+        success: true,
+        blob,
+        url: objectUrl,
+      };
+    }
+
+    const data = await res.json();
+    return {
+      success: false,
+      error: data?.message || data?.error || 'Tidak dapat mengunduh batch label PDF dari Shopee.',
     };
   } catch (err: any) {
     return { success: false, error: err.message };

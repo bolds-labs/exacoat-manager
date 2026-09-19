@@ -205,10 +205,11 @@ class Exacoat_Export_Manager {
 							<?php
 							$settings   = get_option( 'exacoat_core_settings', [] );
 							$recipients = ! empty( $settings['jne_email_recipients'] ) ? $settings['jne_email_recipients'] : 'bki.project@jne.co.id,bki.ccc1@jne.co.id,bayuriskanda83@gmail.com';
+							$cc         = ! empty( $settings['jne_email_cc'] ) ? $settings['jne_email_cc'] : 'exacoat.cs@gmail.com';
 							$date_str   = date_i18n( 'Y.m.d' );
 							$subject    = ! empty( $settings['jne_email_subject'] ) ? str_replace( '{date}', $date_str, $settings['jne_email_subject'] ) : "{$date_str} - econnote exacoat";
 							$body       = ! empty( $settings['jne_email_body'] ) ? str_replace( '{date}', $date_str, $settings['jne_email_body'] ) : "Dear Mas Bayu,\n\nBerikut kami lampirkan Master Data dan Data Loader pengiriman exacoat untuk hari ini.\n\nMohon diproses, terima kasih!";
-							$mailto_url = 'mailto:' . esc_attr( $recipients ) . '?subject=' . rawurlencode( $subject ) . '&body=' . rawurlencode( $body );
+							$mailto_url = 'mailto:' . esc_attr( $recipients ) . '?cc=' . rawurlencode( $cc ) . '&subject=' . rawurlencode( $subject ) . '&body=' . rawurlencode( $body );
 							?>
 							<a href="<?php echo esc_url( $mailto_url ); ?>" target="_blank" class="button button-secondary" style="margin-top:6px;">
 								<?php esc_html_e( 'Kirim Email ke JNE', 'exacoat-core' ); ?> &rarr;
@@ -1046,6 +1047,13 @@ class Exacoat_Export_Manager {
 				'permission_callback' => [ __CLASS__, 'rest_permission_check' ],
 			] );
 
+			// Send JNE Export Email directly with attachments
+			register_rest_route( $ns, '/exports/send-jne-email', [
+				'methods'             => 'POST',
+				'callback'            => [ __CLASS__, 'rest_send_jne_email' ],
+				'permission_callback' => [ __CLASS__, 'rest_permission_check' ],
+			] );
+
 			// Trigger Goorita Export
 			register_rest_route( $ns, '/exports/generate-goorita', [
 				'methods'             => 'POST',
@@ -1112,6 +1120,7 @@ class Exacoat_Export_Manager {
 				'hasFiles'      => file_exists( $jne_xlsx ) && file_exists( $jne_csv ),
 				'xlsxUrl'       => file_exists( $jne_xlsx ) ? $output_jne['url'] . rawurlencode( basename( $jne_xlsx ) ) . '?t=' . time() : null,
 				'csvUrl'        => file_exists( $jne_csv ) ? $output_jne['url'] . rawurlencode( basename( $jne_csv ) ) . '?t=' . time() : null,
+				'lastEmailSent' => get_option( 'last_jne_export_email_sent' ) ?: null,
 			],
 			'goorita' => [
 				'pendingCount'  => count( $goorita_orders ),
@@ -1134,6 +1143,176 @@ class Exacoat_Export_Manager {
 		}
 
 		return new WP_REST_Response( array_merge( [ 'success' => true ], (array) $res ), 200 );
+	}
+
+	/**
+	 * REST: Send JNE Export Email directly from server with XLSX & CSV attached
+	 */
+	public static function rest_send_jne_email( WP_REST_Request $request ): WP_REST_Response {
+		$plugin_settings = get_option( 'exacoat_core_settings', [] );
+
+		// 1. Resolve recipients
+		$param_recipients = sanitize_text_field( $request->get_param( 'recipients' ) ?: '' );
+		$raw_recipients   = ! empty( $param_recipients )
+			? $param_recipients
+			: ( $plugin_settings['jne_email_recipients'] ?? 'bki.project@jne.co.id,bki.ccc1@jne.co.id,bayuriskanda83@gmail.com' );
+
+		$to_list = array_values( array_filter( array_map( 'trim', explode( ',', $raw_recipients ) ), 'is_email' ) );
+		if ( empty( $to_list ) ) {
+			return new WP_REST_Response( [
+				'success' => false,
+				'error'   => 'No valid recipient email addresses provided.',
+			], 400 );
+		}
+
+		// 2. Resolve CC (user specified exacoat.cs@gmail.com)
+		$param_cc = sanitize_text_field( $request->get_param( 'cc' ) ?: '' );
+		$raw_cc   = ! empty( $param_cc )
+			? $param_cc
+			: ( $plugin_settings['jne_email_cc'] ?? 'exacoat.cs@gmail.com' );
+
+		$cc_list = array_values( array_filter( array_map( 'trim', explode( ',', $raw_cc ) ), 'is_email' ) );
+
+		// 3. Resolve Subject and Body with {date} substitution
+		$date_str = date_i18n( 'Y.m.d' );
+
+		$param_subject = sanitize_text_field( $request->get_param( 'subject' ) ?: '' );
+		$raw_subject   = ! empty( $param_subject )
+			? $param_subject
+			: ( $plugin_settings['jne_email_subject'] ?? '{date} - econnote exacoat' );
+		$subject       = str_ireplace( '{date}', $date_str, $raw_subject );
+
+		$param_body = $request->get_param( 'body' );
+		$raw_body   = ! empty( $param_body )
+			? wp_kses_post( $param_body )
+			: ( $plugin_settings['jne_email_body'] ?? "Dear Mas Bayu,\n\nBerikut kami lampirkan Master Data dan Data Loader pengiriman exacoat untuk hari ini.\n\nMohon diproses, terima kasih!" );
+		$body       = str_ireplace( '{date}', $date_str, $raw_body );
+
+		// 4. Locate the generated JNE XLSX & CSV files
+		$output_info = self::get_output_dir( 'jne' );
+		$xlsx_path   = $output_info['dir'] . "{$date_str} Master Data exacoat.xlsx";
+		$csv_path    = $output_info['dir'] . "{$date_str} Data Loader exacoat.csv";
+
+		// If files do not exist with today's standard pattern, check alternate naming and glob
+		if ( ! file_exists( $xlsx_path ) ) {
+			$alt_xlsx = $output_info['dir'] . "Master Data {$date_str} - Exacoat.xlsx";
+			if ( file_exists( $alt_xlsx ) ) {
+				$xlsx_path = $alt_xlsx;
+			} else {
+				$xlsx_glob = glob( $output_info['dir'] . '*Master Data*.xlsx' );
+				if ( ! empty( $xlsx_glob ) ) {
+					rsort( $xlsx_glob );
+					$xlsx_path = $xlsx_glob[0];
+				}
+			}
+		}
+
+		if ( ! file_exists( $csv_path ) ) {
+			$alt_csv = $output_info['dir'] . "Data Loader {$date_str} - Exacoat.csv";
+			if ( file_exists( $alt_csv ) ) {
+				$csv_path = $alt_csv;
+			} else {
+				$csv_glob = glob( $output_info['dir'] . '*Data Loader*.csv' );
+				if ( ! empty( $csv_glob ) ) {
+					rsort( $csv_glob );
+					$csv_path = $csv_glob[0];
+				}
+			}
+		}
+
+		// If still missing, attempt to generate them now
+		if ( ! file_exists( $xlsx_path ) && ! file_exists( $csv_path ) ) {
+			$gen_res = self::generate_jne_files();
+			if ( is_wp_error( $gen_res ) ) {
+				return new WP_REST_Response( [
+					'success' => false,
+					'error'   => 'No existing JNE export files found, and auto-generation failed: ' . $gen_res->get_error_message(),
+				], 400 );
+			}
+			if ( ! empty( $gen_res['xlsx_path'] ) && file_exists( $gen_res['xlsx_path'] ) ) {
+				$xlsx_path = $gen_res['xlsx_path'];
+			}
+			if ( ! empty( $gen_res['csv_path'] ) && file_exists( $gen_res['csv_path'] ) ) {
+				$csv_path = $gen_res['csv_path'];
+			}
+		}
+
+		$attachments = [];
+		if ( file_exists( $xlsx_path ) ) {
+			$attachments[] = $xlsx_path;
+		}
+		if ( file_exists( $csv_path ) ) {
+			$attachments[] = $csv_path;
+		}
+
+		if ( empty( $attachments ) ) {
+			return new WP_REST_Response( [
+				'success' => false,
+				'error'   => 'Could not find any generated JNE export files to attach.',
+			], 400 );
+		}
+
+		// 5. Build Headers with From: noreply@exacoat.com, Reply-To, and CC
+		$sender_email = 'noreply@exacoat.com';
+		$sender_name  = 'Exacoat Operations';
+
+		$headers = [
+			'Content-Type: text/plain; charset=UTF-8',
+			"From: {$sender_name} <{$sender_email}>",
+			'Reply-To: Exacoat CS <exacoat.cs@gmail.com>',
+		];
+
+		foreach ( $cc_list as $cc_addr ) {
+			$headers[] = "Cc: {$cc_addr}";
+		}
+
+		// Apply filters to force wp_mail sender headers
+		$from_filter = function() use ( $sender_email ) { return $sender_email; };
+		$name_filter = function() use ( $sender_name ) { return $sender_name; };
+		add_filter( 'wp_mail_from', $from_filter, 999 );
+		add_filter( 'wp_mail_from_name', $name_filter, 999 );
+
+		// Capture wp_mail errors if any
+		$mail_error_msg = '';
+		$error_catcher = function( $wp_error ) use ( &$mail_error_msg ) {
+			if ( is_wp_error( $wp_error ) ) {
+				$mail_error_msg = $wp_error->get_error_message();
+			}
+		};
+		add_action( 'wp_mail_failed', $error_catcher, 10, 1 );
+
+		$sent = wp_mail( $to_list, $subject, $body, $headers, $attachments );
+
+		remove_action( 'wp_mail_failed', $error_catcher, 10 );
+		remove_filter( 'wp_mail_from', $from_filter, 999 );
+		remove_filter( 'wp_mail_from_name', $name_filter, 999 );
+
+		if ( ! $sent ) {
+			$detail = ! empty( $mail_error_msg ) ? " ({$mail_error_msg})" : '';
+			return new WP_REST_Response( [
+				'success' => false,
+				'error'   => 'wp_mail failed to send the email' . $detail . '. Please verify server SMTP configuration.',
+			], 500 );
+		}
+
+		// Record sent log in options
+		$sent_info = [
+			'time'             => current_time( 'mysql' ),
+			'to'               => $to_list,
+			'cc'               => $cc_list,
+			'subject'          => $subject,
+			'attachments_sent' => array_map( 'basename', $attachments ),
+		];
+		update_option( 'last_jne_export_email_sent', $sent_info );
+
+		return new WP_REST_Response( [
+			'success'          => true,
+			'message'          => 'Email sent to JNE with XLSX and CSV attached successfully.',
+			'recipients'       => implode( ', ', $to_list ),
+			'cc'               => implode( ', ', $cc_list ),
+			'attachments_sent' => array_map( 'basename', $attachments ),
+			'sent_at'          => $sent_info['time'],
+		], 200 );
 	}
 
 	/**

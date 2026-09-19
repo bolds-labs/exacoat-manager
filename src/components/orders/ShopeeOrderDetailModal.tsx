@@ -131,6 +131,7 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
   const badge = getStatusBadge(order.order_status, order);
   const isArranged = Boolean(order.tracking_number?.trim() || order.order_status === 'PROCESSED' || order.is_arranged);
   const isReadyToShip = order.order_status === 'READY_TO_SHIP' && !isArranged;
+  const canPrint = Boolean(order.tracking_number?.trim() || order.order_status === 'PROCESSED' || order.order_status === 'SHIPPED' || order.order_status === 'TO_CONFIRM_RECEIVE' || order.order_status === 'COMPLETED');
 
   return (
     <SlideDrawer
@@ -162,6 +163,22 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
       subtitle={`Placed on ${order.create_time} | Buyer: @${order.buyer_username}`}
       headerActions={
         <div className="flex items-center gap-2">
+          {canPrint && (
+            <button
+              type="button"
+              onClick={() => onPrintLabel(order)}
+              className={clsx(
+                'px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border',
+                isPrinted
+                  ? 'bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 border-white/10'
+                  : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/30'
+              )}
+              title={isPrinted ? 'Reprint 4x6 shipping label' : 'Print 4x6 shipping label'}
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>{isPrinted ? 'Reprint Label' : 'Print Label'}</span>
+            </button>
+          )}
           <span
             className={clsx(
               'text-[11px] px-2.5 py-0.5 rounded-full font-semibold border',

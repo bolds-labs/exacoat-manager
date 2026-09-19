@@ -659,6 +659,13 @@ class Exacoat_TikTok_Client {
 
 		$raw_status = (string) ( $ord['status'] ?? ( $ord['order_status'] ?? 'UNKNOWN' ) );
 
+		$raw_due = $ord['shipping_due_time'] ?? ( $ord['rts_sla_time'] ?? ( $ord['tts_sla_time'] ?? null ) );
+		$ship_by_ts = null;
+		if ( ! empty( $raw_due ) && is_numeric( $raw_due ) ) {
+			$ship_by_ts = strlen( (string) $raw_due ) > 10 ? (int) ( $raw_due / 1000 ) : (int) $raw_due;
+		}
+		$ship_by_date = $ship_by_ts ? date( 'Y-m-d H:i:s', $ship_by_ts ) : null;
+
 		return [
 			'order_id'           => $order_id,
 			'order_sn'           => $order_id,
@@ -666,6 +673,8 @@ class Exacoat_TikTok_Client {
 			'create_time'        => ! empty( $ord['create_time'] ) ? date( 'Y-m-d H:i:s', is_numeric( $ord['create_time'] ) && strlen( (string) $ord['create_time'] ) > 10 ? (int) ( $ord['create_time'] / 1000 ) : (int) $ord['create_time'] ) : date( 'Y-m-d H:i:s' ),
 			'create_timestamp'   => ! empty( $ord['create_time'] ) && is_numeric( $ord['create_time'] ) && strlen( (string) $ord['create_time'] ) > 10 ? (int) ( $ord['create_time'] / 1000 ) : (int) ( $ord['create_time'] ?? time() ),
 			'pay_time'           => ! empty( $ord['paid_time'] ) ? date( 'Y-m-d H:i:s', (int) ( $ord['paid_time'] / 1000 ) ) : null,
+			'ship_by_date'       => $ship_by_date,
+			'ship_by_timestamp'  => $ship_by_ts,
 			'buyer_username'     => (string) ( $ord['buyer_email'] ?? ( $rec['name'] ?? 'TikTok Customer' ) ),
 			'buyer_uid'          => (string) ( $ord['buyer_uid'] ?? '' ),
 			'total_amount'       => (float) ( $ord['payment']['total_amount'] ?? ( $ord['total_amount'] ?? 0 ) ),

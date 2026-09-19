@@ -15,6 +15,13 @@ export interface ExportStatus {
     hasFiles: boolean;
     xlsxUrl: string | null;
     csvUrl: string | null;
+    lastEmailSent?: {
+      time: string;
+      to: string[];
+      cc: string[];
+      subject: string;
+      attachments_sent: string[];
+    } | null;
   };
   goorita: {
     pendingCount: number;
@@ -208,12 +215,14 @@ export async function generateGooritaExportDirect(): Promise<ExportGenerationRes
  */
 export interface JneEmailConfig {
   recipients: string;
+  cc: string;
   subject: string;
   body: string;
 }
 
 export const DEFAULT_JNE_EMAIL_CONFIG: JneEmailConfig = {
   recipients: 'bki.project@jne.co.id,bki.ccc1@jne.co.id,bayuriskanda83@gmail.com',
+  cc: 'exacoat.cs@gmail.com',
   subject: '{date} - econnote exacoat',
   body: 'Dear Mas Bayu,\n\nBerikut kami lampirkan Master Data dan Data Loader pengiriman exacoat untuk hari ini.\n\nMohon diproses, terima kasih!',
 };
@@ -235,6 +244,7 @@ export function getFormattedExportDate(date: Date = new Date()): string {
  */
 export function buildJneMailtoUrl(config?: Partial<JneEmailConfig>, date?: Date): string {
   const activeRecipients = config?.recipients?.trim() || DEFAULT_JNE_EMAIL_CONFIG.recipients;
+  const activeCc = config?.cc !== undefined ? config.cc.trim() : DEFAULT_JNE_EMAIL_CONFIG.cc;
   const activeSubject = config?.subject?.trim() || DEFAULT_JNE_EMAIL_CONFIG.subject;
   const activeBody = config?.body !== undefined ? config.body : DEFAULT_JNE_EMAIL_CONFIG.body;
 
@@ -244,11 +254,24 @@ export function buildJneMailtoUrl(config?: Partial<JneEmailConfig>, date?: Date)
 
   const cleanRecipients = activeRecipients
     .split(',')
-    .map(e => e.trim())
+    .map((e) => e.trim())
     .filter(Boolean)
     .join(',');
 
-  return `mailto:${cleanRecipients}?subject=${encodeURIComponent(resolvedSubject)}&body=${encodeURIComponent(resolvedBody)}`;
+  const cleanCc = activeCc
+    .split(',')
+    .map((e) => e.trim())
+    .filter(Boolean)
+    .join(',');
+
+  const params = new URLSearchParams();
+  if (cleanCc) {
+    params.set('cc', cleanCc);
+  }
+  params.set('subject', resolvedSubject);
+  params.set('body', resolvedBody);
+
+  return `mailto:${cleanRecipients}?${params.toString()}`;
 }
 
 /**
@@ -265,6 +288,7 @@ export async function loadJneEmailConfig(): Promise<JneEmailConfig> {
         const parsed = JSON.parse(stored);
         resolved = {
           recipients: parsed.recipients?.trim() || DEFAULT_JNE_EMAIL_CONFIG.recipients,
+          cc: parsed.cc !== undefined ? parsed.cc.trim() : DEFAULT_JNE_EMAIL_CONFIG.cc,
           subject: parsed.subject?.trim() || DEFAULT_JNE_EMAIL_CONFIG.subject,
           body: parsed.body !== undefined ? parsed.body : DEFAULT_JNE_EMAIL_CONFIG.body,
         };
@@ -279,9 +303,10 @@ export async function loadJneEmailConfig(): Promise<JneEmailConfig> {
     const res = await fetchPluginSettings();
     if (res.success && res.settings) {
       const s = res.settings;
-      if (s.jne_email_recipients || s.jne_email_subject || s.jne_email_body !== undefined) {
+      if (s.jne_email_recipients || s.jne_email_cc || s.jne_email_subject || s.jne_email_body !== undefined) {
         resolved = {
           recipients: s.jne_email_recipients?.trim() || resolved.recipients,
+          cc: s.jne_email_cc !== undefined ? s.jne_email_cc.trim() : resolved.cc,
           subject: s.jne_email_subject?.trim() || resolved.subject,
           body: s.jne_email_body !== undefined ? s.jne_email_body : resolved.body,
         };
@@ -319,11 +344,75 @@ export async function saveJneEmailConfig(config: JneEmailConfig): Promise<{ succ
   try {
     const res = await savePluginSettings({
       jne_email_recipients: config.recipients,
+      jne_email_cc: config.cc,
       jne_email_subject: config.subject,
       jne_email_body: config.body,
     });
     return res;
   } catch (err: any) {
     return { success: false, error: err?.message || 'Failed saving JNE email settings to WordPress' };
+  }
+}
+
+export interface SendJneEmailResult {
+  success: boolean;
+  message?: string;
+  error?: string;
+  recipients?: string;
+  cc?: string;
+  attachments_sent?: string[];
+  sent_at?: string;
+}
+
+/**
+ * Trigger automated email dispatch to JNE from WordPress server with attached XLSX & CSV
+ */
+export async function sendJneEmailDirect(params?: {
+  recipients?: string;
+  cc?: string;
+  subject?: string;
+  body?: string;
+}): Promise<SendJneEmailResult> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/exports/send-jne-email`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(params || {}),
+    });
+
+    const text = await res.text();
+    let data: any;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return { success: false, error: 'Invalid response from server' };
+    }
+
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        message: data.message || 'Email sent with attachments',
+        recipients: data.recipients,
+        cc: data.cc,
+        attachments_sent: data.attachments_sent,
+        sent_at: data.sent_at,
+      };
+    }
+
+    return {
+      success: false,
+      error: data?.error || data?.message || 'Failed to send JNE export email via server',
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err?.message || 'Network error while sending JNE export email',
+    };
   }
 }

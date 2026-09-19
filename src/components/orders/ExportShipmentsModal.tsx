@@ -6,6 +6,7 @@ import {
   generateJneExportDirect,
   generateGooritaExportDirect,
   loadJneEmailConfig,
+  sendJneEmailDirect,
   buildJneMailtoUrl,
   DEFAULT_JNE_EMAIL_CONFIG,
   JneEmailConfig,
@@ -20,7 +21,8 @@ import {
   Loader2, 
   Truck, 
   Plane,
-  FolderOpen
+  FolderOpen,
+  Send
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -43,6 +45,7 @@ export const ExportShipmentsModal: React.FC<ExportShipmentsModalProps> = ({
 
   // JNE State
   const [isGeneratingJne, setIsGeneratingJne] = useState(false);
+  const [isSendingJneEmail, setIsSendingJneEmail] = useState(false);
   const [jneResult, setJneResult] = useState<{ xlsxUrl: string; csvUrl: string; count: number } | null>(null);
 
   // Goorita State
@@ -50,6 +53,34 @@ export const ExportShipmentsModal: React.FC<ExportShipmentsModalProps> = ({
   const [gooritaResult, setGooritaResult] = useState<{ fileUrl: string; count: number } | null>(null);
 
   const [emailConfig, setEmailConfig] = useState<JneEmailConfig>(DEFAULT_JNE_EMAIL_CONFIG);
+
+  const handleSendJneEmail = async () => {
+    setIsSendingJneEmail(true);
+    try {
+      showToast('info', 'Sending Email', 'Dispatching JNE export email with attachments from server...');
+      const res = await sendJneEmailDirect({
+        recipients: emailConfig.recipients,
+        cc: emailConfig.cc,
+        subject: emailConfig.subject,
+        body: emailConfig.body,
+      });
+
+      if (res.success) {
+        showToast(
+          'success',
+          'Email Sent Successfully',
+          `Dispatched to JNE (${res.recipients || emailConfig.recipients}) with ${res.attachments_sent?.length || 2} attached files.`
+        );
+        loadStatus();
+      } else {
+        showToast('error', 'Email Dispatch Failed', res.error || 'Failed sending email via server.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Email Error', err?.message || 'Error occurred while sending email.');
+    } finally {
+      setIsSendingJneEmail(false);
+    }
+  };
 
   const loadStatus = async () => {
     setIsLoadingStatus(true);
@@ -224,14 +255,24 @@ export const ExportShipmentsModal: React.FC<ExportShipmentsModalProps> = ({
                     <Download className="w-3.5 h-3.5" />
                     Download CSV
                   </a>
+                  <button
+                    type="button"
+                    onClick={handleSendJneEmail}
+                    disabled={isSendingJneEmail}
+                    className="px-3.5 py-2 rounded-xl bg-[#f3aa18] hover:bg-amber-400 text-zinc-950 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all ml-auto cursor-pointer disabled:opacity-50"
+                  >
+                    <Send className={clsx('w-3.5 h-3.5', isSendingJneEmail && 'animate-spin')} />
+                    <span>{isSendingJneEmail ? 'Mengirim...' : 'Kirim Email ke JNE (Auto Attach)'}</span>
+                  </button>
                   <a
                     href={jneMailto}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-3.5 py-2 rounded-xl bg-[#f3aa18] hover:bg-amber-400 text-zinc-950 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all ml-auto"
+                    className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold flex items-center gap-1.5 border border-white/10 transition-all"
+                    title="Buka draft di aplikasi email lokal"
                   >
                     <Mail className="w-3.5 h-3.5" />
-                    Kirim Email ke JNE
+                    <span>Mailto</span>
                   </a>
                 </div>
 

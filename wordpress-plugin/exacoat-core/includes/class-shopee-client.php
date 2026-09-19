@@ -462,7 +462,7 @@ class Exacoat_Shopee_Client {
 				'shop_id'                   => $shop_id,
 				'sign'                      => $detail_sign,
 				'order_sn_list'             => implode( ',', $chunk_sns ),
-				'response_optional_fields'  => 'buyer_user_id,buyer_username,recipient_address,item_list,shipping_carrier,total_amount,pay_time,order_status,package_list,note,shipping_document_status',
+				'response_optional_fields'  => 'buyer_user_id,buyer_username,recipient_address,item_list,shipping_carrier,total_amount,pay_time,order_status,package_list,note,shipping_document_status,ship_by_date',
 			]);
 
 			$detail_res = wp_remote_get( $detail_url, [ 'timeout' => 30 ] );
@@ -564,6 +564,10 @@ class Exacoat_Shopee_Client {
 		$shipping_doc_st = strtoupper( (string) ( $ord['shipping_document_status'] ?? ( $package['shipping_document_status'] ?? '' ) ) );
 		$raw_order_st = strtoupper( (string) ( $ord['order_status'] ?? 'UNKNOWN' ) );
 		$tracking_num = trim( (string) ( $package['tracking_number'] ?? '' ) );
+		$pkg_num = trim( (string) ( $package['package_number'] ?? '' ) );
+
+		$ship_by_ts = ! empty( $ord['ship_by_date'] ) && is_numeric( $ord['ship_by_date'] ) ? (int) $ord['ship_by_date'] : null;
+		$ship_by_date = $ship_by_ts ? date( 'Y-m-d H:i:s', $ship_by_ts ) : null;
 
 		$is_delivered = false;
 		$delivered_time = null;
@@ -578,13 +582,15 @@ class Exacoat_Shopee_Client {
 				: ( ! empty( $ord['update_time'] ) ? date( 'Y-m-d H:i:s', $ord['update_time'] ) : current_time( 'mysql' ) );
 		}
 
+		// In Shopee, having a pre-assigned tracking resi does not mean shipment has been arranged.
+		// Arrangement only occurs when status is PROCESSED or pickup/dropoff logistics request is active.
 		$is_arranged = (
 			$raw_order_st === 'PROCESSED' ||
-			! empty( $tracking_num ) ||
 			in_array( $pkg_logistics_st, [ 'LOGISTICS_REQUEST_CREATED', 'LOGISTICS_READY', 'LOGISTICS_PICKUP_DONE' ], true )
 		);
 
-		$is_printed = in_array( $shipping_doc_st, [ 'PRINTED', 'READY' ], true );
+		// Only mark as printed if Shopee explicitly returned PRINTED status
+		$is_printed = ( $shipping_doc_st === 'PRINTED' );
 
 		return [
 			'order_sn'                 => $sn,
@@ -592,12 +598,15 @@ class Exacoat_Shopee_Client {
 			'create_time'              => date( 'Y-m-d H:i:s', $ord['create_time'] ?? time() ),
 			'create_timestamp'         => $ord['create_time'] ?? time(),
 			'pay_time'                 => ! empty( $ord['pay_time'] ) ? date( 'Y-m-d H:i:s', $ord['pay_time'] ) : null,
+			'ship_by_date'             => $ship_by_date,
+			'ship_by_timestamp'        => $ship_by_ts,
 			'buyer_username'           => $ord['buyer_username'] ?? 'Shopee Customer',
 			'buyer_user_id'            => $ord['buyer_user_id'] ?? 0,
 			'total_amount'             => (float) ( $ord['total_amount'] ?? 0 ),
 			'currency'                 => 'IDR',
 			'shipping_carrier'         => $ord['shipping_carrier'] ?? ( $package['shipping_carrier'] ?? 'SPX / J&T' ),
 			'tracking_number'          => $tracking_num,
+			'package_number'           => $pkg_num,
 			'buyer_note'               => $ord['note'] ?? '',
 			'recipient_name'           => $rec['name'] ?? ( $ord['buyer_username'] ?? 'Shopee Customer' ),
 			'recipient_phone'          => $rec['phone'] ?? '',
@@ -610,7 +619,7 @@ class Exacoat_Shopee_Client {
 			'is_arranged'              => $is_arranged,
 			'is_printed'               => $is_printed,
 			'logistics_status'         => $pkg_logistics_st,
-			'shipping_document_status' => $shipping_doc_st,
+			'shipping_document_status' => $shipping_doc_st ?: null,
 			'already_claimed'          => $claim_info['already_claimed'],
 			'existing_claim'           => $claim_info,
 		];
@@ -643,7 +652,7 @@ class Exacoat_Shopee_Client {
 			'shop_id'                   => $shop_id,
 			'sign'                      => $detail_sign,
 			'order_sn_list'             => $clean_sn,
-			'response_optional_fields'  => 'buyer_user_id,buyer_username,recipient_address,item_list,shipping_carrier,total_amount,pay_time,order_status,package_list,note,shipping_document_status',
+			'response_optional_fields'  => 'buyer_user_id,buyer_username,recipient_address,item_list,shipping_carrier,total_amount,pay_time,order_status,package_list,note,shipping_document_status,ship_by_date',
 		]);
 
 		$res = wp_remote_get( $detail_url, [ 'timeout' => 20 ] );
@@ -900,14 +909,22 @@ class Exacoat_Shopee_Client {
 	/**
 	 * Request creation of thermal shipping document (100x150mm AWB)
 	 */
-	public static function create_shipping_document( string $order_sn, string $doc_type = 'THERMAL_AIR_WAYBILL' ): array {
+	public static function create_shipping_document( string $order_sn, string $doc_type = 'THERMAL_AIR_WAYBILL', string $package_num = '', string $tracking_num = '' ): array {
 		$clean_sn = trim( preg_replace( '/^#+/', '', $order_sn ) );
 		if ( empty( $clean_sn ) ) {
 			return [ 'success' => false, 'error' => 'Order SN is required.' ];
 		}
 
+		$order_item = [ 'order_sn' => $clean_sn ];
+		if ( ! empty( $package_num ) ) {
+			$order_item['package_number'] = $package_num;
+		}
+		if ( ! empty( $tracking_num ) ) {
+			$order_item['tracking_number'] = $tracking_num;
+		}
+
 		$body = [
-			'order_list'             => [ [ 'order_sn' => $clean_sn ] ],
+			'order_list'             => [ $order_item ],
 			'shipping_document_type' => $doc_type,
 		];
 
@@ -917,14 +934,19 @@ class Exacoat_Shopee_Client {
 	/**
 	 * Get shipping document generation status
 	 */
-	public static function get_shipping_document_result( string $order_sn, string $doc_type = 'THERMAL_AIR_WAYBILL' ): array {
+	public static function get_shipping_document_result( string $order_sn, string $doc_type = 'THERMAL_AIR_WAYBILL', string $package_num = '' ): array {
 		$clean_sn = trim( preg_replace( '/^#+/', '', $order_sn ) );
 		if ( empty( $clean_sn ) ) {
 			return [ 'success' => false, 'error' => 'Order SN is required.' ];
 		}
 
+		$order_item = [ 'order_sn' => $clean_sn ];
+		if ( ! empty( $package_num ) ) {
+			$order_item['package_number'] = $package_num;
+		}
+
 		$body = [
-			'order_list'             => [ [ 'order_sn' => $clean_sn ] ],
+			'order_list'             => [ $order_item ],
 			'shipping_document_type' => $doc_type,
 		];
 
@@ -932,7 +954,7 @@ class Exacoat_Shopee_Client {
 	}
 
 	/**
-	 * Download official Shopee shipping document PDF
+	 * Download official Shopee shipping document PDF with async polling
 	 */
 	public static function download_shipping_document( string $order_sn, string $doc_type = 'THERMAL_AIR_WAYBILL' ): array {
 		$clean_sn = trim( preg_replace( '/^#+/', '', $order_sn ) );
@@ -940,15 +962,192 @@ class Exacoat_Shopee_Client {
 			return [ 'success' => false, 'error' => 'Order SN is required.' ];
 		}
 
-		// Ensure document is requested first
-		self::create_shipping_document( $clean_sn, $doc_type );
+		$cached_orders = get_option( self::ORDERS_CACHE_KEY, [] );
+		$cached_order  = null;
+		foreach ( (array) $cached_orders as $ord ) {
+			if ( strcasecmp( $ord['order_sn'] ?? '', $clean_sn ) === 0 ) {
+				$cached_order = $ord;
+				break;
+			}
+		}
+
+		// Ensure order has been arranged before attempting document creation
+		$order_st = strtoupper( (string) ( $cached_order['order_status'] ?? '' ) );
+		$is_arranged = ! empty( $cached_order['is_arranged'] ) || $order_st === 'PROCESSED' || in_array( $order_st, [ 'SHIPPED', 'TO_CONFIRM_RECEIVE', 'COMPLETED' ], true );
+		if ( $order_st === 'READY_TO_SHIP' && ! $is_arranged ) {
+			return [
+				'success' => false,
+				'error'   => 'Pesanan ' . $clean_sn . ' belum diatur pengirimannya di Shopee. Silakan klik Atur Pengiriman terlebih dahulu sebelum mencetak label.',
+			];
+		}
+
+		$pkg_num = $cached_order['package_number'] ?? '';
+		$track_num = $cached_order['tracking_number'] ?? '';
+
+		$order_item = [ 'order_sn' => $clean_sn ];
+		if ( ! empty( $pkg_num ) ) {
+			$order_item['package_number'] = $pkg_num;
+		}
+		if ( ! empty( $track_num ) ) {
+			$order_item['tracking_number'] = $track_num;
+		}
 
 		$body = [
 			'shipping_document_type' => $doc_type,
-			'order_list'             => [ [ 'order_sn' => $clean_sn ] ],
+			'order_list'             => [ $order_item ],
 		];
 
-		return self::call_shop_api( '/api/v2/logistics/download_shipping_document', 'POST', [], $body );
+		// Check status first to see if document is already prepared
+		$status_res = self::call_shop_api( '/api/v2/logistics/get_shipping_document_result', 'POST', [], $body );
+		$result_list = $status_res['response']['result_list'] ?? [];
+		$doc_status = '';
+		if ( is_array( $result_list ) && ! empty( $result_list[0]['status'] ) ) {
+			$doc_status = strtoupper( (string) $result_list[0]['status'] );
+		}
+
+		// If not ready, trigger creation and poll up to 4 times
+		if ( $doc_status !== 'READY' ) {
+			self::call_shop_api( '/api/v2/logistics/create_shipping_document', 'POST', [], $body );
+
+			for ( $i = 0; $i < 4; $i++ ) {
+				sleep( 1 );
+				$poll_res = self::call_shop_api( '/api/v2/logistics/get_shipping_document_result', 'POST', [], $body );
+				$p_list = $poll_res['response']['result_list'] ?? [];
+				if ( is_array( $p_list ) && ! empty( $p_list[0]['status'] ) ) {
+					$st = strtoupper( (string) $p_list[0]['status'] );
+					if ( $st === 'READY' ) {
+						$doc_status = 'READY';
+						break;
+					}
+					if ( $st === 'FAILED' ) {
+						return [
+							'success' => false,
+							'error'   => 'Shopee gagal membuat dokumen pengiriman: ' . ( $p_list[0]['fail_message'] ?? 'Status FAILED' ),
+						];
+					}
+				}
+			}
+		}
+
+		// Download binary PDF directly from Shopee
+		$download_res = self::call_shop_api( '/api/v2/logistics/download_shipping_document', 'POST', [], $body );
+		if ( ! empty( $download_res['is_pdf'] ) ) {
+			self::update_order_cache_field( $clean_sn, [
+				'shipping_document_status' => 'PRINTED',
+				'is_printed'               => true,
+			]);
+			return $download_res;
+		}
+
+		if ( ! empty( $download_res['error'] ) ) {
+			return [
+				'success' => false,
+				'error'   => 'Shopee API: ' . ( $download_res['message'] ?? $download_res['error'] ),
+			];
+		}
+
+		return $download_res;
+	}
+
+	/**
+	 * Download batch official Shopee shipping documents into one combined PDF
+	 */
+	public static function download_batch_shipping_documents( array $order_sns, string $doc_type = 'THERMAL_AIR_WAYBILL' ): array {
+		$clean_sns = [];
+		foreach ( $order_sns as $sn ) {
+			$c = trim( preg_replace( '/^#+/', '', $sn ) );
+			if ( ! empty( $c ) ) {
+				$clean_sns[] = $c;
+			}
+		}
+		if ( empty( $clean_sns ) ) {
+			return [ 'success' => false, 'error' => 'Daftar Order SN kosong.' ];
+		}
+
+		$cached_orders = get_option( self::ORDERS_CACHE_KEY, [] );
+		$order_map = [];
+		foreach ( (array) $cached_orders as $ord ) {
+			if ( ! empty( $ord['order_sn'] ) ) {
+				$order_map[ strtoupper( $ord['order_sn'] ) ] = $ord;
+			}
+		}
+
+		$order_list = [];
+		$unarranged = [];
+		foreach ( $clean_sns as $sn ) {
+			$c_ord = $order_map[ strtoupper( $sn ) ] ?? null;
+			$order_st = strtoupper( (string) ( $c_ord['order_status'] ?? '' ) );
+			$is_arranged = ! empty( $c_ord['is_arranged'] ) || $order_st === 'PROCESSED' || in_array( $order_st, [ 'SHIPPED', 'TO_CONFIRM_RECEIVE', 'COMPLETED' ], true );
+
+			if ( $order_st === 'READY_TO_SHIP' && ! $is_arranged ) {
+				$unarranged[] = $sn;
+				continue;
+			}
+
+			$item = [ 'order_sn' => $sn ];
+			if ( ! empty( $c_ord['package_number'] ) ) {
+				$item['package_number'] = $c_ord['package_number'];
+			}
+			if ( ! empty( $c_ord['tracking_number'] ) ) {
+				$item['tracking_number'] = $c_ord['tracking_number'];
+			}
+			$order_list[] = $item;
+		}
+
+		if ( empty( $order_list ) ) {
+			return [
+				'success' => false,
+				'error'   => 'Semua pesanan yang dipilih belum diatur pengirimannya (' . implode( ', ', $unarranged ) . '). Silakan atur pengiriman terlebih dahulu.',
+			];
+		}
+
+		$body = [
+			'shipping_document_type' => $doc_type,
+			'order_list'             => $order_list,
+		];
+
+		// Trigger creation
+		self::call_shop_api( '/api/v2/logistics/create_shipping_document', 'POST', [], $body );
+
+		// Poll up to 5 times
+		for ( $i = 0; $i < 5; $i++ ) {
+			sleep( 1 );
+			$poll_res = self::call_shop_api( '/api/v2/logistics/get_shipping_document_result', 'POST', [], $body );
+			$p_list = $poll_res['response']['result_list'] ?? [];
+			$all_ready = true;
+			if ( is_array( $p_list ) && ! empty( $p_list ) ) {
+				foreach ( $p_list as $res_item ) {
+					$st = strtoupper( (string) ( $res_item['status'] ?? '' ) );
+					if ( $st !== 'READY' ) {
+						$all_ready = false;
+						break;
+					}
+				}
+				if ( $all_ready ) {
+					break;
+				}
+			}
+		}
+
+		$download_res = self::call_shop_api( '/api/v2/logistics/download_shipping_document', 'POST', [], $body );
+		if ( ! empty( $download_res['is_pdf'] ) ) {
+			foreach ( $order_list as $oi ) {
+				self::update_order_cache_field( $oi['order_sn'], [
+					'shipping_document_status' => 'PRINTED',
+					'is_printed'               => true,
+				]);
+			}
+			return $download_res;
+		}
+
+		if ( ! empty( $download_res['error'] ) ) {
+			return [
+				'success' => false,
+				'error'   => 'Shopee API: ' . ( $download_res['message'] ?? $download_res['error'] ),
+			];
+		}
+
+		return $download_res;
 	}
 
 	/**
@@ -1258,13 +1457,19 @@ class Exacoat_Shopee_Client {
 
 	public static function rest_download_shipping_document( \WP_REST_Request $request ) {
 		$order_sn = trim( (string) $request->get_param( 'order_sn' ) );
+		$order_sns_param = $request->get_param( 'order_sns' );
 		$doc_type = sanitize_text_field( $request->get_param( 'document_type' ) ?: 'THERMAL_AIR_WAYBILL' );
 
-		$res = self::download_shipping_document( $order_sn, $doc_type );
+		if ( ! empty( $order_sns_param ) ) {
+			$sns = is_array( $order_sns_param ) ? $order_sns_param : explode( ',', (string) $order_sns_param );
+			$res = self::download_batch_shipping_documents( $sns, $doc_type );
+		} else {
+			$res = self::download_shipping_document( $order_sn, $doc_type );
+		}
 
 		if ( ! empty( $res['is_pdf'] ) && ! empty( $res['pdf_data'] ) ) {
 			header( 'Content-Type: application/pdf' );
-			header( 'Content-Disposition: inline; filename="shopee-awb-' . $order_sn . '.pdf"' );
+			header( 'Content-Disposition: inline; filename="shopee-awb-' . ( $order_sn ?: 'batch' ) . '.pdf"' );
 			header( 'Content-Length: ' . strlen( $res['pdf_data'] ) );
 			echo $res['pdf_data'];
 			exit;
