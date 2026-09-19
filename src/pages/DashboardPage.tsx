@@ -100,6 +100,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             </div>
 
             <button
+              type="button"
+              onClick={() => onNavigate('reports')}
+              className="px-3.5 py-2 rounded-xl bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 text-[#f3aa18] border border-[#f3aa18]/30 text-xs font-semibold font-sans flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+              title="Open Multi-Channel Money & Revenue Reports"
+            >
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>Financial Reports</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
+
+            <button
               onClick={onRefresh}
               disabled={isLoading}
               className="px-3.5 py-2 rounded-xl bg-[#141414] hover:bg-white/[0.06] text-neutral-300 hover:text-white border border-white/[0.08] text-xs font-semibold font-sans flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer shrink-0"

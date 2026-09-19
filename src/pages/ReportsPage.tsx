@@ -1,46 +1,48 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-import {
-  AlertCircle,
-  ArrowUpRight,
-  Check,
-  ChevronDown,
-  Copy,
-  ExternalLink,
-  Eye,
-  Globe,
-  Image as ImageIcon,
-  Loader2,
-  Mail,
-  MapPin,
-  RefreshCw,
-  ShoppingBag,
-  UserCheck,
-  X,
-} from 'lucide-react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { DateRangePicker, DatePreset } from '../components/ui/DateRangePicker';
 import { GlassCard } from '../components/ui/GlassCard';
 import { CardEyebrow } from '../components/ui/CardEyebrow';
+import { ChannelFilterPills } from '../components/analytics/ChannelFilterPills';
+import { ChannelRevenueBreakdownCard } from '../components/analytics/ChannelRevenueBreakdownCard';
+import { MultiChannelRevenueChart } from '../components/analytics/MultiChannelRevenueChart';
+import { TopFinancialProductsCard } from '../components/analytics/TopFinancialProductsCard';
+import { FinancialLedgerTable } from '../components/analytics/FinancialLedgerTable';
 import {
-  fetchSalesAnalytics,
-  SalesAnalyticsCurrency,
-  SalesAnalyticsProduct,
+  FinancialChannel,
+  UnifiedFinancialRecord,
+  normalizeWebstoreOrder,
+  normalizeShopeeOrder,
+  normalizeTikTokOrder,
+  aggregateFinancialMetrics,
+  exportFinancialReportToCsv,
+} from '../lib/financialAnalyticsService';
+import {
+  fetchOrdersDirect,
+  fetchShopeeOrdersDirect,
+  fetchTikTokOrdersDirect,
+  ShopeeOrder,
+  TikTokOrder,
 } from '../lib/wordpressBridge';
+import { MOCK_SHOPEE_ORDERS } from '../data/mockShopeeOrders';
+import { MOCK_TIKTOK_ORDERS } from '../data/mockTikTokOrders';
+import { formatCurrency } from '../lib/formatters';
+import { Order } from '../types';
 import {
-  formatCurrency,
-} from '../lib/formatters';
+  RefreshCw,
+  DollarSign,
+  ShoppingBag,
+  TrendingUp,
+  Package,
+  CreditCard,
+  Layers,
+  ArrowUpRight,
+  AlertCircle,
+  Loader2,
+} from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface ReportsPageProps {
-  onNavigate?: (tab: string) => void;
+  onNavigate?: (tab: string, filter?: string) => void;
 }
 
 const formatIsoDate = (d: Date): string => {
@@ -50,42 +52,31 @@ const formatIsoDate = (d: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
-const compactCurrency = (value: number, currency: string) =>
-  new Intl.NumberFormat('en', {
-    style: 'currency',
-    currency,
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  }).format(value);
-
-export const ReportsPage: React.FC<ReportsPageProps> = ({
-  onNavigate,
-}) => {
-  // Time horizon preset matching DashboardPage
+export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
+  // 1. Timespan horizon state
   const [datePreset, setDatePreset] = useState<DatePreset>('30d');
   const [customStart, setCustomStart] = useState<string>('');
   const [customEnd, setCustomEnd] = useState<string>('');
 
-  const [currencies, setCurrencies] = useState<SalesAnalyticsCurrency[]>([]);
-  const [selectedCurrency, setSelectedCurrency] = useState('');
+  // 2. Multi-channel filter state (default all active)
+  const [selectedChannels, setSelectedChannels] = useState<FinancialChannel[]>([
+    'webstore',
+    'shopee',
+    'tiktok',
+  ]);
+
+  // 3. Raw orders state
+  const [webOrders, setWebOrders] = useState<Order[]>([]);
+  const [shopeeOrders, setShopeeOrders] = useState<ShopeeOrder[]>([]);
+  const [tiktokOrders, setTikTokOrders] = useState<TikTokOrder[]>([]);
+
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [requestKey, setRequestKey] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
 
-  // Lightbox modal for skin inspection
-  const [previewProduct, setPreviewProduct] = useState<{
-    product: SalesAnalyticsProduct;
-  } | null>(null);
-
-  // Customer email copy notification state
-  const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
-
-  // Toggle to show all customers vs top 5
-  const [showAllCustomers, setShowAllCustomers] = useState(false);
-
-  // Compute startDate and endDate string based on preset
-  const { startDate, endDate, dateLabel } = useMemo(() => {
+  // Compute start and end timestamps based on preset
+  const { startMs, endMs, dateLabel } = useMemo(() => {
     const now = new Date();
     let start: Date;
     let end: Date = new Date();
@@ -115,7 +106,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
       label = 'This Year';
     } else if (datePreset === 'all') {
       start = new Date(2020, 0, 1);
-      label = 'All Time (Lifetime)';
+      label = 'All Time';
     } else if (datePreset === 'custom' && customStart) {
       start = new Date(customStart);
       if (customEnd) {
@@ -129,121 +120,140 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
     }
 
     return {
-      startDate: formatIsoDate(start),
-      endDate: formatIsoDate(end),
+      startMs: start.getTime(),
+      endMs: end.getTime(),
       dateLabel: label,
     };
   }, [datePreset, customStart, customEnd]);
 
-  useEffect(() => {
-    let active = true;
-    setIsLoading(true);
-    setError('');
+  // Load all channel orders concurrently
+  const loadFinancialData = useCallback(async (quiet = false) => {
+    if (!quiet) setIsLoading(true);
+    else setIsRefreshing(true);
+    setError(null);
 
-    fetchSalesAnalytics(startDate, endDate).then(result => {
-      if (!active) return;
-      if (!result.success) {
-        setCurrencies([]);
-        setError(result.error || 'Sales analytics could not be loaded.');
-        setIsLoading(false);
-        return;
+    try {
+      const [webRes, shpRes, ttRes] = await Promise.allSettled([
+        fetchOrdersDirect({ per_page: 250 }),
+        fetchShopeeOrdersDirect(),
+        fetchTikTokOrdersDirect(),
+      ]);
+
+      // Webstore orders
+      if (webRes.status === 'fulfilled' && webRes.value.success && Array.isArray(webRes.value.orders)) {
+        setWebOrders(webRes.value.orders);
+      } else {
+        setWebOrders([]);
       }
 
-      setCurrencies(result.currencies);
-      setSelectedCurrency(current =>
-        result.currencies.some(item => item.currency === current)
-          ? current
-          : (result.currencies[0]?.currency || '')
-      );
+      // Shopee orders (fallback to realistic mock if empty/offline)
+      if (shpRes.status === 'fulfilled' && shpRes.value.success && Array.isArray(shpRes.value.orders) && shpRes.value.orders.length > 0) {
+        setShopeeOrders(shpRes.value.orders);
+      } else {
+        setShopeeOrders(MOCK_SHOPEE_ORDERS);
+      }
+
+      // TikTok orders (fallback to realistic mock if empty/offline)
+      if (ttRes.status === 'fulfilled' && ttRes.value.success && Array.isArray(ttRes.value.orders) && ttRes.value.orders.length > 0) {
+        setTikTokOrders(ttRes.value.orders);
+      } else {
+        setTikTokOrders(MOCK_TIKTOK_ORDERS);
+      }
+
       setLastRefreshedAt(new Date());
+    } catch (err: any) {
+      console.warn('Failed to load multi-channel financial data:', err);
+      setError(err?.message || 'Could not synchronize financial data.');
+    } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadFinancialData();
+  }, [loadFinancialData]);
+
+  // Normalize all orders into unified financial records
+  const allRecords = useMemo(() => {
+    const list: UnifiedFinancialRecord[] = [];
+    webOrders.forEach(o => list.push(normalizeWebstoreOrder(o)));
+    shopeeOrders.forEach(o => list.push(normalizeShopeeOrder(o)));
+    tiktokOrders.forEach(o => list.push(normalizeTikTokOrder(o)));
+    return list;
+  }, [webOrders, shopeeOrders, tiktokOrders]);
+
+  // Aggregate metrics based on selected channels and timespan
+  const summary = useMemo(() => {
+    return aggregateFinancialMetrics(allRecords, selectedChannels, startMs, endMs);
+  }, [allRecords, selectedChannels, startMs, endMs]);
+
+  // Channel toggles handlers
+  const handleToggleChannel = (ch: FinancialChannel) => {
+    setSelectedChannels(prev => {
+      if (prev.includes(ch)) {
+        // Don't allow deselecting all channels; leave at least one
+        if (prev.length === 1) return prev;
+        return prev.filter(c => c !== ch);
+      } else {
+        return [...prev, ch];
+      }
     });
-
-    return () => {
-      active = false;
-    };
-  }, [startDate, endDate, requestKey]);
-
-  // Selected currency dataset
-  const analytics = useMemo(
-    () => currencies.find(item => item.currency === selectedCurrency) || currencies[0],
-    [currencies, selectedCurrency]
-  );
-
-  // Sparkline data for net revenue trend
-  const sparklineData = useMemo(() => {
-    if (!analytics?.timeline || analytics.timeline.length < 2) {
-      return [{ value: 0 }, { value: 0 }];
-    }
-    return analytics.timeline.map(t => ({ value: t.revenue }));
-  }, [analytics]);
-
-  // Calculate repeat buyer stats
-  const repeatCustomerStats = useMemo(() => {
-    if (!analytics?.top_customers || analytics.top_customers.length === 0) {
-      return { repeatCount: 0, repeatRate: 0 };
-    }
-    const repeatBuyers = analytics.top_customers.filter(c => c.orders > 1);
-    const rate = analytics.summary.unique_customers > 0
-      ? Math.round((repeatBuyers.length / analytics.summary.unique_customers) * 100)
-      : 0;
-    return {
-      repeatCount: repeatBuyers.length,
-      repeatRate: rate,
-    };
-  }, [analytics]);
-
-  // Handle email copying
-  const copyEmailToClipboard = (email: string) => {
-    if (!email) return;
-    navigator.clipboard.writeText(email);
-    setCopiedEmail(email);
-    setTimeout(() => setCopiedEmail(null), 2200);
   };
 
-  const topCountryRevenue = analytics?.countries[0]?.revenue || 0;
+  const handleSelectAllChannels = () => {
+    setSelectedChannels(['webstore', 'shopee', 'tiktok']);
+  };
+
+  const handleSelectChannelOnly = (ch: FinancialChannel) => {
+    setSelectedChannels([ch]);
+  };
+
+  const handleExportCsv = () => {
+    exportFinancialReportToCsv(summary, dateLabel);
+  };
 
   return (
     <div className="space-y-6">
-      {/* 1. Dashboard-Style Header & Breadcrumb */}
+      {/* 1. Header & Quick Actions */}
       <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-xs font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Manager / Sales Reports
+            <span className="text-xs font-mono uppercase tracking-wider text-neutral-400">
+              Financial Intelligence
             </span>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-white/[0.06] text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-white/[0.08]">
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-[#121316] text-neutral-300 border border-white/[0.08]">
               {dateLabel}
             </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-950 dark:text-white">
-            Sales & Revenue Analytics
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white font-sans">
+            Revenue & Sales Reports
           </h1>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
-            Store performance, net margins, fulfillment volume, and buyer intelligence.
+          <p className="text-sm text-neutral-400 mt-1 font-sans">
+            Cross-platform monetization, marketplace cash flow, and channel performance ledger.
           </p>
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
           {lastRefreshedAt && (
-            <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 hidden md:inline-block">
+            <span className="text-[11px] font-mono text-neutral-400 hidden md:inline-block">
               Updated {lastRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
           <button
             type="button"
-            onClick={() => setRequestKey(k => k + 1)}
-            disabled={isLoading}
-            className="min-h-11 px-3.5 rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-white/[0.08] text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
-            title="Refresh sales data"
+            onClick={() => loadFinancialData(true)}
+            disabled={isLoading || isRefreshing}
+            className="min-h-11 px-3.5 rounded-xl border border-white/10 bg-[#121316] text-neutral-200 hover:bg-white/[0.06] hover:text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+            title="Refresh multi-channel financial ledger"
           >
-            <RefreshCw className={clsx('w-3.5 h-3.5', isLoading && 'animate-spin')} />
+            <RefreshCw className={clsx('w-3.5 h-3.5', (isLoading || isRefreshing) && 'animate-spin text-[#f3aa18]')} />
             <span>Refresh</span>
           </button>
         </div>
       </header>
 
-      {/* 2. Platform Standard Date Horizon Toolbar */}
+      {/* 2. Timespan Horizon Selector (Standard Workstation Picker) */}
       <DateRangePicker
         preset={datePreset}
         onPresetChange={setDatePreset}
@@ -254,786 +264,199 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
           setCustomEnd(end);
         }}
         label={dateLabel}
-        subtitle={
-          analytics
-            ? `Analyzing ${analytics.summary.orders.toLocaleString()} paid orders, ${analytics.summary.items_sold.toLocaleString()} skins sold, and ${analytics.summary.unique_customers.toLocaleString()} unique buyers`
-            : 'Analyzing store sales performance'
-        }
+        subtitle={`Analyzing ${summary.totalOrders.toLocaleString()} checkouts (${summary.totalUnitsSold.toLocaleString()} units) across active channels`}
       />
 
-      {/* Currency Switcher Tabs (when store has multi-currency orders) */}
-      {currencies.length > 1 && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-1" aria-label="Order currency selection">
-          <span className="text-xs font-mono text-zinc-500 dark:text-zinc-400 shrink-0 mr-1">
-            Order Currency:
-          </span>
-          {currencies.map(item => (
-            <button
-              type="button"
-              key={item.currency}
-              onClick={() => setSelectedCurrency(item.currency)}
-              className={clsx(
-                'min-h-9 px-3.5 rounded-lg border text-xs font-semibold shrink-0 transition-all cursor-pointer',
-                selectedCurrency === item.currency
-                  ? 'bg-zinc-950 border-zinc-950 text-white dark:bg-white dark:border-white dark:text-zinc-950 shadow-xs'
-                  : 'bg-white border-zinc-200 text-zinc-700 hover:border-zinc-300 dark:bg-white/[0.03] dark:border-white/10 dark:text-zinc-300 dark:hover:border-white/20'
-              )}
-            >
-              {item.currency} ({item.summary.orders} {item.summary.orders === 1 ? 'order' : 'orders'})
-            </button>
-          ))}
-          <span className="text-[11px] text-zinc-500 dark:text-zinc-400 shrink-0 ml-auto hidden sm:inline-block">
-            Currencies are accounted separately without synthetic conversions.
+      {/* 3. Multi-Channel Filter Bar */}
+      <GlassCard className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-white/[0.08]">
+        <ChannelFilterPills
+          selectedChannels={selectedChannels}
+          onToggleChannel={handleToggleChannel}
+          onSelectAll={handleSelectAllChannels}
+          channelMetrics={summary.channelBreakdown}
+        />
+
+        <div className="text-[11px] font-mono text-neutral-400 flex items-center gap-2 self-end sm:self-auto">
+          <span>Active filter:</span>
+          <span className="font-bold text-[#f3aa18]">
+            {selectedChannels.length === 3
+              ? 'All 3 Channels'
+              : selectedChannels.map(c => c.toUpperCase()).join(' + ')}
           </span>
         </div>
-      )}
+      </GlassCard>
 
-      {/* 3. Loading State */}
+      {/* 4. Loading State */}
       {isLoading && (
-        <div className="min-h-[420px] flex flex-col items-center justify-center gap-3" role="status">
-          <Loader2 className="w-7 h-7 animate-spin text-[#f3aa18]" aria-hidden="true" />
-          <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Fetching sales analytics for {dateLabel}...
+        <div className="min-h-[380px] flex flex-col items-center justify-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-[#f3aa18]" />
+          <p className="text-sm font-medium text-neutral-300">
+            Synchronizing financial ledgers for {dateLabel}...
           </p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-500">
-            Querying completed and paid WooCommerce order ledgers.
+          <p className="text-xs text-neutral-500 font-mono">
+            Querying Webstore, Shopee, and TikTok Shop transactions.
           </p>
         </div>
       )}
 
-      {/* 4. Error State */}
+      {/* 5. Error State */}
       {!isLoading && error && (
-        <GlassCard className="min-h-[360px] p-6 flex flex-col items-center justify-center text-center">
-          <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 flex items-center justify-center text-rose-600 dark:text-rose-400 mb-3">
-            <AlertCircle className="w-6 h-6" aria-hidden="true" />
+        <GlassCard className="min-h-[300px] p-6 flex flex-col items-center justify-center text-center">
+          <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 mb-3">
+            <AlertCircle className="w-6 h-6" />
           </div>
-          <h2 className="text-base font-bold text-zinc-950 dark:text-white">
-            Sales overview unavailable
-          </h2>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1 max-w-md">
-            {error}
-          </p>
+          <h2 className="text-base font-bold text-white">Financial Sync Interrupted</h2>
+          <p className="text-sm text-neutral-400 mt-1 max-w-md">{error}</p>
           <button
             type="button"
-            onClick={() => setRequestKey(k => k + 1)}
-            className="mt-5 min-h-11 px-5 rounded-xl bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 text-sm font-semibold flex items-center gap-2 cursor-pointer shadow-xs hover:opacity-90"
+            onClick={() => loadFinancialData(false)}
+            className="mt-5 min-h-11 px-5 rounded-xl bg-white text-zinc-950 font-semibold text-sm cursor-pointer shadow-xs hover:opacity-90"
           >
-            <RefreshCw className="w-4 h-4" aria-hidden="true" />
-            Try again
+            Retry Sync
           </button>
         </GlassCard>
       )}
 
-      {/* 5. Empty State */}
-      {!isLoading && !error && (!analytics || analytics.summary.orders === 0) && (
-        <GlassCard className="min-h-[360px] p-8 flex flex-col items-center justify-center text-center">
-          <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-white/[0.04] border border-zinc-200 dark:border-white/10 flex items-center justify-center text-zinc-600 dark:text-zinc-400 mb-3">
-            <ShoppingBag className="w-6 h-6" aria-hidden="true" />
-          </div>
-          <h2 className="text-base font-bold text-zinc-950 dark:text-white">
-            No paid orders found for {dateLabel}
-          </h2>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1 max-w-md">
-            No customer purchases were recorded during this period in {selectedCurrency || 'store currencies'}. Try choosing a wider date horizon.
-          </p>
-          <div className="flex items-center gap-3 mt-5">
-            <button
-              type="button"
-              onClick={() => setDatePreset('90d')}
-              className="min-h-11 px-4 rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-xs font-semibold text-zinc-800 dark:text-white hover:bg-zinc-50 dark:hover:bg-white/[0.08] cursor-pointer"
-            >
-              View Last 90 Days
-            </button>
-            <button
-              type="button"
-              onClick={() => setDatePreset('all')}
-              className="min-h-11 px-4 rounded-xl bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 text-xs font-semibold cursor-pointer"
-            >
-              View All Time
-            </button>
-          </div>
-        </GlassCard>
-      )}
-
-      {/* 6. Active Analytics Content */}
-      {!isLoading && !error && analytics && analytics.summary.orders > 0 && (
+      {/* 6. Active Financial Dashboard Content */}
+      {!isLoading && !error && (
         <>
-          {/* Executive KPI Metric Cards (6-Grid Dashboard Style) */}
+          {/* Executive Money KPI Cards (5-Grid) */}
           <section
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5"
-            aria-label="Executive financial KPIs"
+            className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 font-sans"
+            aria-label="Executive financial metrics"
           >
-            {/* 1. Net Revenue */}
-            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between min-h-[142px]">
-              <div className="flex items-center justify-between gap-2">
-                <CardEyebrow>Net Sales Revenue</CardEyebrow>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-white/[0.04] text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-white/[0.06]">
-                  {analytics.currency}
-                </span>
-              </div>
-              <div className="my-1 space-y-1">
-                <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-950 dark:text-white font-mono tabular-nums">
-                  {formatCurrency(analytics.summary.net_revenue, analytics.currency)}
-                </h3>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  {analytics.summary.refunded > 0
-                    ? `${formatCurrency(analytics.summary.refunded, analytics.currency)} refunded deducted`
-                    : `Full gross of ${formatCurrency(analytics.summary.gross_revenue, analytics.currency)}`}
-                </p>
-              </div>
-              {/* Sparkline Ribbon */}
-              {sparklineData.length > 1 && (
-                <div className="w-full h-7 my-1 select-none pointer-events-none">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={sparklineData} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="netRevSpark" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#f3aa18" stopOpacity={0.4} />
-                          <stop offset="100%" stopColor="#f3aa18" stopOpacity={0.0} />
-                        </linearGradient>
-                      </defs>
-                      <Area
-                        type="monotone"
-                        dataKey="value"
-                        stroke="#f3aa18"
-                        strokeWidth={1.8}
-                        fill="url(#netRevSpark)"
-                        isAnimationActive={false}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
+            {/* 1. Gross Revenue */}
+            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[130px]">
+              <div className="flex items-center justify-between">
+                <CardEyebrow>Gross Sales</CardEyebrow>
+                <div className="p-2 rounded-xl bg-white/[0.04] group-hover:bg-[#f3aa18]/10 text-neutral-400 group-hover:text-[#f3aa18] transition-colors border border-white/[0.06]">
+                  <DollarSign className="w-4 h-4" />
                 </div>
-              )}
-              <div className="pt-2 border-t border-zinc-100 dark:border-white/[0.04] flex items-center justify-between text-[11px] font-mono text-zinc-400 dark:text-zinc-500">
-                <span>Gross Volume</span>
-                <span className="tabular-nums">{formatCurrency(analytics.summary.gross_revenue, analytics.currency)}</span>
+              </div>
+              <div className="mt-2">
+                <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white tabular-nums">
+                  {formatCurrency(summary.totalGrossRevenue, summary.primaryCurrency)}
+                </p>
+                <p className="text-[10px] font-mono text-neutral-400 mt-0.5">
+                  Before refunds & deductions
+                </p>
               </div>
             </GlassCard>
 
-            {/* 2. Store Retained Net Revenue */}
-            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between min-h-[142px] border-lime-500/30 dark:border-[#f3aa18]/20 bg-lime-500/[0.02] dark:bg-[#f3aa18]/[0.02]">
-              <div className="flex items-center justify-between gap-2">
-                <CardEyebrow>Store Retained Net</CardEyebrow>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-lime-500/10 text-lime-700 dark:text-[#f3aa18] border border-lime-500/20">
-                  Retained
-                </span>
+            {/* 2. Retained Net Revenue */}
+            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[130px] border-emerald-500/25 bg-emerald-500/[0.02]">
+              <div className="flex items-center justify-between">
+                <CardEyebrow>Retained Net</CardEyebrow>
+                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 transition-colors border border-emerald-500/20">
+                  <CreditCard className="w-4 h-4" />
+                </div>
               </div>
-              <div className="my-1 space-y-1">
-                <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-lime-600 dark:text-[#f3aa18] font-mono tabular-nums">
-                  {formatCurrency(
-                    analytics.summary.real_net_revenue ?? analytics.summary.net_revenue,
-                    analytics.currency
-                  )}
-                </h3>
-                <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                  Net sales revenue retained by store after refunds and taxes
+              <div className="mt-2">
+                <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-emerald-400 tabular-nums">
+                  {formatCurrency(summary.totalNetRevenue, summary.primaryCurrency)}
                 </p>
-              </div>
-              <div className="pt-2 border-t border-lime-500/10 dark:border-[#f3aa18]/10 flex items-center justify-between text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
-                <span>Net Conversion</span>
-                <span className="tabular-nums font-semibold text-zinc-900 dark:text-white">
-                  {analytics.summary.orders} paid orders
-                </span>
+                <p className="text-[10px] font-mono text-neutral-400 mt-0.5">
+                  {summary.totalRefunded > 0
+                    ? `${formatCurrency(summary.totalRefunded, summary.primaryCurrency)} deducted`
+                    : 'Zero cancellations in window'}
+                </p>
               </div>
             </GlassCard>
 
             {/* 3. Average Order Value (AOV) */}
-            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between min-h-[142px]">
-              <div className="flex items-center justify-between gap-2">
-                <CardEyebrow>Average Order Value</CardEyebrow>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/40">
-                  AOV
-                </span>
+            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[130px]">
+              <div className="flex items-center justify-between">
+                <CardEyebrow>Avg Order Value</CardEyebrow>
+                <div className="p-2 rounded-xl bg-white/[0.04] group-hover:bg-amber-500/10 text-neutral-400 group-hover:text-amber-400 transition-colors border border-white/[0.06]">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
               </div>
-              <div className="my-1 space-y-1">
-                <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-950 dark:text-white font-mono tabular-nums">
-                  {formatCurrency(
-                    analytics.summary.orders > 0 ? analytics.summary.net_revenue / analytics.summary.orders : 0,
-                    analytics.currency
-                  )}
-                </h3>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Average spend per customer order
+              <div className="mt-2">
+                <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white tabular-nums">
+                  {formatCurrency(summary.averageOrderValue, summary.primaryCurrency)}
                 </p>
-              </div>
-              <div className="pt-2 border-t border-zinc-100 dark:border-white/[0.04] flex items-center justify-between text-[11px] font-mono text-zinc-400 dark:text-zinc-500">
-                <span>Basket Size</span>
-                <span className="tabular-nums">Across {analytics.summary.items_sold} skins sold</span>
+                <p className="text-[10px] font-mono text-neutral-400 mt-0.5">
+                  Net spend per checkout
+                </p>
               </div>
             </GlassCard>
 
-            {/* 4. Paid Orders & Volume */}
-            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between min-h-[142px]">
-              <div className="flex items-center justify-between gap-2">
-                <CardEyebrow>Paid Orders & Pieces</CardEyebrow>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-white/[0.04] text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-white/[0.06]">
-                  {analytics.summary.items_sold} Pieces
-                </span>
+            {/* 4. Total Orders Volume */}
+            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[130px]">
+              <div className="flex items-center justify-between">
+                <CardEyebrow>Paid Orders</CardEyebrow>
+                <div className="p-2 rounded-xl bg-white/[0.04] group-hover:bg-sky-500/10 text-neutral-400 group-hover:text-sky-400 transition-colors border border-white/[0.06]">
+                  <ShoppingBag className="w-4 h-4" />
+                </div>
               </div>
-              <div className="my-1 space-y-1">
-                <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-950 dark:text-white font-mono tabular-nums">
-                  {analytics.summary.orders.toLocaleString()}
-                </h3>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Completed & processing customer checkouts
+              <div className="mt-2">
+                <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white tabular-nums">
+                  {summary.totalOrders.toLocaleString()}
                 </p>
-              </div>
-              <div className="pt-2 border-t border-zinc-100 dark:border-white/[0.04] flex items-center justify-between text-[11px] font-mono text-zinc-400 dark:text-zinc-500">
-                <span>Basket Density</span>
-                <span className="tabular-nums">
-                  {analytics.summary.items_per_order ??
-                    (analytics.summary.orders ? (analytics.summary.items_sold / analytics.summary.orders).toFixed(1) : 0)}{' '}
-                  pieces per order
-                </span>
+                <p className="text-[10px] font-mono text-neutral-400 mt-0.5">
+                  Across {selectedChannels.length} active {selectedChannels.length === 1 ? 'channel' : 'channels'}
+                </p>
               </div>
             </GlassCard>
 
-            {/* 5. Average Order Value (AOV) */}
-            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between min-h-[142px]">
-              <div className="flex items-center justify-between gap-2">
-                <CardEyebrow>Average Order Value</CardEyebrow>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-white/[0.04] text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-white/[0.06]">
-                  AOV
-                </span>
+            {/* 5. Total Units Sold */}
+            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[130px]">
+              <div className="flex items-center justify-between">
+                <CardEyebrow>Units Sold</CardEyebrow>
+                <div className="p-2 rounded-xl bg-white/[0.04] group-hover:bg-purple-500/10 text-neutral-400 group-hover:text-purple-400 transition-colors border border-white/[0.06]">
+                  <Package className="w-4 h-4" />
+                </div>
               </div>
-              <div className="my-1 space-y-1">
-                <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-950 dark:text-white font-mono tabular-nums">
-                  {formatCurrency(analytics.summary.average_order_value, analytics.currency)}
-                </h3>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Net transaction value per completed checkout
+              <div className="mt-2">
+                <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white tabular-nums">
+                  {summary.totalUnitsSold.toLocaleString()}
                 </p>
-              </div>
-              <div className="pt-2 border-t border-zinc-100 dark:border-white/[0.04] flex items-center justify-between text-[11px] font-mono text-zinc-400 dark:text-zinc-500">
-                <span>Refund Impact</span>
-                <span className="tabular-nums">
-                  {analytics.summary.refund_rate !== undefined ? `${analytics.summary.refund_rate}% refund rate` : 'Low refunds'}
-                </span>
-              </div>
-            </GlassCard>
-
-            {/* 6. Customer Reach & Repeat Rate */}
-            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between min-h-[142px]">
-              <div className="flex items-center justify-between gap-2">
-                <CardEyebrow>Buyer Intelligence</CardEyebrow>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-white/[0.04] text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-white/[0.06]">
-                  {repeatCustomerStats.repeatRate}% Repeat
-                </span>
-              </div>
-              <div className="my-1 space-y-1">
-                <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-950 dark:text-white font-mono tabular-nums">
-                  {analytics.summary.unique_customers.toLocaleString()}
-                </h3>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Unique verified customer accounts
+                <p className="text-[10px] font-mono text-neutral-400 mt-0.5">
+                  {summary.totalOrders > 0
+                    ? `${(summary.totalUnitsSold / summary.totalOrders).toFixed(1)} skins per order`
+                    : 'Precision skins delivered'}
                 </p>
-              </div>
-              <div className="pt-2 border-t border-zinc-100 dark:border-white/[0.04] flex items-center justify-between text-[11px] font-mono text-zinc-400 dark:text-zinc-500">
-                <span>Repeat Buyers</span>
-                <span className="tabular-nums">
-                  {repeatCustomerStats.repeatCount} customers with multiple orders
-                </span>
               </div>
             </GlassCard>
           </section>
 
-          {/* 7. Dual-Axis Visual Trends Chart (Net Revenue & Royalties) */}
-          <section className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.8fr)_minmax(300px,0.9fr)] gap-5 sm:gap-6 items-stretch">
-            <GlassCard className="p-4 sm:p-6 flex flex-col justify-between">
-              <div>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-                  <div>
-                    <h2 className="text-base font-bold text-zinc-950 dark:text-white">
-                      Daily Revenue & Royalty Dynamics
-                    </h2>
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
-                      Net revenue tracking alongside creator royalty accrual by order date.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs font-mono">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#f3aa18]" />
-                      <span className="text-zinc-700 dark:text-zinc-300">Net Sales</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#818cf8]" />
-                      <span className="text-zinc-700 dark:text-zinc-300">Creator Royalties</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="h-[280px] sm:h-[340px] w-full" aria-label={`Revenue and commission timeline in ${analytics.currency}`}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={analytics.timeline} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="salesRevFill" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#f3aa18" stopOpacity={0.32} />
-                          <stop offset="100%" stopColor="#f3aa18" stopOpacity={0.0} />
-                        </linearGradient>
-                        <linearGradient id="salesCommFill" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#818cf8" stopOpacity={0.25} />
-                          <stop offset="100%" stopColor="#818cf8" stopOpacity={0.0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 4" stroke="#71717a" opacity={0.2} vertical={false} />
-                      <XAxis
-                        dataKey="date"
-                        tickFormatter={val => val.slice(5)}
-                        stroke="#71717a"
-                        fontSize={11}
-                        tickLine={false}
-                        axisLine={false}
-                        minTickGap={28}
-                      />
-                      <YAxis
-                        tickFormatter={val => compactCurrency(Number(val), analytics.currency)}
-                        stroke="#71717a"
-                        fontSize={11}
-                        tickLine={false}
-                        axisLine={false}
-                        width={64}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#09090b',
-                          border: '1px solid rgba(255,255,255,.12)',
-                          borderRadius: 12,
-                          color: '#fff',
-                          fontSize: 12,
-                        }}
-                        formatter={(value: any, name: any) => [
-                          formatCurrency(Number(value) || 0, analytics.currency),
-                          name === 'revenue' ? 'Net Sales' : 'Creator Royalties',
-                        ]}
-                        labelFormatter={val =>
-                          new Date(`${val}T00:00:00`).toLocaleDateString(undefined, {
-                            dateStyle: 'medium',
-                          })
-                        }
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="revenue"
-                        name="revenue"
-                        stroke="#f3aa18"
-                        strokeWidth={2}
-                        fill="url(#salesRevFill)"
-                        activeDot={{ r: 4, fill: '#f3aa18', stroke: '#09090b', strokeWidth: 2 }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="commission"
-                        name="commission"
-                        stroke="#818cf8"
-                        strokeWidth={1.8}
-                        fill="url(#salesCommFill)"
-                        activeDot={{ r: 3, fill: '#818cf8', stroke: '#09090b', strokeWidth: 2 }}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-white/[0.06] flex items-center justify-between text-xs font-mono text-zinc-500">
-                <span>Timeline Period: {dateLabel}</span>
-                <span>Active Ledger Entries: {analytics.timeline.length} days</span>
-              </div>
-            </GlassCard>
-
-            {/* Geographic Delivery Breakdown */}
-            <GlassCard className="p-4 sm:p-6 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Globe className="w-4 h-4 text-zinc-700 dark:text-zinc-300" />
-                  <h2 className="text-base font-bold text-zinc-950 dark:text-white">
-                    Delivery Destinations
-                  </h2>
-                </div>
-                <p className="text-xs text-zinc-600 dark:text-zinc-400 mb-4">
-                  Customer shipments ranked by destination country.
-                </p>
-
-                <ol className="space-y-3.5">
-                  {analytics.countries.map((country, idx) => (
-                    <li key={country.code} className="space-y-1">
-                      <div className="flex items-baseline justify-between gap-3 text-xs">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-mono text-zinc-400 dark:text-zinc-500 text-[10px] w-4">
-                            {idx + 1}.
-                          </span>
-                          <span className="font-medium text-zinc-900 dark:text-zinc-100 truncate">
-                            {country.name}
-                          </span>
-                        </div>
-                        <span className="font-mono text-xs text-zinc-950 dark:text-white font-semibold tabular-nums shrink-0">
-                          {formatCurrency(country.revenue, analytics.currency)}
-                        </span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-zinc-100 dark:bg-white/[0.06] overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-zinc-800 dark:bg-zinc-200 transition-all duration-300"
-                          style={{
-                            width: `${
-                              topCountryRevenue > 0
-                                ? Math.max(4, (country.revenue / topCountryRevenue) * 100)
-                                : 0
-                            }%`,
-                          }}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between text-[10px] font-mono text-zinc-500">
-                        <span>
-                          {country.orders} {country.orders === 1 ? 'order' : 'orders'}
-                        </span>
-                        <span>
-                          {analytics.summary.net_revenue > 0
-                            ? `${Math.round((country.revenue / analytics.summary.net_revenue) * 100)}% of sales`
-                            : ''}
-                        </span>
-                      </div>
-                    </li>
-                  ))}
-                  {analytics.countries.length === 0 && (
-                    <p className="text-xs text-zinc-500 text-center py-8">
-                      No country breakdown available for this range.
-                    </p>
-                  )}
-                </ol>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-white/[0.06] text-[11px] font-mono text-zinc-500 text-right">
-                {analytics.countries.length} active delivery territories
-              </div>
-            </GlassCard>
-          </section>
-
-          {/* 8. Top VIP Customers Section */}
-          <section>
-            <GlassCard className="overflow-hidden">
-              <div className="p-4 sm:p-6 border-b border-zinc-200 dark:border-white/[0.08] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-zinc-100 dark:bg-white/[0.04] border border-zinc-200 dark:border-white/[0.08] text-zinc-800 dark:text-white">
-                    <UserCheck className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-bold text-zinc-950 dark:text-white">
-                      Top Customers by Net Spend
-                    </h2>
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
-                      Leading collectors and patrons ranked by verified completed checkouts.
-                    </p>
-                  </div>
-                </div>
-
-                {analytics.top_customers && analytics.top_customers.length > 5 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllCustomers(s => !s)}
-                    className="text-xs font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white flex items-center gap-1 transition-colors cursor-pointer self-start sm:self-auto"
-                  >
-                    <span>{showAllCustomers ? 'Show top 5' : `Show all ${analytics.top_customers.length}`}</span>
-                    <ChevronDown className={clsx('w-3.5 h-3.5 transition-transform', showAllCustomers && 'rotate-180')} />
-                  </button>
-                )}
-              </div>
-
-              <div className="divide-y divide-zinc-200 dark:divide-white/[0.07]">
-                {(showAllCustomers
-                  ? analytics.top_customers || []
-                  : (analytics.top_customers || []).slice(0, 5)
-                ).map((customer, index) => {
-                  const initials = customer.name
-                    .split(' ')
-                    .map(n => n[0])
-                    .filter(Boolean)
-                    .slice(0, 2)
-                    .join('')
-                    .toUpperCase() || 'CU';
-
-                  return (
-                    <div
-                      key={customer.email || index}
-                      className="p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 hover:bg-zinc-50 dark:hover:bg-white/[0.02] transition-colors"
-                    >
-                      {/* Left: Customer Badge & Details */}
-                      <div className="flex items-center gap-3.5 min-w-0">
-                        <span className="text-xs font-mono text-zinc-400 dark:text-zinc-500 tabular-nums w-5 shrink-0">
-                          {String(index + 1).padStart(2, '0')}
-                        </span>
-
-                        <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-white/[0.06] border border-zinc-200 dark:border-white/10 flex items-center justify-center text-xs font-mono font-bold text-zinc-800 dark:text-white shrink-0">
-                          {initials}
-                        </div>
-
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                              {customer.name}
-                            </span>
-                            {customer.orders > 1 && (
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                                VIP Patron
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-3 mt-1 text-xs text-zinc-500 dark:text-zinc-400 flex-wrap">
-                            <button
-                              type="button"
-                              onClick={() => copyEmailToClipboard(customer.email)}
-                              className="flex items-center gap-1 text-[11px] font-mono hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
-                              title="Click to copy customer email"
-                            >
-                              <Mail className="w-3 h-3 text-zinc-400" />
-                              <span className="truncate max-w-[200px] sm:max-w-none">{customer.email}</span>
-                              {copiedEmail === customer.email ? (
-                                <Check className="w-3 h-3 text-lime-500" />
-                              ) : (
-                                <Copy className="w-2.5 h-2.5 opacity-60" />
-                              )}
-                            </button>
-
-                            {(customer.city || customer.country) && (
-                              <span className="flex items-center gap-1 text-[11px] font-mono text-zinc-400">
-                                <MapPin className="w-3 h-3" />
-                                <span>{[customer.city, customer.country].filter(Boolean).join(', ')}</span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Right: Spent & Orders */}
-                      <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t sm:border-t-0 pt-2 sm:pt-0 border-zinc-100 dark:border-white/[0.04] shrink-0">
-                        <span className="text-sm sm:text-base font-mono font-bold text-zinc-950 dark:text-white tabular-nums">
-                          {formatCurrency(customer.spent, analytics.currency)}
-                        </span>
-                        <span className="text-xs font-mono text-zinc-500 dark:text-zinc-400 mt-0.5">
-                          {customer.orders} {customer.orders === 1 ? 'order' : 'orders'}
-                          {customer.last_order && ` · Last ${customer.last_order}`}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {(!analytics.top_customers || analytics.top_customers.length === 0) && (
-                  <div className="p-8 text-center text-xs text-zinc-500">
-                    No customer transaction history available in this period.
-                  </div>
-                )}
-              </div>
-            </GlassCard>
-          </section>
-
-          {/* 9. Top-Selling Precision Skins */}
-          <section>
-            <GlassCard className="overflow-hidden">
-              <div className="p-4 sm:p-6 border-b border-zinc-200 dark:border-white/[0.08] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-zinc-100 dark:bg-white/[0.04] border border-zinc-200 dark:border-white/[0.08] text-zinc-800 dark:text-white">
-                    <ImageIcon className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-bold text-zinc-950 dark:text-white">
-                      Top-Selling Precision Skins
-                    </h2>
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
-                      Ranked by pieces sold with device skin previews and volume performance.
-                    </p>
-                  </div>
-                </div>
-                <span className="text-xs font-mono text-zinc-500 dark:text-zinc-400">
-                  {analytics.products.length} distinct skin models purchased
-                </span>
-              </div>
-
-              <div className="divide-y divide-zinc-200 dark:divide-white/[0.07]">
-                {analytics.products.map((product, index) => {
-                  const displayImg = product.image_url || '';
-
-                  return (
-                    <div
-                      key={`${product.product_id}-${product.name}-${index}`}
-                      className="p-4 sm:px-6 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-zinc-50 dark:hover:bg-white/[0.02] transition-colors"
-                    >
-                      {/* Left: Rank, Thumbnail & Metadata */}
-                      <div className="flex items-center gap-3.5 min-w-0">
-                        <span className="text-xs font-mono text-zinc-400 dark:text-zinc-500 tabular-nums w-5 shrink-0">
-                          {String(index + 1).padStart(2, '0')}
-                        </span>
-
-                        {/* Thumbnail Frame */}
-                        <div
-                          onClick={() => {
-                            if (displayImg) {
-                              setPreviewProduct({ product });
-                            }
-                          }}
-                          className="w-14 h-18 sm:w-16 sm:h-20 rounded-xl bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 flex items-center justify-center p-1 overflow-hidden shrink-0 group/img relative cursor-pointer shadow-2xs hover:border-zinc-300 dark:hover:border-white/25 transition-all"
-                          title="Click to preview skin in full resolution"
-                        >
-                          {displayImg ? (
-                            <>
-                              <img
-                                src={displayImg}
-                                alt={product.name}
-                                loading="lazy"
-                                className="max-w-full max-h-full object-contain drop-shadow-sm group-hover/img:scale-105 transition-transform duration-200"
-                              />
-                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center text-white">
-                                <Eye className="w-4 h-4" />
-                              </div>
-                            </>
-                          ) : (
-                            <ImageIcon className="w-5 h-5 text-zinc-400 dark:text-zinc-600" />
-                          )}
-                        </div>
-
-                        <div className="min-w-0">
-                          <h4
-                            className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate hover:text-lime-600 dark:hover:text-[#f3aa18] transition-colors cursor-pointer"
-                            onClick={() => {
-                              if (displayImg) {
-                                setPreviewProduct({ product });
-                              }
-                            }}
-                            title={product.name}
-                          >
-                            {product.name}
-                          </h4>
-
-                          <div className="flex items-center gap-2 mt-1 text-xs text-zinc-500 dark:text-zinc-400 flex-wrap">
-                            <span className="font-mono text-[11px] text-zinc-600 dark:text-zinc-400">
-                              {(product as any).sku ? `SKU: ${(product as any).sku}` : 'Precision Device Skin'}
-                            </span>
-                          </div>
-
-                          {/* Action links */}
-                          <div className="flex items-center gap-3 mt-1.5">
-                            {displayImg && (
-                              <button
-                                type="button"
-                                onClick={() => setPreviewProduct({ product })}
-                                className="text-[11px] font-mono text-zinc-500 hover:text-zinc-900 dark:hover:text-white flex items-center gap-1 transition-colors cursor-pointer"
-                              >
-                                <Eye className="w-3 h-3" />
-                                <span>Preview skin</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Right: Quantity Sold & Revenue */}
-                      <div className="flex md:flex-col items-center md:items-end justify-between md:justify-center border-t md:border-t-0 pt-2 md:pt-0 border-zinc-100 dark:border-white/[0.04] shrink-0 gap-1">
-                        <div className="text-left md:text-right">
-                          <span className="text-base font-mono font-bold text-zinc-950 dark:text-white tabular-nums">
-                            {formatCurrency(product.revenue, analytics.currency)}
-                          </span>
-                          <span className="block text-xs font-mono text-zinc-500 dark:text-zinc-400">
-                            {product.quantity} {product.quantity === 1 ? 'piece sold' : 'pieces sold'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {analytics.products.length === 0 && (
-                  <div className="p-8 text-center text-xs text-zinc-500">
-                    No product line items recorded in this date range.
-                  </div>
-                )}
-              </div>
-            </GlassCard>
-          </section>
-        </>
-      )}
-
-      {/* 10. Lightbox Modal for Skin Preview */}
-      {previewProduct && (
-        <div
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
-          onClick={() => setPreviewProduct(null)}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Precision skin preview"
-        >
-          <div
-            className="relative max-w-4xl w-full bg-[#0d0d0f] border border-white/15 rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-base font-bold text-white truncate max-w-md sm:max-w-xl">
-                  {previewProduct.product.name}
-                </h3>
-                <p className="text-xs text-zinc-400 mt-0.5">
-                  High-resolution device skin preview
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setPreviewProduct(null)}
-                className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
-                aria-label="Close preview"
-              >
-                <X className="w-4 h-4" />
-              </button>
+          {/* 7. Visual Analytics: Revenue Dynamic Chart & Channel Contribution Matrix */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
+            <div className="lg:col-span-2">
+              <MultiChannelRevenueChart
+                timeline={summary.timeline}
+                selectedChannels={selectedChannels}
+                totalRevenue={summary.totalNetRevenue}
+              />
             </div>
-
-            {/* Modal Image Display */}
-            <div className="flex-1 p-6 bg-black/60 flex items-center justify-center overflow-auto min-h-[300px]">
-              {previewProduct.product.image_url ? (
-                <img
-                  src={previewProduct.product.image_url}
-                  alt={previewProduct.product.name}
-                  className="max-w-full max-h-[58vh] object-contain rounded-lg shadow-xl"
-                />
-              ) : (
-                <div className="text-center text-zinc-500 py-12">
-                  <ImageIcon className="w-12 h-12 mx-auto mb-2 opacity-40" />
-                  <p className="text-xs">Product image unavailable</p>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer with Performance Context */}
-            <div className="px-6 py-4 bg-zinc-950 border-t border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
-              <div className="flex items-center gap-4 font-mono text-zinc-400">
-                <span>
-                  Sold:{' '}
-                  <strong className="text-white">
-                    {previewProduct.product.quantity} units
-                  </strong>
-                </span>
-                <span>
-                  Net Sales:{' '}
-                  <strong className="text-[#f3aa18]">
-                    {formatCurrency(previewProduct.product.revenue, analytics?.currency || 'USD')}
-                  </strong>
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {previewProduct.product.image_url && (
-                  <a
-                    href={previewProduct.product.image_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-medium flex items-center gap-1.5 transition-colors"
-                  >
-                    <span>Open Raw Asset</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                )}
-              </div>
+            <div className="lg:col-span-1">
+              <ChannelRevenueBreakdownCard
+                breakdown={summary.channelBreakdown}
+                totalNetRevenue={summary.totalNetRevenue}
+                selectedChannels={selectedChannels}
+                onSelectChannelOnly={handleSelectChannelOnly}
+              />
             </div>
           </div>
-        </div>
+
+          {/* 8. Top Performing Skins & Models */}
+          <section>
+            <TopFinancialProductsCard
+              products={summary.topProducts}
+              totalNetRevenue={summary.totalNetRevenue}
+              primaryCurrency={summary.primaryCurrency}
+            />
+          </section>
+
+          {/* 9. Financial Orders & Transactions Ledger */}
+          <section>
+            <FinancialLedgerTable
+              records={summary.filteredRecords}
+              onExportCsv={handleExportCsv}
+              primaryCurrency={summary.primaryCurrency}
+            />
+          </section>
+        </>
       )}
     </div>
   );

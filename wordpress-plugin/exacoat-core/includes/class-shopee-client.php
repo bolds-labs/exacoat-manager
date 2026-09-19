@@ -517,7 +517,13 @@ class Exacoat_Shopee_Client {
 		}
 		foreach ( $normalized_orders as $new_ord ) {
 			if ( ! empty( $new_ord['order_sn'] ) ) {
-				$order_map[ $new_ord['order_sn'] ] = $new_ord;
+				$sn = $new_ord['order_sn'];
+				// Preserve existing printed status if previous cache marked it printed
+				if ( ! empty( $order_map[ $sn ]['is_printed'] ) && empty( $new_ord['is_printed'] ) ) {
+					$new_ord['is_printed'] = true;
+					$new_ord['shipping_document_status'] = 'PRINTED';
+				}
+				$order_map[ $sn ] = $new_ord;
 			}
 		}
 
@@ -1259,6 +1265,13 @@ class Exacoat_Shopee_Client {
 			'callback'            => [ __CLASS__, 'rest_get_tracking_info' ],
 			'permission_callback' => '__return_true',
 		]);
+
+		// 12. POST /shopee/orders/toggle-print
+		register_rest_route( $ns, '/shopee/orders/toggle-print', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_toggle_order_print' ],
+			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+		]);
 	}
 
 	public static function check_admin_permission(): bool {
@@ -1892,6 +1905,30 @@ class Exacoat_Shopee_Client {
 			'code'    => 0,
 			'message' => 'success',
 		], 200 );
+	}
+
+	/**
+	 * Toggle or update print status of a cached order
+	 */
+	public static function rest_toggle_order_print( \WP_REST_Request $request ): \WP_REST_Response {
+		$body = $request->get_json_params() ?: [];
+		$sn = trim( (string) ( $body['order_sn'] ?? $request->get_param( 'order_sn' ) ?? '' ) );
+		$is_printed = isset( $body['is_printed'] ) ? (bool) $body['is_printed'] : true;
+
+		if ( empty( $sn ) ) {
+			return new \WP_REST_Response([ 'success' => false, 'error' => 'Order SN is required.' ], 400 );
+		}
+
+		$updated = self::update_order_cache_field( $sn, [
+			'is_printed'               => $is_printed,
+			'shipping_document_status' => $is_printed ? 'PRINTED' : 'UNPRINTED',
+		]);
+
+		return new \WP_REST_Response([
+			'success'    => $updated,
+			'order_sn'   => $sn,
+			'is_printed' => $is_printed,
+		]);
 	}
 }
 

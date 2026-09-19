@@ -1918,105 +1918,291 @@ class Exacoat_Order_Manager {
 			[ 'processing', 'in-production', 'quality-check', 'awaiting-pickup', 'shipped', 'completed', 'refunded' ]
 		) );
 
-		do {
-			$results = wc_get_orders( [
-				'limit'        => 250,
-				'page'         => $page,
-				'paginate'     => true,
-				'orderby'      => 'date',
-				'order'        => 'DESC',
-				'status'       => $paid_statuses,
-				'date_created' => $start_date->getTimestamp() . '...' . $end_date->getTimestamp(),
-			] );
+		$channel = strtolower( trim( sanitize_text_field( $request->get_param( 'channel' ) ?: 'all' ) ) );
+		$channel_totals = [
+			'webstore' => [ 'gross' => 0.0, 'net' => 0.0, 'orders' => 0 ],
+			'shopee'   => [ 'gross' => 0.0, 'net' => 0.0, 'orders' => 0 ],
+			'tiktok'   => [ 'gross' => 0.0, 'net' => 0.0, 'orders' => 0 ],
+		];
 
-			$orders = is_object( $results ) && isset( $results->orders ) ? $results->orders : [];
-			foreach ( $orders as $order ) {
-				if ( ! $order instanceof WC_Order ) {
-					continue;
-				}
+		// 1. Process WooCommerce Webstore Orders
+		if ( 'all' === $channel || 'webstore' === $channel ) {
+			do {
+				$results = wc_get_orders( [
+					'limit'        => 250,
+					'page'         => $page,
+					'paginate'     => true,
+					'orderby'      => 'date',
+					'order'        => 'DESC',
+					'status'       => $paid_statuses,
+					'date_created' => $start_date->getTimestamp() . '...' . $end_date->getTimestamp(),
+				] );
 
-				$currency = strtoupper( $order->get_currency() ?: get_woocommerce_currency() );
-				if ( ! isset( $buckets[ $currency ] ) ) {
-					$buckets[ $currency ] = [
-						'currency' => $currency,
-						'gross_revenue' => 0.0,
-						'net_revenue' => 0.0,
-						'refunded' => 0.0,
-						'orders' => 0,
-						'items_sold' => 0,
-						'customers' => [],
-						'timeline' => [],
-						'countries' => [],
-						'products' => [],
-					];
-				}
-
-				$gross = max( 0, (float) $order->get_total() );
-				$refunded = max( 0, (float) $order->get_total_refunded() );
-				$net = max( 0, $gross - $refunded );
-				$created = $order->get_date_created();
-				$date_key = $created ? $created->date_i18n( 'Y-m-d' ) : '';
-				$country_code = strtoupper( $order->get_shipping_country() ?: $order->get_billing_country() ?: 'ZZ' );
-				$country_name = 'Not provided';
-				if ( 'ZZ' !== $country_code && function_exists( 'WC' ) && WC()->countries ) {
-					$countries = WC()->countries->get_countries();
-					$country_name = $countries[ $country_code ] ?? $country_code;
-				}
-
-				$buckets[ $currency ]['gross_revenue'] += $gross;
-				$buckets[ $currency ]['net_revenue'] += $net;
-				$buckets[ $currency ]['refunded'] += $refunded;
-				$buckets[ $currency ]['orders']++;
-				$email = strtolower( trim( $order->get_billing_email() ) );
-				if ( $email ) {
-					$buckets[ $currency ]['customers'][ $email ] = true;
-				}
-
-				if ( $date_key ) {
-					if ( ! isset( $buckets[ $currency ]['timeline'][ $date_key ] ) ) {
-						$buckets[ $currency ]['timeline'][ $date_key ] = [ 'date' => $date_key, 'revenue' => 0.0, 'orders' => 0 ];
+				$orders = is_object( $results ) && isset( $results->orders ) ? $results->orders : [];
+				foreach ( $orders as $order ) {
+					if ( ! $order instanceof WC_Order ) {
+						continue;
 					}
-					$buckets[ $currency ]['timeline'][ $date_key ]['revenue'] += $net;
-					$buckets[ $currency ]['timeline'][ $date_key ]['orders']++;
-				}
 
-				if ( ! isset( $buckets[ $currency ]['countries'][ $country_code ] ) ) {
-					$buckets[ $currency ]['countries'][ $country_code ] = [
-						'code' => $country_code,
-						'name' => $country_name,
-						'revenue' => 0.0,
-						'orders' => 0,
-					];
-				}
-				$buckets[ $currency ]['countries'][ $country_code ]['revenue'] += $net;
-				$buckets[ $currency ]['countries'][ $country_code ]['orders']++;
-
-				foreach ( $order->get_items( 'line_item' ) as $item_id => $item ) {
-					$quantity = max( 0, (int) $item->get_quantity() - abs( (int) $order->get_qty_refunded_for_item( $item_id ) ) );
-					$refunded_tax = 0.0;
-					if ( method_exists( $order, 'get_taxes_refunded_for_item' ) ) {
-						$taxes_refunded = $order->get_taxes_refunded_for_item( $item_id );
-						$refunded_tax = is_array( $taxes_refunded ) ? abs( (float) array_sum( $taxes_refunded ) ) : 0.0;
-					}
-					$item_revenue = max( 0, (float) $item->get_total() + (float) $item->get_total_tax() - abs( (float) $order->get_total_refunded_for_item( $item_id ) ) - $refunded_tax );
-					$product_key = (string) ( $item->get_product_id() ?: $item->get_name() );
-					if ( ! isset( $buckets[ $currency ]['products'][ $product_key ] ) ) {
-						$buckets[ $currency ]['products'][ $product_key ] = [
-							'product_id' => (int) $item->get_product_id(),
-							'name' => $item->get_name(),
-							'quantity' => 0,
-							'revenue' => 0.0,
+					$currency = strtoupper( $order->get_currency() ?: get_woocommerce_currency() );
+					if ( ! isset( $buckets[ $currency ] ) ) {
+						$buckets[ $currency ] = [
+							'currency' => $currency,
+							'gross_revenue' => 0.0,
+							'net_revenue' => 0.0,
+							'refunded' => 0.0,
+							'orders' => 0,
+							'items_sold' => 0,
+							'customers' => [],
+							'timeline' => [],
+							'countries' => [],
+							'products' => [],
 						];
 					}
-					$buckets[ $currency ]['products'][ $product_key ]['quantity'] += $quantity;
-					$buckets[ $currency ]['products'][ $product_key ]['revenue'] += $item_revenue;
-					$buckets[ $currency ]['items_sold'] += $quantity;
+
+					$gross = max( 0, (float) $order->get_total() );
+					$refunded = max( 0, (float) $order->get_total_refunded() );
+					$net = max( 0, $gross - $refunded );
+					$created = $order->get_date_created();
+					$date_key = $created ? $created->date_i18n( 'Y-m-d' ) : '';
+					$country_code = strtoupper( $order->get_shipping_country() ?: $order->get_billing_country() ?: 'ZZ' );
+					$country_name = 'Not provided';
+					if ( 'ZZ' !== $country_code && function_exists( 'WC' ) && WC()->countries ) {
+						$countries = WC()->countries->get_countries();
+						$country_name = $countries[ $country_code ] ?? $country_code;
+					}
+
+					$buckets[ $currency ]['gross_revenue'] += $gross;
+					$buckets[ $currency ]['net_revenue'] += $net;
+					$buckets[ $currency ]['refunded'] += $refunded;
+					$buckets[ $currency ]['orders']++;
+					$channel_totals['webstore']['gross'] += $gross;
+					$channel_totals['webstore']['net'] += $net;
+					$channel_totals['webstore']['orders']++;
+
+					$email = strtolower( trim( $order->get_billing_email() ) );
+					if ( $email ) {
+						$buckets[ $currency ]['customers'][ $email ] = true;
+					}
+
+					if ( $date_key ) {
+						if ( ! isset( $buckets[ $currency ]['timeline'][ $date_key ] ) ) {
+							$buckets[ $currency ]['timeline'][ $date_key ] = [ 'date' => $date_key, 'revenue' => 0.0, 'orders' => 0 ];
+						}
+						$buckets[ $currency ]['timeline'][ $date_key ]['revenue'] += $net;
+						$buckets[ $currency ]['timeline'][ $date_key ]['orders']++;
+					}
+
+					if ( ! isset( $buckets[ $currency ]['countries'][ $country_code ] ) ) {
+						$buckets[ $currency ]['countries'][ $country_code ] = [
+							'code' => $country_code,
+							'name' => $country_name,
+							'revenue' => 0.0,
+							'orders' => 0,
+						];
+					}
+					$buckets[ $currency ]['countries'][ $country_code ]['revenue'] += $net;
+					$buckets[ $currency ]['countries'][ $country_code ]['orders']++;
+
+					foreach ( $order->get_items( 'line_item' ) as $item_id => $item ) {
+						$quantity = max( 0, (int) $item->get_quantity() - abs( (int) $order->get_qty_refunded_for_item( $item_id ) ) );
+						$refunded_tax = 0.0;
+						if ( method_exists( $order, 'get_taxes_refunded_for_item' ) ) {
+							$taxes_refunded = $order->get_taxes_refunded_for_item( $item_id );
+							$refunded_tax = is_array( $taxes_refunded ) ? abs( (float) array_sum( $taxes_refunded ) ) : 0.0;
+						}
+						$item_revenue = max( 0, (float) $item->get_total() + (float) $item->get_total_tax() - abs( (float) $order->get_total_refunded_for_item( $item_id ) ) - $refunded_tax );
+						$product_key = (string) ( $item->get_product_id() ?: $item->get_name() );
+						if ( ! isset( $buckets[ $currency ]['products'][ $product_key ] ) ) {
+							$buckets[ $currency ]['products'][ $product_key ] = [
+								'product_id' => (int) $item->get_product_id(),
+								'name' => $item->get_name(),
+								'quantity' => 0,
+								'revenue' => 0.0,
+							];
+						}
+						$buckets[ $currency ]['products'][ $product_key ]['quantity'] += $quantity;
+						$buckets[ $currency ]['products'][ $product_key ]['revenue'] += $item_revenue;
+						$buckets[ $currency ]['items_sold'] += $quantity;
+					}
+				}
+
+				$max_pages = is_object( $results ) && isset( $results->max_num_pages ) ? (int) $results->max_num_pages : 1;
+				$page++;
+			} while ( $page <= $max_pages );
+		}
+
+		// 2. Process Shopee Marketplace Orders
+		if ( 'all' === $channel || 'shopee' === $channel ) {
+			$shopee_orders = get_option( '_exacoat_shopee_orders_cache', [] );
+			if ( is_array( $shopee_orders ) ) {
+				$start_ts = $start_date->getTimestamp();
+				$end_ts   = $end_date->getTimestamp();
+				$default_curr = 'IDR';
+
+				foreach ( $shopee_orders as $so ) {
+					$order_ts = ! empty( $so['create_timestamp'] ) ? (int) $so['create_timestamp'] : ( ! empty( $so['create_time'] ) ? strtotime( $so['create_time'] ) : 0 );
+					if ( $order_ts < $start_ts || $order_ts > $end_ts ) {
+						continue;
+					}
+
+					$st = strtoupper( (string) ( $so['order_status'] ?? '' ) );
+					if ( in_array( $st, [ 'CANCELLED', 'IN_CANCEL', 'UNPAID' ], true ) ) {
+						continue;
+					}
+
+					$curr = strtoupper( (string) ( $so['currency'] ?? $default_curr ) );
+					if ( ! isset( $buckets[ $curr ] ) ) {
+						$buckets[ $curr ] = [
+							'currency' => $curr,
+							'gross_revenue' => 0.0,
+							'net_revenue' => 0.0,
+							'refunded' => 0.0,
+							'orders' => 0,
+							'items_sold' => 0,
+							'customers' => [],
+							'timeline' => [],
+							'countries' => [],
+							'products' => [],
+						];
+					}
+
+					$gross = max( 0, (float) ( $so['total_amount'] ?? 0 ) );
+					$is_refunded = in_array( $st, [ 'TO_RETURN', 'REFUNDED' ], true );
+					$refunded = $is_refunded ? $gross : 0.0;
+					$net = max( 0, $gross - $refunded );
+					$date_key = date( 'Y-m-d', $order_ts );
+
+					$buckets[ $curr ]['gross_revenue'] += $gross;
+					$buckets[ $curr ]['net_revenue'] += $net;
+					$buckets[ $curr ]['refunded'] += $refunded;
+					$buckets[ $curr ]['orders']++;
+					$channel_totals['shopee']['gross'] += $gross;
+					$channel_totals['shopee']['net'] += $net;
+					$channel_totals['shopee']['orders']++;
+
+					$buyer = strtolower( trim( (string) ( $so['buyer_username'] ?? '' ) ) );
+					if ( $buyer ) {
+						$buckets[ $curr ]['customers'][ $buyer ] = true;
+					}
+
+					if ( $date_key ) {
+						if ( ! isset( $buckets[ $curr ]['timeline'][ $date_key ] ) ) {
+							$buckets[ $curr ]['timeline'][ $date_key ] = [ 'date' => $date_key, 'revenue' => 0.0, 'orders' => 0 ];
+						}
+						$buckets[ $curr ]['timeline'][ $date_key ]['revenue'] += $net;
+						$buckets[ $curr ]['timeline'][ $date_key ]['orders']++;
+					}
+
+					foreach ( ( $so['items'] ?? [] ) as $item ) {
+						$qty = max( 1, (int) ( $item['quantity'] ?? 1 ) );
+						$price = (float) ( $item['price'] ?? 0 );
+						$p_name = trim( (string) ( $item['item_name'] ?? 'Shopee Item' ) );
+						if ( ! empty( $item['model_name'] ) ) {
+							$p_name .= ' - ' . trim( (string) $item['model_name'] );
+						}
+						$p_key = (string) ( $item['item_id'] ?? $p_name );
+						if ( ! isset( $buckets[ $curr ]['products'][ $p_key ] ) ) {
+							$buckets[ $curr ]['products'][ $p_key ] = [
+								'product_id' => (int) ( $item['item_id'] ?? 0 ),
+								'name'       => $p_name,
+								'quantity'   => 0,
+								'revenue'    => 0.0,
+							];
+						}
+						$buckets[ $curr ]['products'][ $p_key ]['quantity'] += $qty;
+						$buckets[ $curr ]['products'][ $p_key ]['revenue'] += ( $price * $qty );
+						$buckets[ $curr ]['items_sold'] += $qty;
+					}
 				}
 			}
+		}
 
-			$max_pages = is_object( $results ) && isset( $results->max_num_pages ) ? (int) $results->max_num_pages : 1;
-			$page++;
-		} while ( $page <= $max_pages );
+		// 3. Process TikTok Shop Marketplace Orders
+		if ( 'all' === $channel || 'tiktok' === $channel ) {
+			$tiktok_orders = get_option( '_exacoat_tiktok_orders_cache', [] );
+			if ( is_array( $tiktok_orders ) ) {
+				$start_ts = $start_date->getTimestamp();
+				$end_ts   = $end_date->getTimestamp();
+				$default_curr = 'IDR';
+
+				foreach ( $tiktok_orders as $to ) {
+					$order_ts = ! empty( $to['create_timestamp'] ) ? (int) $to['create_timestamp'] : ( ! empty( $to['create_time'] ) ? strtotime( $to['create_time'] ) : 0 );
+					if ( $order_ts < $start_ts || $order_ts > $end_ts ) {
+						continue;
+					}
+
+					$st = strtoupper( (string) ( $to['order_status'] ?? '' ) );
+					if ( in_array( $st, [ 'CANCELLED', 'UNPAID' ], true ) ) {
+						continue;
+					}
+
+					$curr = strtoupper( (string) ( $to['currency'] ?? $default_curr ) );
+					if ( ! isset( $buckets[ $curr ] ) ) {
+						$buckets[ $curr ] = [
+							'currency' => $curr,
+							'gross_revenue' => 0.0,
+							'net_revenue' => 0.0,
+							'refunded' => 0.0,
+							'orders' => 0,
+							'items_sold' => 0,
+							'customers' => [],
+							'timeline' => [],
+							'countries' => [],
+							'products' => [],
+						];
+					}
+
+					$gross = max( 0, (float) ( $to['total_amount'] ?? 0 ) );
+					$is_refunded = in_array( $st, [ 'REFUNDED', 'RETURNED' ], true );
+					$refunded = $is_refunded ? $gross : 0.0;
+					$net = max( 0, $gross - $refunded );
+					$date_key = date( 'Y-m-d', $order_ts );
+
+					$buckets[ $curr ]['gross_revenue'] += $gross;
+					$buckets[ $curr ]['net_revenue'] += $net;
+					$buckets[ $curr ]['refunded'] += $refunded;
+					$buckets[ $curr ]['orders']++;
+					$channel_totals['tiktok']['gross'] += $gross;
+					$channel_totals['tiktok']['net'] += $net;
+					$channel_totals['tiktok']['orders']++;
+
+					$buyer = strtolower( trim( (string) ( $to['buyer_username'] ?? '' ) ) );
+					if ( $buyer ) {
+						$buckets[ $curr ]['customers'][ $buyer ] = true;
+					}
+
+					if ( $date_key ) {
+						if ( ! isset( $buckets[ $curr ]['timeline'][ $date_key ] ) ) {
+							$buckets[ $curr ]['timeline'][ $date_key ] = [ 'date' => $date_key, 'revenue' => 0.0, 'orders' => 0 ];
+						}
+						$buckets[ $curr ]['timeline'][ $date_key ]['revenue'] += $net;
+						$buckets[ $curr ]['timeline'][ $date_key ]['orders']++;
+					}
+
+					foreach ( ( $to['items'] ?? [] ) as $item ) {
+						$qty = max( 1, (int) ( $item['quantity'] ?? 1 ) );
+						$price = (float) ( $item['price'] ?? 0 );
+						$p_name = trim( (string) ( $item['item_name'] ?? 'TikTok Item' ) );
+						if ( ! empty( $item['sku_name'] ) ) {
+							$p_name .= ' - ' . trim( (string) $item['sku_name'] );
+						}
+						$p_key = (string) ( $item['item_id'] ?? $p_name );
+						if ( ! isset( $buckets[ $curr ]['products'][ $p_key ] ) ) {
+							$buckets[ $curr ]['products'][ $p_key ] = [
+								'product_id' => 0,
+								'name'       => $p_name,
+								'quantity'   => 0,
+								'revenue'    => 0.0,
+							];
+						}
+						$buckets[ $curr ]['products'][ $p_key ]['quantity'] += $qty;
+						$buckets[ $curr ]['products'][ $p_key ]['revenue'] += ( $price * $qty );
+						$buckets[ $curr ]['items_sold'] += $qty;
+					}
+				}
+			}
+		}
 
 		$analytics = [];
 		foreach ( $buckets as $currency => $bucket ) {
@@ -2047,10 +2233,12 @@ class Exacoat_Order_Manager {
 		usort( $analytics, fn( $a, $b ) => $b['summary']['net_revenue'] <=> $a['summary']['net_revenue'] );
 
 		return rest_ensure_response( [
-			'success' => true,
-			'start_date' => $start,
-			'end_date' => $end,
-			'currencies' => $analytics,
+			'success'        => true,
+			'start_date'     => $start,
+			'end_date'       => $end,
+			'channel'        => $channel,
+			'channel_totals' => $channel_totals,
+			'currencies'     => $analytics,
 		] );
 	}
 

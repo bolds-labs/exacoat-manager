@@ -183,6 +183,24 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
               <span>{isOrderPrinted ? 'Cetak Ulang' : 'Cetak Label'}</span>
             </button>
           )}
+          {isArranged && (
+            <span
+              className={clsx(
+                'text-[11px] px-2.5 py-0.5 rounded-full font-semibold border flex items-center gap-1.5',
+                isOrderPrinted
+                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25'
+                  : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+              )}
+              title={isOrderPrinted ? 'Label pengiriman resmi telah dicetak' : 'Label pengiriman resmi belum dicetak (Perlu Dicetak)'}
+            >
+              {isOrderPrinted ? (
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <Printer className="w-3.5 h-3.5 text-amber-400" />
+              )}
+              <span>{isOrderPrinted ? 'Telah Dicetak' : 'Perlu Dicetak'}</span>
+            </span>
+          )}
           <span
             className={clsx(
               'text-[11px] px-2.5 py-0.5 rounded-full font-semibold border',
@@ -235,7 +253,7 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
                 )}
               >
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>{order.already_claimed ? 'Telah Diklaim' : 'Klaim Garansi'}</span>
+                <span>{order.already_claimed ? 'Claimed' : 'Claim Warranty'}</span>
               </button>
             )}
 
@@ -252,7 +270,7 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
                 )}
               >
                 <RotateCcw className="w-4 h-4 text-amber-400" />
-                <span>{order.already_claimed ? 'Telah Diklaim' : 'Redeem Hadiah (Cacat)'}</span>
+                <span>{order.already_claimed ? 'Claimed' : 'Claim Redeem (Defect)'}</span>
               </button>
             )}
           </div>
@@ -263,8 +281,8 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
           <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
             <span>
-              Pesanan Shopee ini telah tercatat dalam sistem klaim garansi RMA
-              {order.existing_claim?.existing_order_num ? ` dengan nomor klaim #${order.existing_claim.existing_order_num}` : ''}.
+              This Shopee order has already been recorded in RMA claim system
+              {order.existing_claim?.existing_order_num ? ` under replacement order #${order.existing_claim.existing_order_num}` : ''}.
             </span>
           </div>
         )}
@@ -436,7 +454,7 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
                 <span className="font-bold text-emerald-300 block">Paket Telah Diterima</span>
                 <p className="text-emerald-400/90 text-[11px] leading-relaxed">
                   Diterima pada <span className="font-semibold text-emerald-200">{deliveredTime || 'pembaruan kurir'}</span>.
-                  Batas klaim garansi 48 jam dihitung sejak waktu penerimaan ini.
+                  48-hour warranty claim window is calculated from this delivery timestamp.
                 </p>
               </div>
             </div>

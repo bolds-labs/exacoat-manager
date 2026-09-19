@@ -1484,16 +1484,28 @@ export async function refundOrderDirect(orderId: number | string, payload: { amo
 // Sales & Analytics
 // ==========================================
 
-export async function fetchSalesAnalytics(startIso: string, endIso: string): Promise<{
+export async function fetchSalesAnalytics(
+  startIso: string, 
+  endIso: string, 
+  channel?: string
+): Promise<{
   success: boolean;
   currencies: SalesAnalyticsCurrency[];
   top_products: SalesAnalyticsProduct[];
+  channel_totals?: {
+    webstore?: { gross: number; net: number; orders: number };
+    shopee?: { gross: number; net: number; orders: number };
+    tiktok?: { gross: number; net: number; orders: number };
+  };
   error?: string;
 }> {
   const base = getWordPressBaseUrl();
   const url = new URL(`${base}/wp-json/exacoat-core/v1/orders/analytics`, window.location.origin);
   url.searchParams.set('start', startIso);
   url.searchParams.set('end', endIso);
+  if (channel && channel !== 'all') {
+    url.searchParams.set('channel', channel);
+  }
   url.searchParams.set('_t', String(Date.now()));
 
   try {
@@ -1505,6 +1517,7 @@ export async function fetchSalesAnalytics(startIso: string, endIso: string): Pro
       success: !!data.success,
       currencies: data.currencies || [],
       top_products: data.top_products || [],
+      channel_totals: data.channel_totals,
       error: data.message,
     };
   } catch (err: any) {
@@ -3887,6 +3900,34 @@ export async function downloadShopeeBatchShippingLabelsDirect(order_sns: string[
       success: false,
       error: data?.message || data?.error || 'Tidak dapat mengunduh batch label PDF dari Shopee.',
     };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function toggleShopeeOrderPrintDirect(
+  order_sn: string,
+  is_printed: boolean
+): Promise<{
+  success: boolean;
+  order_sn?: string;
+  is_printed?: boolean;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/orders/toggle-print`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ order_sn, is_printed }),
+    });
+    const data = await res.json();
+    return data;
   } catch (err: any) {
     return { success: false, error: err.message };
   }

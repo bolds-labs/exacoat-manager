@@ -8,7 +8,9 @@ export interface FilterSelectOption<T = string> {
   count?: number;
   icon?: React.ReactNode;
   badge?: string;
-  badgeVariant?: 'emerald' | 'amber' | 'rose' | 'zinc';
+  badgeVariant?: 'emerald' | 'amber' | 'rose' | 'zinc' | 'sky' | 'orange';
+  isHeader?: boolean;
+  indent?: boolean;
 }
 
 export interface FilterSelectProps<T = string> {
@@ -41,7 +43,7 @@ export function FilterSelect<T extends string | number = string>({
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const selectedOption = options.find((opt) => opt.value === value);
+  const selectedOption = options.find((opt) => opt.value === value && !opt.isHeader);
 
   // Close on outside click or Escape key
   useEffect(() => {
@@ -111,7 +113,7 @@ export function FilterSelect<T extends string | number = string>({
       {isOpen && (
         <div
           className={clsx(
-            'absolute z-50 min-w-[170px] max-w-[280px] max-h-72 overflow-y-auto rounded-xl p-1',
+            'absolute z-50 min-w-[200px] max-w-[320px] max-h-80 overflow-y-auto rounded-xl p-1',
             dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5',
             align === 'right' ? 'right-0' : 'left-0',
             'bg-white dark:bg-[#141417] border border-zinc-200 dark:border-white/15 shadow-2xl backdrop-blur-xl',
@@ -124,7 +126,18 @@ export function FilterSelect<T extends string | number = string>({
               No options available
             </div>
           ) : (
-            options.map((opt) => {
+            options.map((opt, idx) => {
+              if (opt.isHeader) {
+                return (
+                  <div
+                    key={`header-${idx}-${String(opt.value)}`}
+                    className="px-2.5 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 border-t border-zinc-200/50 dark:border-white/5 first:border-0 first:pt-1 select-none"
+                  >
+                    {opt.label}
+                  </div>
+                );
+              }
+
               const isSelected = opt.value === value;
               return (
                 <button
@@ -136,6 +149,7 @@ export function FilterSelect<T extends string | number = string>({
                   }}
                   className={clsx(
                     'w-full px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between gap-2 text-left transition-colors cursor-pointer',
+                    opt.indent && 'pl-5',
                     isSelected
                       ? 'bg-[#f3aa18]/15 text-[#f3aa18] font-bold dark:bg-[#f3aa18]/20 dark:text-[#f3aa18]'
                       : 'text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/10'
@@ -143,7 +157,7 @@ export function FilterSelect<T extends string | number = string>({
                 >
                   <div className="flex items-center gap-2 truncate">
                     {opt.icon && <span className="shrink-0">{opt.icon}</span>}
-                    <span className="truncate">{opt.label}</span>
+                    <span className={clsx('truncate', opt.indent && 'text-[11px] text-neutral-300')}>{opt.label}</span>
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -152,6 +166,8 @@ export function FilterSelect<T extends string | number = string>({
                         'text-[9px] px-1.5 py-0.2 rounded font-mono font-bold uppercase',
                         opt.badgeVariant === 'emerald' && 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30',
                         opt.badgeVariant === 'amber' && 'bg-amber-500/15 text-amber-500 dark:text-amber-400 border border-amber-500/30',
+                        opt.badgeVariant === 'sky' && 'bg-sky-500/15 text-sky-500 dark:text-sky-400 border border-sky-500/30',
+                        opt.badgeVariant === 'orange' && 'bg-orange-500/15 text-orange-500 dark:text-orange-400 border border-orange-500/30',
                         opt.badgeVariant === 'rose' && 'bg-rose-500/15 text-rose-500 dark:text-rose-400 border border-rose-500/30',
                         (!opt.badgeVariant || opt.badgeVariant === 'zinc') && 'bg-zinc-200 dark:bg-white/10 text-zinc-600 dark:text-zinc-400'
                       )}>

@@ -7,7 +7,9 @@ import {
   fetchShopeeSettingsDirect,
   downloadShopeeShippingLabelDirect,
   downloadShopeeBatchShippingLabelsDirect,
+  toggleShopeeOrderPrintDirect,
 } from '../../lib/wordpressBridge';
+import { buildGroupedCourierOptions, matchesCourierFilter } from '../../lib/courierGrouping';
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency } from '../../lib/formatters';
 import { matchesPhoneQuery, formatDisplayPhone } from '../../lib/phoneUtils';
@@ -49,7 +51,7 @@ interface ShopeeOrdersViewProps {
   onClaimRedeem: (order: ShopeeOrder) => void;
 }
 
-type StatusTab = 'ALL' | 'READY_TO_SHIP' | 'SHIPPED' | 'COMPLETED' | 'CLAIMED' | 'CANCELLED';
+type StatusTab = 'ALL' | 'READY_TO_SHIP' | 'TO_PROCESS' | 'PROCESSED' | 'SHIPPED' | 'COMPLETED' | 'CLAIMED' | 'CANCELLED';
 
 export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   onClaimWarranty,
@@ -289,6 +291,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
               : o
           )
         );
+        toggleShopeeOrderPrintDirect(order.order_sn, true).catch(() => {});
         showToast('success', 'Label Terbuka', `Label resmi Shopee untuk ${order.order_sn} berhasil dimuat.`);
         return;
       }
@@ -296,6 +299,26 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
       showToast('error', 'Gagal Mengunduh Label', res.error || 'Shopee tidak dapat memuat PDF label pengiriman.');
     } catch (err: any) {
       showToast('error', 'Gagal Mengunduh Label', err?.message || 'Koneksi ke API Shopee gagal.');
+    }
+  };
+
+  const handleTogglePrintStatus = async (order: ShopeeOrder, markPrinted: boolean) => {
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.order_sn === order.order_sn
+          ? { ...o, is_printed: markPrinted, shipping_document_status: markPrinted ? 'PRINTED' : 'UNPRINTED' }
+          : o
+      )
+    );
+    try {
+      await toggleShopeeOrderPrintDirect(order.order_sn, markPrinted);
+      showToast(
+        'success',
+        markPrinted ? 'Telah Dicetak' : 'Perlu Dicetak',
+        `Status label pesanan #${order.order_sn} diubah menjadi ${markPrinted ? 'Telah Dicetak' : 'Perlu Dicetak'}.`
+      );
+    } catch (e: any) {
+      showToast('error', 'Gagal Memperbarui Status Label', e.message);
     }
   };
 
@@ -328,39 +351,56 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
     }
   };
 
-  const availableCouriers = useMemo(() => {
-    const map = new Map<string, string>();
-    orders.forEach((o) => {
-      const raw = (o.shipping_carrier || '').trim();
-      if (!raw) return;
-      const clean = raw.replace(/[---:].*$/, '').trim();
-      if (clean) {
-        const key = clean.toUpperCase();
-        if (!map.has(key)) map.set(key, clean);
-      }
-    });
-    return Array.from(map.entries())
-      .map(([key, name]) => ({ key, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [orders]);
+  const courierOptions = useMemo(() => buildGroupedCourierOptions(orders), [orders]);
+
+  const readyToShipCount = useMemo(
+    () => orders.filter((o) => ['READY_TO_SHIP', 'PROCESSED'].includes(o.order_status)).length,
+    [orders]
+  );
+  const toProcessCount = useMemo(
+    () => orders.filter((o) => o.order_status === 'READY_TO_SHIP' && !o.is_arranged).length,
+    [orders]
+  );
+  const processedCount = useMemo(
+    () => orders.filter((o) => o.order_status === 'PROCESSED' || o.is_arranged).length,
+    [orders]
+  );
+  const unprintedCount = useMemo(
+    () =>
+      orders.filter(
+        (o) =>
+          (o.order_status === 'PROCESSED' || o.is_arranged) &&
+          !o.is_printed &&
+          o.shipping_document_status !== 'PRINTED'
+      ).length,
+    [orders]
+  );
+  const printedCount = useMemo(
+    () =>
+      orders.filter(
+        (o) =>
+          (o.order_status === 'PROCESSED' || o.is_arranged) &&
+          (o.is_printed || o.shipping_document_status === 'PRINTED')
+      ).length,
+    [orders]
+  );
 
   // Filtered orders computation
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       // Tab filter
       if (activeTab === 'READY_TO_SHIP' && !['READY_TO_SHIP', 'PROCESSED'].includes(order.order_status)) return false;
+      if (activeTab === 'TO_PROCESS' && (order.order_status !== 'READY_TO_SHIP' || order.is_arranged)) return false;
+      if (activeTab === 'PROCESSED' && (order.order_status !== 'PROCESSED' && !order.is_arranged)) return false;
       if (activeTab === 'SHIPPED' && order.order_status !== 'SHIPPED') return false;
       if (activeTab === 'COMPLETED' && !['COMPLETED', 'TO_CONFIRM_RECEIVE'].includes(order.order_status) && !order.is_delivered) return false;
       if (activeTab === 'CLAIMED' && !order.already_claimed) return false;
       if (activeTab === 'CANCELLED' && !['CANCELLED', 'IN_CANCEL', 'TO_RETURN'].includes(order.order_status)) return false;
 
-      // Courier filter
-      if (courierFilter !== 'all') {
-        const carrier = (order.shipping_carrier || '').toUpperCase();
-        if (!carrier.includes(courierFilter)) return false;
-      }
+      // Grouped / Individual Courier filter
+      if (!matchesCourierFilter(order.shipping_carrier, courierFilter)) return false;
 
-      // Print status filter
+      // Print status filter (Label Pengiriman)
       if (printFilter !== 'all') {
         const isPrinted = Boolean(order.is_printed || order.shipping_document_status === 'PRINTED');
         if (printFilter === 'printed' && !isPrinted) return false;
@@ -462,6 +502,9 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
               : o
           )
         );
+        selectedOrdersList.forEach((o) => {
+          toggleShopeeOrderPrintDirect(o.order_sn, true).catch(() => {});
+        });
         showToast(
           'success',
           'Batch Label Terbuka',
@@ -528,10 +571,6 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
     showToast('success', 'Ekspor CSV Berhasil', `Berhasil mengekspor ${selectedOrdersList.length} pesanan ke CSV.`);
   };
 
-  const readyToShipCount = orders.filter((o) =>
-    ['READY_TO_SHIP', 'PROCESSED'].includes(o.order_status)
-  ).length;
-
   return (
     <div className="space-y-5 font-sans">
       {/* Shopee Integration Sub-Header */}
@@ -595,6 +634,8 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
             [
               { id: 'ALL', label: 'Semua' },
               { id: 'READY_TO_SHIP', label: 'Perlu Dikirim', count: readyToShipCount },
+              { id: 'TO_PROCESS', label: 'Perlu Diproses', count: toProcessCount },
+              { id: 'PROCESSED', label: 'Telah Diproses', count: processedCount },
               { id: 'SHIPPED', label: 'Dikirim' },
               { id: 'COMPLETED', label: 'Selesai' },
               { id: 'CLAIMED', label: 'Claim Warranty' },
@@ -639,31 +680,40 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
         </div>
       </div>
 
-      {/* Row 2: Secondary Filter Bar (Courier & Printed Resi) */}
+      {/* Row 2: Secondary Filter Bar (Grouped Courier & Printed Resi) */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-neutral-900/50 border border-white/10 text-xs relative z-20">
         <div className="flex flex-wrap items-center gap-3">
-          {/* Courier Filter */}
+          {/* Courier Filter with Instant, Same Day, and Reguler/YES Groups */}
           <FilterSelect
             label="Jasa Kirim"
             value={courierFilter}
             onChange={setCourierFilter}
             icon={<Truck className="w-3.5 h-3.5" />}
-            options={[
-              { value: 'all', label: 'Semua Jasa Kirim' },
-              ...availableCouriers.map((c) => ({ value: c.key, label: c.name })),
-            ]}
+            options={courierOptions}
           />
 
-          {/* Print Status Filter */}
+          {/* Label Pengiriman Status Filter */}
           <FilterSelect
-            label="Status Cetak"
+            label="Label Pengiriman"
             value={printFilter}
             onChange={(val) => setPrintFilter(val as any)}
             icon={<Printer className="w-3.5 h-3.5" />}
             options={[
-              { value: 'all', label: 'Semua Status' },
-              { value: 'printed', label: 'Sudah Dicetak' },
-              { value: 'unprinted', label: 'Belum Dicetak' },
+              { value: 'all', label: 'Semua Label' },
+              {
+                value: 'unprinted',
+                label: 'Perlu Dicetak',
+                count: unprintedCount > 0 ? unprintedCount : undefined,
+                badge: unprintedCount > 0 ? 'Menunggu' : undefined,
+                badgeVariant: 'amber',
+              },
+              {
+                value: 'printed',
+                label: 'Telah Dicetak',
+                count: printedCount > 0 ? printedCount : undefined,
+                badge: printedCount > 0 ? 'Selesai' : undefined,
+                badgeVariant: 'emerald',
+              },
             ]}
           />
 
@@ -859,7 +909,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                     {isClaimed && (
                       <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
                         <ShieldCheck className="w-3 h-3" />
-                        <span>Klaim di #{order.existing_claim?.existing_order_num}</span>
+                        <span>Claimed: #{order.existing_claim?.existing_order_num}</span>
                       </span>
                     )}
                   </div>
@@ -895,6 +945,26 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                       {statusBadge.label}
                     </span>
 
+                    {/* Label Pengiriman Badge for arranged orders */}
+                    {isArranged && (
+                      <span
+                        className={clsx(
+                          'text-[10px] px-2.5 py-1 rounded-full font-semibold border flex items-center gap-1.5',
+                          isPrinted
+                            ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25'
+                            : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                        )}
+                        title={isPrinted ? 'Label pengiriman resmi telah dicetak' : 'Label pengiriman resmi belum dicetak (Perlu Dicetak)'}
+                      >
+                        {isPrinted ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <Printer className="w-3.5 h-3.5 text-amber-400" />
+                        )}
+                        <span>{isPrinted ? 'Telah Dicetak' : 'Perlu Dicetak'}</span>
+                      </span>
+                    )}
+
                     {/* Arrange Shipment Button if ready and unscheduled */}
                     {isReadyToShip && (
                       <button
@@ -910,7 +980,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                       </button>
                     )}
 
-                    {/* Dropdown Menu for Warranty / Redeem */}
+                    {/* Dropdown Menu for Warranty / Redeem / Print */}
                     <div className="relative" data-action-menu>
                       <button
                         type="button"
@@ -924,6 +994,23 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
 
                       {activeActionMenuSn === order.order_sn && (
                         <div className="absolute right-0 top-full mt-1 w-52 rounded-xl bg-neutral-900 border border-white/10 shadow-xl py-1 z-30 font-sans">
+                          {isArranged && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveActionMenuSn(null);
+                                  handleTogglePrintStatus(order, !isPrinted);
+                                }}
+                                className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 cursor-pointer font-medium text-neutral-300 hover:bg-white/5"
+                              >
+                                <Printer className="w-3.5 h-3.5 text-neutral-400" />
+                                <span>{isPrinted ? 'Tandai Perlu Dicetak' : 'Tandai Telah Dicetak'}</span>
+                              </button>
+                              <div className="my-1 border-t border-white/10" />
+                            </>
+                          )}
+
                           <button
                             type="button"
                             disabled={isClaimed}
@@ -939,7 +1026,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                             )}
                           >
                             <ShieldCheck className="w-3.5 h-3.5" />
-                            <span>Klaim Garansi</span>
+                            <span>Claim Warranty</span>
                           </button>
 
                           <button
@@ -957,7 +1044,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                             )}
                           >
                             <RotateCcw className="w-3.5 h-3.5" />
-                            <span>Redeem Hadiah (Cacat)</span>
+                            <span>Claim Redeem (Defect)</span>
                           </button>
 
                           <div className="my-1 border-t border-white/10" />

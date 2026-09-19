@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.0.54.zip?v=0.0.54",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-19T16:59:44.678Z",
+  "last_updated": "2026-09-19T17:20:04.097Z",
   "sections": {
     "description": "The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.",
     "changelog": "### Version 0.0.54\n- English localization for all email service readiness alerts, dispatch error notices, and sent log reset tools\n- Mail service availability checks (ZeptoMail / SMTP) preventing false positive email status"

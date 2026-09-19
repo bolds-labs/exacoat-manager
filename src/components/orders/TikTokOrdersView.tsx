@@ -16,6 +16,7 @@ import { TikTokOrderDetailModal } from './TikTokOrderDetailModal';
 import { FilterSelect } from '../ui/FilterSelect';
 import { ShipCountdownBadge } from './ShipCountdownBadge';
 import { MarketplaceSyncButton } from './MarketplaceSyncButton';
+import { buildGroupedCourierOptions, matchesCourierFilter } from '../../lib/courierGrouping';
 import { generateTikTokAwbHtml, generateTikTokBatchAwbHtml } from '../../lib/tiktokAwbGenerator';
 import { downloadCsv } from '../../lib/csvExport';
 import {
@@ -326,14 +327,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
     }
   };
 
-  const availableCouriers = useMemo(() => {
-    const set = new Set<string>();
-    orders.forEach((o) => {
-      const carrier = (o.shipping_carrier || '').trim();
-      if (carrier) set.add(carrier);
-    });
-    return Array.from(set).sort().map((c) => ({ key: c.toUpperCase(), name: c }));
-  }, [orders]);
+  const courierOptions = useMemo(() => buildGroupedCourierOptions(orders), [orders]);
 
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
@@ -354,11 +348,8 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
         if (st !== 'CANCELLED') return false;
       }
 
-      // Courier filter
-      if (courierFilter !== 'all') {
-        const carrier = (order.shipping_carrier || '').toUpperCase();
-        if (!carrier.includes(courierFilter)) return false;
-      }
+      // Grouped / Individual Courier filter
+      if (!matchesCourierFilter(order.shipping_carrier, courierFilter)) return false;
 
       // Tracking Resi filter
       if (trackingFilter !== 'all') {
@@ -623,16 +614,13 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
       {/* Row 2: Secondary Filter Bar (Courier & Tracking Resi) */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-neutral-900/50 border border-white/10 text-xs relative z-20">
         <div className="flex flex-wrap items-center gap-3">
-          {/* Courier Filter */}
+          {/* Courier Filter with Instant, Same Day, and Reguler/YES Groups */}
           <FilterSelect
             label="Jasa Kirim"
             value={courierFilter}
             onChange={setCourierFilter}
             icon={<Truck className="w-3.5 h-3.5" />}
-            options={[
-              { value: 'all', label: 'Semua Jasa Kirim' },
-              ...availableCouriers.map((c) => ({ value: c.key, label: c.name })),
-            ]}
+            options={courierOptions}
           />
 
           {/* Tracking Resi Filter */}
