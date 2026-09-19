@@ -1,0 +1,179 @@
+# Exacoat Manager & Core Platform - Agent Rules & Architecture Reference
+
+This document is the authoritative operational guideline, system boundaries, and architectural reference for AI agents and developers working in this repository.
+
+---
+
+## 1. Mandatory Knowledge Preservation Directive (Save to Docs / Markdown)
+
+**CRITICAL PROTOCOL FOR ALL AI AGENTS AND DEVELOPERS:**
+- Whenever you solve a non-trivial bug, introduce or alter domain rules, implement new workflows, configure marketplace webhooks/keys, or make architectural decisions, you **MUST immediately record these learnings, root causes, and architectural invariants into `AGENTS.md` and/or the relevant markdown documentation files in `docs/`**.
+- **Never leave architectural knowledge or bug fixes solely in transient chat context.**
+- Check and update relevant docs when touching specific subsystems:
+  - Warranty & RMA Review: [`docs/WARRANTY_SYSTEM.md`](file:///c:/AI/exacoat-manager/docs/WARRANTY_SYSTEM.md)
+  - Shopee Open Platform API v2: [`docs/SHOPEE_INTEGRATION.md`](file:///c:/AI/exacoat-manager/docs/SHOPEE_INTEGRATION.md)
+  - TikTok Shop Integration: [`docs/TIKTOK_INTEGRATION.md`](file:///c:/AI/exacoat-manager/docs/TIKTOK_INTEGRATION.md)
+  - Shipping & Tracking System: [`docs/SHIPPING_AND_TRACKING_SYSTEM.md`](file:///c:/AI/exacoat-manager/docs/SHIPPING_AND_TRACKING_SYSTEM.md)
+  - Multi-Channel Marketplace Architecture: [`docs/MARKETPLACE_ARCHITECTURE.md`](file:///c:/AI/exacoat-manager/docs/MARKETPLACE_ARCHITECTURE.md)
+  - Checkout & Order Engine: [`docs/CHECKOUT_AND_ORDER_SYSTEM.md`](file:///c:/AI/exacoat-manager/docs/CHECKOUT_AND_ORDER_SYSTEM.md)
+  - User Changelog: [`CHANGELOG.md`](file:///c:/AI/exacoat-manager/CHANGELOG.md)
+- Always inspect recent git commits (`git log -n 25 --oneline`) before starting to understand recent context and avoid reverting intentional changes.
+
+---
+
+## 2. Mandatory System & Brand Boundaries
+
+- **Exacoat Manager strictly manages Exacoat e-commerce operations.**
+- **NEVER use or reference `artmatter-core` in active runtime code.**
+- The WordPress master plugin for Exacoat is **`exacoat-core`** (located in `wordpress-plugin/exacoat-core/`).
+- **Language Boundary**: Do not use Indonesian for internal Exacoat systems or UI components. Use English ("Claim Warranty", "Redeem Gift", "Export Shipments"), reserving Indonesian terms only for customer-facing channel contexts (e.g. Shopee marketplace tabs) when necessary.
+- **Antislop Rule**: Never use em dashes (`—`) anywhere in UI copy, code comments, commit messages, or markdown documentation. Use hyphens (`-`), colons (`:`), commas, or parentheses instead.
+
+---
+
+## 3. Multi-Admin Architecture: No LocalStorage for Shared State
+
+Exacoat operations run across multiple admins using different physical PCs simultaneously.
+
+### The Invariant
+**NEVER store operational or fulfillment state (such as print status, order tags, or booking flags) in browser `localStorage`.**
+- `localStorage` is isolated to a single browser profile on a single physical machine. If Admin A marks an order printed on PC 1, Admin B on PC 2 would never see the updated status.
+- **All shared operational state must be persisted in the WordPress database** (e.g., `_exacoat_shopee_orders_cache` option, post meta, or custom tables) via authenticated REST endpoints.
+- When any admin performs an action, the backend database is updated, ensuring all other admins immediately see the identical state upon refresh or live sync.
+
+---
+
+## 4. Shopee Open Platform API v2 & Live Push Integration
+
+### Active Credentials & Endpoints
+- **App Name**: `Exacoat n8n` (App ID: `220533`)
+- **Console URL**: `https://open.shopee.com/console/push/220533`
+- **Deployment Service Area**: `Singapore` (standard SEA gateway for Shopee Indonesia)
+- **Live Callback URL**:
+  ```
+  https://exacoat.com/wp-json/exacoat-core/v1/shopee/webhook
+  ```
+  (Staging: `https://staging.exacoat.com/wp-json/exacoat-core/v1/shopee/webhook`)
+- **Live Push Partner Key**:
+  ```
+  58724959565954534b6d797147587a55505a4f79614243526464424a66686e63
+  ```
+- **Live Push Status**: `ON` with `Status: Normal` (all 30 push mechanisms enabled).
+
+### Supported Push Event Codes in Backend (`class-shopee-client.php`)
+- **Code 1 (`shop_authorization_push`)**: Store connected.
+- **Code 2 (`shop_authorization_canceled_push`)**: Store disconnected.
+- **Code 3 (`order_status_push`)**: Real-time order status transitions (`READY_TO_SHIP`, `PROCESSED`, `SHIPPED`, `COMPLETED`, `CANCELLED`).
+- **Code 4 & 24 (`order_trackingno_push` / `booking_trackingno_push`)**: Courier tracking number (resi) assigned or updated.
+- **Code 12 (`open_api_authorization_expiry`)**: Alerts 30 days before authorization expires.
+- **Code 15 & 25 (`shipping_document_status_push` / `booking_shipping_document_status_push`)**: Shipping document generation status. When Shopee signals `PRINTED`, backend updates `shipping_document_status = 'PRINTED'` and `is_printed = true` in the central cache.
+- **Code 23 (`booking_status_push`)**: Logistics pickup/dropoff booking updates.
+- **Code 29 (`return_updates_push`)**: Buyer return and refund requests.
+- **Code 30 (`package_fulfillment_status_push`)**: Package fulfillment lifecycle.
+- **Code 37 (`courier_delivery_binding_status_push`)**: Driver binding for Instant and Same Day couriers.
+- **Code 47 (`package_info_push`)**: Parcel weight and dimension updates.
+
+### Fulfillment Status Determination
+- `order_status === 'READY_TO_SHIP'`: Order is unarranged ("Perlu Diproses" / "Perlu Diatur Pengiriman"). Prominently displays orange **Atur Pengiriman** button.
+- `order_status === 'PROCESSED'`: Order has been arranged with courier ("Telah Diproses" / "Siap Diambil Kurir").
+- `is_arranged` is strictly evaluated as `order_status === 'PROCESSED'`. Do not treat pre-generated logistics flags (`LOGISTICS_REQUEST_CREATED`, `LOGISTICS_READY`) as arranged.
+
+### Print Status Workflow
+- Single source of truth: `order.is_printed || order.shipping_document_status === 'PRINTED'`.
+- Interactive `Perlu Dicetak →` action pill directly downloads the thermal PDF and marks printed in the database.
+- Once printed, `Cetak Ulang Label` is tucked inside the 3-dots action menu (`⋮`).
+- On-demand verification: `fetch_single_order_live()` calls `/api/v2/logistics/get_shipping_document_result` for arranged orders to pull true printed status from Shopee and update the database cache.
+- Sync safety: Order synchronization in `sync_orders_direct` preserves `$was_printed` so past printed orders are never reverted by general order sync.
+
+### Configurable Pickup Scheduling
+- Endpoint `/api/v2/logistics/get_shipping_parameter` returns `pickup.time_slot_list`.
+- Each slot includes `date` (timestamp), `time_text` (e.g., `14:00 - 16:00`), and `pickup_time_id`.
+- [ArrangeShipmentModal.tsx](file:///c:/AI/exacoat-manager/src/components/orders/ArrangeShipmentModal.tsx) groups slots by date, allowing operators to configure both:
+  1. **Tanggal Pickup** (e.g. `Hari Ini (Sabtu, 20 Sep)` or `Besok (Minggu, 21 Sep)`), and
+  2. **Rentang Waktu** (e.g. `14:00 - 16:00 WIB`).
+- Submitting passes `pickup: { address_id, pickup_time_id }` directly to `/api/v2/logistics/ship_order`.
+
+---
+
+## 5. Cancelled Orders Policy across Marketplaces
+
+In both Shopee and TikTok views:
+- **Default View**: Cancelled orders (`CANCELLED`, `IN_CANCEL`, `TO_RETURN`) are strictly excluded from the `Semua` (`ALL`) filter tab.
+- **Dedicated Tab**: Cancelled orders are viewed only within the `Dibatalkan` tab.
+- **Card and Modal Hygiene**: Cancelled order cards do NOT display countdown timers, resi tracking numbers, print action pills, "Atur Pengiriman" buttons, or 3-dots menus (`⋮`). Only a clean rose `Dibatalkan` status badge is shown.
+
+---
+
+## 6. Item Title Sanitization (`cleanItemTitle`)
+
+- Product titles often come from WooCommerce or marketplaces with `[EXACOAT]` prefixes.
+- Always clean item titles using `cleanItemTitle(name)` from `src/lib/orderItems.ts` across:
+  - `WarrantyReviewModal`
+  - `ShippingLabelA6Modal`
+  - `PackingSlipModal`
+  - `CustomerInvoiceModal`
+```typescript
+export function cleanItemTitle(name?: string): string {
+  if (!name) return '';
+  return name.replace(/\[\s*EXACOAT\s*\]\s*/gi, '').trim();
+}
+```
+
+---
+
+## 7. Warranty Claim Review & Storage Purge
+
+- **Video Proof URL Normalization**: URLs starting with `/` must be resolved to `https://exacoat.com/...`; Exacoat Manager runs on `manager.exacoat.com` and relative URLs will 404.
+- **Disk Purge Invariant**: When a warranty claim is reviewed (approved or rejected via `reviewWarrantyClaimDirect`), the uploaded video proof file is immediately purged from disk via WordPress REST API to comply with disk limits and privacy.
+- **CPT Table Status Prefix**: When querying WooCommerce classic CPT tables (`shop_order`) in WordPress via `WP_Query`, post statuses are prefixed with `wc-` (`wc-pending`, `wc-processing`, etc.). Omitting `wc-` causes queries to return empty results.
+- **Deduplication Check**: Queries across `_rma_original_invoice`, `_rma_original_order_id`, and `_rma_original_order_number` to prevent duplicate replacements on the same order.
+
+---
+
+## 8. A6 Thermal Shipping Labels & Packing Slips
+
+- **Page Capacity**: Single A6 sheet holds up to 4 items on page 1 alongside full header, sender, recipient, and barcode. Larger orders use multi-page chunking (`chunkOrderItems`).
+- **Item Title Line-Height**: Item titles on labels use compact line-height (`1.08`) and tight letter-spacing to prevent awkward wrapping.
+- **Separated Specs**: In `formatSeparatedItemSpecs`, channel and original invoice numbers are strictly separated from production parts (e.g. *Back*, *Camera*, *Accents*) to help production immediately cut the right vinyl piece.
+
+---
+
+## 9. Financial Analytics and Reporting
+
+- **Strict Exclusion**: All sales reports, revenue aggregations, and financial analytics must strictly exclude cancelled, refunded, and unpaid orders across all sales channels (Webstore, Shopee, TikTok Shop).
+- Multi-channel financial reports must respect channel and timespan filters without double-counting adjustments or warranty replacement orders.
+
+---
+
+## 10. Export Shipments & JNE Email Dispatch
+
+- Automated server-side email dispatch with attachments via `class-export-manager.php`.
+- Uses `exacoat-core/templates/excel/goorita_bulk_shipment.xlsx`.
+- Validates ZeptoMail/SMTP service readiness before flagging shipments as emailed to prevent false-positive sent states.
+- All email service notices, toasts, and UI tools are localized in English.
+
+---
+
+## 11. Build, Packaging, and Release Workflow
+
+Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-core` plugin:
+1. **Bump Version**: Update version in:
+   - `package.json`
+   - `wordpress-plugin/exacoat-core/exacoat-core.php` (`Version` and `EXACOAT_CORE_VERSION`)
+2. **Build and Package**: Run:
+   ```bash
+   npm run build
+   ```
+   This executes:
+   - `node scripts/package-plugin.cjs` (creates `exacoat-core-vX.X.XX.zip` and `exacoat-core.zip` in root and `public/`)
+   - `tsc` (TypeScript typecheck)
+   - `vite build` (compiles React frontend into `dist/`)
+   - Updates `public/version.json` and `src/config/version.ts`.
+3. **Type Check**: Verify with `npx tsc --noEmit`.
+4. **Style Check**: Confirm zero em dashes with `git diff | Select-String "—"`.
+5. **Git Commit & Push**:
+   ```bash
+   git add .
+   git commit -m "feat/fix(scope): clear description without em dashes"
+   git push origin main
+   ```
