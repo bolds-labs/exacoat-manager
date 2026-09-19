@@ -42,7 +42,7 @@ export const ArrangeShipmentModal: React.FC<ArrangeShipmentModalProps> = ({
 }) => {
   const { showToast } = useToast();
 
-  const [fulfillmentType, setFulfillmentType] = useState<'dropoff' | 'pickup'>('dropoff');
+  const [fulfillmentType, setFulfillmentType] = useState<'dropoff' | 'pickup'>('pickup');
   const [isLoadingParams, setIsLoadingParams] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [parameters, setParameters] = useState<ShopeeShippingParameter | null>(null);

@@ -1,5 +1,9 @@
-﻿import React, { useState } from 'react';
-import { ShopeeOrder } from '../../lib/wordpressBridge';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  ShopeeOrder,
+  fetchShopeeTrackingInfoDirect,
+  MarketplaceTrackingCheckpoint,
+} from '../../lib/wordpressBridge';
 import { SlideDrawer } from '../ui/SlideDrawer';
 import { formatCurrency } from '../../lib/formatters';
 import { formatDisplayPhone } from '../../lib/phoneUtils';
@@ -19,6 +23,10 @@ import {
   AlertCircle,
   Tag,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useToast } from '../../context/ToastContext';
@@ -46,6 +54,44 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
 }) => {
   const { showToast } = useToast();
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Live Tracking Timeline state
+  const [trackingCheckpoints, setTrackingCheckpoints] = useState<MarketplaceTrackingCheckpoint[]>([]);
+  const [isLoadingTracking, setIsLoadingTracking] = useState(false);
+  const [trackingLoaded, setTrackingLoaded] = useState(false);
+  const [isOrderDelivered, setIsOrderDelivered] = useState(false);
+  const [deliveredTime, setDeliveredTime] = useState<string | null>(null);
+  const [showAllCheckpoints, setShowAllCheckpoints] = useState(false);
+
+  const loadTracking = useCallback(async (orderSn: string) => {
+    setIsLoadingTracking(true);
+    try {
+      const res = await fetchShopeeTrackingInfoDirect(orderSn);
+      setTrackingLoaded(true);
+      if (res.success) {
+        setTrackingCheckpoints(res.checkpoints);
+        setIsOrderDelivered(res.is_delivered);
+        setDeliveredTime(res.delivered_time || null);
+      }
+    } catch {
+      setTrackingLoaded(true);
+    } finally {
+      setIsLoadingTracking(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen || !order?.order_sn) {
+      setTrackingCheckpoints([]);
+      setTrackingLoaded(false);
+      setIsOrderDelivered(false);
+      setDeliveredTime(null);
+      setShowAllCheckpoints(false);
+      return;
+    }
+
+    loadTracking(order.order_sn);
+  }, [isOpen, order?.order_sn, loadTracking]);
 
   if (!order) return null;
 
@@ -318,6 +364,119 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
               <span className="text-[10px] uppercase font-mono text-neutral-500 block">Status</span>
               <span className="text-neutral-300 mt-0.5 block font-medium">{badge.label}</span>
             </div>
+          </div>
+
+          {/* Delivered Status Banner for 48h Warranty */}
+          {isOrderDelivered && (
+            <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-start gap-3">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="space-y-0.5 text-xs">
+                <span className="font-bold text-emerald-300 block">Package Delivered</span>
+                <p className="text-emerald-400/90 text-[11px] leading-relaxed">
+                  Delivered on <span className="font-semibold text-emerald-200">{deliveredTime || 'recent courier update'}</span>.
+                  The 48-hour warranty countdown starts from this delivery timestamp.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Carrier Checkpoints Timeline */}
+          <div className="p-4 rounded-xl bg-neutral-900/60 border border-white/10 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-mono tracking-wider text-neutral-400 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-orange-400" />
+                <span>Carrier Checkpoints ({trackingCheckpoints.length})</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => loadTracking(order.order_sn)}
+                disabled={isLoadingTracking}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono text-neutral-400 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-50 cursor-pointer"
+                title="Refresh Tracking"
+              >
+                <RefreshCw className={clsx('w-3 h-3', isLoadingTracking && 'animate-spin')} />
+                <span>Refresh</span>
+              </button>
+            </div>
+
+            {isLoadingTracking && trackingCheckpoints.length === 0 ? (
+              <div className="py-4 flex items-center justify-center gap-2 text-xs text-neutral-400">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-400" />
+                <span>Loading tracking timeline...</span>
+              </div>
+            ) : trackingCheckpoints.length === 0 ? (
+              <div className="py-2 text-neutral-500 text-xs italic">
+                {trackingLoaded
+                  ? 'No courier checkpoints recorded yet.'
+                  : 'Tracking updates will appear once courier records movement.'}
+              </div>
+            ) : (
+              <div className="space-y-2 pt-1">
+                {/* Latest Checkpoint */}
+                <div className="relative pl-5 border-l-2 border-orange-500/40 pb-2">
+                  <span
+                    className={clsx(
+                      'absolute -left-[5px] top-1.5 w-2 h-2 rounded-full ring-4 ring-neutral-900',
+                      isOrderDelivered ? 'bg-emerald-400' : 'bg-orange-400'
+                    )}
+                  />
+                  <div className="text-xs">
+                    <p className="font-semibold text-white leading-snug">
+                      {trackingCheckpoints[0].description}
+                    </p>
+                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-neutral-400 font-mono">
+                      <span>{trackingCheckpoints[0].time}</span>
+                      {trackingCheckpoints[0].location && (
+                        <span>• {trackingCheckpoints[0].location}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Remaining Checkpoints */}
+                {trackingCheckpoints.length > 1 && (
+                  <>
+                    {showAllCheckpoints && (
+                      <div className="space-y-2 pt-1">
+                        {trackingCheckpoints.slice(1).map((cp, idx) => (
+                          <div
+                            key={idx}
+                            className="relative pl-5 border-l-2 border-white/10 pb-2 last:border-transparent last:pb-0"
+                          >
+                            <span className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-neutral-600 ring-4 ring-neutral-900" />
+                            <div className="text-xs">
+                              <p className="text-neutral-300 leading-snug">{cp.description}</p>
+                              <div className="flex items-center gap-2 mt-0.5 text-[10px] text-neutral-500 font-mono">
+                                <span>{cp.time}</span>
+                                {cp.location && <span>• {cp.location}</span>}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => setShowAllCheckpoints(!showAllCheckpoints)}
+                      className="inline-flex items-center gap-1 text-[11px] font-mono text-orange-400 hover:text-orange-300 transition-colors pt-1 cursor-pointer"
+                    >
+                      {showAllCheckpoints ? (
+                        <>
+                          <ChevronUp className="w-3.5 h-3.5" />
+                          <span>Hide earlier checkpoints</span>
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="w-3.5 h-3.5" />
+                          <span>View earlier checkpoints ({trackingCheckpoints.length - 1} more)</span>
+                        </>
+                      )}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

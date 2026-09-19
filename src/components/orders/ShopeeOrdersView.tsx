@@ -175,6 +175,15 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
 
       if (settingsRes.success && settingsRes.settings) {
         setSettings(settingsRes.settings);
+        // Auto-sync from Shopee API on page open if store is connected
+        if (settingsRes.settings.is_connected && !quiet) {
+          syncShopeeOrdersDirect().then((syncRes) => {
+            if (syncRes.success && Array.isArray(syncRes.orders) && syncRes.orders.length > 0) {
+              setOrders(syncRes.orders);
+              setIsDemoMode(false);
+            }
+          }).catch(() => {});
+        }
       }
     } catch {
       setOrders(MOCK_SHOPEE_ORDERS);
@@ -803,17 +812,6 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                     >
                       {statusBadge.label}
                     </span>
-
-                    {/* Quick Print Thermal Label */}
-                    <button
-                      type="button"
-                      onClick={() => handlePrintShopeeLabel(order)}
-                      className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                      title="Print Shopee Air Waybill"
-                    >
-                      <Printer className="w-3.5 h-3.5 text-neutral-400" />
-                      <span>Label</span>
-                    </button>
 
                     {/* Arrange Shipment Button if ready */}
                     {isReadyToShip && (

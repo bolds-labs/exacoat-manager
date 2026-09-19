@@ -141,6 +141,15 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
 
       if (settingsRes.success && settingsRes.settings) {
         setSettings(settingsRes.settings);
+        // Auto-sync from TikTok API on page open if shop is connected
+        if (settingsRes.settings.is_connected && !quiet) {
+          syncTikTokOrdersDirect().then((syncRes) => {
+            if (syncRes.success && Array.isArray(syncRes.orders) && syncRes.orders.length > 0) {
+              setOrders(syncRes.orders);
+              setIsDemoMode(false);
+            }
+          }).catch(() => {});
+        }
       }
     } catch {
       setOrders(MOCK_TIKTOK_ORDERS);

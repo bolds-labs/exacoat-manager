@@ -4120,5 +4120,97 @@ export async function downloadTikTokShippingLabelDirect(
   }
 }
 
+export interface MarketplaceTrackingCheckpoint {
+  time: string;
+  timestamp: number;
+  description: string;
+  stage?: 'pickup' | 'in_transit' | 'delivered' | string;
+  logistics_status?: string;
+  location?: string;
+}
+
+export interface MarketplaceTrackingResponse {
+  success: boolean;
+  order_sn?: string;
+  order_id?: string;
+  tracking_number?: string;
+  shipping_carrier?: string;
+  logistics_status?: string;
+  is_delivered: boolean;
+  delivered_time?: string | null;
+  delivered_ts?: number | null;
+  checkpoints: MarketplaceTrackingCheckpoint[];
+  error?: string;
+}
+
+export async function fetchShopeeTrackingInfoDirect(
+  orderSn: string
+): Promise<MarketplaceTrackingResponse> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/tracking-info?order_sn=${encodeURIComponent(orderSn)}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        order_sn: data.order_sn,
+        tracking_number: data.tracking_number,
+        shipping_carrier: data.shipping_carrier,
+        logistics_status: data.logistics_status,
+        is_delivered: Boolean(data.is_delivered),
+        delivered_time: data.delivered_time,
+        delivered_ts: data.delivered_ts,
+        checkpoints: Array.isArray(data.checkpoints) ? data.checkpoints : [],
+      };
+    }
+    return {
+      success: false,
+      is_delivered: false,
+      checkpoints: [],
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, is_delivered: false, checkpoints: [], error: err.message };
+  }
+}
+
+export async function fetchTikTokTrackingInfoDirect(
+  orderId: string
+): Promise<MarketplaceTrackingResponse> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/tiktok/tracking-info?order_id=${encodeURIComponent(orderId)}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        order_id: data.order_id,
+        tracking_number: data.tracking_number,
+        shipping_carrier: data.shipping_carrier,
+        is_delivered: Boolean(data.is_delivered),
+        delivered_time: data.delivered_time,
+        delivered_ts: data.delivered_ts,
+        checkpoints: Array.isArray(data.checkpoints) ? data.checkpoints : [],
+      };
+    }
+    return {
+      success: false,
+      is_delivered: false,
+      checkpoints: [],
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, is_delivered: false, checkpoints: [], error: err.message };
+  }
+}
+
 
 

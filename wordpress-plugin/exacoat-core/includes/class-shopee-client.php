@@ -910,6 +910,13 @@ class Exacoat_Shopee_Client {
 			'callback'            => [ __CLASS__, 'rest_download_shipping_document' ],
 			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
 		]);
+
+		// 11. GET /shopee/tracking-info (live logistics checkpoints and delivery detection)
+		register_rest_route( $ns, '/shopee/tracking-info', [
+			'methods'             => 'GET',
+			'callback'            => [ __CLASS__, 'rest_get_tracking_info' ],
+			'permission_callback' => '__return_true',
+		]);
 	}
 
 	public static function check_admin_permission(): bool {
@@ -1134,6 +1141,135 @@ class Exacoat_Shopee_Client {
 		return rest_ensure_response( $res );
 	}
 
+	/**
+	 * Retrieve tracking timeline checkpoints and detect true delivery status
+	 */
+	public static function get_tracking_info( string $order_sn ): array {
+		$clean_sn = trim( preg_replace( '/^#+/', '', $order_sn ) );
+		if ( empty( $clean_sn ) ) {
+			return [
+				'success' => false,
+				'error'   => 'Order SN is required.',
+			];
+		}
+
+		$cached_orders = get_option( self::ORDERS_CACHE_KEY, [] );
+		$cached_order  = null;
+		foreach ( (array) $cached_orders as $ord ) {
+			if ( strcasecmp( $ord['order_sn'] ?? '', $clean_sn ) === 0 ) {
+				$cached_order = $ord;
+				break;
+			}
+		}
+
+		$checkpoints      = [];
+		$logistics_status = '';
+		$is_delivered     = false;
+		$delivered_time   = null;
+		$delivered_ts     = null;
+
+		// 1. Query Shopee Open Platform API for live tracking info
+		$api_res = self::call_shop_api( '/api/v2/logistics/get_tracking_info', 'GET', [ 'order_sn' => $clean_sn ] );
+		if ( ! empty( $api_res['success'] ) && ! empty( $api_res['response'] ) ) {
+			$resp = $api_res['response'];
+			$logistics_status = (string) ( $resp['logistics_status'] ?? '' );
+			$raw_events = $resp['tracking_info'] ?? [];
+
+			if ( is_array( $raw_events ) && ! empty( $raw_events ) ) {
+				usort( $raw_events, function( $a, $b ) {
+					return ( (int) ( $b['update_time'] ?? 0 ) ) <=> ( (int) ( $a['update_time'] ?? 0 ) );
+				});
+
+				foreach ( $raw_events as $ev ) {
+					$ev_ts     = (int) ( $ev['update_time'] ?? 0 );
+					$ev_desc   = trim( (string) ( $ev['description'] ?? '' ) );
+					$ev_status = strtoupper( (string) ( $ev['logistics_status'] ?? '' ) );
+
+					$stage = 'in_transit';
+					$desc_lower = strtolower( $ev_desc );
+					if (
+						str_contains( $ev_status, 'DELIVERY_DONE' ) ||
+						str_contains( $ev_status, 'DELIVERED' ) ||
+						str_contains( $desc_lower, 'delivered' ) ||
+						str_contains( $desc_lower, 'telah sampai' ) ||
+						str_contains( $desc_lower, 'diterima' ) ||
+						str_contains( $desc_lower, 'selesai' )
+					) {
+						$stage = 'delivered';
+						if ( ! $is_delivered ) {
+							$is_delivered   = true;
+							$delivered_ts   = $ev_ts;
+							$delivered_time = $ev_ts ? date( 'Y-m-d H:i:s', $ev_ts ) : current_time( 'mysql' );
+						}
+					} elseif ( str_contains( $ev_status, 'PICKUP' ) || str_contains( $desc_lower, 'pickup' ) || str_contains( $desc_lower, 'diserahkan' ) ) {
+						$stage = 'pickup';
+					}
+
+					$checkpoints[] = [
+						'time'             => $ev_ts ? date( 'Y-m-d H:i:s', $ev_ts ) : '',
+						'timestamp'        => $ev_ts,
+						'description'      => $ev_desc,
+						'stage'            => $stage,
+						'logistics_status' => $ev_status,
+					];
+				}
+			}
+		}
+
+		// 2. Fallback to Shipping Tracker if carrier and resi exist
+		if ( empty( $checkpoints ) && $cached_order && ! empty( $cached_order['tracking_number'] ) ) {
+			$carrier = $cached_order['shipping_carrier'] ?? '';
+			$resi    = $cached_order['tracking_number'];
+			if ( class_exists( 'Exacoat_Shipping_Tracker' ) && method_exists( 'Exacoat_Shipping_Tracker', 'track_shipment' ) ) {
+				$track_res = \Exacoat_Shipping_Tracker::track_shipment( $carrier, $resi );
+				if ( ! empty( $track_res['checkpoints'] ) ) {
+					$checkpoints = $track_res['checkpoints'];
+					if ( ( $track_res['latest_status'] ?? '' ) === 'delivered' ) {
+						$is_delivered   = true;
+						$delivered_time = $track_res['delivered_at'] ?? ( $checkpoints[0]['time'] ?? current_time( 'mysql' ) );
+						$delivered_ts   = strtotime( $delivered_time );
+					}
+				}
+			}
+		}
+
+		// 3. Fallback check from cached order status
+		if ( ! $is_delivered && $cached_order ) {
+			$raw_st = strtoupper( $cached_order['order_status'] ?? '' );
+			if ( in_array( $raw_st, [ 'COMPLETED', 'DELIVERED' ], true ) ) {
+				$is_delivered   = true;
+				$delivered_time = $cached_order['delivered_time'] ?? ( $cached_order['update_time'] ?? ( $cached_order['pay_time'] ?? current_time( 'mysql' ) ) );
+				$delivered_ts   = strtotime( $delivered_time );
+			}
+		}
+
+		// If delivered, update cached order field
+		if ( $is_delivered && $delivered_time ) {
+			self::update_order_cache_field( $clean_sn, [
+				'order_status'   => 'COMPLETED',
+				'delivered_time' => $delivered_time,
+			]);
+		}
+
+		return [
+			'success'          => true,
+			'order_sn'         => $clean_sn,
+			'tracking_number'  => $cached_order['tracking_number'] ?? '',
+			'shipping_carrier' => $cached_order['shipping_carrier'] ?? '',
+			'logistics_status' => $logistics_status,
+			'is_delivered'     => $is_delivered,
+			'delivered_time'   => $delivered_time,
+			'delivered_ts'     => $delivered_ts,
+			'checkpoints'      => $checkpoints,
+		];
+	}
+
+	public static function rest_get_tracking_info( \WP_REST_Request $request ): \WP_REST_Response {
+		$order_sn = trim( (string) $request->get_param( 'order_sn' ) );
+		$res = self::get_tracking_info( $order_sn );
+		return rest_ensure_response( $res );
+	}
+
 	public static function rest_verify_order( \WP_REST_Request $request ): \WP_REST_Response {
 		$order_sn = trim( (string) $request->get_param( 'order_sn' ) );
 		$clean = preg_replace( '/^#+/', '', $order_sn );
@@ -1160,33 +1296,54 @@ class Exacoat_Shopee_Client {
 		// Check cached orders
 		$cached = get_option( self::ORDERS_CACHE_KEY, [] );
 		$found = null;
-		foreach ( $cached as $ord ) {
+		foreach ( (array) $cached as $ord ) {
 			if ( strcasecmp( $ord['order_sn'] ?? '', $clean ) === 0 ) {
 				$found = $ord;
 				break;
 			}
 		}
 
+		// Query tracking info to detect live delivery status
+		$tracking       = self::get_tracking_info( $clean );
+		$order_status   = $found['order_status'] ?? ( $tracking['logistics_status'] ?: 'UNKNOWN' );
+		$is_delivered   = ! empty( $tracking['is_delivered'] ) || in_array( strtoupper( $order_status ), [ 'COMPLETED', 'DELIVERED' ], true );
+		$delivered_time = $tracking['delivered_time'] ?? ( $found['delivered_time'] ?? null );
+
 		if ( $found ) {
 			return rest_ensure_response([
 				'success'          => true,
 				'order_sn'         => $found['order_sn'],
-				'order_status'     => $found['order_status'],
-				'buyer_username'   => $found['buyer_username'],
-				'shipping_carrier' => $found['shipping_carrier'],
-				'tracking_number'  => $found['tracking_number'],
-				'items'            => $found['items'],
+				'order_status'     => $is_delivered ? 'COMPLETED' : $order_status,
+				'is_delivered'     => $is_delivered,
+				'delivered_time'   => $delivered_time,
+				'buyer_username'   => $found['buyer_username'] ?? '',
+				'shipping_carrier' => $found['shipping_carrier'] ?? '',
+				'tracking_number'  => $found['tracking_number'] ?? '',
+				'items'            => $found['items'] ?? [],
 				'already_claimed'  => false,
 			]);
 		}
 
-		// If not in cache, try quick sync or return basic eligible stub
+		// If live checkpoints were retrieved from Shopee API, return tracking state
+		if ( ! empty( $tracking['checkpoints'] ) ) {
+			return rest_ensure_response([
+				'success'          => true,
+				'order_sn'         => $clean,
+				'order_status'     => $is_delivered ? 'COMPLETED' : 'IN_TRANSIT',
+				'is_delivered'     => $is_delivered,
+				'delivered_time'   => $delivered_time,
+				'already_claimed'  => false,
+			]);
+		}
+
+		// Order not found in cache or live query
 		return rest_ensure_response([
-			'success'          => true,
+			'success'          => false,
 			'order_sn'         => $clean,
-			'order_status'     => 'ELIGIBLE',
+			'order_status'     => 'NOT_FOUND',
+			'is_delivered'     => false,
 			'already_claimed'  => false,
-			'message'          => 'Invoice is eligible for warranty claim.',
+			'message'          => "Shopee order #{$clean} not found. Please verify your invoice number.",
 		]);
 	}
 

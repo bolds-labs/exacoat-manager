@@ -854,6 +854,13 @@ class Exacoat_TikTok_Client {
 			'callback'            => [ __CLASS__, 'rest_refresh_shops' ],
 			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
 		]);
+
+		// 11. GET /tiktok/tracking-info (live logistics checkpoints and delivery detection)
+		register_rest_route( $ns, '/tiktok/tracking-info', [
+			'methods'             => 'GET',
+			'callback'            => [ __CLASS__, 'rest_get_tracking_info' ],
+			'permission_callback' => '__return_true',
+		]);
 	}
 
 	public static function rest_refresh_shops( \WP_REST_Request $request ): \WP_REST_Response {
@@ -1033,6 +1040,135 @@ class Exacoat_TikTok_Client {
 		return rest_ensure_response( $res );
 	}
 
+	/**
+	 * Retrieve tracking timeline checkpoints and detect true delivery status
+	 */
+	public static function get_tracking_info( string $order_id ): array {
+		$clean_id = trim( preg_replace( '/^#+/', '', $order_id ) );
+		if ( empty( $clean_id ) ) {
+			return [
+				'success' => false,
+				'error'   => 'Order ID is required.',
+			];
+		}
+
+		$cached_orders = get_option( self::ORDERS_CACHE_KEY, [] );
+		$cached_order  = null;
+		foreach ( (array) $cached_orders as $ord ) {
+			if ( strcasecmp( $ord['order_id'] ?? '', $clean_id ) === 0 || strcasecmp( $ord['order_sn'] ?? '', $clean_id ) === 0 ) {
+				$cached_order = $ord;
+				break;
+			}
+		}
+
+		$checkpoints    = [];
+		$is_delivered   = false;
+		$delivered_time = null;
+		$delivered_ts   = null;
+
+		// 1. Query TikTok Shop API if package_id exists
+		$package_id = $cached_order['package_id'] ?? '';
+		if ( ! empty( $package_id ) ) {
+			$track_res = self::call_api( "/fulfillment/202309/packages/{$package_id}/tracking", 'GET' );
+			if ( ! empty( $track_res['success'] ) && ! empty( $track_res['response'] ) ) {
+				$raw_events = $track_res['response']['tracking_events'] ?? ( $track_res['response']['events'] ?? [] );
+				if ( is_array( $raw_events ) && ! empty( $raw_events ) ) {
+					usort( $raw_events, function( $a, $b ) {
+						return ( (int) ( $b['update_time'] ?? 0 ) ) <=> ( (int) ( $a['update_time'] ?? 0 ) );
+					});
+
+					foreach ( $raw_events as $ev ) {
+						$ev_ts = (int) ( $ev['update_time'] ?? ( $ev['event_time'] ?? 0 ) );
+						if ( strlen( (string) $ev_ts ) > 10 ) {
+							$ev_ts = (int) ( $ev_ts / 1000 );
+						}
+						$ev_desc = trim( (string) ( $ev['description'] ?? ( $ev['event_name'] ?? '' ) ) );
+						$ev_type = strtoupper( (string) ( $ev['event_type'] ?? '' ) );
+
+						$stage = 'in_transit';
+						$desc_lower = strtolower( $ev_desc );
+						if (
+							str_contains( $ev_type, 'DELIVERED' ) ||
+							str_contains( $ev_type, 'COMPLETED' ) ||
+							str_contains( $desc_lower, 'delivered' ) ||
+							str_contains( $desc_lower, 'telah sampai' ) ||
+							str_contains( $desc_lower, 'diterima' ) ||
+							str_contains( $desc_lower, 'selesai' )
+						) {
+							$stage = 'delivered';
+							if ( ! $is_delivered ) {
+								$is_delivered   = true;
+								$delivered_ts   = $ev_ts;
+								$delivered_time = $ev_ts ? date( 'Y-m-d H:i:s', $ev_ts ) : current_time( 'mysql' );
+							}
+						} elseif ( str_contains( $ev_type, 'PICKUP' ) || str_contains( $desc_lower, 'pickup' ) || str_contains( $desc_lower, 'diserahkan' ) ) {
+							$stage = 'pickup';
+						}
+
+						$checkpoints[] = [
+							'time'        => $ev_ts ? date( 'Y-m-d H:i:s', $ev_ts ) : '',
+							'timestamp'   => $ev_ts,
+							'description' => $ev_desc,
+							'stage'       => $stage,
+						];
+					}
+				}
+			}
+		}
+
+		// 2. Fallback to Shipping Tracker if carrier and resi exist
+		if ( empty( $checkpoints ) && $cached_order && ! empty( $cached_order['tracking_number'] ) ) {
+			$carrier = $cached_order['shipping_carrier'] ?? '';
+			$resi    = $cached_order['tracking_number'];
+			if ( class_exists( 'Exacoat_Shipping_Tracker' ) && method_exists( 'Exacoat_Shipping_Tracker', 'track_shipment' ) ) {
+				$track_res = \Exacoat_Shipping_Tracker::track_shipment( $carrier, $resi );
+				if ( ! empty( $track_res['checkpoints'] ) ) {
+					$checkpoints = $track_res['checkpoints'];
+					if ( ( $track_res['latest_status'] ?? '' ) === 'delivered' ) {
+						$is_delivered   = true;
+						$delivered_time = $track_res['delivered_at'] ?? ( $checkpoints[0]['time'] ?? current_time( 'mysql' ) );
+						$delivered_ts   = strtotime( $delivered_time );
+					}
+				}
+			}
+		}
+
+		// 3. Fallback check from cached order status
+		if ( ! $is_delivered && $cached_order ) {
+			$raw_st = strtoupper( $cached_order['order_status'] ?? '' );
+			if ( in_array( $raw_st, [ 'COMPLETED', 'DELIVERED' ], true ) ) {
+				$is_delivered   = true;
+				$delivered_time = $cached_order['delivered_time'] ?? ( $cached_order['update_time'] ?? ( $cached_order['pay_time'] ?? current_time( 'mysql' ) ) );
+				$delivered_ts   = strtotime( $delivered_time );
+			}
+		}
+
+		// If delivered, update cached order field
+		if ( $is_delivered && $delivered_time ) {
+			self::update_order_cache_field( $clean_id, [
+				'order_status'   => 'COMPLETED',
+				'delivered_time' => $delivered_time,
+			]);
+		}
+
+		return [
+			'success'          => true,
+			'order_id'         => $clean_id,
+			'tracking_number'  => $cached_order['tracking_number'] ?? '',
+			'shipping_carrier' => $cached_order['shipping_carrier'] ?? '',
+			'is_delivered'     => $is_delivered,
+			'delivered_time'   => $delivered_time,
+			'delivered_ts'     => $delivered_ts,
+			'checkpoints'      => $checkpoints,
+		];
+	}
+
+	public static function rest_get_tracking_info( \WP_REST_Request $request ): \WP_REST_Response {
+		$order_id = trim( (string) $request->get_param( 'order_id' ) );
+		$res = self::get_tracking_info( $order_id );
+		return rest_ensure_response( $res );
+	}
+
 	public static function rest_verify_order( \WP_REST_Request $request ): \WP_REST_Response {
 		$order_id = trim( (string) $request->get_param( 'order_id' ) );
 		$clean = preg_replace( '/^#+/', '', $order_id );
@@ -1064,25 +1200,46 @@ class Exacoat_TikTok_Client {
 			}
 		}
 
+		// Query live tracking info to detect real delivery status
+		$tracking       = self::get_tracking_info( $clean );
+		$order_status   = $found['order_status'] ?? 'UNKNOWN';
+		$is_delivered   = ! empty( $tracking['is_delivered'] ) || in_array( strtoupper( $order_status ), [ 'COMPLETED', 'DELIVERED' ], true );
+		$delivered_time = $tracking['delivered_time'] ?? ( $found['delivered_time'] ?? null );
+
 		if ( $found ) {
 			return rest_ensure_response([
 				'success'          => true,
 				'order_id'         => $found['order_id'],
-				'order_status'     => $found['order_status'],
-				'buyer_username'   => $found['buyer_username'],
-				'shipping_carrier' => $found['shipping_carrier'],
-				'tracking_number'  => $found['tracking_number'],
-				'items'            => $found['items'],
+				'order_status'     => $is_delivered ? 'COMPLETED' : $order_status,
+				'is_delivered'     => $is_delivered,
+				'delivered_time'   => $delivered_time,
+				'buyer_username'   => $found['buyer_username'] ?? '',
+				'shipping_carrier' => $found['shipping_carrier'] ?? '',
+				'tracking_number'  => $found['tracking_number'] ?? '',
+				'items'            => $found['items'] ?? [],
+				'already_claimed'  => false,
+			]);
+		}
+
+		// If live checkpoints were retrieved, return tracking state
+		if ( ! empty( $tracking['checkpoints'] ) ) {
+			return rest_ensure_response([
+				'success'          => true,
+				'order_id'         => $clean,
+				'order_status'     => $is_delivered ? 'COMPLETED' : 'IN_TRANSIT',
+				'is_delivered'     => $is_delivered,
+				'delivered_time'   => $delivered_time,
 				'already_claimed'  => false,
 			]);
 		}
 
 		return rest_ensure_response([
-			'success'         => true,
-			'order_id'        => $clean,
-			'order_status'    => 'ELIGIBLE',
-			'already_claimed' => false,
-			'message'         => 'TikTok Shop invoice is eligible for warranty claim.',
+			'success'          => false,
+			'order_id'         => $clean,
+			'order_status'     => 'NOT_FOUND',
+			'is_delivered'     => false,
+			'already_claimed'  => false,
+			'message'          => "TikTok Shop order #{$clean} not found. Please verify your invoice number.",
 		]);
 	}
 
