@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.0.52.zip?v=0.0.52",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-19T16:46:31.935Z",
+  "last_updated": "2026-09-19T16:47:17.319Z",
   "sections": {
     "description": "The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.",
     "changelog": "### Version 0.0.52\n- Added automated server-side email dispatch for JNE batch exports with XLSX and CSV attached\n- Set sender to noreply@exacoat.com with CC to exacoat.cs@gmail.com\n- Added JNE email dispatch tracking and configurable CC settings"

@@ -7,6 +7,7 @@ import {
 import { SlideDrawer } from '../ui/SlideDrawer';
 import { formatCurrency } from '../../lib/formatters';
 import { formatDisplayPhone } from '../../lib/phoneUtils';
+import { ShipCountdownBadge } from './ShipCountdownBadge';
 import {
   Package,
   Truck,
@@ -98,7 +99,7 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
   const handleCopy = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
     setCopiedKey(key);
-    showToast('info', 'Copied to Clipboard', text);
+    showToast('info', 'Tersalin ke Clipboard', text);
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
@@ -106,32 +107,35 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
     const s = (status || '').toUpperCase();
     switch (s) {
       case 'READY_TO_SHIP':
-        if (ord?.tracking_number?.trim() || ord?.is_arranged) {
-          return { label: 'Shipping Scheduled', bg: 'bg-sky-500/10', text: 'text-sky-300', border: 'border-sky-500/20' };
+        if (ord?.order_status === 'PROCESSED' || ord?.is_arranged) {
+          return { label: 'Telah Diproses', bg: 'bg-sky-500/10', text: 'text-sky-300', border: 'border-sky-500/20' };
         }
-        return { label: 'Ready to Ship', bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-500/20' };
+        return { label: 'Perlu Diproses', bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-500/20' };
       case 'PROCESSED':
-        return { label: 'Shipping Scheduled', bg: 'bg-sky-500/10', text: 'text-sky-300', border: 'border-sky-500/20' };
+        return { label: 'Telah Diproses', bg: 'bg-sky-500/10', text: 'text-sky-300', border: 'border-sky-500/20' };
       case 'SHIPPED':
-        return { label: 'In Transit', bg: 'bg-blue-500/10', text: 'text-blue-300', border: 'border-blue-500/20' };
+        return { label: 'Dikirim', bg: 'bg-blue-500/10', text: 'text-blue-300', border: 'border-blue-500/20' };
       case 'TO_CONFIRM_RECEIVE':
-        return { label: 'Delivered', bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/20' };
+        return { label: 'Telah Sampai', bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/20' };
       case 'COMPLETED':
-        return { label: 'Completed', bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/20' };
+        return { label: 'Selesai', bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/20' };
       case 'CANCELLED':
       case 'IN_CANCEL':
-        return { label: 'Cancelled', bg: 'bg-rose-500/10', text: 'text-rose-300', border: 'border-rose-500/20' };
+        return { label: 'Dibatalkan', bg: 'bg-rose-500/10', text: 'text-rose-300', border: 'border-rose-500/20' };
       case 'TO_RETURN':
-        return { label: 'Return / Refund', bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-500/20' };
+        return { label: 'Pengembalian', bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-500/20' };
+      case 'UNPAID':
+        return { label: 'Belum Bayar', bg: 'bg-neutral-800', text: 'text-neutral-400', border: 'border-white/10' };
       default:
-        return { label: status || 'Pending', bg: 'bg-neutral-800', text: 'text-neutral-300', border: 'border-white/10' };
+        return { label: status || 'N/A', bg: 'bg-neutral-800', text: 'text-neutral-300', border: 'border-white/10' };
     }
   };
 
   const badge = getStatusBadge(order.order_status, order);
-  const isArranged = Boolean(order.tracking_number?.trim() || order.order_status === 'PROCESSED' || order.is_arranged);
+  const isArranged = Boolean(order.order_status === 'PROCESSED' || order.is_arranged);
   const isReadyToShip = order.order_status === 'READY_TO_SHIP' && !isArranged;
-  const canPrint = Boolean(order.tracking_number?.trim() || order.order_status === 'PROCESSED' || order.order_status === 'SHIPPED' || order.order_status === 'TO_CONFIRM_RECEIVE' || order.order_status === 'COMPLETED');
+  const canPrint = Boolean(isArranged || ['SHIPPED', 'TO_CONFIRM_RECEIVE', 'COMPLETED'].includes((order.order_status || '').toUpperCase()));
+  const isOrderPrinted = Boolean(isPrinted || order.is_printed || order.shipping_document_status === 'PRINTED');
 
   return (
     <SlideDrawer
@@ -150,7 +154,7 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
             type="button"
             onClick={() => handleCopy(order.order_sn, 'order_sn')}
             className="p-1 rounded-md hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
-            title="Copy Order SN"
+            title="Salin No. Pesanan"
           >
             {copiedKey === 'order_sn' ? (
               <Check className="w-3.5 h-3.5 text-emerald-400" />
@@ -160,7 +164,7 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
           </button>
         </div>
       }
-      subtitle={`Placed on ${order.create_time} | Buyer: @${order.buyer_username}`}
+      subtitle={`Waktu Pesanan: ${order.create_time} | Pembeli: @${order.buyer_username}`}
       headerActions={
         <div className="flex items-center gap-2">
           {canPrint && (
@@ -169,14 +173,14 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
               onClick={() => onPrintLabel(order)}
               className={clsx(
                 'px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border',
-                isPrinted
+                isOrderPrinted
                   ? 'bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 border-white/10'
                   : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/30'
               )}
-              title={isPrinted ? 'Reprint 4x6 shipping label' : 'Print 4x6 shipping label'}
+              title={isOrderPrinted ? 'Cetak ulang label resmi 100x150mm Shopee' : 'Cetak label resmi 100x150mm Shopee'}
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>{isPrinted ? 'Reprint Label' : 'Print Label'}</span>
+              <span>{isOrderPrinted ? 'Cetak Ulang' : 'Cetak Label'}</span>
             </button>
           )}
           <span
@@ -202,7 +206,7 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
               className="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm shadow-orange-500/20"
             >
               <Printer className="w-4 h-4" />
-              <span>Print Shopee Label</span>
+              <span>Cetak Label Shopee</span>
             </button>
 
             {isReadyToShip && onArrangeShipment && (
@@ -212,7 +216,7 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
                 className="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Truck className="w-4 h-4" />
-                <span>Arrange Shipment</span>
+                <span>Atur Pengiriman</span>
               </button>
             )}
           </div>
