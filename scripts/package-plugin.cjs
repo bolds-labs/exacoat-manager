@@ -81,7 +81,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       description: 'The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.',
-      changelog: `### Version ${version}\n- Added Admin Override bypass for duplicate warranty and redeem claims on marketplace invoices and existing orders\n- Recorded _rma_duplicate_override metadata and audit trail order notes when duplicate claims are authorized\n- Fixed packing slip precision skin specifications summary rendering`,
+      changelog: `### Version ${version}\n- Added server-side courier filtering in get_orders REST handler across shipping order items and carrier metadata\n- Synchronized pagination and total counts for filtered order queries\n- Updated 4x6 shipping label button to display amber when unprinted and normal grey when printed\n- Restricted shop manager role permissions to orders management only`,
     },
   };
 

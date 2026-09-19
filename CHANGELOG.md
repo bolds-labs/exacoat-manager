@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.40] - 2026-09-19
+
+### Server-Side Courier Filtering, Amber Print Labels & Role Access
+- **Server-Side Courier & Status Filtering**:
+  - Added courier parameter handling to `/exacoat/v1/orders` REST route across `woocommerce_order_items` and order carrier metadata (`carrier_id`, `_tracking_provider`, `_artmatter_tracking_info`).
+  - Added courier keyword matching for POS Indonesia, JNE, Goorita, Lion Parcel, SiCepat, J&T, Biteship, and Store Pickup.
+  - Returns exact `total_orders` and `max_pages` for filtered order queries.
+  - Synchronized client `OrderTable` and `OrdersView` pagination calculations so filtered views display accurate order ranges (e.g. Showing 1 to 3 of 3 orders).
+- **Print 4x6 Label Styling**:
+  - Updated 4x6 shipping label buttons to display an amber accent with a status dot when unprinted.
+  - Switches to normal grey once clicked or printed, with cross-component event broadcasting across table rows, mobile cards, and order details.
+- **WordPress Role Sync & Shop Manager Restrictions**:
+  - Synchronized WordPress administrator and shop_manager accounts with Manager ERP team roles.
+  - Restricted shop_manager operators to orders management only.
+- **Document Template Streamlining**:
+  - Removed redundant billing/shipping duplicate sections, QC check, and picking footer blocks from customer invoice and packing slip templates.
+
+---
+
 ## [0.0.39] - 2026-09-19
 
 ### RMA Duplicate Claim Admin Override & Packing Slip Enhancements

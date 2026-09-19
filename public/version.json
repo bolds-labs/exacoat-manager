@@ -1,17 +1,17 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.0.39",
+  "version": "0.0.40",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.0.39.zip?v=0.0.39",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.0.40.zip?v=0.0.40",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-19T10:22:41.741Z",
+  "last_updated": "2026-09-19T10:26:24.017Z",
   "sections": {
     "description": "The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.",
-    "changelog": "### Version 0.0.39\n- Added Admin Override bypass for duplicate warranty and redeem claims on marketplace invoices and existing orders\n- Recorded _rma_duplicate_override metadata and audit trail order notes when duplicate claims are authorized\n- Fixed packing slip precision skin specifications summary rendering"
+    "changelog": "### Version 0.0.40\n- Added server-side courier filtering in get_orders REST handler across shipping order items and carrier metadata\n- Synchronized pagination and total counts for filtered order queries\n- Updated 4x6 shipping label button to display amber when unprinted and normal grey when printed\n- Restricted shop manager role permissions to orders management only"
   }
 }
