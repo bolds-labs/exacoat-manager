@@ -28,6 +28,7 @@ import {
   ChevronUp,
   RefreshCw,
   Loader2,
+  ArrowRight,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useToast } from '../../context/ToastContext';
@@ -167,38 +168,24 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
       subtitle={`Waktu Pesanan: ${order.create_time} | Pembeli: @${order.buyer_username}`}
       headerActions={
         <div className="flex items-center gap-2">
-          {canPrint && (
+          {!isOrderPrinted ? (
             <button
               type="button"
               onClick={() => onPrintLabel(order)}
-              className={clsx(
-                'px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border',
-                isOrderPrinted
-                  ? 'bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 border-white/10'
-                  : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/30'
-              )}
-              title={isOrderPrinted ? 'Cetak ulang label resmi 100x150mm Shopee' : 'Cetak label resmi 100x150mm Shopee'}
+              className="group px-3 py-1 rounded-full font-semibold border flex items-center gap-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/30 transition-all cursor-pointer shadow-2xs hover:shadow-amber-500/10 active:scale-95"
+              title="Klik untuk mengunduh & mencetak label resmi Shopee"
             >
-              <Printer className="w-3.5 h-3.5" />
-              <span>{isOrderPrinted ? 'Cetak Ulang' : 'Cetak Label'}</span>
+              <Printer className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
+              <span className="text-[11px]">Perlu Dicetak</span>
+              <ArrowRight className="w-3 h-3 text-amber-400 group-hover:translate-x-0.5 transition-transform" />
             </button>
-          )}
-          {isArranged && (
+          ) : (
             <span
-              className={clsx(
-                'text-[11px] px-2.5 py-0.5 rounded-full font-semibold border flex items-center gap-1.5',
-                isOrderPrinted
-                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25'
-                  : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-              )}
-              title={isOrderPrinted ? 'Label pengiriman resmi telah dicetak' : 'Label pengiriman resmi belum dicetak (Perlu Dicetak)'}
+              className="text-[11px] px-2.5 py-0.5 rounded-full font-semibold border flex items-center gap-1.5 bg-emerald-500/10 text-emerald-300 border-emerald-500/25"
+              title="Label pengiriman resmi telah dicetak"
             >
-              {isOrderPrinted ? (
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              ) : (
-                <Printer className="w-3.5 h-3.5 text-amber-400" />
-              )}
-              <span>{isOrderPrinted ? 'Telah Dicetak' : 'Perlu Dicetak'}</span>
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Telah Dicetak</span>
             </span>
           )}
           <span
@@ -224,7 +211,7 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
               className="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm shadow-orange-500/20"
             >
               <Printer className="w-4 h-4" />
-              <span>Cetak Label Shopee</span>
+              <span>{isOrderPrinted ? 'Cetak Ulang Label' : 'Cetak Label Shopee'}</span>
             </button>
 
             {isReadyToShip && onArrangeShipment && (

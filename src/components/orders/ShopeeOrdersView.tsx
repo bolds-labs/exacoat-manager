@@ -43,6 +43,7 @@ import {
   CheckCircle2,
   Download,
   X,
+  ArrowRight,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -262,18 +263,6 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   };
 
   const handlePrintShopeeLabel = async (order: ShopeeOrder) => {
-    const isArranged = Boolean(order.order_status === 'PROCESSED' || order.is_arranged);
-    if (!isArranged && order.order_status === 'READY_TO_SHIP') {
-      showToast(
-        'warning',
-        'Pesanan Belum Diatur',
-        `Pesanan ${order.order_sn} belum diatur pengirimannya di Shopee. Silakan atur pickup/drop off terlebih dahulu.`
-      );
-      setSelectedArrangeOrder(order);
-      setIsArrangeModalOpen(true);
-      return;
-    }
-
     showToast(
       'info',
       'Memuat Label Shopee',
@@ -293,6 +282,25 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
         );
         toggleShopeeOrderPrintDirect(order.order_sn, true).catch(() => {});
         showToast('success', 'Label Terbuka', `Label resmi Shopee untuk ${order.order_sn} berhasil dimuat.`);
+        return;
+      }
+
+      // If Shopee says shipment must be arranged first, guide operator to arrange modal
+      const errLower = (res.error || '').toLowerCase();
+      if (
+        errLower.includes('atur') ||
+        errLower.includes('arrange') ||
+        errLower.includes('not arranged') ||
+        errLower.includes('ship_order') ||
+        errLower.includes('not_ready')
+      ) {
+        showToast(
+          'warning',
+          'Atur Pengiriman Diperlukan',
+          `Shopee mengharuskan pickup/drop off diatur terlebih dahulu untuk pesanan ${order.order_sn}.`
+        );
+        setSelectedArrangeOrder(order);
+        setIsArrangeModalOpen(true);
         return;
       }
 
@@ -963,26 +971,9 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                     )}
                   </div>
 
-                  {/* Right: Print Label, Status badge, Arrange Ship, Menu, Chevron */}
+                  {/* Right: Status badge, Label Pengiriman, Arrange Ship, Menu */}
                   <div className="flex items-center gap-2 self-start lg:self-auto" onClick={(e) => e.stopPropagation()}>
-                    {/* Print Label Button if shipping is scheduled */}
-                    {canPrint && (
-                      <button
-                        type="button"
-                        onClick={() => handlePrintShopeeLabel(order)}
-                        className={clsx(
-                          'px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border',
-                          isPrinted
-                            ? 'bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 border-white/10'
-                            : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/30'
-                        )}
-                        title={isPrinted ? 'Cetak ulang label resmi 100x150mm' : 'Cetak label resmi 100x150mm'}
-                      >
-                        <Printer className="w-3.5 h-3.5" />
-                        <span>{isPrinted ? 'Cetak Ulang' : 'Cetak Label'}</span>
-                      </button>
-                    )}
-
+                    {/* Status badge: Perlu Diproses, Telah Diproses, Dikirim, Selesai, etc. */}
                     <span
                       className={clsx(
                         'text-[10px] px-2.5 py-1 rounded-full font-semibold border',
@@ -994,23 +985,25 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                       {statusBadge.label}
                     </span>
 
-                    {/* Label Pengiriman Badge for arranged orders */}
-                    {isArranged && (
-                      <span
-                        className={clsx(
-                          'text-[10px] px-2.5 py-1 rounded-full font-semibold border flex items-center gap-1.5',
-                          isPrinted
-                            ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25'
-                            : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                        )}
-                        title={isPrinted ? 'Label pengiriman resmi telah dicetak' : 'Label pengiriman resmi belum dicetak (Perlu Dicetak)'}
+                    {/* Label Pengiriman Pill: Clickable with Arrow when Perlu Dicetak, Badge when Telah Dicetak */}
+                    {!isPrinted ? (
+                      <button
+                        type="button"
+                        onClick={() => handlePrintShopeeLabel(order)}
+                        className="group px-2.5 py-1 rounded-full font-semibold border flex items-center gap-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/30 transition-all cursor-pointer shadow-2xs hover:shadow-amber-500/10 active:scale-95"
+                        title="Klik untuk mengunduh & mencetak label resmi Shopee"
                       >
-                        {isPrinted ? (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        ) : (
-                          <Printer className="w-3.5 h-3.5 text-amber-400" />
-                        )}
-                        <span>{isPrinted ? 'Telah Dicetak' : 'Perlu Dicetak'}</span>
+                        <Printer className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
+                        <span className="text-[10px]">Perlu Dicetak</span>
+                        <ArrowRight className="w-3 h-3 text-amber-400 group-hover:translate-x-0.5 transition-transform" />
+                      </button>
+                    ) : (
+                      <span
+                        className="text-[10px] px-2.5 py-1 rounded-full font-semibold border flex items-center gap-1.5 bg-emerald-500/10 text-emerald-300 border-emerald-500/25"
+                        title="Label pengiriman resmi telah dicetak (Cetak ulang tersedia di menu ⋮)"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Telah Dicetak</span>
                       </span>
                     )}
 
@@ -1022,7 +1015,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                           setSelectedArrangeOrder(order);
                           setIsArrangeModalOpen(true);
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm shadow-orange-500/20"
+                        className="px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm shadow-orange-500/20 active:scale-95"
                       >
                         <Truck className="w-3.5 h-3.5" />
                         <span>Atur Pengiriman</span>
@@ -1043,22 +1036,48 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
 
                       {activeActionMenuSn === order.order_sn && (
                         <div className="absolute right-0 top-full mt-1 w-52 rounded-xl bg-neutral-900 border border-white/10 shadow-xl py-1 z-30 font-sans">
-                          {isArranged && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setActiveActionMenuSn(null);
-                                  handleTogglePrintStatus(order, !isPrinted);
-                                }}
-                                className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 cursor-pointer font-medium text-neutral-300 hover:bg-white/5"
-                              >
-                                <Printer className="w-3.5 h-3.5 text-neutral-400" />
-                                <span>{isPrinted ? 'Tandai Perlu Dicetak' : 'Tandai Telah Dicetak'}</span>
-                              </button>
-                              <div className="my-1 border-t border-white/10" />
-                            </>
+                          {isPrinted && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveActionMenuSn(null);
+                                handlePrintShopeeLabel(order);
+                              }}
+                              className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 cursor-pointer font-medium text-neutral-300 hover:bg-white/5"
+                            >
+                              <Printer className="w-3.5 h-3.5 text-neutral-400" />
+                              <span>Cetak Ulang Label</span>
+                            </button>
                           )}
+
+                          {isReadyToShip && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveActionMenuSn(null);
+                                setSelectedArrangeOrder(order);
+                                setIsArrangeModalOpen(true);
+                              }}
+                              className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 cursor-pointer font-medium text-orange-400 hover:bg-white/5"
+                            >
+                              <Truck className="w-3.5 h-3.5 text-orange-400" />
+                              <span>Atur Pengiriman</span>
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveActionMenuSn(null);
+                              handleTogglePrintStatus(order, !isPrinted);
+                            }}
+                            className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 cursor-pointer font-medium text-neutral-300 hover:bg-white/5"
+                          >
+                            <Printer className="w-3.5 h-3.5 text-neutral-400" />
+                            <span>{isPrinted ? 'Tandai Perlu Dicetak' : 'Tandai Telah Dicetak'}</span>
+                          </button>
+
+                          <div className="my-1 border-t border-white/10" />
 
                           <button
                             type="button"

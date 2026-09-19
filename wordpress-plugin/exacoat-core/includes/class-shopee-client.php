@@ -608,11 +608,14 @@ class Exacoat_Shopee_Client {
 				: ( ! empty( $ord['update_time'] ) ? date( 'Y-m-d H:i:s', $ord['update_time'] ) : current_time( 'mysql' ) );
 		}
 
-		// In Shopee, having a pre-assigned tracking resi does not mean shipment has been arranged.
-		// Arrangement only occurs when status is PROCESSED or pickup/dropoff logistics request is active.
+		// In Shopee API v2, order_status is READY_TO_SHIP before the seller arranges shipment ("Perlu Diproses").
+		// Once the seller arranges shipment (pickup/dropoff booked), order_status becomes PROCESSED ("Telah Diproses").
+		// Note: package logistics_status like LOGISTICS_REQUEST_CREATED or LOGISTICS_READY are pre-generated on all new orders
+		// and must not be used to treat unarranged orders as arranged.
 		$is_arranged = (
 			$raw_order_st === 'PROCESSED' ||
-			in_array( $pkg_logistics_st, [ 'LOGISTICS_REQUEST_CREATED', 'LOGISTICS_READY', 'LOGISTICS_PICKUP_DONE' ], true )
+			$pkg_logistics_st === 'LOGISTICS_PICKUP_DONE' ||
+			in_array( $raw_order_st, [ 'SHIPPED', 'TO_CONFIRM_RECEIVE', 'COMPLETED' ], true )
 		);
 
 		// Only mark as printed if Shopee explicitly returned PRINTED status
@@ -997,16 +1000,6 @@ class Exacoat_Shopee_Client {
 			}
 		}
 
-		// Ensure order has been arranged before attempting document creation
-		$order_st = strtoupper( (string) ( $cached_order['order_status'] ?? '' ) );
-		$is_arranged = ! empty( $cached_order['is_arranged'] ) || $order_st === 'PROCESSED' || in_array( $order_st, [ 'SHIPPED', 'TO_CONFIRM_RECEIVE', 'COMPLETED' ], true );
-		if ( $order_st === 'READY_TO_SHIP' && ! $is_arranged ) {
-			return [
-				'success' => false,
-				'error'   => 'Pesanan ' . $clean_sn . ' belum diatur pengirimannya di Shopee. Silakan klik Atur Pengiriman terlebih dahulu sebelum mencetak label.',
-			];
-		}
-
 		$pkg_num = $cached_order['package_number'] ?? '';
 		$track_num = $cached_order['tracking_number'] ?? '';
 
@@ -1099,17 +1092,8 @@ class Exacoat_Shopee_Client {
 		}
 
 		$order_list = [];
-		$unarranged = [];
 		foreach ( $clean_sns as $sn ) {
 			$c_ord = $order_map[ strtoupper( $sn ) ] ?? null;
-			$order_st = strtoupper( (string) ( $c_ord['order_status'] ?? '' ) );
-			$is_arranged = ! empty( $c_ord['is_arranged'] ) || $order_st === 'PROCESSED' || in_array( $order_st, [ 'SHIPPED', 'TO_CONFIRM_RECEIVE', 'COMPLETED' ], true );
-
-			if ( $order_st === 'READY_TO_SHIP' && ! $is_arranged ) {
-				$unarranged[] = $sn;
-				continue;
-			}
-
 			$item = [ 'order_sn' => $sn ];
 			if ( ! empty( $c_ord['package_number'] ) ) {
 				$item['package_number'] = $c_ord['package_number'];
