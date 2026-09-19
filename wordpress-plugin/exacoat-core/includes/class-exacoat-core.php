@@ -955,7 +955,10 @@ class Exacoat_Core {
 			'callback'            => function( WP_REST_Request $request ) {
 				$params  = $request->get_json_params() ?: $request->get_params();
 				$api_key = sanitize_text_field( $params['api_key'] ?? '' );
-				return rest_ensure_response( class_exists( 'Artmatter_Diagnostics' ) ? Artmatter_Diagnostics::test_gemini( $api_key ) : [ 'success' => true ] );
+				if ( class_exists( 'Exacoat_Diagnostics' ) ) {
+					return rest_ensure_response( Exacoat_Diagnostics::test_gemini( $api_key ) );
+				}
+				return rest_ensure_response( [ 'success' => false, 'message' => 'Diagnostics class not available' ] );
 			},
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
@@ -965,7 +968,10 @@ class Exacoat_Core {
 			'callback'            => function( WP_REST_Request $request ) {
 				$params  = $request->get_json_params() ?: $request->get_params();
 				$api_key = sanitize_text_field( $params['api_key'] ?? '' );
-				return rest_ensure_response( class_exists( 'Artmatter_Diagnostics' ) ? Artmatter_Diagnostics::test_openai( $api_key ) : [ 'success' => true ] );
+				if ( class_exists( 'Exacoat_Diagnostics' ) ) {
+					return rest_ensure_response( Exacoat_Diagnostics::test_openai( $api_key ) );
+				}
+				return rest_ensure_response( [ 'success' => false, 'message' => 'Diagnostics class not available' ] );
 			},
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
@@ -1783,7 +1789,9 @@ class Exacoat_Core {
 		self::clear_settings_cache();
 
 		$saved_keys = implode( ', ', array_keys( $new_settings ) );
-		if ( class_exists( 'Artmatter_Logger' ) ) {
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log( 'success', 'settings', "Remote Settings Update via Exacoat Manager ERP: [{$saved_keys}]", [ 'updated_keys' => array_keys( $new_settings ) ] );
+		} elseif ( class_exists( 'Artmatter_Logger' ) ) {
 			Artmatter_Logger::log( 'success', 'settings', "Remote Settings Update via Exacoat Manager ERP: [{$saved_keys}]", [ 'updated_keys' => array_keys( $new_settings ) ] );
 		}
 

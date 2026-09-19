@@ -997,6 +997,67 @@ export async function sendPushoverAlert(title: string, message: string, priority
   }
 }
 
+function filterAndSortOpenAiModels(rawModels: string[]): string[] {
+  const excluded = ['embedding', 'whisper', 'tts', 'dall-e', 'babbage', 'davinci', 'moderation', 'realtime', 'transcribe', 'audio', 'search', 'canary'];
+  const filtered = rawModels.filter(m => {
+    if (!m) return false;
+    const lower = m.toLowerCase();
+    if (excluded.some(term => lower.includes(term))) return false;
+    return /^(gpt-[45]|o[13]|chatgpt|gpt-3\.5)/i.test(m);
+  });
+
+  const getScore = (m: string) => {
+    if (m === 'gpt-4o') return 100;
+    if (m === 'gpt-4o-mini') return 95;
+    if (m.startsWith('o3-mini')) return 90;
+    if (m === 'o1') return 85;
+    if (m.startsWith('o1-mini')) return 80;
+    if (m.includes('gpt-4.5')) return 75;
+    if (m === 'chatgpt-4o-latest') return 70;
+    if (m.startsWith('gpt-4o')) return 65;
+    if (m.startsWith('gpt-4-turbo')) return 60;
+    if (m.startsWith('gpt-4')) return 50;
+    if (m.startsWith('gpt-3.5')) return 30;
+    return 10;
+  };
+
+  return Array.from(new Set(filtered)).sort((a, b) => {
+    const diff = getScore(b) - getScore(a);
+    if (diff !== 0) return diff;
+    return b.localeCompare(a);
+  });
+}
+
+function filterAndSortGeminiModels(rawModels: string[]): string[] {
+  const excluded = ['embedding', 'aqa', 'imagen', 'learnlm', 'veo'];
+  const clean = rawModels
+    .map(m => (m || '').replace(/^models\//, ''))
+    .filter(m => {
+      if (!m) return false;
+      const lower = m.toLowerCase();
+      if (excluded.some(term => lower.includes(term))) return false;
+      return lower.includes('gemini') || lower.includes('flash');
+    });
+
+  const getScore = (m: string) => {
+    if (m.includes('2.5-pro')) return 100;
+    if (m.includes('2.5-flash')) return 95;
+    if (m.includes('2.0-flash') && !m.includes('lite')) return 90;
+    if (m.includes('2.0-flash-lite')) return 85;
+    if (m.includes('2.0-pro')) return 80;
+    if (m.includes('1.5-pro')) return 70;
+    if (m.includes('1.5-flash')) return 65;
+    if (m.includes('gemini')) return 50;
+    return 10;
+  };
+
+  return Array.from(new Set(clean)).sort((a, b) => {
+    const diff = getScore(b) - getScore(a);
+    if (diff !== 0) return diff;
+    return b.localeCompare(a);
+  });
+}
+
 export async function testGeminiDirect(apiKey?: string): Promise<{
   success: boolean;
   latencyMs?: number;
@@ -1006,7 +1067,50 @@ export async function testGeminiDirect(apiKey?: string): Promise<{
   error?: string;
 }> {
   const start = performance.now();
+  const base = getWordPressBaseUrl();
   const key = (apiKey || getCachedPluginSettings().gemini_api_key || '').trim();
+
+  // 1. Try WordPress Diagnostics backend endpoint (works with both client key and server wp-config.php)
+  try {
+    const wpUrl = `${base}/wp-json/exacoat-core/v1/diagnostics/test-gemini`;
+    const res = await authenticatedFetch(wpUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ api_key: key }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.available_models) && data.available_models.length > 0) {
+        return {
+          success: true,
+          latencyMs: data.latency_ms || Math.round(performance.now() - start),
+          latency_ms: data.latency_ms || Math.round(performance.now() - start),
+          available_models: filterAndSortGeminiModels(data.available_models),
+          message: data.message || 'Google Gemini connected',
+        };
+      } else if (data.success) {
+        return {
+          success: true,
+          latencyMs: data.latency_ms || Math.round(performance.now() - start),
+          latency_ms: data.latency_ms || Math.round(performance.now() - start),
+          available_models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+          message: data.message || 'Google Gemini connected',
+        };
+      } else if (!key) {
+        return {
+          success: false,
+          latencyMs: Math.round(performance.now() - start),
+          latency_ms: Math.round(performance.now() - start),
+          message: data.message || data.error || 'Gemini API key not configured',
+          error: data.message || data.error || 'Gemini API key not configured',
+        };
+      }
+    }
+  } catch {
+    // If backend bridge call fails, continue to direct client call if key is available
+  }
+
+  // 2. Direct client-side fetch fallback if key is provided
   if (!key) {
     return { success: false, error: 'Gemini API key is required' };
   }
@@ -1018,13 +1122,14 @@ export async function testGeminiDirect(apiKey?: string): Promise<{
     const latency = Math.round(performance.now() - start);
     if (res.ok) {
       const data = await res.json();
-      const models = Array.isArray(data.models) ? data.models.map((m: any) => (m.name || '').replace('models/', '')) : ['gemini-1.5-flash', 'gemini-1.5-pro'];
+      const rawModels = Array.isArray(data.models) ? data.models.map((m: any) => m.name || '') : [];
+      const models = filterAndSortGeminiModels(rawModels.length > 0 ? rawModels : ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash']);
       return {
         success: true,
         latencyMs: latency,
         latency_ms: latency,
         available_models: models,
-        message: 'Google Gemini API key valid',
+        message: `Google Gemini API connected in ${latency}ms (${models.length} models)`,
       };
     }
     return { success: false, latencyMs: latency, latency_ms: latency, error: `HTTP ${res.status}` };
@@ -1043,7 +1148,50 @@ export async function testOpenAiDirect(apiKey?: string): Promise<{
   error?: string;
 }> {
   const start = performance.now();
+  const base = getWordPressBaseUrl();
   const key = (apiKey || getCachedPluginSettings().openai_api_key || '').trim();
+
+  // 1. Try WordPress Diagnostics backend endpoint (works with both client key and server wp-config.php)
+  try {
+    const wpUrl = `${base}/wp-json/exacoat-core/v1/diagnostics/test-openai`;
+    const res = await authenticatedFetch(wpUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ api_key: key }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.available_models) && data.available_models.length > 0) {
+        return {
+          success: true,
+          latencyMs: data.latency_ms || Math.round(performance.now() - start),
+          latency_ms: data.latency_ms || Math.round(performance.now() - start),
+          available_models: filterAndSortOpenAiModels(data.available_models),
+          message: data.message || 'OpenAI connected',
+        };
+      } else if (data.success) {
+        return {
+          success: true,
+          latencyMs: data.latency_ms || Math.round(performance.now() - start),
+          latency_ms: data.latency_ms || Math.round(performance.now() - start),
+          available_models: ['gpt-4o', 'gpt-4o-mini', 'o3-mini', 'o1', 'gpt-4-turbo'],
+          message: data.message || 'OpenAI connected',
+        };
+      } else if (!key) {
+        return {
+          success: false,
+          latencyMs: Math.round(performance.now() - start),
+          latency_ms: Math.round(performance.now() - start),
+          message: data.message || data.error || 'OpenAI API key not configured',
+          error: data.message || data.error || 'OpenAI API key not configured',
+        };
+      }
+    }
+  } catch {
+    // If backend bridge call fails, continue to direct client call if key is available
+  }
+
+  // 2. Direct client-side fetch fallback if key is provided
   if (!key) {
     return { success: false, error: 'OpenAI API key is required' };
   }
@@ -1055,13 +1203,14 @@ export async function testOpenAiDirect(apiKey?: string): Promise<{
     const latency = Math.round(performance.now() - start);
     if (res.ok) {
       const data = await res.json();
-      const models = Array.isArray(data.data) ? data.data.map((m: any) => m.id) : ['gpt-4o', 'gpt-4o-mini'];
+      const rawModels = Array.isArray(data.data) ? data.data.map((m: any) => m.id) : [];
+      const models = filterAndSortOpenAiModels(rawModels.length > 0 ? rawModels : ['gpt-4o', 'gpt-4o-mini', 'o3-mini']);
       return {
         success: true,
         latencyMs: latency,
         latency_ms: latency,
         available_models: models,
-        message: 'OpenAI API key valid',
+        message: `OpenAI API connected in ${latency}ms (${models.length} models)`,
       };
     }
     return { success: false, latencyMs: latency, latency_ms: latency, error: `HTTP ${res.status}` };

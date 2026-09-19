@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.62] - 2026-09-20
+
+### Dynamic AI Model Pulling & Latest Model Integration
+- **Dynamic Model Retrieval for Google Gemini and OpenAI**:
+  - Added dynamic model fetching in `AiToolsPage` for both Gemini and OpenAI with dedicated "Pull Latest" action buttons.
+  - Dual-source key resolution: queries WordPress backend diagnostic endpoints (`/diagnostics/test-gemini` and `/diagnostics/test-openai`), allowing models to be retrieved whether API keys are entered directly in the UI or securely stored on the server via `wp-config.php` (`EXACOAT_GEMINI_API_KEY`, `EXACOAT_OPENAI_API_KEY`).
+- **Smart Model Filtering & Capability Sorting**:
+  - OpenAI models: parsed from `/v1/models` and filtered strictly for generative chat and reasoning models (`gpt-4o`, `gpt-4o-mini`, `o3-mini`, `o1`, `gpt-4.5-preview`, `gpt-4-turbo`), while excluding non-generative models (embeddings, audio, whisper, tts, moderation).
+  - Gemini models: parsed from `/v1beta/models`, stripped of `models/` prefix, filtered for `generateContent`, and ordered with latest 2.5 and 2.0 models at the top (`gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-2.0-flash-lite`).
+- **Enhanced Select Badges & Subtitles**:
+  - Added descriptive badges (`Pro 2.5`, `Flash 2.5`, `Flash 2.0`, `Lite 2.0`, `Reasoning`, `Flagship`, `Fast`, `Preview`, `Active`) and explanatory subtitles in `CustomSelect` options for easy model identification.
+  - Model selection automatically persists to WordPress options via `savePluginSettings`.
+
+---
+
 ## [0.0.61] - 2026-09-20
 
 ### Order List Status Column Streamlining & RMA Claims Infinite Loop Fix

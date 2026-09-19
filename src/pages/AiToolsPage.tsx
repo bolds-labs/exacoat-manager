@@ -313,7 +313,20 @@ export const AiToolsPage: React.FC = () => {
     setIsTestingOpenAi(false);
 
     if (res.success) {
-      showToast('success', 'OpenAI Online', `OpenAI API connected in ${res.latency_ms}ms.`);
+      if (res.available_models && res.available_models.length > 0) {
+        const merged = Array.from(new Set([
+          ...res.available_models,
+          ...openaiModels,
+          settings.openai_model || '',
+        ])).filter(Boolean);
+        setOpenaiModels(merged);
+        try {
+          localStorage.setItem('exacoat_openai_models_cache', JSON.stringify(merged));
+        } catch {}
+        showToast('success', 'OpenAI Models Fetched', `Found ${res.available_models.length} active OpenAI models (${res.latency_ms}ms)`);
+      } else {
+        showToast('success', 'OpenAI Online', `OpenAI API connected in ${res.latency_ms}ms.`);
+      }
     } else {
       showToast('error', 'OpenAI Connection Failed', res.message);
     }
@@ -355,29 +368,113 @@ export const AiToolsPage: React.FC = () => {
   const geminiOptions = useMemo(() => {
     const activeModel = settings.gemini_model || settings.ai_model || 'gemini-2.5-flash';
     const allModels = Array.from(new Set([activeModel, ...geminiModels]));
-    return allModels.map(m => ({
-      value: m,
-      label: m,
-      badge: m === activeModel ? 'Active' : (m.includes('flash') ? 'Flash' : undefined),
-      badgeVariant: m === activeModel ? ('lime' as const) : undefined,
-      subtitle: m.includes('flash') 
-        ? 'Fast Multimodal Model' 
-        : (m.includes('pro') ? 'Deep Reasoning Model' : 'Google Gemini Model'),
-    }));
+    return allModels.map(m => {
+      let badge: string | undefined = undefined;
+      let badgeVariant: 'lime' | 'amber' | 'rose' | 'zinc' | undefined = undefined;
+      let subtitle = 'Google Gemini Model';
+
+      if (m === activeModel) {
+        badge = 'Active';
+        badgeVariant = 'lime';
+      } else if (m.includes('2.5-pro')) {
+        badge = 'Pro 2.5';
+        badgeVariant = 'amber';
+      } else if (m.includes('2.5-flash')) {
+        badge = 'Flash 2.5';
+        badgeVariant = 'lime';
+      } else if (m.includes('2.0-flash-lite')) {
+        badge = 'Lite 2.0';
+        badgeVariant = 'zinc';
+      } else if (m.includes('2.0-flash')) {
+        badge = 'Flash 2.0';
+        badgeVariant = 'lime';
+      } else if (m.includes('pro')) {
+        badge = 'Pro';
+        badgeVariant = 'amber';
+      } else if (m.includes('flash')) {
+        badge = 'Flash';
+        badgeVariant = 'zinc';
+      }
+
+      if (m.includes('2.5-pro')) {
+        subtitle = 'Advanced Reasoning & Code (Latest)';
+      } else if (m.includes('2.5-flash')) {
+        subtitle = 'Fast Multimodal Intelligence (Latest)';
+      } else if (m.includes('2.0-flash-lite')) {
+        subtitle = 'Ultra-fast & Cost-Efficient 2.0';
+      } else if (m.includes('2.0-flash')) {
+        subtitle = 'High-Speed Multimodal 2.0';
+      } else if (m.includes('pro')) {
+        subtitle = 'Deep Reasoning & Long Context';
+      } else if (m.includes('flash')) {
+        subtitle = 'Fast Multimodal Model';
+      }
+
+      return {
+        value: m,
+        label: m,
+        badge,
+        badgeVariant,
+        subtitle,
+      };
+    });
   }, [geminiModels, settings.gemini_model, settings.ai_model]);
 
   const openaiOptions = useMemo(() => {
     const activeModel = settings.openai_model || settings.fandom_model || 'gpt-4o-mini';
     const allModels = Array.from(new Set([activeModel, ...openaiModels]));
-    return allModels.map(m => ({
-      value: m,
-      label: m,
-      badge: m === activeModel ? 'Active' : undefined,
-      badgeVariant: m === activeModel ? ('lime' as const) : undefined,
-      subtitle: m.includes('mini') 
-        ? 'Lightweight Fast Model' 
-        : (m.includes('o3') || m.includes('o1') ? 'Reasoning Model' : 'OpenAI Model'),
-    }));
+    return allModels.map(m => {
+      let badge: string | undefined = undefined;
+      let badgeVariant: 'lime' | 'amber' | 'rose' | 'zinc' | undefined = undefined;
+      let subtitle = 'OpenAI Model';
+
+      if (m === activeModel) {
+        badge = 'Active';
+        badgeVariant = 'lime';
+      } else if (m.includes('o3-mini')) {
+        badge = 'Reasoning';
+        badgeVariant = 'amber';
+      } else if (m.startsWith('o1')) {
+        badge = 'Reasoning';
+        badgeVariant = 'amber';
+      } else if (m === 'gpt-4o') {
+        badge = 'Flagship';
+        badgeVariant = 'lime';
+      } else if (m === 'gpt-4o-mini') {
+        badge = 'Fast';
+        badgeVariant = 'zinc';
+      } else if (m.includes('4.5')) {
+        badge = 'Preview';
+        badgeVariant = 'rose';
+      } else if (m.includes('turbo')) {
+        badge = 'Turbo';
+        badgeVariant = 'zinc';
+      }
+
+      if (m.includes('o3-mini')) {
+        subtitle = 'High-Intelligence Coding & Reasoning (Latest)';
+      } else if (m === 'o1') {
+        subtitle = 'Complex Reasoning & Deep Thinking';
+      } else if (m.startsWith('o1-mini')) {
+        subtitle = 'Fast Reasoning for Math & Code';
+      } else if (m === 'gpt-4o') {
+        subtitle = 'High-Intelligence Multimodal Flagship';
+      } else if (m === 'gpt-4o-mini') {
+        subtitle = 'Affordable & Fast Lightweight Model';
+      } else if (m.includes('4.5')) {
+        subtitle = 'OpenAI 4.5 Architecture Preview';
+      } else if (m.includes('turbo')) {
+        subtitle = 'High-Throughput GPT-4';
+      }
+
+      return {
+        value: m,
+        label: m,
+        badge,
+        badgeVariant,
+        subtitle,
+      };
+    });
   }, [openaiModels, settings.openai_model, settings.fandom_model]);
 
   return (
@@ -419,9 +516,21 @@ export const AiToolsPage: React.FC = () => {
 
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 block mb-1">
-                    Active Gemini Model
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                      Active Gemini Model
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleFetchGeminiModels}
+                      disabled={isTestingGemini}
+                      title="Pull latest models from Google Gemini API"
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300 disabled:opacity-50 cursor-pointer transition-colors"
+                    >
+                      <RotateCw className={clsx("w-3 h-3", isTestingGemini && "animate-spin")} />
+                      <span>{isTestingGemini ? 'Pulling...' : 'Pull Latest'}</span>
+                    </button>
+                  </div>
                   <CustomSelect
                     options={geminiOptions}
                     value={settings.gemini_model || settings.ai_model || 'gemini-2.5-flash'}
@@ -463,7 +572,7 @@ export const AiToolsPage: React.FC = () => {
                 className="w-full"
                 leftIcon={<Zap className="w-3.5 h-3.5 text-[#f3aa18]" />}
               >
-                {isTestingGemini ? 'Testing Gemini Connection...' : 'Test Gemini API & Latency'}
+                {isTestingGemini ? 'Connecting & Pulling Models...' : 'Test Connection & Pull Models'}
               </Button>
 
               {geminiTestResult && (
@@ -498,9 +607,21 @@ export const AiToolsPage: React.FC = () => {
 
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 block mb-1">
-                    Active OpenAI Model
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                      Active OpenAI Model
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleFetchOpenAiModels}
+                      disabled={isTestingOpenAi}
+                      title="Pull latest models from OpenAI API"
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-500 dark:text-emerald-400 hover:text-emerald-600 dark:hover:text-emerald-300 disabled:opacity-50 cursor-pointer transition-colors"
+                    >
+                      <RotateCw className={clsx("w-3 h-3", isTestingOpenAi && "animate-spin")} />
+                      <span>{isTestingOpenAi ? 'Pulling...' : 'Pull Latest'}</span>
+                    </button>
+                  </div>
                   <CustomSelect
                     options={openaiOptions}
                     value={settings.openai_model || settings.fandom_model || 'gpt-4o-mini'}
@@ -580,7 +701,7 @@ export const AiToolsPage: React.FC = () => {
                 className="w-full"
                 leftIcon={<Zap className="w-3.5 h-3.5 text-[#f3aa18]" />}
               >
-                {isTestingOpenAi ? 'Testing OpenAI Connection...' : 'Test OpenAI API & Latency'}
+                {isTestingOpenAi ? 'Connecting & Pulling Models...' : 'Test Connection & Pull Models'}
               </Button>
 
               {openaiTestResult && (

@@ -650,25 +650,46 @@ class Exacoat_Diagnostics {
 
 		$models = [];
 		if ( ! empty( $body['models'] ) ) {
+			$excluded_terms = [ 'embedding', 'aqa', 'imagen', 'learnlm', 'veo' ];
 			foreach ( $body['models'] as $m ) {
 				$m_name = str_replace( 'models/', '', $m['name'] ?? '' );
 				$supported_methods = $m['supportedGenerationMethods'] ?? [];
+
+				$is_excluded = false;
+				foreach ( $excluded_terms as $term ) {
+					if ( stripos( $m_name, $term ) !== false ) {
+						$is_excluded = true;
+						break;
+					}
+				}
+				if ( $is_excluded ) {
+					continue;
+				}
+
 				if ( in_array( 'generateContent', $supported_methods, true ) || str_contains( $m_name, 'gemini' ) || str_contains( $m_name, 'flash' ) ) {
 					$models[] = $m_name;
 				}
 			}
 		}
 
-		// Sort so latest 3.8, 3.7, 2.5, 2.0 and flash models appear prominently at top
+		// Sort so latest 2.5, 2.0, and flash models appear prominently at top
 		usort( $models, function( $a, $b ) {
-			if ( str_contains( $a, '3.8' ) ) return -1;
-			if ( str_contains( $b, '3.8' ) ) return 1;
-			if ( str_contains( $a, '3.7' ) ) return -1;
-			if ( str_contains( $b, '3.7' ) ) return 1;
-			if ( str_contains( $a, '2.5-flash' ) ) return -1;
-			if ( str_contains( $b, '2.5-flash' ) ) return 1;
-			if ( str_contains( $a, '2.0-flash' ) ) return -1;
-			if ( str_contains( $b, '2.0-flash' ) ) return 1;
+			$score = function( $m ) {
+				if ( str_contains( $m, '2.5-pro' ) ) return 100;
+				if ( str_contains( $m, '2.5-flash' ) ) return 95;
+				if ( str_contains( $m, '2.0-flash' ) && ! str_contains( $m, 'lite' ) ) return 90;
+				if ( str_contains( $m, '2.0-flash-lite' ) ) return 85;
+				if ( str_contains( $m, '2.0-pro' ) ) return 80;
+				if ( str_contains( $m, '1.5-pro' ) ) return 70;
+				if ( str_contains( $m, '1.5-flash' ) ) return 65;
+				if ( str_contains( $m, 'gemini' ) ) return 50;
+				return 10;
+			};
+			$sa = $score( $a );
+			$sb = $score( $b );
+			if ( $sa !== $sb ) {
+				return $sb - $sa;
+			}
 			return strcmp( $b, $a );
 		} );
 
@@ -717,18 +738,73 @@ class Exacoat_Diagnostics {
 		$body = json_decode( wp_remote_retrieve_body( $resp ), true );
 		$is_ok = ( $code === 200 );
 
+		$models = [];
+		if ( $is_ok && ! empty( $body['data'] ) && is_array( $body['data'] ) ) {
+			$excluded_terms = [ 'embedding', 'whisper', 'tts', 'dall-e', 'babbage', 'davinci', 'moderation', 'realtime', 'transcribe', 'audio', 'search', 'canary' ];
+			foreach ( $body['data'] as $item ) {
+				$id = $item['id'] ?? '';
+				if ( empty( $id ) ) {
+					continue;
+				}
+
+				// Check exclusions
+				$is_excluded = false;
+				foreach ( $excluded_terms as $term ) {
+					if ( stripos( $id, $term ) !== false ) {
+						$is_excluded = true;
+						break;
+					}
+				}
+				if ( $is_excluded ) {
+					continue;
+				}
+
+				// Check generative prefix
+				if ( preg_match( '/^(gpt-[45]|o[13]|chatgpt|gpt-3\.5)/i', $id ) ) {
+					$models[] = $id;
+				}
+			}
+
+			// Sort with latest and most capable models at top
+			usort( $models, function( $a, $b ) {
+				$score = function( $m ) {
+					if ( $m === 'gpt-4o' ) return 100;
+					if ( $m === 'gpt-4o-mini' ) return 95;
+					if ( str_starts_with( $m, 'o3-mini' ) ) return 90;
+					if ( $m === 'o1' ) return 85;
+					if ( str_starts_with( $m, 'o1-mini' ) ) return 80;
+					if ( str_contains( $m, 'gpt-4.5' ) ) return 75;
+					if ( $m === 'chatgpt-4o-latest' ) return 70;
+					if ( str_starts_with( $m, 'gpt-4o' ) ) return 65;
+					if ( str_starts_with( $m, 'gpt-4-turbo' ) ) return 60;
+					if ( str_starts_with( $m, 'gpt-4' ) ) return 50;
+					if ( str_starts_with( $m, 'gpt-3.5' ) ) return 30;
+					return 10;
+				};
+				$sa = $score( $a );
+				$sb = $score( $b );
+				if ( $sa !== $sb ) {
+					return $sb - $sa;
+				}
+				return strcmp( $b, $a );
+			} );
+
+			$models = array_values( array_unique( $models ) );
+		}
+
 		Exacoat_Logger::log(
 			$is_ok ? 'success' : 'error',
 			'ai',
 			"Diagnostics: OpenAI API Test ({$latency}ms) -> HTTP {$code}",
-			[ 'latency_ms' => $latency ]
+			[ 'latency_ms' => $latency, 'models_count' => count( $models ) ]
 		);
 
 		return [
-			'success'     => $is_ok,
-			'status_code' => $code,
-			'latency_ms'  => $latency,
-			'message'     => $is_ok ? "OpenAI API connected in {$latency}ms!" : ( $body['error']['message'] ?? "HTTP {$code}" ),
+			'success'          => $is_ok,
+			'status_code'      => $code,
+			'latency_ms'       => $latency,
+			'available_models' => $models,
+			'message'          => $is_ok ? "OpenAI API connected in {$latency}ms! (" . count( $models ) . " models found)" : ( $body['error']['message'] ?? "HTTP {$code}" ),
 		];
 	}
 }
