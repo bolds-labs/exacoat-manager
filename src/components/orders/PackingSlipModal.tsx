@@ -5,7 +5,7 @@ import { formatDate, formatDateTime } from '../../lib/formatters';
 import { Printer, CheckCircle2, ClipboardCheck, Package } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
-import { extractItemSpecs, formatSeparatedItemSpecs } from '../../lib/orderItems';
+import { extractItemSpecs, formatSeparatedItemSpecs, cleanItemTitle } from '../../lib/orderItems';
 import { isStorePickupOrder } from '../../lib/orderUtils';
 
 interface PackingSlipModalProps {
@@ -96,7 +96,7 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
     const itemsRowsHtml = (order.items || [])
       .map((item, idx) => {
         const itemSku = item.sku || (item.product_id ? `SKU-${item.product_id}` : `SKU-${item.id || idx + 1}`);
-        const cleanItemName = String(item.name || 'Precision Device Skin')
+        const cleanItemName = cleanItemTitle(String(item.name || 'Precision Device Skin'))
           .replace(/\r?\n+/g, ' ')
           .replace(/\s{2,}/g, ' ')
           .trim();
@@ -458,7 +458,7 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
             <tbody className="divide-y divide-neutral-200">
               {(order.items || []).map((item, idx) => {
                 const itemSku = item.sku || (item.product_id ? `SKU-${item.product_id}` : `SKU-${item.id || idx + 1}`);
-                const cleanItemName = String(item.name || 'Precision Device Skin')
+                const cleanItemName = cleanItemTitle(String(item.name || 'Precision Device Skin'))
                   .replace(/\r?\n+/g, ' ')
                   .replace(/\s{2,}/g, ' ')
                   .trim();

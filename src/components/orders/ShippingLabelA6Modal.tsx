@@ -13,7 +13,7 @@ import {
 import { clsx } from 'clsx';
 import { useToast } from '../../context/ToastContext';
 import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
-import { formatItemSpecsSummary, formatSeparatedItemSpecs } from '../../lib/orderItems';
+import { formatItemSpecsSummary, formatSeparatedItemSpecs, cleanItemTitle } from '../../lib/orderItems';
 
 interface ShippingLabelA6ModalProps {
   order?: Order | null;
@@ -207,7 +207,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
         const itemSku = item.sku 
           ? item.sku 
           : (item.product_id ? `SKU${item.product_id}` : `SKU${item.id || '72572'}`);
-        const cleanItemName = String(item.name || 'Precision Device Skin')
+        const cleanItemName = cleanItemTitle(String(item.name || 'Precision Device Skin'))
           .replace(/\r?\n+/g, ' ')
           .replace(/\s{2,}/g, ' ')
           .trim();
@@ -873,7 +873,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                       const itemSku = item.sku 
                         ? item.sku 
                         : (item.product_id ? `SKU${item.product_id}` : `SKU${item.id || '72572'}`);
-                      const cleanItemName = String(item.name || 'Precision Device Skin')
+                      const cleanItemName = cleanItemTitle(String(item.name || 'Precision Device Skin'))
                         .replace(/\r?\n+/g, ' ')
                         .replace(/\s{2,}/g, ' ')
                         .trim();
@@ -963,7 +963,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                       const itemSku = item.sku 
                         ? item.sku 
                         : (item.product_id ? `SKU${item.product_id}` : `SKU${item.id || '72572'}`);
-                      const cleanItemName = String(item.name || 'Precision Device Skin')
+                      const cleanItemName = cleanItemTitle(String(item.name || 'Precision Device Skin'))
                         .replace(/\r?\n+/g, ' ')
                         .replace(/\s{2,}/g, ' ')
                         .trim();

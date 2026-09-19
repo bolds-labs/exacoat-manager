@@ -5,6 +5,7 @@ import { formatCurrency, formatDate, formatDateTime } from '../../lib/formatters
 import { Printer, Download, FileText, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
+import { cleanItemTitle } from '../../lib/orderItems';
 
 interface CustomerInvoiceModalProps {
   order: Order | null;
@@ -66,7 +67,7 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
       return `
         <tr style="border-bottom: 1px solid #e5e7eb;">
           <td style="padding: 12px 14px; color: #111827; font-weight: 700; font-size: 13px;">
-            <div>${item.name || 'Device Skin'}</div>
+            <div>${cleanItemTitle(item.name || 'Device Skin')}</div>
             <div style="font-size: 11px; color: #6b7280; font-weight: 500; margin-top: 2px;">
               SKU: <span style="font-family: monospace;">${itemSku}</span>
             </div>
@@ -441,7 +442,7 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
                 return (
                   <tr key={item.id || idx}>
                     <td className="py-2.5 px-3">
-                      <p className="font-bold text-black">{item.name || 'Device Skin'}</p>
+                      <p className="font-bold text-black">{cleanItemTitle(item.name || 'Device Skin')}</p>
                       <p className="text-[10px] text-neutral-500 font-mono mt-0.5">
                         SKU: {itemSku}
                       </p>

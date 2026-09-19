@@ -21,6 +21,14 @@ import {
   WarrantyClaimDetails,
 } from '../../lib/wordpressBridge';
 import { useToast } from '../../context/ToastContext';
+import { cleanItemTitle } from '../../lib/orderItems';
+
+const normalizeVideoUrl = (url?: string): string => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const baseUrl = 'https://exacoat.com';
+  return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+};
 
 interface WarrantyReviewModalProps {
   isOpen: boolean;
@@ -305,7 +313,7 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-white">{item.name}</p>
+                      <p className="truncate font-medium text-white">{cleanItemTitle(item.name)}</p>
                       <p className="text-[11px] text-neutral-500">Qty: {item.quantity} (Warranty Replacement)</p>
                     </div>
                   </div>
@@ -323,7 +331,7 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
               </div>
               {claim.video_proof_url && !claim.video_deleted && (
                 <a
-                  href={claim.video_proof_url}
+                  href={normalizeVideoUrl(claim.video_proof_url)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1 text-[11px] text-[#f3aa18] hover:underline"
@@ -350,7 +358,7 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
             ) : claim.video_proof_url ? (
               <div className="overflow-hidden rounded-xl border border-neutral-800 bg-black">
                 <video
-                  src={claim.video_proof_url}
+                  src={normalizeVideoUrl(claim.video_proof_url)}
                   controls
                   playsInline
                   className="max-h-[380px] w-full bg-black object-contain"

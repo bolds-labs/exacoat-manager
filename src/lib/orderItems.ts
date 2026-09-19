@@ -264,3 +264,8 @@ export function formatSeparatedItemSpecs(
   };
 }
 
+export function cleanItemTitle(name?: string): string {
+  if (!name) return '';
+  return name.replace(/\[\s*EXACOAT\s*\]\s*/gi, '').trim();
+}
+

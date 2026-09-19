@@ -134,20 +134,7 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
   const badge = getStatusBadge(order.order_status, order);
   const isArranged = order.order_status === 'PROCESSED';
   const isReadyToShip = order.order_status === 'READY_TO_SHIP';
-  const isOrderPrinted = Boolean(
-    isPrinted ||
-    order.is_printed ||
-    order.shipping_document_status === 'PRINTED' ||
-    (() => {
-      try {
-        const cached = typeof localStorage !== 'undefined' ? localStorage.getItem('_exacoat_shopee_printed_labels') : null;
-        const set = cached ? new Set(JSON.parse(cached)) : null;
-        return set ? set.has(order.order_sn) : false;
-      } catch {
-        return false;
-      }
-    })()
-  );
+  const isOrderPrinted = Boolean(isPrinted || order.is_printed || order.shipping_document_status === 'PRINTED');
 
   return (
     <SlideDrawer

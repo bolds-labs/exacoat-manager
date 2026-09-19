@@ -106,50 +106,12 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   const [isLiveSearching, setIsLiveSearching] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(false);
 
-  const [printedOrderSns, setPrintedOrderSns] = useState<Set<string>>(() => {
-    try {
-      const cached = localStorage.getItem('_exacoat_shopee_printed_labels');
-      return cached ? new Set(JSON.parse(cached)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
-
-  const markLabelPrinted = useCallback((orderSn: string) => {
-    setPrintedOrderSns((prev) => {
-      const next = new Set(prev).add(orderSn);
-      try {
-        localStorage.setItem('_exacoat_shopee_printed_labels', JSON.stringify(Array.from(next)));
-      } catch {
-        // Continue gracefully
-      }
-      return next;
-    });
+  const isOrderLabelPrinted = useCallback((order: ShopeeOrder) => {
+    return Boolean(
+      order.is_printed ||
+      order.shipping_document_status === 'PRINTED'
+    );
   }, []);
-
-  const unmarkLabelPrinted = useCallback((orderSn: string) => {
-    setPrintedOrderSns((prev) => {
-      const next = new Set(prev);
-      next.delete(orderSn);
-      try {
-        localStorage.setItem('_exacoat_shopee_printed_labels', JSON.stringify(Array.from(next)));
-      } catch {
-        // Continue gracefully
-      }
-      return next;
-    });
-  }, []);
-
-  const isOrderLabelPrinted = useCallback(
-    (order: ShopeeOrder) => {
-      return Boolean(
-        order.is_printed ||
-        order.shipping_document_status === 'PRINTED' ||
-        printedOrderSns.has(order.order_sn)
-      );
-    },
-    [printedOrderSns]
-  );
 
   const handleShipmentArranged = (orderSn: string, trackingNumber: string) => {
     setOrders((prev) =>
@@ -298,7 +260,6 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
       const res = await downloadShopeeShippingLabelDirect(order.order_sn);
       if (res.success && res.url) {
         window.open(res.url, '_blank');
-        markLabelPrinted(order.order_sn);
         setOrders((prev) =>
           prev.map((o) =>
             o.order_sn === order.order_sn
@@ -337,11 +298,6 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   };
 
   const handleTogglePrintStatus = async (order: ShopeeOrder, markPrinted: boolean) => {
-    if (markPrinted) {
-      markLabelPrinted(order.order_sn);
-    } else {
-      unmarkLabelPrinted(order.order_sn);
-    }
     setOrders((prev) =>
       prev.map((o) =>
         o.order_sn === order.order_sn
@@ -609,7 +565,6 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
           )
         );
         selectedOrdersList.forEach((o) => {
-          markLabelPrinted(o.order_sn);
           toggleShopeeOrderPrintDirect(o.order_sn, true).catch(() => {});
         });
         showToast(

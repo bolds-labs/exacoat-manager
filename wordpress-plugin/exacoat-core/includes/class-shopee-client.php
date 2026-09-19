@@ -1873,7 +1873,8 @@ class Exacoat_Shopee_Client {
 				break;
 
 			case 4:
-				// order_trackingno_push: Live courier resi assigned or updated
+			case 24:
+				// order_trackingno_push / booking_trackingno_push: Live courier resi assigned or updated
 				$order_sn = $data['ordersn'] ?? ( $data['order_sn'] ?? '' );
 				$tracking_no = $data['tracking_no'] ?? ( $data['tracking_number'] ?? '' );
 				if ( ! empty( $order_sn ) ) {
@@ -1887,6 +1888,42 @@ class Exacoat_Shopee_Client {
 							sprintf( 'Updated tracking_number to %s for Order SN %s', $tracking_no, $order_sn )
 						);
 					}
+				}
+				break;
+
+			case 15:
+			case 25:
+				// shipping_document_status_push / booking_shipping_document_status_push
+				$order_sn = $data['ordersn'] ?? ( $data['order_sn'] ?? '' );
+				$doc_st   = strtoupper( (string) ( $data['status'] ?? '' ) );
+				if ( ! empty( $order_sn ) ) {
+					$fields = [
+						'shipping_document_status' => $doc_st,
+					];
+					if ( in_array( $doc_st, [ 'PRINTED', 'READY' ], true ) ) {
+						$fields['is_printed'] = ( $doc_st === 'PRINTED' );
+					}
+					self::update_order_cache_field( $order_sn, $fields );
+					if ( class_exists( 'Exacoat_Logger' ) ) {
+						Exacoat_Logger::log(
+							'info',
+							'shopee_push',
+							sprintf( 'Updated shipping_document_status to %s for Order SN %s', $doc_st, $order_sn )
+						);
+					}
+				}
+				break;
+
+			case 23:
+				// booking_status_push: Logistics pickup/dropoff booking status update
+				$order_sn = $data['ordersn'] ?? ( $data['order_sn'] ?? '' );
+				$booking_st = $data['status'] ?? '';
+				if ( ! empty( $order_sn ) && class_exists( 'Exacoat_Logger' ) ) {
+					Exacoat_Logger::log(
+						'info',
+						'shopee_push',
+						sprintf( 'Received booking_status_push (%s) for Order SN %s', $booking_st, $order_sn )
+					);
 				}
 				break;
 

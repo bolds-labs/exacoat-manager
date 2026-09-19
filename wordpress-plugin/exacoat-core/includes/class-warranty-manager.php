@@ -546,8 +546,8 @@ class Exacoat_Warranty_Manager {
 	 * Upload 5-piece cut video proof (max 100MB)
 	 */
 	public static function rest_upload_proof( \WP_REST_Request $request ): \WP_REST_Response {
-		$order_id = absint( $request->get_param( 'order_id' ) );
-		if ( empty( $order_id ) ) {
+		$raw_order_id = sanitize_text_field( trim( (string) $request->get_param( 'order_id' ) ) );
+		if ( empty( $raw_order_id ) ) {
 			return new \WP_REST_Response( [
 				'success' => false,
 				'message' => 'Order ID is required for proof upload.',
@@ -611,7 +611,8 @@ class Exacoat_Warranty_Manager {
 		}
 
 		$unique_token = wp_generate_password( 24, false );
-		$filename     = sprintf( 'proof_%d_%s.%s', $order_id, $unique_token, $ext );
+		$safe_id      = preg_replace( '/[^a-zA-Z0-9_-]/', '', $raw_order_id );
+		$filename     = sprintf( 'proof_%s_%s.%s', $safe_id ?: 'order', $unique_token, $ext );
 		$target_path  = $target_dir . '/' . $filename;
 
 		if ( ! move_uploaded_file( $file['tmp_name'], $target_path ) ) {
@@ -1946,9 +1947,18 @@ class Exacoat_Warranty_Manager {
 			return wc_get_orders( $q_args );
 		}
 
+		$post_status = $args['status'] ?? 'any';
+		if ( is_array( $post_status ) ) {
+			$post_status = array_map( function( $s ) {
+				return ( strpos( $s, 'wc-' ) === 0 || $s === 'any' ) ? $s : 'wc-' . $s;
+			}, $post_status );
+		} elseif ( is_string( $post_status ) && $post_status !== 'any' && strpos( $post_status, 'wc-' ) !== 0 ) {
+			$post_status = 'wc-' . $post_status;
+		}
+
 		$wp_query_args = [
 			'post_type'      => 'shop_order',
-			'post_status'    => $args['status'] ?? 'any',
+			'post_status'    => $post_status,
 			'posts_per_page' => $args['limit'] ?? -1,
 			'fields'         => 'ids',
 			'meta_query'     => $meta_query,
@@ -1991,26 +2001,51 @@ class Exacoat_Warranty_Manager {
 			], 500 );
 		}
 
-		// Query existing active RMA claims with this original invoice
-		$existing_order_ids = self::query_order_ids_by_meta( [
+		// Query existing active RMA claims across _rma_original_invoice, _rma_original_order_id, and _rma_original_order_number
+		$invoice_meta_query = [
+			'relation' => 'OR',
 			[
 				'key'     => '_rma_original_invoice',
 				'value'   => $clean_invoice,
 				'compare' => '=',
 			],
-		], [
+			[
+				'key'     => '_rma_original_order_id',
+				'value'   => $clean_invoice,
+				'compare' => '=',
+			],
+			[
+				'key'     => '_rma_original_order_number',
+				'value'   => $clean_invoice,
+				'compare' => '=',
+			],
+		];
+
+		$existing_order_ids = self::query_order_ids_by_meta( $invoice_meta_query, [
 			'limit'  => 1,
 			'status' => [ 'pending', 'processing', 'on-hold', 'completed', 'shipped', 'ready-to-ship', 'delivered' ],
 		] );
 
 		if ( empty( $existing_order_ids ) && $clean_invoice !== trim( $invoice ) ) {
-			$existing_order_ids = self::query_order_ids_by_meta( [
+			$raw_meta_query = [
+				'relation' => 'OR',
 				[
 					'key'     => '_rma_original_invoice',
 					'value'   => trim( $invoice ),
 					'compare' => '=',
 				],
-			], [
+				[
+					'key'     => '_rma_original_order_id',
+					'value'   => trim( $invoice ),
+					'compare' => '=',
+				],
+				[
+					'key'     => '_rma_original_order_number',
+					'value'   => trim( $invoice ),
+					'compare' => '=',
+				],
+			];
+			$existing_order_ids = self::query_order_ids_by_meta( $raw_meta_query, [
 				'limit'  => 1,
 				'status' => [ 'pending', 'processing', 'on-hold', 'completed', 'shipped', 'ready-to-ship', 'delivered' ],
 			] );
