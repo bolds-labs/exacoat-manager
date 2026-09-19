@@ -202,7 +202,15 @@ class Exacoat_Export_Manager {
 						<li><?php echo wp_kses_post( __( 'Setelah data di-generate, unduh file <b>XLSX</b> dan <b>CSV</b>.', 'exacoat-core' ) ); ?></li>
 						<li><?php echo wp_kses_post( __( 'Simpan data dalam folder <code>\Exacoat CS\Resi (JNE SICEPAT)\JNE Ruby E-Connote (untuk email)</code>.', 'exacoat-core' ) ); ?></li>
 						<li>
-							<a href="mailto:bki.project@jne.co.id,bki.ccc1@jne.co.id,bayuriskanda83@gmail.com?subject=<?php echo rawurlencode( date_i18n( 'Y.m.d' ) . ' - econnote exacoat' ); ?>&body=<?php echo rawurlencode( "Dear Mas Bayu,\n\nBerikut kami lampirkan Master Data dan Data Loader pengiriman exacoat untuk hari ini.\n\nMohon diproses, terima kasih!" ); ?>" target="_blank" class="button button-secondary" style="margin-top:6px;">
+							<?php
+							$settings   = get_option( 'exacoat_core_settings', [] );
+							$recipients = ! empty( $settings['jne_email_recipients'] ) ? $settings['jne_email_recipients'] : 'bki.project@jne.co.id,bki.ccc1@jne.co.id,bayuriskanda83@gmail.com';
+							$date_str   = date_i18n( 'Y.m.d' );
+							$subject    = ! empty( $settings['jne_email_subject'] ) ? str_replace( '{date}', $date_str, $settings['jne_email_subject'] ) : "{$date_str} - econnote exacoat";
+							$body       = ! empty( $settings['jne_email_body'] ) ? str_replace( '{date}', $date_str, $settings['jne_email_body'] ) : "Dear Mas Bayu,\n\nBerikut kami lampirkan Master Data dan Data Loader pengiriman exacoat untuk hari ini.\n\nMohon diproses, terima kasih!";
+							$mailto_url = 'mailto:' . esc_attr( $recipients ) . '?subject=' . rawurlencode( $subject ) . '&body=' . rawurlencode( $body );
+							?>
+							<a href="<?php echo esc_url( $mailto_url ); ?>" target="_blank" class="button button-secondary" style="margin-top:6px;">
 								<?php esc_html_e( 'Kirim Email ke JNE', 'exacoat-core' ); ?> &rarr;
 							</a>
 						</li>
@@ -244,9 +252,6 @@ class Exacoat_Export_Manager {
 					<p style="font-size:14px; margin-top:0;"><strong><?php esc_html_e( 'Goorita bulk file generated successfully.', 'exacoat-core' ); ?></strong></p>
 					<p style="margin-bottom:0;">
 						<a href="<?php echo esc_url( $url ); ?>" class="button button-primary" download><?php esc_html_e( 'Download XLSX', 'exacoat-core' ); ?></a>
-						<a href="https://send.goorita.com/panel/shipment/create-bulk?load=10&page=1" target="_blank" class="button" style="margin-left:8px;">
-							<?php esc_html_e( 'Upload to Goorita', 'exacoat-core' ); ?> &rarr;
-						</a>
 					</p>
 				</div>
 			<?php endif; ?>
@@ -264,11 +269,6 @@ class Exacoat_Export_Manager {
 					<p><b><?php esc_html_e( 'Export ini akan mengambil pesanan Goorita dalam status "Waiting for Courier Pickup"', 'exacoat-core' ); ?></b></p>
 					<p style="margin:6px 0; color:#1d2327;">
 						<?php echo esc_html( sprintf( __( 'Saat ini terdapat %d pesanan Goorita siap pickup.', 'exacoat-core' ), $goorita_count ) ); ?>
-					</p>
-					<p style="margin-bottom:0;">
-						<a href="https://send.goorita.com/panel/shipment/create-bulk?load=10&page=1" target="_blank" class="button button-secondary">
-							<?php esc_html_e( 'Buka Goorita Send Portal', 'exacoat-core' ); ?> &rarr;
-						</a>
 					</p>
 				</div>
 

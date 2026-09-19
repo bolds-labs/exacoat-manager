@@ -5,12 +5,15 @@ import {
   fetchExportStatus,
   generateJneExportDirect,
   generateGooritaExportDirect,
+  loadJneEmailConfig,
+  buildJneMailtoUrl,
+  DEFAULT_JNE_EMAIL_CONFIG,
+  JneEmailConfig,
   ExportStatus
 } from '../../lib/exportManager';
 import { 
   FileSpreadsheet, 
   Download, 
-  ExternalLink, 
   Mail, 
   CheckCircle2, 
   AlertCircle, 
@@ -46,6 +49,8 @@ export const ExportShipmentsModal: React.FC<ExportShipmentsModalProps> = ({
   const [isGeneratingGoorita, setIsGeneratingGoorita] = useState(false);
   const [gooritaResult, setGooritaResult] = useState<{ fileUrl: string; count: number } | null>(null);
 
+  const [emailConfig, setEmailConfig] = useState<JneEmailConfig>(DEFAULT_JNE_EMAIL_CONFIG);
+
   const loadStatus = async () => {
     setIsLoadingStatus(true);
     try {
@@ -63,6 +68,7 @@ export const ExportShipmentsModal: React.FC<ExportShipmentsModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       loadStatus();
+      loadJneEmailConfig().then(setEmailConfig);
     }
   }, [isOpen]);
 
@@ -112,12 +118,7 @@ export const ExportShipmentsModal: React.FC<ExportShipmentsModalProps> = ({
     }
   };
 
-  const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '.');
-  const jneEmailSubject = encodeURIComponent(`${todayStr} - econnote exacoat`);
-  const jneEmailBody = encodeURIComponent(
-    "Dear Mas Bayu,\n\nBerikut kami lampirkan Master Data dan Data Loader pengiriman exacoat untuk hari ini.\n\nMohon diproses, terima kasih!"
-  );
-  const jneMailto = `mailto:bki.project@jne.co.id,bki.ccc1@jne.co.id,bayuriskanda83@gmail.com?subject=${jneEmailSubject}&body=${jneEmailBody}`;
+  const jneMailto = buildJneMailtoUrl(emailConfig);
 
   return (
     <Modal
@@ -290,18 +291,6 @@ export const ExportShipmentsModal: React.FC<ExportShipmentsModalProps> = ({
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between">
-                <span className="text-xs text-zinc-400">Portal Goorita Send Direct:</span>
-                <a
-                  href="https://send.goorita.com/panel/shipment/create-bulk?load=10&page=1"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300 font-mono font-medium"
-                >
-                  <span>send.goorita.com/panel</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
             </div>
 
             {/* Success Download & Workflow Actions */}
@@ -320,15 +309,6 @@ export const ExportShipmentsModal: React.FC<ExportShipmentsModalProps> = ({
                   >
                     <Download className="w-3.5 h-3.5" />
                     Download XLSX
-                  </a>
-                  <a
-                    href="https://send.goorita.com/panel/shipment/create-bulk?load=10&page=1"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold flex items-center gap-1.5 border border-white/10 transition-all"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    Upload to Goorita Send
                   </a>
                 </div>
               </div>

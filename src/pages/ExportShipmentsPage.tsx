@@ -1,25 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { PageHeroHeader } from '../components/ui/PageHeroHeader';
 import { GlassCard } from '../components/ui/GlassCard';
+import { Modal } from '../components/ui/Modal';
 import { useToast } from '../context/ToastContext';
 import {
   fetchExportStatus,
   generateJneExportDirect,
   generateGooritaExportDirect,
+  loadJneEmailConfig,
+  saveJneEmailConfig,
+  buildJneMailtoUrl,
+  getFormattedExportDate,
+  DEFAULT_JNE_EMAIL_CONFIG,
+  JneEmailConfig,
   ExportStatus,
 } from '../lib/exportManager';
 import {
   FileSpreadsheet,
   Download,
-  ExternalLink,
   CheckCircle2,
-  AlertCircle,
   Truck,
   Plane,
   RefreshCw,
-  FolderOpen,
   Calendar,
-  Layers,
+  Mail,
+  Settings2,
+  RotateCcw,
+  Send,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -32,6 +39,10 @@ export const ExportShipmentsPage: React.FC = () => {
   // JNE State
   const [isGeneratingJne, setIsGeneratingJne] = useState(false);
   const [jneResult, setJneResult] = useState<{ xlsxUrl: string; csvUrl: string; count: number } | null>(null);
+  const [emailConfig, setEmailConfig] = useState<JneEmailConfig>(DEFAULT_JNE_EMAIL_CONFIG);
+  const [draftConfig, setDraftConfig] = useState<JneEmailConfig>(DEFAULT_JNE_EMAIL_CONFIG);
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const [isSavingEmailConfig, setIsSavingEmailConfig] = useState(false);
 
   // Goorita State
   const [isGeneratingGoorita, setIsGeneratingGoorita] = useState(false);
@@ -53,7 +64,29 @@ export const ExportShipmentsPage: React.FC = () => {
 
   useEffect(() => {
     loadStatus();
+    loadJneEmailConfig().then((cfg) => {
+      setEmailConfig(cfg);
+      setDraftConfig(cfg);
+    });
   }, []);
+
+  const handleSaveEmailConfig = async () => {
+    setIsSavingEmailConfig(true);
+    try {
+      const res = await saveJneEmailConfig(draftConfig);
+      if (res.success) {
+        setEmailConfig(draftConfig);
+        setIsConfigModalOpen(false);
+        showToast('success', 'Email Settings Saved', 'JNE export email configuration updated.');
+      } else {
+        showToast('error', 'Save Failed', res.error || 'Failed saving JNE email configuration.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Save Error', err?.message || 'Error saving email configuration.');
+    } finally {
+      setIsSavingEmailConfig(false);
+    }
+  };
 
   const handleGenerateJne = async () => {
     setIsGeneratingJne(true);
@@ -200,9 +233,22 @@ export const ExportShipmentsPage: React.FC = () => {
                   <p className="text-xs text-zinc-500 dark:text-neutral-400">Domestic orders with verified destination addresses</p>
                 </div>
               </div>
-              <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30">
-                {status?.jne.pendingCount ?? 0} ready
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraftConfig({ ...emailConfig });
+                    setIsConfigModalOpen(true);
+                  }}
+                  title="Configure JNE Email Template"
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/10 transition-colors"
+                >
+                  <Settings2 className="w-4 h-4" />
+                </button>
+                <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30">
+                  {status?.jne.pendingCount ?? 0} ready
+                </span>
+              </div>
             </div>
 
             <div className="p-4 rounded-xl bg-zinc-50 dark:bg-neutral-900/60 border border-zinc-200 dark:border-white/[0.06] space-y-2 text-xs text-zinc-600 dark:text-neutral-300">
@@ -240,6 +286,26 @@ export const ExportShipmentsPage: React.FC = () => {
                     <Download className="w-3.5 h-3.5" />
                     <span>Download CSV</span>
                   </a>
+                  <a
+                    href={buildJneMailtoUrl(emailConfig)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    <span>Kirim Email ke JNE</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDraftConfig({ ...emailConfig });
+                      setIsConfigModalOpen(true);
+                    }}
+                    title="Configure JNE Email Template"
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-white/10 transition-colors"
+                  >
+                    <Settings2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             ) : status?.jne.hasFiles && (
@@ -268,6 +334,27 @@ export const ExportShipmentsPage: React.FC = () => {
                       <span>CSV</span>
                     </a>
                   )}
+                  <span className="text-zinc-300 dark:text-neutral-700">|</span>
+                  <a
+                    href={buildJneMailtoUrl(emailConfig)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-amber-500 hover:underline flex items-center gap-1 text-xs font-medium"
+                  >
+                    <Mail className="w-3 h-3" />
+                    <span>Kirim Email ke JNE</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDraftConfig({ ...emailConfig });
+                      setIsConfigModalOpen(true);
+                    }}
+                    title="Configure JNE Email Template"
+                    className="text-zinc-400 hover:text-zinc-200 transition-colors p-0.5"
+                  >
+                    <Settings2 className="w-3 h-3" />
+                  </button>
                 </div>
               </div>
             )}
@@ -309,7 +396,7 @@ export const ExportShipmentsPage: React.FC = () => {
               <ul className="list-disc list-inside space-y-1 text-[11px] text-zinc-500 dark:text-neutral-400">
                 <li>Filters international destinations outside Indonesia.</li>
                 <li>Includes commodity description, declared value, customer contact, and destination ZIP codes.</li>
-                <li>Direct upload link to Goorita shipping intake portal.</li>
+                <li>Exports formatted XLSX manifest for freight logistics intake.</li>
               </ul>
             </div>
 
@@ -330,17 +417,6 @@ export const ExportShipmentsPage: React.FC = () => {
                     <Download className="w-3.5 h-3.5" />
                     <span>Download Manifest (.xlsx)</span>
                   </a>
-                  {status?.goorita.uploadPortal && (
-                    <a
-                      href={status.goorita.uploadPortal}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-neutral-200 text-xs font-semibold flex items-center gap-1.5 transition-colors border border-white/10"
-                    >
-                      <span>Upload to Goorita</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  )}
                 </div>
               </div>
             ) : status?.goorita.hasFiles && (
@@ -361,30 +437,137 @@ export const ExportShipmentsPage: React.FC = () => {
             )}
           </div>
 
-          <div className="pt-4 border-t border-zinc-200 dark:border-white/[0.06] flex items-center gap-2">
+          <div className="pt-4 border-t border-zinc-200 dark:border-white/[0.06]">
             <button
               type="button"
               onClick={handleGenerateGoorita}
               disabled={isGeneratingGoorita || (status?.goorita.pendingCount ?? 0) === 0}
-              className="flex-1 py-2.5 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-neutral-950 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
+              className="w-full py-2.5 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-neutral-950 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
             >
               <FileSpreadsheet className={clsx('w-4 h-4', isGeneratingGoorita && 'animate-spin')} />
-              <span>{isGeneratingGoorita ? 'Processing Manifest...' : 'Generate Goorita Manifest'}</span>
+              <span>{isGeneratingGoorita ? 'Processing Manifest...' : 'Generate Goorita Manifest (XLSX)'}</span>
             </button>
-            {status?.goorita.uploadPortal && (
-              <a
-                href={status.goorita.uploadPortal}
-                target="_blank"
-                rel="noreferrer"
-                className="p-2.5 rounded-xl border border-zinc-300 dark:border-white/10 hover:bg-zinc-100 dark:hover:bg-white/5 text-zinc-600 dark:text-neutral-300 transition-colors"
-                title="Open Goorita client portal"
-              >
-                <ExternalLink className="w-4 h-4" />
-              </a>
-            )}
           </div>
         </GlassCard>
       </div>
+
+      {/* JNE Email Template Configuration Modal */}
+      <Modal
+        isOpen={isConfigModalOpen}
+        onClose={() => setIsConfigModalOpen(false)}
+        maxWidth="lg"
+        title={
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500">
+              <Mail className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-zinc-900 dark:text-white">JNE Email Settings</h2>
+              <p className="text-xs text-zinc-500 dark:text-neutral-400">Configure email recipient and message templates for JNE shipments</p>
+            </div>
+          </div>
+        }
+        footer={
+          <div className="flex items-center justify-between w-full">
+            <button
+              type="button"
+              onClick={() => setDraftConfig({ ...DEFAULT_JNE_EMAIL_CONFIG })}
+              className="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-700 dark:text-neutral-400 dark:hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset to Defaults</span>
+            </button>
+            <div className="flex items-center gap-2">
+              <a
+                href={buildJneMailtoUrl(draftConfig)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-2 text-xs font-medium rounded-lg border border-zinc-300 dark:border-white/10 text-zinc-700 dark:text-neutral-200 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors flex items-center gap-1.5"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Test Email Draft</span>
+              </a>
+              <button
+                type="button"
+                onClick={handleSaveEmailConfig}
+                disabled={isSavingEmailConfig}
+                className="px-4 py-2 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs"
+              >
+                {isSavingEmailConfig ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Save Configuration</span>
+                )}
+              </button>
+            </div>
+          </div>
+        }
+      >
+        <div className="space-y-4 py-1">
+          <div>
+            <label className="block text-xs font-semibold text-zinc-700 dark:text-neutral-200 mb-1.5">
+              Recipient Emails (comma separated)
+            </label>
+            <input
+              type="text"
+              value={draftConfig.recipients}
+              onChange={(e) => setDraftConfig(prev => ({ ...prev, recipients: e.target.value }))}
+              placeholder="e.g. bki.project@jne.co.id, bki.ccc1@jne.co.id"
+              className="w-full px-3 py-2 rounded-xl bg-zinc-50 dark:bg-neutral-900 border border-zinc-300 dark:border-white/10 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+            <p className="mt-1 text-[11px] text-zinc-500 dark:text-neutral-400">
+              Multiple recipients can be separated by commas.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-zinc-700 dark:text-neutral-200 mb-1.5">
+              Subject Template
+            </label>
+            <input
+              type="text"
+              value={draftConfig.subject}
+              onChange={(e) => setDraftConfig(prev => ({ ...prev, subject: e.target.value }))}
+              placeholder="{date} - econnote exacoat"
+              className="w-full px-3 py-2 rounded-xl bg-zinc-50 dark:bg-neutral-900 border border-zinc-300 dark:border-white/10 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+            <p className="mt-1 text-[11px] text-zinc-500 dark:text-neutral-400">
+              Placeholder <code className="text-amber-500">{'{date}'}</code> will be replaced with today's date ({getFormattedExportDate()}).
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-zinc-700 dark:text-neutral-200 mb-1.5">
+              Email Body Template
+            </label>
+            <textarea
+              rows={5}
+              value={draftConfig.body}
+              onChange={(e) => setDraftConfig(prev => ({ ...prev, body: e.target.value }))}
+              placeholder="Message body..."
+              className="w-full px-3 py-2 rounded-xl bg-zinc-50 dark:bg-neutral-900 border border-zinc-300 dark:border-white/10 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono text-[12px]"
+            />
+          </div>
+
+          {/* Live Preview */}
+          <div className="p-3.5 rounded-xl bg-zinc-100 dark:bg-white/[0.04] border border-zinc-200 dark:border-white/[0.08] space-y-2 text-xs">
+            <div className="flex items-center justify-between text-[11px] font-semibold text-zinc-500 dark:text-neutral-400 uppercase tracking-wider">
+              <span>Preview</span>
+              <span>{getFormattedExportDate()}</span>
+            </div>
+            <div className="text-zinc-700 dark:text-neutral-200 font-mono text-[11px] space-y-1">
+              <div><span className="text-zinc-400 dark:text-neutral-500">To:</span> {draftConfig.recipients || '(None)'}</div>
+              <div><span className="text-zinc-400 dark:text-neutral-500">Subject:</span> {draftConfig.subject.replace(/{date}/gi, getFormattedExportDate())}</div>
+              <div className="pt-1 text-zinc-600 dark:text-neutral-300 whitespace-pre-wrap font-sans text-xs border-t border-zinc-200 dark:border-white/[0.06]">
+                {draftConfig.body.replace(/{date}/gi, getFormattedExportDate())}
+              </div>
+            </div>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

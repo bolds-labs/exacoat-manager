@@ -92,6 +92,9 @@ export interface WordPressPluginSettings {
   shipping_zones?: Record<string, ShippingZoneConfig>;
   shipping_target_method_ids?: string;
   logistics_carriers?: Record<string, LogisticsCarrierConfig>;
+  jne_email_recipients?: string;
+  jne_email_subject?: string;
+  jne_email_body?: string;
   [key: string]: any;
 }
 

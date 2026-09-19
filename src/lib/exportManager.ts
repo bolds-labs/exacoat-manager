@@ -6,7 +6,7 @@
 
 import { Order } from '../types';
 import { getWordPressBaseUrl } from './env';
-import { authenticatedFetch } from './wordpressBridge';
+import { authenticatedFetch, fetchPluginSettings, savePluginSettings } from './wordpressBridge';
 
 export interface ExportStatus {
   jne: {
@@ -200,5 +200,130 @@ export async function generateGooritaExportDirect(): Promise<ExportGenerationRes
     return { success: false, error: data?.error || data?.message || 'Failed to generate Goorita export' };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Network error generating Goorita export' };
+  }
+}
+
+/**
+ * JNE Batch Export Email Configuration
+ */
+export interface JneEmailConfig {
+  recipients: string;
+  subject: string;
+  body: string;
+}
+
+export const DEFAULT_JNE_EMAIL_CONFIG: JneEmailConfig = {
+  recipients: 'bki.project@jne.co.id,bki.ccc1@jne.co.id,bayuriskanda83@gmail.com',
+  subject: '{date} - econnote exacoat',
+  body: 'Dear Mas Bayu,\n\nBerikut kami lampirkan Master Data dan Data Loader pengiriman exacoat untuk hari ini.\n\nMohon diproses, terima kasih!',
+};
+
+export const JNE_EMAIL_CONFIG_STORAGE_KEY = 'exacoat_jne_email_config';
+
+/**
+ * Format date as YYYY.MM.DD
+ */
+export function getFormattedExportDate(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}.${month}.${day}`;
+}
+
+/**
+ * Build mailto link for sending JNE batch exports
+ */
+export function buildJneMailtoUrl(config?: Partial<JneEmailConfig>, date?: Date): string {
+  const activeRecipients = config?.recipients?.trim() || DEFAULT_JNE_EMAIL_CONFIG.recipients;
+  const activeSubject = config?.subject?.trim() || DEFAULT_JNE_EMAIL_CONFIG.subject;
+  const activeBody = config?.body !== undefined ? config.body : DEFAULT_JNE_EMAIL_CONFIG.body;
+
+  const dateStr = getFormattedExportDate(date || new Date());
+  const resolvedSubject = activeSubject.replace(/{date}/gi, dateStr);
+  const resolvedBody = activeBody.replace(/{date}/gi, dateStr);
+
+  const cleanRecipients = activeRecipients
+    .split(',')
+    .map(e => e.trim())
+    .filter(Boolean)
+    .join(',');
+
+  return `mailto:${cleanRecipients}?subject=${encodeURIComponent(resolvedSubject)}&body=${encodeURIComponent(resolvedBody)}`;
+}
+
+/**
+ * Load JNE email configuration from localStorage and WordPress settings
+ */
+export async function loadJneEmailConfig(): Promise<JneEmailConfig> {
+  let resolved: JneEmailConfig = { ...DEFAULT_JNE_EMAIL_CONFIG };
+
+  // 1. First check local storage for instant sync
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem(JNE_EMAIL_CONFIG_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        resolved = {
+          recipients: parsed.recipients?.trim() || DEFAULT_JNE_EMAIL_CONFIG.recipients,
+          subject: parsed.subject?.trim() || DEFAULT_JNE_EMAIL_CONFIG.subject,
+          body: parsed.body !== undefined ? parsed.body : DEFAULT_JNE_EMAIL_CONFIG.body,
+        };
+      }
+    } catch {
+      // Non-critical local storage parse error
+    }
+  }
+
+  // 2. Fetch server configuration from WordPress settings
+  try {
+    const res = await fetchPluginSettings();
+    if (res.success && res.settings) {
+      const s = res.settings;
+      if (s.jne_email_recipients || s.jne_email_subject || s.jne_email_body !== undefined) {
+        resolved = {
+          recipients: s.jne_email_recipients?.trim() || resolved.recipients,
+          subject: s.jne_email_subject?.trim() || resolved.subject,
+          body: s.jne_email_body !== undefined ? s.jne_email_body : resolved.body,
+        };
+
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(JNE_EMAIL_CONFIG_STORAGE_KEY, JSON.stringify(resolved));
+          } catch {
+            // Non-critical storage quota error
+          }
+        }
+      }
+    }
+  } catch {
+    // Non-critical server fetch error, keep local configuration
+  }
+
+  return resolved;
+}
+
+/**
+ * Save JNE email configuration to localStorage and WordPress server
+ */
+export async function saveJneEmailConfig(config: JneEmailConfig): Promise<{ success: boolean; error?: string }> {
+  // 1. Immediately cache in local storage
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(JNE_EMAIL_CONFIG_STORAGE_KEY, JSON.stringify(config));
+    } catch {
+      // Non-critical local storage save error
+    }
+  }
+
+  // 2. Persist to WordPress exacoat_core_settings
+  try {
+    const res = await savePluginSettings({
+      jne_email_recipients: config.recipients,
+      jne_email_subject: config.subject,
+      jne_email_body: config.body,
+    });
+    return res;
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed saving JNE email settings to WordPress' };
   }
 }
