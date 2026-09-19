@@ -7,6 +7,7 @@ import { matchesPhoneQuery } from '../../lib/phoneUtils';
 import { updateOrderStatusDirect } from '../../lib/wordpressBridge';
 import { downloadCsv } from '../../lib/csvExport';
 import { ShippingLabelA6Modal } from './ShippingLabelA6Modal';
+import { Modal } from '../ui/Modal';
 import { useToast } from '../../context/ToastContext';
 import { FilterSelect } from '../ui/FilterSelect';
 import { isStorePickupOrder } from '../../lib/orderUtils';
@@ -25,8 +26,14 @@ import {
   Download,
   X,
   ChevronDown,
+  Layers,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+
+export function isOrderConfirmed(status: string | null | undefined): boolean {
+  const clean = String(status || '').replace(/^wc-/, '').toLowerCase().trim();
+  return clean === 'processing' || clean === 'confirmed';
+}
 
 export interface OrderTableProps {
   orders: Order[];
@@ -174,6 +181,11 @@ export const OrderTable: React.FC<OrderTableProps> = ({
   // Internal A6 print modal state
   const [printModalOrders, setPrintModalOrders] = useState<Order[]>([]);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+
+  // Post-print advance to Preparing order modal state
+  const [showPreparingModal, setShowPreparingModal] = useState(false);
+  const [ordersToMarkPreparing, setOrdersToMarkPreparing] = useState<Order[]>([]);
+  const [isMarkingPreparing, setIsMarkingPreparing] = useState(false);
 
   const handleCopy = (text: string, id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -417,6 +429,49 @@ export const OrderTable: React.FC<OrderTableProps> = ({
       setPrintModalOrders([order]);
       setIsPrintModalOpen(true);
     }
+  };
+
+  const handleConfirmMarkPreparing = async () => {
+    if (ordersToMarkPreparing.length === 0) return;
+    setIsMarkingPreparing(true);
+    let successCount = 0;
+
+    for (const order of ordersToMarkPreparing) {
+      try {
+        const res = await updateOrderStatusDirect(order.id, 'preparing-order', false);
+        if (res.success) successCount++;
+      } catch (e) {
+        console.error('Failed to update order status to preparing-order', order.id, e);
+      }
+    }
+
+    setIsMarkingPreparing(false);
+    setShowPreparingModal(false);
+
+    if (successCount > 0) {
+      const msg =
+        ordersToMarkPreparing.length === 1
+          ? `Order #${String(ordersToMarkPreparing[0].order_number || ordersToMarkPreparing[0].id).replace(/^#+/, '')} marked as Preparing order.`
+          : `Marked ${successCount} orders as Preparing order.`;
+      showToast('success', 'Status Updated', msg);
+
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        ordersToMarkPreparing.forEach((o) => next.delete(o.id));
+        return next;
+      });
+
+      if (onRefresh) onRefresh();
+    } else {
+      showToast('error', 'Update Failed', 'Failed to update order status to Preparing order.');
+    }
+
+    setOrdersToMarkPreparing([]);
+  };
+
+  const handleCancelMarkPreparing = () => {
+    setShowPreparingModal(false);
+    setOrdersToMarkPreparing([]);
   };
 
   // Bulk Export to CSV
@@ -704,6 +759,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                   const isSelected = selectedIds.has(order.id);
                   const isPickup = isStorePickupOrder(order);
                   const isPrinted = printedOrderIds.has(order.id);
+                  const isConfirmed = isOrderConfirmed(order.status);
 
                   return (
                     <tr
@@ -858,23 +914,25 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* Print Thermal Label - Amber if not printed yet, normal grey if already printed */}
-                          <button
-                            type="button"
-                            onClick={(e) => handleSinglePrintA6(order, e)}
-                            className={clsx(
-                              'p-1.5 rounded-lg border transition-all cursor-pointer relative',
-                              !isPrinted
-                                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/25'
-                                : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-400 dark:text-zinc-500 border-transparent hover:border-zinc-300 dark:hover:border-white/10 hover:text-zinc-700 dark:hover:text-zinc-300'
-                            )}
-                            title={!isPrinted ? 'Print 4x6 Label (Not printed yet)' : 'Print 4x6 Label (Already printed)'}
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                            {!isPrinted && (
-                              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500 ring-1 ring-white dark:ring-neutral-900" />
-                            )}
-                          </button>
+                          {/* Print Thermal Label - Only shown for Confirmed orders */}
+                          {isConfirmed && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleSinglePrintA6(order, e)}
+                              className={clsx(
+                                'p-1.5 rounded-lg border transition-all cursor-pointer relative',
+                                !isPrinted
+                                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/25'
+                                  : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-400 dark:text-zinc-500 border-transparent hover:border-zinc-300 dark:hover:border-white/10 hover:text-zinc-700 dark:hover:text-zinc-300'
+                              )}
+                              title={!isPrinted ? 'Print 4x6 Label (Not printed yet)' : 'Print 4x6 Label (Already printed)'}
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                              {!isPrinted && (
+                                <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500 ring-1 ring-white dark:ring-neutral-900" />
+                              )}
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => onSelectOrder(order)}
@@ -907,6 +965,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
               const isSelected = selectedIds.has(order.id);
               const rawTrackingNum = String(order.tracking?.tracking_number || '').trim();
               const hasValidTracking = rawTrackingNum.length > 0 && !rawTrackingNum.startsWith('field_');
+              const isConfirmed = isOrderConfirmed(order.status);
 
               return (
                 <div
@@ -970,23 +1029,25 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                           {rawTrackingNum}
                         </span>
                       )}
-                      {/* Print 4x6 Label - Amber if not printed yet, normal grey if already printed */}
-                      <button
-                        type="button"
-                        onClick={(e) => handleSinglePrintA6(order, e)}
-                        className={clsx(
-                          'p-1.5 rounded-lg border transition-all cursor-pointer relative',
-                          !printedOrderIds.has(order.id)
-                            ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/25'
-                            : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-400 dark:text-zinc-500 border-transparent hover:border-zinc-300 dark:hover:border-white/10 hover:text-zinc-700 dark:hover:text-zinc-300'
-                        )}
-                        title={!printedOrderIds.has(order.id) ? 'Print 4x6 Label (Not printed yet)' : 'Print 4x6 Label (Already printed)'}
-                      >
-                        <Printer className="w-3.5 h-3.5" />
-                        {!printedOrderIds.has(order.id) && (
-                          <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500 ring-1 ring-white dark:ring-neutral-900" />
-                        )}
-                      </button>
+                      {/* Print 4x6 Label - Only shown for Confirmed orders */}
+                      {isConfirmed && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleSinglePrintA6(order, e)}
+                          className={clsx(
+                            'p-1.5 rounded-lg border transition-all cursor-pointer relative',
+                            !printedOrderIds.has(order.id)
+                              ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/25'
+                              : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-400 dark:text-zinc-500 border-transparent hover:border-zinc-300 dark:hover:border-white/10 hover:text-zinc-700 dark:hover:text-zinc-300'
+                          )}
+                          title={!printedOrderIds.has(order.id) ? 'Print 4x6 Label (Not printed yet)' : 'Print 4x6 Label (Already printed)'}
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          {!printedOrderIds.has(order.id) && (
+                            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500 ring-1 ring-white dark:ring-neutral-900" />
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1061,8 +1122,119 @@ export const OrderTable: React.FC<OrderTableProps> = ({
             orderIds.forEach((id) => next.add(id));
             return next;
           });
+
+          // Filter printed orders to those that are confirmed
+          const confirmedPrinted = printModalOrders.filter((ord) => {
+            const clean = String(ord.status || '').replace(/^wc-/, '').toLowerCase().trim();
+            return clean === 'processing' || clean === 'confirmed';
+          });
+
+          const targets = confirmedPrinted.length > 0 ? confirmedPrinted : printModalOrders;
+          if (targets.length > 0) {
+            setIsPrintModalOpen(false);
+            setOrdersToMarkPreparing(targets);
+            setShowPreparingModal(true);
+          }
         }}
       />
+
+      {/* Post-Print Advance to Preparing Order Confirmation Modal */}
+      <Modal
+        isOpen={showPreparingModal}
+        onClose={handleCancelMarkPreparing}
+        maxWidth="md"
+        title={
+          <div className="flex items-center gap-2 text-zinc-900 dark:text-white">
+            <Layers className="w-5 h-5 text-[#f3aa18]" />
+            <span className="text-base font-bold font-sans">
+              {ordersToMarkPreparing.length === 1
+                ? 'Mark order as "Preparing order"?'
+                : `Mark ${ordersToMarkPreparing.length} orders as "Preparing order"?`}
+            </span>
+          </div>
+        }
+        subtitle={
+          ordersToMarkPreparing.length === 1
+            ? 'Shipping label has been sent to print. Advance order status to begin fulfillment.'
+            : `${ordersToMarkPreparing.length} shipping labels have been sent to print. Advance orders to begin fulfillment.`
+        }
+        footer={
+          <div className="flex items-center justify-end gap-2.5 w-full font-sans">
+            <button
+              type="button"
+              disabled={isMarkingPreparing}
+              onClick={handleCancelMarkPreparing}
+              className="px-4 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-white/[0.06] dark:hover:bg-white/[0.1] text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white text-xs font-semibold border border-zinc-200 dark:border-white/10 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              Keep as Confirmed
+            </button>
+            <button
+              type="button"
+              disabled={isMarkingPreparing}
+              onClick={handleConfirmMarkPreparing}
+              className="px-4 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50 shadow-xs active:scale-95"
+            >
+              {isMarkingPreparing && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+              <span>
+                {isMarkingPreparing
+                  ? 'Updating...'
+                  : ordersToMarkPreparing.length === 1
+                  ? 'Mark as Preparing order'
+                  : `Mark ${ordersToMarkPreparing.length} orders as Preparing order`}
+              </span>
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-3 font-sans text-xs">
+          <p className="text-zinc-600 dark:text-zinc-400">
+            {ordersToMarkPreparing.length === 1 ? (
+              <>
+                Do you want to update order{' '}
+                <strong className="text-zinc-900 dark:text-white font-mono">
+                  #{String(ordersToMarkPreparing[0].order_number || ordersToMarkPreparing[0].id).replace(/^#+/, '')}
+                </strong>{' '}
+                from <span className="text-emerald-500 font-semibold">Confirmed</span> to{' '}
+                <span className="text-cyan-400 font-semibold">Preparing order</span>?
+              </>
+            ) : (
+              <>
+                Do you want to update{' '}
+                <strong className="text-zinc-900 dark:text-white font-semibold">
+                  {ordersToMarkPreparing.length} orders
+                </strong>{' '}
+                from <span className="text-emerald-500 font-semibold">Confirmed</span> to{' '}
+                <span className="text-cyan-400 font-semibold">Preparing order</span>?
+              </>
+            )}
+          </p>
+
+          {/* List of orders preview */}
+          <div className="max-h-48 overflow-y-auto rounded-xl border border-zinc-200 dark:border-white/[0.08] bg-zinc-50 dark:bg-neutral-900/60 divide-y divide-zinc-200/60 dark:divide-white/[0.04]">
+            {ordersToMarkPreparing.map((ord) => {
+              const cleanNum = String(ord.order_number || ord.id).replace(/^#+/, '');
+              return (
+                <div key={ord.id} className="p-2.5 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-bold text-zinc-900 dark:text-white">
+                      #{cleanNum}
+                    </span>
+                    <span className="text-zinc-500 truncate max-w-[160px]">
+                      {ord.customer_name || 'Customer'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-zinc-400 font-mono">
+                      {ord.tracking?.courier || ord.shipping_method_name || 'Standard'}
+                    </span>
+                    <Badge type="orderStatus" value="preparing-order" size="xs" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

@@ -148,6 +148,8 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
 
   // A6 Shipping Label, Customer Invoice & Packing Slip modal state
   const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
+  const [showPreparingPromptModal, setShowPreparingPromptModal] = useState(false);
+  const [isMarkingPreparingFromDrawer, setIsMarkingPreparingFromDrawer] = useState(false);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [isPackingSlipModalOpen, setIsPackingSlipModalOpen] = useState(false);
   const [isWarrantyReviewModalOpen, setIsWarrantyReviewModalOpen] = useState(false);
@@ -2424,8 +2426,66 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         onPrinted={(orderIds) => {
           setIsPrinted(true);
           if (onOrderUpdated) onOrderUpdated();
+          const cleanStatus = String(order?.status || '').replace(/^wc-/, '').toLowerCase().trim();
+          if (cleanStatus === 'processing' || cleanStatus === 'confirmed') {
+            setIsLabelModalOpen(false);
+            setShowPreparingPromptModal(true);
+          }
         }}
       />
+
+      {/* Post-Print Advance to Preparing Order Confirmation Modal */}
+      {order && (
+        <Modal
+          isOpen={showPreparingPromptModal}
+          onClose={() => setShowPreparingPromptModal(false)}
+          maxWidth="md"
+          title={
+            <div className="flex items-center gap-2 text-white font-sans">
+              <Layers className="w-5 h-5 text-[#f3aa18]" />
+              <span className="text-base font-bold">Mark order as "Preparing order"?</span>
+            </div>
+          }
+          subtitle="Shipping label has been sent to print. Advance order status to begin fulfillment."
+          footer={
+            <div className="flex items-center justify-end gap-2.5 w-full font-sans">
+              <button
+                type="button"
+                disabled={isMarkingPreparingFromDrawer}
+                onClick={() => setShowPreparingPromptModal(false)}
+                className="px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-zinc-300 hover:text-white text-xs font-semibold border border-white/10 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Keep as Confirmed
+              </button>
+              <button
+                type="button"
+                disabled={isMarkingPreparingFromDrawer}
+                onClick={async () => {
+                  setIsMarkingPreparingFromDrawer(true);
+                  await handleStatusChange('preparing-order');
+                  setIsMarkingPreparingFromDrawer(false);
+                  setShowPreparingPromptModal(false);
+                }}
+                className="px-4 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50 shadow-xs active:scale-95"
+              >
+                {isMarkingPreparingFromDrawer && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>{isMarkingPreparingFromDrawer ? 'Updating...' : 'Mark as Preparing order'}</span>
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-3 font-sans text-xs">
+            <p className="text-zinc-400">
+              Do you want to update order{' '}
+              <strong className="text-white font-mono">
+                #{String(order.order_number || order.id).replace(/^#+/, '')}
+              </strong>{' '}
+              from <span className="text-emerald-400 font-semibold">Confirmed</span> to{' '}
+              <span className="text-cyan-400 font-semibold">Preparing order</span>?
+            </p>
+          </div>
+        </Modal>
+      )}
 
       {/* Official Customer Tax Invoice Modal */}
       <CustomerInvoiceModal

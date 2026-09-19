@@ -232,7 +232,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({ initialStatus = 'all' })
               : 'text-neutral-400 hover:text-white hover:bg-white/5'
           )}
         >
-          <span>Exacoat Direct Web</span>
+          <span>Exacoat Webstore</span>
           <span
             className={clsx(
               'text-[10px] px-1.5 py-0.2 rounded-full font-mono',
