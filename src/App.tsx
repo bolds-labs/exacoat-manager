@@ -22,6 +22,9 @@ const TestingSandboxPage = React.lazy(() => import('./pages/TestingSandboxPage')
 const SystemHealthPage = React.lazy(() => import('./pages/SystemHealthPage').then(m => ({ default: m.SystemHealthPage })));
 const AuditLogsPage = React.lazy(() => import('./pages/AuditLogsPage').then(m => ({ default: m.AuditLogsPage })));
 const SettingsPage = React.lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
+const RmaClaimsPage = React.lazy(() => import('./pages/RmaClaimsPage').then(m => ({ default: m.RmaClaimsPage })));
+const ExportShipmentsPage = React.lazy(() => import('./pages/ExportShipmentsPage').then(m => ({ default: m.ExportShipmentsPage })));
+const TrackingPoolPage = React.lazy(() => import('./pages/TrackingPoolPage').then(m => ({ default: m.TrackingPoolPage })));
 
 const getTabFromUrl = (): NavItemKey => {
   if (typeof window === 'undefined') return 'dashboard';
@@ -64,11 +67,18 @@ const getTabFromUrl = (): NavItemKey => {
     'system': 'health',
     'audit': 'audit',
     'logs': 'audit',
-    'warranty': 'warranty',
-    'warranty-claims': 'warranty',
-    'warranties': 'warranty',
-    'claims': 'warranty',
-    'rma': 'warranty',
+    'rma': 'rma',
+    'rma-claims': 'rma',
+    'warranty': 'rma',
+    'warranty-claims': 'rma',
+    'warranties': 'rma',
+    'claims': 'rma',
+    'export': 'export',
+    'exports': 'export',
+    'export-shipments': 'export',
+    'tracking': 'tracking_pool',
+    'tracking-pool': 'tracking_pool',
+    'tracking_pool': 'tracking_pool',
     'settings': 'settings',
     'config': 'settings',
   };
@@ -76,6 +86,8 @@ const getTabFromUrl = (): NavItemKey => {
   return urlMap[key] || 'dashboard';
 
 };
+
+const SHOP_MANAGER_ALLOWED_TABS: NavItemKey[] = ['orders', 'rma', 'warranty', 'export', 'tracking_pool'];
 
 export const App: React.FC = () => {
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -91,9 +103,9 @@ export const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Keep shop_manager strictly locked to orders & warranty claims
+  // Keep shop_manager strictly locked to orders, rma claims, export, and tracking pool
   useEffect(() => {
-    if (isShopManager && currentTab !== 'orders' && currentTab !== 'warranty') {
+    if (isShopManager && !SHOP_MANAGER_ALLOWED_TABS.includes(currentTab)) {
       setCurrentTab('orders');
       if (window.location.hash !== '#orders') {
         window.history.replaceState(null, '', '#orders');
@@ -105,7 +117,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     const handlePopState = () => {
       const tab = getTabFromUrl();
-      if (user?.role === 'shop_manager' && tab !== 'orders' && tab !== 'warranty') {
+      if (user?.role === 'shop_manager' && !SHOP_MANAGER_ALLOWED_TABS.includes(tab)) {
         setCurrentTab('orders');
         return;
       }
@@ -154,7 +166,7 @@ export const App: React.FC = () => {
   }, [showToast]);
 
   const handleTabChange = useCallback((tab: NavItemKey) => {
-    if (user?.role === 'shop_manager' && tab !== 'orders' && tab !== 'warranty') {
+    if (user?.role === 'shop_manager' && !SHOP_MANAGER_ALLOWED_TABS.includes(tab)) {
       return;
     }
     setCurrentTab(tab);
@@ -214,7 +226,16 @@ export const App: React.FC = () => {
 
   const renderActiveTab = () => {
     if (user?.role === 'shop_manager') {
-      return <OrdersView initialStatus={currentTab === 'warranty' ? 'warranty' : 'all'} />;
+      if (currentTab === 'rma' || currentTab === 'warranty') {
+        return <RmaClaimsPage />;
+      }
+      if (currentTab === 'export') {
+        return <ExportShipmentsPage />;
+      }
+      if (currentTab === 'tracking_pool') {
+        return <TrackingPoolPage />;
+      }
+      return <OrdersView initialStatus="all" />;
     }
     switch (currentTab) {
       case 'dashboard':
@@ -229,8 +250,13 @@ export const App: React.FC = () => {
         );
       case 'orders':
         return <OrdersView initialStatus="all" />;
+      case 'rma':
       case 'warranty':
-        return <OrdersView initialStatus="warranty" />;
+        return <RmaClaimsPage />;
+      case 'export':
+        return <ExportShipmentsPage />;
+      case 'tracking_pool':
+        return <TrackingPoolPage />;
       case 'configurator':
         return <ConfiguratorStudioPage />;
       case 'materials':

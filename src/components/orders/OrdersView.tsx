@@ -187,19 +187,11 @@ export const OrdersView: React.FC<OrdersViewProps> = ({ initialStatus = 'all' })
           <div className="flex items-center gap-2.5">
             <button
               type="button"
-              onClick={() => setIsRmaLogModalOpen(true)}
-              className="px-4 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-200 border border-white/10 text-xs font-semibold font-sans flex items-center gap-2 transition-all shrink-0 self-start sm:self-auto cursor-pointer"
-            >
-              <Layers className="w-3.5 h-3.5 text-amber-400" />
-              <span>RMA Claims Log</span>
-            </button>
-            <button
-              type="button"
               onClick={() => {
                 setManualClaimInitialType('Warranty');
                 setIsManualWarrantyModalOpen(true);
               }}
-              className="px-4 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 text-xs font-semibold font-sans flex items-center gap-2 transition-all shrink-0 self-start sm:self-auto cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 text-xs font-semibold font-sans flex items-center gap-1.5 transition-all shrink-0 self-start sm:self-auto cursor-pointer shadow-xs"
             >
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
               <span>Warranty</span>
@@ -210,32 +202,16 @@ export const OrdersView: React.FC<OrdersViewProps> = ({ initialStatus = 'all' })
                 setManualClaimInitialType('Redeem');
                 setIsManualWarrantyModalOpen(true);
               }}
-              className="px-4 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 text-xs font-semibold font-sans flex items-center gap-2 transition-all shrink-0 self-start sm:self-auto cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 text-xs font-semibold font-sans flex items-center gap-1.5 transition-all shrink-0 self-start sm:self-auto cursor-pointer shadow-xs"
             >
               <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
               <span>Redeem</span>
             </button>
             <button
               type="button"
-              onClick={() => setIsTrackingPoolModalOpen(true)}
-              className="px-4 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 text-xs font-semibold font-sans flex items-center gap-2 transition-all shrink-0 self-start sm:self-auto cursor-pointer"
-            >
-              <Package className="w-3.5 h-3.5 text-amber-400" />
-              <span>Tracking Pool</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsExportModalOpen(true)}
-              className="px-4 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 text-xs font-semibold font-sans flex items-center gap-2 transition-all shrink-0 self-start sm:self-auto cursor-pointer"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-amber-400" />
-              <span>Export Shipments</span>
-            </button>
-            <button
-              type="button"
               onClick={() => loadOrders(true)}
               disabled={isLoading || isRefreshing}
-              className="px-4 py-2 rounded-xl bg-[#141414] hover:bg-white/[0.06] text-neutral-300 hover:text-white border border-white/[0.08] text-xs font-semibold font-sans flex items-center gap-2 transition-all shrink-0 self-start sm:self-auto disabled:opacity-50 cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-[#141414] hover:bg-white/[0.06] text-neutral-300 hover:text-white border border-white/[0.08] text-xs font-semibold font-sans flex items-center gap-2 transition-all shrink-0 self-start sm:self-auto disabled:opacity-50 cursor-pointer shadow-xs"
             >
               <RefreshCw className={clsx('w-3.5 h-3.5', (isLoading || isRefreshing) && 'animate-spin text-[#f3aa18]')} />
               <span>Refresh</span>

@@ -942,12 +942,17 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
       footer={
         <div className="flex items-center justify-between w-full flex-wrap gap-3">
           <div className="text-xs font-mono text-neutral-400">
-            <span>Courier fee: </span>
+            <span>Customer shipping: </span>
             <span className={clsx('font-bold', isFreeShipping ? 'text-amber-400' : 'text-white')}>
               {isFreeShipping
-                ? 'Rp 0 (Borne by Exacoat / Free)'
+                ? 'Rp 0 (Free)'
                 : formatCurrency(selectedCourierPrice, 'IDR')}
             </span>
+            {isFreeShipping && (
+              <span className="text-[11px] text-neutral-400 ml-2">
+                (Courier rate: <span className="text-emerald-400 font-bold">{formatCurrency(selectedCourierPrice, 'IDR')}</span>)
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -1774,7 +1779,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
             {claimType === 'Redeem' ? (
               <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>Free Shipping (Locked Rp 0 - Borne by Exacoat)</span>
+                <span>Customer Shipping: Free (Rp 0 - Borne by Exacoat)</span>
               </span>
             ) : (
               <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -1784,7 +1789,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                   onChange={(e) => setWaiveShipping(e.target.checked)}
                   className="rounded border-neutral-700 text-emerald-500 focus:ring-emerald-400"
                 />
-                <span className="text-xs font-bold text-emerald-400">Waive Shipping Fee (Rp 0 / Free for Customer)</span>
+                <span className="text-xs font-bold text-emerald-400">Waive Shipping Fee (Rp 0 for Customer)</span>
               </label>
             )}
           </div>
@@ -1841,13 +1846,8 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                       <span className="font-bold text-xs block text-white">{rate.label}</span>
                       <span className="text-[10px] text-neutral-400 font-mono">{rate.duration}</span>
                     </div>
-                    <span
-                      className={clsx(
-                        'text-xs font-mono font-bold mt-1.5 block',
-                        isFreeShipping ? 'text-amber-400' : 'text-emerald-400'
-                      )}
-                    >
-                      {isFreeShipping ? 'Rp 0 (Free)' : formatCurrency(rate.price, 'IDR')}
+                    <span className="text-xs font-mono font-bold mt-1.5 block text-emerald-400">
+                      {formatCurrency(rate.price, 'IDR')}
                     </span>
                   </button>
                 );

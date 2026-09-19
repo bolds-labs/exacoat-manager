@@ -18,6 +18,8 @@ import {
   Star,
   Layers,
   Sliders,
+  FileSpreadsheet,
+  Package,
   LucideIcon
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -28,7 +30,10 @@ import { lockBodyScroll } from '../../lib/bodyScrollLock';
 export type NavItemKey = 
   | 'dashboard'
   | 'orders'
+  | 'rma'
   | 'warranty'
+  | 'export'
+  | 'tracking_pool'
   | 'configurator'
   | 'materials'
   | 'reviews'
@@ -123,7 +128,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           icon: ShoppingBag,
           children: [
             { key: 'orders', label: 'All Orders' },
-            { key: 'warranty', label: 'Warranty Claims', icon: ShieldCheck },
+            { key: 'rma', label: 'RMA Claims', icon: Layers },
+            { key: 'export', label: 'Export Shipments', icon: FileSpreadsheet },
+            { key: 'tracking_pool', label: 'Tracking Pool', icon: Package },
           ]
         },
         { key: 'configurator', label: 'Configurator Studio', icon: Sliders },
@@ -166,7 +173,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           icon: ShoppingBag,
           children: [
             { key: 'orders', label: 'All Orders' },
-            { key: 'warranty', label: 'Warranty Claims', icon: ShieldCheck },
+            { key: 'rma', label: 'RMA Claims', icon: Layers },
+            { key: 'export', label: 'Export Shipments', icon: FileSpreadsheet },
+            { key: 'tracking_pool', label: 'Tracking Pool', icon: Package },
           ]
         },
       ]
