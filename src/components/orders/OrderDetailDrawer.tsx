@@ -56,6 +56,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { extractItemSpecs } from '../../lib/orderItems';
+import { isStorePickupOrder, toggleLocalStorePickupOrder } from '../../lib/orderUtils';
 import { getWpBaseUrl } from '../../lib/wordpressBridge';
 import { formatGooritaShipmentText, openGooritaWhatsApp } from '../../lib/exportManager';
 import { 
@@ -141,6 +142,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   const [manualClaimType, setManualClaimType] = useState<'Warranty' | 'Redeem'>('Warranty');
   const [previewCustomItem, setPreviewCustomItem] = useState<any | null>(null);
   const [showManualCompletedModal, setShowManualCompletedModal] = useState(false);
+  const [pickupOverrideVersion, setPickupOverrideVersion] = useState(0);
 
   // 30-Day Money Back Guarantee state
   const [isProcessingGuaranteeAction, setIsProcessingGuaranteeAction] = useState(false);
@@ -457,15 +459,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
 
     const currentStatusClean = String(order.status || '').replace('wc-', '');
     const cleanOrderNum = String(order.order_number || order.id || '').replace(/^#+/, '');
-    const shippingMethodName = String((order as any).shipping_method || (order as any).shipping_lines?.[0]?.method_title || '').toLowerCase();
-    const shippingAddressStr = `${order.shipping?.address_1 || ''} ${order.shipping?.city || ''} ${order.shipping?.postcode || ''}`.toLowerCase();
-    const isStorePickup = shippingMethodName.includes('pickup') || 
-      shippingMethodName.includes('store') || 
-      shippingAddressStr.includes('summarecon') || 
-      shippingAddressStr.includes('bekasi store') || 
-      shippingAddressStr.includes('ruby commercial') ||
-      currentStatusClean === 'smb-ready' ||
-      currentStatusClean === 'smb-picked';
+    const isStorePickup = isStorePickupOrder(order);
 
     const rmaDetails = getOrderRma(order);
     const guaranteeDetails = getOrderGuarantee(order);
@@ -789,41 +783,35 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                 <div className="w-3 h-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={() => setIsLabelModalOpen(true)}
                 className={clsx(
-                  "px-3 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer",
+                  "p-2 rounded-xl text-xs font-bold font-sans flex items-center justify-center transition-all shadow-sm active:scale-95 cursor-pointer",
                   currentStatusClean === 'processing'
                     ? "bg-[#f3aa18] hover:bg-[#d9940c] text-[#0a0a0a] ring-2 ring-[#f3aa18]/30"
                     : "bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/[0.08]"
                 )}
-                title="Create and print A6 courier shipping label"
+                title={isStorePickup ? "Print Workshop Label" : "Print A6 Shipping Label"}
               >
                 <Printer className="w-3.5 h-3.5" />
-                <span>A6 Shipping Label</span>
-                {currentStatusClean === 'processing' && (
-                  <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#0a0a0a]/20 text-[#0a0a0a] uppercase ml-0.5">
-                    Confirmed
-                  </span>
-                )}
               </button>
 
               <button
                 type="button"
                 onClick={() => setIsInvoiceModalOpen(true)}
-                className="px-3 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/[0.08] cursor-pointer"
+                className="px-2.5 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/[0.08] cursor-pointer"
                 title="View, download, and print official customer tax invoice"
               >
                 <FileText className="w-3.5 h-3.5 text-[#f3aa18]" />
-                <span>Invoice PDF</span>
+                <span>Invoice</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setIsPackingSlipModalOpen(true)}
-                className="px-3 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/[0.08] cursor-pointer"
+                className="px-2.5 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/[0.08] cursor-pointer"
                 title="View and print official warehouse packing slip & picking manifest"
               >
                 <ClipboardCheck className="w-3.5 h-3.5 text-sky-400" />
@@ -837,11 +825,11 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                       setManualClaimType('Warranty');
                       setIsManualWarrantyModalOpen(true);
                     }}
-                    className="px-3 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 cursor-pointer"
+                    className="px-2.5 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 cursor-pointer"
                     title="Claim installation warranty manually for this order"
                   >
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Claim Warranty</span>
+                    <span>Warranty</span>
                   </button>
                   <button
                     type="button"
@@ -849,7 +837,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                       setManualClaimType('Redeem');
                       setIsManualWarrantyModalOpen(true);
                     }}
-                    className="px-3 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 cursor-pointer"
+                    className="px-2.5 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 cursor-pointer"
                     title="Issue free redeem replacement order (Exacoat factory defect / error)"
                   >
                     <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
@@ -978,13 +966,27 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
               "space-y-1.5 p-3.5 rounded-xl border",
               isStorePickup ? "border-[#f3aa18]/25 bg-[#f3aa18]/5" : "border-white/[0.04] bg-[#141414]"
             )}>
-              <span className={clsx(
-                "text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 mb-1",
-                isStorePickup ? "text-[#f3aa18]" : "text-neutral-500"
-              )}>
-                {isStorePickup ? <Store className="w-3.5 h-3.5 text-[#f3aa18]" /> : <MapPin className="w-3.5 h-3.5 text-[#f3aa18]" />}
-                {isStorePickup ? 'Pickup Location' : 'Destination Address'}
-              </span>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className={clsx(
+                  "text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5",
+                  isStorePickup ? "text-[#f3aa18]" : "text-neutral-500"
+                )}>
+                  {isStorePickup ? <Store className="w-3.5 h-3.5 text-[#f3aa18]" /> : <MapPin className="w-3.5 h-3.5 text-[#f3aa18]" />}
+                  {isStorePickup ? 'Pickup Location' : 'Destination Address'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    toggleLocalStorePickupOrder(order.id);
+                    setPickupOverrideVersion((v) => v + 1);
+                    if (onOrderUpdated) onOrderUpdated();
+                  }}
+                  className="text-[10px] text-neutral-500 hover:text-[#f3aa18] underline transition-colors cursor-pointer"
+                  title="Toggle between store pickup and courier delivery view for this order"
+                >
+                  {isStorePickup ? 'Switch to Delivery' : 'Switch to Store Pickup'}
+                </button>
+              </div>
               {isStorePickup ? (
                 <p className="text-xs text-neutral-300 font-sans leading-relaxed">
                   <strong className="text-white">Exacoat Store Summarecon Bekasi</strong><br />
@@ -994,10 +996,10 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                 </p>
               ) : (
                 <p className="text-xs text-neutral-300 font-sans leading-relaxed">
-                  {order.shipping.address_1}
-                  {order.shipping.address_2 ? `, ${order.shipping.address_2}` : ''}<br />
-                  {order.shipping.city}, {order.shipping.state} {order.shipping.postcode}<br />
-                  <strong className="text-white">{order.shipping.country}</strong>
+                  {order.shipping?.address_1 || order.billing?.address_1 || 'No address provided'}
+                  {order.shipping?.address_2 ? `, ${order.shipping.address_2}` : (order.billing?.address_2 ? `, ${order.billing.address_2}` : '')}<br />
+                  {order.shipping?.city || order.billing?.city || ''}, {order.shipping?.state || order.billing?.state || ''} {order.shipping?.postcode || order.billing?.postcode || ''}<br />
+                  <strong className="text-white">{order.shipping?.country || order.billing?.country || 'Indonesia'}</strong>
                 </p>
               )}
             </div>

@@ -77,22 +77,8 @@ function generateBarcodeSvgData(code: string, height: number = 44) {
   };
 }
 
-export function isStorePickupOrder(ord: any): boolean {
-  if (!ord) return false;
-  const shipMethod = String(ord.shipping_method || ord.shipping_lines?.[0]?.method_title || '').toLowerCase();
-  const shp = ord.shipping || {};
-  const shipAddr = `${shp.address_1 || ''} ${shp.city || ''} ${shp.postcode || ''}`.toLowerCase();
-  const cleanStatus = String(ord.status || '').replace('wc-', '');
-  return (
-    shipMethod.includes('pickup') ||
-    shipMethod.includes('store') ||
-    shipAddr.includes('summarecon') ||
-    shipAddr.includes('bekasi store') ||
-    shipAddr.includes('ruby commercial') ||
-    cleanStatus === 'smb-ready' ||
-    cleanStatus === 'smb-picked'
-  );
-}
+import { isStorePickupOrder } from '../../lib/orderUtils';
+export { isStorePickupOrder };
 
 // Split items across multiple label pages if items count exceeds single sheet capacity
 function chunkOrderItems(items: any[]): { pages: any[][]; totalPages: number } {

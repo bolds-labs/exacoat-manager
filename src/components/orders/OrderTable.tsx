@@ -9,6 +9,7 @@ import { downloadCsv } from '../../lib/csvExport';
 import { ShippingLabelA6Modal } from './ShippingLabelA6Modal';
 import { useToast } from '../../context/ToastContext';
 import { FilterSelect } from '../ui/FilterSelect';
+import { isStorePickupOrder } from '../../lib/orderUtils';
 import {
   Search,
   RefreshCw,
@@ -140,16 +141,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
         readyToShip++;
       }
 
-      const shippingMethodName = String((o as any).shipping_method || (o as any).shipping_lines?.[0]?.method_title || '').toLowerCase();
-      const shippingAddressStr = `${o.shipping?.address_1 || ''} ${o.shipping?.city || ''} ${o.shipping?.postcode || ''}`.toLowerCase();
-      const isPickup =
-        shippingMethodName.includes('pickup') ||
-        shippingMethodName.includes('store') ||
-        shippingAddressStr.includes('summarecon') ||
-        shippingAddressStr.includes('bekasi store') ||
-        shippingAddressStr.includes('ruby commercial') ||
-        cleanStatus === 'smb-ready' ||
-        cleanStatus === 'smb-picked';
+      const isPickup = isStorePickupOrder(o);
       if (isPickup) {
         storePickup++;
       }
@@ -195,17 +187,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
         } else {
           const cleanStatus = String(order.status || '').replace('wc-', '').toLowerCase();
           if (statusFilter === 'store-pickup') {
-            const shippingMethodName = String((order as any).shipping_method || (order as any).shipping_lines?.[0]?.method_title || '').toLowerCase();
-            const shippingAddressStr = `${order.shipping?.address_1 || ''} ${order.shipping?.city || ''} ${order.shipping?.postcode || ''}`.toLowerCase();
-            const isPickup =
-              shippingMethodName.includes('pickup') ||
-              shippingMethodName.includes('store') ||
-              shippingAddressStr.includes('summarecon') ||
-              shippingAddressStr.includes('bekasi store') ||
-              shippingAddressStr.includes('ruby commercial') ||
-              cleanStatus === 'smb-ready' ||
-              cleanStatus === 'smb-picked';
-            if (!isPickup) return false;
+            if (!isStorePickupOrder(order)) return false;
           } else if (statusFilter === 'ready-to-ship') {
             if (!['ready-to-ship', 'ready_to_ship', 'awaiting-pickup', 'awaiting_pickup', 'smb-ready'].includes(cleanStatus)) return false;
           } else if (statusFilter === 'preparing-order') {
@@ -222,15 +204,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
       if (courierFilter !== 'all') {
         const orderCourier = String(order.tracking?.courier || (order as any).shipping_lines?.[0]?.method_title || order.shipping_method_name || '').toUpperCase();
         if (courierFilter === 'PICKUP') {
-          const shippingMethodName = String((order as any).shipping_method || (order as any).shipping_lines?.[0]?.method_title || '').toLowerCase();
-          const shippingAddressStr = `${order.shipping?.address_1 || ''} ${order.shipping?.city || ''} ${order.shipping?.postcode || ''}`.toLowerCase();
-          const isPickup =
-            shippingMethodName.includes('pickup') ||
-            shippingMethodName.includes('store') ||
-            shippingAddressStr.includes('summarecon') ||
-            shippingAddressStr.includes('bekasi store') ||
-            shippingAddressStr.includes('ruby commercial');
-          if (!isPickup) return false;
+          if (!isStorePickupOrder(order)) return false;
         } else if (!orderCourier.includes(courierFilter)) {
           return false;
         }
@@ -392,7 +366,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
   return (
     <div className="space-y-4 font-sans">
       {/* Control Bar: Search & Status Filters */}
-      <GlassCard className="p-3 sm:p-4 rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] space-y-3">
+      <GlassCard className="p-3 sm:p-4 rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] space-y-3 overflow-visible relative z-20">
         {/* Row 1: Status Filter Tabs */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
           {[
@@ -623,17 +597,8 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                   const rawTrackingNum = String(order.tracking?.tracking_number || '').trim();
                   const hasValidTracking = rawTrackingNum.length > 0 && !rawTrackingNum.startsWith('field_');
                   const isSelected = selectedIds.has(order.id);
-                  const shipMethod = String((order as any).shipping_method || (order as any).shipping_lines?.[0]?.method_title || '').toLowerCase();
-                  const shipAddr = `${order.shipping?.address_1 || ''} ${order.shipping?.city || ''} ${order.shipping?.postcode || ''}`.toLowerCase();
-                  const cleanStatus = String(order.status || '').replace('wc-', '');
-                  const isPickup =
-                    shipMethod.includes('pickup') ||
-                    shipMethod.includes('store') ||
-                    shipAddr.includes('summarecon') ||
-                    shipAddr.includes('bekasi store') ||
-                    shipAddr.includes('ruby commercial') ||
-                    cleanStatus === 'smb-ready' ||
-                    cleanStatus === 'smb-picked';
+                  const isPickup = isStorePickupOrder(order);
+                  const isPrinted = printedOrderIds.has(order.id);
 
                   return (
                     <tr
@@ -667,74 +632,49 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                             </span>
                           )}
                           {getOrderRma(order)?.order_type === 'Warranty' && (
-                            <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold text-sky-500 dark:text-sky-400 bg-sky-500/15 border border-sky-500/30 px-1 py-0.5 rounded shadow-xs">
-                              <ShieldCheck className="w-2.5 h-2.5 text-sky-400" />
+                            <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1 py-0.5 rounded shadow-xs">
+                              <ShieldCheck className="w-2.5 h-2.5" />
                               WARRANTY
                             </span>
                           )}
                         </div>
-                        <span className="text-[10px] text-zinc-500 font-mono block mt-0.5">
+                        <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono block mt-0.5">
                           {formatDateTime(order.created_at)}
                         </span>
                       </td>
 
-                      {/* Customer & Destination */}
+                      {/* Customer Name & Destination */}
                       <td className="py-3.5 px-4">
-                        <span className="font-semibold text-zinc-900 dark:text-white block">
+                        <p className="font-medium text-zinc-900 dark:text-white">
                           {order.customer_name || 'Customer'}
-                        </span>
-                        {isPickup ? (
-                          <span className="text-[11px] text-[#f3aa18] font-medium block truncate max-w-[180px]">
-                            Summarecon Bekasi Store
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-zinc-500 dark:text-zinc-400 block truncate max-w-[180px]">
-                            {order.shipping?.city ? `${order.shipping.city}, ` : ''}{order.shipping?.country || 'Indonesia'}
-                          </span>
-                        )}
+                        </p>
+                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate max-w-[180px]">
+                          {isPickup ? (
+                            <span className="text-[#f3aa18] font-medium">Summarecon Bekasi Store</span>
+                          ) : (
+                            `${order.shipping?.city ? `${order.shipping.city}, ` : ''}${order.shipping?.country || 'Indonesia'}`
+                          )}
+                        </p>
                       </td>
 
-                      {/* Items & Skin Config */}
+                      {/* Items Count & Products */}
                       <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-2">
-                          {(order.items || []).slice(0, 3).map((it, idx) => (
-                            <div
-                              key={it.id || idx}
-                              className="w-8 h-10 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.08] overflow-hidden shrink-0 relative"
-                              title={`${it.name} (${it.quantity}x)`}
-                            >
-                              {it.image_url ? (
-                                <img src={it.image_url} alt="" className="w-full h-full object-cover" />
-                              ) : (
-                                <Package className="w-4 h-4 text-zinc-400 dark:text-zinc-600 m-auto mt-3" />
-                              )}
-                              {it.quantity > 1 && (
-                                <span className="absolute bottom-0.5 right-0.5 text-[8px] font-mono bg-black/80 text-white px-0.5 rounded">
-                                  {it.quantity}
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                          {(order.items || []).length > 3 && (
-                            <span className="text-[10px] font-mono text-zinc-500">
-                              +{(order.items || []).length - 3}
-                            </span>
-                          )}
-                          <div className="min-w-0">
-                            <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200 block truncate max-w-[200px]">
-                              {order.items?.[0]?.name || 'Precision Device Skin'}
-                            </span>
-                            <span className="text-[10px] text-zinc-500 font-mono">
-                              {order.item_count || order.items?.length || 1} item(s)
-                            </span>
-                          </div>
+                        <span className="inline-flex items-center gap-1 text-[11px] text-zinc-700 dark:text-zinc-300 font-medium">
+                          <Package className="w-3 h-3 text-zinc-400" />
+                          {order.item_count ?? (order.items?.length || 0)} {order.item_count === 1 ? 'item' : 'items'}
+                        </span>
+                        <div className="text-[10.5px] text-zinc-500 truncate max-w-[180px]">
+                          {order.items?.map((it) => `${it.quantity}x ${it.name}`).join(', ')}
                         </div>
                       </td>
 
                       {/* Total */}
-                      <td className="py-3.5 px-4 text-right">
-                        <span className="font-mono font-bold text-zinc-900 dark:text-white text-xs block">
+                      <td className="py-3.5 px-4">
+                        <span className="font-mono font-bold text-zinc-900 dark:text-white">
                           {formatCurrency(order.total, order.currency)}
+                        </span>
+                        <span className="text-[10px] text-zinc-500 block">
+                          {order.payment_method_title || order.payment_method || 'Direct'}
                         </span>
                       </td>
 
@@ -762,36 +702,13 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                         </div>
                       </td>
 
-                      {/* Tracking Resi & Courier & Print Status */}
+                      {/* Tracking Resi & Courier */}
                       <td className="py-3.5 px-4">
                         {isPickup ? (
                           <div className="space-y-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="inline-flex items-center text-[10px] font-mono font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-2 py-0.5 rounded border border-[#f3aa18]/20 whitespace-nowrap">
-                                Store Pickup
-                              </span>
-                              {printedOrderIds.has(order.id) ? (
-                                <button
-                                  type="button"
-                                  onClick={(e) => toggleOrderPrinted(order.id, e)}
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all cursor-pointer shadow-2xs"
-                                  title="Printed. Click to toggle."
-                                >
-                                  <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
-                                  <span>Printed</span>
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={(e) => toggleOrderPrinted(order.id, e)}
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-zinc-100 hover:bg-zinc-200 dark:bg-white/5 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-white/10 transition-all cursor-pointer"
-                                  title="Not yet printed. Click to mark as printed."
-                                >
-                                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
-                                  <span>Unprinted</span>
-                                </button>
-                              )}
-                            </div>
+                            <span className="inline-flex items-center text-[10px] font-mono font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-2 py-0.5 rounded border border-[#f3aa18]/20 whitespace-nowrap">
+                              Store Pickup
+                            </span>
                             <span className="text-[10px] text-zinc-500 block truncate max-w-[140px]">
                               Summarecon Bekasi
                             </span>
@@ -816,61 +733,15 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                                 )}
                               </button>
                             </div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-[10px] text-zinc-500 truncate max-w-[120px] font-medium">
-                                {order.tracking?.courier || order.shipping_method_name || 'Courier'}
-                              </span>
-                              {printedOrderIds.has(order.id) ? (
-                                <button
-                                  type="button"
-                                  onClick={(e) => toggleOrderPrinted(order.id, e)}
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all cursor-pointer shadow-2xs"
-                                  title="Printed. Click to toggle."
-                                >
-                                  <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
-                                  <span>Printed</span>
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={(e) => toggleOrderPrinted(order.id, e)}
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-zinc-100 hover:bg-zinc-200 dark:bg-white/5 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-white/10 transition-all cursor-pointer"
-                                  title="Not yet printed. Click to mark as printed."
-                                >
-                                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
-                                  <span>Unprinted</span>
-                                </button>
-                              )}
-                            </div>
+                            <span className="text-[10px] text-zinc-500 truncate max-w-[140px] font-medium block">
+                              {order.tracking?.courier || order.shipping_method_name || 'Courier'}
+                            </span>
                           </div>
                         ) : (
                           <div className="space-y-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">
-                                Resi pending
-                              </span>
-                              {printedOrderIds.has(order.id) ? (
-                                <button
-                                  type="button"
-                                  onClick={(e) => toggleOrderPrinted(order.id, e)}
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all cursor-pointer shadow-2xs"
-                                  title="Printed. Click to toggle."
-                                >
-                                  <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
-                                  <span>Printed</span>
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={(e) => toggleOrderPrinted(order.id, e)}
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-zinc-100 hover:bg-zinc-200 dark:bg-white/5 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-white/10 transition-all cursor-pointer"
-                                  title="Not yet printed. Click to mark as printed."
-                                >
-                                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
-                                  <span>Unprinted</span>
-                                </button>
-                              )}
-                            </div>
+                            <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono block">
+                              Resi pending
+                            </span>
                             <span className="text-[10px] text-zinc-500 block truncate max-w-[140px]">
                               {order.shipping_method_name || 'Standard'}
                             </span>
@@ -881,18 +752,27 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* Print Thermal Label - Subtle difference if printed vs unprinted */}
                           <button
                             type="button"
                             onClick={(e) => handleSinglePrintA6(order, e)}
-                            className="p-1.5 rounded-lg bg-zinc-100 dark:bg-white/[0.04] hover:bg-zinc-200 dark:hover:bg-white/[0.1] text-zinc-600 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-colors cursor-pointer"
-                            title="Print A6 Thermal Label"
+                            className={clsx(
+                              'p-1.5 rounded-lg border transition-all cursor-pointer relative',
+                              isPrinted
+                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                                : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-400 dark:text-zinc-500 hover:text-zinc-950 dark:hover:text-white border-transparent hover:border-zinc-300 dark:hover:border-white/10'
+                            )}
+                            title={isPrinted ? 'A6 Shipping Label (Printed - Click to print again)' : 'Print A6 Shipping Label'}
                           >
                             <Printer className="w-3.5 h-3.5" />
+                            {isPrinted && (
+                              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500 ring-1 ring-white dark:ring-neutral-900" />
+                            )}
                           </button>
                           <button
                             type="button"
                             onClick={() => onSelectOrder(order)}
-                            className="p-1.5 rounded-lg bg-zinc-100 dark:bg-white/[0.04] hover:bg-zinc-200 dark:hover:bg-white/[0.1] text-zinc-600 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg bg-zinc-100 dark:bg-white/[0.04] hover:bg-zinc-200 dark:hover:bg-white/[0.1] text-zinc-600 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white border border-transparent hover:border-zinc-300 dark:hover:border-white/10 transition-colors cursor-pointer"
                             title="Inspect Order Details"
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -984,25 +864,23 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                           {rawTrackingNum}
                         </span>
                       )}
-                      {printedOrderIds.has(order.id) ? (
-                        <button
-                          type="button"
-                          onClick={(e) => toggleOrderPrinted(order.id, e)}
-                          className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
-                        >
-                          <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
-                          <span>Printed</span>
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={(e) => toggleOrderPrinted(order.id, e)}
-                          className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-mono font-medium bg-zinc-100 dark:bg-white/5 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-white/10"
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
-                          <span>Unprinted</span>
-                        </button>
-                      )}
+                      {/* Subtle Print Quick Action */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleSinglePrintA6(order, e)}
+                        className={clsx(
+                          'p-1.5 rounded-lg border transition-all cursor-pointer relative',
+                          printedOrderIds.has(order.id)
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                            : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-400 dark:text-zinc-500 border-transparent hover:border-zinc-300 dark:hover:border-white/10'
+                        )}
+                        title={printedOrderIds.has(order.id) ? 'A6 Shipping Label (Printed - Click to print again)' : 'Print A6 Shipping Label'}
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                        {printedOrderIds.has(order.id) && (
+                          <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500 ring-1 ring-white dark:ring-neutral-900" />
+                        )}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1029,6 +907,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
               label="Per page"
               value={pageSize}
               onChange={(val) => onPageSizeChange && onPageSizeChange(Number(val))}
+              dropUp={true}
               options={[
                 { value: 50, label: '50' },
                 { value: 100, label: '100' },

@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.0.39.zip?v=0.0.39",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-19T09:35:32.391Z",
+  "last_updated": "2026-09-19T09:44:44.312Z",
   "sections": {
     "description": "The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.",
     "changelog": "### Version 0.0.39\n- Added Admin Override bypass for duplicate warranty and redeem claims on marketplace invoices and existing orders\n- Recorded _rma_duplicate_override metadata and audit trail order notes when duplicate claims are authorized\n- Fixed packing slip precision skin specifications summary rendering"

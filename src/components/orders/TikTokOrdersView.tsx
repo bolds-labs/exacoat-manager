@@ -586,7 +586,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
       </div>
 
       {/* Row 2: Secondary Filter Bar (Courier & Tracking Resi) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-neutral-900/50 border border-white/10 text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-neutral-900/50 border border-white/10 text-xs relative z-20">
         <div className="flex flex-wrap items-center gap-3">
           {/* Courier Filter */}
           <FilterSelect
@@ -1020,6 +1020,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
               label="Per page"
               value={String(pageSize)}
               onChange={(val) => handlePageSizeChange(Number(val))}
+              dropUp={true}
               options={[
                 { value: '50', label: '50' },
                 { value: '100', label: '100' },

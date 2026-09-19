@@ -6,6 +6,7 @@ import { Printer, CheckCircle2, ClipboardCheck, Package } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
 import { extractItemSpecs } from '../../lib/orderItems';
+import { isStorePickupOrder } from '../../lib/orderUtils';
 
 interface PackingSlipModalProps {
   order: Order | null;
@@ -36,21 +37,32 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
     'Customer';
   const customerPhone = order.customer_phone || shipping.phone || billing.phone || '-';
 
-  const shippingAddress = [
-    shipping.address_1 || billing.address_1 || 'Address on file',
-    shipping.address_2 || billing.address_2,
-    [shipping.city || billing.city, shipping.state || billing.state, shipping.postcode || billing.postcode]
-      .filter(Boolean)
-      .join(', '),
-    shipping.country || billing.country || 'Indonesia',
-  ].filter(Boolean);
+  const isPickup = isStorePickupOrder(order);
 
-  const courierName =
-    order.tracking?.courier ||
-    (order as any).shipping_lines?.[0]?.method_title ||
-    order.shipping_method_name ||
-    'Standard Courier';
-  const trackingNumber = order.tracking?.tracking_number && !order.tracking.tracking_number.startsWith('field_')
+  const shippingAddress = isPickup
+    ? [
+        'Exacoat Store Summarecon Bekasi (Self Pickup)',
+        'Ruko Ruby Commercial TB12, Jl. Bulevar Selatan',
+        'Summarecon Bekasi, Kota Bekasi 17142',
+      ]
+    : [
+        shipping.address_1 || billing.address_1 || 'Address on file',
+        shipping.address_2 || billing.address_2,
+        [shipping.city || billing.city, shipping.state || billing.state, shipping.postcode || billing.postcode]
+          .filter(Boolean)
+          .join(', '),
+        shipping.country || billing.country || 'Indonesia',
+      ].filter(Boolean);
+
+  const courierName = isPickup
+    ? 'Store Pickup (Summarecon Bekasi)'
+    : order.tracking?.courier ||
+      (order as any).shipping_lines?.[0]?.method_title ||
+      order.shipping_method_name ||
+      'Standard Courier';
+  const trackingNumber = isPickup
+    ? 'STORE-PICKUP'
+    : order.tracking?.tracking_number && !order.tracking.tracking_number.startsWith('field_')
     ? order.tracking.tracking_number
     : null;
 

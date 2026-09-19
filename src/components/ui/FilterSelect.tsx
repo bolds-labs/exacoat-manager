@@ -21,6 +21,8 @@ export interface FilterSelectProps<T = string> {
   className?: string;
   dropdownClassName?: string;
   disabled?: boolean;
+  dropUp?: boolean;
+  align?: 'left' | 'right';
 }
 
 export function FilterSelect<T extends string | number = string>({
@@ -33,6 +35,8 @@ export function FilterSelect<T extends string | number = string>({
   className,
   dropdownClassName,
   disabled = false,
+  dropUp = false,
+  align = 'left',
 }: FilterSelectProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -107,7 +111,9 @@ export function FilterSelect<T extends string | number = string>({
       {isOpen && (
         <div
           className={clsx(
-            'absolute left-0 top-full mt-1.5 z-50 min-w-[170px] max-w-[280px] max-h-72 overflow-y-auto rounded-xl p-1',
+            'absolute z-50 min-w-[170px] max-w-[280px] max-h-72 overflow-y-auto rounded-xl p-1',
+            dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5',
+            align === 'right' ? 'right-0' : 'left-0',
             'bg-white dark:bg-[#141417] border border-zinc-200 dark:border-white/15 shadow-2xl backdrop-blur-xl',
             'animate-in fade-in zoom-in-95 duration-100 select-none',
             dropdownClassName
