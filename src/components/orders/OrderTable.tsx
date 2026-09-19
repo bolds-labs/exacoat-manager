@@ -259,9 +259,11 @@ export const OrderTable: React.FC<OrderTableProps> = ({
   }, [orders]);
 
   const filteredOrders = useMemo(() => {
+    const hasSearch = Boolean(activeSearch && activeSearch.trim());
+
     return orders.filter((order) => {
-      // If parent didn't handle status filtering on server, filter client-side:
-      if (!onStatusFilterChange && activeStatus !== 'all') {
+      // If parent didn't handle status filtering on server, filter client-side (bypassed if searching):
+      if (!hasSearch && !onStatusFilterChange && activeStatus !== 'all') {
         if (activeStatus === 'warranty') {
           const rma = getOrderRma(order);
           if (rma?.order_type !== 'Warranty') return false;
@@ -284,8 +286,8 @@ export const OrderTable: React.FC<OrderTableProps> = ({
         }
       }
 
-      // If parent didn't handle courier filtering on server, filter client-side:
-      if (!onCourierFilterChange && activeCourier !== 'all') {
+      // If parent didn't handle courier filtering on server, filter client-side (bypassed if searching):
+      if (!hasSearch && !onCourierFilterChange && activeCourier !== 'all') {
         const orderCourier = String(order.tracking?.courier || (order as any).shipping_lines?.[0]?.method_title || order.shipping_method_name || '').toUpperCase();
         if (activeCourier === 'PICKUP') {
           if (!isStorePickupOrder(order)) return false;
@@ -301,10 +303,11 @@ export const OrderTable: React.FC<OrderTableProps> = ({
         if (printFilter === 'unprinted' && isPrinted) return false;
       }
 
-      // If parent didn't handle search on server, or while user is typing before debounce:
-      if (!onSearchQueryChange && internalSearch.trim()) {
-        const q = internalSearch.toLowerCase().trim();
-        const num = String(order.order_number || order.id || '').toLowerCase();
+      // Search matching across all orders
+      if (hasSearch) {
+        const q = activeSearch.toLowerCase().trim();
+        const cleanQ = q.replace(/^#+/, '');
+        const num = String(order.order_number || order.id || '').toLowerCase().replace(/^#+/, '');
         const custName = String(order.customer_name || '').toLowerCase();
         const custEmail = String(order.customer_email || '').toLowerCase();
         const trackNum = String(order.tracking?.tracking_number || '').toLowerCase();
@@ -313,7 +316,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
         const itemNames = (order.items || []).map((i) => i.name.toLowerCase()).join(' ');
 
         return (
-          num.includes(q) ||
+          num.includes(cleanQ) ||
           custName.includes(q) ||
           custEmail.includes(q) ||
           trackNum.includes(q) ||
@@ -323,7 +326,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
       }
       return true;
     });
-  }, [orders, activeStatus, activeCourier, printFilter, printedOrderIds, internalSearch, onStatusFilterChange, onCourierFilterChange, onSearchQueryChange]);
+  }, [orders, activeStatus, activeCourier, printFilter, printedOrderIds, activeSearch, onStatusFilterChange, onCourierFilterChange]);
 
   const [lastSelectedId, setLastSelectedId] = useState<number | null>(null);
 

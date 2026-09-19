@@ -28,6 +28,7 @@ import { lockBodyScroll } from '../../lib/bodyScrollLock';
 export type NavItemKey = 
   | 'dashboard'
   | 'orders'
+  | 'warranty'
   | 'configurator'
   | 'materials'
   | 'reviews'
@@ -116,7 +117,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       title: 'Workspace',
       items: [
         { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { key: 'orders', label: 'Orders', icon: ShoppingBag },
+        { 
+          key: 'orders', 
+          label: 'Orders', 
+          icon: ShoppingBag,
+          children: [
+            { key: 'orders', label: 'All Orders' },
+            { key: 'warranty', label: 'Warranty Claims', icon: ShieldCheck },
+          ]
+        },
         { key: 'configurator', label: 'Configurator Studio', icon: Sliders },
         { key: 'materials', label: 'Materials & Stock', icon: Layers },
         { key: 'reviews', label: 'Reviews', icon: Star, badge: pendingReviewCount > 0 ? pendingReviewCount : undefined, badgeVariant: 'amber' },
@@ -151,7 +160,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       title: 'Workspace',
       items: [
-        { key: 'orders', label: 'Orders', icon: ShoppingBag },
+        { 
+          key: 'orders', 
+          label: 'Orders', 
+          icon: ShoppingBag,
+          children: [
+            { key: 'orders', label: 'All Orders' },
+            { key: 'warranty', label: 'Warranty Claims', icon: ShieldCheck },
+          ]
+        },
       ]
     }
   ];

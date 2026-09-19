@@ -18,9 +18,11 @@ import { Tooltip } from '../ui/Tooltip';
 import { useAuth } from '../../context/AuthContext';
 import { clsx } from 'clsx';
 
-interface OrdersViewProps {}
+interface OrdersViewProps {
+  initialStatus?: string;
+}
 
-export const OrdersView: React.FC<OrdersViewProps> = () => {
+export const OrdersView: React.FC<OrdersViewProps> = ({ initialStatus = 'all' }) => {
   const { showToast } = useToast();
   const { user, simulatedRole } = useAuth();
   const effectiveRole = simulatedRole || user?.role;
@@ -52,7 +54,7 @@ export const OrdersView: React.FC<OrdersViewProps> = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
   const [maxPages, setMaxPages] = useState(1);
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [courierFilter, setCourierFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -68,12 +70,13 @@ export const OrdersView: React.FC<OrdersViewProps> = () => {
       if (!quiet) setIsLoading(true);
       else setIsRefreshing(true);
 
+      const hasSearch = Boolean(search && search.trim());
       const res = await fetchOrdersDirect({
         page,
         per_page: limit,
-        status: status !== 'all' ? status : undefined,
-        courier: courier !== 'all' ? courier : undefined,
-        search: search.trim() ? search.trim() : undefined,
+        status: !hasSearch && status !== 'all' ? status : undefined,
+        courier: !hasSearch && courier !== 'all' ? courier : undefined,
+        search: hasSearch ? search.trim() : undefined,
       });
       if (res.success && Array.isArray(res.orders)) {
         setOrders(res.orders as Order[]);
@@ -114,13 +117,15 @@ export const OrdersView: React.FC<OrdersViewProps> = () => {
   const handleStatusFilterChange = (status: string) => {
     setStatusFilter(status);
     setCurrentPage(1);
-    loadOrders(false, 1, pageSize, status, courierFilter, searchQuery);
+    setSearchQuery('');
+    loadOrders(false, 1, pageSize, status, courierFilter, '');
   };
 
   const handleCourierFilterChange = (courier: string) => {
     setCourierFilter(courier);
     setCurrentPage(1);
-    loadOrders(false, 1, pageSize, statusFilter, courier, searchQuery);
+    setSearchQuery('');
+    loadOrders(false, 1, pageSize, statusFilter, courier, '');
   };
 
   const handleSearchQueryChange = (query: string) => {
@@ -130,8 +135,10 @@ export const OrdersView: React.FC<OrdersViewProps> = () => {
   };
 
   useEffect(() => {
-    loadOrders(false, 1, pageSize, 'all', 'all', '');
-  }, []);
+    setStatusFilter(initialStatus);
+    setCurrentPage(1);
+    loadOrders(false, 1, pageSize, initialStatus, courierFilter, searchQuery);
+  }, [initialStatus]);
 
   const handleSelectOrder = async (order: Order) => {
     setSelectedOrder(order);

@@ -64,6 +64,11 @@ const getTabFromUrl = (): NavItemKey => {
     'system': 'health',
     'audit': 'audit',
     'logs': 'audit',
+    'warranty': 'warranty',
+    'warranty-claims': 'warranty',
+    'warranties': 'warranty',
+    'claims': 'warranty',
+    'rma': 'warranty',
     'settings': 'settings',
     'config': 'settings',
   };
@@ -86,9 +91,9 @@ export const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Keep shop_manager strictly locked to orders
+  // Keep shop_manager strictly locked to orders & warranty claims
   useEffect(() => {
-    if (isShopManager && currentTab !== 'orders') {
+    if (isShopManager && currentTab !== 'orders' && currentTab !== 'warranty') {
       setCurrentTab('orders');
       if (window.location.hash !== '#orders') {
         window.history.replaceState(null, '', '#orders');
@@ -99,11 +104,12 @@ export const App: React.FC = () => {
   // Sync tab with URL hash
   useEffect(() => {
     const handlePopState = () => {
-      if (user?.role === 'shop_manager') {
+      const tab = getTabFromUrl();
+      if (user?.role === 'shop_manager' && tab !== 'orders' && tab !== 'warranty') {
         setCurrentTab('orders');
         return;
       }
-      setCurrentTab(getTabFromUrl());
+      setCurrentTab(tab);
     };
     window.addEventListener('popstate', handlePopState);
     window.addEventListener('hashchange', handlePopState);
@@ -148,7 +154,7 @@ export const App: React.FC = () => {
   }, [showToast]);
 
   const handleTabChange = useCallback((tab: NavItemKey) => {
-    if (user?.role === 'shop_manager' && tab !== 'orders') {
+    if (user?.role === 'shop_manager' && tab !== 'orders' && tab !== 'warranty') {
       return;
     }
     setCurrentTab(tab);
@@ -208,7 +214,7 @@ export const App: React.FC = () => {
 
   const renderActiveTab = () => {
     if (user?.role === 'shop_manager') {
-      return <OrdersView />;
+      return <OrdersView initialStatus={currentTab === 'warranty' ? 'warranty' : 'all'} />;
     }
     switch (currentTab) {
       case 'dashboard':
@@ -222,7 +228,9 @@ export const App: React.FC = () => {
           />
         );
       case 'orders':
-        return <OrdersView />;
+        return <OrdersView initialStatus="all" />;
+      case 'warranty':
+        return <OrdersView initialStatus="warranty" />;
       case 'configurator':
         return <ConfiguratorStudioPage />;
       case 'materials':

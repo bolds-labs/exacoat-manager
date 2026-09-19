@@ -736,12 +736,16 @@ class Exacoat_Warranty_Manager {
 						if ( ! in_array( $c_code, [ 'jne', 'sicepat' ], true ) ) {
 							continue;
 						}
+						$s_code = strtolower( (string) ( $rate['courier_service_code'] ?? '' ) );
+						if ( false !== strpos( $s_code, 'jtr' ) || false !== strpos( $s_code, 'trucking' ) || false !== strpos( $s_code, 'cargo' ) ) {
+							continue;
+						}
 						if ( empty( $rate['shipping_type'] ) || ( $rate['shipping_type'] ?? '' ) === 'parcel' ) {
 							$rates[] = [
 								'id'       => ( $rate['courier_code'] ?? 'courier' ) . '_' . ( $rate['courier_service_code'] ?? 'service' ),
 								'courier'  => $rate['courier_code'] ?? '',
 								'service'  => $rate['courier_service_code'] ?? '',
-								'label'    => sprintf( '%s %s', strtoupper( $rate['courier_name'] ?? '' ), strtoupper( $rate['courier_service_code'] ?? '' ) ),
+								'label'    => sprintf( '%s - %s', strtoupper( $rate['courier_name'] ?? '' ), strtoupper( $rate['courier_service_code'] ?? '' ) ),
 								'price'    => (float) ( $rate['price'] ?? 0 ),
 								'duration' => ! empty( $rate['shipment_duration_range'] ) ? $rate['shipment_duration_range'] . ' ' . ( $rate['shipment_duration_unit'] ?? 'days' ) : '1-3 days',
 							];

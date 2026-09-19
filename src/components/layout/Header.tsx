@@ -12,6 +12,7 @@ import { useTheme } from '../../context/ThemeContext';
 const pageTitles: Record<NavItemKey, string> = {
   dashboard: 'Dashboard',
   orders: 'Orders',
+  warranty: 'Warranty Claims',
   configurator: 'Configurator Studio',
   materials: 'Materials & Stock',
   reviews: 'Reviews',

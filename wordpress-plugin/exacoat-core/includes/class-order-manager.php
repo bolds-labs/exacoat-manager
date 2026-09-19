@@ -180,6 +180,188 @@ class Exacoat_Order_Manager {
 	}
 
 	/**
+	 * Search order IDs by order number, customer name, email, phone, tracking number, or item names.
+	 *
+	 * @param string $search
+	 * @return int[]
+	 */
+	public static function search_order_ids( $search ) {
+		global $wpdb;
+		$term = trim( (string) $search );
+		if ( '' === $term ) {
+			return [];
+		}
+
+		$clean_num   = ltrim( $term, '#' );
+		$matched_ids = [];
+
+		$like_term = '%' . $wpdb->esc_like( $term ) . '%';
+		$like_num  = '%' . $wpdb->esc_like( $clean_num ) . '%';
+
+		// 1. Direct ID / Order Number check
+		if ( is_numeric( $clean_num ) ) {
+			$numeric_id    = intval( $clean_num );
+			$matched_ids[] = $numeric_id;
+		}
+
+		// 2. Check HPOS table if exists (wc_orders)
+		$hpos_orders_table = "{$wpdb->prefix}wc_orders";
+		$has_hpos          = ( $wpdb->get_var( "SHOW TABLES LIKE '{$hpos_orders_table}'" ) === $hpos_orders_table );
+
+		if ( $has_hpos ) {
+			$hpos_ids = $wpdb->get_col( $wpdb->prepare(
+				"SELECT id FROM {$hpos_orders_table}
+				 WHERE id = %d 
+				    OR id LIKE %s 
+				    OR billing_email LIKE %s
+				 LIMIT 150",
+				intval( $clean_num ),
+				$like_num,
+				$like_term
+			) );
+			if ( ! empty( $hpos_ids ) ) {
+				$matched_ids = array_merge( $matched_ids, array_map( 'intval', $hpos_ids ) );
+			}
+
+			$hpos_addr_table = "{$wpdb->prefix}wc_order_addresses";
+			if ( $wpdb->get_var( "SHOW TABLES LIKE '{$hpos_addr_table}'" ) === $hpos_addr_table ) {
+				$addr_ids = $wpdb->get_col( $wpdb->prepare(
+					"SELECT DISTINCT order_id FROM {$hpos_addr_table}
+					 WHERE first_name LIKE %s 
+					    OR last_name LIKE %s 
+					    OR CONCAT(first_name, ' ', last_name) LIKE %s 
+					    OR email LIKE %s 
+					    OR phone LIKE %s
+					 LIMIT 150",
+					$like_term,
+					$like_term,
+					$like_term,
+					$like_term,
+					$like_term
+				) );
+				if ( ! empty( $addr_ids ) ) {
+					$matched_ids = array_merge( $matched_ids, array_map( 'intval', $addr_ids ) );
+				}
+			}
+
+			$hpos_meta_table = "{$wpdb->prefix}wc_orders_meta";
+			if ( $wpdb->get_var( "SHOW TABLES LIKE '{$hpos_meta_table}'" ) === $hpos_meta_table ) {
+				$hpos_meta_ids = $wpdb->get_col( $wpdb->prepare(
+					"SELECT DISTINCT order_id FROM {$hpos_meta_table}
+					 WHERE meta_key IN (
+						'_order_number',
+						'_order_number_formatted',
+						'tracking_number',
+						'_tracking_number',
+						'_rma_original_invoice',
+						'_rma_original_order_id',
+						'_billing_phone_formatted',
+						'_bca_mutation_desc'
+					 ) AND meta_value LIKE %s
+					 LIMIT 150",
+					$like_term
+				) );
+				if ( ! empty( $hpos_meta_ids ) ) {
+					$matched_ids = array_merge( $matched_ids, array_map( 'intval', $hpos_meta_ids ) );
+				}
+			}
+		}
+
+		// 3. Check CPT postmeta (standard WooCommerce orders)
+		$meta_ids = $wpdb->get_col( $wpdb->prepare(
+			"SELECT DISTINCT post_id FROM {$wpdb->postmeta}
+			 WHERE meta_key IN (
+				'_billing_first_name',
+				'_billing_last_name',
+				'_billing_email',
+				'_billing_phone',
+				'_billing_phone_formatted',
+				'_shipping_first_name',
+				'_shipping_last_name',
+				'_shipping_phone',
+				'_order_number',
+				'_order_number_formatted',
+				'tracking_number',
+				'_tracking_number',
+				'carrier_id',
+				'_artmatter_tracking_info',
+				'_rma_original_invoice',
+				'_rma_original_order_id',
+				'_bca_mutation_desc'
+			 ) AND meta_value LIKE %s
+			 LIMIT 150",
+			$like_term
+		) );
+		if ( ! empty( $meta_ids ) ) {
+			$matched_ids = array_merge( $matched_ids, array_map( 'intval', $meta_ids ) );
+		}
+
+		// Full name match (first name + last name) across postmeta
+		if ( strpos( $term, ' ' ) !== false ) {
+			$words = preg_split( '/\s+/', $term, -1, PREG_SPLIT_NO_EMPTY );
+			if ( count( $words ) >= 2 ) {
+				$w1 = '%' . $wpdb->esc_like( $words[0] ) . '%';
+				$w2 = '%' . $wpdb->esc_like( $words[1] ) . '%';
+				$fullname_ids = $wpdb->get_col( $wpdb->prepare(
+					"SELECT DISTINCT p1.post_id 
+					 FROM {$wpdb->postmeta} p1
+					 INNER JOIN {$wpdb->postmeta} p2 ON p1.post_id = p2.post_id
+					 WHERE p1.meta_key = '_billing_first_name' AND p1.meta_value LIKE %s
+					   AND p2.meta_key = '_billing_last_name' AND p2.meta_value LIKE %s
+					 LIMIT 150",
+					$w1,
+					$w2
+				) );
+				if ( ! empty( $fullname_ids ) ) {
+					$matched_ids = array_merge( $matched_ids, array_map( 'intval', $fullname_ids ) );
+				}
+			}
+		}
+
+		// Phone query without formatting (e.g. 0811849943)
+		$digits = preg_replace( '/\D/', '', $term );
+		if ( strlen( $digits ) >= 4 ) {
+			$phone_ids = $wpdb->get_col( $wpdb->prepare(
+				"SELECT DISTINCT post_id FROM {$wpdb->postmeta}
+				 WHERE meta_key IN ('_billing_phone', '_shipping_phone', '_billing_phone_formatted')
+				   AND REPLACE(REPLACE(REPLACE(meta_value, '-', ''), ' ', ''), '+', '') LIKE %s
+				 LIMIT 150",
+				'%' . $wpdb->esc_like( $digits ) . '%'
+			) );
+			if ( ! empty( $phone_ids ) ) {
+				$matched_ids = array_merge( $matched_ids, array_map( 'intval', $phone_ids ) );
+			}
+		}
+
+		// 4. Order line items (searching product names)
+		$item_order_ids = $wpdb->get_col( $wpdb->prepare(
+			"SELECT DISTINCT order_id FROM {$wpdb->prefix}woocommerce_order_items
+			 WHERE order_item_name LIKE %s
+			 LIMIT 150",
+			$like_term
+		) );
+		if ( ! empty( $item_order_ids ) ) {
+			$matched_ids = array_merge( $matched_ids, array_map( 'intval', $item_order_ids ) );
+		}
+
+		// 5. Posts table match for order ID
+		$post_order_ids = $wpdb->get_col( $wpdb->prepare(
+			"SELECT ID FROM {$wpdb->posts}
+			 WHERE post_type IN ('shop_order', 'shop_order_placehold')
+			   AND (ID = %d OR ID LIKE %s)
+			 LIMIT 150",
+			intval( $clean_num ),
+			$like_num
+		) );
+		if ( ! empty( $post_order_ids ) ) {
+			$matched_ids = array_merge( $matched_ids, array_map( 'intval', $post_order_ids ) );
+		}
+
+		$matched_ids = array_unique( array_filter( $matched_ids ) );
+		return array_values( $matched_ids );
+	}
+
+	/**
 	 * REST Route: Get List of Orders with Rich Creator & Production Metadata
 	 */
 	public static function get_orders( WP_REST_Request $request ) {
@@ -213,8 +395,25 @@ class Exacoat_Order_Manager {
 				} elseif ( 'on-hold' === $clean_status ) {
 					$args['status'] = [ 'on-hold', 'pending' ];
 				} elseif ( 'warranty' === $clean_status ) {
-					$args['meta_key'] = '_is_warranty_claim';
-					$args['meta_value'] = 'yes';
+					$args['status'] = [ 'pending', 'on-hold', 'processing', 'preparing-order', 'in-production', 'ready-to-ship', 'shipped', 'completed' ];
+					$args['meta_query'] = [
+						'relation' => 'OR',
+						[
+							'key'     => '_is_warranty_claim',
+							'value'   => 'yes',
+							'compare' => '=',
+						],
+						[
+							'key'     => '_is_warranty',
+							'value'   => 'yes',
+							'compare' => '=',
+						],
+						[
+							'key'     => '_rma_order_type',
+							'value'   => 'Warranty',
+							'compare' => '=',
+						],
+					];
 				} elseif ( 'redeem' === $clean_status ) {
 					$args['meta_key'] = '_is_redeem_claim';
 					$args['meta_value'] = 'yes';
@@ -301,7 +500,36 @@ class Exacoat_Order_Manager {
 			}
 
 			if ( ! empty( $search ) ) {
-				$args['s'] = $search;
+				// Search for all: when searching, search across all statuses as requested
+				unset( $args['status'] );
+				unset( $args['meta_key'] );
+				unset( $args['meta_value'] );
+
+				$matched_search_ids = self::search_order_ids( $search );
+				if ( empty( $matched_search_ids ) ) {
+					return rest_ensure_response( [
+						'success'      => true,
+						'orders'       => [],
+						'total_orders' => 0,
+						'max_pages'    => 1,
+						'current_page' => $page,
+					] );
+				}
+
+				if ( ! empty( $args['include'] ) ) {
+					$args['include'] = array_values( array_intersect( $args['include'], $matched_search_ids ) );
+					if ( empty( $args['include'] ) ) {
+						return rest_ensure_response( [
+							'success'      => true,
+							'orders'       => [],
+							'total_orders' => 0,
+							'max_pages'    => 1,
+							'current_page' => $page,
+						] );
+					}
+				} else {
+					$args['include'] = $matched_search_ids;
+				}
 			}
 
 			$results = wc_get_orders( $args );
@@ -1094,6 +1322,39 @@ class Exacoat_Order_Manager {
 			}
 		}
 
+		// Order Meta Data & RMA details
+		$order_meta_data = [];
+		if ( method_exists( $order, 'get_meta_data' ) ) {
+			foreach ( $order->get_meta_data() as $m ) {
+				$m_data = is_object( $m ) && method_exists( $m, 'get_data' ) ? $m->get_data() : (array) $m;
+				$order_meta_data[] = [
+					'id'    => $m_data['id'] ?? null,
+					'key'   => $m_data['key'] ?? '',
+					'value' => maybe_unserialize( $m_data['value'] ?? '' ),
+				];
+			}
+		}
+
+		$rma_data = null;
+		$rma_type = $order->get_meta( '_rma_order_type' ) ?: ( 'yes' === (string) $order->get_meta( '_is_warranty' ) || 'yes' === (string) $order->get_meta( '_is_warranty_claim' ) ? 'Warranty' : '' );
+		if ( ! empty( $rma_type ) || ! empty( $order->get_meta( '_rma_status' ) ) || ! empty( $order->get_meta( '_warranty_video_url' ) ) ) {
+			$rma_data = [
+				'order_type'            => $rma_type ?: 'Warranty',
+				'original_order_id'     => $order->get_meta( '_rma_original_order_id' ) ?: $order->get_meta( '_original_order_id' ),
+				'original_invoice'      => $order->get_meta( '_rma_original_invoice' ),
+				'original_order_number' => $order->get_meta( '_rma_original_order_number' ),
+				'claim_reason'          => $order->get_meta( '_rma_claim_reason' ) ?: $order->get_meta( '_warranty_claim_reason' ),
+				'video_proof_url'       => $order->get_meta( '_rma_video_proof_url' ) ?: $order->get_meta( '_warranty_video_url' ),
+				'video_file_path'       => $order->get_meta( '_rma_video_file_path' ) ?: $order->get_meta( '_warranty_video_file_path' ),
+				'status'                => $order->get_meta( '_rma_status' ) ?: 'pending',
+				'video_deleted'         => 'yes' === (string) $order->get_meta( '_rma_video_deleted' ),
+				'video_deleted_at'      => $order->get_meta( '_rma_video_deleted_at' ) ?: null,
+				'reviewed_by'           => $order->get_meta( '_rma_reviewed_by' ) ?: null,
+				'reviewed_at'           => $order->get_meta( '_rma_reviewed_at' ) ?: null,
+				'rejection_reason'      => $order->get_meta( '_rma_rejection_reason' ) ?: null,
+			];
+		}
+
 		return [
 			'id'                            => $order_id,
 			'order_number'                  => '#' . $order->get_order_number(),
@@ -1138,6 +1399,8 @@ class Exacoat_Order_Manager {
 			'review'                     => $review_data,
 			'review_invite_scheduled_at' => $order->get_meta( '_artmatter_review_invite_scheduled_at' ) ?: null,
 			'review_invited_at'          => $order->get_meta( '_artmatter_review_invited_at' ) ?: null,
+			'meta_data'                  => $order_meta_data,
+			'rma'                        => $rma_data,
 		];
 	}
 
