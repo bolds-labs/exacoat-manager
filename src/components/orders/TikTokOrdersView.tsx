@@ -14,6 +14,7 @@ import { formatCurrency } from '../../lib/formatters';
 import { MOCK_TIKTOK_ORDERS } from '../../data/mockTikTokOrders';
 import { TikTokSettingsModal } from '../settings/TikTokSettingsModal';
 import { TikTokOrderDetailModal } from './TikTokOrderDetailModal';
+import { FilterSelect } from '../ui/FilterSelect';
 import { generateTikTokAwbHtml, generateTikTokBatchAwbHtml } from '../../lib/tiktokAwbGenerator';
 import { downloadCsv } from '../../lib/csvExport';
 import {
@@ -588,35 +589,29 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-neutral-900/50 border border-white/10 text-xs">
         <div className="flex flex-wrap items-center gap-3">
           {/* Courier Filter */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-neutral-400 font-medium">Courier:</span>
-            <select
-              value={courierFilter}
-              onChange={(e) => setCourierFilter(e.target.value)}
-              className="px-2.5 py-1 rounded-lg bg-neutral-900 border border-white/10 text-xs text-neutral-200 focus:outline-none focus:border-rose-500 cursor-pointer"
-            >
-              <option value="all">All Couriers</option>
-              {availableCouriers.map((c) => (
-                <option key={c.key} value={c.key}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FilterSelect
+            label="Courier"
+            value={courierFilter}
+            onChange={setCourierFilter}
+            icon={<Truck className="w-3.5 h-3.5" />}
+            options={[
+              { value: 'all', label: 'All Couriers' },
+              ...availableCouriers.map((c) => ({ value: c.key, label: c.name })),
+            ]}
+          />
 
           {/* Tracking Resi Filter */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-neutral-400 font-medium">Tracking:</span>
-            <select
-              value={trackingFilter}
-              onChange={(e) => setTrackingFilter(e.target.value as any)}
-              className="px-2.5 py-1 rounded-lg bg-neutral-900 border border-white/10 text-xs text-neutral-200 focus:outline-none focus:border-rose-500 cursor-pointer"
-            >
-              <option value="all">All Tracking</option>
-              <option value="has-resi">Has Resi</option>
-              <option value="no-resi">Missing Resi</option>
-            </select>
-          </div>
+          <FilterSelect
+            label="Tracking"
+            value={trackingFilter}
+            onChange={(val) => setTrackingFilter(val as any)}
+            icon={<Printer className="w-3.5 h-3.5" />}
+            options={[
+              { value: 'all', label: 'All Tracking' },
+              { value: 'has-resi', label: 'Has Resi' },
+              { value: 'no-resi', label: 'Missing Resi' },
+            ]}
+          />
 
           {/* Clear Filters */}
           {(courierFilter !== 'all' || trackingFilter !== 'all' || activeTab !== 'ALL' || searchQuery.trim()) && (
@@ -1021,18 +1016,16 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
 
           <div className="flex items-center gap-3">
             {/* Per Page Selector */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-neutral-400 font-medium">Per page:</span>
-              <select
-                value={pageSize}
-                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-                className="px-2 py-1 rounded-lg bg-neutral-900 border border-white/15 text-xs text-white font-mono cursor-pointer focus:outline-none focus:border-rose-500"
-              >
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-                <option value={200}>200</option>
-              </select>
-            </div>
+            <FilterSelect
+              label="Per page"
+              value={String(pageSize)}
+              onChange={(val) => handlePageSizeChange(Number(val))}
+              options={[
+                { value: '50', label: '50' },
+                { value: '100', label: '100' },
+                { value: '200', label: '200' },
+              ]}
+            />
 
             {/* Page Navigation */}
             <div className="flex items-center gap-1">

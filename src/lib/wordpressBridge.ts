@@ -2866,6 +2866,8 @@ export interface ManualWarrantyClaimPayload {
   initial_status?: 'processing' | 'on-hold' | 'preparing-order';
   notes?: string;
   admin_name?: string;
+  allow_duplicate?: boolean;
+  override_reason?: string;
 }
 
 export interface RmaClaimLogItem {

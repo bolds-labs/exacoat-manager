@@ -51,7 +51,8 @@ import {
   ChevronDown,
   ChevronUp,
   Plane,
-  Store
+  Store,
+  ClipboardCheck
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { extractItemSpecs } from '../../lib/orderItems';
@@ -70,6 +71,7 @@ import {
 } from '../../lib/wordpressBridge';
 import { ShippingLabelA6Modal } from './ShippingLabelA6Modal';
 import { CustomerInvoiceModal } from './CustomerInvoiceModal';
+import { PackingSlipModal } from './PackingSlipModal';
 import { WarrantyReviewModal } from './WarrantyReviewModal';
 import { ManualWarrantyModal } from './ManualWarrantyModal';
 import { clsx } from 'clsx';
@@ -130,9 +132,10 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   const [restockRefundedItems, setRestockRefundedItems] = useState(true);
   const [isProcessingRefund, setIsProcessingRefund] = useState(false);
 
-  // A6 Shipping Label & Customer Invoice modal state
+  // A6 Shipping Label, Customer Invoice & Packing Slip modal state
   const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+  const [isPackingSlipModalOpen, setIsPackingSlipModalOpen] = useState(false);
   const [isWarrantyReviewModalOpen, setIsWarrantyReviewModalOpen] = useState(false);
   const [isManualWarrantyModalOpen, setIsManualWarrantyModalOpen] = useState(false);
   const [manualClaimType, setManualClaimType] = useState<'Warranty' | 'Redeem'>('Warranty');
@@ -791,7 +794,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                 type="button"
                 onClick={() => setIsLabelModalOpen(true)}
                 className={clsx(
-                  "px-3 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95",
+                  "px-3 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer",
                   currentStatusClean === 'processing'
                     ? "bg-[#f3aa18] hover:bg-[#d9940c] text-[#0a0a0a] ring-2 ring-[#f3aa18]/30"
                     : "bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/[0.08]"
@@ -805,6 +808,26 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                     Confirmed
                   </span>
                 )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsInvoiceModalOpen(true)}
+                className="px-3 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/[0.08] cursor-pointer"
+                title="View, download, and print official customer tax invoice"
+              >
+                <FileText className="w-3.5 h-3.5 text-[#f3aa18]" />
+                <span>Invoice PDF</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsPackingSlipModalOpen(true)}
+                className="px-3 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/[0.08] cursor-pointer"
+                title="View and print official warehouse packing slip & picking manifest"
+              >
+                <ClipboardCheck className="w-3.5 h-3.5 text-sky-400" />
+                <span>Packing Slip</span>
               </button>
               {rmaDetails?.order_type !== 'Warranty' && rmaDetails?.order_type !== 'Redeem' && (
                 <>
@@ -2303,6 +2326,46 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         confirmText="Override to Completed"
         cancelText="Cancel"
         variant="warning"
+      />
+
+      {/* Internal A6 Thermal Label Modal */}
+      <ShippingLabelA6Modal
+        order={order}
+        orders={order ? [order] : []}
+        isOpen={isLabelModalOpen}
+        onClose={() => setIsLabelModalOpen(false)}
+      />
+
+      {/* Official Customer Tax Invoice Modal */}
+      <CustomerInvoiceModal
+        order={order}
+        isOpen={isInvoiceModalOpen}
+        onClose={() => setIsInvoiceModalOpen(false)}
+        onPrinted={(orderId) => {
+          try {
+            const cached = localStorage.getItem('_exacoat_direct_printed_orders');
+            const set = cached ? new Set(JSON.parse(cached)) : new Set();
+            set.add(orderId);
+            localStorage.setItem('_exacoat_direct_printed_orders', JSON.stringify(Array.from(set)));
+          } catch {}
+          if (onOrderUpdated) onOrderUpdated();
+        }}
+      />
+
+      {/* Official Warehouse Packing Slip & Dispatch Manifest Modal */}
+      <PackingSlipModal
+        order={order}
+        isOpen={isPackingSlipModalOpen}
+        onClose={() => setIsPackingSlipModalOpen(false)}
+        onPrinted={(orderId) => {
+          try {
+            const cached = localStorage.getItem('_exacoat_direct_printed_orders');
+            const set = cached ? new Set(JSON.parse(cached)) : new Set();
+            set.add(orderId);
+            localStorage.setItem('_exacoat_direct_printed_orders', JSON.stringify(Array.from(set)));
+          } catch {}
+          if (onOrderUpdated) onOrderUpdated();
+        }}
       />
     </SlideDrawer>
   );

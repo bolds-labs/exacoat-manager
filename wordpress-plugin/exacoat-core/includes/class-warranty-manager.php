@@ -1288,14 +1288,16 @@ class Exacoat_Warranty_Manager {
 					] );
 				}
 
-				if ( ! empty( $existing_claims ) ) {
+				$allow_duplicate = ! empty( $request->get_param( 'allow_duplicate' ) ) || ! empty( $request->get_param( 'override_duplicate' ) );
+
+				if ( ! empty( $existing_claims ) && ! $allow_duplicate ) {
 					$existing_order = reset( $existing_claims );
 					$existing_type  = $existing_order->get_meta( '_rma_order_type' ) ?: 'Warranty / Redeem';
 					$existing_num   = $existing_order->get_order_number();
 					return new \WP_REST_Response( [
 						'success' => false,
 						'message' => sprintf(
-							'Invoice "%s" (%s) has already been claimed or redeemed under replacement order #%s (%s). Duplicate claims are not allowed.',
+							'Invoice "%s" (%s) has already been claimed or redeemed under replacement order #%s (%s). Duplicate claims are not allowed without admin override.',
 							$clean_invoice,
 							$channel,
 							$existing_num,
@@ -1444,6 +1446,20 @@ class Exacoat_Warranty_Manager {
 						$courier_label,
 						number_format( $shipping_cost, 0, ',', '.' ),
 						$claim_reason
+					) );
+				}
+
+				if ( ! empty( $existing_claims ) && $allow_duplicate ) {
+					$prior_order = reset( $existing_claims );
+					$prior_num   = $prior_order->get_order_number();
+					$replacement_order->update_meta_data( '_rma_duplicate_override', 'yes' );
+					$replacement_order->update_meta_data( '_rma_prior_order_number', $prior_num );
+					$replacement_order->add_order_note( sprintf(
+						'⚠️ [ADMIN OVERRIDE] Duplicate claim authorized by %s for %s invoice %s. Prior replacement order: #%s.',
+						$admin_name,
+						$channel,
+						$clean_invoice,
+						$prior_num
 					) );
 				}
 

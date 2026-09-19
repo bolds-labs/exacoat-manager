@@ -180,16 +180,26 @@ class Exacoat_Image_Sizes {
 		require_once ABSPATH . 'wp-admin/includes/file.php';
 		require_once ABSPATH . 'wp-admin/includes/media.php';
 
-		$offset       = isset( $_POST['offset'] ) ? max( 0, (int) $_POST['offset'] ) : 0;
-		$batch_size   = isset( $_POST['batch_size'] ) ? max( 1, min( 50, (int) $_POST['batch_size'] ) ) : 15;
-		$only_missing = ! isset( $_POST['only_missing'] ) || '1' === (string) $_POST['only_missing'] || true === $_POST['only_missing'];
+		$offset        = isset( $_POST['offset'] ) ? max( 0, (int) $_POST['offset'] ) : 0;
+		$batch_size    = isset( $_POST['batch_size'] ) ? max( 1, min( 50, (int) $_POST['batch_size'] ) ) : 15;
+		$only_missing  = ! isset( $_POST['only_missing'] ) || '1' === (string) $_POST['only_missing'] || true === $_POST['only_missing'];
+		$products_only = isset( $_POST['products_only'] ) ? ( '1' === (string) $_POST['products_only'] || true === $_POST['products_only'] ) : true;
+
+		$where_clause = "WHERE post_type = 'attachment' AND post_mime_type LIKE 'image/%'";
+		if ( $products_only ) {
+			$where_clause .= " AND (
+				post_parent IN (SELECT ID FROM {$wpdb->posts} WHERE post_type IN ('product', 'product_variation'))
+				OR ID IN (SELECT CAST(meta_value AS UNSIGNED) FROM {$wpdb->postmeta} WHERE meta_key IN ('_thumbnail_id'))
+				OR post_title LIKE '%Skin%' OR post_title LIKE '%Body%' OR post_title LIKE '%Case%' OR post_title LIKE '%Gallery%'
+			)";
+		}
 
 		$total_attachments = (int) $wpdb->get_var(
-			"SELECT COUNT(ID) FROM {$wpdb->posts} WHERE post_type = 'attachment' AND post_mime_type LIKE 'image/%'"
+			"SELECT COUNT(ID) FROM {$wpdb->posts} {$where_clause}"
 		);
 
 		$attachment_ids = $wpdb->get_col( $wpdb->prepare(
-			"SELECT ID FROM {$wpdb->posts} WHERE post_type = 'attachment' AND post_mime_type LIKE 'image/%' ORDER BY ID ASC LIMIT %d OFFSET %d",
+			"SELECT ID FROM {$wpdb->posts} {$where_clause} ORDER BY ID DESC LIMIT %d OFFSET %d",
 			$batch_size,
 			$offset
 		) );
@@ -252,15 +262,25 @@ class Exacoat_Image_Sizes {
 
 		@set_time_limit( 120 );
 
-		$offset     = isset( $_POST['offset'] ) ? max( 0, (int) $_POST['offset'] ) : 0;
-		$batch_size = isset( $_POST['batch_size'] ) ? max( 1, min( 100, (int) $_POST['batch_size'] ) ) : 25;
+		$offset        = isset( $_POST['offset'] ) ? max( 0, (int) $_POST['offset'] ) : 0;
+		$batch_size    = isset( $_POST['batch_size'] ) ? max( 1, min( 100, (int) $_POST['batch_size'] ) ) : 25;
+		$products_only = isset( $_POST['products_only'] ) ? ( '1' === (string) $_POST['products_only'] || true === $_POST['products_only'] ) : false;
+
+		$where_clause = "WHERE post_type = 'attachment' AND post_mime_type LIKE 'image/%'";
+		if ( $products_only ) {
+			$where_clause .= " AND (
+				post_parent IN (SELECT ID FROM {$wpdb->posts} WHERE post_type IN ('product', 'product_variation'))
+				OR ID IN (SELECT CAST(meta_value AS UNSIGNED) FROM {$wpdb->postmeta} WHERE meta_key IN ('_thumbnail_id'))
+				OR post_title LIKE '%Skin%' OR post_title LIKE '%Body%' OR post_title LIKE '%Case%' OR post_title LIKE '%Gallery%'
+			)";
+		}
 
 		$total_attachments = (int) $wpdb->get_var(
-			"SELECT COUNT(ID) FROM {$wpdb->posts} WHERE post_type = 'attachment' AND post_mime_type LIKE 'image/%'"
+			"SELECT COUNT(ID) FROM {$wpdb->posts} {$where_clause}"
 		);
 
 		$attachment_ids = $wpdb->get_col( $wpdb->prepare(
-			"SELECT ID FROM {$wpdb->posts} WHERE post_type = 'attachment' AND post_mime_type LIKE 'image/%' ORDER BY ID ASC LIMIT %d OFFSET %d",
+			"SELECT ID FROM {$wpdb->posts} {$where_clause} ORDER BY ID DESC LIMIT %d OFFSET %d",
 			$batch_size,
 			$offset
 		) );

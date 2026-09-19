@@ -10,12 +10,14 @@ interface CustomerInvoiceModalProps {
   order: Order | null;
   isOpen: boolean;
   onClose: () => void;
+  onPrinted?: (orderId: number) => void;
 }
 
 export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
   order,
   isOpen,
   onClose,
+  onPrinted,
 }) => {
   const { showToast } = useToast();
   const invoiceRef = useRef<HTMLDivElement>(null);
@@ -27,7 +29,7 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
   const shipping = order.shipping || {};
   const billing = order.billing || {};
 
-  const customerName = order.customer_name || `${billing.first_name || shipping.first_name || ''} ${billing.last_name || shipping.last_name || ''}`.trim() || 'Valued Collector';
+  const customerName = order.customer_name || `${billing.first_name || shipping.first_name || ''} ${billing.last_name || shipping.last_name || ''}`.trim() || 'Customer';
   const customerEmail = order.customer_email || billing.email || '-';
   const customerPhone = order.customer_phone || billing.phone || shipping.phone || '-';
 
@@ -46,6 +48,10 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
   ].filter(Boolean);
 
   const handlePrint = () => {
+    if (onPrinted && order.id) {
+      onPrinted(order.id);
+    }
+
     const printWindow = window.open('', '_blank', 'width=850,height=1000');
     if (!printWindow) {
       showToast('error', 'Popup Blocked', 'Please allow popups to print customer invoices.');

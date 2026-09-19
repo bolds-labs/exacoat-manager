@@ -8,6 +8,7 @@ import { updateOrderStatusDirect } from '../../lib/wordpressBridge';
 import { downloadCsv } from '../../lib/csvExport';
 import { ShippingLabelA6Modal } from './ShippingLabelA6Modal';
 import { useToast } from '../../context/ToastContext';
+import { FilterSelect } from '../ui/FilterSelect';
 import {
   Search,
   RefreshCw,
@@ -19,6 +20,7 @@ import {
   Printer,
   Copy,
   Check,
+  CheckCircle2,
   Download,
   X,
   ChevronDown,
@@ -56,8 +58,41 @@ export const OrderTable: React.FC<OrderTableProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [courierFilter, setCourierFilter] = useState('all');
-  const [trackingFilter, setTrackingFilter] = useState<'all' | 'has-resi' | 'no-resi'>('all');
+  const [printFilter, setPrintFilter] = useState<'all' | 'printed' | 'unprinted'>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Printed tracking state
+  const [printedOrderIds, setPrintedOrderIds] = useState<Set<number>>(() => {
+    try {
+      const cached = localStorage.getItem('_exacoat_direct_printed_orders');
+      return cached ? new Set(JSON.parse(cached)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const markOrderPrinted = (orderId: number) => {
+    setPrintedOrderIds((prev) => {
+      const next = new Set(prev).add(orderId);
+      try {
+        localStorage.setItem('_exacoat_direct_printed_orders', JSON.stringify(Array.from(next)));
+      } catch {}
+      return next;
+    });
+  };
+
+  const toggleOrderPrinted = (orderId: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setPrintedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      try {
+        localStorage.setItem('_exacoat_direct_printed_orders', JSON.stringify(Array.from(next)));
+      } catch {}
+      return next;
+    });
+  };
 
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -201,12 +236,11 @@ export const OrderTable: React.FC<OrderTableProps> = ({
         }
       }
 
-      // Tracking Resi filter
-      if (trackingFilter !== 'all') {
-        const rawResi = String(order.tracking?.tracking_number || '').trim();
-        const hasResi = rawResi.length > 0 && !rawResi.startsWith('field_');
-        if (trackingFilter === 'has-resi' && !hasResi) return false;
-        if (trackingFilter === 'no-resi' && hasResi) return false;
+      // Print status filter
+      if (printFilter !== 'all') {
+        const isPrinted = printedOrderIds.has(order.id);
+        if (printFilter === 'printed' && !isPrinted) return false;
+        if (printFilter === 'unprinted' && isPrinted) return false;
       }
 
       // Text query
@@ -231,7 +265,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
       }
       return true;
     });
-  }, [orders, statusFilter, courierFilter, trackingFilter, searchQuery]);
+  }, [orders, statusFilter, courierFilter, printFilter, printedOrderIds, searchQuery]);
 
   // Selection handlers
   const isAllSelected = filteredOrders.length > 0 && filteredOrders.every((o) => selectedIds.has(o.id));
@@ -292,12 +326,14 @@ export const OrderTable: React.FC<OrderTableProps> = ({
   // Bulk Print A6
   const handleBulkPrintA6 = () => {
     if (selectedOrdersList.length === 0) return;
+    selectedOrdersList.forEach((o) => markOrderPrinted(o.id));
     setPrintModalOrders(selectedOrdersList);
     setIsPrintModalOpen(true);
   };
 
   const handleSinglePrintA6 = (order: Order, e: React.MouseEvent) => {
     e.stopPropagation();
+    markOrderPrinted(order.id);
     if (onPrintA6) {
       onPrintA6(order);
     } else {
@@ -407,44 +443,38 @@ export const OrderTable: React.FC<OrderTableProps> = ({
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-zinc-100 dark:border-white/5">
           <div className="flex flex-wrap items-center gap-2">
             {/* Courier Filter */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-zinc-500 font-medium">Courier:</span>
-              <select
-                value={courierFilter}
-                onChange={(e) => setCourierFilter(e.target.value)}
-                className="px-2.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-xs text-zinc-900 dark:text-white focus:outline-none focus:border-[#f3aa18] cursor-pointer"
-              >
-                <option value="all">All Couriers</option>
-                {availableCouriers.map((c) => (
-                  <option key={c.key} value={c.key}>
-                    {c.name}
-                  </option>
-                ))}
-                <option value="PICKUP">Store Pickup (SMB)</option>
-              </select>
-            </div>
+            <FilterSelect
+              label="Courier"
+              value={courierFilter}
+              onChange={setCourierFilter}
+              icon={<Truck className="w-3.5 h-3.5" />}
+              options={[
+                { value: 'all', label: 'All Couriers' },
+                ...availableCouriers.map((c) => ({ value: c.key, label: c.name })),
+                { value: 'PICKUP', label: 'Store Pickup (SMB)' },
+              ]}
+            />
 
-            {/* Tracking Resi Filter */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-zinc-500 font-medium">Tracking:</span>
-              <select
-                value={trackingFilter}
-                onChange={(e) => setTrackingFilter(e.target.value as any)}
-                className="px-2.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-xs text-zinc-900 dark:text-white focus:outline-none focus:border-[#f3aa18] cursor-pointer"
-              >
-                <option value="all">All Tracking</option>
-                <option value="has-resi">Has Resi</option>
-                <option value="no-resi">Missing Resi</option>
-              </select>
-            </div>
+            {/* Print Status Filter */}
+            <FilterSelect
+              label="Label Status"
+              value={printFilter}
+              onChange={(val) => setPrintFilter(val as any)}
+              icon={<Printer className="w-3.5 h-3.5" />}
+              options={[
+                { value: 'all', label: 'All Orders' },
+                { value: 'printed', label: 'Printed Labels' },
+                { value: 'unprinted', label: 'Not Printed' },
+              ]}
+            />
 
             {/* Clear Filters */}
-            {(courierFilter !== 'all' || trackingFilter !== 'all' || statusFilter !== 'all') && (
+            {(courierFilter !== 'all' || printFilter !== 'all' || statusFilter !== 'all') && (
               <button
                 type="button"
                 onClick={() => {
                   setCourierFilter('all');
-                  setTrackingFilter('all');
+                  setPrintFilter('all');
                   setStatusFilter('all');
                 }}
                 className="px-2 py-1 rounded-lg text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white text-xs underline cursor-pointer"
@@ -460,7 +490,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
               <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
-                placeholder="Search orders, customers, skins..."
+                placeholder="Search orders, phone, customer..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-3.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-xs text-zinc-900 dark:text-white placeholder-zinc-500 focus:outline-none focus:border-[#f3aa18]"
@@ -502,17 +532,17 @@ export const OrderTable: React.FC<OrderTableProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               {/* Bulk Change Status Selector */}
               <div className="flex items-center gap-1.5 whitespace-nowrap">
-                <select
+                <FilterSelect
                   value={bulkStatusTarget}
-                  onChange={(e) => setBulkStatusTarget(e.target.value)}
-                  className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-neutral-900 border border-zinc-300 dark:border-white/15 text-xs text-zinc-900 dark:text-neutral-200 focus:outline-none focus:border-[#f3aa18] cursor-pointer"
-                >
-                  <option value="processing">Confirmed (Processing)</option>
-                  <option value="preparing-order">Preparing Order</option>
-                  <option value="ready-to-ship">Waiting for Pickup</option>
-                  <option value="shipped">Shipped</option>
-                  <option value="completed">Completed</option>
-                </select>
+                  onChange={setBulkStatusTarget}
+                  options={[
+                    { value: 'processing', label: 'Confirmed (Processing)' },
+                    { value: 'preparing-order', label: 'Preparing Order' },
+                    { value: 'ready-to-ship', label: 'Waiting for Pickup' },
+                    { value: 'shipped', label: 'Shipped' },
+                    { value: 'completed', label: 'Completed' },
+                  ]}
+                />
 
                 <button
                   type="button"
@@ -732,13 +762,36 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                         </div>
                       </td>
 
-                      {/* Tracking Resi & Courier */}
+                      {/* Tracking Resi & Courier & Print Status */}
                       <td className="py-3.5 px-4">
                         {isPickup ? (
-                          <div className="space-y-0.5">
-                            <span className="inline-flex items-center text-[10px] font-mono font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-2 py-0.5 rounded border border-[#f3aa18]/20 whitespace-nowrap">
-                              Store Pickup
-                            </span>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="inline-flex items-center text-[10px] font-mono font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-2 py-0.5 rounded border border-[#f3aa18]/20 whitespace-nowrap">
+                                Store Pickup
+                              </span>
+                              {printedOrderIds.has(order.id) ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => toggleOrderPrinted(order.id, e)}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all cursor-pointer shadow-2xs"
+                                  title="Printed. Click to toggle."
+                                >
+                                  <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
+                                  <span>Printed</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={(e) => toggleOrderPrinted(order.id, e)}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-zinc-100 hover:bg-zinc-200 dark:bg-white/5 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-white/10 transition-all cursor-pointer"
+                                  title="Not yet printed. Click to mark as printed."
+                                >
+                                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
+                                  <span>Unprinted</span>
+                                </button>
+                              )}
+                            </div>
                             <span className="text-[10px] text-zinc-500 block truncate max-w-[140px]">
                               Summarecon Bekasi
                             </span>
@@ -763,15 +816,61 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                                 )}
                               </button>
                             </div>
-                            <span className="text-[10px] text-zinc-500 block truncate max-w-[140px] font-medium">
-                              {order.tracking?.courier || order.shipping_method_name || 'Courier'}
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[10px] text-zinc-500 truncate max-w-[120px] font-medium">
+                                {order.tracking?.courier || order.shipping_method_name || 'Courier'}
+                              </span>
+                              {printedOrderIds.has(order.id) ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => toggleOrderPrinted(order.id, e)}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all cursor-pointer shadow-2xs"
+                                  title="Printed. Click to toggle."
+                                >
+                                  <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
+                                  <span>Printed</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={(e) => toggleOrderPrinted(order.id, e)}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-zinc-100 hover:bg-zinc-200 dark:bg-white/5 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-white/10 transition-all cursor-pointer"
+                                  title="Not yet printed. Click to mark as printed."
+                                >
+                                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
+                                  <span>Unprinted</span>
+                                </button>
+                              )}
+                            </div>
                           </div>
                         ) : (
-                          <div className="space-y-0.5">
-                            <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">
-                              Resi pending
-                            </span>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">
+                                Resi pending
+                              </span>
+                              {printedOrderIds.has(order.id) ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => toggleOrderPrinted(order.id, e)}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all cursor-pointer shadow-2xs"
+                                  title="Printed. Click to toggle."
+                                >
+                                  <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
+                                  <span>Printed</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={(e) => toggleOrderPrinted(order.id, e)}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-zinc-100 hover:bg-zinc-200 dark:bg-white/5 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-white/10 transition-all cursor-pointer"
+                                  title="Not yet printed. Click to mark as printed."
+                                >
+                                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
+                                  <span>Unprinted</span>
+                                </button>
+                              )}
+                            </div>
                             <span className="text-[10px] text-zinc-500 block truncate max-w-[140px]">
                               {order.shipping_method_name || 'Standard'}
                             </span>
@@ -877,14 +976,35 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                     </p>
                   </div>
 
-                  {hasValidTracking && (
-                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-zinc-100 dark:border-white/5">
-                      <span className="text-zinc-500">{order.tracking?.courier || 'Courier'}</span>
-                      <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                        {rawTrackingNum}
-                      </span>
+                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-zinc-100 dark:border-white/5">
+                    <span className="text-zinc-500">{order.tracking?.courier || 'Courier'}</span>
+                    <div className="flex items-center gap-2">
+                      {hasValidTracking && (
+                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          {rawTrackingNum}
+                        </span>
+                      )}
+                      {printedOrderIds.has(order.id) ? (
+                        <button
+                          type="button"
+                          onClick={(e) => toggleOrderPrinted(order.id, e)}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                        >
+                          <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
+                          <span>Printed</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => toggleOrderPrinted(order.id, e)}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-mono font-medium bg-zinc-100 dark:bg-white/5 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-white/10"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
+                          <span>Unprinted</span>
+                        </button>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
               );
             })
@@ -905,18 +1025,16 @@ export const OrderTable: React.FC<OrderTableProps> = ({
 
           <div className="flex items-center gap-3">
             {/* Per Page Selector */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-zinc-500 font-medium">Per page:</span>
-              <select
-                value={pageSize}
-                onChange={(e) => onPageSizeChange && onPageSizeChange(Number(e.target.value))}
-                className="px-2 py-1 rounded-lg bg-white dark:bg-neutral-900 border border-zinc-300 dark:border-white/15 text-xs text-zinc-900 dark:text-white font-mono cursor-pointer focus:outline-none focus:border-[#f3aa18]"
-              >
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-                <option value={200}>200</option>
-              </select>
-            </div>
+            <FilterSelect
+              label="Per page"
+              value={pageSize}
+              onChange={(val) => onPageSizeChange && onPageSizeChange(Number(val))}
+              options={[
+                { value: 50, label: '50' },
+                { value: 100, label: '100' },
+                { value: 200, label: '200' },
+              ]}
+            />
 
             {/* Page Navigation */}
             <div className="flex items-center gap-1">

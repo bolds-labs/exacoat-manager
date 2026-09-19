@@ -259,10 +259,12 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
     existingOrderNumber?: string;
     existingOrderType?: string;
   } | null>(null);
+  const [allowDuplicateOverride, setAllowDuplicateOverride] = useState(false);
 
   // Sync initialClaimType when prop changes or modal opens
   useEffect(() => {
     if (isOpen) {
+      setAllowDuplicateOverride(false);
       setClaimType(initialClaimType);
       if (initialClaimType === 'Redeem') {
         setWaiveShipping(true);
@@ -574,6 +576,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
 
   // Debounced check for invoice availability to prevent duplicates
   useEffect(() => {
+    setAllowDuplicateOverride(false);
     if (isExisting) {
       setInvoiceStatus(null);
       return;
@@ -673,8 +676,8 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
         showToast('error', 'Invoice Required', 'Please enter the marketplace order number / invoice.');
         return;
       }
-      if (invoiceStatus?.checked && !invoiceStatus.available) {
-        showToast('error', 'Duplicate Invoice Blocked', invoiceStatus.message || 'This invoice has already been claimed or redeemed.');
+      if (invoiceStatus?.checked && !invoiceStatus.available && !allowDuplicateOverride) {
+        showToast('error', 'Duplicate Invoice Blocked', invoiceStatus.message || 'This invoice has already been claimed or redeemed. Check "Allow duplicate claim" to override.');
         return;
       }
       if (!customerName.trim() || !customerPhone.trim()) {
@@ -694,8 +697,8 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
         showToast('error', 'Select Items', 'Please select at least one skin to replace.');
         return;
       }
-      if (isParentAlreadyClaimed) {
-        showToast('error', 'Order Already Claimed', 'This order has already been processed for an RMA warranty or redeem replacement.');
+      if (isParentAlreadyClaimed && !allowDuplicateOverride) {
+        showToast('error', 'Order Already Claimed', 'This order has already been processed for an RMA warranty or redeem replacement. Check "Allow secondary RMA claim" to override.');
         return;
       }
     }
@@ -717,6 +720,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
           waive_shipping: claimType === 'Redeem' || waiveShipping,
           initial_status: claimType === 'Redeem' ? 'processing' : initialStatus,
           notes: adminNotes,
+          allow_duplicate: allowDuplicateOverride,
           shipping_address: {
             address_1: address1,
             city,
@@ -808,6 +812,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
           claim_reason: claimReason,
           initial_status: claimType === 'Redeem' ? 'processing' : initialStatus,
           notes: adminNotes,
+          allow_duplicate: allowDuplicateOverride,
         };
 
         const res = await createManualWarrantyClaimDirect(payload);
@@ -887,7 +892,11 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={isSubmitting || isParentAlreadyClaimed || (!isExisting && invoiceStatus?.checked && !invoiceStatus.available)}
+              disabled={
+                isSubmitting ||
+                (isParentAlreadyClaimed && !allowDuplicateOverride) ||
+                (!isExisting && invoiceStatus?.checked && !invoiceStatus.available && !allowDuplicateOverride)
+              }
               className={clsx(
                 'px-5 py-2 rounded-xl text-xs font-bold text-neutral-950 disabled:opacity-50 transition-all shadow-sm flex items-center gap-2 cursor-pointer',
                 claimType === 'Redeem'
@@ -1013,7 +1022,9 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                 className={clsx(
                   "w-full px-3.5 py-2 rounded-xl bg-[#141414] border font-mono text-xs focus:outline-none transition-colors",
                   invoiceStatus?.checked && !invoiceStatus.available
-                    ? "border-rose-500/70 text-rose-300 focus:border-rose-500"
+                    ? allowDuplicateOverride
+                      ? "border-amber-500/70 text-amber-300 focus:border-amber-500"
+                      : "border-rose-500/70 text-rose-300 focus:border-rose-500"
                     : invoiceStatus?.checked && invoiceStatus.available
                     ? "border-emerald-500/60 text-white focus:border-emerald-500"
                     : "border-white/[0.08] text-white focus:border-emerald-500"
@@ -1026,11 +1037,43 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                 </div>
               )}
               {invoiceStatus?.checked && !invoiceStatus.available && (
-                <div className="mt-2 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
-                  <div>
-                    <p className="font-bold text-rose-400">Duplicate Claim Blocked</p>
-                    <p className="mt-0.5 text-rose-300/90 leading-relaxed">{invoiceStatus.message}</p>
+                <div className={clsx(
+                  "mt-2 p-3.5 rounded-xl border text-xs space-y-2.5 transition-colors",
+                  allowDuplicateOverride
+                    ? "bg-amber-500/10 border-amber-500/40 text-amber-300"
+                    : "bg-rose-500/10 border-rose-500/30 text-rose-300"
+                )}>
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className={clsx(
+                      "w-4 h-4 shrink-0 mt-0.5",
+                      allowDuplicateOverride ? "text-amber-400" : "text-rose-400"
+                    )} />
+                    <div>
+                      <p className={clsx(
+                        "font-bold",
+                        allowDuplicateOverride ? "text-amber-400" : "text-rose-400"
+                      )}>
+                        {allowDuplicateOverride ? "Duplicate Claim (Admin Override Active)" : "Duplicate Claim Blocked"}
+                      </p>
+                      <p className="mt-0.5 leading-relaxed opacity-90">{invoiceStatus.message}</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-white/[0.08] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <label className="flex items-center gap-2 cursor-pointer select-none text-amber-300 text-xs font-semibold">
+                      <input
+                        type="checkbox"
+                        checked={allowDuplicateOverride}
+                        onChange={(e) => setAllowDuplicateOverride(e.target.checked)}
+                        className="w-4 h-4 rounded border-amber-500/50 bg-neutral-900 text-amber-500 focus:ring-amber-400 focus:ring-offset-neutral-950 cursor-pointer"
+                      />
+                      <span>Allow duplicate claim (Admin Override)</span>
+                    </label>
+                    {allowDuplicateOverride && (
+                      <span className="text-[11px] text-amber-400/90 font-mono">
+                        Override active. Reason will be logged in order notes.
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
@@ -1048,13 +1091,45 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
         {isExisting ? (
           <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.08] space-y-3">
             {isParentAlreadyClaimed && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2.5">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
-                <div>
-                  <p className="font-bold text-rose-400">Order Already Processed for RMA</p>
-                  <p className="mt-0.5 text-rose-300/90">
-                    This order has already been processed for an RMA warranty or redeem replacement. Duplicate replacements for the same purchase are prohibited.
-                  </p>
+              <div className={clsx(
+                "p-3.5 rounded-xl border text-xs space-y-2.5 transition-colors",
+                allowDuplicateOverride
+                  ? "bg-amber-500/10 border-amber-500/40 text-amber-300"
+                  : "bg-rose-500/10 border-rose-500/30 text-rose-300"
+              )}>
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className={clsx(
+                    "w-4 h-4 shrink-0 mt-0.5",
+                    allowDuplicateOverride ? "text-amber-400" : "text-rose-400"
+                  )} />
+                  <div>
+                    <p className={clsx(
+                      "font-bold",
+                      allowDuplicateOverride ? "text-amber-400" : "text-rose-400"
+                    )}>
+                      {allowDuplicateOverride ? "Order RMA (Admin Override Active)" : "Order Already Processed for RMA"}
+                    </p>
+                    <p className="mt-0.5 opacity-90 leading-relaxed">
+                      This order has already been processed for an RMA warranty or redeem replacement. Duplicate replacements are restricted without admin authorization.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-white/[0.08] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <label className="flex items-center gap-2 cursor-pointer select-none text-amber-300 text-xs font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={allowDuplicateOverride}
+                      onChange={(e) => setAllowDuplicateOverride(e.target.checked)}
+                      className="w-4 h-4 rounded border-amber-500/50 bg-neutral-900 text-amber-500 focus:ring-amber-400 focus:ring-offset-neutral-950 cursor-pointer"
+                    />
+                    <span>Allow secondary RMA claim (Admin Override)</span>
+                  </label>
+                  {allowDuplicateOverride && (
+                    <span className="text-[11px] text-amber-400/90 font-mono">
+                      Override active. Secondary replacement permitted.
+                    </span>
+                  )}
                 </div>
               </div>
             )}

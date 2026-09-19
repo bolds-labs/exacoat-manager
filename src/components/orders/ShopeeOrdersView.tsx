@@ -14,6 +14,7 @@ import { matchesPhoneQuery, formatDisplayPhone } from '../../lib/phoneUtils';
 import { ShopeeSettingsModal } from '../settings/ShopeeSettingsModal';
 import { ArrangeShipmentModal } from './ArrangeShipmentModal';
 import { ShopeeOrderDetailModal } from './ShopeeOrderDetailModal';
+import { FilterSelect } from '../ui/FilterSelect';
 import { generateShopeeAwbHtml, generateShopeeBatchAwbHtml } from '../../lib/shopeeAwbGenerator';
 import { downloadCsv } from '../../lib/csvExport';
 import {
@@ -587,35 +588,29 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-neutral-900/50 border border-white/10 text-xs">
         <div className="flex flex-wrap items-center gap-3">
           {/* Courier Filter */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-neutral-400 font-medium">Courier:</span>
-            <select
-              value={courierFilter}
-              onChange={(e) => setCourierFilter(e.target.value)}
-              className="px-2.5 py-1 rounded-lg bg-neutral-900 border border-white/10 text-xs text-neutral-200 focus:outline-none focus:border-orange-500 cursor-pointer"
-            >
-              <option value="all">All Couriers</option>
-              {availableCouriers.map((c) => (
-                <option key={c.key} value={c.key}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FilterSelect
+            label="Courier"
+            value={courierFilter}
+            onChange={setCourierFilter}
+            icon={<Truck className="w-3.5 h-3.5" />}
+            options={[
+              { value: 'all', label: 'All Couriers' },
+              ...availableCouriers.map((c) => ({ value: c.key, label: c.name })),
+            ]}
+          />
 
           {/* Print Status Filter */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-neutral-400 font-medium">Label Status:</span>
-            <select
-              value={printFilter}
-              onChange={(e) => setPrintFilter(e.target.value as any)}
-              className="px-2.5 py-1 rounded-lg bg-neutral-900 border border-white/10 text-xs text-neutral-200 focus:outline-none focus:border-orange-500 cursor-pointer"
-            >
-              <option value="all">All Status</option>
-              <option value="printed">Printed Labels</option>
-              <option value="unprinted">Not Printed</option>
-            </select>
-          </div>
+          <FilterSelect
+            label="Label Status"
+            value={printFilter}
+            onChange={(val) => setPrintFilter(val as any)}
+            icon={<Printer className="w-3.5 h-3.5" />}
+            options={[
+              { value: 'all', label: 'All Status' },
+              { value: 'printed', label: 'Printed Labels' },
+              { value: 'unprinted', label: 'Not Printed' },
+            ]}
+          />
 
           {/* Clear Filters */}
           {(courierFilter !== 'all' || printFilter !== 'all' || activeTab !== 'ALL' || searchQuery.trim()) && (
@@ -1042,18 +1037,16 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
 
           <div className="flex items-center gap-3">
             {/* Per Page Selector */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-neutral-400 font-medium">Per page:</span>
-              <select
-                value={pageSize}
-                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-                className="px-2 py-1 rounded-lg bg-neutral-900 border border-white/15 text-xs text-white font-mono cursor-pointer focus:outline-none focus:border-orange-500"
-              >
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-                <option value={200}>200</option>
-              </select>
-            </div>
+            <FilterSelect
+              label="Per page"
+              value={String(pageSize)}
+              onChange={(val) => handlePageSizeChange(Number(val))}
+              options={[
+                { value: '50', label: '50' },
+                { value: '100', label: '100' },
+                { value: '200', label: '200' },
+              ]}
+            />
 
             {/* Page Navigation */}
             <div className="flex items-center gap-1">

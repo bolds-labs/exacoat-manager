@@ -1551,10 +1551,16 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 								<p style="margin: 0; font-size: 12px; color: #71717a; line-height: 1.5;">
 									Generates 240x240 and 720x720 thumbnails for all media attachments. Full master images for configurator swatches and layers are untouched.
 								</p>
-								<label style="display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; color: #f3aa18; font-size: 12px; font-weight: 600; cursor: pointer;">
-									<input type="checkbox" id="regen-thumbs-only-missing" value="1" checked>
-									Only generate missing thumbnails (skip intact files)
-								</label>
+								<div style="display: flex; flex-direction: column; gap: 6px; margin-top: 12px;">
+									<label style="display: inline-flex; align-items: center; gap: 8px; color: #f3aa18; font-size: 12px; font-weight: 600; cursor: pointer;">
+										<input type="checkbox" id="regen-thumbs-products-only" value="1" checked>
+										Prioritize product attachments only (~300 store items, fast)
+									</label>
+									<label style="display: inline-flex; align-items: center; gap: 8px; color: #a1a1aa; font-size: 12px; font-weight: 500; cursor: pointer;">
+										<input type="checkbox" id="regen-thumbs-only-missing" value="1" checked>
+										Only generate missing thumbnails (skip intact files)
+									</label>
+								</div>
 							</div>
 							<div>
 								<button type="button" id="btn-regen-thumbs" class="ex-btn ex-btn-primary" style="width: 100%; justify-content: center;">
@@ -2101,6 +2107,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	// 1-Click Batch Regenerate Thumbnails (Chunked Runner)
 	const btnRegenThumbs = document.getElementById('btn-regen-thumbs');
 	const chkOnlyMissing = document.getElementById('regen-thumbs-only-missing');
+	const chkProductsOnly = document.getElementById('regen-thumbs-products-only');
 	const mediaOpsProgress = document.getElementById('media-ops-progress');
 	const mediaOpsStatus = document.getElementById('media-ops-status');
 	const mediaOpsPct = document.getElementById('media-ops-pct');
@@ -2109,9 +2116,10 @@ document.addEventListener('DOMContentLoaded', function() {
 	if (btnRegenThumbs) {
 		btnRegenThumbs.addEventListener('click', async function() {
 			const onlyMissing = chkOnlyMissing ? chkOnlyMissing.checked : true;
+			const productsOnly = chkProductsOnly ? chkProductsOnly.checked : true;
 			const confirmMsg = onlyMissing
-				? 'Scan Media Library and generate missing 240x240 & 720x720 thumbnails for Exacoat? (Intact files will be skipped)'
-				: 'Force re-generate all 240x240 & 720x720 thumbnails for all images? (This will reprocess every attachment)';
+				? (productsOnly ? 'Scan store product attachments and generate missing 240x240 & 720x720 thumbnails for Exacoat?' : 'Scan ALL Media Library attachments and generate missing 240x240 & 720x720 thumbnails for Exacoat?')
+				: 'Force re-generate all 240x240 & 720x720 thumbnails? (This will reprocess matching attachments)';
 			if (!confirm(confirmMsg)) return;
 
 			btnRegenThumbs.disabled = true;
@@ -2134,7 +2142,8 @@ document.addEventListener('DOMContentLoaded', function() {
 							action: 'exacoat_regenerate_thumbnails',
 							offset: String(offset),
 							batch_size: String(batchSize),
-							only_missing: onlyMissing ? '1' : '0'
+							only_missing: onlyMissing ? '1' : '0',
+							products_only: productsOnly ? '1' : '0'
 						});
 						resp = await fetch(ajaxurl, { method: 'POST', body });
 						text = await resp.text();
