@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.0.51.zip?v=0.0.51",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-19T16:32:09.242Z",
+  "last_updated": "2026-09-19T16:35:25.986Z",
   "sections": {
     "description": "The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.",
     "changelog": "### Version 0.0.51\n- Fixed PHP fatal error in manual warranty and redeem claim creation\n- Added timespan RMA analytics with Warranty and Redeem breakdowns across channels\n- Separated Warranty and Redeem claims into dedicated tabs\n- Expanded Shopee and TikTok synchronization limits up to 250 orders, cache retention up to 1,000, and live on-demand order lookups"

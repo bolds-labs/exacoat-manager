@@ -2066,13 +2066,83 @@ class Exacoat_Warranty_Manager {
 			], 500 );
 		}
 
+		if ( 'Redeem' === $type || 'redeem' === strtolower( $type ) ) {
+			$type_clause = [
+				'relation' => 'OR',
+				[
+					'key'     => '_rma_order_type',
+					'value'   => [ 'Redeem', 'redeem' ],
+					'compare' => 'IN',
+				],
+				[
+					'key'     => '_is_redeem',
+					'value'   => 'yes',
+					'compare' => '=',
+				],
+				[
+					'key'     => '_is_redeem_claim',
+					'value'   => 'yes',
+					'compare' => '=',
+				],
+				[
+					'key'     => '_order_badge',
+					'value'   => [ 'REDEEM', 'Redeem', 'redeem' ],
+					'compare' => 'IN',
+				],
+			];
+		} elseif ( 'Warranty' === $type || 'warranty' === strtolower( $type ) ) {
+			$type_clause = [
+				'relation' => 'OR',
+				[
+					'key'     => '_rma_order_type',
+					'value'   => [ 'Warranty', 'warranty' ],
+					'compare' => 'IN',
+				],
+				[
+					'key'     => '_is_warranty',
+					'value'   => 'yes',
+					'compare' => '=',
+				],
+				[
+					'key'     => '_is_warranty_claim',
+					'value'   => 'yes',
+					'compare' => '=',
+				],
+				[
+					'key'     => '_order_badge',
+					'value'   => [ 'WARRANTY', 'Warranty', 'warranty' ],
+					'compare' => 'IN',
+				],
+			];
+		} else {
+			$type_clause = [
+				'relation' => 'OR',
+				[
+					'key'     => '_rma_order_type',
+					'value'   => [ 'Warranty', 'Redeem', 'warranty', 'redeem' ],
+					'compare' => 'IN',
+				],
+				[
+					'key'     => '_is_redeem',
+					'value'   => 'yes',
+					'compare' => '=',
+				],
+				[
+					'key'     => '_is_warranty',
+					'value'   => 'yes',
+					'compare' => '=',
+				],
+				[
+					'key'     => '_order_badge',
+					'value'   => [ 'WARRANTY', 'REDEEM' ],
+					'compare' => 'IN',
+				],
+			];
+		}
+
 		$meta_query = [
 			'relation' => 'AND',
-			[
-				'key'     => '_rma_order_type',
-				'value'   => in_array( $type, [ 'Warranty', 'Redeem' ], true ) ? $type : [ 'Warranty', 'Redeem' ],
-				'compare' => in_array( $type, [ 'Warranty', 'Redeem' ], true ) ? '=' : 'IN',
-			],
+			$type_clause,
 		];
 
 		if ( ! empty( $status ) && 'all' !== $status ) {
@@ -2152,7 +2222,12 @@ class Exacoat_Warranty_Manager {
 			}
 
 			$order_id       = $order->get_id();
-			$order_type     = $order->get_meta( '_rma_order_type' ) ?: 'Warranty';
+			$raw_type       = (string) $order->get_meta( '_rma_order_type' );
+			$is_redeem_flag = ( 'redeem' === strtolower( $raw_type ) )
+				|| ( 'yes' === (string) $order->get_meta( '_is_redeem' ) )
+				|| ( 'yes' === (string) $order->get_meta( '_is_redeem_claim' ) )
+				|| ( 'REDEEM' === strtoupper( (string) $order->get_meta( '_order_badge' ) ) );
+			$order_type     = $is_redeem_flag ? 'Redeem' : 'Warranty';
 			$parent_id      = $order->get_meta( '_rma_original_invoice' );
 			$orig_number    = $order->get_meta( '_rma_original_order_number' ) ?: $parent_id;
 			$mp_channel     = $order->get_meta( '_rma_marketplace_channel' ) ?: ( empty( $parent_id ) ? 'Web' : ( is_numeric( $parent_id ) ? 'Web' : 'Marketplace' ) );
@@ -2255,9 +2330,25 @@ class Exacoat_Warranty_Manager {
 		];
 
 		$all_rma = self::query_order_ids_by_meta( [
+			'relation' => 'OR',
 			[
 				'key'     => '_rma_order_type',
-				'value'   => [ 'Warranty', 'Redeem' ],
+				'value'   => [ 'Warranty', 'Redeem', 'warranty', 'redeem' ],
+				'compare' => 'IN',
+			],
+			[
+				'key'     => '_is_redeem',
+				'value'   => 'yes',
+				'compare' => '=',
+			],
+			[
+				'key'     => '_is_warranty',
+				'value'   => 'yes',
+				'compare' => '=',
+			],
+			[
+				'key'     => '_order_badge',
+				'value'   => [ 'WARRANTY', 'REDEEM' ],
 				'compare' => 'IN',
 			],
 		] );
@@ -2269,10 +2360,15 @@ class Exacoat_Warranty_Manager {
 				if ( ! $rma_order ) {
 					continue;
 				}
-				$o_type   = $rma_order->get_meta( '_rma_order_type' ) ?: 'Warranty';
-				$o_stat   = $rma_order->get_meta( '_rma_status' );
-				$o_ship   = (float) $rma_order->get_shipping_total();
-				$order_ts = $rma_order->get_date_created() ? $rma_order->get_date_created()->getTimestamp() : 0;
+				$raw_o_type     = (string) $rma_order->get_meta( '_rma_order_type' );
+				$is_o_redeem    = ( 'redeem' === strtolower( $raw_o_type ) )
+					|| ( 'yes' === (string) $rma_order->get_meta( '_is_redeem' ) )
+					|| ( 'yes' === (string) $rma_order->get_meta( '_is_redeem_claim' ) )
+					|| ( 'REDEEM' === strtoupper( (string) $rma_order->get_meta( '_order_badge' ) ) );
+				$o_type         = $is_o_redeem ? 'Redeem' : 'Warranty';
+				$o_stat         = $rma_order->get_meta( '_rma_status' ) ?: ( $rma_order->has_status( [ 'processing', 'completed', 'shipped', 'ready-to-ship' ] ) ? 'approved' : ( $rma_order->has_status( [ 'cancelled', 'failed' ] ) ? 'rejected' : 'pending_review' ) );
+				$o_ship         = (float) $rma_order->get_shipping_total();
+				$order_ts       = $rma_order->get_date_created() ? $rma_order->get_date_created()->getTimestamp() : 0;
 
 				$raw_chan = strtolower( (string) $rma_order->get_meta( '_rma_marketplace_channel' ) );
 				if ( str_contains( $raw_chan, 'shopee' ) ) {
@@ -2287,20 +2383,23 @@ class Exacoat_Warranty_Manager {
 
 				if ( 'Redeem' === $o_type ) {
 					$stats['redeem_count']++;
-					$stats['waived_count']++;
 				} else {
 					$stats['warranty_count']++;
-					if ( 0.0 === $o_ship ) {
-						$stats['waived_count']++;
-					}
 				}
 
-				if ( 'approved' === $o_stat ) {
-					$stats['approved_count']++;
-				} elseif ( 'rejected' === $o_stat ) {
-					$stats['rejected_count']++;
-				} else {
-					$stats['pending_count']++;
+				// Only count status in quick KPI stats if order type matches requested tab type
+				$matches_tab_type = ( 'all' === $type ) || ( strtolower( $type ) === strtolower( $o_type ) );
+				if ( $matches_tab_type ) {
+					if ( 'Redeem' === $o_type || 0.0 === $o_ship ) {
+						$stats['waived_count']++;
+					}
+					if ( 'approved' === $o_stat ) {
+						$stats['approved_count']++;
+					} elseif ( 'rejected' === $o_stat ) {
+						$stats['rejected_count']++;
+					} else {
+						$stats['pending_count']++;
+					}
 				}
 
 				$type_key = ( 'Redeem' === $o_type ) ? 'redeem' : 'warranty';

@@ -453,18 +453,59 @@ export const RmaClaimsPage: React.FC = () => {
                   </span>
                 </div>
                 <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-zinc-200/60 dark:border-white/[0.04] text-center font-mono">
-                  <div className="p-1.5 rounded-lg bg-zinc-100 dark:bg-white/[0.03]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChannelFilter((prev) => (prev === 'Web' ? 'all' : 'Web'));
+                      setPage(1);
+                    }}
+                    className={clsx(
+                      'p-1.5 rounded-lg transition-all cursor-pointer text-left',
+                      channelFilter === 'Web'
+                        ? 'bg-zinc-800 text-white ring-2 ring-emerald-500 dark:bg-white/[0.1]'
+                        : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]'
+                    )}
+                    title="Click to filter by Web orders"
+                  >
                     <div className="text-[10px] text-zinc-500 dark:text-neutral-400">Web</div>
                     <div className="text-xs font-bold text-zinc-900 dark:text-white">{p.channel_totals.web}</div>
-                  </div>
-                  <div className="p-1.5 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChannelFilter((prev) => (prev === 'Shopee' ? 'all' : 'Shopee'));
+                      setPage(1);
+                    }}
+                    className={clsx(
+                      'p-1.5 rounded-lg border transition-all cursor-pointer text-left',
+                      channelFilter === 'Shopee'
+                        ? 'bg-orange-500/20 border-orange-500 ring-2 ring-orange-500'
+                        : 'bg-orange-500/10 hover:bg-orange-500/15 border-orange-500/20'
+                    )}
+                    title="Click to filter by Shopee orders"
+                  >
                     <div className="text-[10px] text-orange-500">Shopee</div>
                     <div className="text-xs font-bold text-orange-400">{p.channel_totals.shopee}</div>
-                  </div>
-                  <div className="p-1.5 rounded-lg bg-sky-500/10 border border-sky-500/20">
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChannelFilter((prev) => (prev === 'TikTok' ? 'all' : 'TikTok'));
+                      setPage(1);
+                    }}
+                    className={clsx(
+                      'p-1.5 rounded-lg border transition-all cursor-pointer text-left',
+                      channelFilter === 'TikTok'
+                        ? 'bg-sky-500/20 border-sky-500 ring-2 ring-sky-500'
+                        : 'bg-sky-500/10 hover:bg-sky-500/15 border-sky-500/20'
+                    )}
+                    title="Click to filter by TikTok Shop orders"
+                  >
                     <div className="text-[10px] text-sky-500">TikTok</div>
                     <div className="text-xs font-bold text-sky-400">{p.channel_totals.tiktok}</div>
-                  </div>
+                  </button>
                 </div>
               </div>
             </div>
@@ -489,16 +530,6 @@ export const RmaClaimsPage: React.FC = () => {
         >
           <ShieldCheck className={clsx('w-3.5 h-3.5', activeTab === 'warranty' ? 'text-emerald-200' : 'text-emerald-500')} />
           <span>Warranty Claims</span>
-          <span
-            className={clsx(
-              'text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold',
-              activeTab === 'warranty'
-                ? 'bg-emerald-800 text-white'
-                : 'bg-zinc-300 dark:bg-white/10 text-zinc-600 dark:text-neutral-400'
-            )}
-          >
-            {stats.warranty_count}
-          </span>
         </button>
 
         <button
@@ -516,16 +547,6 @@ export const RmaClaimsPage: React.FC = () => {
         >
           <RotateCcw className={clsx('w-3.5 h-3.5', activeTab === 'redeem' ? 'text-neutral-950' : 'text-amber-500')} />
           <span>Redeem Claims</span>
-          <span
-            className={clsx(
-              'text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold',
-              activeTab === 'redeem'
-                ? 'bg-amber-800 text-amber-100'
-                : 'bg-zinc-300 dark:bg-white/10 text-zinc-600 dark:text-neutral-400'
-            )}
-          >
-            {stats.redeem_count}
-          </span>
         </button>
 
         <button
@@ -543,16 +564,6 @@ export const RmaClaimsPage: React.FC = () => {
         >
           <RotateCcw className="w-3.5 h-3.5 text-purple-400" />
           <span>30-Day Guarantee</span>
-          <span
-            className={clsx(
-              'text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold',
-              activeTab === 'guarantee'
-                ? 'bg-purple-800 text-purple-100'
-                : 'bg-zinc-300 dark:bg-white/10 text-zinc-600 dark:text-neutral-400'
-            )}
-          >
-            {guaranteeStats.total}
-          </span>
         </button>
       </div>
 
