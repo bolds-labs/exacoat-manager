@@ -24,6 +24,7 @@ import {
   Store,
   ChevronRight,
   Building,
+  Calendar,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -51,7 +52,75 @@ export const ArrangeShipmentModal: React.FC<ArrangeShipmentModalProps> = ({
   const [selectedBranchId, setSelectedBranchId] = useState<number | undefined>(undefined);
   const [selectedAddressId, setSelectedAddressId] = useState<number | undefined>(undefined);
   const [selectedTimeSlotId, setSelectedTimeSlotId] = useState<string>('');
+  const [selectedDateKey, setSelectedDateKey] = useState<string>('');
   const [senderName, setSenderName] = useState('Exacoat Official');
+
+  // Group slots by date
+  const distinctDates = React.useMemo(() => {
+    const slots = parameters?.pickup?.time_slot_list || [];
+    const dateMap = new Map<string, { dateTimestamp: number; dateLabel: string; dateKey: string }>();
+
+    for (const slot of slots) {
+      if (!slot.date) continue;
+      const ts = slot.date > 1e11 ? slot.date : slot.date * 1000;
+      const d = new Date(ts);
+      const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+      if (!dateMap.has(dateKey)) {
+        const now = new Date();
+        const isToday = d.toDateString() === now.toDateString();
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const isTomorrow = d.toDateString() === tomorrow.toDateString();
+
+        const formatted = d.toLocaleDateString('id-ID', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        });
+        const prefix = isToday ? 'Hari Ini (' : isTomorrow ? 'Besok (' : '';
+        const suffix = isToday || isTomorrow ? ')' : '';
+        dateMap.set(dateKey, {
+          dateTimestamp: slot.date,
+          dateLabel: `${prefix}${formatted}${suffix}`,
+          dateKey,
+        });
+      }
+    }
+    return Array.from(dateMap.values());
+  }, [parameters?.pickup?.time_slot_list]);
+
+  useEffect(() => {
+    if (distinctDates.length > 0) {
+      setSelectedDateKey((prev) => {
+        if (prev && distinctDates.some((d) => d.dateKey === prev)) return prev;
+        return distinctDates[0].dateKey;
+      });
+    } else {
+      setSelectedDateKey('');
+    }
+  }, [distinctDates]);
+
+  const availableTimeSlots = React.useMemo(() => {
+    const allSlots = parameters?.pickup?.time_slot_list || [];
+    if (!selectedDateKey || distinctDates.length <= 1) return allSlots;
+    return allSlots.filter((slot) => {
+      if (!slot.date) return true;
+      const ts = slot.date > 1e11 ? slot.date : slot.date * 1000;
+      const d = new Date(ts);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return key === selectedDateKey;
+    });
+  }, [parameters?.pickup?.time_slot_list, selectedDateKey, distinctDates.length]);
+
+  useEffect(() => {
+    if (availableTimeSlots.length > 0) {
+      if (!availableTimeSlots.some((s) => s.pickup_time_id === selectedTimeSlotId)) {
+        setSelectedTimeSlotId(availableTimeSlots[0].pickup_time_id);
+      }
+    }
+  }, [availableTimeSlots, selectedTimeSlotId]);
 
   useEffect(() => {
     if (!isOpen || !order) {
@@ -335,29 +404,96 @@ export const ArrangeShipmentModal: React.FC<ArrangeShipmentModalProps> = ({
               )}
             </div>
 
-            <div>
-              <label className="text-xs font-semibold text-neutral-300 block mb-1">
-                Pickup Time Window
-              </label>
-              {parameters?.pickup?.time_slot_list && parameters.pickup.time_slot_list.length > 0 ? (
+            {distinctDates.length > 1 ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-neutral-300 block mb-1">
+                    Tanggal Pickup
+                  </label>
+                  <select
+                    value={selectedDateKey}
+                    onChange={(e) => {
+                      const newDateKey = e.target.value;
+                      setSelectedDateKey(newDateKey);
+                      const matchingSlots = (parameters?.pickup?.time_slot_list || []).filter((slot) => {
+                        if (!slot.date) return true;
+                        const ts = slot.date > 1e11 ? slot.date : slot.date * 1000;
+                        const d = new Date(ts);
+                        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                        return key === newDateKey;
+                      });
+                      if (matchingSlots.length > 0) {
+                        setSelectedTimeSlotId(matchingSlots[0].pickup_time_id);
+                      }
+                    }}
+                    className="w-full px-3 py-2 rounded-xl bg-neutral-950 border border-white/10 text-white text-xs focus:outline-none focus:border-orange-500/60 transition-colors"
+                  >
+                    {distinctDates.map((d) => (
+                      <option key={d.dateKey} value={d.dateKey}>
+                        {d.dateLabel}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-neutral-300 block mb-1">
+                    Rentang Waktu
+                  </label>
+                  <select
+                    value={selectedTimeSlotId}
+                    onChange={(e) => setSelectedTimeSlotId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-neutral-950 border border-white/10 text-white text-xs focus:outline-none focus:border-orange-500/60 transition-colors"
+                  >
+                    {availableTimeSlots.map((slot: ShopeePickupTimeSlot) => (
+                      <option key={slot.pickup_time_id} value={slot.pickup_time_id}>
+                        {slot.time_text ? `${slot.time_text} WIB` : 'Rentang Waktu Standar'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ) : availableTimeSlots.length > 0 ? (
+              <div>
+                <label className="text-xs font-semibold text-neutral-300 block mb-1">
+                  Pickup Time Window
+                </label>
                 <select
                   value={selectedTimeSlotId}
                   onChange={(e) => setSelectedTimeSlotId(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-neutral-950 border border-white/10 text-white text-xs focus:outline-none focus:border-orange-500/60 transition-colors"
                 >
-                  {parameters.pickup.time_slot_list.map((slot: ShopeePickupTimeSlot) => (
-                    <option key={slot.pickup_time_id} value={slot.pickup_time_id}>
-                      {slot.time_text || (slot.date ? new Date(slot.date * 1000).toLocaleDateString('id-ID') : 'Available Slot')}
-                    </option>
-                  ))}
+                  {availableTimeSlots.map((slot: ShopeePickupTimeSlot) => {
+                    let label = slot.time_text ? `${slot.time_text} WIB` : 'Available Slot';
+                    if (slot.date) {
+                      const ts = slot.date > 1e11 ? slot.date : slot.date * 1000;
+                      const d = new Date(ts);
+                      const formatted = d.toLocaleDateString('id-ID', {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                      });
+                      label = `${formatted} (${slot.time_text ? `${slot.time_text} WIB` : 'Standar'})`;
+                    }
+                    return (
+                      <option key={slot.pickup_time_id} value={slot.pickup_time_id}>
+                        {label}
+                      </option>
+                    );
+                  })}
                 </select>
-              ) : (
+              </div>
+            ) : (
+              <div>
+                <label className="text-xs font-semibold text-neutral-300 block mb-1">
+                  Pickup Time Window
+                </label>
                 <div className="px-3 py-2 rounded-xl bg-neutral-950 border border-white/10 text-neutral-300 text-xs flex items-center gap-2">
                   <Clock className="w-3.5 h-3.5 text-orange-400 shrink-0" />
                   <span>Hari Ini: 13:00 - 17:00 WIB</span>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-300 text-xs flex items-start gap-2">
               <Clock className="w-4 h-4 shrink-0 mt-0.5" />

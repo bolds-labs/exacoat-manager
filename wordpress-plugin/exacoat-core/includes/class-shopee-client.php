@@ -41,7 +41,7 @@ class Exacoat_Shopee_Client {
 			'test_push_partner_key' => self::DEFAULT_TEST_PUSH_KEY,
 			'live_partner_id'       => self::DEFAULT_LIVE_PID,
 			'live_partner_key'      => 'shpk706c666c6f42674755427a546a79445a78417449554e5674616b4b665a4f',
-			'live_push_partner_key' => 'aaaaaaaaaaaaaactd5mbgvzd3cjhmhh48v428zpt6ywwnuosz567nweg42ey8pky',
+			'live_push_partner_key' => '58724959565954534b6d797147587a55505a4f79614243526464424a66686e63',
 			'redirect_url'          => 'https://manager.exacoat.com/shopee/callback',
 			'push_callback_url'     => self::DEFAULT_WEBHOOK_URL,
 			'shop_id'               => 0,
@@ -718,7 +718,20 @@ class Exacoat_Shopee_Client {
 					}
 				}
 			}
-			// Save into cache so future accesses are instant
+
+			// If order is arranged and not yet marked printed, query Shopee shipping document result directly
+			if ( empty( $norm['is_printed'] ) && ! empty( $norm['is_arranged'] ) ) {
+				$doc_res = self::get_shipping_document_result( $clean_sn );
+				if ( ! empty( $doc_res['response']['result_list'][0]['status'] ) ) {
+					$doc_status = strtoupper( (string) $doc_res['response']['result_list'][0]['status'] );
+					$norm['shipping_document_status'] = $doc_status;
+					if ( $doc_status === 'PRINTED' ) {
+						$norm['is_printed'] = true;
+					}
+				}
+			}
+
+			// Save into cache so future accesses are instant across all admin PCs
 			self::update_order_cache_field( $clean_sn, $norm );
 		}
 		return $norm;
