@@ -28,6 +28,7 @@ import {
   ChevronUp,
   RefreshCw,
   Loader2,
+  XCircle,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useToast } from '../../context/ToastContext';
@@ -122,6 +123,7 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
     }
   };
 
+  const isCancelled = (order.order_status || '').toUpperCase() === 'CANCELLED';
   const badge = getStatusBadge(order.order_status);
   const isReadyToShip = ['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'READY_TO_SHIP'].includes(
     (order.order_status || '').toUpperCase()
@@ -140,10 +142,12 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
           <span className="font-mono font-bold text-white text-base">
             #{order.order_id}
           </span>
-          <ShipCountdownBadge
-            shipByDate={order.ship_by_date}
-            shipByTimestamp={order.ship_by_timestamp}
-          />
+          {!isCancelled && (
+            <ShipCountdownBadge
+              shipByDate={order.ship_by_date}
+              shipByTimestamp={order.ship_by_timestamp}
+            />
+          )}
           <button
             type="button"
             onClick={() => handleCopy(order.order_id, 'order_id')}
@@ -177,27 +181,29 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
       <div className="p-5 sm:p-6 space-y-6 text-neutral-200 font-sans">
         {/* Quick Actions Bar */}
         <div className="p-3 rounded-xl bg-neutral-900/80 border border-white/10 flex flex-wrap items-center justify-between gap-2.5">
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => onPrintAwb(order)}
-              className="px-3.5 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm shadow-rose-500/20"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Cetak Label Thermal</span>
-            </button>
-
-            {isReadyToShip && !order.tracking_number && onArrangeShipment && (
+          {!isCancelled && (
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
-                onClick={() => onArrangeShipment(order)}
-                className="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                onClick={() => onPrintAwb(order)}
+                className="px-3.5 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm shadow-rose-500/20"
               >
-                <Truck className="w-4 h-4" />
-                <span>Atur Pengiriman</span>
+                <Printer className="w-4 h-4" />
+                <span>Cetak Label Thermal</span>
               </button>
-            )}
-          </div>
+
+              {isReadyToShip && !order.tracking_number && onArrangeShipment && (
+                <button
+                  type="button"
+                  onClick={() => onArrangeShipment(order)}
+                  className="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Truck className="w-4 h-4" />
+                  <span>Atur Pengiriman</span>
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center gap-2 flex-wrap">
             {onClaimWarranty && (
@@ -334,38 +340,54 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
             </div>
 
             <div>
-              <span className="text-[10px] uppercase font-mono text-neutral-500 block">No. Resi</span>
-              {order.tracking_number ? (
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="font-mono font-bold text-rose-400">{order.tracking_number}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(order.tracking_number, 'resi')}
-                    className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
-                    title="Salin No. Resi"
-                  >
-                    {copiedKey === 'resi' ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    ) : (
-                      <Copy className="w-3.5 h-3.5" />
-                    )}
-                  </button>
-                </div>
+              <span className="text-[10px] uppercase font-mono text-neutral-500 block">Status Pengiriman</span>
+              {isCancelled ? (
+                <span className="text-rose-400 font-semibold mt-0.5 flex items-center gap-1 text-xs">
+                  <XCircle className="w-3.5 h-3.5" />
+                  <span>Pesanan Dibatalkan</span>
+                </span>
               ) : (
-                <span className="text-neutral-500 font-mono mt-0.5 block">N/A</span>
+                <span className="text-neutral-300 mt-0.5 block font-medium">{badge.label}</span>
               )}
             </div>
 
-            <div>
-              <span className="text-[10px] uppercase font-mono text-neutral-500 block">Batas Waktu Pengiriman</span>
-              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                <span className="font-mono text-white font-medium">{order.ship_by_date || 'N/A'}</span>
-                <ShipCountdownBadge
-                  shipByDate={order.ship_by_date}
-                  shipByTimestamp={order.ship_by_timestamp}
-                />
+            {!isCancelled && (
+              <div>
+                <span className="text-[10px] uppercase font-mono text-neutral-500 block">No. Resi</span>
+                {order.tracking_number ? (
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="font-mono font-bold text-rose-400">{order.tracking_number}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(order.tracking_number, 'resi')}
+                      className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                      title="Salin No. Resi"
+                    >
+                      {copiedKey === 'resi' ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-neutral-500 font-mono mt-0.5 block">N/A</span>
+                )}
               </div>
-            </div>
+            )}
+
+            {!isCancelled && (
+              <div>
+                <span className="text-[10px] uppercase font-mono text-neutral-500 block">Batas Waktu Pengiriman</span>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  <span className="font-mono text-white font-medium">{order.ship_by_date || 'N/A'}</span>
+                  <ShipCountdownBadge
+                    shipByDate={order.ship_by_date}
+                    shipByTimestamp={order.ship_by_timestamp}
+                  />
+                </div>
+              </div>
+            )}
 
             {order.package_id && (
               <div>

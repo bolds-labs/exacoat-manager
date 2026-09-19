@@ -44,6 +44,7 @@ import {
   Download,
   X,
   ArrowRight,
+  XCircle,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -331,13 +332,10 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   };
 
   // Status mapping and badge helper (Indonesian marketplace terminology)
-  const getStatusBadge = (status: string, order?: ShopeeOrder) => {
+  const getStatusBadge = (status: string, _order?: ShopeeOrder) => {
     const s = (status || '').toUpperCase();
     switch (s) {
       case 'READY_TO_SHIP':
-        if (order?.order_status === 'PROCESSED' || order?.is_arranged) {
-          return { label: 'Telah Diproses', bg: 'bg-sky-500/10', text: 'text-sky-300', border: 'border-sky-500/20' };
-        }
         return { label: 'Perlu Diproses', bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-500/20' };
       case 'PROCESSED':
         return { label: 'Telah Diproses', bg: 'bg-sky-500/10', text: 'text-sky-300', border: 'border-sky-500/20' };
@@ -362,9 +360,10 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   // Orders matching current status tab
   const ordersInActiveTab = useMemo(() => {
     return orders.filter((order) => {
+      if (activeTab === 'ALL' && ['CANCELLED', 'IN_CANCEL', 'TO_RETURN'].includes(order.order_status)) return false;
       if (activeTab === 'READY_TO_SHIP' && !['READY_TO_SHIP', 'PROCESSED'].includes(order.order_status)) return false;
-      if (activeTab === 'TO_PROCESS' && (order.order_status !== 'READY_TO_SHIP' || order.is_arranged)) return false;
-      if (activeTab === 'PROCESSED' && (order.order_status !== 'PROCESSED' && !order.is_arranged)) return false;
+      if (activeTab === 'TO_PROCESS' && order.order_status !== 'READY_TO_SHIP') return false;
+      if (activeTab === 'PROCESSED' && order.order_status !== 'PROCESSED') return false;
       if (activeTab === 'SHIPPED' && order.order_status !== 'SHIPPED') return false;
       if (activeTab === 'COMPLETED' && !['COMPLETED', 'TO_CONFIRM_RECEIVE'].includes(order.order_status) && !order.is_delivered) return false;
       if (activeTab === 'CLAIMED' && !order.already_claimed) return false;
@@ -381,11 +380,15 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
     [orders]
   );
   const toProcessCount = useMemo(
-    () => orders.filter((o) => o.order_status === 'READY_TO_SHIP' && !o.is_arranged).length,
+    () => orders.filter((o) => o.order_status === 'READY_TO_SHIP').length,
     [orders]
   );
   const processedCount = useMemo(
-    () => orders.filter((o) => o.order_status === 'PROCESSED' || o.is_arranged).length,
+    () => orders.filter((o) => o.order_status === 'PROCESSED').length,
+    [orders]
+  );
+  const cancelledCount = useMemo(
+    () => orders.filter((o) => ['CANCELLED', 'IN_CANCEL', 'TO_RETURN'].includes(o.order_status)).length,
     [orders]
   );
 
@@ -545,7 +548,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
     if (selectedOrdersList.length === 0) return;
 
     const unarrangedOrders = selectedOrdersList.filter(
-      (o) => o.order_status === 'READY_TO_SHIP' && !o.is_arranged
+      (o) => o.order_status === 'READY_TO_SHIP'
     );
 
     if (unarrangedOrders.length > 0) {
@@ -594,7 +597,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   // Bulk Arrange Shipment trigger
   const handleBulkArrange = () => {
     const readyOrders = selectedOrdersList.filter(
-      (o) => o.order_status === 'READY_TO_SHIP' && !o.is_arranged
+      (o) => o.order_status === 'READY_TO_SHIP'
     );
     if (readyOrders.length === 0) {
       showToast('warning', 'Tidak Ada Pesanan', 'Tidak ada pesanan terpilih yang berstatus Perlu Diatur Pengiriman.');
@@ -712,7 +715,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
               { id: 'SHIPPED', label: 'Dikirim' },
               { id: 'COMPLETED', label: 'Selesai' },
               { id: 'CLAIMED', label: 'Claim Warranty' },
-              { id: 'CANCELLED', label: 'Dibatalkan' },
+              { id: 'CANCELLED', label: 'Dibatalkan', count: cancelledCount },
             ] as Array<{ id: StatusTab; label: string; count?: number }>
           ).map((tab) => (
             <button
@@ -889,11 +892,12 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
       ) : (
         <div className="space-y-3">
           {pagedOrders.map((order) => {
+            const isCancelled = ['CANCELLED', 'IN_CANCEL', 'TO_RETURN'].includes(order.order_status);
             const statusBadge = getStatusBadge(order.order_status, order);
             const isClaimed = order.already_claimed;
             const isPrinted = Boolean(order.is_printed || order.shipping_document_status === 'PRINTED');
-            const isArranged = Boolean(order.order_status === 'PROCESSED' || order.is_arranged);
-            const isReadyToShip = order.order_status === 'READY_TO_SHIP' && !isArranged;
+            const isArranged = order.order_status === 'PROCESSED';
+            const isReadyToShip = order.order_status === 'READY_TO_SHIP';
             const canPrint = Boolean(isArranged || ['SHIPPED', 'TO_CONFIRM_RECEIVE', 'COMPLETED'].includes(order.order_status));
             const isSelected = selectedSns.has(order.order_sn);
 
@@ -958,10 +962,12 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                       <span>@{order.buyer_username}</span>
                     </div>
 
-                    <ShipCountdownBadge
-                      shipByTimestamp={order.ship_by_timestamp}
-                      orderStatus={order.order_status}
-                    />
+                    {!isCancelled && (
+                      <ShipCountdownBadge
+                        shipByTimestamp={order.ship_by_timestamp}
+                        orderStatus={order.order_status}
+                      />
+                    )}
 
                     {isClaimed && (
                       <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
@@ -985,30 +991,32 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                       {statusBadge.label}
                     </span>
 
-                    {/* Label Pengiriman Pill: Clickable with Arrow when Perlu Dicetak, Badge when Telah Dicetak */}
-                    {!isPrinted ? (
-                      <button
-                        type="button"
-                        onClick={() => handlePrintShopeeLabel(order)}
-                        className="group px-2.5 py-1 rounded-full font-semibold border flex items-center gap-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/30 transition-all cursor-pointer shadow-2xs hover:shadow-amber-500/10 active:scale-95"
-                        title="Klik untuk mengunduh & mencetak label resmi Shopee"
-                      >
-                        <Printer className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
-                        <span className="text-[10px]">Perlu Dicetak</span>
-                        <ArrowRight className="w-3 h-3 text-amber-400 group-hover:translate-x-0.5 transition-transform" />
-                      </button>
-                    ) : (
-                      <span
-                        className="text-[10px] px-2.5 py-1 rounded-full font-semibold border flex items-center gap-1.5 bg-emerald-500/10 text-emerald-300 border-emerald-500/25"
-                        title="Label pengiriman resmi telah dicetak (Cetak ulang tersedia di menu ⋮)"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Telah Dicetak</span>
-                      </span>
+                    {/* Label Pengiriman Pill: Clickable with Arrow when Perlu Dicetak, Badge when Telah Dicetak (Hidden for cancelled orders) */}
+                    {!isCancelled && (
+                      !isPrinted ? (
+                        <button
+                          type="button"
+                          onClick={() => handlePrintShopeeLabel(order)}
+                          className="group px-2.5 py-1 rounded-full font-semibold border flex items-center gap-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/30 transition-all cursor-pointer shadow-2xs hover:shadow-amber-500/10 active:scale-95"
+                          title="Klik untuk mengunduh & mencetak label resmi Shopee"
+                        >
+                          <Printer className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
+                          <span className="text-[10px]">Perlu Dicetak</span>
+                          <ArrowRight className="w-3 h-3 text-amber-400 group-hover:translate-x-0.5 transition-transform" />
+                        </button>
+                      ) : (
+                        <span
+                          className="text-[10px] px-2.5 py-1 rounded-full font-semibold border flex items-center gap-1.5 bg-emerald-500/10 text-emerald-300 border-emerald-500/25"
+                          title="Label pengiriman resmi telah dicetak (Cetak ulang tersedia di menu ⋮)"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Telah Dicetak</span>
+                        </span>
+                      )
                     )}
 
                     {/* Arrange Shipment Button if ready and unscheduled */}
-                    {isReadyToShip && (
+                    {!isCancelled && isReadyToShip && (
                       <button
                         type="button"
                         onClick={() => {
@@ -1022,9 +1030,10 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                       </button>
                     )}
 
-                    {/* Dropdown Menu for Warranty / Redeem / Print */}
-                    <div className="relative" data-action-menu>
-                      <button
+                    {/* Dropdown Menu for Warranty / Redeem / Print (Hidden for cancelled orders) */}
+                    {!isCancelled && (
+                      <div className="relative" data-action-menu>
+                        <button
                         type="button"
                         onClick={() =>
                           setActiveActionMenuSn(activeActionMenuSn === order.order_sn ? null : order.order_sn)
@@ -1145,6 +1154,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                         </div>
                       )}
                     </div>
+                  )}
 
                     <div className="pl-1 text-neutral-500 hover:text-white transition-colors">
                       <ChevronRight className="w-4 h-4" />
@@ -1221,7 +1231,12 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
 
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-mono uppercase text-neutral-500">Status Pengiriman</span>
-                      {isArranged ? (
+                      {isCancelled ? (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-rose-500/15 text-rose-300 border border-rose-500/30 flex items-center gap-1">
+                          <XCircle className="w-2.5 h-2.5" />
+                          <span>Dibatalkan</span>
+                        </span>
+                      ) : isArranged ? (
                         <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-sky-500/15 text-sky-300 border border-sky-500/30 flex items-center gap-1">
                           <Truck className="w-2.5 h-2.5" />
                           <span>Telah Diatur</span>
@@ -1234,38 +1249,44 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono uppercase text-neutral-500">No. Resi</span>
-                      {order.tracking_number ? (
-                        <span className="font-mono font-bold text-orange-400">{order.tracking_number}</span>
-                      ) : (
-                        <span className="text-neutral-500 font-mono text-[11px]">N/A</span>
-                      )}
-                    </div>
+                    {!isCancelled && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono uppercase text-neutral-500">No. Resi</span>
+                        {order.tracking_number ? (
+                          <span className="font-mono font-bold text-orange-400">{order.tracking_number}</span>
+                        ) : (
+                          <span className="text-neutral-500 font-mono text-[11px]">N/A</span>
+                        )}
+                      </div>
+                    )}
 
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono uppercase text-neutral-500">Label Pengiriman</span>
-                      {isPrinted ? (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded font-mono font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                          <CheckCircle2 className="w-2.5 h-2.5" />
-                          <span>Tercetak</span>
-                        </span>
-                      ) : canPrint ? (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded font-mono font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
-                          <Printer className="w-2.5 h-2.5" />
-                          <span>Belum Dicetak</span>
-                        </span>
-                      ) : (
-                        <span className="text-neutral-500 font-mono text-[10px]">Atur pengiriman dahulu</span>
-                      )}
-                    </div>
+                    {!isCancelled && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono uppercase text-neutral-500">Label Pengiriman</span>
+                        {isPrinted ? (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded font-mono font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                            <CheckCircle2 className="w-2.5 h-2.5" />
+                            <span>Tercetak</span>
+                          </span>
+                        ) : canPrint ? (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded font-mono font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                            <Printer className="w-2.5 h-2.5" />
+                            <span>Belum Dicetak</span>
+                          </span>
+                        ) : (
+                          <span className="text-neutral-500 font-mono text-[10px]">Atur pengiriman dahulu</span>
+                        )}
+                      </div>
+                    )}
 
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono uppercase text-neutral-500">Batas Kirim</span>
-                      <span className="font-mono text-[11px] text-neutral-300">
-                        {order.ship_by_date || 'N/A'}
-                      </span>
-                    </div>
+                    {!isCancelled && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono uppercase text-neutral-500">Batas Kirim</span>
+                        <span className="font-mono text-[11px] text-neutral-300">
+                          {order.ship_by_date || 'N/A'}
+                        </span>
+                      </div>
+                    )}
 
                     <div className="flex items-start gap-2 pt-2 border-t border-white/5">
                       <MapPin className="w-3.5 h-3.5 text-neutral-500 shrink-0 mt-0.5" />

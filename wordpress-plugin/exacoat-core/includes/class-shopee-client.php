@@ -1397,6 +1397,19 @@ class Exacoat_Shopee_Client {
 			$cached = [];
 		}
 
+		// Ensure READY_TO_SHIP orders are never falsely marked as arranged
+		$cache_dirty = false;
+		foreach ( $cached as &$c_ord ) {
+			if ( ( $c_ord['order_status'] ?? '' ) === 'READY_TO_SHIP' && ! empty( $c_ord['is_arranged'] ) ) {
+				$c_ord['is_arranged'] = false;
+				$cache_dirty = true;
+			}
+		}
+		unset( $c_ord );
+		if ( $cache_dirty ) {
+			update_option( self::ORDERS_CACHE_KEY, $cached );
+		}
+
 		// Filter orders
 		$filtered = $cached;
 

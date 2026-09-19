@@ -44,6 +44,7 @@ import {
   Square,
   X,
   Layers,
+  XCircle,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -330,19 +331,18 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
   // Orders matching current status tab
   const ordersInActiveTab = useMemo(() => {
     return orders.filter((order) => {
-      if (activeTab === 'READY_TO_SHIP') {
-        const st = (order.order_status || '').toUpperCase();
+      const st = (order.order_status || '').toUpperCase();
+      if (activeTab === 'ALL') {
+        if (st === 'CANCELLED') return false;
+      } else if (activeTab === 'READY_TO_SHIP') {
         if (!['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'READY_TO_SHIP'].includes(st)) return false;
       } else if (activeTab === 'SHIPPED') {
-        const st = (order.order_status || '').toUpperCase();
         if (!['IN_TRANSIT', 'SHIPPED'].includes(st)) return false;
       } else if (activeTab === 'COMPLETED') {
-        const st = (order.order_status || '').toUpperCase();
         if (!['DELIVERED', 'COMPLETED'].includes(st)) return false;
       } else if (activeTab === 'CLAIMED') {
         if (!order.already_claimed) return false;
       } else if (activeTab === 'CANCELLED') {
-        const st = (order.order_status || '').toUpperCase();
         if (st !== 'CANCELLED') return false;
       }
       return true;
@@ -453,6 +453,10 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
 
   const readyToShipCount = orders.filter((o) =>
     ['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'READY_TO_SHIP'].includes((o.order_status || '').toUpperCase())
+  ).length;
+
+  const cancelledCount = orders.filter((o) =>
+    (o.order_status || '').toUpperCase() === 'CANCELLED'
   ).length;
 
   // Selection handlers
@@ -640,7 +644,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
               { id: 'SHIPPED', label: 'Dikirim' },
               { id: 'COMPLETED', label: 'Selesai' },
               { id: 'CLAIMED', label: 'Claim Warranty' },
-              { id: 'CANCELLED', label: 'Dibatalkan' },
+              { id: 'CANCELLED', label: 'Dibatalkan', count: cancelledCount },
             ] as Array<{ id: StatusTab; label: string; count?: number }>
           ).map((tab) => (
             <button
@@ -818,6 +822,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
       ) : (
         <div className="space-y-3">
           {pagedOrders.map((order) => {
+            const isCancelled = (order.order_status || '').toUpperCase() === 'CANCELLED';
             const badge = getStatusBadge(order.order_status);
             const isReadyToShip = ['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'READY_TO_SHIP'].includes(
               (order.order_status || '').toUpperCase()
@@ -857,10 +862,12 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                       #{order.order_id}
                     </span>
 
-                    <ShipCountdownBadge
-                      shipByDate={order.ship_by_date}
-                      shipByTimestamp={order.ship_by_timestamp}
-                    />
+                    {!isCancelled && (
+                      <ShipCountdownBadge
+                        shipByDate={order.ship_by_date}
+                        shipByTimestamp={order.ship_by_timestamp}
+                      />
+                    )}
 
                     <button
                       type="button"
@@ -912,18 +919,20 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                     </span>
 
                     {/* Quick Print Thermal Label */}
-                    <button
-                      type="button"
-                      onClick={() => handlePrintLabel(order)}
-                      className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                      title="Cetak Label Pengiriman"
-                    >
-                      <Printer className="w-3.5 h-3.5 text-neutral-400" />
-                      <span>Cetak Label</span>
-                    </button>
+                    {!isCancelled && (
+                      <button
+                        type="button"
+                        onClick={() => handlePrintLabel(order)}
+                        className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        title="Cetak Label Pengiriman"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-neutral-400" />
+                        <span>Cetak Label</span>
+                      </button>
+                    )}
 
                     {/* Arrange Shipment Button if ready */}
-                    {isReadyToShip && !order.tracking_number && (
+                    {!isCancelled && isReadyToShip && !order.tracking_number && (
                       <button
                         type="button"
                         onClick={() => handleArrangeShipment(order)}
@@ -940,73 +949,75 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                     )}
 
                     {/* Dropdown Menu for Warranty / Redeem */}
-                    <div className="relative" data-action-menu>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setActiveActionMenuId(activeActionMenuId === order.order_id ? null : order.order_id)
-                        }
-                        className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-white/10 cursor-pointer"
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
+                    {!isCancelled && (
+                      <div className="relative" data-action-menu>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setActiveActionMenuId(activeActionMenuId === order.order_id ? null : order.order_id)
+                          }
+                          className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-white/10 cursor-pointer"
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
 
-                      {activeActionMenuId === order.order_id && (
-                        <div className="absolute right-0 top-full mt-1 w-48 rounded-xl bg-neutral-900 border border-white/10 shadow-xl py-1 z-30 font-sans">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setActiveActionMenuId(null);
-                              onClaimWarranty(order);
-                            }}
-                            className="w-full px-3 py-2 text-left text-xs text-emerald-400 hover:bg-emerald-500/10 flex items-center gap-2 cursor-pointer font-medium"
-                          >
-                            <ShieldCheck className="w-3.5 h-3.5" />
-                            <span>Claim Warranty</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setActiveActionMenuId(null);
-                              onClaimRedeem(order);
-                            }}
-                            className="w-full px-3 py-2 text-left text-xs text-amber-400 hover:bg-amber-500/10 flex items-center gap-2 cursor-pointer font-medium"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            <span>Claim Redeem (Defect)</span>
-                          </button>
-
-                          <div className="my-1 border-t border-white/10" />
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setActiveActionMenuId(null);
-                              handleCopy(order.order_id, `id_${order.order_id}`);
-                            }}
-                            className="w-full px-3 py-2 text-left text-xs text-neutral-300 hover:bg-white/5 flex items-center gap-2 cursor-pointer"
-                          >
-                            <Copy className="w-3.5 h-3.5 text-neutral-500" />
-                            <span>Salin No. Pesanan</span>
-                          </button>
-
-                          {order.tracking_number && (
+                        {activeActionMenuId === order.order_id && (
+                          <div className="absolute right-0 top-full mt-1 w-48 rounded-xl bg-neutral-900 border border-white/10 shadow-xl py-1 z-30 font-sans">
                             <button
                               type="button"
                               onClick={() => {
                                 setActiveActionMenuId(null);
-                                handleCopy(order.tracking_number, `resi_${order.order_id}`);
+                                onClaimWarranty(order);
+                              }}
+                              className="w-full px-3 py-2 text-left text-xs text-emerald-400 hover:bg-emerald-500/10 flex items-center gap-2 cursor-pointer font-medium"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              <span>Claim Warranty</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveActionMenuId(null);
+                                onClaimRedeem(order);
+                              }}
+                              className="w-full px-3 py-2 text-left text-xs text-amber-400 hover:bg-amber-500/10 flex items-center gap-2 cursor-pointer font-medium"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>Claim Redeem (Defect)</span>
+                            </button>
+
+                            <div className="my-1 border-t border-white/10" />
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveActionMenuId(null);
+                                handleCopy(order.order_id, `id_${order.order_id}`);
                               }}
                               className="w-full px-3 py-2 text-left text-xs text-neutral-300 hover:bg-white/5 flex items-center gap-2 cursor-pointer"
                             >
                               <Copy className="w-3.5 h-3.5 text-neutral-500" />
-                              <span>Salin No. Resi</span>
+                              <span>Salin No. Pesanan</span>
                             </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
+
+                            {order.tracking_number && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveActionMenuId(null);
+                                  handleCopy(order.tracking_number, `resi_${order.order_id}`);
+                                }}
+                                className="w-full px-3 py-2 text-left text-xs text-neutral-300 hover:bg-white/5 flex items-center gap-2 cursor-pointer"
+                              >
+                                <Copy className="w-3.5 h-3.5 text-neutral-500" />
+                                <span>Salin No. Resi</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <div className="pl-1 text-neutral-500 hover:text-white transition-colors">
                       <ChevronRight className="w-4 h-4" />
@@ -1082,18 +1093,36 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono uppercase text-neutral-500">No. Resi</span>
-                      <span className="font-mono font-bold text-rose-400">
-                        {order.tracking_number || 'N/A'}
-                      </span>
+                      <span className="text-[10px] font-mono uppercase text-neutral-500">Status Pengiriman</span>
+                      {isCancelled ? (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-rose-500/15 text-rose-300 border border-rose-500/30 flex items-center gap-1">
+                          <XCircle className="w-2.5 h-2.5" />
+                          <span>Dibatalkan</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-neutral-800 text-neutral-300 border border-white/10">
+                          {badge.label}
+                        </span>
+                      )}
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono uppercase text-neutral-500">Batas Kirim</span>
-                      <span className="font-mono text-neutral-300">
-                        {order.ship_by_date || 'N/A'}
-                      </span>
-                    </div>
+                    {!isCancelled && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono uppercase text-neutral-500">No. Resi</span>
+                        <span className="font-mono font-bold text-rose-400">
+                          {order.tracking_number || 'N/A'}
+                        </span>
+                      </div>
+                    )}
+
+                    {!isCancelled && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono uppercase text-neutral-500">Batas Kirim</span>
+                        <span className="font-mono text-neutral-300">
+                          {order.ship_by_date || 'N/A'}
+                        </span>
+                      </div>
+                    )}
 
                     <div className="flex items-start gap-2 pt-2 border-t border-white/5">
                       <MapPin className="w-3.5 h-3.5 text-neutral-500 shrink-0 mt-0.5" />
