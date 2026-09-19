@@ -3518,7 +3518,7 @@ export async function fetchShopeeOrdersDirect(params?: {
   }
 }
 
-export async function syncShopeeOrdersDirect(days = 15, limit = 100): Promise<{
+export async function syncShopeeOrdersDirect(days = 30, limit = 500): Promise<{
   success: boolean;
   orders?: ShopeeOrder[];
   total_synced?: number;
@@ -3933,7 +3933,7 @@ export async function fetchTikTokOrdersDirect(params?: {
   }
 }
 
-export async function syncTikTokOrdersDirect(days = 15, limit = 100): Promise<{
+export async function syncTikTokOrdersDirect(days = 30, limit = 500): Promise<{
   success: boolean;
   orders?: TikTokOrder[];
   total_synced?: number;

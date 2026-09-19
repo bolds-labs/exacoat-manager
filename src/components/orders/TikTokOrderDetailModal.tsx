@@ -213,7 +213,7 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
                 )}
               >
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>{order.already_claimed ? 'Garansi Tercatat' : 'Klaim Garansi'}</span>
+                <span>{order.already_claimed ? 'Claimed' : 'Claim Warranty'}</span>
               </button>
             )}
 
@@ -230,7 +230,7 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
                 )}
               >
                 <RotateCcw className="w-4 h-4 text-amber-400" />
-                <span>{order.already_claimed ? 'Garansi Tercatat' : 'Redeem Hadiah (Cacat)'}</span>
+                <span>{order.already_claimed ? 'Claimed' : 'Claim Redeem (Defect)'}</span>
               </button>
             )}
           </div>
@@ -241,8 +241,8 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
           <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
             <span>
-              Pesanan TikTok ini telah tercatat dalam sistem klaim garansi RMA
-              {order.existing_claim?.existing_order_num ? ` dengan pesanan pengganti #${order.existing_claim.existing_order_num}` : ''}.
+              This TikTok order has already been recorded in RMA claim system
+              {order.existing_claim?.existing_order_num ? ` under replacement order #${order.existing_claim.existing_order_num}` : ''}.
             </span>
           </div>
         )}

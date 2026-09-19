@@ -477,10 +477,10 @@ class Exacoat_TikTok_Client {
 	/**
 	 * Synchronize orders from TikTok Shop Open Platform
 	 */
-	public static function sync_orders( int $days_back = 15, int $max_orders = 100 ): array {
+	public static function sync_orders( int $days_back = 30, int $max_orders = 500 ): array {
 		$start_time = microtime( true );
 		$s = self::get_settings();
-		$max_fetch = min( 250, max( 50, $max_orders ) );
+		$max_fetch = min( 1000, max( 50, $max_orders ) );
 
 		if ( class_exists( 'Exacoat_Logger' ) ) {
 			Exacoat_Logger::log(
@@ -1123,8 +1123,8 @@ class Exacoat_TikTok_Client {
 	}
 
 	public static function rest_sync_orders( \WP_REST_Request $request ): \WP_REST_Response {
-		$days = (int) ( $request->get_param( 'days' ) ?: 15 );
-		$limit = (int) ( $request->get_param( 'limit' ) ?: 100 );
+		$days = (int) ( $request->get_param( 'days' ) ?: 30 );
+		$limit = (int) ( $request->get_param( 'limit' ) ?: 500 );
 		$res = self::sync_orders( $days, $limit );
 		return rest_ensure_response( $res );
 	}

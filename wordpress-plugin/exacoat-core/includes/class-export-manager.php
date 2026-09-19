@@ -1373,7 +1373,7 @@ class Exacoat_Export_Manager {
 		if ( ! $mail_service['ready'] ) {
 			return new WP_REST_Response( [
 				'success' => false,
-				'error'   => 'Layanan email (Plugin ZeptoMail / SMTP) terdeteksi nonaktif di WordPress. Email tidak dikirim karena server staging tidak memiliki relay email aktif (hanya PHP mail() lokal yang tidak dapat mengirim ke email eksternal). Silakan aktifkan kembali plugin ZeptoMail di WordPress admin.',
+				'error'   => 'Email delivery service (ZeptoMail / SMTP plugin) is currently disabled in WordPress. The email was not sent because this server lacks an active outbound email relay (default PHP mail() cannot deliver to external inboxes). Please activate the ZeptoMail plugin in WordPress admin.',
 				'service' => $mail_service,
 			], 400 );
 		}

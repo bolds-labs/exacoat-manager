@@ -15,6 +15,7 @@ import { TikTokSettingsModal } from '../settings/TikTokSettingsModal';
 import { TikTokOrderDetailModal } from './TikTokOrderDetailModal';
 import { FilterSelect } from '../ui/FilterSelect';
 import { ShipCountdownBadge } from './ShipCountdownBadge';
+import { MarketplaceSyncButton } from './MarketplaceSyncButton';
 import { generateTikTokAwbHtml, generateTikTokBatchAwbHtml } from '../../lib/tiktokAwbGenerator';
 import { downloadCsv } from '../../lib/csvExport';
 import {
@@ -169,7 +170,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
   const handleSync = async (days = syncDays) => {
     setIsSyncing(true);
     try {
-      let res = await syncTikTokOrdersDirect(days, 200);
+      let res = await syncTikTokOrdersDirect(days, 500);
 
       if (
         !res.success &&
@@ -184,7 +185,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
             'Cipher Toko Terhubung',
             `Cipher terhubung: ${detectRes.shop_cipher}. Mengulang sinkronisasi pesanan...`
           );
-          res = await syncTikTokOrdersDirect(days, 200);
+          res = await syncTikTokOrdersDirect(days, 500);
         }
       }
 
@@ -558,29 +559,13 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
             <span>Pengaturan</span>
           </button>
 
-          <div className="flex items-center rounded-xl bg-rose-500 overflow-hidden shadow-md shadow-rose-500/20">
-            <button
-              type="button"
-              onClick={() => handleSync(syncDays)}
-              disabled={isSyncing}
-              className="px-3.5 py-2 hover:bg-rose-600 text-white text-xs font-bold flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
-            >
-              <RefreshCw className={clsx('w-3.5 h-3.5', isSyncing && 'animate-spin')} />
-              <span>{isSyncing ? 'Menyinkronkan...' : 'Sinkronkan Pesanan'}</span>
-            </button>
-            <select
-              value={syncDays}
-              onChange={(e) => setSyncDays(Number(e.target.value))}
-              disabled={isSyncing}
-              className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold py-2 px-2 border-l border-rose-400/30 outline-none cursor-pointer"
-              title="Pilih rentang hari pesanan"
-            >
-              <option value={15}>15 hari</option>
-              <option value={30}>30 hari</option>
-              <option value={60}>60 hari</option>
-              <option value={90}>90 hari</option>
-            </select>
-          </div>
+          <MarketplaceSyncButton
+            brand="tiktok"
+            isSyncing={isSyncing}
+            onSync={handleSync}
+            syncDays={syncDays}
+            onSyncDaysChange={setSyncDays}
+          />
         </div>
       </div>
 
@@ -593,7 +578,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
               { id: 'READY_TO_SHIP', label: 'Perlu Dikirim', count: readyToShipCount },
               { id: 'SHIPPED', label: 'Dikirim' },
               { id: 'COMPLETED', label: 'Selesai' },
-              { id: 'CLAIMED', label: 'Klaim Garansi' },
+              { id: 'CLAIMED', label: 'Claim Warranty' },
               { id: 'CANCELLED', label: 'Dibatalkan' },
             ] as Array<{ id: StatusTab; label: string; count?: number }>
           ).map((tab) => (
@@ -854,7 +839,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                     {order.already_claimed && (
                       <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
                         <ShieldCheck className="w-3 h-3" />
-                        <span>Garansi Tercatat</span>
+                        <span>Claimed</span>
                       </span>
                     )}
                   </div>
@@ -923,7 +908,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                             className="w-full px-3 py-2 text-left text-xs text-emerald-400 hover:bg-emerald-500/10 flex items-center gap-2 cursor-pointer font-medium"
                           >
                             <ShieldCheck className="w-3.5 h-3.5" />
-                            <span>Klaim Garansi</span>
+                            <span>Claim Warranty</span>
                           </button>
 
                           <button
@@ -935,7 +920,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                             className="w-full px-3 py-2 text-left text-xs text-amber-400 hover:bg-amber-500/10 flex items-center gap-2 cursor-pointer font-medium"
                           >
                             <RotateCcw className="w-3.5 h-3.5" />
-                            <span>Redeem Hadiah (Cacat)</span>
+                            <span>Claim Redeem (Defect)</span>
                           </button>
 
                           <div className="my-1 border-t border-white/10" />

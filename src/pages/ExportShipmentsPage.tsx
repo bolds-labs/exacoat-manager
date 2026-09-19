@@ -97,13 +97,13 @@ export const ExportShipmentsPage: React.FC = () => {
     try {
       const res = await clearJneEmailSentLog();
       if (res.success) {
-        showToast('info', 'Riwayat Email Direset', 'Catatan pengiriman email JNE berhasil dihapus.');
+        showToast('info', 'Email Log Cleared', 'JNE export email dispatch history cleared.');
         loadStatus();
       } else {
-        showToast('error', 'Gagal Reset', res.error || 'Tidak dapat menghapus riwayat.');
+        showToast('error', 'Reset Failed', res.error || 'Could not clear email dispatch history.');
       }
     } catch (err: any) {
-      showToast('error', 'Gagal Reset', err?.message || 'Error saat mereset riwayat.');
+      showToast('error', 'Reset Failed', err?.message || 'Error occurred while resetting history.');
     }
   };
 
@@ -111,8 +111,8 @@ export const ExportShipmentsPage: React.FC = () => {
     if (status?.jne.mailService && !status.jne.mailService.ready) {
       showToast(
         'error',
-        'Layanan Email Nonaktif',
-        'Plugin ZeptoMail / SMTP di server staging sedang nonaktif. Silakan aktifkan kembali plugin ZeptoMail di WordPress admin.'
+        'Email Service Inactive',
+        'ZeptoMail or SMTP plugin is currently disabled on the server. Please activate ZeptoMail in WordPress admin.'
       );
       return;
     }
@@ -438,7 +438,7 @@ export const ExportShipmentsPage: React.FC = () => {
                 {status?.jne.mailService && !status.jne.mailService.ready && (
                   <div className="text-[11px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-500" />
-                    <span>Layanan ZeptoMail / SMTP nonaktif di WordPress staging.</span>
+                    <span>ZeptoMail / SMTP service is disabled on this WordPress server.</span>
                   </div>
                 )}
                 {status.jne.lastEmailSent && (
@@ -452,7 +452,7 @@ export const ExportShipmentsPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleClearEmailLog}
-                      title="Reset catatan pengiriman email ini"
+                      title="Clear email dispatch record"
                       className="text-zinc-400 hover:text-rose-400 p-0.5 transition-colors shrink-0 cursor-pointer"
                     >
                       <X className="w-3.5 h-3.5" />

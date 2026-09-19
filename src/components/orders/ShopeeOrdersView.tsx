@@ -16,6 +16,7 @@ import { ArrangeShipmentModal } from './ArrangeShipmentModal';
 import { ShopeeOrderDetailModal } from './ShopeeOrderDetailModal';
 import { FilterSelect } from '../ui/FilterSelect';
 import { ShipCountdownBadge } from './ShipCountdownBadge';
+import { MarketplaceSyncButton } from './MarketplaceSyncButton';
 import { downloadCsv } from '../../lib/csvExport';
 import {
   Store,

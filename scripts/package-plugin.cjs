@@ -81,7 +81,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       description: 'The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.',
-      changelog: `### Version ${version}\n- Added transactional mail provider readiness checks (ZeptoMail / SMTP) to prevent false positive email sent status\n- Added direct ZeptoMail API integration with attachments\n- Added clear/reset JNE export email sent log endpoint and UI button\n- Added active mail service warning when ZeptoMail is disabled`,
+      changelog: `### Version ${version}\n- English localization for all email service readiness alerts, dispatch error notices, and sent log reset tools\n- Mail service availability checks (ZeptoMail / SMTP) preventing false positive email status`,
     },
   };
 

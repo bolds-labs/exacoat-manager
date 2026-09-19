@@ -1454,8 +1454,8 @@ class Exacoat_Shopee_Client {
 	}
 
 	public static function rest_sync_orders( \WP_REST_Request $request ): \WP_REST_Response {
-		$days = (int) ( $request->get_param( 'days' ) ?: 15 );
-		$limit = (int) ( $request->get_param( 'limit' ) ?: 100 );
+		$days = (int) ( $request->get_param( 'days' ) ?: 30 );
+		$limit = (int) ( $request->get_param( 'limit' ) ?: 500 );
 		$res = self::sync_orders( $days, $limit );
 		return rest_ensure_response( $res );
 	}

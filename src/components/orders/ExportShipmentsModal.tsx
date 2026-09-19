@@ -61,13 +61,13 @@ export const ExportShipmentsModal: React.FC<ExportShipmentsModalProps> = ({
     try {
       const res = await clearJneEmailSentLog();
       if (res.success) {
-        showToast('info', 'Riwayat Email Direset', 'Catatan pengiriman email JNE berhasil dihapus.');
+        showToast('info', 'Email Log Cleared', 'JNE export email dispatch history cleared.');
         loadStatus();
       } else {
-        showToast('error', 'Gagal Reset', res.error || 'Tidak dapat menghapus riwayat.');
+        showToast('error', 'Reset Failed', res.error || 'Could not clear email dispatch history.');
       }
     } catch (err: any) {
-      showToast('error', 'Gagal Reset', err?.message || 'Error saat mereset riwayat.');
+      showToast('error', 'Reset Failed', err?.message || 'Error occurred while resetting history.');
     }
   };
 
@@ -75,8 +75,8 @@ export const ExportShipmentsModal: React.FC<ExportShipmentsModalProps> = ({
     if (status?.jne.mailService && !status.jne.mailService.ready) {
       showToast(
         'error',
-        'Layanan Email Nonaktif',
-        'Plugin ZeptoMail / SMTP di server staging sedang nonaktif. Silakan aktifkan kembali plugin ZeptoMail di WordPress admin.'
+        'Email Service Inactive',
+        'ZeptoMail or SMTP plugin is currently disabled on the server. Please activate ZeptoMail in WordPress admin.'
       );
       return;
     }
@@ -314,7 +314,7 @@ export const ExportShipmentsModal: React.FC<ExportShipmentsModalProps> = ({
             {status?.jne?.mailService && !status.jne.mailService.ready && (
               <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center gap-2 text-xs text-amber-400">
                 <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
-                <span>Plugin ZeptoMail / SMTP nonaktif di staging. Aktifkan kembali plugin di WordPress admin untuk mengirim email otomatis.</span>
+                <span>ZeptoMail / SMTP service is disabled on this server. Activate ZeptoMail in WordPress admin to enable automatic email dispatch.</span>
               </div>
             )}
 
@@ -329,7 +329,7 @@ export const ExportShipmentsModal: React.FC<ExportShipmentsModalProps> = ({
                 <button
                   type="button"
                   onClick={handleClearEmailLog}
-                  title="Reset status pengiriman email"
+                  title="Clear email dispatch record"
                   className="text-zinc-400 hover:text-rose-400 p-0.5 transition-colors shrink-0 cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
