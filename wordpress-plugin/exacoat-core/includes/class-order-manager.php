@@ -191,7 +191,7 @@ class Exacoat_Order_Manager {
 			$status   = sanitize_text_field( $request->get_param( 'status' ) ?: 'any' );
 			$search   = sanitize_text_field( $request->get_param( 'search' ) ?: '' );
 			$page     = max( 1, intval( $request->get_param( 'page' ) ?: 1 ) );
-			$per_page = max( 1, min( 100, intval( $request->get_param( 'per_page' ) ?: 20 ) ) );
+			$per_page = max( 1, min( 250, intval( $request->get_param( 'per_page' ) ?: 50 ) ) );
 
 			$args = [
 				'limit'    => $per_page,

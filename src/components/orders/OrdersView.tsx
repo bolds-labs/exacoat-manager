@@ -34,14 +34,29 @@ export const OrdersView: React.FC<OrdersViewProps> = () => {
   const [selectedShopeeOrder, setSelectedShopeeOrder] = useState<ShopeeOrder | null>(null);
   const [selectedTikTokOrder, setSelectedTikTokOrder] = useState<TikTokOrder | null>(null);
 
-  const loadOrders = useCallback(async (quiet = false) => {
+  const [pageSize, setPageSize] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('exacoat_orders_per_page');
+      const parsed = parseInt(saved || '50', 10);
+      return [50, 100, 200].includes(parsed) ? parsed : 50;
+    } catch {
+      return 50;
+    }
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [maxPages, setMaxPages] = useState(1);
+
+  const loadOrders = useCallback(async (quiet = false, page = currentPage, limit = pageSize) => {
     try {
       if (!quiet) setIsLoading(true);
       else setIsRefreshing(true);
 
-      const res = await fetchOrdersDirect({ per_page: 50 });
+      const res = await fetchOrdersDirect({ page, per_page: limit });
       if (res.success && Array.isArray(res.orders)) {
         setOrders(res.orders as Order[]);
+        if (typeof res.total_orders === 'number') setTotalOrders(res.total_orders);
+        if (typeof res.max_pages === 'number') setMaxPages(res.max_pages);
       } else {
         if (!quiet) {
           showToast('warning', 'Orders Sync Warning', res.error || 'Could not fetch orders from store.');
@@ -55,11 +70,28 @@ export const OrdersView: React.FC<OrdersViewProps> = () => {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [showToast]);
+  }, [currentPage, pageSize, showToast]);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || (maxPages > 0 && newPage > maxPages) || newPage === currentPage) return;
+    setCurrentPage(newPage);
+    loadOrders(false, newPage, pageSize);
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+    try {
+      localStorage.setItem('exacoat_orders_per_page', String(newSize));
+    } catch {
+      // ignore
+    }
+    loadOrders(false, 1, newSize);
+  };
 
   useEffect(() => {
-    loadOrders();
-  }, [loadOrders]);
+    loadOrders(false, currentPage, pageSize);
+  }, []);
 
   const handleSelectOrder = async (order: Order) => {
     setSelectedOrder(order);
@@ -366,7 +398,13 @@ export const OrdersView: React.FC<OrdersViewProps> = () => {
         orders={orders}
         isLoading={isLoading}
         onSelectOrder={handleSelectOrder}
-        onRefresh={() => loadOrders(false)}
+        onRefresh={() => loadOrders(false, currentPage, pageSize)}
+        currentPage={currentPage}
+        maxPages={maxPages}
+        totalOrders={totalOrders}
+        pageSize={pageSize}
+        onPageChange={handlePageChange}
+        onPageSizeChange={handlePageSizeChange}
       />
         </>
       )}

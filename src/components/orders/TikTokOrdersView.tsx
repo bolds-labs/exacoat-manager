@@ -32,6 +32,7 @@ import {
   User,
   MapPin,
   Tag,
+  ChevronLeft,
   ChevronRight,
   MoreVertical,
   Printer,
@@ -67,6 +68,32 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [isArrangingId, setIsArrangingId] = useState<string | null>(null);
+  const [courierFilter, setCourierFilter] = useState<string>('all');
+  const [trackingFilter, setTrackingFilter] = useState<'all' | 'has-resi' | 'no-resi'>('all');
+  const [pageSize, setPageSize] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('exacoat_orders_per_page');
+      const parsed = parseInt(saved || '50', 10);
+      return [50, 100, 200].includes(parsed) ? parsed : 50;
+    } catch {
+      return 50;
+    }
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    try {
+      localStorage.setItem('exacoat_orders_per_page', String(newSize));
+    } catch {
+      // Ignore
+    }
+    setCurrentPage(1);
+  };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, courierFilter, trackingFilter, searchQuery]);
 
   // Selection & Detail Modal states
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -262,6 +289,15 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
     }
   };
 
+  const availableCouriers = useMemo(() => {
+    const set = new Set<string>();
+    orders.forEach((o) => {
+      const carrier = (o.shipping_carrier || '').trim();
+      if (carrier) set.add(carrier);
+    });
+    return Array.from(set).sort().map((c) => ({ key: c.toUpperCase(), name: c }));
+  }, [orders]);
+
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       // Tab filter
@@ -281,6 +317,19 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
         if (st !== 'CANCELLED') return false;
       }
 
+      // Courier filter
+      if (courierFilter !== 'all') {
+        const carrier = (order.shipping_carrier || '').toUpperCase();
+        if (!carrier.includes(courierFilter)) return false;
+      }
+
+      // Tracking Resi filter
+      if (trackingFilter !== 'all') {
+        const hasResi = Boolean(order.tracking_number && order.tracking_number.trim().length > 0);
+        if (trackingFilter === 'has-resi' && !hasResi) return false;
+        if (trackingFilter === 'no-resi' && hasResi) return false;
+      }
+
       // Search filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -296,7 +345,13 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
 
       return true;
     });
-  }, [orders, activeTab, searchQuery]);
+  }, [orders, activeTab, courierFilter, trackingFilter, searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
+  const pagedOrders = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredOrders.slice(start, start + pageSize);
+  }, [filteredOrders, currentPage, pageSize]);
 
   const readyToShipCount = orders.filter((o) =>
     ['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'READY_TO_SHIP'].includes((o.order_status || '').toUpperCase())
@@ -529,9 +584,59 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
         </div>
       </div>
 
-      {/* Select-All Control Bar */}
-      {filteredOrders.length > 0 && (
-        <div className="px-4 py-2.5 rounded-xl bg-neutral-900/50 border border-white/5 flex items-center justify-between text-xs">
+      {/* Row 2: Secondary Filter Bar (Courier & Tracking Resi) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-neutral-900/50 border border-white/10 text-xs">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Courier Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-neutral-400 font-medium">Courier:</span>
+            <select
+              value={courierFilter}
+              onChange={(e) => setCourierFilter(e.target.value)}
+              className="px-2.5 py-1 rounded-lg bg-neutral-900 border border-white/10 text-xs text-neutral-200 focus:outline-none focus:border-rose-500 cursor-pointer"
+            >
+              <option value="all">All Couriers</option>
+              {availableCouriers.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Tracking Resi Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-neutral-400 font-medium">Tracking:</span>
+            <select
+              value={trackingFilter}
+              onChange={(e) => setTrackingFilter(e.target.value as any)}
+              className="px-2.5 py-1 rounded-lg bg-neutral-900 border border-white/10 text-xs text-neutral-200 focus:outline-none focus:border-rose-500 cursor-pointer"
+            >
+              <option value="all">All Tracking</option>
+              <option value="has-resi">Has Resi</option>
+              <option value="no-resi">Missing Resi</option>
+            </select>
+          </div>
+
+          {/* Clear Filters */}
+          {(courierFilter !== 'all' || trackingFilter !== 'all' || activeTab !== 'ALL' || searchQuery.trim()) && (
+            <button
+              type="button"
+              onClick={() => {
+                setCourierFilter('all');
+                setTrackingFilter('all');
+                setActiveTab('ALL');
+                setSearchQuery('');
+              }}
+              className="text-xs text-neutral-400 hover:text-white underline cursor-pointer"
+            >
+              Reset filters
+            </button>
+          )}
+        </div>
+
+        {/* Select-All Toggle on right */}
+        {filteredOrders.length > 0 && (
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
               type="checkbox"
@@ -548,12 +653,56 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
               Select all ({filteredOrders.length})
             </span>
           </label>
+        )}
+      </div>
 
-          {selectedIds.size > 0 && (
-            <span className="text-rose-400 font-mono font-semibold">
-              {selectedIds.size} selected
+      {/* Row 3: Multiselect Bulk Action Bar (Rendered directly under filters/pills when items are selected) */}
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+            <span className="font-bold text-white">
+              {selectedIds.size} {selectedIds.size === 1 ? 'order' : 'orders'} selected
             </span>
-          )}
+            <span className="text-neutral-600">|</span>
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="text-neutral-400 hover:text-white underline cursor-pointer"
+            >
+              Deselect All
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleBulkPrint}
+              className="px-3 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Bulk Print AWBs</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleBulkArrangeShipment}
+              disabled={isBulkArranging}
+              className="px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-600 text-white font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
+            >
+              <Truck className={clsx('w-3.5 h-3.5', isBulkArranging && 'animate-spin')} />
+              <span>{isBulkArranging ? 'Arranging...' : 'Bulk Arrange'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleBulkExport}
+              className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-white/10 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+            >
+              <Download className="w-3.5 h-3.5 text-neutral-400" />
+              <span>Export CSV</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -573,7 +722,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredOrders.map((order) => {
+          {pagedOrders.map((order) => {
             const badge = getStatusBadge(order.order_status);
             const isReadyToShip = ['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'READY_TO_SHIP'].includes(
               (order.order_status || '').toUpperCase()
@@ -859,52 +1008,55 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
         </div>
       )}
 
-      {/* Floating Bulk Actions Bar */}
-      {selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-y-0 -translate-x-1/2 z-40 bg-[#141414]/95 border border-white/20 shadow-2xl rounded-2xl px-5 py-3 flex items-center gap-3 backdrop-blur-xl max-w-[95vw] overflow-x-auto">
-          <div className="flex items-center gap-2 pr-3 border-r border-white/10 whitespace-nowrap">
-            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-            <span className="text-xs font-bold text-white">
-              {selectedIds.size} {selectedIds.size === 1 ? 'order' : 'orders'} selected
-            </span>
+      {/* Pagination Footer */}
+      {filteredOrders.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 rounded-xl bg-neutral-900/60 border border-white/10 text-xs text-neutral-400">
+          <div>
+            Showing <span className="font-mono font-bold text-white">{(currentPage - 1) * pageSize + 1}</span> to{' '}
+            <span className="font-mono font-bold text-white">
+              {Math.min(currentPage * pageSize, filteredOrders.length)}
+            </span>{' '}
+            of <span className="font-mono font-bold text-white">{filteredOrders.length}</span> orders
           </div>
 
-          <button
-            type="button"
-            onClick={handleBulkPrint}
-            className="px-3.5 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-rose-500/20 whitespace-nowrap"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Bulk Print AWBs</span>
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Per Page Selector */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-neutral-400 font-medium">Per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                className="px-2 py-1 rounded-lg bg-neutral-900 border border-white/15 text-xs text-white font-mono cursor-pointer focus:outline-none focus:border-rose-500"
+              >
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+              </select>
+            </div>
 
-          <button
-            type="button"
-            onClick={handleBulkArrangeShipment}
-            disabled={isBulkArranging}
-            className="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
-          >
-            <Truck className={clsx('w-3.5 h-3.5', isBulkArranging && 'animate-spin')} />
-            <span>{isBulkArranging ? 'Arranging...' : 'Bulk Arrange'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleBulkExport}
-            className="px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
-          >
-            <Download className="w-3.5 h-3.5 text-neutral-400" />
-            <span>Export CSV</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setSelectedIds(new Set())}
-            className="p-2 rounded-xl hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer ml-1"
-            title="Deselect All"
-          >
-            <X className="w-4 h-4" />
-          </button>
+            {/* Page Navigation */}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="px-2.5 py-1 rounded-lg border border-white/10 bg-neutral-900 hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                Prev
+              </button>
+              <span className="px-2 py-1 font-mono text-[11px] text-neutral-300">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="px-2.5 py-1 rounded-lg border border-white/10 bg-neutral-900 hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

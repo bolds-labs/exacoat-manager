@@ -32,6 +32,7 @@ import {
   User,
   MapPin,
   Tag,
+  ChevronLeft,
   ChevronRight,
   MoreVertical,
   Printer,
@@ -67,6 +68,32 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   const [activeActionMenuSn, setActiveActionMenuSn] = useState<string | null>(null);
   const [selectedArrangeOrder, setSelectedArrangeOrder] = useState<ShopeeOrder | null>(null);
   const [isArrangeModalOpen, setIsArrangeModalOpen] = useState(false);
+  const [courierFilter, setCourierFilter] = useState<string>('all');
+  const [printFilter, setPrintFilter] = useState<'all' | 'printed' | 'unprinted'>('all');
+  const [pageSize, setPageSize] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('exacoat_orders_per_page');
+      const parsed = parseInt(saved || '50', 10);
+      return [50, 100, 200].includes(parsed) ? parsed : 50;
+    } catch {
+      return 50;
+    }
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    try {
+      localStorage.setItem('exacoat_orders_per_page', String(newSize));
+    } catch {
+      // Ignore
+    }
+    setCurrentPage(1);
+  };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, courierFilter, printFilter, searchQuery]);
 
   // Selection & Detail Modal state
   const [selectedSns, setSelectedSns] = useState<Set<string>>(new Set());
@@ -261,6 +288,22 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
     }
   };
 
+  const availableCouriers = useMemo(() => {
+    const map = new Map<string, string>();
+    orders.forEach((o) => {
+      const raw = (o.shipping_carrier || '').trim();
+      if (!raw) return;
+      const clean = raw.replace(/[-–—:].*$/, '').trim();
+      if (clean) {
+        const key = clean.toUpperCase();
+        if (!map.has(key)) map.set(key, clean);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([key, name]) => ({ key, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [orders]);
+
   // Filtered orders computation
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
@@ -270,6 +313,19 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
       if (activeTab === 'COMPLETED' && order.order_status !== 'COMPLETED') return false;
       if (activeTab === 'CLAIMED' && !order.already_claimed) return false;
       if (activeTab === 'CANCELLED' && !['CANCELLED', 'IN_CANCEL'].includes(order.order_status)) return false;
+
+      // Courier filter
+      if (courierFilter !== 'all') {
+        const carrier = (order.shipping_carrier || '').toUpperCase();
+        if (!carrier.includes(courierFilter)) return false;
+      }
+
+      // Print status filter
+      if (printFilter !== 'all') {
+        const isPrinted = printedOrderSns.has(order.order_sn);
+        if (printFilter === 'printed' && !isPrinted) return false;
+        if (printFilter === 'unprinted' && isPrinted) return false;
+      }
 
       // Search filter
       if (searchQuery.trim()) {
@@ -297,7 +353,13 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
 
       return true;
     });
-  }, [orders, activeTab, searchQuery]);
+  }, [orders, activeTab, courierFilter, printFilter, printedOrderSns, searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
+  const pagedOrders = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredOrders.slice(start, start + pageSize);
+  }, [filteredOrders, currentPage, pageSize]);
 
   // Selection handlers
   const isAllSelected = filteredOrders.length > 0 && filteredOrders.every((o) => selectedSns.has(o.order_sn));
@@ -521,9 +583,59 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
         </div>
       </div>
 
-      {/* Select-All Control Bar */}
-      {filteredOrders.length > 0 && (
-        <div className="px-4 py-2.5 rounded-xl bg-neutral-900/50 border border-white/5 flex items-center justify-between text-xs">
+      {/* Row 2: Secondary Filter Bar (Courier & Printed Resi) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-neutral-900/50 border border-white/10 text-xs">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Courier Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-neutral-400 font-medium">Courier:</span>
+            <select
+              value={courierFilter}
+              onChange={(e) => setCourierFilter(e.target.value)}
+              className="px-2.5 py-1 rounded-lg bg-neutral-900 border border-white/10 text-xs text-neutral-200 focus:outline-none focus:border-orange-500 cursor-pointer"
+            >
+              <option value="all">All Couriers</option>
+              {availableCouriers.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Print Status Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-neutral-400 font-medium">Label Status:</span>
+            <select
+              value={printFilter}
+              onChange={(e) => setPrintFilter(e.target.value as any)}
+              className="px-2.5 py-1 rounded-lg bg-neutral-900 border border-white/10 text-xs text-neutral-200 focus:outline-none focus:border-orange-500 cursor-pointer"
+            >
+              <option value="all">All Status</option>
+              <option value="printed">Printed Labels</option>
+              <option value="unprinted">Not Printed</option>
+            </select>
+          </div>
+
+          {/* Clear Filters */}
+          {(courierFilter !== 'all' || printFilter !== 'all' || activeTab !== 'ALL' || searchQuery.trim()) && (
+            <button
+              type="button"
+              onClick={() => {
+                setCourierFilter('all');
+                setPrintFilter('all');
+                setActiveTab('ALL');
+                setSearchQuery('');
+              }}
+              className="text-xs text-neutral-400 hover:text-white underline cursor-pointer"
+            >
+              Reset filters
+            </button>
+          )}
+        </div>
+
+        {/* Select-All Toggle on right */}
+        {filteredOrders.length > 0 && (
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
               type="checkbox"
@@ -540,12 +652,55 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
               Select all ({filteredOrders.length})
             </span>
           </label>
+        )}
+      </div>
 
-          {selectedSns.size > 0 && (
-            <span className="text-orange-400 font-mono font-semibold">
-              {selectedSns.size} selected
+      {/* Row 3: Multiselect Bulk Action Bar (Rendered directly under filters/pills when items are selected) */}
+      {selectedSns.size > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-orange-500/10 border border-orange-500/30 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+            <span className="font-bold text-white">
+              {selectedSns.size} {selectedSns.size === 1 ? 'order' : 'orders'} selected
             </span>
-          )}
+            <span className="text-neutral-600">|</span>
+            <button
+              type="button"
+              onClick={() => setSelectedSns(new Set())}
+              className="text-neutral-400 hover:text-white underline cursor-pointer"
+            >
+              Deselect All
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleBulkPrint}
+              className="px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Bulk Print Labels</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleBulkArrange}
+              className="px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-600 text-white font-bold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+            >
+              <Truck className="w-3.5 h-3.5" />
+              <span>Bulk Arrange</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleBulkExport}
+              className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-white/10 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+            >
+              <Download className="w-3.5 h-3.5 text-neutral-400" />
+              <span>Export CSV</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -565,7 +720,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredOrders.map((order) => {
+          {pagedOrders.map((order) => {
             const statusBadge = getStatusBadge(order.order_status);
             const isClaimed = order.already_claimed;
             const isReadyToShip = order.order_status === 'READY_TO_SHIP';
@@ -874,51 +1029,55 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
         </div>
       )}
 
-      {/* Floating Bulk Actions Bar */}
-      {selectedSns.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-y-0 -translate-x-1/2 z-40 bg-[#141414]/95 border border-white/20 shadow-2xl rounded-2xl px-5 py-3 flex items-center gap-3 backdrop-blur-xl max-w-[95vw] overflow-x-auto">
-          <div className="flex items-center gap-2 pr-3 border-r border-white/10 whitespace-nowrap">
-            <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-            <span className="text-xs font-bold text-white">
-              {selectedSns.size} {selectedSns.size === 1 ? 'order' : 'orders'} selected
-            </span>
+      {/* Pagination Footer */}
+      {filteredOrders.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 rounded-xl bg-neutral-900/60 border border-white/10 text-xs text-neutral-400">
+          <div>
+            Showing <span className="font-mono font-bold text-white">{(currentPage - 1) * pageSize + 1}</span> to{' '}
+            <span className="font-mono font-bold text-white">
+              {Math.min(currentPage * pageSize, filteredOrders.length)}
+            </span>{' '}
+            of <span className="font-mono font-bold text-white">{filteredOrders.length}</span> orders
           </div>
 
-          <button
-            type="button"
-            onClick={handleBulkPrint}
-            className="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-orange-500/20 whitespace-nowrap"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Bulk Print Labels</span>
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Per Page Selector */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-neutral-400 font-medium">Per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                className="px-2 py-1 rounded-lg bg-neutral-900 border border-white/15 text-xs text-white font-mono cursor-pointer focus:outline-none focus:border-orange-500"
+              >
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+              </select>
+            </div>
 
-          <button
-            type="button"
-            onClick={handleBulkArrange}
-            className="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
-          >
-            <Truck className="w-3.5 h-3.5" />
-            <span>Bulk Arrange</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleBulkExport}
-            className="px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
-          >
-            <Download className="w-3.5 h-3.5 text-neutral-400" />
-            <span>Export CSV</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setSelectedSns(new Set())}
-            className="p-2 rounded-xl hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer ml-1"
-            title="Deselect All"
-          >
-            <X className="w-4 h-4" />
-          </button>
+            {/* Page Navigation */}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="px-2.5 py-1 rounded-lg border border-white/10 bg-neutral-900 hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                Prev
+              </button>
+              <span className="px-2 py-1 font-mono text-[11px] text-neutral-300">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="px-2.5 py-1 rounded-lg border border-white/10 bg-neutral-900 hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

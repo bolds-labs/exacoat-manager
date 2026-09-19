@@ -31,6 +31,12 @@ export interface OrderTableProps {
   onSelectOrder: (order: Order) => void;
   onRefresh?: () => void;
   onPrintA6?: (order: Order) => void;
+  currentPage?: number;
+  maxPages?: number;
+  totalOrders?: number;
+  pageSize?: number;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (size: number) => void;
 }
 
 export const OrderTable: React.FC<OrderTableProps> = ({
@@ -39,10 +45,18 @@ export const OrderTable: React.FC<OrderTableProps> = ({
   onSelectOrder,
   onRefresh,
   onPrintA6,
+  currentPage = 1,
+  maxPages = 1,
+  totalOrders,
+  pageSize = 50,
+  onPageChange,
+  onPageSizeChange,
 }) => {
   const { showToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [courierFilter, setCourierFilter] = useState('all');
+  const [trackingFilter, setTrackingFilter] = useState<'all' | 'has-resi' | 'no-resi'>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Multi-select state
@@ -115,6 +129,24 @@ export const OrderTable: React.FC<OrderTableProps> = ({
     return { onHold, confirmed, preparing, readyToShip, storePickup, shipped, completed, warranty, redeem };
   }, [orders]);
 
+  const availableCouriers = useMemo(() => {
+    const map = new Map<string, string>();
+    orders.forEach((o) => {
+      const raw = String(o.tracking?.courier || (o as any).shipping_lines?.[0]?.method_title || o.shipping_method_name || '').trim();
+      if (!raw) return;
+      const clean = raw.replace(/[-–—:].*$/, '').trim();
+      if (clean && !clean.startsWith('field_') && clean.toUpperCase() !== 'UNKNOWN') {
+        const key = clean.toUpperCase();
+        if (!map.has(key)) {
+          map.set(key, clean);
+        }
+      }
+    });
+    return Array.from(map.entries())
+      .map(([key, name]) => ({ key, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [orders]);
+
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       // Status filter
@@ -151,6 +183,32 @@ export const OrderTable: React.FC<OrderTableProps> = ({
         }
       }
 
+      // Courier filter
+      if (courierFilter !== 'all') {
+        const orderCourier = String(order.tracking?.courier || (order as any).shipping_lines?.[0]?.method_title || order.shipping_method_name || '').toUpperCase();
+        if (courierFilter === 'PICKUP') {
+          const shippingMethodName = String((order as any).shipping_method || (order as any).shipping_lines?.[0]?.method_title || '').toLowerCase();
+          const shippingAddressStr = `${order.shipping?.address_1 || ''} ${order.shipping?.city || ''} ${order.shipping?.postcode || ''}`.toLowerCase();
+          const isPickup =
+            shippingMethodName.includes('pickup') ||
+            shippingMethodName.includes('store') ||
+            shippingAddressStr.includes('summarecon') ||
+            shippingAddressStr.includes('bekasi store') ||
+            shippingAddressStr.includes('ruby commercial');
+          if (!isPickup) return false;
+        } else if (!orderCourier.includes(courierFilter)) {
+          return false;
+        }
+      }
+
+      // Tracking Resi filter
+      if (trackingFilter !== 'all') {
+        const rawResi = String(order.tracking?.tracking_number || '').trim();
+        const hasResi = rawResi.length > 0 && !rawResi.startsWith('field_');
+        if (trackingFilter === 'has-resi' && !hasResi) return false;
+        if (trackingFilter === 'no-resi' && hasResi) return false;
+      }
+
       // Text query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -173,7 +231,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
       }
       return true;
     });
-  }, [orders, statusFilter, searchQuery]);
+  }, [orders, statusFilter, courierFilter, trackingFilter, searchQuery]);
 
   // Selection handlers
   const isAllSelected = filteredOrders.length > 0 && filteredOrders.every((o) => selectedIds.has(o.id));
@@ -298,52 +356,102 @@ export const OrderTable: React.FC<OrderTableProps> = ({
   return (
     <div className="space-y-4 font-sans">
       {/* Control Bar: Search & Status Filters */}
-      <GlassCard className="p-3 sm:p-4 rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111]">
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-          {/* Status Filter Tabs */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 custom-scrollbar">
-            {[
-              { key: 'all', label: 'All Orders' },
-              { key: 'on-hold', label: 'Waiting for Payment', count: statusCounts.onHold },
-              { key: 'processing', label: 'Confirmed', count: statusCounts.confirmed },
-              { key: 'preparing-order', label: 'Preparing order', count: statusCounts.preparing },
-              { key: 'ready-to-ship', label: 'Waiting for Pickup', count: statusCounts.readyToShip },
-              { key: 'store-pickup', label: 'Store Pickup (SMB)', count: statusCounts.storePickup },
-              { key: 'shipped', label: 'Shipped', count: statusCounts.shipped },
-              { key: 'completed', label: 'Completed', count: statusCounts.completed },
-              { key: 'warranty', label: 'Warranty Claims', count: statusCounts.warranty },
-              { key: 'redeem', label: 'Redeem', count: statusCounts.redeem },
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setStatusFilter(tab.key)}
-                className={clsx(
-                  'px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer border flex items-center gap-1.5',
-                  statusFilter === tab.key
-                    ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 border-zinc-900 dark:border-white shadow-xs'
-                    : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-transparent'
-                )}
+      <GlassCard className="p-3 sm:p-4 rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] space-y-3">
+        {/* Row 1: Status Filter Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+          {[
+            { key: 'all', label: 'All Orders' },
+            { key: 'on-hold', label: 'Waiting for Payment', count: statusCounts.onHold },
+            { key: 'processing', label: 'Confirmed', count: statusCounts.confirmed },
+            { key: 'preparing-order', label: 'Preparing order', count: statusCounts.preparing },
+            { key: 'ready-to-ship', label: 'Waiting for Pickup', count: statusCounts.readyToShip },
+            { key: 'store-pickup', label: 'Store Pickup (SMB)', count: statusCounts.storePickup },
+            { key: 'shipped', label: 'Shipped', count: statusCounts.shipped },
+            { key: 'completed', label: 'Completed', count: statusCounts.completed },
+            { key: 'warranty', label: 'Warranty Claims', count: statusCounts.warranty },
+            { key: 'redeem', label: 'Redeem', count: statusCounts.redeem },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setStatusFilter(tab.key)}
+              className={clsx(
+                'px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer border flex items-center gap-1.5',
+                statusFilter === tab.key
+                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 border-zinc-900 dark:border-white shadow-xs'
+                  : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-transparent'
+              )}
+            >
+              <span>{tab.label}</span>
+              {tab.count !== undefined && tab.count > 0 && (
+                <span
+                  className={clsx(
+                    'px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold',
+                    statusFilter === tab.key
+                      ? tab.key === 'redeem'
+                        ? 'bg-amber-500 text-black font-extrabold'
+                        : 'bg-white/20 text-white dark:bg-black/20 dark:text-black'
+                      : tab.key === 'redeem'
+                      ? 'bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-500/30'
+                      : 'bg-zinc-200 dark:bg-white/10 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-white/10'
+                  )}
+                >
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Row 2: Secondary Filters & Search Bar */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-zinc-100 dark:border-white/5">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Courier Filter */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-zinc-500 font-medium">Courier:</span>
+              <select
+                value={courierFilter}
+                onChange={(e) => setCourierFilter(e.target.value)}
+                className="px-2.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-xs text-zinc-900 dark:text-white focus:outline-none focus:border-[#f3aa18] cursor-pointer"
               >
-                <span>{tab.label}</span>
-                {tab.count !== undefined && tab.count > 0 && (
-                  <span
-                    className={clsx(
-                      'px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold',
-                      statusFilter === tab.key
-                        ? tab.key === 'redeem'
-                          ? 'bg-amber-500 text-black font-extrabold'
-                          : 'bg-white/20 text-white dark:bg-black/20 dark:text-black'
-                        : tab.key === 'redeem'
-                        ? 'bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-500/30'
-                        : 'bg-zinc-200 dark:bg-white/10 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-white/10'
-                    )}
-                  >
-                    {tab.count}
-                  </span>
-                )}
+                <option value="all">All Couriers</option>
+                {availableCouriers.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.name}
+                  </option>
+                ))}
+                <option value="PICKUP">Store Pickup (SMB)</option>
+              </select>
+            </div>
+
+            {/* Tracking Resi Filter */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-zinc-500 font-medium">Tracking:</span>
+              <select
+                value={trackingFilter}
+                onChange={(e) => setTrackingFilter(e.target.value as any)}
+                className="px-2.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-xs text-zinc-900 dark:text-white focus:outline-none focus:border-[#f3aa18] cursor-pointer"
+              >
+                <option value="all">All Tracking</option>
+                <option value="has-resi">Has Resi</option>
+                <option value="no-resi">Missing Resi</option>
+              </select>
+            </div>
+
+            {/* Clear Filters */}
+            {(courierFilter !== 'all' || trackingFilter !== 'all' || statusFilter !== 'all') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCourierFilter('all');
+                  setTrackingFilter('all');
+                  setStatusFilter('all');
+                }}
+                className="px-2 py-1 rounded-lg text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white text-xs underline cursor-pointer"
+              >
+                Reset filters
               </button>
-            ))}
+            )}
           </div>
 
           {/* Search Input and Refresh */}
@@ -364,7 +472,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                 type="button"
                 onClick={onRefresh}
                 disabled={isLoading}
-                className="p-2 rounded-xl bg-zinc-100 dark:bg-[#141414] hover:bg-zinc-200 dark:hover:bg-white/[0.06] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border border-zinc-200 dark:border-white/[0.08] transition-colors disabled:opacity-50 cursor-pointer"
+                className="p-2 rounded-xl bg-zinc-100 dark:bg-[#141414] hover:bg-zinc-200 dark:hover:bg-white/[0.06] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border border-zinc-200 dark:border-white/[0.08] transition-colors disabled:opacity-50 cursor-pointer shrink-0"
                 title="Refresh Orders"
               >
                 <RefreshCw className={clsx('w-4 h-4', isLoading && 'animate-spin text-[#f3aa18]')} />
@@ -372,6 +480,73 @@ export const OrderTable: React.FC<OrderTableProps> = ({
             )}
           </div>
         </div>
+
+        {/* Row 3: Multiselect Bulk Action Bar (Displayed under pills when items are selected) */}
+        {selectedIds.size > 0 && (
+          <div className="pt-3 border-t border-amber-500/20 flex flex-wrap items-center justify-between gap-3 bg-amber-500/[0.06] dark:bg-amber-500/[0.08] rounded-xl px-4 py-2.5">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#f3aa18] animate-pulse" />
+              <span className="text-xs font-bold text-zinc-900 dark:text-white">
+                {selectedIds.size} {selectedIds.size === 1 ? 'order' : 'orders'} selected
+              </span>
+              <span className="text-zinc-400 dark:text-zinc-600">|</span>
+              <button
+                type="button"
+                onClick={() => setSelectedIds(new Set())}
+                className="text-xs text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white underline cursor-pointer"
+              >
+                Deselect All
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Bulk Change Status Selector */}
+              <div className="flex items-center gap-1.5 whitespace-nowrap">
+                <select
+                  value={bulkStatusTarget}
+                  onChange={(e) => setBulkStatusTarget(e.target.value)}
+                  className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-neutral-900 border border-zinc-300 dark:border-white/15 text-xs text-zinc-900 dark:text-neutral-200 focus:outline-none focus:border-[#f3aa18] cursor-pointer"
+                >
+                  <option value="processing">Confirmed (Processing)</option>
+                  <option value="preparing-order">Preparing Order</option>
+                  <option value="ready-to-ship">Waiting for Pickup</option>
+                  <option value="shipped">Shipped</option>
+                  <option value="completed">Completed</option>
+                </select>
+
+                <button
+                  type="button"
+                  onClick={handleBulkChangeStatus}
+                  disabled={isBulkUpdating}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap shadow-xs"
+                >
+                  <RefreshCw className={clsx('w-3.5 h-3.5', isBulkUpdating && 'animate-spin')} />
+                  <span>{isBulkUpdating ? 'Updating...' : 'Update Status'}</span>
+                </button>
+              </div>
+
+              {/* Bulk Print A6 */}
+              <button
+                type="button"
+                onClick={handleBulkPrintA6}
+                className="px-3.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-800 dark:text-neutral-200 border border-zinc-300 dark:border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+              >
+                <Printer className="w-3.5 h-3.5 text-zinc-500 dark:text-neutral-400" />
+                <span>Bulk Print A6</span>
+              </button>
+
+              {/* Bulk Export CSV */}
+              <button
+                type="button"
+                onClick={handleBulkExport}
+                className="px-3.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-800 dark:text-neutral-200 border border-zinc-300 dark:border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+              >
+                <Download className="w-3.5 h-3.5 text-zinc-500 dark:text-neutral-400" />
+                <span>Export CSV</span>
+              </button>
+            </div>
+          </div>
+        )}
       </GlassCard>
 
       {/* Orders Table Container */}
@@ -715,74 +890,59 @@ export const OrderTable: React.FC<OrderTableProps> = ({
             })
           )}
         </div>
-      </GlassCard>
 
-      {/* Floating Bulk Actions Bar */}
-      {selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-y-0 -translate-x-1/2 z-40 bg-[#141414]/95 border border-white/20 shadow-2xl rounded-2xl px-5 py-3 flex items-center gap-3 backdrop-blur-xl max-w-[95vw] overflow-x-auto">
-          <div className="flex items-center gap-2 pr-3 border-r border-white/10 whitespace-nowrap">
-            <span className="w-2 h-2 rounded-full bg-[#f3aa18] animate-pulse" />
-            <span className="text-xs font-bold text-white">
-              {selectedIds.size} {selectedIds.size === 1 ? 'order' : 'orders'} selected
+        {/* Table Pagination Footer */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-zinc-200 dark:border-white/[0.06] bg-zinc-50 dark:bg-[#0e0e0e]/80 text-xs text-zinc-600 dark:text-zinc-400 font-sans">
+          <div className="flex items-center gap-2">
+            <span>
+              Showing <span className="font-mono font-bold text-zinc-900 dark:text-white">{filteredOrders.length === 0 ? 0 : ((currentPage - 1) * pageSize) + 1}</span> to{' '}
+              <span className="font-mono font-bold text-zinc-900 dark:text-white">
+                {Math.min(currentPage * pageSize, totalOrders ?? filteredOrders.length)}
+              </span>{' '}
+              of <span className="font-mono font-bold text-zinc-900 dark:text-white">{totalOrders ?? orders.length}</span> orders
             </span>
           </div>
 
-          {/* Bulk Change Status Selector */}
-          <div className="flex items-center gap-2 whitespace-nowrap">
-            <select
-              value={bulkStatusTarget}
-              onChange={(e) => setBulkStatusTarget(e.target.value)}
-              className="px-2.5 py-1.5 rounded-xl bg-neutral-900 border border-white/15 text-xs text-neutral-200 focus:outline-none focus:border-[#f3aa18] cursor-pointer"
-            >
-              <option value="processing">Confirmed (Processing)</option>
-              <option value="preparing-order">Preparing Order</option>
-              <option value="ready-to-ship">Waiting for Pickup</option>
-              <option value="shipped">Shipped</option>
-              <option value="completed">Completed</option>
-            </select>
+          <div className="flex items-center gap-3">
+            {/* Per Page Selector */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-zinc-500 font-medium">Per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => onPageSizeChange && onPageSizeChange(Number(e.target.value))}
+                className="px-2 py-1 rounded-lg bg-white dark:bg-neutral-900 border border-zinc-300 dark:border-white/15 text-xs text-zinc-900 dark:text-white font-mono cursor-pointer focus:outline-none focus:border-[#f3aa18]"
+              >
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+              </select>
+            </div>
 
-            <button
-              type="button"
-              onClick={handleBulkChangeStatus}
-              disabled={isBulkUpdating}
-              className="px-3.5 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap shadow-sm"
-            >
-              <RefreshCw className={clsx('w-3.5 h-3.5', isBulkUpdating && 'animate-spin')} />
-              <span>{isBulkUpdating ? 'Updating...' : 'Update Status'}</span>
-            </button>
+            {/* Page Navigation */}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => onPageChange && onPageChange(currentPage - 1)}
+                disabled={currentPage <= 1}
+                className="px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-white/10 bg-white dark:bg-neutral-900 hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors font-sans"
+              >
+                Prev
+              </button>
+              <span className="px-2 py-1 font-mono text-[11px]">
+                Page {currentPage} of {Math.max(1, maxPages || 1)}
+              </span>
+              <button
+                type="button"
+                onClick={() => onPageChange && onPageChange(currentPage + 1)}
+                disabled={currentPage >= (maxPages || 1)}
+                className="px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-white/10 bg-white dark:bg-neutral-900 hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors font-sans"
+              >
+                Next
+              </button>
+            </div>
           </div>
-
-          {/* Bulk Print A6 */}
-          <button
-            type="button"
-            onClick={handleBulkPrintA6}
-            className="px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
-          >
-            <Printer className="w-3.5 h-3.5 text-neutral-400" />
-            <span>Bulk Print A6</span>
-          </button>
-
-          {/* Bulk Export CSV */}
-          <button
-            type="button"
-            onClick={handleBulkExport}
-            className="px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
-          >
-            <Download className="w-3.5 h-3.5 text-neutral-400" />
-            <span>Export CSV</span>
-          </button>
-
-          {/* Deselect All */}
-          <button
-            type="button"
-            onClick={() => setSelectedIds(new Set())}
-            className="p-2 rounded-xl hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer ml-1"
-            title="Deselect All"
-          >
-            <X className="w-4 h-4" />
-          </button>
         </div>
-      )}
+      </GlassCard>
 
       {/* Internal A6 Thermal Label Modal for Bulk / Row Print */}
       <ShippingLabelA6Modal
