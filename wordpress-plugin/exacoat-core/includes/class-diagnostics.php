@@ -759,15 +759,14 @@ class Exacoat_Diagnostics {
 					continue;
 				}
 
-				// Check generative prefix
-				if ( preg_match( '/^(gpt-[45]|o[13]|chatgpt|gpt-3\.5)/i', $id ) ) {
-					$models[] = $id;
-				}
+				// Exclude non-generative, audio, and embedding models
+				$models[] = $id;
 			}
 
 			// Sort with latest and most capable models at top
 			usort( $models, function( $a, $b ) {
 				$score = function( $m ) {
+					if ( str_starts_with( $m, 'gpt-5' ) ) return 110;
 					if ( $m === 'gpt-4o' ) return 100;
 					if ( $m === 'gpt-4o-mini' ) return 95;
 					if ( str_starts_with( $m, 'o3-mini' ) ) return 90;

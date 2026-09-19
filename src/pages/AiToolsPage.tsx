@@ -32,26 +32,29 @@ import {
   PrivateSettingStatus
 } from '../lib/wordpressBridge';
 
-const DEFAULT_DESCRIPTION_PROMPT = `You are writing an SEO-optimized descriptive overview for an Exacoat collection, theme, or series page.
+const DEFAULT_DESCRIPTION_PROMPT = `You are writing an on-page descriptive overview for an Exacoat device skin collection or texture series.
 
 Context:
-- A collection represents a device skin design theme, texture series, or cultural subject with an established audience or fanbase.
-- The description explains the theme, its defining aesthetic traits, and visual appeal for device wraps and protective skins.
+- Exacoat designs precision-engineered vinyl skins and protective wraps for smartphones, laptops, gaming consoles, and accessories.
+- Each collection represents a specific finish, material texture, colorway, or design aesthetic.
 
-SEO instructions:
-- Mention the collection or theme name naturally in the first paragraph only.
-- Use semantically related terms such as design, precision, texture, finish, aesthetic, and durability where appropriate.
-- Optimize for clarity and readability first. Avoid keyword stuffing.
-- Write as primary on-page content intended for search indexing.
+Brand Voice and Tone:
+- Confident, clean, understated, and authentic.
+- No exclamation marks.
+- No fake technical jargon or exaggerated marketing claims (e.g. avoid phrases like "aerospace-grade metal", "revolutionary shield", or "ultimate game-changing protection").
+- Ground descriptions in real tactile and visual characteristics: finish (matte, textured, brushed, satin), grip enhancement, scratch defense without added bulk, and clean precision fit.
+- Specific yet accessible: explain the look, feel, and aesthetic appeal of the collection naturally.
 
-Writing instructions:
+SEO Instructions:
+- Mention the collection or series name naturally in the first paragraph only.
+- Use semantically relevant terms such as design, precision, texture, finish, minimal bulk, and everyday durability.
+- Optimize for readability and search relevance. Avoid keyword stuffing.
+
+Writing Rules:
 - Write exactly 3 short paragraphs.
-- Total length must be between 100 and 150 words, strictly enforced.
-- Be informative, concise, and focused on design characteristics.
+- Total word count must be between 100 and 150 words, strictly enforced.
 - Plain text only.
-- Do not use em dashes like — or long dashes of any kind. Use commas, periods, or parentheses instead.
-- No promotional or exaggerated sales claims.
-- Do not mention classical art, museum prints, or artists.`;
+- Do not use em dashes like - or long dashes of any kind. Use commas, periods, or parentheses instead.`;
 
 const DEFAULT_GEMINI_MODELS = [
   'gemini-2.5-flash',
@@ -76,6 +79,10 @@ export const AiToolsPage: React.FC = () => {
   // Settings State - hydrate from local cache on mount
   const [settings, setSettings] = useState<WordPressPluginSettings>(() => {
     const cached = getCachedPluginSettings();
+    const cachedPrompt = cached.fandom_system_prompt || '';
+    const isLegacyPrompt = cachedPrompt.includes('museum prints') || cachedPrompt.includes('classical art');
+    const initialPrompt = isLegacyPrompt || !cachedPrompt ? DEFAULT_DESCRIPTION_PROMPT : cachedPrompt;
+
     return {
       gemini_api_key: cached.gemini_api_key || '',
       vision_provider: cached.vision_provider || cached.ai_provider || 'gemini',
@@ -87,7 +94,7 @@ export const AiToolsPage: React.FC = () => {
       fandom_provider: cached.fandom_provider || cached.fandom_ai_provider || 'openai',
       fandom_model: cached.openai_model || cached.fandom_model || 'gpt-4o-mini',
       openai_model: cached.openai_model || cached.fandom_model || 'gpt-4o-mini',
-      fandom_system_prompt: cached.fandom_system_prompt || DEFAULT_DESCRIPTION_PROMPT,
+      fandom_system_prompt: initialPrompt,
     };
   });
   const [secretStatus, setSecretStatus] = useState<PrivateSettingStatus>({});
@@ -175,6 +182,10 @@ export const AiToolsPage: React.FC = () => {
       const loadedGeminiModel = res.settings.gemini_model || res.settings.ai_model || 'gemini-2.5-flash';
       const loadedOpenAiModel = res.settings.openai_model || res.settings.fandom_model || 'gpt-4o-mini';
 
+      const currentPrompt = res.settings?.fandom_system_prompt || '';
+      const isLegacyPrompt = currentPrompt.includes('museum prints') || currentPrompt.includes('classical art');
+      const resolvedPrompt = isLegacyPrompt || !currentPrompt ? DEFAULT_DESCRIPTION_PROMPT : currentPrompt;
+
       setSettings(prev => ({
         ...prev,
         ...res.settings,
@@ -182,7 +193,7 @@ export const AiToolsPage: React.FC = () => {
         ai_model: loadedGeminiModel,
         openai_model: loadedOpenAiModel,
         fandom_model: loadedOpenAiModel,
-        fandom_system_prompt: res.settings?.fandom_system_prompt || DEFAULT_DESCRIPTION_PROMPT,
+        fandom_system_prompt: resolvedPrompt,
       }));
 
       if (loadedGeminiModel) {
@@ -268,6 +279,33 @@ export const AiToolsPage: React.FC = () => {
     } else {
       showToast('info', 'Model Updated Locally', `Model set to ${val}`);
     }
+  };
+
+  const [showCustomOpenAiInput, setShowCustomOpenAiInput] = useState(false);
+  const [customOpenAiModel, setCustomOpenAiModel] = useState('');
+  const [showCustomGeminiInput, setShowCustomGeminiInput] = useState(false);
+  const [customGeminiModel, setCustomGeminiModel] = useState('');
+
+  const handleApplyCustomOpenAiModel = async () => {
+    const trimmed = customOpenAiModel.trim();
+    if (!trimmed) {
+      showToast('warning', 'Model ID Required', 'Please enter a model ID (e.g. gpt-5.6-terra).');
+      return;
+    }
+    await handleOpenAiModelChange(trimmed);
+    setShowCustomOpenAiInput(false);
+    setCustomOpenAiModel('');
+  };
+
+  const handleApplyCustomGeminiModel = async () => {
+    const trimmed = customGeminiModel.trim();
+    if (!trimmed) {
+      showToast('warning', 'Model ID Required', 'Please enter a model ID (e.g. gemini-2.5-pro).');
+      return;
+    }
+    await handleGeminiModelChange(trimmed);
+    setShowCustomGeminiInput(false);
+    setCustomGeminiModel('');
   };
 
   const handleFetchGeminiModels = async () => {
@@ -431,6 +469,9 @@ export const AiToolsPage: React.FC = () => {
       if (m === activeModel) {
         badge = 'Active';
         badgeVariant = 'lime';
+      } else if (m.startsWith('gpt-5')) {
+        badge = 'Next-Gen';
+        badgeVariant = 'lime';
       } else if (m.includes('o3-mini')) {
         badge = 'Reasoning';
         badgeVariant = 'amber';
@@ -451,7 +492,9 @@ export const AiToolsPage: React.FC = () => {
         badgeVariant = 'zinc';
       }
 
-      if (m.includes('o3-mini')) {
+      if (m.startsWith('gpt-5')) {
+        subtitle = 'OpenAI Next-Generation Model';
+      } else if (m.includes('o3-mini')) {
         subtitle = 'High-Intelligence Coding & Reasoning (Latest)';
       } else if (m === 'o1') {
         subtitle = 'Complex Reasoning & Deep Thinking';
@@ -537,6 +580,44 @@ export const AiToolsPage: React.FC = () => {
                     onChange={handleGeminiModelChange}
                     placeholder="Select Gemini Model"
                   />
+                  <div className="flex items-center justify-between text-[11px] mt-1.5 px-0.5">
+                    <span className="text-zinc-500 dark:text-zinc-400">
+                      Active: <span className="font-mono text-zinc-700 dark:text-zinc-300 font-bold">{settings.gemini_model || 'gemini-2.5-flash'}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomGeminiInput(!showCustomGeminiInput)}
+                      className="text-blue-500 dark:text-blue-400 hover:underline cursor-pointer font-medium"
+                    >
+                      {showCustomGeminiInput ? 'Close Custom' : '+ Custom Model'}
+                    </button>
+                  </div>
+
+                  {showCustomGeminiInput && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <input
+                        type="text"
+                        value={customGeminiModel}
+                        onChange={e => setCustomGeminiModel(e.target.value)}
+                        placeholder="e.g. gemini-2.5-pro, custom-gemini"
+                        className="flex-1 p-2 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 text-xs font-mono text-zinc-900 dark:text-white focus:outline-hidden focus:border-[#f3aa18]"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleApplyCustomGeminiModel}
+                      >
+                        Apply
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => setShowCustomGeminiInput(false)}
+                        className="text-xs text-zinc-400 hover:text-white px-1 cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -628,6 +709,44 @@ export const AiToolsPage: React.FC = () => {
                     onChange={handleOpenAiModelChange}
                     placeholder="Select OpenAI Model"
                   />
+                  <div className="flex items-center justify-between text-[11px] mt-1.5 px-0.5">
+                    <span className="text-zinc-500 dark:text-zinc-400">
+                      Active: <span className="font-mono text-zinc-700 dark:text-zinc-300 font-bold">{settings.openai_model || 'gpt-4o-mini'}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomOpenAiInput(!showCustomOpenAiInput)}
+                      className="text-emerald-500 dark:text-emerald-400 hover:underline cursor-pointer font-medium"
+                    >
+                      {showCustomOpenAiInput ? 'Close Custom' : '+ Custom Model'}
+                    </button>
+                  </div>
+
+                  {showCustomOpenAiInput && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <input
+                        type="text"
+                        value={customOpenAiModel}
+                        onChange={e => setCustomOpenAiModel(e.target.value)}
+                        placeholder="e.g. gpt-5.6-terra, ft:gpt-4o:..."
+                        className="flex-1 p-2 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 text-xs font-mono text-zinc-900 dark:text-white focus:outline-hidden focus:border-[#f3aa18]"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleApplyCustomOpenAiModel}
+                      >
+                        Apply
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => setShowCustomOpenAiInput(false)}
+                        className="text-xs text-zinc-400 hover:text-white px-1 cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div>

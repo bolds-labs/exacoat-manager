@@ -1003,10 +1003,11 @@ function filterAndSortOpenAiModels(rawModels: string[]): string[] {
     if (!m) return false;
     const lower = m.toLowerCase();
     if (excluded.some(term => lower.includes(term))) return false;
-    return /^(gpt-[45]|o[13]|chatgpt|gpt-3\.5)/i.test(m);
+    return true;
   });
 
   const getScore = (m: string) => {
+    if (m.startsWith('gpt-5')) return 110;
     if (m === 'gpt-4o') return 100;
     if (m === 'gpt-4o-mini') return 95;
     if (m.startsWith('o3-mini')) return 90;
@@ -1070,7 +1071,31 @@ export async function testGeminiDirect(apiKey?: string): Promise<{
   const base = getWordPressBaseUrl();
   const key = (apiKey || getCachedPluginSettings().gemini_api_key || '').trim();
 
-  // 1. Try WordPress Diagnostics backend endpoint (works with both client key and server wp-config.php)
+  // 1. If key is provided in client, fetch Google Gemini directly first for live models
+  if (key) {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`, {
+        headers: { Accept: 'application/json' },
+      });
+      const latency = Math.round(performance.now() - start);
+      if (res.ok) {
+        const data = await res.json();
+        const rawModels = Array.isArray(data.models) ? data.models.map((m: any) => m.name || '') : [];
+        const models = filterAndSortGeminiModels(rawModels.length > 0 ? rawModels : ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash']);
+        return {
+          success: true,
+          latencyMs: latency,
+          latency_ms: latency,
+          available_models: models,
+          message: `Google Gemini API connected in ${latency}ms (${models.length} models found)`,
+        };
+      }
+    } catch {
+      // Fallback to backend diagnostics if direct client fetch encounters issues
+    }
+  }
+
+  // 2. Query WordPress Diagnostics backend endpoint (for keys in wp-config.php or server CMS)
   try {
     const wpUrl = `${base}/wp-json/exacoat-core/v1/diagnostics/test-gemini`;
     const res = await authenticatedFetch(wpUrl, {
@@ -1107,36 +1132,14 @@ export async function testGeminiDirect(apiKey?: string): Promise<{
       }
     }
   } catch {
-    // If backend bridge call fails, continue to direct client call if key is available
+    // If backend bridge call fails, continue to key check
   }
 
-  // 2. Direct client-side fetch fallback if key is provided
   if (!key) {
     return { success: false, error: 'Gemini API key is required' };
   }
 
-  try {
-    const res = await authenticatedFetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`, {
-      headers: { Accept: 'application/json' },
-    });
-    const latency = Math.round(performance.now() - start);
-    if (res.ok) {
-      const data = await res.json();
-      const rawModels = Array.isArray(data.models) ? data.models.map((m: any) => m.name || '') : [];
-      const models = filterAndSortGeminiModels(rawModels.length > 0 ? rawModels : ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash']);
-      return {
-        success: true,
-        latencyMs: latency,
-        latency_ms: latency,
-        available_models: models,
-        message: `Google Gemini API connected in ${latency}ms (${models.length} models)`,
-      };
-    }
-    return { success: false, latencyMs: latency, latency_ms: latency, error: `HTTP ${res.status}` };
-  } catch (err: any) {
-    const latency = Math.round(performance.now() - start);
-    return { success: false, latencyMs: latency, latency_ms: latency, error: err.message };
-  }
+  return { success: false, error: 'Unable to connect to Google Gemini API' };
 }
 
 export async function testOpenAiDirect(apiKey?: string): Promise<{
@@ -1151,7 +1154,40 @@ export async function testOpenAiDirect(apiKey?: string): Promise<{
   const base = getWordPressBaseUrl();
   const key = (apiKey || getCachedPluginSettings().openai_api_key || '').trim();
 
-  // 1. Try WordPress Diagnostics backend endpoint (works with both client key and server wp-config.php)
+  // 1. If key is provided in client, fetch OpenAI directly first for live models
+  if (key) {
+    try {
+      const res = await fetch('https://api.openai.com/v1/models', {
+        headers: { Authorization: `Bearer ${key}` },
+      });
+      const latency = Math.round(performance.now() - start);
+      if (res.ok) {
+        const data = await res.json();
+        const rawModels = Array.isArray(data.data) ? data.data.map((m: any) => m.id) : [];
+        const models = filterAndSortOpenAiModels(rawModels);
+        return {
+          success: true,
+          latencyMs: latency,
+          latency_ms: latency,
+          available_models: models,
+          message: `OpenAI API connected in ${latency}ms (${models.length} models found)`,
+        };
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        return {
+          success: false,
+          latencyMs: latency,
+          latency_ms: latency,
+          error: errData?.error?.message || `HTTP ${res.status}`,
+          message: errData?.error?.message || `HTTP ${res.status}`,
+        };
+      }
+    } catch {
+      // Fallback to backend diagnostics if direct client fetch encounters issues
+    }
+  }
+
+  // 2. Query WordPress Diagnostics backend endpoint (for keys in wp-config.php or server CMS)
   try {
     const wpUrl = `${base}/wp-json/exacoat-core/v1/diagnostics/test-openai`;
     const res = await authenticatedFetch(wpUrl, {
@@ -1187,37 +1223,16 @@ export async function testOpenAiDirect(apiKey?: string): Promise<{
         };
       }
     }
-  } catch {
-    // If backend bridge call fails, continue to direct client call if key is available
-  }
-
-  // 2. Direct client-side fetch fallback if key is provided
-  if (!key) {
-    return { success: false, error: 'OpenAI API key is required' };
-  }
-
-  try {
-    const res = await authenticatedFetch('https://api.openai.com/v1/models', {
-      headers: { Authorization: `Bearer ${key}` },
-    });
-    const latency = Math.round(performance.now() - start);
-    if (res.ok) {
-      const data = await res.json();
-      const rawModels = Array.isArray(data.data) ? data.data.map((m: any) => m.id) : [];
-      const models = filterAndSortOpenAiModels(rawModels.length > 0 ? rawModels : ['gpt-4o', 'gpt-4o-mini', 'o3-mini']);
-      return {
-        success: true,
-        latencyMs: latency,
-        latency_ms: latency,
-        available_models: models,
-        message: `OpenAI API connected in ${latency}ms (${models.length} models)`,
-      };
-    }
-    return { success: false, latencyMs: latency, latency_ms: latency, error: `HTTP ${res.status}` };
   } catch (err: any) {
     const latency = Math.round(performance.now() - start);
     return { success: false, latencyMs: latency, latency_ms: latency, error: err.message };
   }
+
+  if (!key) {
+    return { success: false, error: 'OpenAI API key is required' };
+  }
+
+  return { success: false, error: 'Unable to connect to OpenAI API' };
 }
 
 export async function generateFandomDescriptionAi(
@@ -1233,37 +1248,121 @@ export async function generateFandomDescriptionAi(
   message?: string;
   error?: string;
 }> {
+  const start = performance.now();
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/fandom/generate`;
 
   let provider = 'openai';
   let prompt = '';
+  let model = '';
+  let clientOpenAiKey = '';
+  let clientGeminiKey = '';
+
   if (typeof providerOrOptions === 'string') {
     provider = providerOrOptions;
     if (typeof customPromptOrOptions === 'string') prompt = customPromptOrOptions;
   } else if (typeof providerOrOptions === 'object' && providerOrOptions !== null) {
     provider = providerOrOptions.model || providerOrOptions.provider || 'openai';
     prompt = providerOrOptions.prompt || providerOrOptions.system_prompt || '';
+    model = providerOrOptions.model || '';
+    clientOpenAiKey = providerOrOptions.openai_api_key || '';
+    clientGeminiKey = providerOrOptions.gemini_api_key || '';
   }
 
+  // 1. Try WordPress Backend endpoint
   try {
     const res = await authenticatedFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ name: fandomName, provider, prompt }),
+      body: JSON.stringify({ name: fandomName, provider, prompt, model }),
     });
-    const data = await res.json();
-    return {
-      ...data,
-      text: data.text || data.description,
-      description: data.description || data.text,
-      model_used: data.model_used || provider,
-      latency_ms: data.latency_ms || 350,
-      message: data.message,
-    };
-  } catch (err: any) {
-    return { success: false, error: err.message, message: err.message };
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && (data.text || data.description)) {
+        return {
+          ...data,
+          text: data.text || data.description,
+          description: data.description || data.text,
+          model_used: data.model_used || model || provider,
+          latency_ms: data.latency_ms || Math.round(performance.now() - start),
+          message: data.message,
+        };
+      }
+    }
+  } catch {
+    // If backend route fails or is not yet deployed, fallback to direct provider API
   }
+
+  // 2. Direct client-side AI generation fallback
+  const isGemini = provider.toLowerCase().includes('gemini');
+  if (isGemini) {
+    const geminiKey = clientGeminiKey || getCachedPluginSettings().gemini_api_key || '';
+    const geminiModel = model || getCachedPluginSettings().gemini_model || 'gemini-2.5-flash';
+    if (geminiKey) {
+      try {
+        const fullPrompt = `${prompt}\n\nCollection or theme name: "${fandomName}"`;
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent?key=${encodeURIComponent(geminiKey)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+          }),
+        });
+        const latency = Math.round(performance.now() - start);
+        if (res.ok) {
+          const data = await res.json();
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          return {
+            success: true,
+            text,
+            description: text,
+            model_used: geminiModel,
+            latency_ms: latency,
+          };
+        }
+      } catch (err: any) {
+        return { success: false, error: err.message, message: err.message };
+      }
+    }
+  } else {
+    const openAiKey = clientOpenAiKey || getCachedPluginSettings().openai_api_key || '';
+    const openAiModel = model || getCachedPluginSettings().openai_model || 'gpt-4o-mini';
+    if (openAiKey) {
+      try {
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${openAiKey}`,
+          },
+          body: JSON.stringify({
+            model: openAiModel,
+            messages: [
+              { role: 'system', content: prompt },
+              { role: 'user', content: `Collection or theme name: "${fandomName}"` },
+            ],
+            temperature: 0.7,
+          }),
+        });
+        const latency = Math.round(performance.now() - start);
+        if (res.ok) {
+          const data = await res.json();
+          const text = data.choices?.[0]?.message?.content || '';
+          return {
+            success: true,
+            text,
+            description: text,
+            model_used: openAiModel,
+            latency_ms: latency,
+          };
+        }
+      } catch (err: any) {
+        return { success: false, error: err.message, message: err.message };
+      }
+    }
+  }
+
+  return { success: false, error: 'AI description generator unavailable. Check API key.' };
 }
 
 // ==========================================

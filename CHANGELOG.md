@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.63] - 2026-09-20
+
+### Exacoat Brand Voice System Prompt, Custom Model Entry & Direct AI Fetch
+- **Exacoat Brand Voice System Prompt**:
+  - Overhauled collection description prompt in `AiToolsPage` to strictly reflect Exacoat's brand voice.
+  - Purged all legacy references to classical art, museum prints, and artists.
+  - Strictly banned exclamation marks and fake sci-fi buzzwords (e.g. "aerospace-grade metal", "revolutionary shield").
+  - Grounded descriptions in real tactile and visual traits: precision fit, scratch defense without added bulk, and authentic material finishes (matte, textured, brushed, satin).
+  - Automatically sanitizes and upgrades legacy prompts stored in browser cache and WordPress database.
+- **Custom Model Entry & gpt-5 Prioritization**:
+  - Added "+ Custom Model" action toggle and text input under both OpenAI and Gemini selectors, allowing operators to type and apply any model (e.g. `gpt-5.6-terra`, custom fine-tunes, or private endpoints).
+  - Prioritized `gpt-5*` models at the top of the OpenAI dropdown with a `Next-Gen` badge.
+  - Removed restrictive regex filters so all generative models returned by the API are displayed.
+- **Direct Client Fetch Fallback**:
+  - Updated `testOpenAiDirect` and `testGeminiDirect` to query provider endpoints directly when an API key is present in the client, ensuring live models are pulled even if the remote WordPress staging server has an older plugin version.
+  - Implemented `/fandom/generate` backend route in `class-exacoat-core.php` with direct client-side generation fallback in `generateFandomDescriptionAi`.
+
+---
+
 ## [0.0.62] - 2026-09-20
 
 ### Dynamic AI Model Pulling & Latest Model Integration
