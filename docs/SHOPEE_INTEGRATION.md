@@ -1,4 +1,4 @@
-﻿# Exacoat Shopee Open Platform API v2 Integration
+# Exacoat Shopee Open Platform API v2 Integration
 
 Comprehensive architectural and technical reference for the Shopee Open Platform API v2 integration connecting Exacoat Manager and the Exacoat Core WordPress backend engine.
 
@@ -65,12 +65,15 @@ Shopee separates development and live operations into distinct endpoints and par
 | Setting | Sandbox (Test-Stable) | Production (Live) |
 | :--- | :--- | :--- |
 | **Base URL** | https://partner.test-stable.shopeemobile.com | https://partner.shopeemobile.com |
-| **Partner ID** | Stored in 	est_partner_id (Default: 1244885) | Stored in live_partner_id (Default: 2011551) |
-| **Partner Key** | Stored in 	est_partner_key | Stored in live_partner_key |
-| **Push Partner Key** | Stored in 	est_push_partner_key | Stored in live_push_partner_key |
+| **App Name** | Exacoat Sandbox | Exacoat n8n (App ID: 220533) |
+| **Deployment Area** | Singapore | Singapore |
+| **Partner ID** | Stored in test_partner_id (Default: 1244885) | Stored in live_partner_id (Default: 2011551) |
+| **Partner Key** | Stored in test_partner_key | Stored in live_partner_key |
+| **Push Partner Key** | Stored in test_push_partner_key | `58724959565954534b6d797147587a55505a4f79614243526464424a66686e63` |
 | **Default Shop ID** | 227918647 (Sandbox Exacoat ID) | Configured upon seller authorization |
 | **Redirect URL** | https://manager.exacoat.com/shopee/callback | Configured in Shopee Partner Console |
-| **Push Webhook URL** | https://exacoat.com/wp-json/exacoat-core/v1/shopee/webhook | Same public HTTPS URL |
+| **Push Webhook URL** | https://exacoat.com/wp-json/exacoat-core/v1/shopee/webhook | Staging: https://staging.exacoat.com/... |
+| **Live Push Status** | Configured in Console | ON (Status: Normal, 30/30 mechanisms) |
 
 Configuration data is stored in the WordPress wp_options table under key _exacoat_shopee_settings.
 
@@ -156,14 +159,22 @@ When Shopee pushes an event to /shopee/webhook, the Authorization header contain
 - **Retrieve Shipping Parameters**:
   - GET /wp-json/exacoat-core/v1/shopee/shipping-parameter?order_sn={order_sn}
   - Under the hood: GET /api/v2/logistics/get_shipping_parameter
-  - Returns eligible courier options: Dropoff branch list or pickup address time slots.
+  - Returns eligible courier options: Dropoff branch list or pickup address time slots (`time_slot_list`).
+  - Each pickup time slot includes `date` (timestamp), `time_text` (e.g. `14:00 - 16:00`), and `pickup_time_id`.
+  - ArrangeShipmentModal supports selecting both **Tanggal Pickup** (grouped by day) and **Rentang Waktu** (time window).
 - **Arrange Shipment (Atur Pengiriman)**:
   - POST /wp-json/exacoat-core/v1/shopee/ship-order
-  - Under the hood: POST /api/v2/logistics/ship_order with payload {"dropoff": ...} or {"pickup": ...}.
+  - Under the hood: POST /api/v2/logistics/ship_order with payload {"dropoff": ...} or {"pickup": {"address_id": ..., "pickup_time_id": ...}}.
   - Automatically fetches tracking number via GET /api/v2/logistics/get_tracking_number.
   - Updates local order cache status to PROCESSED and persists tracking number immediately.
 
-### 5.3 Shipping Labels (Air Waybill / AWB)
+### 5.3 Shipping Labels (Air Waybill / AWB) & Print Truth
+- **Single Server Truth (No LocalStorage)**:
+  - Order print states (`is_printed` and `shipping_document_status`) are stored exclusively in the WordPress database (`_exacoat_shopee_orders_cache`).
+  - Never stored in browser `localStorage`, ensuring all admins across different PCs see identical status.
+  - Interactive `Perlu Dicetak →` action pill opens the thermal PDF and updates the server database to `PRINTED`.
+  - On-demand verification: `fetch_single_order_live` queries `/api/v2/logistics/get_shipping_document_result` for arranged orders to verify if Shopee has recorded the label as `PRINTED`.
+  - Sync preservation: `sync_orders_direct` preserves `$was_printed` so background sync cycles never revert a printed label back to unprinted.
 - **Official Shopee PDF Stream**:
   - GET /wp-json/exacoat-core/v1/shopee/shipping-document?order_sn={order_sn}
   - Initiates POST /api/v2/logistics/create_shipping_document (THERMAL_AIR_WAYBILL).
@@ -182,11 +193,19 @@ The endpoint /wp-json/exacoat-core/v1/shopee/webhook receives push event notific
 
 | Event Code | Event Name | Action Taken in Exacoat |
 | :--- | :--- | :--- |
-| 3 | order_status_push | Updates order_status in cache (e.g. READY_TO_SHIP, SHIPPED, COMPLETED, CANCELLED). |
-| 4 | order_trackingno_push | Updates courier 	racking_number (resi) in cache. |
-| 30 | package_fulfillment_status_push | Updates ulfillment_status and package tracking. |
 | 1 | shop_authorization_push | Logs store authorization event. |
-| 2 | shop_authorization_canceled_push| Logs store revocation event and alerts administrators. |
+| 2 | shop_authorization_canceled_push | Logs store revocation event and alerts administrators. |
+| 3 | order_status_push | Updates order_status in cache (READY_TO_SHIP, PROCESSED, SHIPPED, COMPLETED, CANCELLED). |
+| 4 | order_trackingno_push | Updates courier tracking_number (resi) in cache. |
+| 12 | open_api_authorization_expiry | Alerts 30 days before authorization token expires. |
+| 15 | shipping_document_status_push | Updates shipping_document_status and is_printed in cache when label is PRINTED in Shopee. |
+| 23 | booking_status_push | Logistics pickup/dropoff booking status update. |
+| 24 | booking_trackingno_push | Courier tracking number for booked packages. |
+| 25 | booking_shipping_document_status_push | Document status for booked packages. |
+| 29 | return_updates_push | Buyer return and refund notifications. |
+| 30 | package_fulfillment_status_push | Updates package fulfillment lifecycle. |
+| 37 | courier_delivery_binding_status_push | Driver assignment updates for Instant and Same Day. |
+| 47 | package_info_push | Parcel weight and dimension updates. |
 
 All received webhooks respond with HTTP 200 and body {"code": 0, "message": "success"} within Shopee SLA.
 
