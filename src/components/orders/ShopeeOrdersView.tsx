@@ -202,7 +202,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   const handleSync = async (days = syncDays) => {
     setIsSyncing(true);
     try {
-      const res = await syncShopeeOrdersDirect(days, 200);
+      const res = await syncShopeeOrdersDirect(days, 500);
       if (res.success && Array.isArray(res.orders)) {
         if (res.orders.length > 0) {
           setOrders(res.orders);
@@ -563,35 +563,19 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
               </span>
             </div>
             <p className="text-xs text-neutral-400 mt-1">
-              Kanal integrasi Shopee Indonesia. Menampilkan pesanan, batas waktu kirim, status pickup/dropoff, no. resi resmi, dan klaim garansi.
+              Kanal integrasi Shopee Indonesia. Menampilkan pesanan, batas waktu kirim, status pickup/dropoff, no. resi resmi, dan Claim Warranty.
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0 self-start md:self-auto">
-          <div className="flex items-center rounded-xl bg-orange-500 overflow-hidden shadow-md shadow-orange-500/20">
-            <button
-              type="button"
-              onClick={() => handleSync(syncDays)}
-              disabled={isSyncing || isLoading}
-              className="px-3.5 py-2 hover:bg-orange-600 text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw className={clsx('w-3.5 h-3.5', isSyncing && 'animate-spin')} />
-              <span>{isSyncing ? 'Menyelaraskan...' : 'Sinkronisasi Shopee'}</span>
-            </button>
-            <select
-              value={syncDays}
-              onChange={(e) => setSyncDays(Number(e.target.value))}
-              disabled={isSyncing}
-              className="bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold py-2 px-2 border-l border-orange-400/30 outline-none cursor-pointer"
-              title="Jumlah hari pesanan yang diambil"
-            >
-              <option value={15}>15 hari</option>
-              <option value={30}>30 hari</option>
-              <option value={60}>60 hari</option>
-              <option value={90}>90 hari</option>
-            </select>
-          </div>
+          <MarketplaceSyncButton
+            brand="shopee"
+            isSyncing={isSyncing}
+            onSync={handleSync}
+            syncDays={syncDays}
+            onSyncDaysChange={setSyncDays}
+          />
 
           <button
             type="button"
@@ -613,7 +597,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
               { id: 'READY_TO_SHIP', label: 'Perlu Dikirim', count: readyToShipCount },
               { id: 'SHIPPED', label: 'Dikirim' },
               { id: 'COMPLETED', label: 'Selesai' },
-              { id: 'CLAIMED', label: 'Klaim Garansi' },
+              { id: 'CLAIMED', label: 'Claim Warranty' },
               { id: 'CANCELLED', label: 'Dibatalkan' },
             ] as Array<{ id: StatusTab; label: string; count?: number }>
           ).map((tab) => (
