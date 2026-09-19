@@ -551,9 +551,9 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 								<td>Headless verified buyer reviews, photo attachments, and ratings</td>
 							</tr>
 							<tr>
-								<td><strong>Customer Wishlists</strong></td>
+								<td><strong>Multi-Zone Free Shipping</strong></td>
 								<td><span class="ex-badge ex-badge-emerald">Enabled</span></td>
-								<td>Persistent user and session wishlist storage (<span class="ex-code">/wishlist</span>)</td>
+								<td>Regional thresholds in native currencies with automated qualification</td>
 							</tr>
 							<tr>
 								<td><strong>Pushover Alert Service</strong></td>
@@ -751,20 +751,20 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 							</div>
 						</div>
 
-						<!-- Module 9: Wishlists -->
+						<!-- Module 9: Multi-Currency & Free Shipping -->
 						<div style="background: #0d0e12; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 10px;">
 							<div style="display: flex; align-items: flex-start; justify-content: space-between;">
 								<div>
-									<div style="font-size: 14px; font-weight: 700; color: #ffffff;">❤️ Customer Wishlist Engine</div>
-									<div style="font-size: 11px; color: #71717a; font-family: monospace;">Exacoat_Wishlist_Engine</div>
+									<div style="font-size: 14px; font-weight: 700; color: #ffffff;">🌐 Currency & Free Shipping Engine</div>
+									<div style="font-size: 11px; color: #71717a; font-family: monospace;">Exacoat_Store_Enhancements</div>
 								</div>
 								<span class="ex-badge ex-badge-emerald">Live</span>
 							</div>
 							<p style="font-size: 12px; color: #a1a1aa; line-height: 1.5; margin: 0;">
-								Hybrid guest session and user-authenticated product wishlist storage with instant counter updates across devices.
+								Psychological currency rounding, multi-currency auto-pricing, and multi-zone free shipping threshold rules.
 							</p>
 							<div style="font-size: 11px; color: #71717a;">
-								<strong>Route:</strong> <span class="ex-code">/wp-json/exacoat/v1/wishlist</span>
+								<strong>Routes:</strong> <span class="ex-code">/checkout/config</span> &bull; <span class="ex-code">/settings/currency</span>
 							</div>
 						</div>
 
@@ -1079,9 +1079,9 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 							</tr>
 							<tr>
 								<td><span class="ex-badge ex-badge-sky">GET</span></td>
-								<td><span class="ex-code">/wp-json/exacoat/v1/wishlist</span></td>
-								<td>Customer wishlist products and live counters</td>
-								<td><a href="<?php echo esc_url( rest_url( 'exacoat/v1/wishlist' ) ); ?>" target="_blank" class="ex-btn ex-btn-secondary" style="padding: 2px 8px; font-size: 11px;">View JSON ↗</a></td>
+								<td><span class="ex-code">/wp-json/exacoat-core/v1/checkout/config</span></td>
+								<td>Store checkout context, currency list, and free shipping bar thresholds</td>
+								<td><a href="<?php echo esc_url( rest_url( 'exacoat-core/v1/checkout/config' ) ); ?>" target="_blank" class="ex-btn ex-btn-secondary" style="padding: 2px 8px; font-size: 11px;">View JSON ↗</a></td>
 							</tr>
 						</tbody>
 					</table>

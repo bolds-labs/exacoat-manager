@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.36] - 2026-09-19
+
+### Wishlist Engine Purge, Multi-Currency Rounding & Free Shipping Engine
+- **Complete Wishlist Purge**:
+  - Permanently removed legacy `class-wishlist-engine.php`, `wishlist-engine.css`, and `wishlist-engine.js` from the codebase.
+  - Purged "Customer Wishlist Engine" cards, module statuses, and REST routes from WordPress admin `settings-page.php`.
+- **Multi-Currency Pricing & Psychological Rounding Matrix (1:1 with artmatter-core)**:
+  - Synchronized `calculate_price_for_currency` with full psychological rounding rules: `9_end`, `90_end`, `500_step`, `50_step`, and `none`.
+  - Configurable global markup (`currency_global_markup`) and currency rates registry for USD, EUR, AUD, SGD, JPY, GBP, CAD, CHF, HKD, THB, and KRW.
+  - Automatic WooCommerce product meta synchronization (`_regular_currency_prices` and `_sale_currency_prices`) compatible with Aelia Currency Switcher.
+- **Multi-Zone Free Shipping Threshold Contract**:
+  - Wired `/checkout/config` REST endpoint to return `free_shipping_threshold`, `thresholds_by_currency`, and `shipping_zones` across both `exacoat-core/v1` and `exacoat/v1` namespaces.
+  - Direct integration powering headless storefront Cart Drawer and Checkout Free Shipping progress bars.
+  - Package rate discount filter applying 100% Free Shipping (`$rate->cost = 0`, `is_free_shipping`, `original_cost`) when qualified.
+
+---
+
 ## [0.0.8] - 2026-09-15
 
 ### WordPress Storefront Safety & Flat Media Reversion Engine

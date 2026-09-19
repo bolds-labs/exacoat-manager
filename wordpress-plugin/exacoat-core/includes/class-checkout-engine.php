@@ -125,7 +125,7 @@ class Exacoat_Checkout_Engine {
 	}
 
 	public static function register_headless_checkout_routes() {
-		$namespaces = [ 'exacoat-core/v1', 'artmatter-core/v1' ];
+		$namespaces = [ 'exacoat-core/v1', 'exacoat/v1', 'artmatter-core/v1' ];
 
 		foreach ( $namespaces as $ns ) {
 			register_rest_route( $ns, '/checkout/config', [
@@ -208,16 +208,23 @@ class Exacoat_Checkout_Engine {
 		$currency = self::get_active_currency();
 		$flat_idr = (float) ( get_post_meta( $product_id, '_price', true ) ?: 990000 );
 		$convert  = static function( float $amount ) use ( $currency ): float {
+			if ( class_exists( 'Exacoat_Store_Enhancements' ) ) {
+				return Exacoat_Store_Enhancements::calculate_price_for_currency( $amount, $currency );
+			}
 			return class_exists( 'Artmatter_Store_Enhancements' )
 				? Artmatter_Store_Enhancements::calculate_price_for_currency( $amount, $currency )
 				: $amount;
 		};
 
+		$decimals = class_exists( 'Exacoat_Store_Enhancements' )
+			? Exacoat_Store_Enhancements::get_currency_decimals( $currency )
+			: ( class_exists( 'Artmatter_Store_Enhancements' )
+				? Artmatter_Store_Enhancements::get_currency_decimals( $currency )
+				: wc_get_price_decimals() );
+
 		return rest_ensure_response( [
 			'currency'   => $currency,
-			'minor_unit' => class_exists( 'Artmatter_Store_Enhancements' )
-				? Artmatter_Store_Enhancements::get_currency_decimals( $currency )
-				: wc_get_price_decimals(),
+			'minor_unit' => $decimals,
 			'prices'     => [
 				'standard' => (float) $product->get_price(),
 				'flat'     => $convert( $flat_idr ),
@@ -259,8 +266,11 @@ class Exacoat_Checkout_Engine {
 		$thresholds_by_currency  = [];
 		$shipping_zones          = [];
 
-		if ( class_exists( 'Artmatter_Store_Enhancements' ) ) {
-			$shipping_config = Artmatter_Store_Enhancements::get_shipping_config();
+		$has_enhancements = class_exists( 'Exacoat_Store_Enhancements' ) || class_exists( 'Artmatter_Store_Enhancements' );
+		if ( $has_enhancements ) {
+			$shipping_config = class_exists( 'Exacoat_Store_Enhancements' )
+				? Exacoat_Store_Enhancements::get_shipping_config()
+				: Artmatter_Store_Enhancements::get_shipping_config();
 			$zones           = $shipping_config['zones'] ?? [];
 			$matched_zone    = null;
 
@@ -295,6 +305,10 @@ class Exacoat_Checkout_Engine {
 				$matched_zone = $zones['default'];
 			}
 
+			$currencies = class_exists( 'Exacoat_Store_Enhancements' )
+				? Exacoat_Store_Enhancements::get_currency_rates()
+				: Artmatter_Store_Enhancements::get_currency_rates();
+
 			if ( $matched_zone ) {
 				$zone_curr = strtoupper( trim( $matched_zone['currency'] ?? '' ) );
 				$free_amt  = (float) ( $matched_zone['free'] ?? 0 );
@@ -310,17 +324,32 @@ class Exacoat_Checkout_Engine {
 					if ( 'IDR' === $active_currency ) {
 						$free_shipping_threshold = $free_amt;
 					} else {
-						$free_shipping_threshold = (float) apply_filters( 'wc_aelia_cs_convert', $free_amt, 'IDR', $active_currency );
+						$converted = apply_filters( 'wc_aelia_cs_convert', $free_amt, 'IDR', $active_currency );
+						if ( (float) $converted === (float) $free_amt && $active_currency !== 'IDR' ) {
+							$rate_val = floatval( $currencies[ $active_currency ]['rate'] ?? 0 );
+							$free_shipping_threshold = $rate_val > 0 ? ( $free_amt * $rate_val ) : $free_amt;
+						} else {
+							$free_shipping_threshold = (float) $converted;
+						}
 					}
 				} else {
 					// Zone in other foreign currency: convert to IDR, then to customer currency
-					$free_idr = (float) apply_filters( 'wc_aelia_cs_convert', $free_amt, $zone_curr, 'IDR' );
-					$free_shipping_threshold = (float) apply_filters( 'wc_aelia_cs_convert', $free_idr, 'IDR', $active_currency );
+					$thresh_idr = (float) apply_filters( 'wc_aelia_cs_convert', $free_amt, $zone_curr, 'IDR' );
+					if ( (float) $thresh_idr === (float) $free_amt && $zone_curr !== 'IDR' ) {
+						$rate_val   = floatval( $currencies[ $zone_curr ]['rate'] ?? 0 );
+						$thresh_idr = $rate_val > 0 ? ( $free_amt / $rate_val ) : $free_amt;
+					}
+					$converted = apply_filters( 'wc_aelia_cs_convert', $thresh_idr, 'IDR', $active_currency );
+					if ( (float) $converted === (float) $thresh_idr && $active_currency !== 'IDR' ) {
+						$rate_val = floatval( $currencies[ $active_currency ]['rate'] ?? 0 );
+						$free_shipping_threshold = $rate_val > 0 ? ( $thresh_idr * $rate_val ) : $thresh_idr;
+					} else {
+						$free_shipping_threshold = (float) $converted;
+					}
 				}
 			}
 
 			// Ensure all supported currencies have a calculated threshold
-			$currencies = Artmatter_Store_Enhancements::get_currency_rates();
 			$def_zone   = $zones['default'] ?? [ 'free' => 250, 'currency' => 'USD' ];
 			$def_free   = (float) ( $def_zone['free'] ?? 250 );
 			$def_curr   = strtoupper( trim( $def_zone['currency'] ?? 'USD' ) );
@@ -330,7 +359,12 @@ class Exacoat_Checkout_Engine {
 						$thresholds_by_currency[ $cur_k ] = $def_free;
 					} else {
 						$converted = (float) apply_filters( 'wc_aelia_cs_convert', $def_free, $def_curr, $cur_k );
-						$thresholds_by_currency[ $cur_k ] = $converted > 0 ? round( $converted ) : $def_free;
+						if ( $converted <= 0 || ( $converted === $def_free && $def_curr !== $cur_k ) ) {
+							$rate_val = floatval( $currencies[ $cur_k ]['rate'] ?? 0 );
+							$def_rate = floatval( $currencies[ $def_curr ]['rate'] ?? 0.000059 );
+							$converted = ( $def_rate > 0 && $rate_val > 0 ) ? ( $def_free / $def_rate * $rate_val ) : $def_free;
+						}
+						$thresholds_by_currency[ $cur_k ] = round( $converted );
 					}
 				}
 			}

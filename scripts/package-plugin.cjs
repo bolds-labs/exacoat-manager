@@ -81,7 +81,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       description: 'The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.',
-      changelog: `### Version ${version}\n- High-speed order management & ready-to-ship custom status\n- Integrated courier tracking and A6 label metadata synchronization`,
+      changelog: `### Version ${version}\n- Completely purged legacy Customer Wishlist Engine from codebase, assets, and admin settings\n- Standardized multi-currency pricing and psychological rounding matrix (9_end, 90_end, 500_step, 50_step, none)\n- Integrated multi-zone free shipping thresholds contract (/checkout/config) powering headless Free Shipping bars\n- Exposed headless checkout endpoints under exacoat-core/v1 and exacoat/v1 namespaces`,
     },
   };
 
