@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.60] - 2026-09-20
+
+### Marketplace SLA Deadline Guarding & Hourly Courier Time Slots
+- **Marketplace SLA Deadline Enforcement**:
+  - Added real-time shipping deadline banner (`shipDeadline`) to `ArrangeShipmentModal` based on Shopee `ship_by_date` and `ship_by_timestamp`.
+  - Enforced deadline guarding on pickup dates: disabled "Besok" if the deadline expires today or before tomorrow morning pickup.
+  - Enforced deadline guarding on pickup time slots: disabled any courier or fallback slots that start after the order's deadline with a `⚠️ (Lewat Batas Kirim)` warning badge.
+  - Auto-selects the earliest valid non-expired time slot and date.
+- **Instant Courier Same-Day Policy**:
+  - For Instant couriers (e.g. SPX Instant), restricted pickup scheduling strictly to "Hari Ini" and disabled tomorrow options.
+- **Hourly Fallback Time Windows**:
+  - Added granular 1-hour interval slots (e.g. `12:00 - 13:00`, `13:00 - 14:00`, `14:00 - 15:00`) to the fallback time selection list.
+  - Enabled detection of past elapsed hours today so operators cannot select time slots that have already passed.
+- **Address-Level Slot Resolution**:
+  - Added `time_slot_list` parsing from `ShopeePickupAddress` (`address_list[].time_slot_list`), ensuring couriers that return slots scoped to warehouse addresses are correctly detected.
+
+---
+
 ## [0.0.59] - 2026-09-20
 
 ### Configurable Pickup Scheduling & Staging Environment Enforcement

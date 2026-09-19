@@ -203,6 +203,7 @@ export interface ShopeePickupAddress {
   zipcode?: string;
   district?: string;
   town?: string;
+  time_slot_list?: ShopeePickupTimeSlot[];
 }
 
 export interface ShopeePickupTimeSlot {

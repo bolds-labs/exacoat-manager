@@ -55,8 +55,84 @@ export const ArrangeShipmentModal: React.FC<ArrangeShipmentModalProps> = ({
   const [selectedDateKey, setSelectedDateKey] = useState<string>('');
   const [senderName, setSenderName] = useState('Exacoat Official');
   const [fallbackDate, setFallbackDate] = useState<'today' | 'tomorrow'>('today');
-  const [fallbackTimeRange, setFallbackTimeRange] = useState<string>('13:00 - 17:00');
+  const [fallbackTimeRange, setFallbackTimeRange] = useState<string>('12:00 - 13:00');
   const isInstantCourier = /instant/i.test(order?.shipping_carrier || '');
+
+  // Marketplace shipping deadline detection
+  const shipDeadline = React.useMemo(() => {
+    if (!order) return null;
+    if (order.ship_by_timestamp) {
+      const ts = order.ship_by_timestamp > 1e11 ? order.ship_by_timestamp : order.ship_by_timestamp * 1000;
+      return new Date(ts);
+    }
+    if (order.ship_by_date) {
+      const parsed = Date.parse(order.ship_by_date);
+      if (!isNaN(parsed)) return new Date(parsed);
+    }
+    return null;
+  }, [order]);
+
+  const isTomorrowPastDeadline = React.useMemo(() => {
+    if (!shipDeadline) return false;
+    const tomorrowMorning = new Date();
+    tomorrowMorning.setDate(tomorrowMorning.getDate() + 1);
+    tomorrowMorning.setHours(9, 0, 0, 0); // Earliest courier pickup tomorrow
+    return tomorrowMorning.getTime() > shipDeadline.getTime();
+  }, [shipDeadline]);
+
+  const fallbackSlotList = React.useMemo(() => {
+    if (isInstantCourier) {
+      return [
+        'Pickup Segera (Driver Langsung)',
+        '09:00 - 11:00',
+        '11:00 - 13:00',
+        '12:00 - 13:00',
+        '13:00 - 15:00',
+        '15:00 - 17:00',
+        '17:00 - 19:00',
+      ];
+    }
+    return [
+      '09:00 - 10:00',
+      '10:00 - 11:00',
+      '11:00 - 12:00',
+      '12:00 - 13:00',
+      '13:00 - 14:00',
+      '14:00 - 15:00',
+      '15:00 - 16:00',
+      '16:00 - 17:00',
+      '17:00 - 18:00',
+      '18:00 - 20:00',
+    ];
+  }, [isInstantCourier]);
+
+  const isFallbackSlotPastDeadline = (dateChoice: 'today' | 'tomorrow', slotStr: string): boolean => {
+    if (!shipDeadline) return false;
+    const match = slotStr.match(/(\d{1,2}):(\d{2})/);
+    if (!match) return false;
+    const hour = parseInt(match[1], 10);
+    const minute = parseInt(match[2], 10);
+
+    const checkTime = new Date();
+    if (dateChoice === 'tomorrow') {
+      checkTime.setDate(checkTime.getDate() + 1);
+    }
+    checkTime.setHours(hour, minute, 0, 0);
+    return checkTime.getTime() > shipDeadline.getTime();
+  };
+
+  const isSlotInThePast = (dateChoice: 'today' | 'tomorrow', slotStr: string): boolean => {
+    if (dateChoice === 'tomorrow') return false;
+    const endMatch = slotStr.match(/-\s*(\d{1,2}):(\d{2})/);
+    const startMatch = slotStr.match(/(\d{1,2}):(\d{2})/);
+    if (!startMatch) return false;
+    const hour = endMatch ? parseInt(endMatch[1], 10) : parseInt(startMatch[1], 10);
+    const minute = endMatch ? parseInt(endMatch[2], 10) : parseInt(startMatch[2], 10);
+
+    const checkTime = new Date();
+    checkTime.setHours(hour, minute, 0, 0);
+    return Date.now() > checkTime.getTime();
+  };
 
   const fallbackTodayLabel = React.useMemo(() => {
     const now = new Date();
@@ -79,10 +155,31 @@ export const ArrangeShipmentModal: React.FC<ArrangeShipmentModalProps> = ({
     return `Besok (${formatted})`;
   }, []);
 
+  // Consolidate API slots from root or any pickup address
+  const allPickupSlots = React.useMemo(() => {
+    if (parameters?.pickup?.time_slot_list && parameters.pickup.time_slot_list.length > 0) {
+      return parameters.pickup.time_slot_list;
+    }
+    const currentAddress =
+      parameters?.pickup?.address_list?.find((a) => a.address_id === selectedAddressId) ||
+      parameters?.pickup?.address_list?.[0];
+
+    if (currentAddress?.time_slot_list && currentAddress.time_slot_list.length > 0) {
+      return currentAddress.time_slot_list;
+    }
+
+    for (const addr of parameters?.pickup?.address_list || []) {
+      if (addr.time_slot_list && addr.time_slot_list.length > 0) {
+        return addr.time_slot_list;
+      }
+    }
+    return [];
+  }, [parameters, selectedAddressId]);
+
   // Group slots by date
   const distinctDates = React.useMemo(() => {
-    const slots = parameters?.pickup?.time_slot_list || [];
-    const dateMap = new Map<string, { dateTimestamp: number; dateLabel: string; dateKey: string }>();
+    const slots = allPickupSlots;
+    const dateMap = new Map<string, { dateTimestamp: number; dateLabel: string; dateKey: string; isPastDeadline: boolean }>();
 
     for (const slot of slots) {
       if (!slot.date) continue;
@@ -105,21 +202,26 @@ export const ArrangeShipmentModal: React.FC<ArrangeShipmentModalProps> = ({
         });
         const prefix = isToday ? 'Hari Ini (' : isTomorrow ? 'Besok (' : '';
         const suffix = isToday || isTomorrow ? ')' : '';
+
+        const isPast = shipDeadline ? d.getTime() > shipDeadline.getTime() : false;
+
         dateMap.set(dateKey, {
           dateTimestamp: slot.date,
-          dateLabel: `${prefix}${formatted}${suffix}`,
+          dateLabel: `${prefix}${formatted}${suffix}${isPast ? ' ⚠️ (Lewat Batas Kirim)' : ''}`,
           dateKey,
+          isPastDeadline: isPast,
         });
       }
     }
     return Array.from(dateMap.values());
-  }, [parameters?.pickup?.time_slot_list]);
+  }, [allPickupSlots, shipDeadline]);
 
   useEffect(() => {
     if (distinctDates.length > 0) {
       setSelectedDateKey((prev) => {
-        if (prev && distinctDates.some((d) => d.dateKey === prev)) return prev;
-        return distinctDates[0].dateKey;
+        if (prev && distinctDates.some((d) => d.dateKey === prev && !d.isPastDeadline)) return prev;
+        const firstValid = distinctDates.find((d) => !d.isPastDeadline) || distinctDates[0];
+        return firstValid.dateKey;
       });
     } else {
       setSelectedDateKey('');
@@ -127,24 +229,62 @@ export const ArrangeShipmentModal: React.FC<ArrangeShipmentModalProps> = ({
   }, [distinctDates]);
 
   const availableTimeSlots = React.useMemo(() => {
-    const allSlots = parameters?.pickup?.time_slot_list || [];
-    if (!selectedDateKey || distinctDates.length <= 1) return allSlots;
-    return allSlots.filter((slot) => {
-      if (!slot.date) return true;
-      const ts = slot.date > 1e11 ? slot.date : slot.date * 1000;
-      const d = new Date(ts);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      return key === selectedDateKey;
+    const allSlots = allPickupSlots;
+    let filtered = allSlots;
+    if (selectedDateKey && distinctDates.length > 1) {
+      filtered = allSlots.filter((slot) => {
+        if (!slot.date) return true;
+        const ts = slot.date > 1e11 ? slot.date : slot.date * 1000;
+        const d = new Date(ts);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        return key === selectedDateKey;
+      });
+    }
+
+    return filtered.map((slot) => {
+      let isPast = false;
+      if (shipDeadline && slot.date) {
+        const ts = slot.date > 1e11 ? slot.date : slot.date * 1000;
+        const d = new Date(ts);
+        const m = (slot.time_text || '').match(/(\d{1,2}):(\d{2})/);
+        if (m) {
+          d.setHours(parseInt(m[1], 10), parseInt(m[2], 10), 0, 0);
+        }
+        isPast = d.getTime() > shipDeadline.getTime();
+      }
+      return {
+        ...slot,
+        isPastDeadline: isPast,
+      };
     });
-  }, [parameters?.pickup?.time_slot_list, selectedDateKey, distinctDates.length]);
+  }, [allPickupSlots, selectedDateKey, distinctDates.length, shipDeadline]);
 
   useEffect(() => {
     if (availableTimeSlots.length > 0) {
-      if (!availableTimeSlots.some((s) => s.pickup_time_id === selectedTimeSlotId)) {
-        setSelectedTimeSlotId(availableTimeSlots[0].pickup_time_id);
+      const current = availableTimeSlots.find((s) => s.pickup_time_id === selectedTimeSlotId);
+      if (!current || current.isPastDeadline) {
+        const firstValid = availableTimeSlots.find((s) => !s.isPastDeadline) || availableTimeSlots[0];
+        setSelectedTimeSlotId(firstValid.pickup_time_id);
       }
     }
   }, [availableTimeSlots, selectedTimeSlotId]);
+
+  // Enforce valid fallback selections against deadline and instant courier
+  useEffect(() => {
+    if ((isInstantCourier || isTomorrowPastDeadline) && fallbackDate === 'tomorrow') {
+      setFallbackDate('today');
+    }
+  }, [isInstantCourier, isTomorrowPastDeadline, fallbackDate]);
+
+  useEffect(() => {
+    const isPast = isFallbackSlotPastDeadline(fallbackDate, fallbackTimeRange) || isSlotInThePast(fallbackDate, fallbackTimeRange);
+    if (isPast) {
+      const valid = fallbackSlotList.find((opt) => !isFallbackSlotPastDeadline(fallbackDate, opt) && !isSlotInThePast(fallbackDate, opt));
+      if (valid) {
+        setFallbackTimeRange(valid);
+      }
+    }
+  }, [fallbackDate, fallbackTimeRange, fallbackSlotList]);
 
   useEffect(() => {
     if (!isOpen || !order) {
@@ -159,12 +299,13 @@ export const ArrangeShipmentModal: React.FC<ArrangeShipmentModalProps> = ({
         const res = await fetchShopeeShippingParameterDirect(order.order_sn);
         if (isMounted && res.success && res.parameters) {
           setParameters(res.parameters);
-          // Set default address if pickup available
-          if (res.parameters.pickup?.address_list && res.parameters.pickup.address_list.length > 0) {
-            setSelectedAddressId(res.parameters.pickup.address_list[0].address_id);
+          const addrList = res.parameters.pickup?.address_list || [];
+          if (addrList.length > 0) {
+            setSelectedAddressId(addrList[0].address_id);
           }
-          if (res.parameters.pickup?.time_slot_list && res.parameters.pickup.time_slot_list.length > 0) {
-            setSelectedTimeSlotId(res.parameters.pickup.time_slot_list[0].pickup_time_id);
+          const slots = res.parameters.pickup?.time_slot_list || addrList[0]?.time_slot_list || [];
+          if (slots.length > 0) {
+            setSelectedTimeSlotId(slots[0].pickup_time_id);
           }
           if (res.parameters.dropoff?.branch_list && res.parameters.dropoff.branch_list.length > 0) {
             setSelectedBranchId(res.parameters.dropoff.branch_list[0].branch_id);
@@ -432,7 +573,43 @@ export const ArrangeShipmentModal: React.FC<ArrangeShipmentModalProps> = ({
               )}
             </div>
 
-            {/* Pickup Date & Time Window (Always Configurable) */}
+            {/* Marketplace SLA Shipping Deadline Banner */}
+            {shipDeadline && (
+              <div
+                className={clsx(
+                  'p-3 rounded-xl border text-xs flex items-center justify-between gap-3',
+                  shipDeadline.getTime() - Date.now() < 12 * 3600 * 1000
+                    ? 'bg-rose-500/10 border-rose-500/25 text-rose-300'
+                    : 'bg-amber-500/10 border-amber-500/25 text-amber-300'
+                )}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Clock className="w-4 h-4 shrink-0 text-orange-400" />
+                  <div>
+                    <div className="text-[11px] font-semibold text-white">
+                      Batas Pengiriman Marketplace (SLA Shopee)
+                    </div>
+                    <div className="text-[10px] text-neutral-300 mt-0.5">
+                      Maksimal pickup sebelum:{' '}
+                      <span className="font-bold text-orange-300">
+                        {shipDeadline.toLocaleDateString('id-ID', {
+                          weekday: 'long',
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                        , {shipDeadline.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-white/10 shrink-0">
+                  {order.ship_by_date ? 'Shopee Deadline' : 'SLA'}
+                </span>
+              </div>
+            )}
+
+            {/* Pickup Date & Time Window (Always Configurable & Guarded by SLA) */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-semibold text-neutral-300 block mb-1">
@@ -444,7 +621,7 @@ export const ArrangeShipmentModal: React.FC<ArrangeShipmentModalProps> = ({
                     onChange={(e) => {
                       const newDateKey = e.target.value;
                       setSelectedDateKey(newDateKey);
-                      const matchingSlots = (parameters?.pickup?.time_slot_list || []).filter((slot) => {
+                      const matchingSlots = allPickupSlots.filter((slot) => {
                         if (!slot.date) return true;
                         const ts = slot.date > 1e11 ? slot.date : slot.date * 1000;
                         const d = new Date(ts);
@@ -452,13 +629,18 @@ export const ArrangeShipmentModal: React.FC<ArrangeShipmentModalProps> = ({
                         return key === newDateKey;
                       });
                       if (matchingSlots.length > 0) {
-                        setSelectedTimeSlotId(matchingSlots[0].pickup_time_id);
+                        const firstValid = matchingSlots.find((s) => {
+                          if (!shipDeadline || !s.date) return true;
+                          const ts = s.date > 1e11 ? s.date : s.date * 1000;
+                          return ts <= shipDeadline.getTime();
+                        }) || matchingSlots[0];
+                        setSelectedTimeSlotId(firstValid.pickup_time_id);
                       }
                     }}
                     className="w-full px-3 py-2 rounded-xl bg-neutral-950 border border-white/10 text-white text-xs focus:outline-none focus:border-orange-500/60 transition-colors"
                   >
                     {distinctDates.map((d) => (
-                      <option key={d.dateKey} value={d.dateKey}>
+                      <option key={d.dateKey} value={d.dateKey} disabled={d.isPastDeadline}>
                         {d.dateLabel}
                       </option>
                     ))}
@@ -470,7 +652,17 @@ export const ArrangeShipmentModal: React.FC<ArrangeShipmentModalProps> = ({
                     className="w-full px-3 py-2 rounded-xl bg-neutral-950 border border-white/10 text-white text-xs focus:outline-none focus:border-orange-500/60 transition-colors"
                   >
                     <option value="today">{fallbackTodayLabel}</option>
-                    <option value="tomorrow">{fallbackTomorrowLabel}</option>
+                    <option
+                      value="tomorrow"
+                      disabled={isInstantCourier || isTomorrowPastDeadline}
+                    >
+                      {fallbackTomorrowLabel}{' '}
+                      {isInstantCourier
+                        ? '(Tidak Berlaku utk Instant)'
+                        : isTomorrowPastDeadline
+                        ? '⚠️ (Lewat Batas Kirim)'
+                        : ''}
+                    </option>
                   </select>
                 )}
               </div>
@@ -485,9 +677,14 @@ export const ArrangeShipmentModal: React.FC<ArrangeShipmentModalProps> = ({
                     onChange={(e) => setSelectedTimeSlotId(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-neutral-950 border border-white/10 text-white text-xs focus:outline-none focus:border-orange-500/60 transition-colors"
                   >
-                    {availableTimeSlots.map((slot: ShopeePickupTimeSlot) => (
-                      <option key={slot.pickup_time_id} value={slot.pickup_time_id}>
-                        {slot.time_text ? `${slot.time_text} WIB` : 'Rentang Waktu Standar'}
+                    {availableTimeSlots.map((slot: any) => (
+                      <option
+                        key={slot.pickup_time_id}
+                        value={slot.pickup_time_id}
+                        disabled={slot.isPastDeadline}
+                      >
+                        {slot.time_text ? `${slot.time_text} WIB` : 'Rentang Waktu Standar'}{' '}
+                        {slot.isPastDeadline ? '⚠️ (Lewat Batas Kirim)' : ''}
                       </option>
                     ))}
                   </select>
@@ -497,10 +694,21 @@ export const ArrangeShipmentModal: React.FC<ArrangeShipmentModalProps> = ({
                     onChange={(e) => setFallbackTimeRange(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-neutral-950 border border-white/10 text-white text-xs focus:outline-none focus:border-orange-500/60 transition-colors"
                   >
-                    <option value="09:00 - 12:00">09:00 - 12:00 WIB</option>
-                    <option value="12:00 - 15:00">12:00 - 15:00 WIB</option>
-                    <option value="13:00 - 17:00">13:00 - 17:00 WIB</option>
-                    <option value="17:00 - 20:00">17:00 - 20:00 WIB</option>
+                    {fallbackSlotList.map((slot) => {
+                      const isPast = isFallbackSlotPastDeadline(fallbackDate, slot);
+                      const isElapsed = isSlotInThePast(fallbackDate, slot);
+                      const disabled = isPast || isElapsed;
+                      let note = '';
+                      if (isPast) note = '⚠️ (Lewat Batas Kirim)';
+                      else if (isElapsed) note = '(Waktu Berlalu)';
+
+                      return (
+                        <option key={slot} value={slot} disabled={disabled}>
+                          {slot.includes('WIB') || slot.includes('Pickup') ? slot : `${slot} WIB`}{' '}
+                          {note}
+                        </option>
+                      );
+                    })}
                   </select>
                 )}
               </div>
@@ -510,7 +718,7 @@ export const ArrangeShipmentModal: React.FC<ArrangeShipmentModalProps> = ({
               <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs flex items-center gap-2">
                 <Clock className="w-3.5 h-3.5 text-blue-400 shrink-0" />
                 <span className="text-[11px]">
-                  Kurir Instant ({order.shipping_carrier || 'Instant'}): Driver akan dialokasikan segera setelah konfirmasi jadwal.
+                  Kurir Instant ({order.shipping_carrier || 'Instant'}): Driver langsung dialokasikan untuk penjemputan hari ini.
                 </span>
               </div>
             )}
