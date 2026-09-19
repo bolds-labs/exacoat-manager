@@ -7,7 +7,7 @@
  * - Hemat & Kargo (SPX Hemat, J&T Cargo, JNE Trucking/JTR, SiCepat Gokil/HALU)
  */
 
-export type CourierTier = 'instant' | 'sameday' | 'reguler_yes' | 'cargo_hemat' | 'other';
+export type CourierTier = 'instant' | 'sameday' | 'reguler_yes' | 'cargo' | 'cargo_hemat' | 'other';
 
 export function classifyCourierTier(carrierRaw: string): CourierTier {
   const c = (carrierRaw || '').toLowerCase().trim();
@@ -19,18 +19,20 @@ export function classifyCourierTier(carrierRaw: string): CourierTier {
   if (c.includes('sameday') || c.includes('same day') || c.includes('same-day') || c.includes('samday')) {
     return 'sameday';
   }
+  // Heavy freight / cargo
   if (
     c.includes('cargo') ||
     c.includes('kargo') ||
     c.includes('trucking') ||
     c.includes('jtr') ||
-    c.includes('hemat') ||
-    c.includes('economy') ||
-    c.includes('halu') ||
-    c.includes('gokil')
+    c.includes('gokil') ||
+    c.includes('sentral') ||
+    c.includes('dakota') ||
+    c.includes('indah logistik')
   ) {
-    return 'cargo_hemat';
+    return 'cargo';
   }
+  // Reguler, Express, YES, plus Hemat & Halu
   if (
     c.includes('reguler') ||
     c.includes('regular') ||
@@ -40,6 +42,10 @@ export function classifyCourierTier(carrierRaw: string): CourierTier {
     c.includes('best') ||
     c.includes('next day') ||
     c.includes('nextday') ||
+    c.includes('hemat') ||
+    c.includes('halu') ||
+    c.includes('economy') ||
+    c.includes('oke') ||
     c.includes('jne') ||
     c.includes('j&t') ||
     c.includes('spx') ||
@@ -75,7 +81,7 @@ export function buildGroupedCourierOptions<T extends { shipping_carrier?: string
     const raw = (o.shipping_carrier || '').trim();
     if (!raw) return;
 
-    const clean = raw.replace(/[---:].*$/, '').trim();
+    const clean = raw.replace(/\s*[-:].*$/, '').trim();
     const tier = classifyCourierTier(clean);
     const key = clean.toUpperCase();
 
@@ -89,7 +95,7 @@ export function buildGroupedCourierOptions<T extends { shipping_carrier?: string
       const cur = samedayMap.get(key) || { name: clean, count: 0 };
       cur.count++;
       samedayMap.set(key, cur);
-    } else if (tier === 'cargo_hemat') {
+    } else if (tier === 'cargo' || tier === 'cargo_hemat') {
       cargoTotal++;
       const cur = cargoMap.get(key) || { name: clean, count: 0 };
       cur.count++;
@@ -119,8 +125,8 @@ export function buildGroupedCourierOptions<T extends { shipping_carrier?: string
     { value: 'all', label: 'Semua Jasa Kirim', count: orders.length },
   ];
 
-  // 1. Instant Group
-  if (instantTotal > 0 || instantMap.size > 0) {
+  // 1. Instant Group (only when there are orders)
+  if (instantTotal > 0) {
     options.push({ isHeader: true, label: 'Layanan Instant', value: 'header:instant' });
     options.push({
       value: 'group:instant',
@@ -130,6 +136,7 @@ export function buildGroupedCourierOptions<T extends { shipping_carrier?: string
       badgeVariant: 'amber',
     });
     Array.from(instantMap.entries())
+      .filter(([, val]) => val.count > 0)
       .sort((a, b) => b[1].count - a[1].count)
       .forEach(([key, val]) => {
         options.push({
@@ -141,8 +148,8 @@ export function buildGroupedCourierOptions<T extends { shipping_carrier?: string
       });
   }
 
-  // 2. Same Day Group
-  if (samedayTotal > 0 || samedayMap.size > 0) {
+  // 2. Same Day Group (only when there are orders)
+  if (samedayTotal > 0) {
     options.push({ isHeader: true, label: 'Layanan Same Day', value: 'header:sameday' });
     options.push({
       value: 'group:sameday',
@@ -152,6 +159,7 @@ export function buildGroupedCourierOptions<T extends { shipping_carrier?: string
       badgeVariant: 'sky',
     });
     Array.from(samedayMap.entries())
+      .filter(([, val]) => val.count > 0)
       .sort((a, b) => b[1].count - a[1].count)
       .forEach(([key, val]) => {
         options.push({
@@ -163,9 +171,9 @@ export function buildGroupedCourierOptions<T extends { shipping_carrier?: string
       });
   }
 
-  // 3. Reguler & Next Day / YES Group
-  if (regulerTotal > 0 || regulerMap.size > 0) {
-    options.push({ isHeader: true, label: 'Reguler & Next Day (YES)', value: 'header:reguler' });
+  // 3. Reguler & YES Group (including Hemat & Halu)
+  if (regulerTotal > 0) {
+    options.push({ isHeader: true, label: 'Reguler, Hemat & YES', value: 'header:reguler' });
     options.push({
       value: 'group:reguler_yes',
       label: '📦 Semua Reguler & YES',
@@ -174,6 +182,7 @@ export function buildGroupedCourierOptions<T extends { shipping_carrier?: string
       badgeVariant: 'zinc',
     });
     Array.from(regulerMap.entries())
+      .filter(([, val]) => val.count > 0)
       .sort((a, b) => b[1].count - a[1].count)
       .forEach(([key, val]) => {
         options.push({
@@ -185,17 +194,18 @@ export function buildGroupedCourierOptions<T extends { shipping_carrier?: string
       });
   }
 
-  // 4. Kargo & Hemat Group (if any)
+  // 4. Kargo Group (only when there are orders)
   if (cargoTotal > 0) {
-    options.push({ isHeader: true, label: 'Kargo & Hemat', value: 'header:cargo' });
+    options.push({ isHeader: true, label: 'Layanan Kargo', value: 'header:cargo' });
     options.push({
-      value: 'group:cargo_hemat',
-      label: '🚛 Semua Kargo & Hemat',
+      value: 'group:cargo',
+      label: '🚛 Semua Kargo',
       count: cargoTotal,
       badge: 'Grup',
       badgeVariant: 'zinc',
     });
     Array.from(cargoMap.entries())
+      .filter(([, val]) => val.count > 0)
       .sort((a, b) => b[1].count - a[1].count)
       .forEach(([key, val]) => {
         options.push({
@@ -207,10 +217,11 @@ export function buildGroupedCourierOptions<T extends { shipping_carrier?: string
       });
   }
 
-  // 5. Other Group (if any)
+  // 5. Other Group (only when there are orders)
   if (otherTotal > 0) {
     options.push({ isHeader: true, label: 'Lainnya', value: 'header:other' });
     Array.from(otherMap.entries())
+      .filter(([, val]) => val.count > 0)
       .sort((a, b) => b[1].count - a[1].count)
       .forEach(([key, val]) => {
         options.push({
@@ -229,7 +240,11 @@ export function matchesCourierFilter(carrierRaw: string | undefined, filter: str
   if (!filter || filter === 'all') return true;
   if (filter.startsWith('group:')) {
     const tier = filter.replace('group:', '') as CourierTier;
-    return classifyCourierTier(carrierRaw || '') === tier;
+    const itemTier = classifyCourierTier(carrierRaw || '');
+    if (tier === 'cargo' || tier === 'cargo_hemat') {
+      return itemTier === 'cargo' || itemTier === 'cargo_hemat';
+    }
+    return itemTier === tier;
   }
   const clean = (carrierRaw || '').toUpperCase();
   return clean.includes(filter.toUpperCase());

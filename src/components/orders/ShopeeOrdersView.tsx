@@ -351,7 +351,22 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
     }
   };
 
-  const courierOptions = useMemo(() => buildGroupedCourierOptions(orders), [orders]);
+  // Orders matching current status tab
+  const ordersInActiveTab = useMemo(() => {
+    return orders.filter((order) => {
+      if (activeTab === 'READY_TO_SHIP' && !['READY_TO_SHIP', 'PROCESSED'].includes(order.order_status)) return false;
+      if (activeTab === 'TO_PROCESS' && (order.order_status !== 'READY_TO_SHIP' || order.is_arranged)) return false;
+      if (activeTab === 'PROCESSED' && (order.order_status !== 'PROCESSED' && !order.is_arranged)) return false;
+      if (activeTab === 'SHIPPED' && order.order_status !== 'SHIPPED') return false;
+      if (activeTab === 'COMPLETED' && !['COMPLETED', 'TO_CONFIRM_RECEIVE'].includes(order.order_status) && !order.is_delivered) return false;
+      if (activeTab === 'CLAIMED' && !order.already_claimed) return false;
+      if (activeTab === 'CANCELLED' && !['CANCELLED', 'IN_CANCEL', 'TO_RETURN'].includes(order.order_status)) return false;
+      return true;
+    });
+  }, [orders, activeTab]);
+
+  // Contextual courier options matching orders strictly in the current tab
+  const courierOptions = useMemo(() => buildGroupedCourierOptions(ordersInActiveTab), [ordersInActiveTab]);
 
   const readyToShipCount = useMemo(
     () => orders.filter((o) => ['READY_TO_SHIP', 'PROCESSED'].includes(o.order_status)).length,
@@ -365,38 +380,88 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
     () => orders.filter((o) => o.order_status === 'PROCESSED' || o.is_arranged).length,
     [orders]
   );
-  const unprintedCount = useMemo(
+
+  // Print counts within the active tab
+  const tabUnprintedCount = useMemo(
     () =>
-      orders.filter(
-        (o) =>
-          (o.order_status === 'PROCESSED' || o.is_arranged) &&
-          !o.is_printed &&
-          o.shipping_document_status !== 'PRINTED'
+      ordersInActiveTab.filter(
+        (o) => !o.is_printed && o.shipping_document_status !== 'PRINTED'
       ).length,
-    [orders]
+    [ordersInActiveTab]
   );
-  const printedCount = useMemo(
+  const tabPrintedCount = useMemo(
     () =>
-      orders.filter(
-        (o) =>
-          (o.order_status === 'PROCESSED' || o.is_arranged) &&
-          (o.is_printed || o.shipping_document_status === 'PRINTED')
+      ordersInActiveTab.filter(
+        (o) => Boolean(o.is_printed || o.shipping_document_status === 'PRINTED')
       ).length,
-    [orders]
+    [ordersInActiveTab]
   );
+
+  // Dynamic Label Pengiriman options (only show options that have orders)
+  const printStatusOptions = useMemo(() => {
+    const opts: Array<{
+      value: 'all' | 'unprinted' | 'printed';
+      label: string;
+      count?: number;
+      badge?: string;
+      badgeVariant?: 'emerald' | 'amber' | 'rose' | 'zinc' | 'sky' | 'orange';
+    }> = [
+      { value: 'all', label: 'Semua Label', count: ordersInActiveTab.length },
+    ];
+
+    if (tabUnprintedCount > 0) {
+      opts.push({
+        value: 'unprinted',
+        label: 'Perlu Dicetak',
+        count: tabUnprintedCount,
+        badge: 'Menunggu',
+        badgeVariant: 'amber',
+      });
+    }
+
+    if (tabPrintedCount > 0) {
+      opts.push({
+        value: 'printed',
+        label: 'Telah Dicetak',
+        count: tabPrintedCount,
+        badge: 'Selesai',
+        badgeVariant: 'emerald',
+      });
+    }
+
+    return opts;
+  }, [ordersInActiveTab.length, tabUnprintedCount, tabPrintedCount]);
+
+  // Tab change handler that resets courier and print filters
+  const handleTabChange = (newTab: StatusTab) => {
+    setActiveTab(newTab);
+    setCourierFilter('all');
+    setPrintFilter('all');
+    setCurrentPage(1);
+  };
+
+  // Auto-reset courier or print filter if selected value has 0 matches in the active tab
+  useEffect(() => {
+    if (courierFilter !== 'all') {
+      const exists = ordersInActiveTab.some((o) =>
+        matchesCourierFilter(o.shipping_carrier, courierFilter)
+      );
+      if (!exists) {
+        setCourierFilter('all');
+      }
+    }
+    if (printFilter !== 'all') {
+      if (printFilter === 'unprinted' && tabUnprintedCount === 0) {
+        setPrintFilter('all');
+      } else if (printFilter === 'printed' && tabPrintedCount === 0) {
+        setPrintFilter('all');
+      }
+    }
+  }, [ordersInActiveTab, courierFilter, printFilter, tabUnprintedCount, tabPrintedCount]);
 
   // Filtered orders computation
   const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
-      // Tab filter
-      if (activeTab === 'READY_TO_SHIP' && !['READY_TO_SHIP', 'PROCESSED'].includes(order.order_status)) return false;
-      if (activeTab === 'TO_PROCESS' && (order.order_status !== 'READY_TO_SHIP' || order.is_arranged)) return false;
-      if (activeTab === 'PROCESSED' && (order.order_status !== 'PROCESSED' && !order.is_arranged)) return false;
-      if (activeTab === 'SHIPPED' && order.order_status !== 'SHIPPED') return false;
-      if (activeTab === 'COMPLETED' && !['COMPLETED', 'TO_CONFIRM_RECEIVE'].includes(order.order_status) && !order.is_delivered) return false;
-      if (activeTab === 'CLAIMED' && !order.already_claimed) return false;
-      if (activeTab === 'CANCELLED' && !['CANCELLED', 'IN_CANCEL', 'TO_RETURN'].includes(order.order_status)) return false;
-
+    return ordersInActiveTab.filter((order) => {
       // Grouped / Individual Courier filter
       if (!matchesCourierFilter(order.shipping_carrier, courierFilter)) return false;
 
@@ -433,7 +498,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
 
       return true;
     });
-  }, [orders, activeTab, courierFilter, printFilter, searchQuery]);
+  }, [ordersInActiveTab, courierFilter, printFilter, searchQuery]);
 
   const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
   const pagedOrders = useMemo(() => {
@@ -645,7 +710,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
               className={clsx(
                 'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer',
                 activeTab === tab.id
@@ -698,23 +763,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
             value={printFilter}
             onChange={(val) => setPrintFilter(val as any)}
             icon={<Printer className="w-3.5 h-3.5" />}
-            options={[
-              { value: 'all', label: 'Semua Label' },
-              {
-                value: 'unprinted',
-                label: 'Perlu Dicetak',
-                count: unprintedCount > 0 ? unprintedCount : undefined,
-                badge: unprintedCount > 0 ? 'Menunggu' : undefined,
-                badgeVariant: 'amber',
-              },
-              {
-                value: 'printed',
-                label: 'Telah Dicetak',
-                count: printedCount > 0 ? printedCount : undefined,
-                badge: printedCount > 0 ? 'Selesai' : undefined,
-                badgeVariant: 'emerald',
-              },
-            ]}
+            options={printStatusOptions}
           />
 
           {/* Clear Filters */}

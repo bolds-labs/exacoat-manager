@@ -68,6 +68,20 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
 
   const totalItemsCount = (order.items || []).reduce((sum, item) => sum + (item.quantity || 1), 0);
 
+  const metaList = Array.isArray(order.meta_data) ? order.meta_data : [];
+  const isWarrantyOrder =
+    metaList.some((m: any) => (m.key === '_order_badge' && m.value === 'WARRANTY') || (m.key === '_rma_order_type' && m.value === 'Warranty') || (m.key === '_is_warranty' && m.value === 'yes'));
+  const isRedeemOrder =
+    metaList.some((m: any) => (m.key === '_order_badge' && m.value === 'REDEEM') || (m.key === '_rma_order_type' && m.value === 'Redeem'));
+  const rmaMarketplace = metaList.find((m: any) => m.key === '_rma_marketplace_channel')?.value;
+  const rmaOrigInvoice = metaList.find((m: any) => m.key === '_rma_original_invoice' || m.key === '_rma_original_order_id' || m.key === '_rma_original_order_number')?.value;
+
+  const channelBadgeHtml = isWarrantyOrder
+    ? `<span class="badge-channel" style="background: #e0f2fe; color: #0369a1; border-color: #7dd3fc; font-weight: 800;">${rmaMarketplace ? `${rmaMarketplace} Warranty` : 'Installation Warranty'}</span>`
+    : isRedeemOrder
+    ? `<span class="badge-channel" style="background: #fef3c7; color: #b45309; border-color: #fcd34d; font-weight: 800;">Redeem Replacement</span>`
+    : `<span class="badge-channel">Direct Web Order</span>`;
+
   const handlePrint = () => {
     if (onPrinted && order.id) {
       onPrinted(order.id);
@@ -92,7 +106,7 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
           </td>
           <td style="padding: 10px 12px; font-weight: 700; font-size: 13px; color: #111827; vertical-align: top;">
             <div>${item.name || 'Precision Device Skin'}</div>
-            ${specSummary ? `<div style="font-size: 11px; color: #4b5563; font-weight: 500; margin-top: 2px;">${specSummary}</div>` : ''}
+            ${specSummary ? `<div style="font-size: 11px; color: #1e3a8a; font-weight: 600; margin-top: 2px;">${specSummary}</div>` : ''}
             <div style="font-size: 10.5px; color: #6b7280; font-family: monospace; margin-top: 2px;">SKU: ${itemSku}</div>
           </td>
           <td style="padding: 10px 12px; text-align: center; font-weight: 800; font-size: 14px; color: #111827; font-family: monospace; vertical-align: top; width: 70px;">
@@ -251,8 +265,9 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
               <div class="slip-meta">
                 <div><strong>Slip Ref:</strong> ${packingSlipNum}</div>
                 <div><strong>Order #:</strong> #${cleanOrderNum}</div>
+                ${rmaOrigInvoice ? `<div style="color: #0369a1; font-weight: 700; font-size: 11px;"><strong>Orig. Ref:</strong> #${rmaOrigInvoice}</div>` : ''}
                 <div><strong>Date:</strong> ${formatDate(order.created_at)}</div>
-                <div style="margin-top: 4px;"><span class="badge-channel">Direct Web Order</span></div>
+                <div style="margin-top: 4px;">${channelBadgeHtml}</div>
               </div>
             </div>
           </div>
@@ -270,7 +285,7 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
               <div class="col-text"><strong>Courier:</strong> ${courierName}</div>
               <div class="col-text"><strong>Tracking Resi:</strong> ${trackingNumber || 'Pending Pickup Allocation'}</div>
               <div class="col-text"><strong>Total Line Items:</strong> ${(order.items || []).length} (${totalItemsCount} units)</div>
-              ${order.customer_note ? `<div class="col-text" style="margin-top: 6px; padding: 6px; background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; font-style: italic;"><strong>Note:</strong> ${order.customer_note}</div>` : ''}
+              ${order.customer_note ? `<div class="col-text" style="margin-top: 6px; padding: 8px; background: #fff; border: 1.5px solid #d1d5db; border-radius: 6px; font-size: 11px; line-height: 1.45; color: #111827; white-space: pre-line;"><strong>Production Note:</strong>\n${order.customer_note}</div>` : ''}
             </div>
           </div>
 
@@ -373,10 +388,20 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
             <div className="text-right">
               <span className="text-lg font-black tracking-tight text-black block">PACKING SLIP</span>
               <span className="text-[11px] font-mono font-bold text-neutral-700 block">{packingSlipNum}</span>
+              {rmaOrigInvoice && (
+                <span className="text-[11px] font-mono font-bold text-sky-700 block">Orig: #{rmaOrigInvoice}</span>
+              )}
               <span className="text-[10px] text-neutral-500 block">{formatDate(order.created_at)}</span>
-              <span className="inline-block mt-1 px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-[9px] font-extrabold font-mono uppercase">
-                {courierName}
-              </span>
+              <div className="flex items-center justify-end gap-1 mt-1">
+                <span className="inline-block px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-[9px] font-extrabold font-mono uppercase">
+                  {courierName}
+                </span>
+                {isWarrantyOrder && (
+                  <span className="inline-block px-2 py-0.5 rounded bg-sky-100 text-sky-900 border border-sky-300 text-[9px] font-extrabold font-mono uppercase">
+                    {rmaMarketplace ? `${rmaMarketplace} Warranty` : 'Warranty'}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -409,9 +434,10 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
                 <strong>Total Items:</strong> {(order.items || []).length} lines ({totalItemsCount} units)
               </p>
               {order.customer_note && (
-                <p className="text-[10.5px] text-neutral-600 italic mt-1 border-t border-neutral-200 pt-1">
-                  Note: {order.customer_note}
-                </p>
+                <div className="text-[10px] text-neutral-700 mt-2 border-t border-neutral-200 pt-1.5 whitespace-pre-line bg-amber-50/70 p-2 rounded border border-amber-200/60 leading-relaxed font-sans">
+                  <strong className="text-neutral-900 block font-bold mb-0.5">Production Note:</strong>
+                  {order.customer_note}
+                </div>
               )}
             </div>
           </div>

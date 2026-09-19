@@ -327,11 +327,9 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
     }
   };
 
-  const courierOptions = useMemo(() => buildGroupedCourierOptions(orders), [orders]);
-
-  const filteredOrders = useMemo(() => {
+  // Orders matching current status tab
+  const ordersInActiveTab = useMemo(() => {
     return orders.filter((order) => {
-      // Tab filter
       if (activeTab === 'READY_TO_SHIP') {
         const st = (order.order_status || '').toUpperCase();
         if (!['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'READY_TO_SHIP'].includes(st)) return false;
@@ -347,7 +345,79 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
         const st = (order.order_status || '').toUpperCase();
         if (st !== 'CANCELLED') return false;
       }
+      return true;
+    });
+  }, [orders, activeTab]);
 
+  const courierOptions = useMemo(() => buildGroupedCourierOptions(ordersInActiveTab), [ordersInActiveTab]);
+
+  const tabWithResiCount = useMemo(
+    () => ordersInActiveTab.filter((o) => Boolean(o.tracking_number && o.tracking_number.trim().length > 0)).length,
+    [ordersInActiveTab]
+  );
+  const tabNoResiCount = useMemo(
+    () => ordersInActiveTab.filter((o) => !o.tracking_number || o.tracking_number.trim().length === 0).length,
+    [ordersInActiveTab]
+  );
+
+  const trackingOptions = useMemo(() => {
+    const opts: Array<{
+      value: 'all' | 'has-resi' | 'no-resi';
+      label: string;
+      count?: number;
+      badge?: string;
+      badgeVariant?: 'emerald' | 'amber' | 'rose' | 'zinc' | 'sky' | 'orange';
+    }> = [
+      { value: 'all', label: 'Semua Status Resi', count: ordersInActiveTab.length },
+    ];
+    if (tabWithResiCount > 0) {
+      opts.push({
+        value: 'has-resi',
+        label: 'Ada No. Resi',
+        count: tabWithResiCount,
+        badge: 'Resi Siap',
+        badgeVariant: 'emerald',
+      });
+    }
+    if (tabNoResiCount > 0) {
+      opts.push({
+        value: 'no-resi',
+        label: 'Belum Ada Resi',
+        count: tabNoResiCount,
+        badge: 'Menunggu',
+        badgeVariant: 'amber',
+      });
+    }
+    return opts;
+  }, [ordersInActiveTab.length, tabWithResiCount, tabNoResiCount]);
+
+  const handleTabChange = (newTab: StatusTab) => {
+    setActiveTab(newTab);
+    setCourierFilter('all');
+    setTrackingFilter('all');
+    setCurrentPage(1);
+  };
+
+  useEffect(() => {
+    if (courierFilter !== 'all') {
+      const exists = ordersInActiveTab.some((o) =>
+        matchesCourierFilter(o.shipping_carrier, courierFilter)
+      );
+      if (!exists) {
+        setCourierFilter('all');
+      }
+    }
+    if (trackingFilter !== 'all') {
+      if (trackingFilter === 'has-resi' && tabWithResiCount === 0) {
+        setTrackingFilter('all');
+      } else if (trackingFilter === 'no-resi' && tabNoResiCount === 0) {
+        setTrackingFilter('all');
+      }
+    }
+  }, [ordersInActiveTab, courierFilter, trackingFilter, tabWithResiCount, tabNoResiCount]);
+
+  const filteredOrders = useMemo(() => {
+    return ordersInActiveTab.filter((order) => {
       // Grouped / Individual Courier filter
       if (!matchesCourierFilter(order.shipping_carrier, courierFilter)) return false;
 
@@ -576,7 +646,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
               className={clsx(
                 'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer',
                 activeTab === tab.id
@@ -629,11 +699,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
             value={trackingFilter}
             onChange={(val) => setTrackingFilter(val as any)}
             icon={<Printer className="w-3.5 h-3.5" />}
-            options={[
-              { value: 'all', label: 'Semua Status Resi' },
-              { value: 'has-resi', label: 'Ada No. Resi' },
-              { value: 'no-resi', label: 'Belum Ada Resi' },
-            ]}
+            options={trackingOptions}
           />
 
           {/* Clear Filters */}

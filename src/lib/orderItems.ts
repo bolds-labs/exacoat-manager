@@ -75,13 +75,45 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
     }
   };
 
+  // 0. Prioritize Warranty Replacement & RMA keys so production immediately sees what part to cut
+  if (Array.isArray(item.meta_data) && item.meta_data.length > 0) {
+    const priorityWarrantyKeys = [
+      'claimed part',
+      'part to produce',
+      'original invoice',
+      'original order',
+      'original channel',
+      'variation',
+      'shopee note',
+      'buyer note',
+    ];
+    for (const pKey of priorityWarrantyKeys) {
+      const match = item.meta_data.find(
+        (m: any) => String(m.label || m.key || '').trim().toLowerCase() === pKey
+      );
+      if (match) {
+        const val = match.display_value || match.value;
+        if (val && typeof val === 'string' && val.trim()) {
+          addSpec(match.key || match.label, val.trim());
+        }
+      }
+    }
+    const partNoteMeta = item.meta_data.find((m: any) => m.key === '_claimed_part_note')?.value;
+    if (partNoteMeta && typeof partNoteMeta === 'string' && partNoteMeta.trim()) {
+      addSpec('Claimed Part', partNoteMeta.trim());
+    }
+  }
+
+  // Count specs found so far before checking regular configurator/product attributes
+  const hasConfiguratorSpecs = () => specs.some(s => !['claimed part', 'part to produce', 'original invoice', 'original order', 'original channel', 'variation', 'shopee note', 'buyer note'].includes(s.label.toLowerCase()));
+
   // 1. Check custom_addons array (prepared by backend parser)
   if (Array.isArray(item.custom_addons) && item.custom_addons.length > 0) {
     parseAddonsList(item.custom_addons);
   }
 
   // 2. Check parsed_configurator
-  if (specs.length === 0 && Array.isArray(item.parsed_configurator) && item.parsed_configurator.length > 0) {
+  if (!hasConfiguratorSpecs() && Array.isArray(item.parsed_configurator) && item.parsed_configurator.length > 0) {
     for (const c of item.parsed_configurator) {
       const layer = String(c.layer_name || c.name || '').trim();
       const choice = String(c.choice_name || c.choice_title || c.name || '').trim();
@@ -94,7 +126,7 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
   }
 
   // 3. Check formatted_meta
-  if (specs.length === 0 && Array.isArray(item.formatted_meta) && item.formatted_meta.length > 0) {
+  if (!hasConfiguratorSpecs() && Array.isArray(item.formatted_meta) && item.formatted_meta.length > 0) {
     for (const m of item.formatted_meta) {
       const key = String(m.label || m.key || '').trim();
       const val = String(m.display_value || m.value || '').trim();
@@ -115,7 +147,7 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
   }
 
   // 4. Check meta_data (including legacy WooCommerce Product Add-ons & Acowebs WCPA)
-  if (specs.length === 0 && Array.isArray(item.meta_data) && item.meta_data.length > 0) {
+  if (!hasConfiguratorSpecs() && Array.isArray(item.meta_data) && item.meta_data.length > 0) {
     // Check raw configurator data
     const rawConfig = item.meta_data.find((m: any) => m.key === '_configurator_data_raw' || m.key === '_configurator_data');
     if (rawConfig && rawConfig.value && Array.isArray(rawConfig.value)) {
@@ -129,7 +161,7 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
     }
 
     // Check legacy WooCommerce Custom Product Add-ons keys (e.g. Order #542240 Everything Skins)
-    if (specs.length === 0) {
+    if (!hasConfiguratorSpecs()) {
       for (const m of item.meta_data) {
         const key = String(m.key || '').trim().toLowerCase();
         if (
@@ -145,7 +177,7 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
       }
     }
 
-    if (specs.length === 0) {
+    if (!hasConfiguratorSpecs()) {
       for (const m of item.meta_data) {
         const key = String(m.key || '').trim();
         const val = typeof m.value === 'string' ? m.value.trim() : (m.display_value ? String(m.display_value).trim() : '');
