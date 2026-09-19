@@ -66,34 +66,13 @@ export const FinancialLedgerTable: React.FC<FinancialLedgerTableProps> = ({
     }
   };
 
-  const getStatusBadge = (statusNorm: string, rawStatus: string) => {
-    switch (statusNorm) {
-      case 'paid':
-        return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            {rawStatus.toUpperCase()}
-          </span>
-        );
-      case 'pending':
-        return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-            {rawStatus.toUpperCase()}
-          </span>
-        );
-      case 'refunded':
-        return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
-            REFUNDED
-          </span>
-        );
-      case 'cancelled':
-      default:
-        return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-zinc-500/10 text-zinc-400 border border-zinc-500/20">
-            {rawStatus.toUpperCase()}
-          </span>
-        );
-    }
+  const getStatusBadge = (_statusNorm: string, rawStatus: string) => {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 whitespace-nowrap">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+        <span>PAID · {rawStatus.toUpperCase()}</span>
+      </span>
+    );
   };
 
   return (
@@ -108,7 +87,7 @@ export const FinancialLedgerTable: React.FC<FinancialLedgerTableProps> = ({
             </h3>
           </div>
           <p className="text-xs text-neutral-400 mt-0.5">
-            Verified completed, marketplace, and webstore payment records
+            Verified paid customer checkouts (cancelled and unpaid orders excluded)
           </p>
         </div>
 

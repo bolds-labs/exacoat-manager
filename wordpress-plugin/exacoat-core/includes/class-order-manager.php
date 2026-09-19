@@ -1915,7 +1915,7 @@ class Exacoat_Order_Manager {
 		$buckets = [];
 		$paid_statuses = array_unique( array_merge(
 			wc_get_is_paid_statuses(),
-			[ 'processing', 'in-production', 'quality-check', 'awaiting-pickup', 'shipped', 'completed', 'refunded' ]
+			[ 'processing', 'in-production', 'quality-check', 'awaiting-pickup', 'shipped', 'completed' ]
 		) );
 
 		$channel = strtolower( trim( sanitize_text_field( $request->get_param( 'channel' ) ?: 'all' ) ) );
@@ -1941,6 +1941,11 @@ class Exacoat_Order_Manager {
 				$orders = is_object( $results ) && isset( $results->orders ) ? $results->orders : [];
 				foreach ( $orders as $order ) {
 					if ( ! $order instanceof WC_Order ) {
+						continue;
+					}
+
+					$st = strtolower( trim( (string) $order->get_status() ) );
+					if ( in_array( $st, [ 'cancelled', 'failed', 'pending', 'on-hold', 'refunded', 'trash' ], true ) ) {
 						continue;
 					}
 
@@ -2047,7 +2052,10 @@ class Exacoat_Order_Manager {
 					}
 
 					$st = strtoupper( (string) ( $so['order_status'] ?? '' ) );
-					if ( in_array( $st, [ 'CANCELLED', 'IN_CANCEL', 'UNPAID' ], true ) ) {
+					if ( in_array( $st, [ 'CANCELLED', 'IN_CANCEL', 'UNPAID', 'TO_RETURN', 'REFUNDED' ], true ) ) {
+						continue;
+					}
+					if ( empty( $so['pay_time'] ) && ! in_array( $st, [ 'READY_TO_SHIP', 'PROCESSED', 'SHIPPED', 'COMPLETED', 'TO_CONFIRM_RECEIVE' ], true ) ) {
 						continue;
 					}
 
@@ -2068,14 +2076,12 @@ class Exacoat_Order_Manager {
 					}
 
 					$gross = max( 0, (float) ( $so['total_amount'] ?? 0 ) );
-					$is_refunded = in_array( $st, [ 'TO_RETURN', 'REFUNDED' ], true );
-					$refunded = $is_refunded ? $gross : 0.0;
-					$net = max( 0, $gross - $refunded );
+					$refunded = 0.0;
+					$net = $gross;
 					$date_key = date( 'Y-m-d', $order_ts );
 
 					$buckets[ $curr ]['gross_revenue'] += $gross;
 					$buckets[ $curr ]['net_revenue'] += $net;
-					$buckets[ $curr ]['refunded'] += $refunded;
 					$buckets[ $curr ]['orders']++;
 					$channel_totals['shopee']['gross'] += $gross;
 					$channel_totals['shopee']['net'] += $net;
@@ -2133,7 +2139,10 @@ class Exacoat_Order_Manager {
 					}
 
 					$st = strtoupper( (string) ( $to['order_status'] ?? '' ) );
-					if ( in_array( $st, [ 'CANCELLED', 'UNPAID' ], true ) ) {
+					if ( in_array( $st, [ 'CANCELLED', 'UNPAID', 'REFUNDED', 'RETURNED' ], true ) ) {
+						continue;
+					}
+					if ( empty( $to['pay_time'] ) && ! in_array( $st, [ 'AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED' ], true ) ) {
 						continue;
 					}
 
@@ -2154,14 +2163,12 @@ class Exacoat_Order_Manager {
 					}
 
 					$gross = max( 0, (float) ( $to['total_amount'] ?? 0 ) );
-					$is_refunded = in_array( $st, [ 'REFUNDED', 'RETURNED' ], true );
-					$refunded = $is_refunded ? $gross : 0.0;
-					$net = max( 0, $gross - $refunded );
+					$refunded = 0.0;
+					$net = $gross;
 					$date_key = date( 'Y-m-d', $order_ts );
 
 					$buckets[ $curr ]['gross_revenue'] += $gross;
 					$buckets[ $curr ]['net_revenue'] += $net;
-					$buckets[ $curr ]['refunded'] += $refunded;
 					$buckets[ $curr ]['orders']++;
 					$channel_totals['tiktok']['gross'] += $gross;
 					$channel_totals['tiktok']['net'] += $net;

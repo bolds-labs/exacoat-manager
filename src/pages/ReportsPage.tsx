@@ -264,7 +264,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
           setCustomEnd(end);
         }}
         label={dateLabel}
-        subtitle={`Analyzing ${summary.totalOrders.toLocaleString()} checkouts (${summary.totalUnitsSold.toLocaleString()} units) across active channels`}
+        subtitle={`Analyzing ${summary.totalOrders.toLocaleString()} verified paid orders (${summary.totalUnitsSold.toLocaleString()} units) across active channels (cancelled and unpaid excluded)`}
       />
 
       {/* 3. Multi-Channel Filter Bar */}

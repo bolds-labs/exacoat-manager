@@ -25,6 +25,7 @@ export interface UnifiedFinancialRecord {
   currency: string;
   status: string;
   statusNormalized: 'paid' | 'pending' | 'cancelled' | 'refunded';
+  isPaid: boolean;
   itemsCount: number;
   items: UnifiedOrderItem[];
   customerName: string;
@@ -81,15 +82,41 @@ export interface FinancialAnalyticsSummary {
  * Normalizes a WooCommerce webstore order into a unified financial record
  */
 export function normalizeWebstoreOrder(order: Order): UnifiedFinancialRecord {
-  const isRev = isRevenueOrder(order);
-  const st = String(order.status || '').replace('wc-', '').toLowerCase();
+  const st = String(order.status || '').replace('wc-', '').toLowerCase().trim();
   
+  const isCancelledOrFailed = ['cancelled', 'failed', 'trash', 'draft', 'checkout-draft', 'auto-draft'].includes(st);
+  const isRefunded = ['refunded'].includes(st);
+  const isPendingPayment = ['pending', 'on-hold'].includes(st);
+
+  // Confirmed paid statuses in WooCommerce / Exacoat ERP
+  const isConfirmedPaidStatus = [
+    'processing',
+    'completed',
+    'in-production',
+    'in_production',
+    'preparing-order',
+    'preparing_order',
+    'quality-check',
+    'ready-to-ship',
+    'ready_to_ship',
+    'awaiting-pickup',
+    'awaiting_pickup',
+    'smb-ready',
+    'smb-picked',
+    'shipped',
+    'delivered',
+  ].includes(st);
+
+  // Order is paid only if status is a confirmed paid fulfillment status or has explicit date_paid,
+  // and is NOT cancelled, failed, pending payment, or refunded
+  const isPaid = !isCancelledOrFailed && !isRefunded && !isPendingPayment && (isConfirmedPaidStatus || Boolean(order.date_paid));
+
   let statusNormalized: 'paid' | 'pending' | 'cancelled' | 'refunded' = 'paid';
-  if (['cancelled', 'failed', 'trash'].includes(st)) {
+  if (isCancelledOrFailed) {
     statusNormalized = 'cancelled';
-  } else if (['refunded'].includes(st)) {
+  } else if (isRefunded) {
     statusNormalized = 'refunded';
-  } else if (['pending', 'on-hold'].includes(st)) {
+  } else if (isPendingPayment || !isPaid) {
     statusNormalized = 'pending';
   }
 
@@ -97,7 +124,7 @@ export function normalizeWebstoreOrder(order: Order): UnifiedFinancialRecord {
   const grossIdr = (order as any).total_idr || convertToIdr(gross, order.currency || 'IDR');
   const refunded = Number(order.total_refunded) || 0;
   const refundedIdr = convertToIdr(refunded, order.currency || 'IDR');
-  const netIdr = isRev ? Math.max(0, grossIdr - refundedIdr) : 0;
+  const netIdr = isPaid ? Math.max(0, grossIdr - refundedIdr) : 0;
 
   const createdDate = order.created_at ? new Date(order.created_at) : new Date();
   const timestamp = !isNaN(createdDate.getTime()) ? createdDate.getTime() : Date.now();
@@ -123,12 +150,13 @@ export function normalizeWebstoreOrder(order: Order): UnifiedFinancialRecord {
     timestamp,
     dateIso: createdDate.toISOString().split('T')[0],
     dateFormatted: createdDate.toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' }),
-    grossRevenue: grossIdr,
+    grossRevenue: isPaid ? grossIdr : 0,
     netRevenue: netIdr,
     refundedAmount: refundedIdr,
     currency: 'IDR',
     status: st,
     statusNormalized,
+    isPaid,
     itemsCount: totalItemsCount,
     items,
     customerName,
@@ -142,19 +170,26 @@ export function normalizeWebstoreOrder(order: Order): UnifiedFinancialRecord {
  * Normalizes a Shopee order into a unified financial record
  */
 export function normalizeShopeeOrder(order: ShopeeOrder): UnifiedFinancialRecord {
-  const st = String(order.order_status || '').toUpperCase();
+  const st = String(order.order_status || '').toUpperCase().trim();
   
+  const isCancelled = ['CANCELLED', 'IN_CANCEL'].includes(st);
+  const isRefunded = ['TO_RETURN', 'REFUNDED'].includes(st);
+  const isUnpaid = ['UNPAID'].includes(st);
+  const isPaidStatus = ['READY_TO_SHIP', 'PROCESSED', 'SHIPPED', 'COMPLETED', 'TO_CONFIRM_RECEIVE'].includes(st);
+
+  // Shopee order is paid only if status is verified paid or has pay_time, and not cancelled/unpaid/refunded
+  const isPaid = !isCancelled && !isUnpaid && !isRefunded && (isPaidStatus || Boolean(order.pay_time));
+
   let statusNormalized: 'paid' | 'pending' | 'cancelled' | 'refunded' = 'paid';
-  if (['CANCELLED', 'IN_CANCEL'].includes(st)) {
+  if (isCancelled) {
     statusNormalized = 'cancelled';
-  } else if (['TO_RETURN', 'REFUNDED'].includes(st)) {
+  } else if (isRefunded) {
     statusNormalized = 'refunded';
-  } else if (['UNPAID'].includes(st)) {
+  } else if (isUnpaid || !isPaid) {
     statusNormalized = 'pending';
   }
 
   const gross = Number(order.total_amount) || 0;
-  const isPaid = !['UNPAID', 'CANCELLED', 'IN_CANCEL'].includes(st);
   const net = isPaid ? gross : 0;
 
   const timestamp = order.create_timestamp ? order.create_timestamp * 1000 : (
@@ -179,12 +214,13 @@ export function normalizeShopeeOrder(order: ShopeeOrder): UnifiedFinancialRecord
     timestamp,
     dateIso: dateObj.toISOString().split('T')[0],
     dateFormatted: dateObj.toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' }),
-    grossRevenue: gross,
+    grossRevenue: isPaid ? gross : 0,
     netRevenue: net,
-    refundedAmount: statusNormalized === 'refunded' ? gross : 0,
+    refundedAmount: isRefunded ? gross : 0,
     currency: order.currency || 'IDR',
     status: st,
     statusNormalized,
+    isPaid,
     itemsCount: totalItemsCount,
     items,
     customerName: order.recipient_name || order.buyer_username || 'Shopee Customer',
@@ -197,19 +233,26 @@ export function normalizeShopeeOrder(order: ShopeeOrder): UnifiedFinancialRecord
  * Normalizes a TikTok Shop order into a unified financial record
  */
 export function normalizeTikTokOrder(order: TikTokOrder): UnifiedFinancialRecord {
-  const st = String(order.order_status || '').toUpperCase();
+  const st = String(order.order_status || '').toUpperCase().trim();
   
+  const isCancelled = ['CANCELLED'].includes(st);
+  const isRefunded = ['REFUNDED', 'RETURNED'].includes(st);
+  const isUnpaid = ['UNPAID'].includes(st);
+  const isPaidStatus = ['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'].includes(st);
+
+  // TikTok order is paid only if status confirmed paid or has pay_time, and not cancelled/unpaid/refunded
+  const isPaid = !isCancelled && !isUnpaid && !isRefunded && (isPaidStatus || Boolean(order.pay_time));
+
   let statusNormalized: 'paid' | 'pending' | 'cancelled' | 'refunded' = 'paid';
-  if (['CANCELLED'].includes(st)) {
+  if (isCancelled) {
     statusNormalized = 'cancelled';
-  } else if (['REFUNDED', 'RETURNED'].includes(st)) {
+  } else if (isRefunded) {
     statusNormalized = 'refunded';
-  } else if (['UNPAID'].includes(st)) {
+  } else if (isUnpaid || !isPaid) {
     statusNormalized = 'pending';
   }
 
   const gross = Number(order.total_amount) || 0;
-  const isPaid = !['UNPAID', 'CANCELLED'].includes(st);
   const net = isPaid ? gross : 0;
 
   const timestamp = order.create_timestamp ? order.create_timestamp * 1000 : (
@@ -234,12 +277,13 @@ export function normalizeTikTokOrder(order: TikTokOrder): UnifiedFinancialRecord
     timestamp,
     dateIso: dateObj.toISOString().split('T')[0],
     dateFormatted: dateObj.toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' }),
-    grossRevenue: gross,
+    grossRevenue: isPaid ? gross : 0,
     netRevenue: net,
-    refundedAmount: statusNormalized === 'refunded' ? gross : 0,
+    refundedAmount: isRefunded ? gross : 0,
     currency: order.currency || 'IDR',
     status: st,
     statusNormalized,
+    isPaid,
     itemsCount: totalItemsCount,
     items,
     customerName: order.recipient_name || order.buyer_username || 'TikTok Buyer',
@@ -249,7 +293,8 @@ export function normalizeTikTokOrder(order: TikTokOrder): UnifiedFinancialRecord
 }
 
 /**
- * Aggregates all financial records according to selected channels and timespan horizon
+ * Aggregates all financial records according to selected channels and timespan horizon.
+ * Strictly excludes cancelled orders and any order that has not been paid.
  */
 export function aggregateFinancialMetrics(
   records: UnifiedFinancialRecord[],
@@ -257,13 +302,17 @@ export function aggregateFinancialMetrics(
   startMs: number,
   endMs: number
 ): FinancialAnalyticsSummary {
-  // 1. Filter by timespan and channel
+  // 1. Filter by timespan, channel, and strict payment validity
   const isAllChannels = selectedChannels === 'all' || selectedChannels.length === 3;
   const channelSet = new Set(isAllChannels ? ['webstore', 'shopee', 'tiktok'] : selectedChannels);
 
   const filtered = records.filter(rec => {
+    // Channel filter
     if (!channelSet.has(rec.channel)) return false;
+    // Timespan filter
     if (rec.timestamp < startMs || rec.timestamp > endMs) return false;
+    // Strict rule: do not include 'cancelled' status order or any order that hasn't been paid!
+    if (!rec.isPaid || rec.statusNormalized !== 'paid') return false;
     return true;
   });
 
