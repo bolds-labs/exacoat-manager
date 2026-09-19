@@ -519,7 +519,8 @@ class Exacoat_Shopee_Client {
 			if ( ! empty( $new_ord['order_sn'] ) ) {
 				$sn = $new_ord['order_sn'];
 				// Preserve existing printed status if previous cache marked it printed
-				if ( ! empty( $order_map[ $sn ]['is_printed'] ) && empty( $new_ord['is_printed'] ) ) {
+				$was_printed = ! empty( $order_map[ $sn ]['is_printed'] ) || ( ( $order_map[ $sn ]['shipping_document_status'] ?? '' ) === 'PRINTED' );
+				if ( $was_printed && empty( $new_ord['is_printed'] ) ) {
 					$new_ord['is_printed'] = true;
 					$new_ord['shipping_document_status'] = 'PRINTED';
 				}
@@ -587,7 +588,17 @@ class Exacoat_Shopee_Client {
 		$rec = $ord['recipient_address'] ?? [];
 		$package = ( $ord['package_list'] ?? [] )[0] ?? [];
 		$pkg_logistics_st = strtoupper( (string) ( $package['logistics_status'] ?? '' ) );
-		$shipping_doc_st = strtoupper( (string) ( $ord['shipping_document_status'] ?? ( $package['shipping_document_status'] ?? '' ) ) );
+		$shipping_doc_st = '';
+		if ( ! empty( $ord['shipping_document_status'] ) ) {
+			$shipping_doc_st = strtoupper( (string) $ord['shipping_document_status'] );
+		} else {
+			foreach ( ( $ord['package_list'] ?? [] ) as $pkg_item ) {
+				if ( ! empty( $pkg_item['shipping_document_status'] ) ) {
+					$shipping_doc_st = strtoupper( (string) $pkg_item['shipping_document_status'] );
+					break;
+				}
+			}
+		}
 		$raw_order_st = strtoupper( (string) ( $ord['order_status'] ?? 'UNKNOWN' ) );
 		$tracking_num = trim( (string) ( $package['tracking_number'] ?? '' ) );
 		$pkg_num = trim( (string) ( $package['package_number'] ?? '' ) );
@@ -693,6 +704,20 @@ class Exacoat_Shopee_Client {
 
 		$norm = self::normalize_shopee_order( $list[0] );
 		if ( $norm ) {
+			// Preserve existing printed status if previous cache marked it printed
+			$cached = get_option( self::ORDERS_CACHE_KEY, [] );
+			if ( is_array( $cached ) ) {
+				foreach ( $cached as $old_ord ) {
+					if ( strcasecmp( $old_ord['order_sn'] ?? '', $clean_sn ) === 0 ) {
+						$was_printed = ! empty( $old_ord['is_printed'] ) || ( ( $old_ord['shipping_document_status'] ?? '' ) === 'PRINTED' );
+						if ( $was_printed ) {
+							$norm['is_printed'] = true;
+							$norm['shipping_document_status'] = 'PRINTED';
+						}
+						break;
+					}
+				}
+			}
 			// Save into cache so future accesses are instant
 			self::update_order_cache_field( $clean_sn, $norm );
 		}

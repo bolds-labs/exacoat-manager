@@ -127,6 +127,30 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
     });
   }, []);
 
+  const unmarkLabelPrinted = useCallback((orderSn: string) => {
+    setPrintedOrderSns((prev) => {
+      const next = new Set(prev);
+      next.delete(orderSn);
+      try {
+        localStorage.setItem('_exacoat_shopee_printed_labels', JSON.stringify(Array.from(next)));
+      } catch {
+        // Continue gracefully
+      }
+      return next;
+    });
+  }, []);
+
+  const isOrderLabelPrinted = useCallback(
+    (order: ShopeeOrder) => {
+      return Boolean(
+        order.is_printed ||
+        order.shipping_document_status === 'PRINTED' ||
+        printedOrderSns.has(order.order_sn)
+      );
+    },
+    [printedOrderSns]
+  );
+
   const handleShipmentArranged = (orderSn: string, trackingNumber: string) => {
     setOrders((prev) =>
       prev.map((o) =>
@@ -274,6 +298,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
       const res = await downloadShopeeShippingLabelDirect(order.order_sn);
       if (res.success && res.url) {
         window.open(res.url, '_blank');
+        markLabelPrinted(order.order_sn);
         setOrders((prev) =>
           prev.map((o) =>
             o.order_sn === order.order_sn
@@ -312,6 +337,11 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   };
 
   const handleTogglePrintStatus = async (order: ShopeeOrder, markPrinted: boolean) => {
+    if (markPrinted) {
+      markLabelPrinted(order.order_sn);
+    } else {
+      unmarkLabelPrinted(order.order_sn);
+    }
     setOrders((prev) =>
       prev.map((o) =>
         o.order_sn === order.order_sn
@@ -396,16 +426,16 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   const tabUnprintedCount = useMemo(
     () =>
       ordersInActiveTab.filter(
-        (o) => !o.is_printed && o.shipping_document_status !== 'PRINTED'
+        (o) => !isOrderLabelPrinted(o)
       ).length,
-    [ordersInActiveTab]
+    [ordersInActiveTab, isOrderLabelPrinted]
   );
   const tabPrintedCount = useMemo(
     () =>
       ordersInActiveTab.filter(
-        (o) => Boolean(o.is_printed || o.shipping_document_status === 'PRINTED')
+        (o) => isOrderLabelPrinted(o)
       ).length,
-    [ordersInActiveTab]
+    [ordersInActiveTab, isOrderLabelPrinted]
   );
 
   // Dynamic Label Pengiriman options (only show options that have orders)
@@ -478,7 +508,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
 
       // Print status filter (Label Pengiriman)
       if (printFilter !== 'all') {
-        const isPrinted = Boolean(order.is_printed || order.shipping_document_status === 'PRINTED');
+        const isPrinted = isOrderLabelPrinted(order);
         if (printFilter === 'printed' && !isPrinted) return false;
         if (printFilter === 'unprinted' && isPrinted) return false;
       }
@@ -579,6 +609,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
           )
         );
         selectedOrdersList.forEach((o) => {
+          markLabelPrinted(o.order_sn);
           toggleShopeeOrderPrintDirect(o.order_sn, true).catch(() => {});
         });
         showToast(
@@ -895,7 +926,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
             const isCancelled = ['CANCELLED', 'IN_CANCEL', 'TO_RETURN'].includes(order.order_status);
             const statusBadge = getStatusBadge(order.order_status, order);
             const isClaimed = order.already_claimed;
-            const isPrinted = Boolean(order.is_printed || order.shipping_document_status === 'PRINTED');
+            const isPrinted = isOrderLabelPrinted(order);
             const isArranged = order.order_status === 'PROCESSED';
             const isReadyToShip = order.order_status === 'READY_TO_SHIP';
             const canPrint = Boolean(isArranged || ['SHIPPED', 'TO_CONFIRM_RECEIVE', 'COMPLETED'].includes(order.order_status));
@@ -1375,7 +1406,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
         }}
         onClaimWarranty={onClaimWarranty}
         onClaimRedeem={onClaimRedeem}
-        isPrinted={selectedDetailOrder ? Boolean(selectedDetailOrder.is_printed || selectedDetailOrder.shipping_document_status === 'PRINTED') : false}
+        isPrinted={selectedDetailOrder ? isOrderLabelPrinted(selectedDetailOrder) : false}
       />
 
       {/* Shopee Settings Modal */}
