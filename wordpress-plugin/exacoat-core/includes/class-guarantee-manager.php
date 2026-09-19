@@ -558,39 +558,69 @@ class Exacoat_Guarantee_Manager {
 	 * REST Endpoint: Admin Claims Log Feed
 	 */
 	public static function rest_get_claims_log( \WP_REST_Request $request ): \WP_REST_Response {
+		global $wpdb;
 		$status_filter = sanitize_text_field( $request->get_param( 'status' ) ?: 'all' );
 		$search_query  = sanitize_text_field( $request->get_param( 'search' ) ?: '' );
 		$page          = max( 1, (int) ( $request->get_param( 'page' ) ?: 1 ) );
 		$per_page      = max( 1, min( 100, (int) ( $request->get_param( 'per_page' ) ?: 20 ) ) );
 
-		$meta_query = [
-			[
-				'key'     => '_has_guarantee_claim',
-				'value'   => 'yes',
-				'compare' => '=',
-			],
+		// 1. Gather all order IDs that explicitly have _has_guarantee_claim = 'yes'
+		$guarantee_order_ids = [];
+
+		$hpos_meta_table = "{$wpdb->prefix}wc_orders_meta";
+		if ( $wpdb->get_var( "SHOW TABLES LIKE '{$hpos_meta_table}'" ) === $hpos_meta_table ) {
+			$hpos_ids = $wpdb->get_col( "SELECT DISTINCT order_id FROM {$hpos_meta_table} WHERE meta_key = '_has_guarantee_claim' AND meta_value = 'yes'" );
+			if ( ! empty( $hpos_ids ) ) {
+				$guarantee_order_ids = array_merge( $guarantee_order_ids, array_map( 'intval', $hpos_ids ) );
+			}
+		}
+
+		$postmeta_ids = $wpdb->get_col( "SELECT DISTINCT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_has_guarantee_claim' AND meta_value = 'yes'" );
+		if ( ! empty( $postmeta_ids ) ) {
+			$guarantee_order_ids = array_merge( $guarantee_order_ids, array_map( 'intval', $postmeta_ids ) );
+		}
+
+		$guarantee_order_ids = array_values( array_unique( array_filter( $guarantee_order_ids ) ) );
+
+		if ( empty( $guarantee_order_ids ) ) {
+			return new \WP_REST_Response( [
+				'success'    => true,
+				'claims'     => [],
+				'stats'      => [
+					'total'            => 0,
+					'pending_return'   => 0,
+					'package_received' => 0,
+					'refunded'         => 0,
+					'rejected'         => 0,
+				],
+				'pagination' => [
+					'page'        => $page,
+					'per_page'    => $per_page,
+					'total_items' => 0,
+					'total_pages' => 1,
+				],
+			], 200 );
+		}
+
+		// 2. Query only matching guarantee orders
+		$query_args = [
+			'limit'    => $per_page,
+			'page'     => $page,
+			'paginate' => true,
+			'include'  => $guarantee_order_ids,
+			'orderby'  => 'date',
+			'order'    => 'DESC',
 		];
 
 		if ( ! empty( $status_filter ) && 'all' !== $status_filter ) {
-			$meta_query[] = [
-				'key'     => '_guarantee_status',
-				'value'   => $status_filter,
-				'compare' => '=',
-			];
+			$query_args['meta_key']   = '_guarantee_status';
+			$query_args['meta_value'] = $status_filter;
 		}
-
-		$query_args = [
-			'limit'      => $per_page,
-			'page'       => $page,
-			'paginate'   => true,
-			'meta_query' => $meta_query,
-			'orderby'    => 'date',
-			'order'      => 'DESC',
-		];
 
 		if ( ! empty( $search_query ) ) {
 			if ( is_numeric( $search_query ) ) {
-				$query_args['post__in'] = [ (int) $search_query ];
+				$target_id = (int) $search_query;
+				$query_args['include'] = in_array( $target_id, $guarantee_order_ids, true ) ? [ $target_id ] : [ 0 ];
 			} else {
 				$query_args['s'] = $search_query;
 			}
@@ -604,6 +634,16 @@ class Exacoat_Guarantee_Manager {
 		$claims = [];
 		foreach ( $orders as $order ) {
 			/** @var \WC_Order $order */
+			if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
+				continue;
+			}
+
+			// Strict verification: only actual submitted claims
+			$has_claim = $order->get_meta( '_has_guarantee_claim' ) ?: get_post_meta( $order->get_id(), '_has_guarantee_claim', true );
+			if ( 'yes' !== $has_claim ) {
+				continue;
+			}
+
 			$claim_data       = $order->get_meta( '_guarantee_claim_data' ) ?: [];
 			$shipped_ts       = self::get_order_shipped_timestamp( $order );
 			$currency_sym     = get_woocommerce_currency_symbol( $order->get_currency() );
@@ -625,30 +665,37 @@ class Exacoat_Guarantee_Manager {
 				'refund_destination'    => $order->get_meta( '_guarantee_destination' ) ?: ( $claim_data['destination_desc'] ?? '' ),
 				'return_courier'        => $order->get_meta( '_guarantee_return_courier' ) ?: ( $claim_data['return_courier'] ?? '' ),
 				'return_tracking_number'=> $order->get_meta( '_guarantee_return_tracking' ) ?: ( $claim_data['return_tracking_number'] ?? '' ),
-				'submitted_at'          => $claim_data['submitted_at'] ?? $order->get_date_created()->date( 'Y-m-d H:i:s' ),
+				'submitted_at'          => $claim_data['submitted_at'] ?? ( $order->get_date_created() ? $order->get_date_created()->date( 'Y-m-d H:i:s' ) : '' ),
 				'reason'                => $claim_data['reason'] ?? '',
 				'claimed_items'         => $claim_data['claimed_items'] ?? [],
 			];
 		}
 
-		// Calculate overview stats across all claims
-		$stats = [
-			'total'            => wc_get_orders( [ 'meta_key' => '_has_guarantee_claim', 'meta_value' => 'yes', 'return' => 'ids', 'limit' => -1 ] ),
-			'pending_return'   => wc_get_orders( [ 'meta_query' => [ [ 'key' => '_has_guarantee_claim', 'value' => 'yes' ], [ 'key' => '_guarantee_status', 'value' => 'pending_return' ] ], 'return' => 'ids', 'limit' => -1 ] ),
-			'package_received' => wc_get_orders( [ 'meta_query' => [ [ 'key' => '_has_guarantee_claim', 'value' => 'yes' ], [ 'key' => '_guarantee_status', 'value' => 'package_received' ] ], 'return' => 'ids', 'limit' => -1 ] ),
-			'refunded'         => wc_get_orders( [ 'meta_query' => [ [ 'key' => '_has_guarantee_claim', 'value' => 'yes' ], [ 'key' => '_guarantee_status', 'value' => 'refunded' ] ], 'return' => 'ids', 'limit' => -1 ] ),
-			'rejected'         => wc_get_orders( [ 'meta_query' => [ [ 'key' => '_has_guarantee_claim', 'value' => 'yes' ], [ 'key' => '_guarantee_status', 'value' => 'rejected' ] ], 'return' => 'ids', 'limit' => -1 ] ),
-		];
+		// Calculate overview stats strictly across valid guarantee order IDs
+		$pending_count  = 0;
+		$received_count = 0;
+		$refunded_count = 0;
+		$rejected_count = 0;
+
+		foreach ( $guarantee_order_ids as $gid ) {
+			$g_order = wc_get_order( $gid );
+			if ( ! $g_order ) continue;
+			$st = $g_order->get_meta( '_guarantee_status' ) ?: 'pending_return';
+			if ( 'pending_return' === $st ) $pending_count++;
+			elseif ( 'package_received' === $st ) $received_count++;
+			elseif ( 'refunded' === $st ) $refunded_count++;
+			elseif ( 'rejected' === $st ) $rejected_count++;
+		}
 
 		return new \WP_REST_Response( [
 			'success'    => true,
 			'claims'     => $claims,
 			'stats'      => [
-				'total'            => count( $stats['total'] ),
-				'pending_return'   => count( $stats['pending_return'] ),
-				'package_received' => count( $stats['package_received'] ),
-				'refunded'         => count( $stats['refunded'] ),
-				'rejected'         => count( $stats['rejected'] ),
+				'total'            => count( $guarantee_order_ids ),
+				'pending_return'   => $pending_count,
+				'package_received' => $received_count,
+				'refunded'         => $refunded_count,
+				'rejected'         => $rejected_count,
 			],
 			'pagination' => [
 				'page'        => $page,

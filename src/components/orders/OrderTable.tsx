@@ -481,8 +481,8 @@ export const OrderTable: React.FC<OrderTableProps> = ({
             { key: 'store-pickup', label: 'Store Pickup (SMB)', count: statusCounts.storePickup },
             { key: 'shipped', label: 'Shipped', count: statusCounts.shipped },
             { key: 'completed', label: 'Completed' },
-            { key: 'warranty', label: 'Warranty Claims', count: statusCounts.warranty },
-            { key: 'redeem', label: 'Redeem', count: statusCounts.redeem },
+            { key: 'warranty', label: 'Warranty Claims' },
+            { key: 'redeem', label: 'Redeem' },
           ].map((tab) => (
             <button
               key={tab.key}
