@@ -415,8 +415,25 @@ class Exacoat_Order_Manager {
 						],
 					];
 				} elseif ( 'redeem' === $clean_status ) {
-					$args['meta_key'] = '_is_redeem_claim';
-					$args['meta_value'] = 'yes';
+					$args['status'] = [ 'pending', 'on-hold', 'processing', 'preparing-order', 'in-production', 'ready-to-ship', 'shipped', 'completed' ];
+					$args['meta_query'] = [
+						'relation' => 'OR',
+						[
+							'key'     => '_rma_order_type',
+							'value'   => 'Redeem',
+							'compare' => '=',
+						],
+						[
+							'key'     => '_is_redeem_claim',
+							'value'   => 'yes',
+							'compare' => '=',
+						],
+						[
+							'key'     => '_is_redeem',
+							'value'   => 'yes',
+							'compare' => '=',
+						],
+					];
 				} else {
 					$args['status'] = $clean_status;
 				}

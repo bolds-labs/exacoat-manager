@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.0.47.zip?v=0.0.47",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-19T13:46:25.697Z",
+  "last_updated": "2026-09-19T13:59:40.630Z",
   "sections": {
     "description": "The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.",
     "changelog": "### Version 0.0.47\n- Added server-side courier filtering in get_orders REST handler across shipping order items and carrier metadata\n- Synchronized pagination and total counts for filtered order queries\n- Updated 4x6 shipping label button to display amber when unprinted and normal grey when printed\n- Restricted shop manager role permissions to orders management only"

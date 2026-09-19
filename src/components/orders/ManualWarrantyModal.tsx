@@ -176,14 +176,35 @@ const CLAIM_REASONS = [
   'Other / Courtesy replacement',
 ];
 
-const REDEEM_DEFECT_REASONS = [
-  'Precision cut defect / sizing mismatch',
-  'Incorrect design or finish sent by factory',
-  'Missing multi-part component (e.g. bottom skin not included)',
-  'Surface defect / printing flaw on arrival',
-  'Damaged in transit / packaging crushed',
-  'Other Exacoat factory or fulfillment error',
-];
+export const REDEEM_REASON_GROUPS = [
+  {
+    group: 'QC Fault',
+    isQcFault: true,
+    description: 'Defect or fulfillment error: automatic shipping deduction dispatched to HR',
+    reasons: [
+      'Precision cut defect / sizing mismatch',
+      'Incorrect design or finish sent by factory',
+      'Missing multi-part component (e.g. bottom skin not included)',
+      'Surface defect / printing flaw on arrival',
+      'Other Exacoat factory or fulfillment error',
+    ],
+  },
+  {
+    group: 'External Cause',
+    isQcFault: false,
+    description: 'Logistics or courier damage (no HR deduction)',
+    reasons: [
+      'Damaged in transit / packaging crushed',
+    ],
+  },
+] as const;
+
+export const REDEEM_DEFECT_REASONS = REDEEM_REASON_GROUPS.flatMap((g) => g.reasons);
+
+export const isQcFaultReason = (reason: string): boolean => {
+  const qcGroup = REDEEM_REASON_GROUPS.find((g) => g.isQcFault);
+  return Boolean(qcGroup?.reasons.includes(reason as any));
+};
 
 export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
   isOpen,
@@ -733,6 +754,12 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
       }
     }
 
+    const isQc = claimType === 'Redeem' && isQcFaultReason(claimReason);
+    if (isQc && !adminNotes.trim()) {
+      showToast('error', 'QC Reason Required', 'Please enter internal admin notes explaining the QC defect for HR shipping deduction.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -747,6 +774,9 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
           courier_id: selectedCourierId,
           courier_label: selectedCourierLabel,
           shipping_cost: claimType === 'Redeem' || waiveShipping ? 0 : selectedCourierPrice,
+          actual_shipping_cost: selectedCourierPrice,
+          is_qc_fault: isQc,
+          qc_deduction_reason: adminNotes.trim(),
           waive_shipping: claimType === 'Redeem' || waiveShipping,
           initial_status: claimType === 'Redeem' ? 'processing' : initialStatus,
           notes: adminNotes,
@@ -761,7 +791,10 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
 
         const res = await createManualWarrantyClaimDirect(payload);
         if (res.success) {
-          showToast('success', `${claimType} Claim Created`, res.message || 'Replacement order generated successfully.');
+          const webhookNote = res.hr_webhook?.dispatched
+            ? (res.hr_webhook.success ? ' HR deduction webhook dispatched.' : ' (HR webhook logged in notes)')
+            : '';
+          showToast('success', `${claimType} Claim Created`, (res.message || 'Replacement order generated successfully.') + webhookNote);
           onSuccess?.(res.replacement_order_id);
           onClose();
         } else {
@@ -838,6 +871,9 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
           courier_id: selectedCourierId,
           courier_label: selectedCourierLabel,
           shipping_cost: claimType === 'Redeem' || waiveShipping ? 0 : selectedCourierPrice,
+          actual_shipping_cost: selectedCourierPrice,
+          is_qc_fault: isQc,
+          qc_deduction_reason: adminNotes.trim(),
           waive_shipping: claimType === 'Redeem' || waiveShipping,
           claim_reason: claimReason,
           initial_status: claimType === 'Redeem' ? 'processing' : initialStatus,
@@ -847,7 +883,10 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
 
         const res = await createManualWarrantyClaimDirect(payload);
         if (res.success) {
-          showToast('success', `${claimType} Order Created`, res.message || 'Replacement order generated successfully.');
+          const webhookNote = res.hr_webhook?.dispatched
+            ? (res.hr_webhook.success ? ' HR deduction webhook dispatched.' : ' (HR webhook logged in notes)')
+            : '';
+          showToast('success', `${claimType} Order Created`, (res.message || 'Replacement order generated successfully.') + webhookNote);
           onSuccess?.(res.replacement_order_id);
           onClose();
         } else {
@@ -1826,43 +1865,100 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* Custom Beautiful Claim Reason Select */}
             <div className="relative" ref={claimReasonMenuRef}>
-              <label className="text-xs text-neutral-400 mb-1 block font-medium">Claim Reason</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs text-neutral-400 font-medium">Claim Reason</label>
+                {claimType === 'Redeem' && (
+                  <span className={clsx(
+                    "text-[10px] font-mono px-1.5 py-0.2 rounded",
+                    isQcFaultReason(claimReason)
+                      ? "bg-amber-500/20 text-amber-300"
+                      : "bg-sky-500/20 text-sky-300"
+                  )}>
+                    {isQcFaultReason(claimReason) ? 'QC Fault' : 'External Cause'}
+                  </span>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setIsReasonMenuOpen(!isReasonMenuOpen)}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-[#141414] hover:bg-[#181818] border border-white/[0.12] hover:border-white/25 text-white text-xs font-sans flex items-center justify-between gap-2 transition-all cursor-pointer shadow-xs focus:outline-none focus:border-emerald-500"
               >
                 <div className="flex items-center gap-2 truncate">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                  <span className={clsx(
+                    "w-1.5 h-1.5 rounded-full shrink-0",
+                    claimType === 'Redeem'
+                      ? (isQcFaultReason(claimReason) ? "bg-amber-400" : "bg-sky-400")
+                      : "bg-emerald-400"
+                  )} />
                   <span className="font-semibold text-neutral-100 truncate">{claimReason}</span>
                 </div>
                 <ChevronDown className={clsx("w-4 h-4 text-neutral-400 shrink-0 transition-transform duration-200", isReasonMenuOpen && "rotate-180 text-white")} />
               </button>
 
               {isReasonMenuOpen && (
-                <div className="absolute left-0 right-0 bottom-full mb-2 z-50 rounded-xl bg-[#121215] border border-white/15 shadow-2xl overflow-hidden py-1 backdrop-blur-2xl max-h-60 overflow-y-auto">
-                  {(claimType === 'Redeem' ? REDEEM_DEFECT_REASONS : CLAIM_REASONS).map((r) => {
-                    const isSelected = claimReason === r;
-                    return (
-                      <button
-                        key={r}
-                        type="button"
-                        onClick={() => {
-                          setClaimReason(r);
-                          setIsReasonMenuOpen(false);
-                        }}
-                        className={clsx(
-                          "w-full px-3 py-2 text-left text-xs flex items-center justify-between gap-2 cursor-pointer transition-colors",
-                          isSelected
-                            ? "bg-emerald-500/15 text-emerald-300 font-bold"
-                            : "text-neutral-200 hover:bg-white/[0.08]"
-                        )}
-                      >
-                        <span>{r}</span>
-                        {isSelected && <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
-                      </button>
-                    );
-                  })}
+                <div className="absolute left-0 right-0 bottom-full mb-2 z-50 rounded-xl bg-[#121215] border border-white/15 shadow-2xl overflow-hidden py-1 backdrop-blur-2xl max-h-72 overflow-y-auto">
+                  {claimType === 'Redeem' ? (
+                    REDEEM_REASON_GROUPS.map((group, gIdx) => (
+                      <div key={group.group} className={clsx(gIdx > 0 && "border-t border-white/[0.08] pt-1 mt-1")}>
+                        <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-neutral-400 flex items-center justify-between bg-white/[0.02]">
+                          <div className="flex items-center gap-1.5">
+                            <span className={clsx("w-1.5 h-1.5 rounded-full", group.isQcFault ? "bg-amber-400" : "bg-sky-400")} />
+                            <span>{group.group}</span>
+                          </div>
+                          {group.isQcFault && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">
+                              HR Webhook
+                            </span>
+                          )}
+                        </div>
+                        {group.reasons.map((r) => {
+                          const isSelected = claimReason === r;
+                          return (
+                            <button
+                              key={r}
+                              type="button"
+                              onClick={() => {
+                                setClaimReason(r);
+                                setIsReasonMenuOpen(false);
+                              }}
+                              className={clsx(
+                                "w-full px-3 py-2 text-left text-xs flex items-center justify-between gap-2 cursor-pointer transition-colors",
+                                isSelected
+                                  ? "bg-emerald-500/15 text-emerald-300 font-bold"
+                                  : "text-neutral-200 hover:bg-white/[0.08]"
+                              )}
+                            >
+                              <span>{r}</span>
+                              {isSelected && <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))
+                  ) : (
+                    CLAIM_REASONS.map((r) => {
+                      const isSelected = claimReason === r;
+                      return (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => {
+                            setClaimReason(r);
+                            setIsReasonMenuOpen(false);
+                          }}
+                          className={clsx(
+                            "w-full px-3 py-2 text-left text-xs flex items-center justify-between gap-2 cursor-pointer transition-colors",
+                            isSelected
+                              ? "bg-emerald-500/15 text-emerald-300 font-bold"
+                              : "text-neutral-200 hover:bg-white/[0.08]"
+                          )}
+                        >
+                          <span>{r}</span>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
               )}
             </div>
@@ -1930,13 +2026,37 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
           </div>
 
           <div>
-            <label className="text-xs text-neutral-400 mb-1 block">Internal Admin Notes (Optional)</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs text-neutral-400 font-medium">
+                {claimType === 'Redeem' && isQcFaultReason(claimReason) ? (
+                  <span>
+                    Internal Admin Notes (QC Deduction Reason) <span className="text-rose-400">*</span>
+                  </span>
+                ) : (
+                  'Internal Admin Notes (Optional)'
+                )}
+              </label>
+              {claimType === 'Redeem' && isQcFaultReason(claimReason) && (
+                <span className="text-[10px] text-amber-400 font-mono">
+                  Deducted via HR Webhook
+                </span>
+              )}
+            </div>
             <input
               type="text"
-              placeholder="e.g. Approved via WhatsApp chat by admin. Customer sent photo of damaged edge."
+              placeholder={
+                claimType === 'Redeem'
+                  ? 'Kesalahan kirim, iPhone 18 Pro dikirim iPhone 18.'
+                  : 'e.g. Approved via WhatsApp chat by admin. Customer sent photo of damaged edge.'
+              }
               value={adminNotes}
               onChange={(e) => setAdminNotes(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-[#141414] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-emerald-500"
+              className={clsx(
+                "w-full px-3 py-2 rounded-xl bg-[#141414] border text-white text-xs focus:outline-none transition-colors",
+                claimType === 'Redeem' && isQcFaultReason(claimReason) && !adminNotes.trim()
+                  ? "border-amber-500/40 focus:border-amber-400 placeholder:text-neutral-500"
+                  : "border-white/[0.08] focus:border-emerald-500 placeholder:text-neutral-500"
+              )}
             />
           </div>
         </div>

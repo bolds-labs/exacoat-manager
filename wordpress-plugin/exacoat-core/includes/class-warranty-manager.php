@@ -1105,6 +1105,55 @@ class Exacoat_Warranty_Manager {
 	}
 
 	/**
+	 * Dispatch shipping deduction webhook to Exacoat HR system for QC fault replacements.
+	 *
+	 * @param array $payload Payload data (orderNumber, replacementShippingCost, reason, incidentDate, invoiceReference).
+	 * @return array Result containing success status, code, and response body or error.
+	 */
+	public static function dispatch_shipping_deduction_webhook( array $payload ): array {
+		$webhook_url = 'https://hr.exacoat.com/api/webhooks/shipping-deduction';
+		$secret      = 'ExacoatHRWebhook';
+
+		$headers = [
+			'Content-Type'        => 'application/json',
+			'x-webhook-secret'    => $secret,
+			'Authorization'       => 'Bearer ' . $secret,
+		];
+
+		$response = wp_remote_post( $webhook_url, [
+			'method'      => 'POST',
+			'timeout'     => 15,
+			'redirection' => 5,
+			'httpversion' => '1.1',
+			'blocking'    => true,
+			'headers'     => $headers,
+			'body'        => wp_json_encode( $payload ),
+			'data_format' => 'body',
+		] );
+
+		if ( is_wp_error( $response ) ) {
+			return [
+				'success' => false,
+				'error'   => $response->get_error_message(),
+				'code'    => 0,
+				'body'    => '',
+			];
+		}
+
+		$code = (int) wp_remote_retrieve_response_code( $response );
+		$body = wp_remote_retrieve_body( $response );
+
+		$is_success = ( $code >= 200 && $code < 300 );
+
+		return [
+			'success' => $is_success,
+			'code'    => $code,
+			'body'    => $body,
+			'error'   => $is_success ? null : ( 'HTTP ' . $code . ': ' . substr( (string) $body, 0, 200 ) ),
+		];
+	}
+
+	/**
 	 * Admin / Manager: Create manual warranty or redeem claim (Web order or Marketplace Shopee / Tokopedia)
 	 */
 	public static function rest_create_manual_claim( \WP_REST_Request $request ): \WP_REST_Response {
@@ -1114,19 +1163,29 @@ class Exacoat_Warranty_Manager {
 			$rma_type = 'Warranty';
 		}
 		$admin_name   = sanitize_text_field( $request->get_param( 'admin_name' ) ?: 'Operations Manager' );
-		$claim_reason = sanitize_text_field( $request->get_param( 'claim_reason' ) ?: ( 'Redeem' === $rma_type ? 'Exacoat Defect / Production Error' : 'Manual replacement issued by admin' ) );
+		$claim_reason = sanitize_text_field( $request->get_param( 'claim_reason' ) ?: ( 'Redeem' === $rma_type ? 'Precision cut defect / sizing mismatch' : 'Manual replacement issued by admin' ) );
 		$notes        = sanitize_textarea_field( $request->get_param( 'notes' ) ?: '' );
 		$initial_status = sanitize_text_field( $request->get_param( 'initial_status' ) ?: 'processing' );
 		if ( ! in_array( $initial_status, [ 'processing', 'on-hold', 'preparing-order' ], true ) ) {
 			$initial_status = 'processing';
 		}
 
-		$courier_id     = sanitize_text_field( $request->get_param( 'courier_id' ) ?: 'jne_reg' );
-		$courier_label  = sanitize_text_field( $request->get_param( 'courier_label' ) ?: 'JNE Regular' );
-		$shipping_cost  = max( 0, floatval( $request->get_param( 'shipping_cost' ) ?: 0 ) );
-		$waive_shipping = (bool) $request->get_param( 'waive_shipping' );
+		$courier_id           = sanitize_text_field( $request->get_param( 'courier_id' ) ?: 'jne_reg' );
+		$courier_label        = sanitize_text_field( $request->get_param( 'courier_label' ) ?: 'JNE Regular' );
+		$shipping_cost        = max( 0, floatval( $request->get_param( 'shipping_cost' ) ?: 0 ) );
+		$actual_shipping_cost = max( 0, floatval( $request->get_param( 'actual_shipping_cost' ) ?: $shipping_cost ) );
+		$waive_shipping       = (bool) $request->get_param( 'waive_shipping' );
 		if ( 'Redeem' === $rma_type || $waive_shipping ) {
 			$shipping_cost = 0;
+		}
+
+		$is_qc_fault_param = $request->get_param( 'is_qc_fault' );
+		$is_qc_fault       = ( true === $is_qc_fault_param || '1' === $is_qc_fault_param || 'true' === $is_qc_fault_param );
+		if ( ! $is_qc_fault && 'Redeem' === $rma_type ) {
+			$external_reasons = [
+				'damaged in transit / packaging crushed',
+			];
+			$is_qc_fault = ! in_array( strtolower( trim( $claim_reason ) ), $external_reasons, true );
 		}
 
 		try {
@@ -1283,6 +1342,7 @@ class Exacoat_Warranty_Manager {
 				}
 				$replacement_order->save();
 
+				$hr_webhook_result = null;
 				if ( 'Redeem' === $rma_type ) {
 					$parent_order->update_meta_data( '_has_redeem_claim', 'yes' );
 					$parent_order->update_meta_data( '_redeem_replacement_order_id', $rep_id );
@@ -1301,6 +1361,43 @@ class Exacoat_Warranty_Manager {
 						$admin_name,
 						$claim_reason
 					) );
+
+					if ( $is_qc_fault ) {
+						$order_number_ref = (string) ( $parent_order->get_order_number() ?: $parent_order_id );
+						$qc_reason_text   = ! empty( $notes ) ? $notes : $claim_reason;
+						$hr_payload = [
+							'orderNumber'             => $order_number_ref,
+							'replacementShippingCost' => $actual_shipping_cost,
+							'reason'                  => $qc_reason_text,
+							'incidentDate'            => gmdate( 'Y-m-d\TH:i:s\Z' ),
+							'invoiceReference'        => (string) $replacement_order->get_order_number(),
+						];
+
+						$hr_webhook_result = self::dispatch_shipping_deduction_webhook( $hr_payload );
+						$replacement_order->update_meta_data( '_is_qc_fault', 'yes' );
+						$replacement_order->update_meta_data( '_actual_shipping_cost', $actual_shipping_cost );
+						$replacement_order->update_meta_data( '_hr_webhook_dispatched', 'yes' );
+						$replacement_order->update_meta_data( '_hr_webhook_success', $hr_webhook_result['success'] ? 'yes' : 'no' );
+						$replacement_order->update_meta_data( '_hr_webhook_code', $hr_webhook_result['code'] );
+						$replacement_order->update_meta_data( '_hr_webhook_payload', $hr_payload );
+
+						if ( $hr_webhook_result['success'] ) {
+							$replacement_order->add_order_note( sprintf(
+								'📋 [HR DEDUCTION WEBHOOK] Successfully sent shipping deduction to HR system (HTTP %d). Cost: Rp %s. Reason: "%s". Parent Order: #%s.',
+								$hr_webhook_result['code'],
+								number_format( $actual_shipping_cost, 0, ',', '.' ),
+								$qc_reason_text,
+								$order_number_ref
+							) );
+						} else {
+							$replacement_order->add_order_note( sprintf(
+								'⚠️ [HR DEDUCTION WEBHOOK FAILED] Failed to notify HR system (HTTP %d). Error: %s. Payload: %s',
+								$hr_webhook_result['code'],
+								$hr_webhook_result['error'] ?: $hr_webhook_result['body'],
+								wp_json_encode( $hr_payload )
+							) );
+						}
+					}
 				} else {
 					$parent_order->update_meta_data( '_has_warranty_claim', 'yes' );
 					$parent_order->update_meta_data( '_warranty_replacement_order_id', $rep_id );
@@ -1323,7 +1420,9 @@ class Exacoat_Warranty_Manager {
 					) );
 				}
 
-				return new \WP_REST_Response( [
+				$replacement_order->save();
+
+				$res_data = [
 					'success'                  => true,
 					'replacement_order_id'     => $rep_id,
 					'replacement_order_number' => $replacement_order->get_order_number(),
@@ -1333,7 +1432,17 @@ class Exacoat_Warranty_Manager {
 						strtolower( $rma_type ),
 						$replacement_order->get_order_number()
 					),
-				], 200 );
+				];
+				if ( null !== $hr_webhook_result ) {
+					$res_data['hr_webhook'] = [
+						'dispatched' => true,
+						'success'    => $hr_webhook_result['success'],
+						'code'       => $hr_webhook_result['code'],
+						'error'      => $hr_webhook_result['error'] ?? null,
+					];
+				}
+
+				return new \WP_REST_Response( $res_data, 200 );
 
 			} else {
 				// Marketplace / Manual Order (Shopee, Tokopedia, TikTok Shop, WhatsApp)
@@ -1520,6 +1629,7 @@ class Exacoat_Warranty_Manager {
 				$replacement_order->update_meta_data( '_rma_reviewed_by', $admin_name );
 				$replacement_order->update_meta_data( '_rma_reviewed_at', current_time( 'mysql' ) );
 
+				$hr_webhook_result = null;
 				if ( 'Redeem' === $rma_type ) {
 					$replacement_order->add_order_note( sprintf(
 						'⭐ [REDEEM REPLACEMENT - COMPANY FAULT] Channel: %s | Invoice: %s. Free shipping (Rp 0). Defect: %s. Created manually by %s. Courier: %s. Direct to production queue.',
@@ -1529,6 +1639,44 @@ class Exacoat_Warranty_Manager {
 						$admin_name,
 						$courier_label
 					) );
+
+					if ( $is_qc_fault ) {
+						$order_number_ref = (string) $clean_invoice;
+						$qc_reason_text   = ! empty( $notes ) ? $notes : $claim_reason;
+						$hr_payload = [
+							'orderNumber'             => $order_number_ref,
+							'replacementShippingCost' => $actual_shipping_cost,
+							'reason'                  => $qc_reason_text,
+							'incidentDate'            => gmdate( 'Y-m-d\TH:i:s\Z' ),
+							'invoiceReference'        => (string) $replacement_order->get_order_number(),
+						];
+
+						$hr_webhook_result = self::dispatch_shipping_deduction_webhook( $hr_payload );
+						$replacement_order->update_meta_data( '_is_qc_fault', 'yes' );
+						$replacement_order->update_meta_data( '_actual_shipping_cost', $actual_shipping_cost );
+						$replacement_order->update_meta_data( '_hr_webhook_dispatched', 'yes' );
+						$replacement_order->update_meta_data( '_hr_webhook_success', $hr_webhook_result['success'] ? 'yes' : 'no' );
+						$replacement_order->update_meta_data( '_hr_webhook_code', $hr_webhook_result['code'] );
+						$replacement_order->update_meta_data( '_hr_webhook_payload', $hr_payload );
+
+						if ( $hr_webhook_result['success'] ) {
+							$replacement_order->add_order_note( sprintf(
+								'📋 [HR DEDUCTION WEBHOOK] Successfully sent shipping deduction to HR system (HTTP %d). Cost: Rp %s. Reason: "%s". Marketplace Invoice: %s (%s).',
+								$hr_webhook_result['code'],
+								number_format( $actual_shipping_cost, 0, ',', '.' ),
+								$qc_reason_text,
+								$order_number_ref,
+								$channel
+							) );
+						} else {
+							$replacement_order->add_order_note( sprintf(
+								'⚠️ [HR DEDUCTION WEBHOOK FAILED] Failed to notify HR system (HTTP %d). Error: %s. Payload: %s',
+								$hr_webhook_result['code'],
+								$hr_webhook_result['error'] ?: $hr_webhook_result['body'],
+								wp_json_encode( $hr_payload )
+							) );
+						}
+					}
 				} else {
 					$replacement_order->add_order_note( sprintf(
 						'[Marketplace Warranty Claim] Channel: %s | Invoice: %s. Created manually by %s. Courier: %s (Rp %s). Reason: %s',
@@ -1557,7 +1705,7 @@ class Exacoat_Warranty_Manager {
 
 				$replacement_order->save();
 
-				return new \WP_REST_Response( [
+				$res_data = [
 					'success'                  => true,
 					'replacement_order_id'     => $rep_id,
 					'replacement_order_number' => $replacement_order->get_order_number(),
@@ -1569,7 +1717,17 @@ class Exacoat_Warranty_Manager {
 						$channel,
 						$clean_invoice
 					),
-				], 200 );
+				];
+				if ( null !== $hr_webhook_result ) {
+					$res_data['hr_webhook'] = [
+						'dispatched' => true,
+						'success'    => $hr_webhook_result['success'],
+						'code'       => $hr_webhook_result['code'],
+						'error'      => $hr_webhook_result['error'] ?? null,
+					];
+				}
+
+				return new \WP_REST_Response( $res_data, 200 );
 			}
 		} catch ( \Throwable $e ) {
 			return new \WP_REST_Response( [

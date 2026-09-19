@@ -3058,6 +3058,9 @@ export interface ManualWarrantyClaimPayload {
   courier_id?: string;
   courier_label?: string;
   shipping_cost?: number;
+  actual_shipping_cost?: number;
+  is_qc_fault?: boolean;
+  qc_deduction_reason?: string;
   waive_shipping?: boolean;
   claim_reason?: string;
   initial_status?: 'processing' | 'on-hold' | 'preparing-order';
@@ -3130,6 +3133,12 @@ export async function createManualWarrantyClaimDirect(
   replacement_order_number?: string;
   shipping_cost?: number;
   message?: string;
+  hr_webhook?: {
+    dispatched: boolean;
+    success: boolean;
+    code: number;
+    error?: string;
+  };
   error?: string;
 }> {
   const base = getWordPressBaseUrl();
@@ -3152,6 +3161,7 @@ export async function createManualWarrantyClaimDirect(
         replacement_order_number: data.replacement_order_number,
         shipping_cost: data.shipping_cost,
         message: data.message,
+        hr_webhook: data.hr_webhook,
       };
     }
     return { success: false, error: data?.message || `HTTP ${res.status}` };
