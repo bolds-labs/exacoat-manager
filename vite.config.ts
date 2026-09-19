@@ -44,13 +44,13 @@ export default defineConfig({
     host: true,
     proxy: {
       '/cms': {
-        target: 'https://exacoat.com',
+        target: 'https://staging.exacoat.com',
         changeOrigin: true,
         secure: true,
         rewrite: (path) => path.replace(/^\/cms/, ''),
       },
       '/wp-json': {
-        target: 'https://exacoat.com',
+        target: 'https://staging.exacoat.com',
         changeOrigin: true,
         secure: true,
       },

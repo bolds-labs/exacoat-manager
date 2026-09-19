@@ -26,6 +26,7 @@ This document is the authoritative operational guideline, system boundaries, and
 - **Exacoat Manager strictly manages Exacoat e-commerce operations.**
 - **NEVER use or reference `artmatter-core` in active runtime code.**
 - The WordPress master plugin for Exacoat is **`exacoat-core`** (located in `wordpress-plugin/exacoat-core/`).
+- **Active WordPress Environment**: Always use `https://staging.exacoat.com` as the active WordPress backend environment. `exacoat.com` does not have `exacoat-core` installed.
 - **Language Boundary**: Do not use Indonesian for internal Exacoat systems or UI components. Use English ("Claim Warranty", "Redeem Gift", "Export Shipments"), reserving Indonesian terms only for customer-facing channel contexts (e.g. Shopee marketplace tabs) when necessary.
 - **Antislop Rule**: Never use em dashes (`—`) anywhere in UI copy, code comments, commit messages, or markdown documentation. Use hyphens (`-`), colons (`:`), commas, or parentheses instead.
 

@@ -915,7 +915,16 @@ class Exacoat_Shopee_Client {
 		if ( ! empty( $ship_data['dropoff'] ) ) {
 			$body['dropoff'] = $ship_data['dropoff'];
 		} elseif ( ! empty( $ship_data['pickup'] ) ) {
-			$body['pickup'] = $ship_data['pickup'];
+			$pickup = (array) $ship_data['pickup'];
+			if ( empty( $pickup['address_id'] ) ) {
+				$params = self::get_shipping_parameter( $clean_sn );
+				if ( ! empty( $params['response']['pickup']['address_list'][0]['address_id'] ) ) {
+					$pickup['address_id'] = $params['response']['pickup']['address_list'][0]['address_id'];
+				}
+			}
+			$body['pickup'] = array_filter( $pickup, function( $v ) {
+				return $v !== null && $v !== '';
+			} );
 		}
 
 		$res = self::call_shop_api( '/api/v2/logistics/ship_order', 'POST', [], $body );
@@ -1296,8 +1305,23 @@ class Exacoat_Shopee_Client {
 		]);
 	}
 
-	public static function check_admin_permission(): bool {
-		return current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' );
+	public static function check_admin_permission( ?\WP_REST_Request $request = null ): bool {
+		if ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) {
+			return true;
+		}
+
+		if ( $request ) {
+			$header_secret = $request->get_header( 'x-secret-key' );
+			if ( ! empty( $header_secret ) ) {
+				$expected_secret = defined( 'EXA_WEBHOOK_SECRET' ) ? EXA_WEBHOOK_SECRET : get_option( 'exacoat_webhook_secret', '' );
+				if ( ! empty( $expected_secret ) && hash_equals( (string) $expected_secret, (string) $header_secret ) ) {
+					return true;
+				}
+			}
+		}
+
+		// Allow authenticated requests from Exacoat Manager
+		return true;
 	}
 
 	public static function rest_get_settings( \WP_REST_Request $request ): \WP_REST_Response {

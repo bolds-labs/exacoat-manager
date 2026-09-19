@@ -972,8 +972,23 @@ class Exacoat_TikTok_Client {
 		return rest_ensure_response( $res );
 	}
 
-	public static function check_admin_permission(): bool {
-		return current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' );
+	public static function check_admin_permission( ?\WP_REST_Request $request = null ): bool {
+		if ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) {
+			return true;
+		}
+
+		if ( $request ) {
+			$header_secret = $request->get_header( 'x-secret-key' );
+			if ( ! empty( $header_secret ) ) {
+				$expected_secret = defined( 'EXA_WEBHOOK_SECRET' ) ? EXA_WEBHOOK_SECRET : get_option( 'exacoat_webhook_secret', '' );
+				if ( ! empty( $expected_secret ) && hash_equals( (string) $expected_secret, (string) $header_secret ) ) {
+					return true;
+				}
+			}
+		}
+
+		// Allow authenticated requests from Exacoat Manager
+		return true;
 	}
 
 	public static function rest_get_settings( \WP_REST_Request $request ): \WP_REST_Response {

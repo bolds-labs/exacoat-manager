@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.59] - 2026-09-20
+
+### Configurable Pickup Scheduling & Staging Environment Enforcement
+- **Configurable Pickup Date & Time Window**:
+  - Replaced static fallback in `ArrangeShipmentModal` with a unified 2-column selector for Tanggal Pickup and Rentang Waktu.
+  - Tanggal Pickup dynamically maps available dates from Shopee API, or defaults to configurable Today/Tomorrow selectors.
+  - Rentang Waktu allows operator selection across courier time slots or standard working windows (09:00 - 12:00, 12:00 - 15:00, 13:00 - 17:00, 17:00 - 20:00 WIB).
+  - Added visual helper indicator for Instant couriers (e.g. SPX Instant).
+- **Backend Permissions & Staging Routing**:
+  - Updated `check_admin_permission` in `class-shopee-client.php` and `class-tiktok-client.php` to authorize Exacoat Manager REST calls.
+  - Enforced `staging.exacoat.com` backend across Vite proxies, WordPress base URL fallbacks, and video proof URL normalization.
+  - Enhanced `ship_order` in `class-shopee-client.php` to auto-resolve default pickup address ID if missing and sanitize empty time slot parameters.
+
+---
+
 ## [0.0.40] - 2026-09-19
 
 ### Server-Side Courier Filtering, Amber Print Labels & Role Access

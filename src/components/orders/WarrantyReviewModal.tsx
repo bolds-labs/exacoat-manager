@@ -22,11 +22,12 @@ import {
 } from '../../lib/wordpressBridge';
 import { useToast } from '../../context/ToastContext';
 import { cleanItemTitle } from '../../lib/orderItems';
+import { getWordPressBaseUrl } from '../../lib/env';
 
 const normalizeVideoUrl = (url?: string): string => {
   if (!url) return '';
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  const baseUrl = 'https://exacoat.com';
+  const baseUrl = getWordPressBaseUrl();
   return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
 };
 
