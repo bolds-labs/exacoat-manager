@@ -1337,11 +1337,58 @@ class Exacoat_Shopee_Client {
 			}
 		}
 
+		// If not in cache, query Shopee Open API v2 live
+		if ( ! $found ) {
+			$detail_res = self::call_shop_api( '/api/v2/order/get_order_detail', 'GET', [
+				'order_sn_list'            => $clean,
+				'response_optional_fields' => 'buyer_user_id,buyer_username,recipient_address,item_list,shipping_carrier,total_amount,pay_time,order_status,package_list,note',
+			]);
+			if ( ! empty( $detail_res['response']['order_list'][0] ) ) {
+				$live_ord = $detail_res['response']['order_list'][0];
+				$raw_st = strtoupper( (string) ( $live_ord['order_status'] ?? 'UNKNOWN' ) );
+				$package = ( $live_ord['package_list'] ?? [] )[0] ?? [];
+				$pkg_logistics_st = strtoupper( (string) ( $package['logistics_status'] ?? '' ) );
+				$tracking_num = trim( (string) ( $package['tracking_number'] ?? '' ) );
+				$rec = $live_ord['recipient_address'] ?? [];
+
+				$items = [];
+				foreach ( ( $live_ord['item_list'] ?? [] ) as $item ) {
+					$items[] = [
+						'item_id'    => $item['item_id'] ?? 0,
+						'item_name'  => trim( $item['item_name'] ?? 'Exacoat Skin' ),
+						'model_id'   => $item['model_id'] ?? 0,
+						'model_name' => trim( $item['model_name'] ?? '' ),
+						'quantity'   => (int) ( $item['model_quantity_purchased'] ?? 1 ),
+						'price'      => (float) ( $item['model_discounted_price'] ?? $item['model_original_price'] ?? 0 ),
+						'image_url'  => $item['image_info']['image_url'] ?? '',
+					];
+				}
+
+				$found = [
+					'order_sn'         => $clean,
+					'order_status'     => $raw_st,
+					'buyer_username'   => $live_ord['buyer_username'] ?? 'Shopee Customer',
+					'shipping_carrier' => $live_ord['shipping_carrier'] ?? ( $package['shipping_carrier'] ?? '' ),
+					'tracking_number'  => $tracking_num,
+					'items'            => $items,
+					'recipient_name'   => $rec['name'] ?? '',
+					'recipient_phone'  => $rec['phone'] ?? '',
+					'recipient_address'=> $rec['full_address'] ?? '',
+					'recipient_city'   => $rec['city'] ?? '',
+					'recipient_postcode'=> $rec['zipcode'] ?? '',
+					'is_delivered'     => in_array( $raw_st, [ 'COMPLETED', 'DELIVERED', 'TO_CONFIRM_RECEIVE' ], true ) || $pkg_logistics_st === 'LOGISTICS_DELIVERY_DONE',
+					'delivered_time'   => ! empty( $package['delivery_time'] ) ? date( 'Y-m-d H:i:s', $package['delivery_time'] ) : null,
+					'delivered_ts'     => ! empty( $package['delivery_time'] ) ? (int) $package['delivery_time'] : null,
+				];
+			}
+		}
+
 		// Query tracking info to detect live delivery status
 		$tracking       = self::get_tracking_info( $clean );
 		$order_status   = $found['order_status'] ?? ( $tracking['logistics_status'] ?: 'UNKNOWN' );
 		$is_delivered   = ! empty( $tracking['is_delivered'] ) || in_array( strtoupper( $order_status ), [ 'COMPLETED', 'DELIVERED', 'TO_CONFIRM_RECEIVE' ], true ) || ! empty( $found['is_delivered'] );
 		$delivered_time = $tracking['delivered_time'] ?? ( $found['delivered_time'] ?? null );
+		$delivered_ts   = $tracking['delivered_ts'] ?? ( $found['delivered_ts'] ?? null );
 
 		if ( $found ) {
 			return rest_ensure_response([
@@ -1350,6 +1397,7 @@ class Exacoat_Shopee_Client {
 				'order_status'     => $is_delivered ? 'COMPLETED' : $order_status,
 				'is_delivered'     => $is_delivered,
 				'delivered_time'   => $delivered_time,
+				'delivered_ts'     => $delivered_ts,
 				'buyer_username'   => $found['buyer_username'] ?? '',
 				'shipping_carrier' => $found['shipping_carrier'] ?? '',
 				'tracking_number'  => $found['tracking_number'] ?? '',

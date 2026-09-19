@@ -51,7 +51,7 @@ class Exacoat_Store_Enhancements {
 		add_action( 'woocommerce_after_product_object_save', [ __CLASS__, 'auto_set_aelia_currency_prices_after_save' ], 20, 2 );
 		add_filter( 'woocommerce_price_num_decimals', [ __CLASS__, 'get_active_currency_decimals' ], 999 );
 
-		// 15. Checkout Shipping Rules (#14577)
+		// 15. Checkout Shipping Rules (#14577) - Multi-Zone Tiered Free Shipping Discount
 		add_filter( 'woocommerce_package_rates', [ __CLASS__, 'apply_zone_tiered_shipping_discount' ], 100, 2 );
 
 		// 18. Virtual Upload Folder Path Resolver & 404 Prevention

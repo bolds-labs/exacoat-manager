@@ -174,6 +174,23 @@ if ( ! class_exists( 'WC_Biteship_Shipping_Method' ) && class_exists( 'WC_Shippi
 				$rates_to_cache = [];
 				foreach ( $response_body['pricing'] as $rate ) {
 					if ( isset( $rate['shipping_type'] ) && 'parcel' === $rate['shipping_type'] ) {
+						$service_code = strtolower( (string) ( $rate['courier_service_code'] ?? '' ) );
+						$service_name = strtolower( (string) ( $rate['courier_service_name'] ?? '' ) );
+
+						// Exclude cargo, trucking, JTR, and GOKIL services
+						if (
+							strpos( $service_code, 'cargo' ) !== false ||
+							strpos( $service_name, 'cargo' ) !== false ||
+							strpos( $service_code, 'trucking' ) !== false ||
+							strpos( $service_name, 'trucking' ) !== false ||
+							strpos( $service_code, 'jtr' ) !== false ||
+							strpos( $service_name, 'jtr' ) !== false ||
+							strpos( $service_code, 'gokil' ) !== false ||
+							strpos( $service_name, 'gokil' ) !== false
+						) {
+							continue;
+						}
+
 						$dr            = explode( ' - ', $rate['shipment_duration_range'] ?? '' );
 						$duration_text = ( count( $dr ) > 1 && $dr[0] != $dr[1] ) ? $rate['shipment_duration_range'] . ' business days' : ( $dr[0] ?? '' ) . ' business day';
 						$label         = sprintf( '%s - %s', strtoupper( $rate['courier_name'] ?? '' ), strtoupper( $rate['courier_service_code'] ?? '' ) );

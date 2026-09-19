@@ -526,7 +526,18 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         title={
           <div className="flex items-center gap-2.5 flex-wrap">
             <span className="text-lg font-semibold text-zinc-950 dark:text-white font-sans tracking-tight">Order #{cleanOrderNum}</span>
-            <Badge type="orderStatus" value={order.status} size="sm" />
+            <button
+              type="button"
+              onClick={() => copyToClipboard(cleanOrderNum, 'order_number')}
+              className="p-1 rounded-md hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+              title={`Copy Order #${cleanOrderNum}`}
+            >
+              {copiedField === 'order_number' ? (
+                <Check className="w-4 h-4 text-emerald-400" />
+              ) : (
+                <Copy className="w-4 h-4" />
+              )}
+            </button>
             {rmaDetails?.order_type === 'Redeem' && (
               <span className="inline-flex h-6 items-center whitespace-nowrap text-[11px] leading-none font-mono font-bold text-amber-400 bg-amber-500/20 px-2.5 rounded-full border border-amber-500/40 shadow-xs">
                 <RotateCcw className="w-3.5 h-3.5 mr-1 text-amber-400" />
@@ -559,9 +570,6 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                 Store Pickup (Bekasi)
               </span>
             )}
-            <span className="inline-flex h-6 items-center whitespace-nowrap text-xs leading-none font-mono font-medium text-lime-700 dark:text-[#f3aa18] bg-[#f3aa18]/10 px-2.5 rounded-full border border-[#f3aa18]/20">
-              {formatCurrency(order.total, order.currency)}
-            </span>
           </div>
         }
       subtitle={`Created on ${formatDateTime(order.created_at)} • via ${order.payment_method_title || order.payment_method || 'Direct Payment'}${order.customer_ip ? ` • IP: ${order.customer_ip}` : ''}`}

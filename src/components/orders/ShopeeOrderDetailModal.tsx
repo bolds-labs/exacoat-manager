@@ -365,7 +365,17 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
 
             <div>
               <span className="text-[10px] uppercase font-mono text-neutral-500 block">Shipment State</span>
-              {isArranged ? (
+              {isOrderDelivered || ['COMPLETED', 'DELIVERED', 'TO_CONFIRM_RECEIVE'].includes((order.order_status || '').toUpperCase()) ? (
+                <span className="text-emerald-400 font-semibold mt-0.5 block flex items-center gap-1 text-xs">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Delivered</span>
+                </span>
+              ) : (order.order_status || '').toUpperCase() === 'SHIPPED' ? (
+                <span className="text-blue-400 font-semibold mt-0.5 block flex items-center gap-1 text-xs">
+                  <Truck className="w-3.5 h-3.5" />
+                  <span>In Transit</span>
+                </span>
+              ) : isArranged ? (
                 <span className="text-sky-400 font-semibold mt-0.5 block flex items-center gap-1 text-xs">
                   <Truck className="w-3.5 h-3.5" />
                   <span>Scheduled / Ready for Courier</span>
