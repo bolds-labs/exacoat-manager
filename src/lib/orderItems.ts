@@ -228,3 +228,39 @@ export function formatItemSpecsSummary(item: any, options?: { excludeKeys?: stri
   const filtered = specs.filter(s => !excludeList.includes(s.label.trim().toLowerCase()));
   return filtered.map(s => `${s.label}: ${s.value}`).join(' • ');
 }
+
+export interface SeparatedItemSpecs {
+  partSpecs: string;
+  refSpecs: string;
+}
+
+export function formatSeparatedItemSpecs(
+  item: any,
+  options?: { excludeKeys?: string[] }
+): SeparatedItemSpecs {
+  const specs = extractItemSpecs(item);
+  if (specs.length === 0) return { partSpecs: '', refSpecs: '' };
+
+  const refKeys = ['original invoice', 'original order', 'original channel'];
+  const excludeList = (options?.excludeKeys || ['part', 'device', 'device type']).map(k => k.toLowerCase());
+
+  const filtered = specs.filter(s => !excludeList.includes(s.label.trim().toLowerCase()));
+
+  const refList = filtered.filter(s => refKeys.includes(s.label.trim().toLowerCase()));
+  const partList = filtered.filter(s => !refKeys.includes(s.label.trim().toLowerCase()));
+
+  // Order ref list so Channel appears before Invoice / Order ID
+  refList.sort((a, b) => {
+    const aIsChannel = a.label.toLowerCase().includes('channel');
+    const bIsChannel = b.label.toLowerCase().includes('channel');
+    if (aIsChannel && !bIsChannel) return -1;
+    if (!aIsChannel && bIsChannel) return 1;
+    return 0;
+  });
+
+  return {
+    partSpecs: partList.map(s => `${s.label}: ${s.value}`).join(' • '),
+    refSpecs: refList.map(s => `${s.label}: ${s.value}`).join(' • '),
+  };
+}
+

@@ -5,7 +5,7 @@ import { formatDate, formatDateTime } from '../../lib/formatters';
 import { Printer, CheckCircle2, ClipboardCheck, Package } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
-import { extractItemSpecs } from '../../lib/orderItems';
+import { extractItemSpecs, formatSeparatedItemSpecs } from '../../lib/orderItems';
 import { isStorePickupOrder } from '../../lib/orderUtils';
 
 interface PackingSlipModalProps {
@@ -96,8 +96,11 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
     const itemsRowsHtml = (order.items || [])
       .map((item, idx) => {
         const itemSku = item.sku || (item.product_id ? `SKU-${item.product_id}` : `SKU-${item.id || idx + 1}`);
-        const specs = extractItemSpecs(item);
-        const specSummary = specs.map((s) => `${s.label}: ${s.value}`).join(' • ');
+        const cleanItemName = String(item.name || 'Precision Device Skin')
+          .replace(/\r?\n+/g, ' ')
+          .replace(/\s{2,}/g, ' ')
+          .trim();
+        const { partSpecs, refSpecs } = formatSeparatedItemSpecs(item);
 
         return `
         <tr style="border-bottom: 1px solid #e5e7eb;">
@@ -105,8 +108,9 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
             <div style="width: 18px; height: 18px; border: 1.5px solid #9ca3af; border-radius: 4px; margin: 2px auto;"></div>
           </td>
           <td style="padding: 10px 12px; font-weight: 700; font-size: 13px; color: #111827; vertical-align: top;">
-            <div>${item.name || 'Precision Device Skin'}</div>
-            ${specSummary ? `<div style="font-size: 11px; color: #1e3a8a; font-weight: 600; margin-top: 2px;">${specSummary}</div>` : ''}
+            <div style="line-height: 1.15; margin-bottom: 2px;">${cleanItemName}</div>
+            ${partSpecs ? `<div style="font-size: 11px; color: #1e3a8a; font-weight: 700; margin-top: 2px; line-height: 1.2;">${partSpecs}</div>` : ''}
+            ${refSpecs ? `<div style="font-size: 10px; color: #6b7280; font-weight: 600; margin-top: 1.5px; line-height: 1.2;">${refSpecs}</div>` : ''}
             <div style="font-size: 10.5px; color: #6b7280; font-family: monospace; margin-top: 2px;">SKU: ${itemSku}</div>
           </td>
           <td style="padding: 10px 12px; text-align: center; font-weight: 800; font-size: 14px; color: #111827; font-family: monospace; vertical-align: top; width: 70px;">
@@ -454,22 +458,28 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
             <tbody className="divide-y divide-neutral-200">
               {(order.items || []).map((item, idx) => {
                 const itemSku = item.sku || (item.product_id ? `SKU-${item.product_id}` : `SKU-${item.id || idx + 1}`);
-                const specs = extractItemSpecs(item);
-                const specSummary = specs.map((s) => `${s.label}: ${s.value}`).join(' • ');
+                const cleanItemName = String(item.name || 'Precision Device Skin')
+                  .replace(/\r?\n+/g, ' ')
+                  .replace(/\s{2,}/g, ' ')
+                  .trim();
+                const { partSpecs, refSpecs } = formatSeparatedItemSpecs(item);
 
                 return (
                   <tr key={item.id || idx} className="hover:bg-neutral-50">
-                    <td className="py-2.5 px-3 text-center">
+                    <td className="py-2.5 px-3 text-center align-top">
                       <div className="w-4 h-4 rounded border-2 border-neutral-400 mx-auto" />
                     </td>
-                    <td className="py-2.5 px-3">
-                      <span className="font-bold text-xs text-neutral-900 block">{item.name}</span>
-                      {specSummary && (
-                        <span className="text-[10.5px] text-neutral-600 block mt-0.5">{specSummary}</span>
+                    <td className="py-2.5 px-3 align-top">
+                      <span className="font-bold text-xs text-neutral-900 block leading-[1.15]">{cleanItemName}</span>
+                      {partSpecs && (
+                        <span className="text-[10.5px] text-sky-900 font-bold block mt-0.5 leading-tight">{partSpecs}</span>
+                      )}
+                      {refSpecs && (
+                        <span className="text-[10px] text-neutral-500 font-semibold block mt-0.5 leading-tight">{refSpecs}</span>
                       )}
                       <span className="text-[10px] text-neutral-500 font-mono block mt-0.5">SKU: {itemSku}</span>
                     </td>
-                    <td className="py-2.5 px-3 text-center font-mono font-bold text-xs text-neutral-900">
+                    <td className="py-2.5 px-3 text-center font-mono font-bold text-xs text-neutral-900 align-top">
                       {item.quantity || 1}x
                     </td>
                   </tr>

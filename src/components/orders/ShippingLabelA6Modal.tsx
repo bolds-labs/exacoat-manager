@@ -13,7 +13,7 @@ import {
 import { clsx } from 'clsx';
 import { useToast } from '../../context/ToastContext';
 import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
-import { formatItemSpecsSummary } from '../../lib/orderItems';
+import { formatItemSpecsSummary, formatSeparatedItemSpecs } from '../../lib/orderItems';
 
 interface ShippingLabelA6ModalProps {
   order?: Order | null;
@@ -207,7 +207,26 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
         const itemSku = item.sku 
           ? item.sku 
           : (item.product_id ? `SKU${item.product_id}` : `SKU${item.id || '72572'}`);
-        const specsStr = formatItemSpecsSummary(item);
+        const cleanItemName = String(item.name || 'Precision Device Skin')
+          .replace(/\r?\n+/g, ' ')
+          .replace(/\s{2,}/g, ' ')
+          .trim();
+        const { partSpecs, refSpecs } = formatSeparatedItemSpecs(item);
+
+        const isWarrantyItem =
+          cleanItemName.toLowerCase().includes('warranty') ||
+          (ord.meta_data || []).some((m: any) => (m.key === '_order_badge' && m.value === 'WARRANTY') || (m.key === '_is_warranty' && m.value === 'yes'));
+
+        let finalRefSpecs = refSpecs;
+        if (!finalRefSpecs && isWarrantyItem) {
+          const rmaChannel = (ord.meta_data || []).find((m: any) => m.key === '_rma_marketplace_channel')?.value;
+          const rmaInvoice = (ord.meta_data || []).find((m: any) => m.key === '_rma_original_invoice' || m.key === '_rma_original_order_id')?.value;
+          if (rmaInvoice) {
+            finalRefSpecs = rmaChannel
+              ? `Original Channel: ${rmaChannel} • Original Invoice: ${rmaInvoice}`
+              : `Original Order: #${rmaInvoice}`;
+          }
+        }
 
         return `
           <tr style="border-bottom: 1px solid #e5e7eb;">
@@ -215,8 +234,9 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
               ${item.quantity > 1 ? `<u style="text-decoration: underline; text-underline-offset: 2px;">${item.quantity}x</u>` : `${item.quantity}x`}
             </td>
             <td style="padding: 3px 5px; vertical-align: top;">
-              <div style="font-size: 10px; font-weight: 800; color: #111; line-height: 1.2;">${item.name || 'Precision Device Skin'}</div>
-              ${specsStr ? `<div style="font-size: 8px; color: #444; font-weight: 600; margin-top: 1.5px; line-height: 1.2;">${specsStr}</div>` : ''}
+              <div style="font-size: 10px; font-weight: 800; color: #111; line-height: 1.08; letter-spacing: -0.15px; margin: 0 0 2px 0;">${cleanItemName}</div>
+              ${partSpecs ? `<div style="font-size: 8px; color: #111; font-weight: 700; line-height: 1.15; margin-bottom: 1px;">${partSpecs}</div>` : ''}
+              ${finalRefSpecs ? `<div style="font-size: 7.5px; color: #555; font-weight: 600; line-height: 1.15;">${finalRefSpecs}</div>` : ''}
             </td>
             <td style="padding: 3px 5px; font-size: 9px; text-align: right; color: #333; font-weight: 800; vertical-align: top; white-space: nowrap; font-variant-numeric: tabular-nums;">${itemSku}</td>
           </tr>
@@ -853,7 +873,26 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                       const itemSku = item.sku 
                         ? item.sku 
                         : (item.product_id ? `SKU${item.product_id}` : `SKU${item.id || '72572'}`);
-                      const specsStr = formatItemSpecsSummary(item);
+                      const cleanItemName = String(item.name || 'Precision Device Skin')
+                        .replace(/\r?\n+/g, ' ')
+                        .replace(/\s{2,}/g, ' ')
+                        .trim();
+                      const { partSpecs, refSpecs } = formatSeparatedItemSpecs(item);
+
+                      const isWarrantyItem =
+                        cleanItemName.toLowerCase().includes('warranty') ||
+                        (activeOrder.meta_data || []).some((m: any) => (m.key === '_order_badge' && m.value === 'WARRANTY') || (m.key === '_is_warranty' && m.value === 'yes'));
+
+                      let finalRefSpecs = refSpecs;
+                      if (!finalRefSpecs && isWarrantyItem) {
+                        const rmaChannel = (activeOrder.meta_data || []).find((m: any) => m.key === '_rma_marketplace_channel')?.value;
+                        const rmaInvoice = (activeOrder.meta_data || []).find((m: any) => m.key === '_rma_original_invoice' || m.key === '_rma_original_order_id')?.value;
+                        if (rmaInvoice) {
+                          finalRefSpecs = rmaChannel
+                            ? `Original Channel: ${rmaChannel} • Original Invoice: ${rmaInvoice}`
+                            : `Original Order: #${rmaInvoice}`;
+                        }
+                      }
 
                       return (
                         <div key={idx} className="border-b border-neutral-100 pb-0.5">
@@ -861,14 +900,19 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                             <span className={clsx("font-black text-black", item.quantity > 1 && "underline decoration-2 underline-offset-2")}>
                               {item.quantity}x
                             </span>
-                            <span className="font-bold text-black ml-1">
-                              {item.name || 'Precision Device Skin'}
+                            <span className="font-bold text-black ml-1 leading-[1.08] block text-[8px] tracking-tight">
+                              {cleanItemName}
                             </span>
                             <span className="text-[7.5px] text-neutral-700 font-sans font-bold shrink-0 ml-auto pl-1 tabular-nums">{itemSku}</span>
                           </div>
-                          {specsStr && (
-                            <p className="text-[7.5px] text-neutral-600 font-semibold leading-tight mt-0.5">
-                              {specsStr}
+                          {partSpecs && (
+                            <p className="text-[7.5px] text-neutral-900 font-bold leading-tight mt-0.5 pl-3">
+                              {partSpecs}
+                            </p>
+                          )}
+                          {finalRefSpecs && (
+                            <p className="text-[7px] text-neutral-500 font-semibold leading-tight mt-0.5 pl-3">
+                              {finalRefSpecs}
                             </p>
                           )}
                         </div>
@@ -919,7 +963,26 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                       const itemSku = item.sku 
                         ? item.sku 
                         : (item.product_id ? `SKU${item.product_id}` : `SKU${item.id || '72572'}`);
-                      const specsStr = formatItemSpecsSummary(item);
+                      const cleanItemName = String(item.name || 'Precision Device Skin')
+                        .replace(/\r?\n+/g, ' ')
+                        .replace(/\s{2,}/g, ' ')
+                        .trim();
+                      const { partSpecs, refSpecs } = formatSeparatedItemSpecs(item);
+
+                      const isWarrantyItem =
+                        cleanItemName.toLowerCase().includes('warranty') ||
+                        (activeOrder.meta_data || []).some((m: any) => (m.key === '_order_badge' && m.value === 'WARRANTY') || (m.key === '_is_warranty' && m.value === 'yes'));
+
+                      let finalRefSpecs = refSpecs;
+                      if (!finalRefSpecs && isWarrantyItem) {
+                        const rmaChannel = (activeOrder.meta_data || []).find((m: any) => m.key === '_rma_marketplace_channel')?.value;
+                        const rmaInvoice = (activeOrder.meta_data || []).find((m: any) => m.key === '_rma_original_invoice' || m.key === '_rma_original_order_id')?.value;
+                        if (rmaInvoice) {
+                          finalRefSpecs = rmaChannel
+                            ? `Original Channel: ${rmaChannel} • Original Invoice: ${rmaInvoice}`
+                            : `Original Order: #${rmaInvoice}`;
+                        }
+                      }
 
                       return (
                         <div key={idx} className="border-b border-neutral-100 pb-0.5">
@@ -927,14 +990,19 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                             <span className={clsx("font-black text-black", item.quantity > 1 && "underline decoration-2 underline-offset-2")}>
                               {item.quantity}x
                             </span>
-                            <span className="font-bold text-black ml-1">
-                              {item.name || 'Precision Device Skin'}
+                            <span className="font-bold text-black ml-1 leading-[1.08] block text-[8px] tracking-tight">
+                              {cleanItemName}
                             </span>
                             <span className="text-[7.5px] text-neutral-700 font-sans font-bold shrink-0 ml-auto pl-1 tabular-nums">{itemSku}</span>
                           </div>
-                          {specsStr && (
-                            <p className="text-[7.5px] text-neutral-600 font-semibold leading-tight mt-0.5">
-                              {specsStr}
+                          {partSpecs && (
+                            <p className="text-[7.5px] text-neutral-900 font-bold leading-tight mt-0.5 pl-3">
+                              {partSpecs}
+                            </p>
+                          )}
+                          {finalRefSpecs && (
+                            <p className="text-[7px] text-neutral-500 font-semibold leading-tight mt-0.5 pl-3">
+                              {finalRefSpecs}
                             </p>
                           )}
                         </div>
