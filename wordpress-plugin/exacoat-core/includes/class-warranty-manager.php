@@ -657,7 +657,7 @@ class Exacoat_Warranty_Manager {
 			$body = [
 				'origin_postal_code'      => (int) $origin_zip,
 				'destination_postal_code' => (int) $postcode,
-				'couriers'                => 'jne,sicepat,jnt',
+				'couriers'                => 'jne,sicepat',
 				'items'                   => [
 					[
 						'name'     => 'Replacement Skin Pack',
@@ -682,6 +682,10 @@ class Exacoat_Warranty_Manager {
 				$resp_body = json_decode( wp_remote_retrieve_body( $response ), true );
 				if ( ! empty( $resp_body['pricing'] ) && is_array( $resp_body['pricing'] ) ) {
 					foreach ( $resp_body['pricing'] as $rate ) {
+						$c_code = strtolower( (string) ( $rate['courier_code'] ?? '' ) );
+						if ( ! in_array( $c_code, [ 'jne', 'sicepat' ], true ) ) {
+							continue;
+						}
 						if ( empty( $rate['shipping_type'] ) || ( $rate['shipping_type'] ?? '' ) === 'parcel' ) {
 							$rates[] = [
 								'id'       => ( $rate['courier_code'] ?? 'courier' ) . '_' . ( $rate['courier_service_code'] ?? 'service' ),

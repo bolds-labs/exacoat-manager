@@ -177,6 +177,12 @@ export interface ShopeeOrder {
   recipient_district?: string;
   recipient_postcode: string;
   items: ShopeeOrderItem[];
+  is_delivered?: boolean;
+  delivered_time?: string | null;
+  is_arranged?: boolean;
+  is_printed?: boolean;
+  logistics_status?: string;
+  shipping_document_status?: string;
   already_claimed: boolean;
   existing_claim?: ShopeeExistingClaim;
 }

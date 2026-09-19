@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../../context/ToastContext';
 import {
@@ -145,6 +145,8 @@ import {
   Sliders,
   X,
   Plus,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -249,6 +251,23 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
   const [initialStatus, setInitialStatus] = useState<'processing' | 'on-hold'>('processing');
   const [adminNotes, setAdminNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isReasonMenuOpen, setIsReasonMenuOpen] = useState(false);
+  const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
+  const claimReasonMenuRef = useRef<HTMLDivElement>(null);
+  const statusMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (claimReasonMenuRef.current && !claimReasonMenuRef.current.contains(e.target as Node)) {
+        setIsReasonMenuOpen(false);
+      }
+      if (statusMenuRef.current && !statusMenuRef.current.contains(e.target as Node)) {
+        setIsStatusMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Invoice validation state to prevent duplicates
   const [isCheckingInvoice, setIsCheckingInvoice] = useState(false);
@@ -620,15 +639,21 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
     setIsLoadingShipping(false);
 
     if (res.success && res.rates?.length) {
-      setShippingRates(res.rates);
-      const first = res.rates[0];
+      // Filter strictly to JNE and SiCepat, no J&T
+      const filteredRates = res.rates.filter((r) => {
+        const c = (r.courier || '').toLowerCase();
+        return c.includes('jne') || c.includes('sicepat');
+      });
+      const finalRates = filteredRates.length ? filteredRates : res.rates;
+      setShippingRates(finalRates);
+      const first = finalRates[0];
       setSelectedCourierId(first.id);
       setSelectedCourierLabel(first.label);
       setSelectedCourierPrice(first.price);
       if (res.is_fallback) {
         showToast('info', 'Standard Rates', 'Using standard courier rate estimates.');
       } else {
-        showToast('success', 'Live Rates Loaded', `Loaded ${res.rates.length} live Biteship rates.`);
+        showToast('success', 'Live Rates Loaded', `Loaded ${finalRates.length} live Biteship rates.`);
       }
     } else {
       showToast('warning', 'Rates Fallback', 'Using standard courier rate estimates.');
@@ -1799,31 +1824,108 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
           </label>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-neutral-400 mb-1 block">Claim Reason</label>
-              <select
-                value={claimReason}
-                onChange={(e) => setClaimReason(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-[#141414] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-emerald-500 cursor-pointer"
+            {/* Custom Beautiful Claim Reason Select */}
+            <div className="relative" ref={claimReasonMenuRef}>
+              <label className="text-xs text-neutral-400 mb-1 block font-medium">Claim Reason</label>
+              <button
+                type="button"
+                onClick={() => setIsReasonMenuOpen(!isReasonMenuOpen)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-[#141414] hover:bg-[#181818] border border-white/[0.12] hover:border-white/25 text-white text-xs font-sans flex items-center justify-between gap-2 transition-all cursor-pointer shadow-xs focus:outline-none focus:border-emerald-500"
               >
-                {(claimType === 'Redeem' ? REDEEM_DEFECT_REASONS : CLAIM_REASONS).map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
+                <div className="flex items-center gap-2 truncate">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                  <span className="font-semibold text-neutral-100 truncate">{claimReason}</span>
+                </div>
+                <ChevronDown className={clsx("w-4 h-4 text-neutral-400 shrink-0 transition-transform duration-200", isReasonMenuOpen && "rotate-180 text-white")} />
+              </button>
+
+              {isReasonMenuOpen && (
+                <div className="absolute left-0 right-0 bottom-full mb-2 z-50 rounded-xl bg-[#121215] border border-white/15 shadow-2xl overflow-hidden py-1 backdrop-blur-2xl max-h-60 overflow-y-auto">
+                  {(claimType === 'Redeem' ? REDEEM_DEFECT_REASONS : CLAIM_REASONS).map((r) => {
+                    const isSelected = claimReason === r;
+                    return (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => {
+                          setClaimReason(r);
+                          setIsReasonMenuOpen(false);
+                        }}
+                        className={clsx(
+                          "w-full px-3 py-2 text-left text-xs flex items-center justify-between gap-2 cursor-pointer transition-colors",
+                          isSelected
+                            ? "bg-emerald-500/15 text-emerald-300 font-bold"
+                            : "text-neutral-200 hover:bg-white/[0.08]"
+                        )}
+                      >
+                        <span>{r}</span>
+                        {isSelected && <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            <div>
-              <label className="text-xs text-neutral-400 mb-1 block">Initial Order Status</label>
-              <select
-                value={initialStatus}
-                onChange={(e) => setInitialStatus(e.target.value as any)}
-                className="w-full px-3 py-2 rounded-xl bg-[#141414] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-emerald-500 cursor-pointer"
+            {/* Custom Beautiful Initial Order Status Select */}
+            <div className="relative" ref={statusMenuRef}>
+              <label className="text-xs text-neutral-400 mb-1 block font-medium">Initial Order Status</label>
+              <button
+                type="button"
+                onClick={() => setIsStatusMenuOpen(!isStatusMenuOpen)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-[#141414] hover:bg-[#181818] border border-white/[0.12] hover:border-white/25 text-white text-xs font-sans flex items-center justify-between gap-2 transition-all cursor-pointer shadow-xs focus:outline-none focus:border-emerald-500"
               >
-                <option value="processing">Payment Confirmed (Ready to Cut / Production)</option>
-                <option value="on-hold">Waiting for Payment (Awaiting Customer Transfer)</option>
-              </select>
+                <div className="flex items-center gap-2 truncate">
+                  <span className={clsx(
+                    "w-1.5 h-1.5 rounded-full shrink-0",
+                    initialStatus === 'processing' ? "bg-emerald-400" : "bg-amber-400"
+                  )} />
+                  <span className="font-semibold text-neutral-100 truncate">
+                    {initialStatus === 'processing'
+                      ? 'Payment Confirmed (Ready to Cut)'
+                      : 'Waiting for Payment (Awaiting Customer Transfer)'}
+                  </span>
+                </div>
+                <ChevronDown className={clsx("w-4 h-4 text-neutral-400 shrink-0 transition-transform duration-200", isStatusMenuOpen && "rotate-180 text-white")} />
+              </button>
+
+              {isStatusMenuOpen && (
+                <div className="absolute left-0 right-0 bottom-full mb-2 z-50 rounded-xl bg-[#121215] border border-white/15 shadow-2xl overflow-hidden py-1 backdrop-blur-2xl">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInitialStatus('processing');
+                      setIsStatusMenuOpen(false);
+                    }}
+                    className={clsx(
+                      "w-full px-3 py-2 text-left text-xs flex items-center justify-between gap-2 cursor-pointer transition-colors",
+                      initialStatus === 'processing'
+                        ? "bg-emerald-500/15 text-emerald-300 font-bold"
+                        : "text-neutral-200 hover:bg-white/[0.08]"
+                    )}
+                  >
+                    <span>Payment Confirmed (Ready to Cut / Production)</span>
+                    {initialStatus === 'processing' && <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInitialStatus('on-hold');
+                      setIsStatusMenuOpen(false);
+                    }}
+                    className={clsx(
+                      "w-full px-3 py-2 text-left text-xs flex items-center justify-between gap-2 cursor-pointer transition-colors",
+                      initialStatus === 'on-hold'
+                        ? "bg-amber-500/15 text-amber-300 font-bold"
+                        : "text-neutral-200 hover:bg-white/[0.08]"
+                    )}
+                  >
+                    <span>Waiting for Payment (Awaiting Customer Transfer)</span>
+                    {initialStatus === 'on-hold' && <Check className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 

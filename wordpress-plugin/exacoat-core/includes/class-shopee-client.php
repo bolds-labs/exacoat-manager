@@ -439,7 +439,7 @@ class Exacoat_Shopee_Client {
 			'shop_id'                   => $shop_id,
 			'sign'                      => $detail_sign,
 			'order_sn_list'             => implode( ',', $order_sns ),
-			'response_optional_fields'  => 'buyer_user_id,buyer_username,recipient_address,item_list,shipping_carrier,total_amount,pay_time,order_status,package_list,note',
+			'response_optional_fields'  => 'buyer_user_id,buyer_username,recipient_address,item_list,shipping_carrier,total_amount,pay_time,order_status,package_list,note,shipping_document_status',
 		]);
 
 		$detail_res = wp_remote_get( $detail_url, [ 'timeout' => 30 ] );
@@ -487,28 +487,62 @@ class Exacoat_Shopee_Client {
 
 			$rec = $ord['recipient_address'] ?? [];
 			$package = ( $ord['package_list'] ?? [] )[0] ?? [];
+			$pkg_logistics_st = strtoupper( (string) ( $package['logistics_status'] ?? '' ) );
+			$shipping_doc_st = strtoupper( (string) ( $ord['shipping_document_status'] ?? ( $package['shipping_document_status'] ?? '' ) ) );
+			$raw_order_st = strtoupper( (string) ( $ord['order_status'] ?? 'UNKNOWN' ) );
+			$tracking_num = trim( (string) ( $package['tracking_number'] ?? '' ) );
+
+			// Check if delivery completed
+			$is_delivered = false;
+			$delivered_time = null;
+			if (
+				$raw_order_st === 'COMPLETED' ||
+				$raw_order_st === 'TO_CONFIRM_RECEIVE' ||
+				$pkg_logistics_st === 'LOGISTICS_DELIVERY_DONE'
+			) {
+				$is_delivered = true;
+				$delivered_time = ! empty( $package['delivery_time'] )
+					? date( 'Y-m-d H:i:s', $package['delivery_time'] )
+					: ( ! empty( $ord['update_time'] ) ? date( 'Y-m-d H:i:s', $ord['update_time'] ) : current_time( 'mysql' ) );
+			}
+
+			// Check if shipping arranged / scheduled
+			$is_arranged = (
+				$raw_order_st === 'PROCESSED' ||
+				! empty( $tracking_num ) ||
+				in_array( $pkg_logistics_st, [ 'LOGISTICS_REQUEST_CREATED', 'LOGISTICS_READY', 'LOGISTICS_PICKUP_DONE' ], true )
+			);
+
+			// Check if label printed
+			$is_printed = in_array( $shipping_doc_st, [ 'PRINTED', 'READY' ], true );
 
 			$normalized_orders[] = [
-				'order_sn'           => $sn,
-				'order_status'       => $ord['order_status'] ?? 'UNKNOWN',
-				'create_time'        => date( 'Y-m-d H:i:s', $ord['create_time'] ?? time() ),
-				'create_timestamp'   => $ord['create_time'] ?? time(),
-				'pay_time'           => ! empty( $ord['pay_time'] ) ? date( 'Y-m-d H:i:s', $ord['pay_time'] ) : null,
-				'buyer_username'     => $ord['buyer_username'] ?? 'Shopee Customer',
-				'buyer_user_id'      => $ord['buyer_user_id'] ?? 0,
-				'total_amount'       => (float) ( $ord['total_amount'] ?? 0 ),
-				'currency'           => 'IDR',
-				'shipping_carrier'   => $ord['shipping_carrier'] ?? ( $package['shipping_carrier'] ?? 'SPX / J&T' ),
-				'tracking_number'    => $package['tracking_number'] ?? '',
-				'buyer_note'         => $ord['note'] ?? '',
-				'recipient_name'     => $rec['name'] ?? ( $ord['buyer_username'] ?? 'Shopee Customer' ),
-				'recipient_phone'    => $rec['phone'] ?? '',
-				'recipient_address'  => $rec['full_address'] ?? '',
-				'recipient_city'     => $rec['city'] ?? ( $rec['district'] ?? '' ),
-				'recipient_postcode' => $rec['zipcode'] ?? '',
-				'items'              => $items,
-				'already_claimed'    => $claim_info['already_claimed'],
-				'existing_claim'     => $claim_info,
+				'order_sn'                 => $sn,
+				'order_status'             => $ord['order_status'] ?? 'UNKNOWN',
+				'create_time'              => date( 'Y-m-d H:i:s', $ord['create_time'] ?? time() ),
+				'create_timestamp'         => $ord['create_time'] ?? time(),
+				'pay_time'                 => ! empty( $ord['pay_time'] ) ? date( 'Y-m-d H:i:s', $ord['pay_time'] ) : null,
+				'buyer_username'           => $ord['buyer_username'] ?? 'Shopee Customer',
+				'buyer_user_id'            => $ord['buyer_user_id'] ?? 0,
+				'total_amount'             => (float) ( $ord['total_amount'] ?? 0 ),
+				'currency'                 => 'IDR',
+				'shipping_carrier'         => $ord['shipping_carrier'] ?? ( $package['shipping_carrier'] ?? 'SPX / J&T' ),
+				'tracking_number'          => $tracking_num,
+				'buyer_note'               => $ord['note'] ?? '',
+				'recipient_name'           => $rec['name'] ?? ( $ord['buyer_username'] ?? 'Shopee Customer' ),
+				'recipient_phone'          => $rec['phone'] ?? '',
+				'recipient_address'        => $rec['full_address'] ?? '',
+				'recipient_city'           => $rec['city'] ?? ( $rec['district'] ?? '' ),
+				'recipient_postcode'       => $rec['zipcode'] ?? '',
+				'items'                    => $items,
+				'is_delivered'             => $is_delivered,
+				'delivered_time'           => $delivered_time,
+				'is_arranged'              => $is_arranged,
+				'is_printed'               => $is_printed,
+				'logistics_status'         => $pkg_logistics_st,
+				'shipping_document_status' => $shipping_doc_st,
+				'already_claimed'          => $claim_info['already_claimed'],
+				'existing_claim'           => $claim_info,
 			];
 		}
 
@@ -1306,7 +1340,7 @@ class Exacoat_Shopee_Client {
 		// Query tracking info to detect live delivery status
 		$tracking       = self::get_tracking_info( $clean );
 		$order_status   = $found['order_status'] ?? ( $tracking['logistics_status'] ?: 'UNKNOWN' );
-		$is_delivered   = ! empty( $tracking['is_delivered'] ) || in_array( strtoupper( $order_status ), [ 'COMPLETED', 'DELIVERED' ], true );
+		$is_delivered   = ! empty( $tracking['is_delivered'] ) || in_array( strtoupper( $order_status ), [ 'COMPLETED', 'DELIVERED', 'TO_CONFIRM_RECEIVE' ], true ) || ! empty( $found['is_delivered'] );
 		$delivered_time = $tracking['delivered_time'] ?? ( $found['delivered_time'] ?? null );
 
 		if ( $found ) {

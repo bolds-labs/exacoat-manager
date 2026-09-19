@@ -277,20 +277,27 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   };
 
   // Status mapping and badge helper
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, order?: ShopeeOrder) => {
     const s = (status || '').toUpperCase();
     switch (s) {
       case 'READY_TO_SHIP':
+        if (order?.tracking_number?.trim() || order?.is_arranged) {
+          return { label: 'Shipping Scheduled', bg: 'bg-sky-500/10', text: 'text-sky-300', border: 'border-sky-500/20' };
+        }
         return { label: 'Ready to Ship', bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-500/20' };
       case 'PROCESSED':
-        return { label: 'Processed', bg: 'bg-sky-500/10', text: 'text-sky-300', border: 'border-sky-500/20' };
+        return { label: 'Shipping Scheduled', bg: 'bg-sky-500/10', text: 'text-sky-300', border: 'border-sky-500/20' };
       case 'SHIPPED':
-        return { label: 'Shipped', bg: 'bg-blue-500/10', text: 'text-blue-300', border: 'border-blue-500/20' };
+        return { label: 'In Transit', bg: 'bg-blue-500/10', text: 'text-blue-300', border: 'border-blue-500/20' };
+      case 'TO_CONFIRM_RECEIVE':
+        return { label: 'Delivered', bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/20' };
       case 'COMPLETED':
         return { label: 'Completed', bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/20' };
       case 'CANCELLED':
       case 'IN_CANCEL':
         return { label: 'Cancelled', bg: 'bg-rose-500/10', text: 'text-rose-300', border: 'border-rose-500/20' };
+      case 'TO_RETURN':
+        return { label: 'Return / Refund', bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-500/20' };
       case 'UNPAID':
         return { label: 'Unpaid', bg: 'bg-neutral-800', text: 'text-neutral-400', border: 'border-white/10' };
       default:
@@ -303,7 +310,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
     orders.forEach((o) => {
       const raw = (o.shipping_carrier || '').trim();
       if (!raw) return;
-      const clean = raw.replace(/[-–—:].*$/, '').trim();
+      const clean = raw.replace(/[---:].*$/, '').trim();
       if (clean) {
         const key = clean.toUpperCase();
         if (!map.has(key)) map.set(key, clean);
@@ -320,9 +327,9 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
       // Tab filter
       if (activeTab === 'READY_TO_SHIP' && !['READY_TO_SHIP', 'PROCESSED'].includes(order.order_status)) return false;
       if (activeTab === 'SHIPPED' && order.order_status !== 'SHIPPED') return false;
-      if (activeTab === 'COMPLETED' && order.order_status !== 'COMPLETED') return false;
+      if (activeTab === 'COMPLETED' && !['COMPLETED', 'TO_CONFIRM_RECEIVE'].includes(order.order_status) && !order.is_delivered) return false;
       if (activeTab === 'CLAIMED' && !order.already_claimed) return false;
-      if (activeTab === 'CANCELLED' && !['CANCELLED', 'IN_CANCEL'].includes(order.order_status)) return false;
+      if (activeTab === 'CANCELLED' && !['CANCELLED', 'IN_CANCEL', 'TO_RETURN'].includes(order.order_status)) return false;
 
       // Courier filter
       if (courierFilter !== 'all') {
@@ -332,7 +339,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
 
       // Print status filter
       if (printFilter !== 'all') {
-        const isPrinted = printedOrderSns.has(order.order_sn);
+        const isPrinted = printedOrderSns.has(order.order_sn) || order.is_printed || order.shipping_document_status === 'PRINTED';
         if (printFilter === 'printed' && !isPrinted) return false;
         if (printFilter === 'unprinted' && isPrinted) return false;
       }
@@ -725,11 +732,13 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
       ) : (
         <div className="space-y-3">
           {pagedOrders.map((order) => {
-            const statusBadge = getStatusBadge(order.order_status);
+            const statusBadge = getStatusBadge(order.order_status, order);
             const isClaimed = order.already_claimed;
-            const isReadyToShip = order.order_status === 'READY_TO_SHIP';
+            const isPrinted = printedOrderSns.has(order.order_sn) || order.is_printed || order.shipping_document_status === 'PRINTED';
+            const isArranged = Boolean(order.tracking_number?.trim() || order.order_status === 'PROCESSED' || order.is_arranged);
+            const isReadyToShip = order.order_status === 'READY_TO_SHIP' && !isArranged;
+            const canPrint = Boolean(isArranged || order.tracking_number);
             const isSelected = selectedSns.has(order.order_sn);
-            const isPrinted = printedOrderSns.has(order.order_sn);
 
             return (
               <div
@@ -813,7 +822,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                       {statusBadge.label}
                     </span>
 
-                    {/* Arrange Shipment Button if ready */}
+                    {/* Arrange Shipment Button if ready and unscheduled */}
                     {isReadyToShip && (
                       <button
                         type="button"
@@ -825,6 +834,24 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                       >
                         <Truck className="w-3.5 h-3.5" />
                         <span>Arrange Ship</span>
+                      </button>
+                    )}
+
+                    {/* Print Label Button if shipping is scheduled */}
+                    {canPrint && (
+                      <button
+                        type="button"
+                        onClick={() => handlePrintShopeeLabel(order)}
+                        className={clsx(
+                          'px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border',
+                          isPrinted
+                            ? 'bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 border-white/10'
+                            : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/30'
+                        )}
+                        title={isPrinted ? 'Reprint 4x6 shipping label' : 'Print 4x6 shipping label'}
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                        <span>{isPrinted ? 'Reprint Label' : 'Print Label'}</span>
                       </button>
                     )}
 
@@ -983,19 +1010,43 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                     </div>
 
                     <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono uppercase text-neutral-500">Shipment State</span>
+                      {isArranged ? (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-sky-500/15 text-sky-300 border border-sky-500/30 flex items-center gap-1">
+                          <Truck className="w-2.5 h-2.5" />
+                          <span>Scheduled / Ready</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                          <AlertTriangle className="w-2.5 h-2.5" />
+                          <span>Needs Arrangement</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between">
                       <span className="text-[10px] font-mono uppercase text-neutral-500">Tracking Resi</span>
                       {order.tracking_number ? (
-                        <div className="flex items-center gap-1 font-mono font-bold text-orange-400">
-                          <span>{order.tracking_number}</span>
-                          {isPrinted && (
-                            <span className="text-[9px] px-1 py-0.2 rounded font-mono font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-0.5">
-                              <CheckCircle2 className="w-2.5 h-2.5" />
-                              <span>Printed</span>
-                            </span>
-                          )}
-                        </div>
+                        <span className="font-mono font-bold text-orange-400">{order.tracking_number}</span>
                       ) : (
-                        <span className="text-neutral-500 font-mono">Pending</span>
+                        <span className="text-neutral-500 font-mono text-[11px]">Pending allocation</span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono uppercase text-neutral-500">4x6 Label</span>
+                      {isPrinted ? (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-mono font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                          <CheckCircle2 className="w-2.5 h-2.5" />
+                          <span>Printed</span>
+                        </span>
+                      ) : canPrint ? (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-mono font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                          <Printer className="w-2.5 h-2.5" />
+                          <span>Not Printed</span>
+                        </span>
+                      ) : (
+                        <span className="text-neutral-500 font-mono text-[10px]">Arrange ship first</span>
                       )}
                     </div>
 

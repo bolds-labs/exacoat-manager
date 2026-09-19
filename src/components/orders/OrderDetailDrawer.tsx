@@ -98,6 +98,19 @@ const COURIER_PRESETS = [
   { label: 'Custom / Other', value: 'custom' },
 ];
 
+const getPublicTrackingUrl = (carrier?: string, trackingNum?: string, customUrl?: string): string => {
+  if (!trackingNum) return '#';
+  if (customUrl && customUrl.trim()) {
+    return customUrl.includes('%s')
+      ? customUrl.replace('%s', encodeURIComponent(trackingNum.trim()))
+      : customUrl.trim();
+  }
+  const c = (carrier || '').toLowerCase();
+  if (c.includes('dhl')) return `https://www.dhl.com/en/express/tracking.html?AWB=${encodeURIComponent(trackingNum.trim())}`;
+  if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(trackingNum.trim())}`;
+  return `https://biteship.com/track/${encodeURIComponent(trackingNum.trim())}`;
+};
+
 export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   order,
   isOpen,
@@ -1235,6 +1248,22 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                 )}>
                   {order.tracking.latest_status === 'delivered' ? '✓ Delivered' : order.tracking.latest_status.replace('_', ' ')}
                 </span>
+              )}
+              {order.tracking?.tracking_number && !order.tracking.tracking_number.startsWith('field_') && (
+                <a
+                  href={getPublicTrackingUrl(
+                    order.tracking.courier || courier,
+                    order.tracking.tracking_number,
+                    order.tracking.tracking_url
+                  )}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2.5 py-1 rounded-lg bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 text-xs text-[#f3aa18] font-mono font-semibold flex items-center gap-1.5 border border-[#f3aa18]/30 transition-all cursor-pointer shadow-xs"
+                  title="Track shipment on carrier tracking portal"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>{order.tracking.tracking_number}</span>
+                </a>
               )}
               {order.tracking?.tracking_number && !order.tracking.tracking_number.startsWith('field_') && (
                 <button

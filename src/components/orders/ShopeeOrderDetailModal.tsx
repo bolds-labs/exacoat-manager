@@ -102,27 +102,35 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, ord?: ShopeeOrder) => {
     const s = (status || '').toUpperCase();
     switch (s) {
       case 'READY_TO_SHIP':
+        if (ord?.tracking_number?.trim() || ord?.is_arranged) {
+          return { label: 'Shipping Scheduled', bg: 'bg-sky-500/10', text: 'text-sky-300', border: 'border-sky-500/20' };
+        }
         return { label: 'Ready to Ship', bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-500/20' };
       case 'PROCESSED':
-        return { label: 'Processed', bg: 'bg-sky-500/10', text: 'text-sky-300', border: 'border-sky-500/20' };
+        return { label: 'Shipping Scheduled', bg: 'bg-sky-500/10', text: 'text-sky-300', border: 'border-sky-500/20' };
       case 'SHIPPED':
-        return { label: 'Shipped', bg: 'bg-blue-500/10', text: 'text-blue-300', border: 'border-blue-500/20' };
+        return { label: 'In Transit', bg: 'bg-blue-500/10', text: 'text-blue-300', border: 'border-blue-500/20' };
+      case 'TO_CONFIRM_RECEIVE':
+        return { label: 'Delivered', bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/20' };
       case 'COMPLETED':
         return { label: 'Completed', bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/20' };
       case 'CANCELLED':
       case 'IN_CANCEL':
         return { label: 'Cancelled', bg: 'bg-rose-500/10', text: 'text-rose-300', border: 'border-rose-500/20' };
+      case 'TO_RETURN':
+        return { label: 'Return / Refund', bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-500/20' };
       default:
         return { label: status || 'Pending', bg: 'bg-neutral-800', text: 'text-neutral-300', border: 'border-white/10' };
     }
   };
 
-  const badge = getStatusBadge(order.order_status);
-  const isReadyToShip = order.order_status === 'READY_TO_SHIP';
+  const badge = getStatusBadge(order.order_status, order);
+  const isArranged = Boolean(order.tracking_number?.trim() || order.order_status === 'PROCESSED' || order.is_arranged);
+  const isReadyToShip = order.order_status === 'READY_TO_SHIP' && !isArranged;
 
   return (
     <SlideDrawer
@@ -356,8 +364,18 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
             </div>
 
             <div>
-              <span className="text-[10px] uppercase font-mono text-neutral-500 block">Fulfillment Channel</span>
-              <span className="text-neutral-300 mt-0.5 block font-medium">Shopee Cashless Dropoff</span>
+              <span className="text-[10px] uppercase font-mono text-neutral-500 block">Shipment State</span>
+              {isArranged ? (
+                <span className="text-sky-400 font-semibold mt-0.5 block flex items-center gap-1 text-xs">
+                  <Truck className="w-3.5 h-3.5" />
+                  <span>Scheduled / Ready for Courier</span>
+                </span>
+              ) : (
+                <span className="text-amber-400 font-semibold mt-0.5 block flex items-center gap-1 text-xs">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>Needs Arrangement</span>
+                </span>
+              )}
             </div>
 
             <div>
