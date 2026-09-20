@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.95] - 2026-09-21
+
+### Configurator Metadata Physical Hierarchy & Universal Configured Skin Image Display
+- **Layer & Metadata Physical Hierarchy Invariant**:
+  - Replaced arbitrary alphabetical attribute and addon sorting with physical device hierarchy:
+    1. Primary base skin (Back Skin, Top Lid, Main Body) strictly on top (Line 1).
+    2. Secondary physical components (Camera, Additional Camera & Back Glass, Accents, Frame, Hinge) at Line 2+.
+    3. Configuration options (Coverage, Logo Cutout, Stylus Cutout) at the bottom.
+  - Implemented `sort_addon_layers` in `class-configurator-engine.php` to sort WooCommerce cart items and order line item metadata.
+  - Implemented `sortItemSpecs` in `orderItems.ts` to ensure Exacoat Manager Order Detail drawers, packing slips, and shipping labels render Back Skin on top.
+- **Universal Configured Skin Image Display Pipeline**:
+  - Registered dual `/configurator/composite/upload` and `/composite/upload` REST endpoints in `class-configurator-engine.php` with open CORS headers.
+  - Line items in `enrichOrder` (`wordpressBridge.ts`) dynamically extract `_configured_image_url`, `_configurator_image`, `_thumbnail_url`, and `image_url` into `item.image_url` so the Order Detail drawer displays the configured skin thumbnail.
+  - Preserved permanent composite image URLs across all media helpers, cart drawers, checkout reviews, order confirmations, and transactional emails.
+
 ## [0.0.94] - 2026-09-21
 
 ### Finish Group Renaming, UI Beautification & 0.22mm Physical Skin Micro-Shadow

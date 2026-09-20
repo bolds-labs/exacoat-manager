@@ -596,6 +596,11 @@ class Exacoat_Configurator_Engine {
 			'callback'            => [ __CLASS__, 'rest_upload_composite' ],
 			'permission_callback' => '__return_true',
 		] );
+		$register( '/composite/upload', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_upload_composite' ],
+			'permission_callback' => '__return_true',
+		] );
 	}
 
 
@@ -2406,12 +2411,51 @@ class Exacoat_Configurator_Engine {
 		], 200 );
 	}
 
+	/**
+	 * Sorts configurator addon layers so Back Skin / primary base layer appears on top.
+	 */
+	public static function sort_addon_layers( array $addons ): array {
+		if ( count( $addons ) <= 1 ) {
+			return $addons;
+		}
+		usort( $addons, function( $a, $b ) {
+			$label_a = strtolower( trim( $a['label'] ?? ( $a['key'] ?? ( $a['name'] ?? '' ) ) ) );
+			$label_b = strtolower( trim( $b['label'] ?? ( $b['key'] ?? ( $b['name'] ?? '' ) ) ) );
+
+			$is_back_a = ( false !== strpos( $label_a, 'back' ) ) && ( false === strpos( $label_a, 'camera' ) ) && ( false === strpos( $label_a, 'glass' ) );
+			$is_back_b = ( false !== strpos( $label_b, 'back' ) ) && ( false === strpos( $label_b, 'camera' ) ) && ( false === strpos( $label_b, 'glass' ) );
+			if ( $is_back_a && ! $is_back_b ) return -1;
+			if ( ! $is_back_a && $is_back_b ) return 1;
+
+			$is_primary_a = ( false !== strpos( $label_a, 'top lid' ) ) || ( false !== strpos( $label_a, 'main body' ) ) || 'skin' === $label_a || 'body' === $label_a;
+			$is_primary_b = ( false !== strpos( $label_b, 'top lid' ) ) || ( false !== strpos( $label_b, 'main body' ) ) || 'skin' === $label_b || 'body' === $label_b;
+			if ( $is_primary_a && ! $is_primary_b ) return -1;
+			if ( ! $is_primary_a && $is_primary_b ) return 1;
+
+			$is_cov_a = false !== strpos( $label_a, 'coverage' );
+			$is_cov_b = false !== strpos( $label_b, 'coverage' );
+			$is_logo_a = false !== strpos( $label_a, 'logo' );
+			$is_logo_b = false !== strpos( $label_b, 'logo' );
+			$is_pen_a = ( false !== strpos( $label_a, 'pencil' ) ) || ( false !== strpos( $label_a, 'stylus' ) ) || ( false !== strpos( $label_a, 's-pen' ) );
+			$is_pen_b = ( false !== strpos( $label_b, 'pencil' ) ) || ( false !== strpos( $label_b, 'stylus' ) ) || ( false !== strpos( $label_b, 's-pen' ) );
+
+			$rank_a = $is_cov_a ? 100 : ( $is_logo_a ? 101 : ( $is_pen_a ? 102 : 10 ) );
+			$rank_b = $is_cov_b ? 100 : ( $is_logo_b ? 101 : ( $is_pen_b ? 102 : 10 ) );
+
+			if ( $rank_a !== $rank_b ) {
+				return $rank_a - $rank_b;
+			}
+			return 0;
+		} );
+		return $addons;
+	}
+
 	public static function add_addon_data_to_cart_item( $cart_item_data, $product_id, $variation_id ) {
 		if ( ! empty( $_POST['exacoat_addon_data'] ) ) {
 			$raw = wp_unslash( $_POST['exacoat_addon_data'] );
 			$parsed = json_decode( $raw, true );
 			if ( is_array( $parsed ) ) {
-				$cart_item_data['exacoat_addons'] = $parsed;
+				$cart_item_data['exacoat_addons'] = self::sort_addon_layers( $parsed );
 				$cart_item_data['unique_key'] = md5( microtime() . rand() );
 			}
 		}
@@ -2440,7 +2484,8 @@ class Exacoat_Configurator_Engine {
 
 	public static function display_custom_addons_in_cart( $item_data, $cart_item ) {
 		if ( ! empty( $cart_item['exacoat_addons'] ) && is_array( $cart_item['exacoat_addons'] ) ) {
-			foreach ( $cart_item['exacoat_addons'] as $addon ) {
+			$sorted = self::sort_addon_layers( $cart_item['exacoat_addons'] );
+			foreach ( $sorted as $addon ) {
 				if ( ! empty( $addon['label'] ) && ! empty( $addon['value'] ) ) {
 					$item_data[] = [
 						'key'   => sanitize_text_field( $addon['label'] ),
@@ -2454,7 +2499,8 @@ class Exacoat_Configurator_Engine {
 
 	public static function save_custom_addons_to_order_item( $item, $cart_item_key, $values, $order ) {
 		if ( ! empty( $values['exacoat_addons'] ) && is_array( $values['exacoat_addons'] ) ) {
-			foreach ( $values['exacoat_addons'] as $addon ) {
+			$sorted = self::sort_addon_layers( $values['exacoat_addons'] );
+			foreach ( $sorted as $addon ) {
 				if ( ! empty( $addon['label'] ) && ! empty( $addon['value'] ) ) {
 					$item->add_meta_data( sanitize_text_field( $addon['label'] ), sanitize_text_field( $addon['value'] ), true );
 				}

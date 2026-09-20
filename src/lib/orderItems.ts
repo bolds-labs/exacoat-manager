@@ -218,7 +218,60 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
     addSpec('Model', String(item.device_model).trim());
   }
 
-  return specs;
+  return sortItemSpecs(specs);
+}
+
+export function sortItemSpecs(specs: ItemCustomizationSpec[]): ItemCustomizationSpec[] {
+  if (!Array.isArray(specs) || specs.length <= 1) return specs || [];
+
+  return [...specs].sort((a, b) => {
+    const nameA = a.label.toLowerCase().trim();
+    const nameB = b.label.toLowerCase().trim();
+
+    // Priority warranty and reference keys always stay at the top if present
+    const isWarrantyA = /^(claimed part|part to produce|original invoice|original order|original channel|variation|shopee note|buyer note)$/i.test(nameA);
+    const isWarrantyB = /^(claimed part|part to produce|original invoice|original order|original channel|variation|shopee note|buyer note)$/i.test(nameB);
+    if (isWarrantyA && !isWarrantyB) return -1;
+    if (!isWarrantyA && isWarrantyB) return 1;
+
+    // 1. Back skin / primary base layer ALWAYS on top
+    const isBackA = nameA.includes('back') && !nameA.includes('camera') && !nameA.includes('glass');
+    const isBackB = nameB.includes('back') && !nameB.includes('camera') && !nameB.includes('glass');
+    if (isBackA && !isBackB) return -1;
+    if (!isBackA && isBackB) return 1;
+
+    const isPrimaryA =
+      nameA.includes('top lid') ||
+      nameA.includes('main body') ||
+      nameA === 'skin' ||
+      nameA === 'body' ||
+      nameA === 'base' ||
+      nameA === 'device';
+    const isPrimaryB =
+      nameB.includes('top lid') ||
+      nameB.includes('main body') ||
+      nameB === 'skin' ||
+      nameB === 'body' ||
+      nameB === 'base' ||
+      nameB === 'device';
+    if (isPrimaryA && !isPrimaryB) return -1;
+    if (!isPrimaryA && isPrimaryB) return 1;
+
+    // 2. Trailing option layers: Coverage, Logo Cutout, Stylus Cutout
+    const isCoverageA = nameA.includes('coverage');
+    const isCoverageB = nameB.includes('coverage');
+    const isLogoA = nameA.includes('logo');
+    const isLogoB = nameB.includes('logo');
+    const isStylusA = nameA.includes('pencil') || nameA.includes('stylus') || nameA.includes('s-pen');
+    const isStylusB = nameB.includes('pencil') || nameB.includes('stylus') || nameB.includes('s-pen');
+
+    const rankA = isCoverageA ? 100 : isLogoA ? 101 : isStylusA ? 102 : 10;
+    const rankB = isCoverageB ? 100 : isLogoB ? 101 : isStylusB ? 102 : 10;
+
+    if (rankA !== rankB) return rankA - rankB;
+
+    return 0;
+  });
 }
 
 export function formatItemSpecsSummary(item: any, options?: { excludeKeys?: string[] }): string {

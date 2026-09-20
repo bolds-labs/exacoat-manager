@@ -604,10 +604,28 @@ function enrichOrder(order: any): Order {
     ? order.items
     : (Array.isArray(order.line_items) ? order.line_items : (Array.isArray(order.items) ? order.items : []));
 
-  const lineItems = rawItems.map((item: any) => ({
-    ...item,
-    parsed_configurator: item.parsed_configurator || parseConfiguratorFromItem(item),
-  }));
+  const lineItems = rawItems.map((item: any) => {
+    let resolvedImg = item.image_url || (item.image?.src ? item.image.src : '');
+    if (!resolvedImg && Array.isArray(item.meta_data)) {
+      const cfgImgMeta = item.meta_data.find(
+        (m: any) =>
+          m.key === '_configured_image_url' ||
+          m.key === '_configurator_image' ||
+          m.key === 'mkl_pc_thumbnail_url' ||
+          m.key === '_thumbnail_url' ||
+          m.key === 'image_url'
+      );
+      if (cfgImgMeta?.value) {
+        resolvedImg = String(cfgImgMeta.value);
+      }
+    }
+
+    return {
+      ...item,
+      image_url: resolvedImg || item.image_url,
+      parsed_configurator: item.parsed_configurator || parseConfiguratorFromItem(item),
+    };
+  });
 
   const tracking: OrderTracking | null = trackingMeta?.value && trackingMeta.value !== '⚠️' ? {
     courier: carrierMeta?.value ? String(carrierMeta.value) : 'Standard',

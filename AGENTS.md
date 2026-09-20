@@ -916,5 +916,26 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Calibrating canvas filters to `drop-shadow-[0_0.75px_1.5px_rgba(0,0,0,0.38)]` accurately simulates the microscopic physical edge bevel of genuine 0.22mm vinyl skins without unsightly dark smudges.
   - Synchronized identically across storefront canvas (`c:\AI\exacoat-web\components\configurator\stacked-layer-canvas.tsx`) and Studio viewport (`c:\AI\exacoat-manager\src\pages\ConfiguratorStudioPage.tsx`).
 
+---
+
+## 51. Configurator Metadata Physical Hierarchy & Universal Configured Skin Image Pipeline
+
+- **Physical Hierarchy Sorting Invariant**:
+  - WooCommerce default metadata display and arbitrary JavaScript object iteration previously sorted skin attributes alphabetically (e.g. "Additional Camera & Back Glass" sorted ahead of "Back Skin").
+  - Physical devices possess an unequivocal visual and manufacturing hierarchy:
+    1. **Primary Base Skin (Rank 0)**: Back Skin, Top Lid, Main Body, Full Body MUST appear strictly at Line 1 (top).
+    2. **Secondary Physical Components (Rank 10)**: Camera, Additional Camera & Back Glass, Accents, Frame, Hinge appear at Line 2+.
+    3. **Configuration Options (Rank 100-102)**: Model Coverage (100), Logo Cutout (101), Stylus Cutout (102) appear at the bottom.
+  - Implemented `sort_addon_layers` in `class-configurator-engine.php` to sort addons before saving order item meta and rendering cart item data.
+  - Implemented `sortItemSpecs` in `orderItems.ts` to ensure Exacoat Manager Order Detail drawers, packing slips, and shipping labels render Back Skin at the top.
+  - Exported `sortItemLayers` in `exacoat-web` (`lib/cart-store.ts`) and applied across cart drawer, checkout review, and order confirmation pages.
+
+- **Universal Configured Skin Image Display Pipeline**:
+  - **Permanent Upload Storage**: Offscreen canvas renders are uploaded to WordPress uploads directory (`wp-content/uploads/composites/{key}.png`) via dual REST endpoints `/configurator/composite/upload` and `/composite/upload` with permissive CORS headers.
+  - **No Dimension Suffix Mangling**: Media helpers (`isConfiguredCompositeUrl` in `media-url.ts`) strictly protect composite URLs from having WordPress thumbnail suffixes (`-240x240.png`) appended, preventing 404 HTML errors that previously caused `onError` fallback to the bare phone chassis.
+  - **Transactional Emails & Order Views**: `class-checkout-engine.php:filter_order_item_thumbnail` and `class-order-manager.php:1541` dynamically inspect `_configured_image_url`, `_configurator_image`, and `image_url` to display the customized skin in WooCommerce emails, checkout receipts, and Exacoat Manager Order Detail drawers.
+  - **Exacoat Manager Bridge Enrichment**: `enrichOrder` in `wordpressBridge.ts` extracts `_configured_image_url` into `item.image_url` for immediate visual inspection by operators and fulfillment staff.
+
+
 
 
