@@ -425,33 +425,34 @@ export interface GlobalFinish {
   slug: string;
   thumbnail: string;
   texture_url?: string;
+  color_hex?: string;
   in_stock: boolean;
   extra_price: number;
   class_name?: string;
 }
 
 export const DEFAULT_GLOBAL_FINISHES: GlobalFinish[] = [
-  { id: 'swarm', name: 'Swarm', group: 'Signature skins', slug: 'swarm', thumbnail: '/images/finishes/signature/swarm.png', in_stock: true, extra_price: 0 },
-  { id: 'black-camo', name: 'Black Camo', group: 'Signature skins', slug: 'black-camo', thumbnail: '/images/finishes/signature/black-camo.png', in_stock: true, extra_price: 0 },
-  { id: 'patina', name: 'Patina', group: 'Signature skins', slug: 'patina', thumbnail: '/images/finishes/signature/patina.png', in_stock: true, extra_price: 0 },
-  { id: 'slate', name: 'Slate', group: 'Signature skins', slug: 'slate', thumbnail: '/images/finishes/signature/slate.png', in_stock: true, extra_price: 0 },
-  { id: 'dragon-black', name: 'Dragon Black', group: 'Signature skins', slug: 'dragon-black', thumbnail: '/images/finishes/signature/dragon-black.png', in_stock: true, extra_price: 0 },
-  { id: 'carbon-fiber-black', name: 'Carbon Fiber Black', group: 'Signature skins', slug: 'carbon-fiber-black', thumbnail: '/images/finishes/signature/carbon-fiber-black.png', in_stock: true, extra_price: 0 },
-  { id: 'forged-carbon', name: 'Forged Carbon', group: 'Signature skins', slug: 'forged-carbon', thumbnail: '/images/finishes/signature/forged-carbon.png', in_stock: true, extra_price: 0 },
-  { id: 'woven', name: 'Woven', group: 'Signature skins', slug: 'woven', thumbnail: '/images/finishes/signature/woven.png', in_stock: true, extra_price: 0 },
-  { id: 'matte-black', name: 'Matte Black', group: 'Pastels & Colors', slug: 'matte-black', thumbnail: '/images/finishes/colors/matte-black.png', in_stock: true, extra_price: 0 },
-  { id: 'matte-white', name: 'Matte White', group: 'Pastels & Colors', slug: 'matte-white', thumbnail: '/images/finishes/colors/matte-white.png', in_stock: true, extra_price: 0 },
-  { id: 'arctic-blue', name: 'Arctic Blue', group: 'Pastels & Colors', slug: 'arctic-blue', thumbnail: '/images/finishes/colors/arctic-blue.png', in_stock: true, extra_price: 0 },
-  { id: 'glacial-green', name: 'Glacial Green', group: 'Pastels & Colors', slug: 'glacial-green', thumbnail: '/images/finishes/colors/glacial-green.png', in_stock: true, extra_price: 0 },
-  { id: 'mellow-yellow', name: 'Mellow Yellow', group: 'Pastels & Colors', slug: 'mellow-yellow', thumbnail: '/images/finishes/colors/mellow-yellow.png', in_stock: true, extra_price: 0 },
-  { id: 'petal-pink', name: 'Petal Pink', group: 'Pastels & Colors', slug: 'petal-pink', thumbnail: '/images/finishes/colors/petal-pink.png', in_stock: true, extra_price: 0 },
-  { id: 'blush-pink', name: 'Blush Pink', group: 'Pastels & Colors', slug: 'blush-pink', thumbnail: '/images/finishes/colors/blush-pink.png', in_stock: true, extra_price: 0 },
-  { id: 'emerald-green', name: 'Emerald Green', group: 'Pastels & Colors', slug: 'emerald-green', thumbnail: '/images/finishes/colors/emerald-green.png', in_stock: true, extra_price: 0 },
-  { id: 'lust-red', name: 'Lust Red', group: 'Pastels & Colors', slug: 'lust-red', thumbnail: '/images/finishes/colors/lust-red.png', in_stock: true, extra_price: 0 },
-  { id: 'lemon-yellow', name: 'Lemon Yellow', group: 'Pastels & Colors', slug: 'lemon-yellow', thumbnail: '/images/finishes/colors/lemon-yellow.png', in_stock: true, extra_price: 0 },
-  { id: 'marble-white', name: 'Marble White', group: 'Special editions', slug: 'marble-white', thumbnail: '/images/finishes/special/marble-white.png', in_stock: true, extra_price: 0 },
-  { id: 'leather-black', name: 'Leather Black', group: 'Special editions', slug: 'leather-black', thumbnail: '/images/finishes/special/leather-black.png', in_stock: true, extra_price: 0 },
-  { id: 'titanium-black', name: 'Titanium Black', group: 'Special editions', slug: 'titanium-black', thumbnail: '/images/finishes/special/titanium-black.png', in_stock: true, extra_price: 0 }
+  { id: 'swarm', name: 'Swarm', group: 'Signature skins', slug: 'swarm', thumbnail: 'https://exacoat.com/wp-content/uploads/Swarm-Texture-Thumbnail.jpg', color_hex: '#1f2024', in_stock: true, extra_price: 30000 },
+  { id: 'black-camo', name: 'Black Camo', group: 'Signature skins', slug: 'black-camo', thumbnail: 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg', color_hex: '#2a2b2e', in_stock: true, extra_price: 30000 },
+  { id: 'patina', name: 'Patina', group: 'Signature skins', slug: 'patina', thumbnail: 'https://exacoat.com/wp-content/uploads/Patina-Texture-Thumbnail.jpg', color_hex: '#325c56', in_stock: true, extra_price: 30000 },
+  { id: 'slate', name: 'Slate', group: 'Signature skins', slug: 'slate', thumbnail: 'https://exacoat.com/wp-content/uploads/Slate-Texture-Thumbnail.jpg', color_hex: '#4a4d52', in_stock: true, extra_price: 30000 },
+  { id: 'dragon-black', name: 'Dragon Black', group: 'Signature skins', slug: 'dragon-black', thumbnail: 'https://exacoat.com/wp-content/uploads/Dragon-Black-Texture-Thumbnail.jpg', color_hex: '#1c1c1e', in_stock: true, extra_price: 0 },
+  { id: 'carbon-fiber-black', name: 'Carbon Fiber Black', group: 'Signature skins', slug: 'carbon-fiber-black', thumbnail: 'https://exacoat.com/wp-content/uploads/Carbon-Fiber-Black-Texture-Thumbnail.jpg', color_hex: '#202022', in_stock: true, extra_price: 0 },
+  { id: 'forged-carbon', name: 'Forged Carbon', group: 'Signature skins', slug: 'forged-carbon', thumbnail: 'https://exacoat.com/wp-content/uploads/Forged-Carbon-Texture-Thumbnail.jpg', color_hex: '#2e2e33', in_stock: true, extra_price: 30000 },
+  { id: 'woven', name: 'Woven', group: 'Signature skins', slug: 'woven', thumbnail: 'https://exacoat.com/wp-content/uploads/Woven-Texture-Thumbnail.jpg', color_hex: '#2b2d30', in_stock: true, extra_price: 30000 },
+  { id: 'matte-black', name: 'Matte Black', group: 'Pastels & Colors', slug: 'matte-black', thumbnail: 'https://exacoat.com/wp-content/uploads/Matte-Black-Texture-Thumbnail.jpg', color_hex: '#18181b', in_stock: true, extra_price: 0 },
+  { id: 'matte-white', name: 'Matte White', group: 'Pastels & Colors', slug: 'matte-white', thumbnail: 'https://exacoat.com/wp-content/uploads/Matte-White-Texture-Thumbnail.jpg', color_hex: '#f4f4f6', in_stock: true, extra_price: 0 },
+  { id: 'arctic-blue', name: 'Arctic Blue', group: 'Pastels & Colors', slug: 'arctic-blue', thumbnail: 'https://exacoat.com/wp-content/uploads/Arctic-Blue-Texture-Thumbnail.jpg', color_hex: '#7ba7c2', in_stock: true, extra_price: 0 },
+  { id: 'glacial-green', name: 'Glacial Green', group: 'Pastels & Colors', slug: 'glacial-green', thumbnail: 'https://exacoat.com/wp-content/uploads/Glacial-Green-Texture-Thumbnail.jpg', color_hex: '#8db4a2', in_stock: true, extra_price: 0 },
+  { id: 'mellow-yellow', name: 'Mellow Yellow', group: 'Pastels & Colors', slug: 'mellow-yellow', thumbnail: 'https://exacoat.com/wp-content/uploads/Mellow-Yellow-Texture-Thumbnail.jpg', color_hex: '#e8ca65', in_stock: true, extra_price: 0 },
+  { id: 'petal-pink', name: 'Petal Pink', group: 'Pastels & Colors', slug: 'petal-pink', thumbnail: 'https://exacoat.com/wp-content/uploads/Petal-Pink-Texture-Thumbnail.jpg', color_hex: '#e5a5b5', in_stock: true, extra_price: 0 },
+  { id: 'blush-pink', name: 'Blush Pink', group: 'Pastels & Colors', slug: 'blush-pink', thumbnail: 'https://exacoat.com/wp-content/uploads/Blush-Pink-Texture-Thumbnail.jpg', color_hex: '#d98299', in_stock: true, extra_price: 0 },
+  { id: 'emerald-green', name: 'Emerald Green', group: 'Pastels & Colors', slug: 'emerald-green', thumbnail: 'https://exacoat.com/wp-content/uploads/Emerald-Green-Texture-Thumbnail.jpg', color_hex: '#1e5631', in_stock: true, extra_price: 0 },
+  { id: 'lust-red', name: 'Lust Red', group: 'Pastels & Colors', slug: 'lust-red', thumbnail: 'https://exacoat.com/wp-content/uploads/Lust-Red-Texture-Thumbnail.jpg', color_hex: '#b22222', in_stock: true, extra_price: 0 },
+  { id: 'lemon-yellow', name: 'Lemon Yellow', group: 'Pastels & Colors', slug: 'lemon-yellow', thumbnail: 'https://exacoat.com/wp-content/uploads/Lemon-Yellow-Texture-Thumbnail.jpg', color_hex: '#f5d033', in_stock: true, extra_price: 0 },
+  { id: 'marble-white', name: 'Marble White', group: 'Special editions', slug: 'marble-white', thumbnail: 'https://exacoat.com/wp-content/uploads/Marble-White-Texture-Thumbnail.jpg', color_hex: '#e2e4e8', in_stock: true, extra_price: 0 },
+  { id: 'leather-black', name: 'Leather Black', group: 'Special editions', slug: 'leather-black', thumbnail: 'https://exacoat.com/wp-content/uploads/Leather-Black-Texture-Thumbnail.jpg', color_hex: '#1a1a1c', in_stock: true, extra_price: 0 },
+  { id: 'titanium-black', name: 'Titanium Black', group: 'Special editions', slug: 'titanium-black', thumbnail: 'https://exacoat.com/wp-content/uploads/Titanium-Black-Texture-Thumbnail.jpg', color_hex: '#262629', in_stock: true, extra_price: 0 }
 ];
 
 // ==========================================
@@ -2598,6 +2599,46 @@ export async function resetDeviceAuditDirect(productId?: number, all = false): P
     };
   } catch (err: any) {
     return { success: false, message: err.message };
+  }
+}
+
+export interface WpMediaItem {
+  id: number;
+  title: string;
+  filename: string;
+  url: string;
+  thumbnail_url: string;
+  width?: number;
+  height?: number;
+  mime?: string;
+  date?: string;
+}
+
+export async function fetchWordPressMedia(params?: {
+  search?: string;
+  page?: number;
+  per_page?: number;
+}): Promise<{ success: boolean; items: WpMediaItem[]; total: number; total_pages: number; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const searchParam = params?.search ? `&search=${encodeURIComponent(params.search)}` : '';
+  const pageParam = params?.page ? `&page=${params.page}` : '&page=1';
+  const perPageParam = params?.per_page ? `&per_page=${params.per_page}` : '&per_page=24';
+  const url = `${base}/wp-json/exacoat-core/v1/media/list?_t=${Date.now()}${searchParam}${pageParam}${perPageParam}`;
+
+  try {
+    const res = await authenticatedFetch(url, { headers: { Accept: 'application/json' } });
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        success: true,
+        items: Array.isArray(data.items) ? data.items : [],
+        total: Number(data.total) || 0,
+        total_pages: Number(data.total_pages) || 1,
+      };
+    }
+    return { success: false, items: [], total: 0, total_pages: 1, error: `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, items: [], total: 0, total_pages: 1, error: err.message || 'Network error' };
   }
 }
 

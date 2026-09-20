@@ -472,6 +472,7 @@ export interface ConfiguratorView {
   aspect_ratio?: '1:1' | '4:3' | '16:9';
   canvas_dimensions?: { width: number; height: number };
   background_url?: string;
+  logo_url?: string;
   legacy_id?: number;
 }
 

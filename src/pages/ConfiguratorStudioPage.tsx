@@ -66,8 +66,11 @@ import {
   GripVertical,
   Tag,
   AlertCircle,
+  FolderOpen,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { MediaLibraryModal } from '../components/modals/MediaLibraryModal';
+import { WpMediaItem } from '../lib/wordpressBridge';
 
 export interface AssetAuditItem {
   id: string;
@@ -139,6 +142,99 @@ const COMMON_PRESET_LAYERS = [
   { name: 'Inner Keyboard Surround', group: 'accent', is_required: false, is_optional: true, extra_price: 60000 },
   { name: 'Pencil Cutout', group: 'accent', is_required: false, is_optional: true, extra_price: 0 },
 ];
+
+interface V2SkinCanvasLayerProps {
+  maskUrl: string;
+  textureUrl?: string;
+  fallbackColor?: string;
+  zIndex: number;
+  layerName: string;
+}
+
+const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
+  maskUrl,
+  textureUrl,
+  fallbackColor = '#18181b',
+  zIndex,
+  layerName,
+}) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !maskUrl) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let isCancelled = false;
+
+    // Helper: draw color fill or direct mask fallback
+    const drawColorFallback = (loadedMask: HTMLImageElement) => {
+      if (isCancelled || !ctx) return;
+      ctx.clearRect(0, 0, 1000, 1000);
+      if (fallbackColor) {
+        ctx.fillStyle = fallbackColor;
+        ctx.fillRect(0, 0, 1000, 1000);
+        ctx.globalCompositeOperation = 'destination-in';
+        ctx.drawImage(loadedMask, 0, 0, 1000, 1000);
+        ctx.globalCompositeOperation = 'source-over';
+      } else {
+        ctx.drawImage(loadedMask, 0, 0, 1000, 1000);
+      }
+    };
+
+    // Helper: draw texture composited with mask
+    const drawTextureComposite = (texImg: HTMLImageElement, loadedMask: HTMLImageElement) => {
+      if (isCancelled || !ctx) return;
+      ctx.clearRect(0, 0, 1000, 1000);
+      ctx.drawImage(texImg, 0, 0, 1000, 1000);
+      ctx.globalCompositeOperation = 'destination-in';
+      ctx.drawImage(loadedMask, 0, 0, 1000, 1000);
+      ctx.globalCompositeOperation = 'source-over';
+    };
+
+    // Load mask image without crossOrigin flag so LiteSpeed or Cloudflare never blocks it
+    const maskImg = new Image();
+    maskImg.onload = () => {
+      if (isCancelled) return;
+
+      if (textureUrl && textureUrl.trim()) {
+        const texImg = new Image();
+        texImg.onload = () => {
+          if (isCancelled) return;
+          drawTextureComposite(texImg, maskImg);
+        };
+        texImg.onerror = () => {
+          if (isCancelled) return;
+          drawColorFallback(maskImg);
+        };
+        texImg.src = textureUrl.trim();
+      } else {
+        drawColorFallback(maskImg);
+      }
+    };
+    maskImg.onerror = () => {
+      if (isCancelled || !ctx) return;
+      ctx.clearRect(0, 0, 1000, 1000);
+    };
+    maskImg.src = maskUrl.trim();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [maskUrl, textureUrl, fallbackColor]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={1000}
+      height={1000}
+      style={{ zIndex }}
+      className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+      title={layerName}
+    />
+  );
+};
 
 export const ConfiguratorStudioPage: React.FC = () => {
   const { showToast } = useToast();
@@ -252,6 +348,24 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [savingFinishId, setSavingFinishId] = useState<string | null>(null);
   const [editingFinishUrls, setEditingFinishUrls] = useState<Record<string, string>>({});
 
+  // WordPress Media Library Picker state
+  const [mediaPickerConfig, setMediaPickerConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    recommendedDimensions: string;
+    currentUrl: string;
+    onSelect: (url: string) => void;
+  }>({
+    isOpen: false,
+    title: '',
+    recommendedDimensions: '',
+    currentUrl: '',
+    onSelect: () => {},
+  });
+
+  // v2 Advanced texture map overrides accordion toggle
+  const [showV2AdvancedOverrides, setShowV2AdvancedOverrides] = useState(false);
+
   // Close category dropdown on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -306,6 +420,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
       if (e.key === 'Escape') {
         if (categoryDropdownOpen) {
           setCategoryDropdownOpen(false);
+        } else if (mediaPickerConfig.isOpen) {
+          setMediaPickerConfig((prev) => ({ ...prev, isOpen: false }));
         } else if (showMasterTexturesModal) {
           setShowMasterTexturesModal(false);
         } else if (showGlobalAuditModal) {
@@ -329,7 +445,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [categoryDropdownOpen, showMasterTexturesModal, showGlobalAuditModal, showAssetAuditModal, showFindReplaceModal, editingTextureModal, duplicateModal, priceEditModal, selectedProductId]);
+  }, [categoryDropdownOpen, mediaPickerConfig.isOpen, showMasterTexturesModal, showGlobalAuditModal, showAssetAuditModal, showFindReplaceModal, editingTextureModal, duplicateModal, priceEditModal, selectedProductId]);
 
   useEffect(() => {
     if (selectedProductId !== null) {
@@ -2161,7 +2277,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Scope Selector: Configurators Only vs All Store Products */}
           <div className="flex items-center gap-1 bg-zinc-900/60 p-1 rounded-xl border border-white/10 shrink-0">
             <button
@@ -2307,7 +2423,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
           </div>
 
           {/* Category Combobox Dropdown */}
-          <div className="relative shrink-0" ref={categoryDropdownRef}>
+          <div className="relative shrink-0 z-[60]" ref={categoryDropdownRef}>
             <button
               type="button"
               onClick={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
@@ -2343,7 +2459,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
             {/* Floating Popover Dropdown */}
             {categoryDropdownOpen && (
-              <div className="absolute left-0 lg:right-0 lg:left-auto top-full mt-1.5 z-50 w-72 rounded-2xl bg-[#121215]/95 backdrop-blur-xl border border-white/10 shadow-2xl p-2 animate-in fade-in zoom-in-95 duration-150">
+              <div className="absolute left-0 lg:right-0 lg:left-auto top-full mt-1.5 z-[60] w-72 rounded-2xl bg-[#121215]/95 backdrop-blur-xl border border-white/10 shadow-2xl p-2 animate-in fade-in zoom-in-95 duration-150">
                 {/* Search Header */}
                 <div className="relative mb-2">
                   <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
@@ -3111,27 +3227,49 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                         {/* Middle: Input Field for texture_url */}
                         <div className="flex-1 min-w-0">
-                          <div className="relative flex items-center">
-                            <input
-                              type="text"
-                              placeholder="https://exacoat.com/uploads/textures/master-texture.png"
-                              value={currentInput}
-                              onChange={(e) =>
-                                setEditingFinishUrls((prev) => ({ ...prev, [f.id]: e.target.value }))
+                          <div className="flex items-center gap-2">
+                            <div className="relative flex-1">
+                              <input
+                                type="text"
+                                placeholder="https://exacoat.com/uploads/textures/master-texture.png"
+                                value={currentInput}
+                                onChange={(e) =>
+                                  setEditingFinishUrls((prev) => ({ ...prev, [f.id]: e.target.value }))
+                                }
+                                className="w-full pl-3 pr-16 py-2 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                              />
+                              {currentInput.trim() && (
+                                <a
+                                  href={currentInput.trim()}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-mono text-sky-400 hover:underline flex items-center gap-1"
+                                >
+                                  <span>View</span>
+                                  <ExternalLink className="w-2.5 h-2.5" />
+                                </a>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setMediaPickerConfig({
+                                  isOpen: true,
+                                  title: `Select Master Texture: ${f.name}`,
+                                  recommendedDimensions: 'High-Res Tileable Texture PNG/JPG',
+                                  currentUrl: currentInput,
+                                  onSelect: (url) => {
+                                    setEditingFinishUrls((prev) => ({ ...prev, [f.id]: url }));
+                                  },
+                                })
                               }
-                              className="w-full pl-3 pr-20 py-2 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
-                            />
-                            {currentInput.trim() && (
-                              <a
-                                href={currentInput.trim()}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="absolute right-3 text-[10px] font-mono text-sky-400 hover:underline flex items-center gap-1"
-                              >
-                                <span>Preview</span>
-                                <ExternalLink className="w-2.5 h-2.5" />
-                              </a>
-                            )}
+                              className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
+                              title="Browse WordPress Media Library"
+                            >
+                              <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                              <span>Browse</span>
+                            </button>
                           </div>
                         </div>
 
@@ -3661,39 +3799,20 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             );
                             const texUrl = matchedKey ? assets.render_texture_map?.[matchedKey] || '' : '';
 
-                            // v2 Engine: Dynamic Mask Compositing
+                            // v2 Engine: Dynamic Canvas Compositing with Alpha Mask & Logo Cutout
                             if (editingProfile.configurator_version === 'v2' && assets.mask_svg_url) {
-                              const activeFinish = finishes.find((f) => f.slug === selectedSimFinish || f.id === selectedSimFinish);
-                              const textureToTile = texUrl || activeFinish?.texture_url || activeFinish?.thumbnail || '';
+                              const activeFinish = finishes.find((f) => (f.slug || f.id) === selectedSimFinish || f.id === selectedSimFinish);
+                              const textureToTile = texUrl || activeFinish?.texture_url || '';
+                              const fallbackColor = activeFinish?.color_hex || '#18181b';
                               return (
-                                <div
-                                  key={`v2-mask-${l.id}`}
-                                  style={{
-                                    zIndex: (l.z_index || 1) + 5,
-                                    maskImage: `url("${assets.mask_svg_url}")`,
-                                    WebkitMaskImage: `url("${assets.mask_svg_url}")`,
-                                    maskSize: 'contain',
-                                    WebkitMaskSize: 'contain',
-                                    maskRepeat: 'no-repeat',
-                                    WebkitMaskRepeat: 'no-repeat',
-                                    maskPosition: 'center',
-                                    WebkitMaskPosition: 'center',
-                                  }}
-                                  className="absolute inset-0 w-full h-full pointer-events-none"
-                                >
-                                  {textureToTile ? (
-                                    <img
-                                      src={textureToTile}
-                                      alt={l.name}
-                                      className="w-full h-full object-cover pointer-events-none"
-                                      onError={(e) => {
-                                        (e.target as HTMLElement).style.display = 'none';
-                                      }}
-                                    />
-                                  ) : (
-                                    <div className="w-full h-full bg-zinc-600" />
-                                  )}
-                                </div>
+                                <V2SkinCanvasLayer
+                                  key={`v2-canvas-${l.id}`}
+                                  maskUrl={assets.mask_svg_url}
+                                  textureUrl={textureToTile}
+                                  fallbackColor={fallbackColor}
+                                  zIndex={(l.z_index || 1) + 5}
+                                  layerName={l.name}
+                                />
                               );
                             }
 
@@ -3740,6 +3859,20 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 />
                               );
                             })}
+
+                          {/* Layer 4: Optional Hardware Accent / Logo Overlay */}
+                          {currentView?.logo_url && (
+                            <img
+                              key={`logo-${currentView.id}`}
+                              src={currentView.logo_url}
+                              alt={`${currentView.name} Logo`}
+                              style={{ zIndex: 30 }}
+                              className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                          )}
                         </div>
                       </div>
 
@@ -4123,13 +4256,32 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                             <span className="text-emerald-400 text-[10px]">Configured</span>
                                           )}
                                         </label>
-                                        <input
-                                          type="text"
-                                          placeholder="https://exacoat.com/uploads/device-part-mask.png"
-                                          value={currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url || ''}
-                                          onChange={(e) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'mask_svg_url', e.target.value)}
-                                          className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
-                                        />
+                                        <div className="flex gap-2">
+                                          <input
+                                            type="text"
+                                            placeholder="https://exacoat.com/uploads/device-part-mask.png"
+                                            value={currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url || ''}
+                                            onChange={(e) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'mask_svg_url', e.target.value)}
+                                            className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setMediaPickerConfig({
+                                                isOpen: true,
+                                                title: `Select Alpha Mask: ${currentActiveLayer.name}`,
+                                                recommendedDimensions: '1000x1000 Alpha PNG or SVG',
+                                                currentUrl: currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url || '',
+                                                onSelect: (url) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'mask_svg_url', url),
+                                              })
+                                            }
+                                            className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
+                                            title="Browse WordPress Media Library"
+                                          >
+                                            <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                            <span>Browse</span>
+                                          </button>
+                                        </div>
                                       </div>
 
                                       <div>
@@ -4139,13 +4291,32 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                             <span className="text-emerald-400 text-[10px]">Configured</span>
                                           )}
                                         </label>
-                                        <input
-                                          type="text"
-                                          placeholder="https://exacoat.com/uploads/device-part-shadow.png"
-                                          value={currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.shadow_png_url || ''}
-                                          onChange={(e) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'shadow_png_url', e.target.value)}
-                                          className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
-                                        />
+                                        <div className="flex gap-2">
+                                          <input
+                                            type="text"
+                                            placeholder="https://exacoat.com/uploads/device-part-shadow.png"
+                                            value={currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.shadow_png_url || ''}
+                                            onChange={(e) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'shadow_png_url', e.target.value)}
+                                            className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setMediaPickerConfig({
+                                                isOpen: true,
+                                                title: `Select Shadow / Ambient Occlusion: ${currentActiveLayer.name}`,
+                                                recommendedDimensions: '1000x1000 Transparent PNG',
+                                                currentUrl: currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.shadow_png_url || '',
+                                                onSelect: (url) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'shadow_png_url', url),
+                                              })
+                                            }
+                                            className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
+                                            title="Browse WordPress Media Library"
+                                          >
+                                            <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                            <span>Browse</span>
+                                          </button>
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
@@ -4163,153 +4334,354 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             {/* Finish Swatches Grid */}
                             {currentActiveLayer && (
                               <div className="space-y-3">
-                                {/* Header with Group Filter Tabs and Autofill */}
-                                <div className="space-y-2.5">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                      <Palette className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                      <h5 className="text-xs font-bold text-white uppercase tracking-wider">
-                                        Texture Maps ({filteredFinishesForDisplay.length})
-                                      </h5>
-                                    </div>
-                                    <span className="text-[11px] text-zinc-400">
-                                      Click swatch to test, or click URL button to edit image
-                                    </span>
-                                  </div>
-
-                                  {/* Category Filter Pills */}
-                                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                                    {finishGroups.map((group) => (
-                                      <button
-                                        key={group}
-                                        type="button"
-                                        onClick={() => setFinishCategoryFilter(group)}
-                                        className={clsx(
-                                          'px-2.5 py-1 rounded-lg text-[11px] font-sans whitespace-nowrap transition-colors cursor-pointer',
-                                          finishCategoryFilter === group
-                                            ? 'bg-white/15 text-white font-bold'
-                                            : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                                        )}
-                                      >
-                                        {group === 'all' ? 'All Finishes' : group}
-                                      </button>
-                                    ))}
-                                  </div>
-
-                                  {/* Quick Autofill Helper */}
-                                  <div className="flex items-center gap-2 p-2 rounded-xl bg-zinc-900/60 border border-white/5">
-                                    <input
-                                      type="text"
-                                      placeholder="https://exacoat.com/uploads/iPhone-Back-{finish}.png"
-                                      value={autofillPrefix}
-                                      onChange={(e) => setAutofillPrefix(e.target.value)}
-                                      className="px-3 py-1.5 text-xs rounded-lg bg-zinc-950 border border-white/10 text-white font-mono flex-1 placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => handleAutofillLayerTextures(currentActiveLayer.id)}
-                                      className="px-3 py-1.5 text-xs font-sans font-bold uppercase tracking-wider rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer transition-colors shrink-0"
-                                    >
-                                      Autofill All
-                                    </button>
-                                  </div>
-                                </div>
-
-                                {/* Swatches Grid */}
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[380px] overflow-y-auto pr-1">
-                                  {filteredFinishesForDisplay.map((f) => {
-                                    const finishSlug = f.slug || f.id;
-                                    const normSlug = finishSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
-                                    const matchedKey = Object.keys(textureMap).find(
-                                      (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === normSlug
-                                    );
-                                    const currentUrl = matchedKey ? textureMap[matchedKey] : '';
-                                    const isAssigned = Boolean(currentUrl);
-                                    const isSimSelected = selectedSimFinish === finishSlug;
-
-                                    return (
-                                      <div
-                                        key={f.id}
-                                        onClick={() => setSelectedSimFinish(finishSlug)}
-                                        className={clsx(
-                                          'p-3 rounded-2xl border transition-all flex flex-col justify-between gap-2.5 text-xs cursor-pointer group relative',
-                                          isSimSelected
-                                            ? 'bg-white/10 border-[#f3aa18] shadow-md shadow-[#f3aa18]/15'
-                                            : isAssigned
-                                            ? 'bg-zinc-900/90 border-white/10 hover:border-white/25'
-                                            : 'bg-zinc-900/40 border-white/5 hover:border-white/20'
-                                        )}
-                                      >
-                                        <div className="flex items-center gap-2.5 min-w-0">
-                                          <div className="w-9 h-9 rounded-xl bg-zinc-800 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center">
-                                            {currentUrl ? (
-                                              <img
-                                                src={currentUrl}
-                                                alt={f.name}
-                                                className="w-full h-full object-cover"
-                                                onError={(e) => {
-                                                  (e.target as HTMLElement).style.display = 'none';
-                                                }}
-                                              />
-                                            ) : f.thumbnail ? (
-                                              <img
-                                                src={f.thumbnail}
-                                                alt={f.name}
-                                                className="w-full h-full object-cover opacity-60"
-                                              />
-                                            ) : (
-                                              <Sparkles className="w-3.5 h-3.5 text-zinc-600" />
-                                            )}
-                                          </div>
-
-                                          <div className="min-w-0 flex-1">
-                                            <p className="font-bold text-white truncate text-xs">{f.name}</p>
-                                            <span className="text-[10px] text-zinc-400 truncate block">
-                                              {f.group || 'Material'}
-                                            </span>
-                                          </div>
+                                {editingProfile.configurator_version === 'v2' ? (
+                                  /* v2 Modern Engine: Clean Swatch Simulator & Global Master Inheritance */
+                                  <div className="space-y-3">
+                                    <div className="space-y-2.5">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                          <Palette className="w-3.5 h-3.5 text-sky-400" />
+                                          <h5 className="text-xs font-bold text-white uppercase tracking-wider">
+                                            Finish Simulation ({filteredFinishesForDisplay.length})
+                                          </h5>
                                         </div>
-
-                                        <div className="flex items-center justify-between pt-1.5 border-t border-white/5">
-                                          {isAssigned ? (
-                                            <span className="inline-flex items-center gap-1 text-[10px] font-sans font-medium text-emerald-400">
-                                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                                              Mapped
-                                            </span>
-                                          ) : (
-                                            <span className="text-[10px] text-zinc-500 font-sans">
-                                              Unassigned
-                                            </span>
-                                          )}
-
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleOpenTextureModal(
-                                                currentActiveLayer.id,
-                                                currentActiveLayer.name,
-                                                finishSlug,
-                                                f.name,
-                                                currentUrl,
-                                                f.thumbnail
-                                              );
-                                            }}
-                                            className={clsx(
-                                              'p-1.5 rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1',
-                                              isAssigned
-                                                ? 'text-zinc-400 hover:text-white hover:bg-white/10'
-                                                : 'text-[#f3aa18] hover:text-[#ffb72b] bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20'
-                                            )}
-                                            title="Edit Transparent Texture PNG URL"
-                                          >
-                                            <LinkIcon className="w-3 h-3" />
-                                          </button>
-                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => setShowMasterTexturesModal(true)}
+                                          className="text-[11px] font-sans text-sky-400 hover:text-sky-300 flex items-center gap-1 cursor-pointer transition-colors"
+                                        >
+                                          <Sparkles className="w-3 h-3" />
+                                          <span>Manage Master Textures</span>
+                                        </button>
                                       </div>
-                                    );
-                                  })}
-                                </div>
+
+                                      <p className="text-[11px] text-zinc-400 leading-relaxed">
+                                        Click any finish swatch to simulate the dynamic masked texture live on the phone. All v2 finishes inherit global master textures automatically.
+                                      </p>
+
+                                      {/* Category Filter Pills */}
+                                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                                        {finishGroups.map((group) => (
+                                          <button
+                                            key={group}
+                                            type="button"
+                                            onClick={() => setFinishCategoryFilter(group)}
+                                            className={clsx(
+                                              'px-2.5 py-1 rounded-lg text-[11px] font-sans whitespace-nowrap transition-colors cursor-pointer',
+                                              finishCategoryFilter === group
+                                                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 font-bold'
+                                                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                                            )}
+                                          >
+                                            {group === 'all' ? 'All Finishes' : group}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    {/* v2 Modern Swatches Grid */}
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[360px] overflow-y-auto pr-1">
+                                      {filteredFinishesForDisplay.map((f) => {
+                                        const finishSlug = f.slug || f.id;
+                                        const isSimSelected = selectedSimFinish === finishSlug;
+                                        const hasMasterTex = Boolean(f.texture_url);
+                                        const surcharge = (f.extra_price || 0) * (editingProfile.size_multiplier || 1.0);
+
+                                        return (
+                                          <div
+                                            key={f.id}
+                                            onClick={() => setSelectedSimFinish(finishSlug)}
+                                            className={clsx(
+                                              'p-2.5 rounded-2xl border transition-all flex flex-col justify-between gap-2 text-xs cursor-pointer group relative',
+                                              isSimSelected
+                                                ? 'bg-sky-500/15 border-sky-400 shadow-md shadow-sky-500/10 ring-1 ring-sky-400/40'
+                                                : 'bg-zinc-900/60 border-white/10 hover:border-white/20 hover:bg-zinc-900'
+                                            )}
+                                          >
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                              <div
+                                                className="w-8 h-8 rounded-xl border border-white/10 overflow-hidden shrink-0 flex items-center justify-center relative shadow-xs"
+                                                style={{ backgroundColor: f.color_hex || '#27272a' }}
+                                              >
+                                                {f.thumbnail ? (
+                                                  <img
+                                                    src={f.thumbnail}
+                                                    alt={f.name}
+                                                    className="w-full h-full object-cover"
+                                                    onError={(e) => {
+                                                      (e.target as HTMLElement).style.display = 'none';
+                                                    }}
+                                                  />
+                                                ) : (
+                                                  <div
+                                                    className="w-full h-full"
+                                                    style={{ backgroundColor: f.color_hex || '#3f3f46' }}
+                                                  />
+                                                )}
+                                              </div>
+
+                                              <div className="min-w-0 flex-1">
+                                                <p className={clsx('font-bold truncate text-xs', isSimSelected ? 'text-sky-300' : 'text-white')}>
+                                                  {f.name}
+                                                </p>
+                                                <span className="text-[10px] text-zinc-500 truncate block">
+                                                  {f.group || 'Material'}
+                                                </span>
+                                              </div>
+                                            </div>
+
+                                            <div className="flex items-center justify-between pt-1 border-t border-white/5 text-[10px] font-mono">
+                                              {hasMasterTex ? (
+                                                <span className="text-emerald-400 flex items-center gap-1">
+                                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                                  Master Set
+                                                </span>
+                                              ) : (
+                                                <span className="text-zinc-500">Color Fallback</span>
+                                              )}
+
+                                              {surcharge > 0 ? (
+                                                <span className="text-amber-400 font-semibold">+IDR {surcharge.toLocaleString('id-ID')}</span>
+                                              ) : (
+                                                <span className="text-zinc-600">IDR 0</span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+
+                                    {/* Collapsible Accordion: Optional Advanced Texture Map Overrides */}
+                                    <div className="pt-2 border-t border-white/5">
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowV2AdvancedOverrides(!showV2AdvancedOverrides)}
+                                        className="w-full py-2 px-3 rounded-xl bg-zinc-900/60 hover:bg-zinc-900 border border-white/5 text-xs text-zinc-400 hover:text-white flex items-center justify-between cursor-pointer transition-colors"
+                                      >
+                                        <span className="flex items-center gap-2">
+                                          <Sliders className="w-3.5 h-3.5 text-zinc-500" />
+                                          <span>Advanced: Custom Texture Overrides (Optional)</span>
+                                        </span>
+                                        <ChevronDown
+                                          className={clsx('w-3.5 h-3.5 text-zinc-500 transition-transform duration-200', showV2AdvancedOverrides && 'rotate-180')}
+                                        />
+                                      </button>
+
+                                      {showV2AdvancedOverrides && (
+                                        <div className="mt-3 p-3 rounded-2xl bg-zinc-950/80 border border-white/10 space-y-3">
+                                          <div className="flex items-center gap-2 p-2 rounded-xl bg-zinc-900/60 border border-white/5">
+                                            <input
+                                              type="text"
+                                              placeholder="https://exacoat.com/uploads/iPhone-Back-{finish}.png"
+                                              value={autofillPrefix}
+                                              onChange={(e) => setAutofillPrefix(e.target.value)}
+                                              className="px-3 py-1.5 text-xs rounded-lg bg-zinc-950 border border-white/10 text-white font-mono flex-1 placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
+                                            />
+                                            <button
+                                              type="button"
+                                              onClick={() => handleAutofillLayerTextures(currentActiveLayer.id)}
+                                              className="px-3 py-1.5 text-xs font-sans font-bold uppercase tracking-wider rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer transition-colors shrink-0"
+                                            >
+                                              Autofill All
+                                            </button>
+                                          </div>
+
+                                          <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                                            {filteredFinishesForDisplay.map((f) => {
+                                              const finishSlug = f.slug || f.id;
+                                              const normSlug = finishSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                              const matchedKey = Object.keys(textureMap).find(
+                                                (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === normSlug
+                                              );
+                                              const currentUrl = matchedKey ? textureMap[matchedKey] : '';
+                                              const isAssigned = Boolean(currentUrl);
+
+                                              return (
+                                                <div
+                                                  key={`override-${f.id}`}
+                                                  className="p-2 rounded-xl bg-zinc-900 border border-white/5 flex items-center justify-between gap-2"
+                                                >
+                                                  <span className="text-xs text-zinc-300 truncate">{f.name}</span>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                      setEditingTextureModal({
+                                                        layerId: currentActiveLayer.id,
+                                                        layerName: currentActiveLayer.name,
+                                                        finishSlug,
+                                                        finishName: f.name,
+                                                        initialUrl: currentUrl,
+                                                        thumbnail: f.thumbnail,
+                                                      })
+                                                    }
+                                                    className={clsx(
+                                                      'text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors font-mono',
+                                                      isAssigned
+                                                        ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                                        : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                                                    )}
+                                                  >
+                                                    {isAssigned ? 'Edit' : 'Set URL'}
+                                                  </button>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  /* v1 Legacy View: Full Texture Maps Grid with Autofill */
+                                  <div className="space-y-3">
+                                    <div className="space-y-2.5">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                          <Palette className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                          <h5 className="text-xs font-bold text-white uppercase tracking-wider">
+                                            Texture Maps ({filteredFinishesForDisplay.length})
+                                          </h5>
+                                        </div>
+                                        <span className="text-[11px] text-zinc-400">
+                                          Click swatch to test, or click URL button to edit image
+                                        </span>
+                                      </div>
+
+                                      {/* Category Filter Pills */}
+                                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                                        {finishGroups.map((group) => (
+                                          <button
+                                            key={group}
+                                            type="button"
+                                            onClick={() => setFinishCategoryFilter(group)}
+                                            className={clsx(
+                                              'px-2.5 py-1 rounded-lg text-[11px] font-sans whitespace-nowrap transition-colors cursor-pointer',
+                                              finishCategoryFilter === group
+                                                ? 'bg-white/15 text-white font-bold'
+                                                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                                            )}
+                                          >
+                                            {group === 'all' ? 'All Finishes' : group}
+                                          </button>
+                                        ))}
+                                      </div>
+
+                                      {/* Quick Autofill Helper */}
+                                      <div className="flex items-center gap-2 p-2 rounded-xl bg-zinc-900/60 border border-white/5">
+                                        <input
+                                          type="text"
+                                          placeholder="https://exacoat.com/uploads/iPhone-Back-{finish}.png"
+                                          value={autofillPrefix}
+                                          onChange={(e) => setAutofillPrefix(e.target.value)}
+                                          className="px-3 py-1.5 text-xs rounded-lg bg-zinc-950 border border-white/10 text-white font-mono flex-1 placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => handleAutofillLayerTextures(currentActiveLayer.id)}
+                                          className="px-3 py-1.5 text-xs font-sans font-bold uppercase tracking-wider rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer transition-colors shrink-0"
+                                        >
+                                          Autofill All
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Swatches Grid */}
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[380px] overflow-y-auto pr-1">
+                                      {filteredFinishesForDisplay.map((f) => {
+                                        const finishSlug = f.slug || f.id;
+                                        const normSlug = finishSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                        const matchedKey = Object.keys(textureMap).find(
+                                          (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === normSlug
+                                        );
+                                        const currentUrl = matchedKey ? textureMap[matchedKey] : '';
+                                        const isAssigned = Boolean(currentUrl);
+                                        const isSimSelected = selectedSimFinish === finishSlug;
+
+                                        return (
+                                          <div
+                                            key={f.id}
+                                            onClick={() => setSelectedSimFinish(finishSlug)}
+                                            className={clsx(
+                                              'p-3 rounded-2xl border transition-all flex flex-col justify-between gap-2.5 text-xs cursor-pointer group relative',
+                                              isSimSelected
+                                                ? 'bg-white/10 border-[#f3aa18] shadow-md shadow-[#f3aa18]/15'
+                                                : isAssigned
+                                                ? 'bg-zinc-900/90 border-white/10 hover:border-white/25'
+                                                : 'bg-zinc-900/40 border-white/5 hover:border-white/20'
+                                            )}
+                                          >
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                              <div className="w-9 h-9 rounded-xl bg-zinc-800 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center">
+                                                {currentUrl ? (
+                                                  <img
+                                                    src={currentUrl}
+                                                    alt={f.name}
+                                                    className="w-full h-full object-cover"
+                                                    onError={(e) => {
+                                                      (e.target as HTMLElement).style.display = 'none';
+                                                    }}
+                                                  />
+                                                ) : f.thumbnail ? (
+                                                  <img
+                                                    src={f.thumbnail}
+                                                    alt={f.name}
+                                                    className="w-full h-full object-cover opacity-60"
+                                                  />
+                                                ) : (
+                                                  <Sparkles className="w-3.5 h-3.5 text-zinc-600" />
+                                                )}
+                                              </div>
+
+                                              <div className="min-w-0 flex-1">
+                                                <p className="font-bold text-white truncate text-xs">{f.name}</p>
+                                                <span className="text-[10px] text-zinc-400 truncate block">
+                                                  {f.group || 'Material'}
+                                                </span>
+                                              </div>
+                                            </div>
+
+                                            <div className="flex items-center justify-between pt-1.5 border-t border-white/5">
+                                              {isAssigned ? (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-sans font-medium text-emerald-400">
+                                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                                  Mapped
+                                                </span>
+                                              ) : (
+                                                <span className="text-[10px] text-zinc-500 font-sans">
+                                                  Unassigned
+                                                </span>
+                                              )}
+
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleOpenTextureModal(
+                                                    currentActiveLayer.id,
+                                                    currentActiveLayer.name,
+                                                    finishSlug,
+                                                    f.name,
+                                                    currentUrl,
+                                                    f.thumbnail
+                                                  );
+                                                }}
+                                                className={clsx(
+                                                  'p-1.5 rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1',
+                                                  isAssigned
+                                                    ? 'text-zinc-400 hover:text-white hover:bg-white/10'
+                                                    : 'text-[#f3aa18] hover:text-[#ffb72b] bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20'
+                                                )}
+                                                title="Edit Transparent Texture PNG URL"
+                                              >
+                                                <LinkIcon className="w-3 h-3" />
+                                              </button>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
@@ -4377,16 +4749,83 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 </div>
 
                                 <div className="space-y-1.5">
-                                  <label className="block text-xs font-bold text-zinc-300">
-                                    Hardware Body Image URL
+                                  <label className="block text-xs font-bold text-zinc-300 flex items-center justify-between">
+                                    <span>Hardware Body Image URL</span>
+                                    {currentView.background_url && <span className="text-emerald-400 text-[10px] font-mono">Configured</span>}
                                   </label>
-                                  <input
-                                    type="url"
-                                    placeholder="https://exacoat.com/wp-content/uploads/renders/device-body.png"
-                                    value={currentView.background_url || ''}
-                                    onChange={(e) => handleSetViewBackground(currentView.id, e.target.value)}
-                                    className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
-                                  />
+                                  <div className="flex gap-2">
+                                    <input
+                                      type="url"
+                                      placeholder="https://exacoat.com/wp-content/uploads/renders/device-body.png"
+                                      value={currentView.background_url || ''}
+                                      onChange={(e) => handleSetViewBackground(currentView.id, e.target.value)}
+                                      className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setMediaPickerConfig({
+                                          isOpen: true,
+                                          title: `Select Hardware Chassis: ${currentView.name}`,
+                                          recommendedDimensions: '1000x1000 Transparent PNG',
+                                          currentUrl: currentView.background_url || '',
+                                          onSelect: (url) => handleSetViewBackground(currentView.id, url),
+                                        })
+                                      }
+                                      className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
+                                      title="Browse WordPress Media Library"
+                                    >
+                                      <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                      <span>Browse</span>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-1.5 pt-2 border-t border-white/5">
+                                  <label className="block text-xs font-bold text-zinc-300 flex items-center justify-between">
+                                    <span>Hardware Accent / Logo Overlay URL (Optional)</span>
+                                    {currentView.logo_url && <span className="text-emerald-400 text-[10px] font-mono">Configured</span>}
+                                  </label>
+                                  <div className="flex gap-2">
+                                    <input
+                                      type="url"
+                                      placeholder="https://exacoat.com/wp-content/uploads/iPhone-17-Pro-Logo.png"
+                                      value={currentView.logo_url || ''}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setEditingProfile({
+                                          ...editingProfile,
+                                          views: editingProfile.views.map((v) => (v.id === currentView.id ? { ...v, logo_url: val.trim() } : v)),
+                                        });
+                                      }}
+                                      className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setMediaPickerConfig({
+                                          isOpen: true,
+                                          title: `Select Logo / Accent Overlay: ${currentView.name}`,
+                                          recommendedDimensions: '1000x1000 Transparent PNG',
+                                          currentUrl: currentView.logo_url || '',
+                                          onSelect: (url) => {
+                                            setEditingProfile({
+                                              ...editingProfile,
+                                              views: editingProfile.views.map((v) => (v.id === currentView.id ? { ...v, logo_url: url } : v)),
+                                            });
+                                          },
+                                        })
+                                      }
+                                      className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
+                                      title="Browse WordPress Media Library"
+                                    >
+                                      <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                      <span>Browse</span>
+                                    </button>
+                                  </div>
+                                  <p className="text-[11px] text-zinc-400">
+                                    Transparent PNG with metallic reflection or logo artwork. Displays directly over the cutout in the skin layer.
+                                  </p>
                                 </div>
 
                                 <div className="pt-2 border-t border-white/5 flex items-center justify-between">
@@ -4522,19 +4961,35 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 <label className="block text-xs font-bold text-zinc-300 mb-1.5">Device Family</label>
                                 <select
                                   value={editingProfile.family}
-                                  onChange={(e) =>
-                                    setEditingProfile({ ...editingProfile, family: e.target.value as DeviceFamily })
-                                  }
+                                  onChange={(e) => {
+                                    const nextFamily = e.target.value as DeviceFamily;
+                                    const familyMultipliers: Record<string, number> = {
+                                      phone: 1.0,
+                                      foldable: 1.3,
+                                      tablet: 1.8,
+                                      keyboard: 2.0,
+                                      laptop: 2.5,
+                                      console: 2.0,
+                                      accessory: 0.8,
+                                      case: 1.0,
+                                    };
+                                    const nextMult = familyMultipliers[nextFamily] ?? 1.0;
+                                    setEditingProfile({
+                                      ...editingProfile,
+                                      family: nextFamily,
+                                      size_multiplier: nextMult,
+                                    });
+                                  }}
                                   className="w-full px-3.5 py-2 text-xs rounded-xl bg-zinc-950 border border-white/10 text-white font-sans focus:outline-none focus:border-[#f3aa18]"
                                 >
-                                  <option value="phone">Phone</option>
-                                  <option value="laptop">Laptop / MacBook</option>
-                                  <option value="tablet">iPad / Tablet</option>
-                                  <option value="foldable">Foldable / Flip</option>
-                                  <option value="keyboard">Magic Keyboard / Folio</option>
-                                  <option value="case">Hybrid Case</option>
-                                  <option value="console">Gaming Console</option>
-                                  <option value="accessory">Accessory</option>
+                                  <option value="phone">Phone (1.0x)</option>
+                                  <option value="foldable">Foldable / Flip (1.3x)</option>
+                                  <option value="tablet">iPad / Tablet (1.8x)</option>
+                                  <option value="keyboard">Magic Keyboard / Folio (2.0x)</option>
+                                  <option value="laptop">Laptop / MacBook (2.5x)</option>
+                                  <option value="console">Gaming Console (2.0x)</option>
+                                  <option value="case">Hybrid Case (1.0x)</option>
+                                  <option value="accessory">Accessory (0.8x)</option>
                                 </select>
                               </div>
 
@@ -4555,7 +5010,31 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   className="w-full px-3.5 py-2 text-xs rounded-xl bg-zinc-950 border border-white/10 text-white font-mono focus:outline-none focus:border-[#f3aa18]"
                                 />
                                 <p className="text-[11px] text-zinc-500 mt-1">
-                                  Multiplied against premium finish group up-prices (e.g. 1.0x for phones, 1.4x for laptops).
+                                  Multiplied against premium finish group up-prices (e.g. 1.0x for phones, 2.5x for laptops).
+                                </p>
+                              </div>
+
+                              {/* Universal Pricing Explanation */}
+                              <div className="p-3 rounded-xl bg-[#f3aa18]/10 border border-[#f3aa18]/25 text-xs space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-bold text-[#f3aa18] flex items-center gap-1.5">
+                                    <DollarSign className="w-3.5 h-3.5" />
+                                    Universal Signature Pricing
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowMasterTexturesModal(true)}
+                                    className="text-[10px] text-[#f3aa18] underline font-medium hover:text-white cursor-pointer"
+                                  >
+                                    Manage Finishes
+                                  </button>
+                                </div>
+                                <p className="text-[11px] text-zinc-300 leading-relaxed">
+                                  Signature finishes (e.g. Swarm, Black Camo, Patina) add their extra surcharge storewide. On this device, a base IDR 30,000 surcharge equals{' '}
+                                  <strong className="text-white font-mono">
+                                    +IDR {Math.round(30000 * (editingProfile.size_multiplier || 1.0)).toLocaleString('id-ID')}
+                                  </strong>{' '}
+                                  ({editingProfile.size_multiplier || 1.0}x multiplier).
                                 </p>
                               </div>
                             </div>
@@ -5206,6 +5685,19 @@ export const ConfiguratorStudioPage: React.FC = () => {
           </div>,
           document.body
         )}
+
+      {/* WordPress Media Library Picker Modal */}
+      <MediaLibraryModal
+        isOpen={mediaPickerConfig.isOpen}
+        onClose={() => setMediaPickerConfig((prev) => ({ ...prev, isOpen: false }))}
+        onSelectImage={(url) => {
+          mediaPickerConfig.onSelect(url);
+          setMediaPickerConfig((prev) => ({ ...prev, isOpen: false }));
+        }}
+        title={mediaPickerConfig.title}
+        recommendedDimensions={mediaPickerConfig.recommendedDimensions}
+        currentUrl={mediaPickerConfig.currentUrl}
+      />
     </div>
   );
 };

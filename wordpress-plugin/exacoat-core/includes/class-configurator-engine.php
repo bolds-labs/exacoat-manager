@@ -468,6 +468,13 @@ class Exacoat_Configurator_Engine {
 			'callback'            => [ __CLASS__, 'rest_reset_audit' ],
 			'permission_callback' => [ __CLASS__, 'verify_permission' ],
 		] );
+
+		// 16. GET /media/list: Search and browse WordPress media library for configurator assets
+		$register( '/media/list', [
+			'methods'             => 'GET',
+			'callback'            => [ __CLASS__, 'rest_get_media_list' ],
+			'permission_callback' => '__return_true',
+		] );
 	}
 
 
@@ -773,6 +780,72 @@ class Exacoat_Configurator_Engine {
 			'product_id' => $pid,
 			'message'    => 'Audit status reset for device.',
 		] );
+	}
+
+	/**
+	 * Search and browse WordPress media library attachments for configurator studio
+	 */
+	public static function rest_get_media_list( WP_REST_Request $request ): WP_REST_Response {
+		$search   = sanitize_text_field( (string) $request->get_param( 'search' ) );
+		$page     = max( 1, (int) $request->get_param( 'page' ) );
+		$per_page = min( 100, max( 1, (int) ( $request->get_param( 'per_page' ) ?: 24 ) ) );
+
+		$args = [
+			'post_type'      => 'attachment',
+			'post_mime_type' => 'image',
+			'post_status'    => 'inherit',
+			'posts_per_page' => $per_page,
+			'paged'          => $page,
+			'orderby'        => 'date',
+			'order'          => 'DESC',
+		];
+
+		if ( ! empty( $search ) ) {
+			$args['s'] = $search;
+		}
+
+		$query = new WP_Query( $args );
+		$items = [];
+
+		foreach ( $query->posts as $post ) {
+			$id = $post->ID;
+			$url = wp_get_attachment_url( $id );
+			if ( ! $url ) {
+				continue;
+			}
+
+			$meta = wp_get_attachment_metadata( $id );
+			$thumb = wp_get_attachment_image_src( $id, 'medium' );
+			$thumb_url = $thumb ? $thumb[0] : $url;
+
+			$width  = isset( $meta['width'] ) ? (int) $meta['width'] : ( $thumb ? (int) $thumb[1] : 0 );
+			$height = isset( $meta['height'] ) ? (int) $meta['height'] : ( $thumb ? (int) $thumb[2] : 0 );
+
+			$items[] = [
+				'id'            => $id,
+				'title'         => get_the_title( $id ) ?: wp_basename( $url ),
+				'filename'      => wp_basename( $url ),
+				'url'           => $url,
+				'thumbnail_url' => $thumb_url,
+				'width'         => $width,
+				'height'        => $height,
+				'mime'          => get_post_mime_type( $id ) ?: 'image/png',
+				'date'          => get_the_date( 'c', $id ),
+			];
+		}
+
+		$response = new WP_REST_Response( [
+			'success'     => true,
+			'items'       => $items,
+			'total'       => (int) $query->found_posts,
+			'total_pages' => (int) $query->max_num_pages,
+			'page'        => $page,
+			'per_page'    => $per_page,
+		] );
+
+		$response->header( 'Access-Control-Allow-Origin', '*' );
+		$response->header( 'Access-Control-Allow-Methods', 'GET, OPTIONS' );
+		return $response;
 	}
 
 	/**

@@ -267,5 +267,39 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **Category Combobox Dropdown**:
   Replaces overflowing horizontal category button strips with a compact, glassmorphic combobox dropdown featuring real-time brand search, live device counts per category, and 1-click reset to "All Categories".
 
+---
 
+## 17. v2 Canvas Mask Compositing & Cutout Logo Architecture
 
+- **Canvas `destination-in` Invariant**:
+  Modern Chromium browsers enforce strict cross-origin restrictions on CSS `mask-image: url(...)`. Because static image uploads on `exacoat.com` lack explicit CORS headers, CSS masks are silently blocked.
+  Configurator Studio renders v2 skin layers using an HTML5 `<canvas width={1000} height={1000}>` with `ctx.globalCompositeOperation = 'destination-in'`. This clips textures directly without triggering cross-origin canvas taint errors.
+- **Cutout Logo Invariant**:
+  In v2 alpha masks, cutouts (such as the Apple logo on iPhone back skins) are transparent pixels (alpha = 0). Drawing the mask with `destination-in` automatically leaves that area transparent, exposing the underlying hardware base chassis render (`view.background_url`).
+- **Hardware Accent / Logo Overlay (`logo_url`)**:
+  `ConfiguratorView` supports an optional `logo_url` field. When present, it renders directly above the skin cutout, allowing specular foil reflections, metallic logo emblems, or glossy highlights (`iPhone-17-Pro-Logo.png`) to be layered on top of the base.
+
+---
+
+## 18. WordPress Media Library Integration (`MediaLibraryModal`)
+
+- **REST Endpoint**:
+  `GET /wp-json/exacoat-core/v1/media/list` in `class-configurator-engine.php` provides paginated media attachment queries with full CORS headers (`Access-Control-Allow-Origin: *`), search, and thumbnail URLs.
+- **Interactive Asset Selector**:
+  `MediaLibraryModal.tsx` provides 1-click browsing directly from Exacoat Manager into WordPress uploads. Operators can filter for 1000x1000 canvas assets and select chassis renders, alpha masks, overlays, and master textures without copying and pasting URLs.
+
+---
+
+## 19. Universal Signature Pricing & Family Multipliers
+
+- **Family Size Multipliers**:
+  Standardized in `ConfiguratorStudioPage.tsx` Settings tab:
+  - Phone: 1.0x
+  - Foldable: 1.3x
+  - Tablet: 1.8x
+  - Keyboard: 2.0x
+  - Laptop: 2.5x
+  - Console: 2.0x
+  - Accessory: 0.8x
+- **Universal Surcharge Formula**:
+  Signature and premium finish group up-prices (configured globally in Finishes) are dynamically multiplied by the device's `size_multiplier` (e.g. IDR 30,000 * 2.5x = +IDR 75,000 on Laptop). Operators do not need to configure extra prices individually per device.
