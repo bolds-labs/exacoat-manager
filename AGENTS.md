@@ -472,4 +472,24 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **Cognitive Overload Elimination**:
   Removed duplicate horizontal layer selector strips from the top of the canvas stage. The canvas viewport now only hosts the Angle switcher and the floating hardware color pill, keeping the design workspace focused and clutter-free.
 
+---
+
+## 33. Legacy v1 Backward Compatibility & Multi-Angle Asset Resolution Architecture
+
+- **Hardware Logo Overlay Invariant (Layer 4)**:
+  In legacy v1 devices (and devices with custom hardware accents), logos are rendered as top-level overlay PNGs (`currentView.logo_url`) rather than punched through skin masks via canvas `destination-out`.
+  - The canvas viewport must render `currentView.logo_url` as Layer 4 at `zIndex={30}` whenever `currentView.logo_url` is present and `selectedLogoCutout` is true.
+  - Toggling buyer choice "With Cutout" vs "Solid / No Logo" controls visibility of Layer 4.
+  - Tab 2 (Hardware Base) provides a dedicated "Hardware Accent / Logo Overlay URL (v1 Overlay)" input field with full WordPress Media Library selector support (`setMediaPickerConfig`).
+- **Multi-Angle Intelligent Angle Switching (`handleSelectSkinPart`)**:
+  On multi-angle devices (such as laptops with Top Lid, Bottom Base, and Trackpad angles, or keyboards with Outer and Inner views), individual skin parts belong to specific camera angles:
+  - If an operator clicks a skin part (e.g. clicking "Bottom Base" or "Trackpad" from "Top View"), `handleSelectSkinPart` detects that the active angle has 0 textures for this layer and automatically switches `activeSimView` to the angle that contains textures or masks for that part (e.g. auto-switching to "Bottom View").
+  - On the canvas stage, layers that are strictly mapped to other angles on a multi-view device are suppressed from rendering on incorrect angles (`hasOtherAngleAssignments`).
+  - Single-angle devices fall back gracefully to `main_view` or any view with valid assets.
+- **Smart View Asset Resolution & v1 Texture Fallbacks**:
+  - In Tab 1 inspector, `textureMap` resolution evaluates the active angle and falls back to `main_view` or any angle containing textures/masks if the active angle is an empty object, preventing false "Unassigned" states across all swatches.
+  - In canvas Layer 2 rendering for v1 devices, if a part's finish does not have an exact matching key in its `render_texture_map`, it automatically falls back to `selectedSimFinish` or the first available texture slice in its map rather than returning `null` and hiding the layer.
+- **v1 Badge Hygiene in Vertical Layer Stack**:
+  v1 devices use pre-cut texture slice maps rather than 1000x1000 SVG/PNG alpha masks. The vertical layer stack displays `✓ {count} Textures` (emerald) or `No Textures` (amber) for v1 devices, reserving `✓ Mask` and `No Mask` strictly for modern v2 devices.
+
 

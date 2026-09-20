@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.78] - 2026-09-20
+
+### Configurator Studio: Complete v1 Legacy Device Backward Compatibility & Multi-Angle Resolution
+- **Hardware Logo Overlay Restored (Layer 4)**:
+  - Fixed issue where logo overlays were invisible on v1 legacy devices (e.g. iPhones, MacBooks, iPads).
+  - Restored canvas Layer 4 rendering of `currentView.logo_url` at `zIndex={30}`, respecting the buyer logo toggle ("With Cutout" vs "Solid / No Logo").
+  - Restored the dedicated "Hardware Accent / Logo Overlay URL (v1 Overlay)" input card with WordPress Media Library integration in Tab 2 (Hardware Base).
+- **Multi-Angle Intelligent Angle Switching (`handleSelectSkinPart`)**:
+  - Solved the issue where bottom skins on multi-angle devices (such as MacBook Pro with Top, Bottom, and Trackpad views) appeared missing when inspecting or clicking "Bottom" from Top View.
+  - Clicking any skin part in Tab 1 or the tester dock now automatically switches `activeSimView` to the angle containing textures or masks for that part (e.g. auto-switching to "Bottom View" when selecting "Bottom").
+  - Prevents parts assigned to other angles from rendering on incorrect camera angles while ensuring single-angle devices fall back gracefully.
+- **Smart View Asset Resolution & v1 Texture Fallbacks**:
+  - In Tab 1 inspector, resolved texture maps now evaluate the active angle and fall back to `main_view` or any angle with configured textures if the active view has an empty texture map object, eliminating false "Unassigned" states.
+  - In canvas Layer 2 rendering for v1 devices, if a part's finish does not have a texture matching the active finish slug, it automatically falls back to the global simulation finish or the first available texture slice in its map rather than returning `null`.
+- **v1 Badge Hygiene in Vertical Layer Stack**:
+  - Replaced misleading "No Mask" amber badges on v1 profiles with clean `✓ {count} Textures` (emerald) or `No Textures` (amber), reserving mask badges strictly for modern v2 devices.
+
 ## [0.0.77] - 2026-09-20
 
 ### Configurator Studio: Vertical Layer Stack, Priority Reordering & Accents Visibility Fix

@@ -4179,11 +4179,46 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   return f.group === finishCategoryFilter;
                 });
 
-                const currentLayerAssets =
-                  currentActiveLayer?.assets_by_view?.[currentView?.id || 'main_view'] ||
-                  currentActiveLayer?.assets_by_view?.['main_view'] ||
-                  Object.values(currentActiveLayer?.assets_by_view || {})[0] ||
-                  {};
+                const handleSelectSkinPart = (partId: string) => {
+                  setSelectedLayerId(partId);
+                  setActiveSimTestingPartId(partId);
+                  setSelectedSimLayers((prev) => ({ ...prev, [partId]: true }));
+
+                  // Multi-angle device UX: if this layer has textures/mask on another view, auto-switch to that view
+                  const targetLayer = skinLayers.find((l) => l.id === partId);
+                  if (targetLayer && editingProfile.views && editingProfile.views.length > 1) {
+                    const curAssets = targetLayer.assets_by_view?.[currentView?.id || ''];
+                    const curCount = Object.keys(curAssets?.render_texture_map || {}).length;
+                    const curHasMask = Boolean(curAssets?.mask_svg_url);
+                    if (curCount === 0 && !curHasMask) {
+                      const matchingView = editingProfile.views.find((v) => {
+                        const a = targetLayer.assets_by_view?.[v.id];
+                        return Boolean(a?.mask_svg_url) || Object.keys(a?.render_texture_map || {}).length > 0;
+                      });
+                      if (matchingView) {
+                        setActiveSimView(matchingView.id);
+                      }
+                    }
+                  }
+                };
+
+                // Smart asset resolution for Tab 1 texture map inspector
+                const currentLayerAssets = (() => {
+                  if (!currentActiveLayer) return {};
+                  const byView = currentActiveLayer.assets_by_view || {};
+                  const activeViewAsset = byView[currentView?.id || 'main_view'];
+                  if (activeViewAsset && (activeViewAsset.mask_svg_url || Object.keys(activeViewAsset.render_texture_map || {}).length > 0)) {
+                    return activeViewAsset;
+                  }
+                  const mainAsset = byView['main_view'];
+                  if (mainAsset && (mainAsset.mask_svg_url || Object.keys(mainAsset.render_texture_map || {}).length > 0)) {
+                    return mainAsset;
+                  }
+                  const anyWithTex = Object.values(byView).find(
+                    (a) => Boolean(a.mask_svg_url) || Object.keys(a.render_texture_map || {}).length > 0
+                  );
+                  return anyWithTex || activeViewAsset || {};
+                })();
 
                 const textureMap = currentLayerAssets.render_texture_map || {};
 
@@ -4331,11 +4366,39 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               const isChecked = selectedSimLayers[l.id] ?? true;
                               if (!isChecked) return null;
 
-                            const assets =
-                              l.assets_by_view?.[currentView?.id || 'main_view'] ||
-                              l.assets_by_view?.['main_view'] ||
-                              Object.values(l.assets_by_view || {})[0] ||
-                              {};
+                            // Resolve effective assets for this layer and current view
+                            const viewSpecificAsset = l.assets_by_view?.[currentView?.id || 'main_view'];
+                            const hasViewSpecificTex = Boolean(
+                              viewSpecificAsset?.mask_svg_url ||
+                              (viewSpecificAsset?.render_texture_map && Object.keys(viewSpecificAsset.render_texture_map).length > 0)
+                            );
+
+                            // For multi-angle devices where this layer is strictly assigned to other views, do not render on wrong angle
+                            const hasOtherAngleAssignments = Boolean(
+                              editingProfile.views &&
+                              editingProfile.views.length > 1 &&
+                              Object.entries(l.assets_by_view || {}).some(
+                                ([vId, vAsset]) =>
+                                  vId !== currentView?.id &&
+                                  (vAsset.mask_svg_url || Object.keys(vAsset.render_texture_map || {}).length > 0)
+                              )
+                            );
+
+                            let assets = viewSpecificAsset || {};
+                            if (!hasViewSpecificTex) {
+                              if (hasOtherAngleAssignments) {
+                                // Layer belongs to another angle on this multi-view device (e.g. Bottom on top_view)
+                                return null;
+                              }
+                              // Single angle device or general fallback: check main_view or any angle with textures
+                              assets =
+                                l.assets_by_view?.['main_view'] ||
+                                Object.values(l.assets_by_view || {}).find(
+                                  (a) => Boolean(a.mask_svg_url) || Object.keys(a.render_texture_map || {}).length > 0
+                                ) ||
+                                viewSpecificAsset ||
+                                {};
+                            }
 
                             const layerFinishSlug = selectedLayerFinishes[l.id] || selectedSimFinish;
                             const activeFinish = finishes.find(
@@ -4387,11 +4450,26 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               );
                             }
 
+                            const textureMap = assets.render_texture_map || {};
                             const simNorm = layerFinishSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
-                            const matchedKey = Object.keys(assets.render_texture_map || {}).find(
+                            const matchedKey = Object.keys(textureMap).find(
                               (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === simNorm
                             );
-                            const texUrl = matchedKey ? assets.render_texture_map?.[matchedKey] || '' : '';
+                            let texUrl = matchedKey ? textureMap[matchedKey] || '' : '';
+
+                            // v1 Fallback: if selected finish is not mapped on this layer, fall back to global simulation finish or first available texture
+                            if (!texUrl && Object.keys(textureMap).length > 0) {
+                              const globalNorm = selectedSimFinish.toLowerCase().replace(/[^a-z0-9]/g, '');
+                              const globalMatchedKey = Object.keys(textureMap).find(
+                                (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === globalNorm
+                              );
+                              if (globalMatchedKey) {
+                                texUrl = textureMap[globalMatchedKey] || '';
+                              } else {
+                                const firstKey = Object.keys(textureMap)[0];
+                                texUrl = textureMap[firstKey] || '';
+                              }
+                            }
 
                             if (!texUrl) return null;
 
@@ -4457,6 +4535,20 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </React.Fragment>
                             );
                           })()}
+
+                          {/* Layer 4: Hardware Logo / Accent Overlay (v1 Legacy & Overlay Support) */}
+                          {Boolean(currentView?.logo_url) && selectedLogoCutout && (
+                            <img
+                              key={`logo-overlay-${currentView?.id || 'main'}`}
+                              src={currentView.logo_url}
+                              alt={`${currentView?.name || 'Device'} Logo Overlay`}
+                              style={{ zIndex: 30 }}
+                              className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                          )}
                         </div>
                       </div>
 
@@ -4479,8 +4571,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   key={l.id}
                                   type="button"
                                   onClick={() => {
-                                    setActiveSimTestingPartId(l.id);
-                                    setSelectedSimLayers((prev) => ({ ...prev, [l.id]: true }));
+                                    handleSelectSkinPart(l.id);
                                   }}
                                   className={clsx(
                                     'px-3 py-1.5 rounded-xl text-xs font-sans font-medium flex items-center gap-2 transition-all cursor-pointer border shrink-0',
@@ -4521,32 +4612,19 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             })}
                           </div>
 
-                          <div className="flex items-center gap-3 shrink-0 ml-auto">
-                            <div className="text-right">
-                              <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold">Live Total</p>
-                              <p className="text-sm font-mono font-bold text-emerald-400">
-                                IDR {simulatedTotalPrice.toLocaleString('id-ID')}
-                              </p>
-                            </div>
+                          {/* Real-Time Test Simulation Price Badge */}
+                          <div className="flex items-center gap-2 shrink-0 bg-zinc-900/90 border border-white/10 px-3 py-1.5 rounded-xl text-xs font-mono">
+                            <span className="text-zinc-400">Total Price:</span>
+                            <span className="font-bold text-[#f3aa18] text-sm">
+                              IDR {simulatedTotalPrice.toLocaleString('id-ID')}
+                            </span>
                           </div>
                         </div>
 
-                        {/* Row 2: Finish Swatches for the Active Part */}
-                        <div className="space-y-2 pt-1 border-t border-white/5">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 text-xs">
-                              <button
-                                type="button"
-                                onClick={() => setSimFinishGroupFilter('all')}
-                                className={clsx(
-                                  'px-2.5 py-0.5 rounded-lg text-[11px] font-sans transition-all cursor-pointer border shrink-0',
-                                  simFinishGroupFilter === 'all'
-                                    ? 'bg-[#f3aa18] text-black font-bold border-[#f3aa18]'
-                                    : 'bg-zinc-900 border-white/5 text-zinc-400 hover:text-white'
-                                )}
-                              >
-                                All ({testPartFinishes.length})
-                              </button>
+                        {/* Row 2: Selected Part Finish Swatches Carousel */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2 overflow-x-auto">
+                            <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
                               {testPartGroups.map((grp) => (
                                 <button
                                   key={grp}
@@ -4615,7 +4693,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         {/* Row 3: Configurable Choices (Coverage, Logo Cutout, Chassis Color) */}
                         <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-white/5 text-xs">
                           {/* Logo Cutout Toggle */}
-                          {(editingProfile.coverage_and_cutouts?.has_logo_cutout !== false || Boolean(currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url)) && (
+                          {(editingProfile.coverage_and_cutouts?.has_logo_cutout !== false || Boolean(currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url || currentView?.logo_url)) && (
                             <div className="flex items-center gap-1.5 bg-zinc-900/80 p-1 rounded-xl border border-white/10">
                               <span className="text-[11px] text-zinc-400 font-medium px-2">Logo:</span>
                               <button
@@ -5045,11 +5123,15 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     const extraPrice = Number(layer.extra_price) || 0;
                                     const viewAsset = layer.assets_by_view?.[currentView?.id || 'main_view'];
                                     const hasMask = Boolean(viewAsset?.mask_svg_url);
+                                    const totalLayerTextures = Object.values(layer.assets_by_view || {}).reduce(
+                                      (sum, v) => sum + Object.keys(v.render_texture_map || {}).length,
+                                      0
+                                    );
 
                                     return (
                                       <div
                                         key={layer.id}
-                                        onClick={() => setSelectedLayerId(layer.id)}
+                                        onClick={() => handleSelectSkinPart(layer.id)}
                                         className={clsx(
                                           'p-2.5 rounded-xl transition-all border flex items-center justify-between gap-2.5 cursor-pointer select-none group',
                                           isSelected
@@ -5148,14 +5230,26 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                               Included
                                             </span>
                                           )}
-                                          {hasMask ? (
-                                            <span className="text-[10px] font-mono text-emerald-400/90 hidden md:inline-block" title="Alpha mask configured for this angle">
-                                              ✓ Mask
-                                            </span>
+                                          {editingProfile.configurator_version === 'v2' ? (
+                                            hasMask ? (
+                                              <span className="text-[10px] font-mono text-emerald-400/90 hidden md:inline-block" title="Alpha mask configured for this angle">
+                                                ✓ Mask
+                                              </span>
+                                            ) : (
+                                              <span className="text-[10px] font-mono text-amber-400/70 hidden md:inline-block" title="No alpha mask set for current angle">
+                                                No Mask
+                                              </span>
+                                            )
                                           ) : (
-                                            <span className="text-[10px] font-mono text-amber-400/70 hidden md:inline-block" title="No alpha mask set for current angle">
-                                              No Mask
-                                            </span>
+                                            totalLayerTextures > 0 ? (
+                                              <span className="text-[10px] font-mono text-emerald-400 hidden md:inline-block" title={`${totalLayerTextures} textures configured across angles`}>
+                                                ✓ {totalLayerTextures} Textures
+                                              </span>
+                                            ) : (
+                                              <span className="text-[10px] font-mono text-amber-400/70 hidden md:inline-block" title="No texture slices mapped yet">
+                                                No Textures
+                                              </span>
+                                            )
                                           )}
 
                                           {/* Direct Delete Button */}
@@ -5871,6 +5965,52 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     </button>
                                   </div>
                                 </div>
+
+                                  {/* Hardware Accent / Logo Overlay URL (v1 & Custom Overlays) */}
+                                  <div className="space-y-1.5 bg-black/30 p-3 rounded-xl border border-white/5">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-bold text-zinc-300">
+                                        Hardware Accent / Logo Overlay URL (v1 Overlay)
+                                      </span>
+                                      {currentView.logo_url && (
+                                        <span className="text-emerald-400 text-[10px] font-mono">Configured</span>
+                                      )}
+                                    </div>
+                                    <p className="text-[11px] text-zinc-400 leading-relaxed">
+                                      Rendered directly on top of skin vinyl layers (e.g. metallic Apple logo, camera lens reflections, or brand badge).
+                                    </p>
+                                    <div className="flex gap-2">
+                                      <input
+                                        type="url"
+                                        placeholder="https://exacoat.com/uploads/device-logo-overlay.png"
+                                        value={currentView.logo_url || ''}
+                                        onChange={(e) => {
+                                          const val = e.target.value.trim();
+                                          handleSetViewField(currentView.id, 'logo_url', val);
+                                        }}
+                                        className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] placeholder:text-zinc-600"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setMediaPickerConfig({
+                                            isOpen: true,
+                                            title: `Select Logo Overlay: ${currentView.name}`,
+                                            recommendedDimensions: '1000x1000 Transparent PNG',
+                                            currentUrl: currentView.logo_url || '',
+                                            onSelect: (url) => {
+                                              handleSetViewField(currentView.id, 'logo_url', url);
+                                            },
+                                          })
+                                        }
+                                        className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
+                                        title="Browse WordPress Media Library"
+                                      >
+                                        <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                        <span>Browse</span>
+                                      </button>
+                                    </div>
+                                  </div>
 
                                  {/* Angle Cutout Masks (v2 Compositing) */}
                                  <div className="space-y-3 pt-3 border-t border-white/5">
