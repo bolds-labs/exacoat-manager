@@ -1295,12 +1295,7 @@ class Exacoat_Configurator_Engine {
 			'size_multiplier'      => $size_multiplier,
 			'is_configurable'      => ! empty( $normalized_layers ),
 			'configurator_version' => 'v1',
-			'device_colors'        => [
-				[ 'id' => 'space-gray', 'name' => 'Space Gray', 'hex' => '#535559' ],
-				[ 'id' => 'silver', 'name' => 'Silver', 'hex' => '#e3e4e5' ],
-				[ 'id' => 'midnight', 'name' => 'Midnight', 'hex' => '#1e242b' ],
-				[ 'id' => 'starlight', 'name' => 'Starlight', 'hex' => '#f0e4d3' ],
-			],
+			'device_colors'        => [],
 			'views'                => $views,
 			'layers'               => $normalized_layers,
 			'variants'             => $variants,

@@ -2952,12 +2952,7 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
           size_multiplier,
           is_configurable: true,
           configurator_version: 'v1',
-          device_colors: [
-            { id: 'space-gray', name: 'Space Gray', hex: '#535559' },
-            { id: 'silver', name: 'Silver', hex: '#e3e4e5' },
-            { id: 'midnight', name: 'Midnight', hex: '#1e242b' },
-            { id: 'starlight', name: 'Starlight', hex: '#f0e4d3' },
-          ],
+          device_colors: [],
           views: convertedViews.length > 0 ? convertedViews : [{ id: 'main_view', name: 'Main View', is_default: true, aspect_ratio: '1:1', canvas_dimensions: { width: 1000, height: 1000 } }],
           layers: convertedLayers,
           variants: convertedVariants,

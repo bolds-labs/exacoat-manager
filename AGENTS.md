@@ -393,4 +393,20 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - `model_cut_only`: For foldables (Galaxy Z Flip) where hinge/frame wraps cannot be applied; Model Cut is permanently active with no 360 wrap choice displayed.
   - `model_360_only`: For devices where only full wrap is offered.
 
+---
+
+## 23. Single-Source 3D Shading & Viewport Hardware Color Architecture
+
+- **Single-Source 3D Shading Invariant**:
+  In v2 modern engine, viewing angles do not require separate shadow and highlight files. A single image (`shading_image_url` on `ConfiguratorView`), such as a neutral CAD render or ambient occlusion map, provides both depth channels simultaneously:
+  - Dark pixels darken underlying vinyl via `mix-blend-mode: multiply` at `shadow_opacity` (0% to 100%).
+  - Bright specular pixels illuminate underlying vinyl via `mix-blend-mode: screen` at `highlight_opacity` (0% to 100%).
+  - Operators can supply one image and tune both sliders independently without dual-file extraction overhead.
+- **Floating Viewport Hardware Color Selector**:
+  - Device hardware chassis finishes (e.g. Titanium, Silver, Space Gray) are displayed directly inside the viewport canvas stage as a floating glassmorphic pill, not in an accordion menu.
+  - **Single Color Gate**: When a device has 0 or 1 hardware color configured (`device_colors.length <= 1`), the selector is completely hidden from the viewport.
+  - **Visual Simulation Only**: Hardware chassis colors are strictly visual aids for buyers to preview cutouts against their device finish. Hardware color is never passed to WooCommerce order item metadata or checkout line items.
+  - **Clean Fallback Policy**: Fallback profiles and newly created devices default to `device_colors: []` (empty array) rather than hardcoding 4 Apple colors across non-Apple devices. Operators explicitly configure colors or load presets (Titanium, MacBook/iPad) when needed.
+
+
 

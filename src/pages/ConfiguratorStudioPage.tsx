@@ -659,12 +659,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
             size_multiplier: fallbackSummary.size_multiplier || 1.0,
             is_configurable: true,
             configurator_version: fallbackSummary.configurator_version || 'v1',
-            device_colors: [
-              { id: 'space-gray', name: 'Space Gray', hex: '#535559' },
-              { id: 'silver', name: 'Silver', hex: '#e3e4e5' },
-              { id: 'midnight', name: 'Midnight', hex: '#1e242b' },
-              { id: 'starlight', name: 'Starlight', hex: '#f0e4d3' },
-            ],
+            device_colors: [],
             views: [
               {
                 id: 'main_view',
@@ -784,10 +779,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
           if (v.id !== viewKey) return v;
           return {
             ...v,
+            shading_image_url: res.shadow_url || res.highlight_url,
             shadow_png_url: res.shadow_url,
             highlight_png_url: res.highlight_url,
             shadow_opacity: v.shadow_opacity ?? 0.85,
-            highlight_opacity: v.highlight_opacity ?? 0.40,
+            highlight_opacity: v.highlight_opacity ?? 0.35,
           };
         });
 
@@ -4158,30 +4154,85 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                       {/* Device Stage Viewport */}
                       <div className="flex-1 flex items-center justify-center p-6 relative overflow-hidden">
+                        {/* Floating Viewport Hardware Color Selector (Shown only when 2+ colors exist) */}
+                        {editingProfile.device_colors && editingProfile.device_colors.length > 1 && (
+                          <div className="absolute top-4 right-4 z-30 flex items-center gap-2 bg-zinc-950/85 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/15 shadow-xl select-none">
+                            <span className="text-[11px] font-medium text-zinc-400 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                              <span>Device:</span>
+                              <span className="font-semibold text-zinc-200">
+                                {editingProfile.device_colors.find((c) => c.id === selectedSimColor)?.name ||
+                                  editingProfile.device_colors[0]?.name}
+                              </span>
+                            </span>
+                            <div className="h-3.5 w-px bg-white/10 mx-0.5" />
+                            <div className="flex items-center gap-1.5">
+                              {editingProfile.device_colors.map((c) => {
+                                const isSelected = (selectedSimColor || editingProfile.device_colors?.[0]?.id) === c.id;
+                                return (
+                                  <button
+                                    key={c.id}
+                                    type="button"
+                                    onClick={() => setSelectedSimColor(c.id)}
+                                    title={c.name}
+                                    className={clsx(
+                                      'w-5 h-5 rounded-full border transition-all cursor-pointer relative group flex items-center justify-center',
+                                      isSelected
+                                        ? 'border-white ring-2 ring-[#f3aa18] scale-110 shadow-md'
+                                        : 'border-white/20 hover:border-white/60 hover:scale-105'
+                                    )}
+                                    style={{ backgroundColor: c.hex }}
+                                  >
+                                    {isSelected && (
+                                      <span className="w-1.5 h-1.5 rounded-full bg-white shadow-sm" />
+                                    )}
+                                    <span className="pointer-events-none absolute -bottom-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-900 border border-white/10 text-white text-[10px] px-1.5 py-0.5 rounded shadow whitespace-nowrap z-40">
+                                      {c.name}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Device Canvas Box */}
                         <div className="relative w-full max-w-[420px] aspect-square flex items-center justify-center drop-shadow-2xl">
                           {/* Layer 1: Hardware Chassis Base Image */}
                           {currentView?.background_url ? (
                             <div className="absolute inset-0 w-full h-full flex items-center justify-center pointer-events-none z-0">
-                              <img
-                                src={currentView.background_url}
-                                alt="Hardware Chassis"
-                                className="w-full h-full object-contain pointer-events-none"
-                                onError={(e) => {
-                                  (e.target as HTMLElement).style.display = 'none';
-                                }}
-                              />
-                              {editingProfile.configurator_version === 'v2' && selectedSimColor && (
-                                <div
-                                  style={{
-                                    backgroundColor:
-                                      editingProfile.device_colors?.find((c) => c.id === selectedSimColor)?.hex ||
-                                      '#535559',
-                                    mixBlendMode: 'color',
-                                  }}
-                                  className="absolute inset-0 w-full h-full pointer-events-none opacity-30"
-                                />
-                              )}
+                              {(() => {
+                                const activeColor = editingProfile.device_colors?.find((c) => c.id === selectedSimColor);
+                                const chassisSrc =
+                                  (activeColor as any)?.body_images_by_view?.[currentView.id] ||
+                                  activeColor?.body_image_url ||
+                                  currentView.background_url;
+                                const hasDedicatedImage = Boolean(
+                                  (activeColor as any)?.body_images_by_view?.[currentView.id] || activeColor?.body_image_url
+                                );
+
+                                return (
+                                  <>
+                                    <img
+                                      src={chassisSrc}
+                                      alt="Hardware Chassis"
+                                      className="w-full h-full object-contain pointer-events-none"
+                                      onError={(e) => {
+                                        (e.target as HTMLElement).style.display = 'none';
+                                      }}
+                                    />
+                                    {editingProfile.configurator_version === 'v2' && activeColor && !hasDedicatedImage && (
+                                      <div
+                                        style={{
+                                          backgroundColor: activeColor.hex || '#535559',
+                                          mixBlendMode: 'color',
+                                        }}
+                                        className="absolute inset-0 w-full h-full pointer-events-none opacity-30"
+                                      />
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </div>
                           ) : (
                             <div className="absolute inset-0 border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center justify-center text-xs text-zinc-500 text-center p-6">
@@ -4276,53 +4327,54 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             );
                           })}
 
-                          {/* Layer 3: Realistic Multiply Shadow & Specular Highlights (v2 View Shading) */}
-                          {editingProfile.configurator_version === 'v2' && currentView && (
-                            <React.Fragment key={`view-shading-${currentView.id}`}>
-                              {Boolean(
-                                currentView.shadow_png_url ||
-                                  skinLayers.find((l) => l.assets_by_view?.[currentView.id]?.shadow_png_url)?.assets_by_view?.[currentView.id]?.shadow_png_url
-                              ) && (
-                                <img
-                                  src={
-                                    currentView.shadow_png_url ||
-                                    skinLayers.find((l) => l.assets_by_view?.[currentView.id]?.shadow_png_url)?.assets_by_view?.[currentView.id]?.shadow_png_url
-                                  }
-                                  alt={`${currentView.name} 3D Shadow`}
-                                  style={{
-                                    zIndex: 20,
-                                    mixBlendMode: 'multiply',
-                                    opacity: currentView.shadow_opacity ?? 0.85,
-                                  }}
-                                  className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity"
-                                  onError={(e) => {
-                                    (e.target as HTMLElement).style.display = 'none';
-                                  }}
-                                />
-                              )}
-                              {Boolean(
-                                currentView.highlight_png_url ||
-                                  skinLayers.find((l) => l.assets_by_view?.[currentView.id]?.highlight_png_url)?.assets_by_view?.[currentView.id]?.highlight_png_url
-                              ) && (
-                                <img
-                                  src={
-                                    currentView.highlight_png_url ||
-                                    skinLayers.find((l) => l.assets_by_view?.[currentView.id]?.highlight_png_url)?.assets_by_view?.[currentView.id]?.highlight_png_url
-                                  }
-                                  alt={`${currentView.name} 3D Highlight`}
-                                  style={{
-                                    zIndex: 25,
-                                    mixBlendMode: 'screen',
-                                    opacity: currentView.highlight_opacity ?? 0.40,
-                                  }}
-                                  className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity"
-                                  onError={(e) => {
-                                    (e.target as HTMLElement).style.display = 'none';
-                                  }}
-                                />
-                              )}
-                            </React.Fragment>
-                          )}
+                          {/* Layer 3: Realistic 3D Shading & Specular Highlights (Single Source) */}
+                          {editingProfile.configurator_version === 'v2' && currentView && (() => {
+                            const shadingSrc =
+                              currentView.shading_image_url ||
+                              currentView.shadow_png_url ||
+                              currentView.highlight_png_url ||
+                              skinLayers.find((l) => l.assets_by_view?.[currentView.id]?.shading_image_url || l.assets_by_view?.[currentView.id]?.shadow_png_url)?.assets_by_view?.[currentView.id]?.shading_image_url;
+
+                            if (!shadingSrc) return null;
+
+                            const shadowOpacity = currentView.shadow_opacity ?? 0.85;
+                            const highlightOpacity = currentView.highlight_opacity ?? 0.35;
+
+                            return (
+                              <React.Fragment key={`view-shading-${currentView.id}`}>
+                                {shadowOpacity > 0 && (
+                                  <img
+                                    src={shadingSrc}
+                                    alt={`${currentView.name} 3D Shadow`}
+                                    style={{
+                                      zIndex: 20,
+                                      mixBlendMode: 'multiply',
+                                      opacity: shadowOpacity,
+                                    }}
+                                    className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity"
+                                    onError={(e) => {
+                                      (e.target as HTMLElement).style.display = 'none';
+                                    }}
+                                  />
+                                )}
+                                {highlightOpacity > 0 && (
+                                  <img
+                                    src={shadingSrc}
+                                    alt={`${currentView.name} 3D Highlight`}
+                                    style={{
+                                      zIndex: 25,
+                                      mixBlendMode: 'screen',
+                                      opacity: highlightOpacity,
+                                    }}
+                                    className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity"
+                                    onError={(e) => {
+                                      (e.target as HTMLElement).style.display = 'none';
+                                    }}
+                                  />
+                                )}
+                              </React.Fragment>
+                            );
+                          })()}
                         </div>
                       </div>
 
@@ -4592,28 +4644,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </div>
                             );
                           })()}
-
-                          {/* Chassis Base Color Swatches */}
-                          {editingProfile.device_colors && editingProfile.device_colors.length > 0 && (
-                            <div className="flex items-center gap-1.5 bg-zinc-900/80 p-1 rounded-xl border border-white/10 ml-auto">
-                              <span className="text-[11px] text-zinc-400 font-medium px-2">Hardware:</span>
-                              {editingProfile.device_colors.map((c) => (
-                                <button
-                                  key={c.id}
-                                  type="button"
-                                  onClick={() => setSelectedSimColor(c.id)}
-                                  title={c.name}
-                                  className={clsx(
-                                    'w-5 h-5 rounded-full border transition-all cursor-pointer',
-                                    selectedSimColor === c.id
-                                      ? 'border-[#f3aa18] ring-2 ring-[#f3aa18]/50 scale-110'
-                                      : 'border-white/20 hover:border-white/60'
-                                  )}
-                                  style={{ backgroundColor: c.hex }}
-                                />
-                              ))}
-                            </div>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -5702,7 +5732,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                    </div>
                                  </div>
 
-                                {/* 3D Shading & Specular Highlights for this Angle */}
+                                {/* 3D Shading & Specular Highlights for this Angle (Single Source) */}
                                 <div className="space-y-4 pt-3 border-t border-white/5">
                                   <div className="flex items-center justify-between">
                                     <div>
@@ -5710,14 +5740,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         <Wand2 className="w-3.5 h-3.5 text-amber-400" />
                                         <span>Angle 3D Shading & Highlights</span>
                                       </label>
-                                      <p className="text-[11px] text-zinc-400 mt-0.5">
-                                        Multiply shadow and screen highlight PNGs composited over all skin pieces.
+                                      <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
+                                        Single neutral CAD render or AO map. Dark tones multiply to cast shadows, and bright specular tones screen to add surface shine.
                                       </p>
                                     </div>
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        setShadingSourceUrl(currentView.background_url || '');
+                                        setShadingSourceUrl(currentView.shading_image_url || currentView.shadow_png_url || currentView.background_url || '');
                                         setShowShadingExtractorModal(true);
                                       }}
                                       className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 text-xs font-medium flex items-center gap-1.5 cursor-pointer transition-colors shrink-0"
@@ -5727,29 +5757,52 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     </button>
                                   </div>
 
-                                  {/* Multiply Shadow */}
-                                  <div className="space-y-1.5 bg-black/30 p-3 rounded-xl border border-white/5">
+                                  {/* Single Shading Image Map Card */}
+                                  <div className="space-y-3 bg-black/30 p-3.5 rounded-xl border border-white/5">
                                     <div className="flex items-center justify-between">
-                                      <span className="text-xs font-bold text-zinc-300">3D Multiply Shadow PNG</span>
-                                      {currentView.shadow_png_url && <span className="text-emerald-400 text-[10px] font-mono">Active</span>}
+                                      <span className="text-xs font-bold text-zinc-200">Shading & Highlight Map (Single Source)</span>
+                                      {(currentView.shading_image_url || currentView.shadow_png_url) && (
+                                        <span className="text-emerald-400 text-[10px] font-mono">Active</span>
+                                      )}
                                     </div>
+
                                     <div className="flex gap-2">
                                       <input
                                         type="url"
-                                        placeholder="https://exacoat.com/wp-content/uploads/iPhone-Shadow.png"
-                                        value={currentView.shadow_png_url || ''}
-                                        onChange={(e) => handleSetViewField(currentView.id, 'shadow_png_url', e.target.value.trim())}
+                                        placeholder="https://exacoat.com/wp-content/uploads/iPhone-Shading.png"
+                                        value={currentView.shading_image_url || currentView.shadow_png_url || ''}
+                                        onChange={(e) => {
+                                          const val = e.target.value.trim();
+                                          handleSetViewField(currentView.id, 'shading_image_url', val);
+                                          handleSetViewField(currentView.id, 'shadow_png_url', val);
+                                        }}
                                         className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-amber-400 placeholder:text-zinc-600"
                                       />
+                                      {currentView.background_url && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            handleSetViewField(currentView.id, 'shading_image_url', currentView.background_url);
+                                            handleSetViewField(currentView.id, 'shadow_png_url', currentView.background_url);
+                                          }}
+                                          className="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-[11px] font-sans font-medium shrink-0 cursor-pointer transition-colors"
+                                          title="Use hardware base render as shading source"
+                                        >
+                                          Use Base
+                                        </button>
+                                      )}
                                       <button
                                         type="button"
                                         onClick={() =>
                                           setMediaPickerConfig({
                                             isOpen: true,
-                                            title: `Select 3D Shadow PNG: ${currentView.name}`,
+                                            title: `Select 3D Shading Map: ${currentView.name}`,
                                             recommendedDimensions: '1000x1000 Transparent PNG',
-                                            currentUrl: currentView.shadow_png_url || '',
-                                            onSelect: (url) => handleSetViewField(currentView.id, 'shadow_png_url', url),
+                                            currentUrl: currentView.shading_image_url || currentView.shadow_png_url || '',
+                                            onSelect: (url) => {
+                                              handleSetViewField(currentView.id, 'shading_image_url', url);
+                                              handleSetViewField(currentView.id, 'shadow_png_url', url);
+                                            },
                                           })
                                         }
                                         className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
@@ -5759,9 +5812,17 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         <span>Browse</span>
                                       </button>
                                     </div>
-                                    <div className="flex items-center justify-between gap-3 pt-1">
-                                      <span className="text-[11px] text-zinc-400">Shadow Opacity:</span>
-                                      <div className="flex items-center gap-2 flex-1 max-w-[180px]">
+
+                                    {/* Live Tuning Sliders */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-white/5">
+                                      {/* Multiply Shadow Opacity */}
+                                      <div className="space-y-1">
+                                        <div className="flex items-center justify-between text-[11px]">
+                                          <span className="text-zinc-400 font-medium">Shadow Opacity (Multiply):</span>
+                                          <span className="font-mono font-bold text-amber-400">
+                                            {Math.round((currentView.shadow_opacity ?? 0.85) * 100)}%
+                                          </span>
+                                        </div>
                                         <input
                                           type="range"
                                           min="0"
@@ -5771,60 +5832,25 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                           onChange={(e) => handleSetViewField(currentView.id, 'shadow_opacity', parseFloat(e.target.value))}
                                           className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
                                         />
-                                        <span className="font-mono text-xs text-amber-400 font-bold w-10 text-right">
-                                          {Math.round((currentView.shadow_opacity ?? 0.85) * 100)}%
-                                        </span>
                                       </div>
-                                    </div>
-                                  </div>
 
-                                  {/* Screen Highlight */}
-                                  <div className="space-y-1.5 bg-black/30 p-3 rounded-xl border border-white/5">
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-xs font-bold text-zinc-300">3D Screen Highlight PNG</span>
-                                      {currentView.highlight_png_url && <span className="text-emerald-400 text-[10px] font-mono">Active</span>}
-                                    </div>
-                                    <div className="flex gap-2">
-                                      <input
-                                        type="url"
-                                        placeholder="https://exacoat.com/wp-content/uploads/iPhone-Highlight.png"
-                                        value={currentView.highlight_png_url || ''}
-                                        onChange={(e) => handleSetViewField(currentView.id, 'highlight_png_url', e.target.value.trim())}
-                                        className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setMediaPickerConfig({
-                                            isOpen: true,
-                                            title: `Select 3D Highlight PNG: ${currentView.name}`,
-                                            recommendedDimensions: '1000x1000 Transparent PNG',
-                                            currentUrl: currentView.highlight_png_url || '',
-                                            onSelect: (url) => handleSetViewField(currentView.id, 'highlight_png_url', url),
-                                          })
-                                        }
-                                        className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
-                                        title="Browse WordPress Media Library"
-                                      >
-                                        <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                        <span>Browse</span>
-                                      </button>
-                                    </div>
-                                    <div className="flex items-center justify-between gap-3 pt-1">
-                                      <span className="text-[11px] text-zinc-400">Highlight Opacity:</span>
-                                      <div className="flex items-center gap-2 flex-1 max-w-[180px]">
+                                      {/* Screen Highlight Opacity */}
+                                      <div className="space-y-1">
+                                        <div className="flex items-center justify-between text-[11px]">
+                                          <span className="text-zinc-400 font-medium">Highlight Opacity (Screen):</span>
+                                          <span className="font-mono font-bold text-sky-400">
+                                            {Math.round((currentView.highlight_opacity ?? 0.35) * 100)}%
+                                          </span>
+                                        </div>
                                         <input
                                           type="range"
                                           min="0"
                                           max="1"
                                           step="0.05"
-                                          value={currentView.highlight_opacity ?? 0.40}
+                                          value={currentView.highlight_opacity ?? 0.35}
                                           onChange={(e) => handleSetViewField(currentView.id, 'highlight_opacity', parseFloat(e.target.value))}
                                           className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-sky-400"
                                         />
-                                        <span className="font-mono text-xs text-sky-400 font-bold w-10 text-right">
-                                          {Math.round((currentView.highlight_opacity ?? 0.40) * 100)}%
-                                        </span>
                                       </div>
                                     </div>
                                   </div>
@@ -5845,9 +5871,174 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </div>
                             )}
 
+                            {/* Device Hardware Colors (Chassis Finishes) */}
+                            <div className="p-4 rounded-2xl bg-zinc-900/70 border border-white/10 space-y-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                  <h5 className="text-xs font-bold text-white flex items-center gap-2">
+                                    <Palette className="w-3.5 h-3.5 text-sky-400" />
+                                    Device Hardware Colors (Optional, Visual Only)
+                                  </h5>
+                                  <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
+                                    Physical chassis colors (e.g. Titanium, Silver, Space Gray). If 2 or more colors are configured, buyers see a floating color selector in the viewport. If 1 or none, it is hidden.
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newColor = {
+                                        id: `color_${Date.now()}`,
+                                        name: 'New Color',
+                                        hex: '#535559',
+                                      };
+                                      setEditingProfile({
+                                        ...editingProfile,
+                                        device_colors: [...(editingProfile.device_colors || []), newColor],
+                                      });
+                                      setSelectedSimColor(newColor.id);
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/20 text-xs font-medium flex items-center gap-1.5 cursor-pointer transition-colors shrink-0"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    <span>Add Color</span>
+                                  </button>
+                                  {editingProfile.device_colors && editingProfile.device_colors.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingProfile({
+                                          ...editingProfile,
+                                          device_colors: [],
+                                        });
+                                        setSelectedSimColor('');
+                                      }}
+                                      className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-rose-400 border border-white/10 text-xs font-medium cursor-pointer transition-colors shrink-0"
+                                      title="Remove all colors so viewport selector is hidden"
+                                    >
+                                      Clear
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
 
+                              {/* Presets Bar */}
+                              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider pr-1">Presets:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const titanium = [
+                                      { id: 'natural-titanium', name: 'Natural Titanium', hex: '#9d9891' },
+                                      { id: 'black-titanium', name: 'Black Titanium', hex: '#2c2b29' },
+                                      { id: 'white-titanium', name: 'White Titanium', hex: '#e8e8e6' },
+                                      { id: 'desert-titanium', name: 'Desert Titanium', hex: '#c5b49d' },
+                                    ];
+                                    setEditingProfile({
+                                      ...editingProfile,
+                                      device_colors: titanium,
+                                    });
+                                    setSelectedSimColor('natural-titanium');
+                                  }}
+                                  className="px-2 py-0.5 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-medium cursor-pointer transition-colors"
+                                >
+                                  Titanium (iPhone 16 Pro)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const macColors = [
+                                      { id: 'space-gray', name: 'Space Gray', hex: '#535559' },
+                                      { id: 'silver', name: 'Silver', hex: '#e3e4e5' },
+                                      { id: 'midnight', name: 'Midnight', hex: '#1e242b' },
+                                      { id: 'starlight', name: 'Starlight', hex: '#f0e4d3' },
+                                    ];
+                                    setEditingProfile({
+                                      ...editingProfile,
+                                      device_colors: macColors,
+                                    });
+                                    setSelectedSimColor('space-gray');
+                                  }}
+                                  className="px-2 py-0.5 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-medium cursor-pointer transition-colors"
+                                >
+                                  MacBook / iPad (4 Colors)
+                                </button>
+                              </div>
 
-                              {/* Add Viewing Angle Helper */}
+                              {/* Colors List */}
+                              {(!editingProfile.device_colors || editingProfile.device_colors.length === 0) ? (
+                                <div className="p-3 rounded-xl bg-zinc-950/50 border border-dashed border-white/10 text-center text-xs text-zinc-500">
+                                  No hardware colors configured. Viewport selector will remain hidden.
+                                </div>
+                              ) : (
+                                <div className="space-y-2 pt-1">
+                                  {editingProfile.device_colors.map((color, idx) => (
+                                    <div
+                                      key={color.id || idx}
+                                      className="flex items-center gap-2 p-2 rounded-xl bg-zinc-950 border border-white/5"
+                                    >
+                                      {/* Native color picker swatch */}
+                                      <div className="relative w-7 h-7 rounded-full border border-white/20 overflow-hidden shrink-0 cursor-pointer">
+                                        <input
+                                          type="color"
+                                          value={color.hex || '#535559'}
+                                          onChange={(e) => {
+                                            const nextColors = [...(editingProfile.device_colors || [])];
+                                            nextColors[idx] = { ...nextColors[idx], hex: e.target.value };
+                                            setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                          }}
+                                          className="absolute -top-2 -left-2 w-12 h-12 cursor-pointer border-0 p-0"
+                                        />
+                                      </div>
+
+                                      {/* Color Name */}
+                                      <input
+                                        type="text"
+                                        placeholder="Color Name"
+                                        value={color.name}
+                                        onChange={(e) => {
+                                          const nextColors = [...(editingProfile.device_colors || [])];
+                                          nextColors[idx] = { ...nextColors[idx], name: e.target.value };
+                                          setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                        }}
+                                        className="flex-1 px-2.5 py-1.5 text-xs rounded-lg bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
+                                      />
+
+                                      {/* Hex text input */}
+                                      <input
+                                        type="text"
+                                        placeholder="#535559"
+                                        value={color.hex}
+                                        onChange={(e) => {
+                                          const nextColors = [...(editingProfile.device_colors || [])];
+                                          nextColors[idx] = { ...nextColors[idx], hex: e.target.value };
+                                          setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                        }}
+                                        className="w-20 px-2 py-1.5 text-xs font-mono rounded-lg bg-zinc-900 border border-white/10 text-zinc-300 focus:outline-none focus:border-sky-400"
+                                      />
+
+                                      {/* Delete Color */}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const nextColors = editingProfile.device_colors?.filter((_, i) => i !== idx) || [];
+                                          setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                          if (selectedSimColor === color.id) {
+                                            setSelectedSimColor(nextColors[0]?.id || '');
+                                          }
+                                        }}
+                                        className="p-1.5 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer"
+                                        title="Remove Color"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Add Viewing Angle Helper */}
                               <div className="pt-3 border-t border-white/5 space-y-2">
                                 <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
                                   Quick Add Device Angle

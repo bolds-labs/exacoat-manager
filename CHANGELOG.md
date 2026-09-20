@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.75] - 2026-09-20
+
+### Configurator v2 Single-Source 3D Shading & Viewport Hardware Color Architecture
+- **Single-Source 3D Shading & Highlight Engine**:
+  - Unified the 3D shading pipeline from dual shadow/highlight files into a single image source (`shading_image_url` on `ConfiguratorView`), with backward compatibility for legacy configs.
+  - Replaced redundant dual shadow/highlight input cards in Studio Inspector Tab 2 with a clean "3D Shading & Highlight Map (Single Source)" card.
+  - Added "Use Base" shortcut button and WordPress Media Library browsing.
+  - Provided independent live opacity sliders for Shadow Opacity (Multiply, 0% to 100%) and Highlight Opacity (Screen, 0% to 100%) driven from the single image source.
+- **Floating Viewport Hardware Color Selector**:
+  - Relocated device hardware chassis finishes (e.g. Titanium, Silver, Space Gray) out of bottom dock and accordion menus directly into a floating glassmorphic pill in the viewport canvas stage (`top-4 right-4`).
+  - **Single Color Gate**: When a device has 0 or 1 hardware color configured (`device_colors.length <= 1`), the selector is completely hidden from the viewport.
+  - **Visual-Only Invariant**: Hardware chassis colors are strictly visual aids for buyers to preview cutouts against physical device finishes and are never saved to WooCommerce order item metadata.
+  - Added dedicated Hardware Device Colors manager in Tab 2 with color swatches, native color picker, hex codes, and 1-click presets (Titanium, MacBook/iPad) or 1-click Clear.
+  - Changed fallback `device_colors` from hardcoded 4 Apple colors to `[]` so non-Apple devices do not show unwanted color pickers by default.
+
 ## [0.0.74] - 2026-09-20
 
 ### Configurator v2 Unified Device Families, Preset Packs, Cutouts & Coverage Architecture

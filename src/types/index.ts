@@ -478,6 +478,7 @@ export interface ConfiguratorView {
   logo_cutout_mask_url?: string;
   pencil_cutout_mask_url?: string;
   model_cut_mask_url?: string;
+  shading_image_url?: string;
   shadow_png_url?: string;
   highlight_png_url?: string;
   shadow_opacity?: number;
@@ -507,6 +508,7 @@ export interface ConfiguratorLayer {
     logo_cutout_url?: string;
     pencil_cutout_url?: string;
     model_cutout_url?: string;
+    shading_image_url?: string;
     shadow_png_url?: string;
     highlight_png_url?: string;
     shadow_opacity?: number;
@@ -558,7 +560,7 @@ export interface DeviceConfiguratorProfile {
   size_multiplier: number;
   is_configurable: boolean;
   configurator_version?: 'v1' | 'v2';
-  device_colors?: { id: string; name: string; hex: string; body_image_url?: string }[];
+  device_colors?: { id: string; name: string; hex: string; body_image_url?: string; body_images_by_view?: Record<string, string> }[];
   views: ConfiguratorView[];
   layers: ConfiguratorLayer[];
   variants?: ConfiguratorVariant[];
