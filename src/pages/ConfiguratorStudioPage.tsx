@@ -79,6 +79,7 @@ import {
   Globe,
   RotateCw,
   Maximize2,
+  Sun,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { MediaLibraryModal } from '../components/modals/MediaLibraryModal';
@@ -483,6 +484,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [editingFinishCustomFlags, setEditingFinishCustomFlags] = useState<Record<string, boolean>>({});
   const [editingFinishBadgeTexts, setEditingFinishBadgeTexts] = useState<Record<string, string>>({});
   const [editingFinishBadgeColors, setEditingFinishBadgeColors] = useState<Record<string, string>>({});
+  const [editingFinishShadowOpacities, setEditingFinishShadowOpacities] = useState<Record<string, number>>({});
+  const [editingFinishHighlightOpacities, setEditingFinishHighlightOpacities] = useState<Record<string, number>>({});
   const [imagePickerModal, setImagePickerModal] = useState<{
     isOpen: boolean;
     finishId: string;
@@ -2575,6 +2578,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
     const newBadgeText = customBadgeText !== undefined ? customBadgeText.trim() : (finish.badge_text || '');
     const customBadgeColor = editingFinishBadgeColors[finish.id];
     const newBadgeColor = customBadgeColor !== undefined ? customBadgeColor.trim() : (finish.badge_color || '#f3aa18');
+    const customShadow = editingFinishShadowOpacities[finish.id];
+    const newShadow = customShadow !== undefined ? customShadow : (typeof finish.shadow_opacity === 'number' ? finish.shadow_opacity : 0.85);
+    const customHighlight = editingFinishHighlightOpacities[finish.id];
+    const newHighlight = customHighlight !== undefined ? customHighlight : (typeof finish.highlight_opacity === 'number' ? finish.highlight_opacity : 0.35);
 
     try {
       setSavingFinishId(finish.id);
@@ -2592,6 +2599,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
         is_custom_per_device: newCustomFlag,
         badge_text: newBadgeText,
         badge_color: newBadgeColor,
+        shadow_opacity: newShadow,
+        highlight_opacity: newHighlight,
       });
       if (res.success) {
         showToast('success', 'Finish Saved', `Finish "${newName}" updated successfully.`);
@@ -2613,6 +2622,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     is_custom_per_device: newCustomFlag,
                     badge_text: newBadgeText,
                     badge_color: newBadgeColor,
+                    shadow_opacity: newShadow,
+                    highlight_opacity: newHighlight,
                   }
                 : f
             )
@@ -4142,6 +4153,18 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       editingFinishBadgeColors[f.id] !== undefined
                         ? editingFinishBadgeColors[f.id]
                         : (f.badge_color || '#f3aa18');
+                    const currentShadowInput =
+                      editingFinishShadowOpacities[f.id] !== undefined
+                        ? editingFinishShadowOpacities[f.id]
+                        : typeof f.shadow_opacity === 'number'
+                        ? f.shadow_opacity
+                        : 0.85;
+                    const currentHighlightInput =
+                      editingFinishHighlightOpacities[f.id] !== undefined
+                        ? editingFinishHighlightOpacities[f.id]
+                        : typeof f.highlight_opacity === 'number'
+                        ? f.highlight_opacity
+                        : 0.35;
 
                     const isSaving = savingFinishId === f.id;
                     const hasUnsavedChanges =
@@ -4164,23 +4187,35 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       (editingFinishBadgeTexts[f.id] !== undefined &&
                         editingFinishBadgeTexts[f.id].trim() !== (f.badge_text || '')) ||
                       (editingFinishBadgeColors[f.id] !== undefined &&
-                        editingFinishBadgeColors[f.id].trim() !== (f.badge_color || '#f3aa18'));
+                        editingFinishBadgeColors[f.id].trim() !== (f.badge_color || '#f3aa18')) ||
+                      (editingFinishShadowOpacities[f.id] !== undefined &&
+                        editingFinishShadowOpacities[f.id] !== (typeof f.shadow_opacity === 'number' ? f.shadow_opacity : 0.85)) ||
+                      (editingFinishHighlightOpacities[f.id] !== undefined &&
+                        editingFinishHighlightOpacities[f.id] !== (typeof f.highlight_opacity === 'number' ? f.highlight_opacity : 0.35));
 
                     return (
                       <div
                         key={f.id}
-                        className="p-4 rounded-2xl bg-zinc-900/70 border border-white/10 hover:border-white/20 transition-all space-y-3"
+                        className="p-4 rounded-2xl bg-zinc-900/80 border border-white/10 hover:border-white/20 transition-all space-y-3.5 shadow-sm"
                       >
-                        {/* Row 1: Properties & Inputs */}
-                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 pb-2.5">
+                        {/* Header: Identification, Surcharge, Stock & Actions */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 pb-3">
+                          {/* Left: Swatch Mini, Name, Group, Slug */}
                           <div className="flex flex-wrap items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-lg overflow-hidden border border-white/15 bg-zinc-950 shrink-0 flex items-center justify-center">
+                              {currentThumbInput ? (
+                                <img src={currentThumbInput} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full" style={{ backgroundColor: f.color_hex || '#27272a' }} />
+                              )}
+                            </div>
                             <input
                               type="text"
                               value={currentNameInput}
                               onChange={(e) =>
                                 setEditingFinishNames((prev) => ({ ...prev, [f.id]: e.target.value }))
                               }
-                              className="text-sm font-bold text-white bg-transparent border-b border-white/10 focus:border-[#f3aa18] focus:outline-none px-1 py-0.5 w-36 sm:w-44"
+                              className="text-sm font-bold text-white bg-transparent border-b border-white/10 hover:border-white/30 focus:border-[#f3aa18] focus:outline-none px-1 py-0.5 w-36 sm:w-44 transition-colors"
                               placeholder="Finish Name"
                             />
                             <select
@@ -4196,50 +4231,13 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 </option>
                               ))}
                             </select>
-                            <span className="text-[10px] font-mono text-zinc-500 bg-white/5 px-2 py-0.5 rounded-lg">
+                            <span className="text-[10px] font-mono text-zinc-500 bg-white/5 px-2 py-0.5 rounded-lg border border-white/5 hidden sm:inline-block">
                               {f.slug}
                             </span>
-
-                            {/* Notice / Badge Pill Configuration */}
-                            <div className="flex items-center gap-1.5 bg-zinc-950 px-2 py-1 rounded-xl border border-white/10">
-                              <span className="text-[10px] text-zinc-500 font-mono">Badge:</span>
-                              <input
-                                type="text"
-                                placeholder="NEW, HOT, etc."
-                                value={currentBadgeTextInput}
-                                maxLength={15}
-                                onChange={(e) =>
-                                  setEditingFinishBadgeTexts((prev) => ({
-                                    ...prev,
-                                    [f.id]: e.target.value,
-                                  }))
-                                }
-                                className="w-20 sm:w-24 text-[11px] font-medium text-white bg-transparent focus:outline-none placeholder:text-zinc-600"
-                              />
-                              <input
-                                type="color"
-                                value={currentBadgeColorInput || '#f3aa18'}
-                                onChange={(e) =>
-                                  setEditingFinishBadgeColors((prev) => ({
-                                    ...prev,
-                                    [f.id]: e.target.value,
-                                  }))
-                                }
-                                className="w-4 h-4 rounded cursor-pointer border-0 bg-transparent p-0"
-                                title="Pick badge color"
-                              />
-                              {currentBadgeTextInput.trim() && (
-                                <span
-                                  className="px-1.5 py-0.5 rounded text-[8.5px] font-bold uppercase tracking-wider text-black font-mono shadow-xs shrink-0"
-                                  style={{ backgroundColor: currentBadgeColorInput || '#f3aa18' }}
-                                >
-                                  {currentBadgeTextInput.trim()}
-                                </span>
-                              )}
-                            </div>
                           </div>
 
-                          <div className="flex items-center gap-3">
+                          {/* Right: In Stock, Price, Delete, Save */}
+                          <div className="flex items-center gap-2.5">
                             {/* In Stock / Out of Stock Toggle */}
                             <button
                               type="button"
@@ -4278,29 +4276,45 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               />
                             </div>
 
-                            {/* Custom per device toggle */}
-                            <label className="flex items-center gap-1.5 text-xs text-zinc-300 cursor-pointer px-2 py-1 rounded-lg bg-zinc-950/60 border border-white/5 hover:border-white/15 transition-colors">
-                              <input
-                                type="checkbox"
-                                checked={currentCustomFlag}
-                                onChange={(e) =>
-                                  setEditingFinishCustomFlags((prev) => ({
-                                    ...prev,
-                                    [f.id]: e.target.checked,
-                                  }))
-                                }
-                                className="w-3.5 h-3.5 rounded text-amber-400 focus:ring-0 accent-amber-500 cursor-pointer"
-                              />
-                              <span className="text-[11px] font-medium">Custom per device</span>
-                              <InfoTooltip content="When enabled, this finish only appears on devices where custom artwork is uploaded in the Skins tab." />
-                            </label>
+                            {/* Delete Finish Button */}
+                            <button
+                              type="button"
+                              onClick={() => setDeletingFinishId(f.id)}
+                              className="p-1.5 text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors cursor-pointer"
+                              title={`Delete ${f.name}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Save Changes Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleSaveMasterFinish(f)}
+                              disabled={isSaving || !hasUnsavedChanges}
+                              className={clsx(
+                                'px-3.5 py-1.5 text-xs font-sans font-semibold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+                                hasUnsavedChanges
+                                  ? 'bg-[#f3aa18] hover:bg-[#ffb72b] text-black shadow-md'
+                                  : 'bg-white/5 text-zinc-400 border border-white/10'
+                              )}
+                            >
+                              {isSaving ? (
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Check className="w-3.5 h-3.5" />
+                              )}
+                              <span>
+                                {isSaving ? 'Saving...' : hasUnsavedChanges ? 'Save Changes' : 'Saved'}
+                              </span>
+                            </button>
                           </div>
                         </div>
 
-                        {/* Row 2: Image Pickers (Clean Clickable Squares) */}
-                        <div className="flex flex-wrap items-center justify-between gap-4 p-3 rounded-xl bg-zinc-950/70 border border-white/5">
-                          <div className="flex flex-wrap items-center gap-6">
-                            {/* Image 1: Swatch Thumbnail */}
+                        {/* Body Grid: Texture Media Slots & 3D Shading Tone */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+                          {/* Col 1: 3 Media Texture Slots */}
+                          <div className="lg:col-span-7 p-3 rounded-xl bg-zinc-950/70 border border-white/5 flex flex-wrap items-center justify-between gap-4">
+                            {/* Swatch Thumbnail */}
                             <div className="flex items-center gap-3">
                               <button
                                 type="button"
@@ -4336,7 +4350,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </button>
                               <div className="flex flex-col">
                                 <span className="text-xs font-semibold text-zinc-200">
-                                  Swatch Thumbnail
+                                  Swatch
                                 </span>
                                 <span className="text-[10px] font-mono text-zinc-500">
                                   {currentThumbInput ? 'Assigned' : 'Not set'}
@@ -4346,7 +4360,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                             <div className="h-8 w-px bg-white/10 hidden sm:block" />
 
-                            {/* Image 2: Master Texture (v2 Standard) */}
+                            {/* Master Texture (Standard) */}
                             <div className="flex items-center gap-3">
                               <button
                                 type="button"
@@ -4373,7 +4387,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   />
                                 ) : (
                                   <div className="text-zinc-600 group-hover:text-amber-400 transition-colors flex flex-col items-center justify-center gap-0.5">
-                                    <Sparkles className="w-4 h-4" />
+                                    <Layers className="w-4 h-4" />
                                   </div>
                                 )}
                                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
@@ -4382,7 +4396,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </button>
                               <div className="flex flex-col">
                                 <span className="text-xs font-semibold text-zinc-200">
-                                  Master Texture (Standard)
+                                  Master (v2)
                                 </span>
                                 <span className="text-[10px] font-mono text-zinc-500">
                                   {currentTextureInput ? 'Assigned' : 'Not set'}
@@ -4392,7 +4406,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                             <div className="h-8 w-px bg-white/10 hidden sm:block" />
 
-                            {/* Image 3: Master Texture (Big / Laptop) */}
+                            {/* Master Texture (Big / Laptop) */}
                             <div className="flex items-center gap-3">
                               <button
                                 type="button"
@@ -4428,7 +4442,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </button>
                               <div className="flex flex-col">
                                 <span className="text-xs font-semibold text-zinc-200">
-                                  Big Texture (Laptop / Tablet)
+                                  Big Texture
                                 </span>
                                 <span className="text-[10px] font-mono text-zinc-500">
                                   {currentTextureBigInput ? 'Assigned' : 'Optional (Auto)'}
@@ -4437,39 +4451,126 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             </div>
                           </div>
 
-                          {/* Row 3: Actions (Save & Delete) */}
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setDeletingFinishId(f.id)}
-                              className="px-2.5 py-1.5 text-xs text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors cursor-pointer flex items-center gap-1"
-                              title={`Delete ${f.name}`}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span>Delete</span>
-                            </button>
+                          {/* Col 2: 3D Shading & Specular Lighting Tone */}
+                          <div className="lg:col-span-5 p-3 rounded-xl bg-zinc-950/70 border border-white/5 flex flex-col justify-between space-y-2">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <div className="flex items-center gap-1.5 font-semibold text-zinc-200">
+                                <Sun className="w-3.5 h-3.5 text-amber-400" />
+                                <span>3D Shading Tone</span>
+                              </div>
+                              <span className="text-[10px] text-zinc-500 font-mono">Custom per color</span>
+                            </div>
 
-                            <button
-                              type="button"
-                              onClick={() => handleSaveMasterFinish(f)}
-                              disabled={isSaving || !hasUnsavedChanges}
-                              className={clsx(
-                                'px-3.5 py-1.5 text-xs font-sans font-semibold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
-                                hasUnsavedChanges
-                                  ? 'bg-[#f3aa18] hover:bg-[#ffb72b] text-black shadow-md'
-                                  : 'bg-white/5 text-zinc-400 border border-white/10'
-                              )}
-                            >
-                              {isSaving ? (
-                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <Check className="w-3.5 h-3.5" />
-                              )}
-                              <span>
-                                {isSaving ? 'Saving...' : hasUnsavedChanges ? 'Save Changes' : 'Saved'}
-                              </span>
-                            </button>
+                            <div className="grid grid-cols-2 gap-3 pt-0.5">
+                              {/* Shadow (Multiply) */}
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between text-[10.5px]">
+                                  <span className="text-zinc-400 font-medium">Shadow:</span>
+                                  <span className="font-mono font-bold text-amber-400">
+                                    {Math.round(currentShadowInput * 100)}%
+                                  </span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="1"
+                                  step="0.05"
+                                  value={currentShadowInput}
+                                  onChange={(e) =>
+                                    setEditingFinishShadowOpacities((prev) => ({
+                                      ...prev,
+                                      [f.id]: parseFloat(e.target.value),
+                                    }))
+                                  }
+                                  className="w-full h-1.5 bg-zinc-900 rounded-lg appearance-none cursor-pointer accent-[#f3aa18]"
+                                  title="Multiply shadow intensity for this finish"
+                                />
+                              </div>
+
+                              {/* Highlight (Screen) */}
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between text-[10.5px]">
+                                  <span className="text-zinc-400 font-medium">Highlight:</span>
+                                  <span className="font-mono font-bold text-sky-400">
+                                    {Math.round(currentHighlightInput * 100)}%
+                                  </span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="1"
+                                  step="0.05"
+                                  value={currentHighlightInput}
+                                  onChange={(e) =>
+                                    setEditingFinishHighlightOpacities((prev) => ({
+                                      ...prev,
+                                      [f.id]: parseFloat(e.target.value),
+                                    }))
+                                  }
+                                  className="w-full h-1.5 bg-zinc-900 rounded-lg appearance-none cursor-pointer accent-sky-400"
+                                  title="Screen specular highlight intensity for this finish"
+                                />
+                              </div>
+                            </div>
                           </div>
+                        </div>
+
+                        {/* Bottom Row: Badge Pill & Custom per device */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-0.5 text-xs text-zinc-400">
+                          {/* Notice / Badge Pill Configuration */}
+                          <div className="flex items-center gap-2 bg-zinc-950 px-2.5 py-1 rounded-xl border border-white/10">
+                            <span className="text-[10px] text-zinc-500 font-mono">Storefront Badge:</span>
+                            <input
+                              type="text"
+                              placeholder="NEW, HOT, etc."
+                              value={currentBadgeTextInput}
+                              maxLength={15}
+                              onChange={(e) =>
+                                setEditingFinishBadgeTexts((prev) => ({
+                                  ...prev,
+                                  [f.id]: e.target.value,
+                                }))
+                              }
+                              className="w-24 sm:w-28 text-[11px] font-medium text-white bg-transparent focus:outline-none placeholder:text-zinc-600"
+                            />
+                            <input
+                              type="color"
+                              value={currentBadgeColorInput || '#f3aa18'}
+                              onChange={(e) =>
+                                setEditingFinishBadgeColors((prev) => ({
+                                  ...prev,
+                                  [f.id]: e.target.value,
+                                }))
+                              }
+                              className="w-4 h-4 rounded cursor-pointer border-0 bg-transparent p-0"
+                              title="Pick badge color"
+                            />
+                            {currentBadgeTextInput.trim() && (
+                              <span
+                                className="px-1.5 py-0.5 rounded text-[8.5px] font-bold uppercase tracking-wider text-black font-mono shadow-xs shrink-0"
+                                style={{ backgroundColor: currentBadgeColorInput || '#f3aa18' }}
+                              >
+                                {currentBadgeTextInput.trim()}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Custom per device toggle */}
+                          <label className="flex items-center gap-1.5 text-xs text-zinc-300 cursor-pointer px-2.5 py-1 rounded-xl bg-zinc-950/60 border border-white/10 hover:border-white/20 transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={currentCustomFlag}
+                              onChange={(e) =>
+                                setEditingFinishCustomFlags((prev) => ({
+                                  ...prev,
+                                  [f.id]: e.target.checked,
+                                }))
+                              }
+                              className="w-3.5 h-3.5 rounded text-amber-400 focus:ring-0 accent-amber-500 cursor-pointer"
+                            />
+                            <span className="text-[11px] font-medium">Custom per device</span>
+                            <InfoTooltip content="When enabled, this finish only appears on devices where custom artwork is uploaded in the Skins tab." />
+                          </label>
                         </div>
                       </div>
                     );
@@ -5663,8 +5764,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                             if (!shadingSrc) return null;
 
-                            const shadowOpacity = currentView.shadow_opacity ?? 0.85;
-                            const highlightOpacity = currentView.highlight_opacity ?? 0.35;
+                            const simFinish = finishes.find(
+                              (f) => (f.slug || f.id) === selectedSimFinish || f.id === selectedSimFinish
+                            );
+                            const finishShadowOpacity = typeof simFinish?.shadow_opacity === 'number' ? simFinish.shadow_opacity : undefined;
+                            const finishHighlightOpacity = typeof simFinish?.highlight_opacity === 'number' ? simFinish.highlight_opacity : undefined;
+
+                            const shadowOpacity = finishShadowOpacity !== undefined ? finishShadowOpacity : (currentView.shadow_opacity ?? 0.85);
+                            const highlightOpacity = finishHighlightOpacity !== undefined ? finishHighlightOpacity : (currentView.highlight_opacity ?? 0.35);
 
                             return (
                               <React.Fragment key={`view-shading-${currentView.id}`}>
@@ -7390,45 +7497,19 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       </div>
                                     </div>
 
-                                    {/* Live Tuning Sliders */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-white/5">
-                                      {/* Multiply Shadow Opacity */}
-                                      <div className="space-y-1">
-                                        <div className="flex items-center justify-between text-[11px]">
-                                          <span className="text-zinc-400 font-medium">Shadow (Multiply):</span>
-                                          <span className="font-mono font-bold text-amber-400">
-                                            {Math.round((currentView.shadow_opacity ?? 0.85) * 100)}%
-                                          </span>
-                                        </div>
-                                        <input
-                                          type="range"
-                                          min="0"
-                                          max="1"
-                                          step="0.05"
-                                          value={currentView.shadow_opacity ?? 0.85}
-                                          onChange={(e) => handleSetViewField(currentView.id, 'shadow_opacity', parseFloat(e.target.value))}
-                                          className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
-                                        />
-                                      </div>
-
-                                      {/* Screen Highlight Opacity */}
-                                      <div className="space-y-1">
-                                        <div className="flex items-center justify-between text-[11px]">
-                                          <span className="text-zinc-400 font-medium">Highlight (Screen):</span>
-                                          <span className="font-mono font-bold text-sky-400">
-                                            {Math.round((currentView.highlight_opacity ?? 0.35) * 100)}%
-                                          </span>
-                                        </div>
-                                        <input
-                                          type="range"
-                                          min="0"
-                                          max="1"
-                                          step="0.05"
-                                          value={currentView.highlight_opacity ?? 0.35}
-                                          onChange={(e) => handleSetViewField(currentView.id, 'highlight_opacity', parseFloat(e.target.value))}
-                                          className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-sky-400"
-                                        />
-                                      </div>
+                                    {/* Shading Tone Note */}
+                                    <div className="pt-2.5 border-t border-white/5 flex items-center justify-between text-xs">
+                                      <span className="text-[11px] text-zinc-400">
+                                        Shadow & highlight tones are tuned per finish in Master Textures (v2).
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowMasterTexturesModal(true)}
+                                        className="text-[11px] text-[#f3aa18] hover:text-[#ffb72b] font-semibold cursor-pointer transition-colors flex items-center gap-1"
+                                      >
+                                        <span>Tone Settings</span>
+                                        <span>&rarr;</span>
+                                      </button>
                                     </div>
                                   </div>
 
@@ -7705,7 +7786,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         },
                                       })
                                     }
-                                    className="w-14 h-14 rounded-xl bg-zinc-950 border border-white/10 hover:border-amber-400/60 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105"
+                                    className="w-14 h-14 rounded-xl bg-white border border-white/20 hover:border-white/40 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105 shadow-sm"
                                     title="Click to select Logo Cutout Mask from Media Library"
                                   >
                                     {(currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url) ? (
@@ -7718,13 +7799,13 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         }}
                                       />
                                     ) : (
-                                      <div className="text-zinc-600 group-hover:text-amber-400 transition-colors flex flex-col items-center justify-center gap-0.5">
+                                      <div className="text-zinc-400 group-hover:text-zinc-600 transition-colors flex flex-col items-center justify-center gap-0.5">
                                         <Plus className="w-4 h-4" />
                                         <span className="text-[9px] font-semibold">Mask</span>
                                       </div>
                                     )}
-                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                                      <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                      <Edit3 className="w-3.5 h-3.5 text-white" />
                                     </div>
                                   </button>
 
@@ -7905,7 +7986,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                           },
                                         })
                                       }
-                                      className="w-14 h-14 rounded-xl bg-zinc-950 border border-white/10 hover:border-amber-400/60 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105"
+                                      className="w-14 h-14 rounded-xl bg-white border border-white/20 hover:border-white/40 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105 shadow-sm"
                                       title="Click to select Cutout Mask from Media Library"
                                     >
                                       {(currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) ? (
@@ -7918,13 +7999,13 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                           }}
                                         />
                                       ) : (
-                                        <div className="text-zinc-600 group-hover:text-amber-400 transition-colors flex flex-col items-center justify-center gap-0.5">
+                                        <div className="text-zinc-400 group-hover:text-zinc-600 transition-colors flex flex-col items-center justify-center gap-0.5">
                                           <Plus className="w-4 h-4" />
                                           <span className="text-[9px] font-semibold">Mask</span>
                                         </div>
                                       )}
-                                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                                        <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                        <Edit3 className="w-3.5 h-3.5 text-white" />
                                       </div>
                                     </button>
 
@@ -8134,7 +8215,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         },
                                       })
                                     }
-                                    className="w-14 h-14 rounded-xl bg-zinc-950 border border-white/10 hover:border-amber-400/60 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105"
+                                    className="w-14 h-14 rounded-xl bg-white border border-white/20 hover:border-white/40 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105 shadow-sm"
                                     title="Click to select Model Cut Mask from Media Library"
                                   >
                                     {(currentView?.model_cut_mask_url || editingProfile.coverage_and_cutouts?.model_cut_mask_url) ? (
@@ -8147,13 +8228,13 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         }}
                                       />
                                     ) : (
-                                      <div className="text-zinc-600 group-hover:text-amber-400 transition-colors flex flex-col items-center justify-center gap-0.5">
+                                      <div className="text-zinc-400 group-hover:text-zinc-600 transition-colors flex flex-col items-center justify-center gap-0.5">
                                         <Plus className="w-4 h-4" />
                                         <span className="text-[9px] font-semibold">Mask</span>
                                       </div>
                                     )}
-                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                                      <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                      <Edit3 className="w-3.5 h-3.5 text-white" />
                                     </div>
                                   </button>
 

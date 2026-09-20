@@ -327,10 +327,12 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 
 - **3D Geometric Elevation Invariant**:
   Flat 2D CSS/SVG filters (such as `drop-shadow` or `box-shadow`) only apply to the outer element bounds and cannot simulate internal 3D height elevations (such as camera plateau drop shadows cast downwards onto the back glass, camera lens bevels, or physical edge falloffs).
-- **The Hybrid Architecture**:
+- **The Hybrid Architecture & Finish-Level Tone Invariant**:
   The optimal approach combines baked 3D raytraced precision with real-time dynamic slider control:
   1. **One-Time Extraction from Matte White 3D Render**: `POST /configurator/extract-shading` processes a neutral white CAD render (`iPhone-17-Pro-Skins-Matte-White.png`), extracting a transparent Multiply Shadow PNG (`mix-blend-mode: multiply`) and a Screen Highlight PNG (`mix-blend-mode: screen`).
-  2. **Dynamic Live Intensity Controls**: In Configurator Studio, operators tune **Shadow Opacity (0% to 100%)** and **Highlight Opacity (0% to 100%)** sliders per layer/device. This provides complete interactive control without sacrificing raytraced realism across any vinyl finish.
+  2. **Finish-Level Shading & Highlight Tone**: Because different vinyl finishes reflect light differently (e.g. dark textured finishes like Black Camo benefit from stronger highlights, while bright white finishes require deeper multiply shadows), shadow multiply depth (`shadow_opacity`) and screen highlight intensity (`highlight_opacity`) are managed globally per finish on `GlobalFinish` in Master Textures (v2).
+  3. **Single-Source Specular Highlight Fallback**: When viewing angles configure a single universal shading map (`shadow_png_url`), the storefront canvas (`stacked-layer-canvas.tsx`) and composite generator (`device-skin-configurator.tsx`) automatically fall back to `shadowSrc` for screen highlights (`currentView.highlight_png_url || shadowSrc`), guaranteeing highlights render whenever highlight opacity exceeds 0%.
+  4. **High-Contrast Mask & Cutout Preview Slots**: In Configurator Studio, all mask and cutout thumbnail slots (Skin Part Alpha Mask, Model Coverage Perimeter Mask, Logo Cutout Mask, Stylus / Custom Cutout Mask, and 3D Shading Map) use bright white backgrounds (`bg-white border-white/20 shadow-sm`) so dark transparent PNG paths and vector shapes remain clearly visible to operators.
 
 ---
 

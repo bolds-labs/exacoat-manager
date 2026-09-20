@@ -172,6 +172,8 @@ export const MaterialsStockPage: React.FC = () => {
         texture_url: (editingFinish.texture_url || '').trim(),
         extra_price: Number(editingFinish.extra_price) || 0,
         in_stock: editingFinish.in_stock,
+        shadow_opacity: editingFinish.shadow_opacity,
+        highlight_opacity: editingFinish.highlight_opacity,
       });
 
       if (res.success) {

@@ -434,6 +434,8 @@ export interface GlobalFinish {
   badge_text?: string;
   badge_color?: string;
   order?: number;
+  shadow_opacity?: number;
+  highlight_opacity?: number;
 }
 
 export const DEFAULT_GLOBAL_FINISHES: GlobalFinish[] = [

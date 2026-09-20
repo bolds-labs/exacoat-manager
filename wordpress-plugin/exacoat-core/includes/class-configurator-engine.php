@@ -643,6 +643,8 @@ class Exacoat_Configurator_Engine {
 		$order = isset( $params['order'] ) ? (int) $params['order'] : 0;
 		$badge_text = sanitize_text_field( $params['badge_text'] ?? '' );
 		$badge_color = sanitize_text_field( $params['badge_color'] ?? '' );
+		$shadow_opacity = isset( $params['shadow_opacity'] ) ? (float) $params['shadow_opacity'] : null;
+		$highlight_opacity = isset( $params['highlight_opacity'] ) ? (float) $params['highlight_opacity'] : null;
 
 		$finishes = self::get_finishes();
 		$updated = false;
@@ -666,6 +668,12 @@ class Exacoat_Configurator_Engine {
 				$f['is_custom_per_device'] = $is_custom_per_device;
 				$f['badge_text']           = $badge_text;
 				$f['badge_color']          = $badge_color;
+				if ( isset( $params['shadow_opacity'] ) ) {
+					$f['shadow_opacity']   = (float) $params['shadow_opacity'];
+				}
+				if ( isset( $params['highlight_opacity'] ) ) {
+					$f['highlight_opacity'] = (float) $params['highlight_opacity'];
+				}
 				if ( isset( $params['order'] ) ) {
 					$f['order'] = $order;
 				}
@@ -675,7 +683,7 @@ class Exacoat_Configurator_Engine {
 		}
 
 		if ( ! $updated ) {
-			$finishes[] = [
+			$new_finish = [
 				'id'                   => $id,
 				'slug'                 => $slug,
 				'name'                 => $name,
@@ -691,6 +699,13 @@ class Exacoat_Configurator_Engine {
 				'badge_color'          => $badge_color,
 				'order'                => $order,
 			];
+			if ( $shadow_opacity !== null ) {
+				$new_finish['shadow_opacity'] = $shadow_opacity;
+			}
+			if ( $highlight_opacity !== null ) {
+				$new_finish['highlight_opacity'] = $highlight_opacity;
+			}
+			$finishes[] = $new_finish;
 		}
 
 		self::save_finishes( $finishes );
@@ -717,6 +732,8 @@ class Exacoat_Configurator_Engine {
 				'extra_price'          => $extra_price,
 				'in_stock'             => $in_stock,
 				'is_custom_per_device' => $is_custom_per_device,
+				'shadow_opacity'       => $shadow_opacity,
+				'highlight_opacity'    => $highlight_opacity,
 				'order'                => $order,
 			],
 			'finishes' => $finishes,

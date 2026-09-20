@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.88] - 2026-09-21
+
+### Finish-Level 3D Shading Tone, Highlight Single-Source Fallback, Master Textures Row Overhaul & White Cutout Slots
+- **Specular Highlight Single-Source Shading Fallback**:
+  - Fixed highlight not rendering on storefront canvas and composite generator by adding fallback to `shadowSrc` (`currentView.highlight_png_url || shadowSrc`). Single universal shading maps now properly project specular screen highlights when highlight opacity is set.
+- **Finish-Level 3D Shading & Specular Lighting Controls**:
+  - Added `shadow_opacity` and `highlight_opacity` to `GlobalFinish` in database, REST API (`rest_save_finish`), and storefront types (`GlobalFinishItem`, `ConfiguratorChoice`).
+  - Operators can now fine-tune shadow multiply depth and screen highlight intensity individually per color/finish directly in Master Textures (v2).
+  - Live storefront canvas (`stacked-layer-canvas.tsx`), composite generator (`device-skin-configurator.tsx`), and Studio viewport automatically evaluate finish-level shading tone with fallback to angle defaults.
+- **Master Textures Modal Finish Row Overhaul**:
+  - Completely redesigned finish rows into structured, clean cards with zero clutter.
+  - Distinct Header (Swatch mini, Name, Group select, Slug, Stock toggle pill, Surcharge input, Delete, and Save button).
+  - Content Grid: 3 clearly defined Media Texture Slots (Swatch, Master v2, Big Texture) and a dedicated 3D Shading Tone tuning card (Shadow Multiply and Highlight Screen sliders with real-time percentage indicators).
+  - Bottom Options Bar: Storefront badge configuration (text, color, preview) and "Custom per device" toggle.
+- **High-Contrast White Background for All Cutout Preview Buttons**:
+  - Updated Model Cut Perimeter Mask, Logo Cutout Mask, and Custom / Stylus Cutout Mask thumbnail preview buttons to bright white background (`bg-white border-white/20 shadow-sm`) with dark icons, ensuring transparent black cutout paths remain clearly visible.
+
 ## [0.0.87] - 2026-09-21
 
 ### Universal View-Level 3D Shading, White Preview Thumbnail Slot & Layer Shading Pruning
