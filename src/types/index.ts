@@ -465,6 +465,8 @@ export interface AdminUser {
 
 export type DeviceFamily = 'phone' | 'laptop' | 'tablet' | 'foldable' | 'keyboard' | 'console' | 'audio' | 'case' | 'accessory';
 
+export type CoverageType = 'none' | 'model_cut_only' | 'model_cut_and_360' | 'model_360_only';
+
 export interface ConfiguratorView {
   id: string;
   name: string;
@@ -473,6 +475,9 @@ export interface ConfiguratorView {
   canvas_dimensions?: { width: number; height: number };
   background_url?: string;
   logo_url?: string;
+  logo_cutout_mask_url?: string;
+  pencil_cutout_mask_url?: string;
+  model_cut_mask_url?: string;
   shadow_png_url?: string;
   highlight_png_url?: string;
   shadow_opacity?: number;
@@ -500,6 +505,7 @@ export interface ConfiguratorLayer {
     base_hardware_body_url?: string;
     mask_svg_url?: string;
     logo_cutout_url?: string;
+    pencil_cutout_url?: string;
     model_cutout_url?: string;
     shadow_png_url?: string;
     highlight_png_url?: string;
@@ -523,11 +529,15 @@ export interface ConfiguratorVariant {
 }
 
 export interface DeviceCoverageAndCutouts {
+  coverage_type?: CoverageType;
+  model_360_extra_price?: number;
   has_logo_cutout?: boolean;
   logo_cutout_mask_url?: string;
-  logo_target_layer_id?: string;
+  has_pencil_cutout?: boolean;
+  pencil_cutout_mask_url?: string;
   has_model_cut?: boolean;
   model_cut_mask_url?: string;
+  logo_target_layer_id?: string;
   coverage_target_layer_id?: string;
   available_coverages?: Array<{
     id: string;

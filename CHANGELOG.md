@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.74] - 2026-09-20
+
+### Configurator v2 Unified Device Families, Preset Packs, Cutouts & Coverage Architecture
+- **Flexible Device Family Preset Packs & Custom Skin Parts**:
+  - Added standardized 1-click Preset Packs for Smartphone, Foldable (Z Flip/Fold), Laptop (MacBook), Tablet (iPad/Galaxy Tab), and Keyboard (Magic Keyboard).
+  - Presets inject foundational skin parts with distinct pricing (e.g. Laptop Bottom Base +IDR 120,000, Trackpad +IDR 40,000, Palm Rest +IDR 80,000; or Smartphone Camera Skin +IDR 15,000, Back Glass +IDR 25,000).
+  - Added "+ Custom Part" inline input in Studio Inspector Tab 1, allowing operators to create arbitrary named parts with independent extra prices (+IDR) and selection attributes.
+  - Active skin parts display interactive pills with assigned finish counts and colored extra price badges.
+- **Universal Multi-Layer Cutout Punching Invariant**:
+  - Removed confusing single-layer target dropdowns and redundant hardware accent/logo overlay URLs.
+  - When "With Logo Cutout" is selected, destination-out punches out the brand logo across all applied skin layers on that viewing angle, exposing the metallic chassis logo photorealistically.
+  - When "With Pencil Cutout" is selected (Tablets: iPad, Galaxy Tab), destination-out punches out the magnetic pencil charging strip from all applied skins on that viewing angle.
+  - When "Model Cut" is selected (or when device is `model_cut_only` like Galaxy Z Flip), destination-out punches out side flaps from all applied skins on that viewing angle, exposing the bare metal frame.
+- **Clean Coverage Taxonomy & Buyer Options Architecture**:
+  - Streamlined `coverage_type` options: `none` (Laptops, Keyboards, Accessories), `model_cut_and_360` (Smartphones with configurable Model 360 upcharge), `model_cut_only` (Foldables like Z Flip), and `model_360_only`.
+  - Foldables display a clean non-interactive badge for Model Cut without displaying a redundant 360 wrap toggle.
+  - Consolidated Buyer Options (Coverage style, Logo Cutout choice, Pencil Cutout choice) into a dedicated card in Studio Inspector Tab 3 Settings.
+  - Angle-specific cutout masks (Logo Cutout Mask, Pencil Cutout Mask, Model Cut Mask) are organized under Hardware Base & Angles (Tab 2) with 1-click WordPress Media Library browsing.
+
 ## [0.0.73] - 2026-09-20
 
 ### Configurator Duplication Draft Invariant, Full Asset Preservation & Storefront Status Control

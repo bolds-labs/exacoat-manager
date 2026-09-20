@@ -275,9 +275,9 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   Modern Chromium browsers enforce strict cross-origin restrictions on CSS `mask-image: url(...)`. Because static image uploads on `exacoat.com` lack explicit CORS headers, CSS masks are silently blocked.
   Configurator Studio renders v2 skin layers using an HTML5 `<canvas width={1000} height={1000}>` with `ctx.globalCompositeOperation = 'destination-in'`. This clips textures directly without triggering cross-origin canvas taint errors.
 - **Cutout Logo Invariant**:
-  In v2 alpha masks, cutouts (such as the Apple logo on iPhone back skins) are transparent pixels (alpha = 0). Drawing the mask with `destination-in` automatically leaves that area transparent, exposing the underlying hardware base chassis render (`view.background_url`).
-- **Hardware Accent / Logo Overlay (`logo_url`)**:
-  `ConfiguratorView` supports an optional `logo_url` field. When present, it renders directly above the skin cutout, allowing specular foil reflections, metallic logo emblems, or glossy highlights (`iPhone-17-Pro-Logo.png`) to be layered on top of the base.
+  In v2 alpha masks, cutouts (such as the Apple logo on iPhone back skins or magnetic pencil groove on iPads) are transparent pixels (alpha = 0). Drawing the mask with `destination-in` automatically leaves that area transparent, exposing the underlying hardware base chassis render (`view.background_url`).
+- **Hardware Chassis Direct Exposure**:
+  The underlying hardware render (Layer 1) already contains the metallic Apple/brand logo, ports, and camera bump. When `destination-out` punches through the skin layers, Layer 1 shines through photorealistically without requiring redundant overlay images.
 
 ---
 
@@ -369,4 +369,28 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **Next.js Storefront ISR & Cache Architecture (`web.exacoat.com`)**:
   - Storefront fetches use `next: { revalidate: 3600 }` (1-hour cache). Products published in WordPress will not appear on the storefront until the cache expires or on-demand revalidation (`/api/revalidate`) is triggered.
   - Storefront queries products by explicit numeric category IDs (`CATEGORY_CONFIG`). Products must have the matching category ID assigned and `catalog_visibility` set to `'visible'` or `'catalog'`.
+
+---
+
+## 24. v2 Unified Device Families, Preset Packs, Cutouts & Coverage Architecture
+
+- **Flexible Family Preset Packs**:
+  Configurator Studio provides standardized preset packs per device family, adding foundational skin parts with appropriate pricing:
+  - **Smartphone**: Back Skin (Required), Camera Skin (+IDR 15,000), Back Glass Skin (+IDR 25,000).
+  - **Foldable**: Top Back Skin (Required), Bottom Back Skin (Required), Camera Skin (+IDR 15,000), Hinge / Spine (+IDR 25,000).
+  - **Laptop**: Top Lid (Required), Bottom Base (+IDR 120,000), Trackpad (+IDR 40,000), Palm Rest (+IDR 80,000).
+  - **Tablet**: Back Skin (Required), Camera Accent (+IDR 15,000), Pencil Skin (+IDR 25,000).
+  - **Keyboard**: Top Outer Cover (Required), Bottom Outer Cover (+IDR 60,000), Inner Keyboard Surround (+IDR 60,000).
+  - **Custom Skin Parts**: Operators can add custom named parts with independent pricing (+IDR extra_price) and attributes (`is_required`, `default_selected`, `is_optional`).
+- **Universal Multi-Layer Cutout Punching Invariant**:
+  Cutouts are angle-level properties, not tied to a single target layer:
+  - **Logo Cutout**: When "With Logo Cutout" is selected, the logo silhouette is erased via `destination-out` from **all** applied skins on that angle (Back Skin, Back Glass Skin, etc.), letting the hardware chassis logo shine through.
+  - **Pencil Cutout**: On tablets (iPad, Galaxy Tab), when "With Pencil Cutout" is selected, the pencil charging groove silhouette is erased via `destination-out` from all applied skins on that angle.
+  - **Model Cut**: When "Model Cut" is selected (or when device is `model_cut_only` like Galaxy Z Flip), perimeter frame flaps are erased via `destination-out` from all applied skins on that angle, leaving flat back skin and exposing the phone metal frame.
+- **Coverage Type Taxonomy (`coverage_type`)**:
+  - `none`: For laptops (MacBook), keyboards, or accessories where frame wraps do not exist.
+  - `model_cut_and_360`: For smartphones (iPhone, Galaxy S) where buyer chooses between Model Cut (flat back) or Model 360 (full frame wrap) with configurable upcharge (`model_360_extra_price`).
+  - `model_cut_only`: For foldables (Galaxy Z Flip) where hinge/frame wraps cannot be applied; Model Cut is permanently active with no 360 wrap choice displayed.
+  - `model_360_only`: For devices where only full wrap is offered.
+
 

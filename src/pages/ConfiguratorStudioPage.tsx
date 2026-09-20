@@ -130,19 +130,79 @@ export interface GlobalCatalogAuditReport {
   deviceSummaries: DeviceAuditSummary[];
 }
 
-const COMMON_PRESET_LAYERS = [
+export interface SkinPartPreset {
+  name: string;
+  group: 'primary' | 'accent' | 'protection' | 'addon';
+  is_required: boolean;
+  is_optional: boolean;
+  extra_price: number;
+}
+
+export const DEVICE_FAMILY_PRESET_PACKS: Record<string, { label: string; family: DeviceFamily; parts: SkinPartPreset[] }> = {
+  phone: {
+    label: 'Smartphone (iPhone / Galaxy S)',
+    family: 'phone',
+    parts: [
+      { name: 'Back Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
+      { name: 'Camera Skin', group: 'accent', is_required: false, is_optional: true, extra_price: 15000 },
+      { name: 'Back Glass Skin', group: 'accent', is_required: false, is_optional: true, extra_price: 25000 },
+      { name: 'Frame / Sides', group: 'protection', is_required: false, is_optional: true, extra_price: 30000 },
+    ],
+  },
+  foldable: {
+    label: 'Foldable (Z Flip / Fold)',
+    family: 'foldable',
+    parts: [
+      { name: 'Top Back Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
+      { name: 'Bottom Back Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
+      { name: 'Camera Skin', group: 'accent', is_required: false, is_optional: true, extra_price: 15000 },
+      { name: 'Hinge / Spine', group: 'accent', is_required: false, is_optional: true, extra_price: 25000 },
+    ],
+  },
+  laptop: {
+    label: 'Laptop (MacBook Pro / Air)',
+    family: 'laptop',
+    parts: [
+      { name: 'Top Lid', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
+      { name: 'Bottom Base', group: 'primary', is_required: false, is_optional: true, extra_price: 120000 },
+      { name: 'Trackpad', group: 'accent', is_required: false, is_optional: true, extra_price: 40000 },
+      { name: 'Palm Rest', group: 'accent', is_required: false, is_optional: true, extra_price: 80000 },
+    ],
+  },
+  tablet: {
+    label: 'Tablet (iPad / Galaxy Tab)',
+    family: 'tablet',
+    parts: [
+      { name: 'Back Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
+      { name: 'Camera Accent', group: 'accent', is_required: false, is_optional: true, extra_price: 15000 },
+      { name: 'Pencil Skin', group: 'accent', is_required: false, is_optional: true, extra_price: 25000 },
+    ],
+  },
+  keyboard: {
+    label: 'Keyboard (Magic Keyboard)',
+    family: 'keyboard',
+    parts: [
+      { name: 'Top Outer Cover', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
+      { name: 'Bottom Outer Cover', group: 'primary', is_required: false, is_optional: true, extra_price: 60000 },
+      { name: 'Inner Keyboard Surround', group: 'accent', is_required: false, is_optional: true, extra_price: 60000 },
+    ],
+  },
+};
+
+const COMMON_PRESET_LAYERS: SkinPartPreset[] = [
   { name: 'Back Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
+  { name: 'Camera Skin', group: 'accent', is_required: false, is_optional: true, extra_price: 15000 },
+  { name: 'Back Glass Skin', group: 'accent', is_required: false, is_optional: true, extra_price: 25000 },
   { name: 'Camera Accent', group: 'accent', is_required: false, is_optional: true, extra_price: 15000 },
-  { name: 'Additional Camera Ring', group: 'accent', is_required: false, is_optional: true, extra_price: 10000 },
   { name: 'Frame / Sides', group: 'protection', is_required: false, is_optional: true, extra_price: 30000 },
-  { name: 'Logo Cutout', group: 'accent', is_required: false, is_optional: true, extra_price: 0 },
   { name: 'Top Lid', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
   { name: 'Bottom Base', group: 'primary', is_required: false, is_optional: true, extra_price: 120000 },
   { name: 'Trackpad', group: 'accent', is_required: false, is_optional: true, extra_price: 40000 },
   { name: 'Palm Rest', group: 'accent', is_required: false, is_optional: true, extra_price: 80000 },
-  { name: 'Middle / Hinge Spine', group: 'accent', is_required: false, is_optional: true, extra_price: 30000 },
-  { name: 'Inner Keyboard Surround', group: 'accent', is_required: false, is_optional: true, extra_price: 60000 },
-  { name: 'Pencil Cutout', group: 'accent', is_required: false, is_optional: true, extra_price: 0 },
+  { name: 'Top Back Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
+  { name: 'Bottom Back Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
+  { name: 'Hinge / Spine', group: 'accent', is_required: false, is_optional: true, extra_price: 25000 },
+  { name: 'Pencil Skin', group: 'accent', is_required: false, is_optional: true, extra_price: 25000 },
 ];
 
 interface V2SkinCanvasLayerProps {
@@ -150,6 +210,7 @@ interface V2SkinCanvasLayerProps {
   textureUrl?: string;
   fallbackColor?: string;
   logoCutoutUrl?: string;
+  pencilCutoutUrl?: string;
   modelCutoutUrl?: string;
   zIndex: number;
   layerName: string;
@@ -160,6 +221,7 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
   textureUrl,
   fallbackColor = '#18181b',
   logoCutoutUrl,
+  pencilCutoutUrl,
   modelCutoutUrl,
   zIndex,
   layerName,
@@ -189,8 +251,9 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
       loadImage(maskUrl),
       textureUrl ? loadImage(textureUrl) : Promise.resolve(null),
       logoCutoutUrl ? loadImage(logoCutoutUrl) : Promise.resolve(null),
+      pencilCutoutUrl ? loadImage(pencilCutoutUrl) : Promise.resolve(null),
       modelCutoutUrl ? loadImage(modelCutoutUrl) : Promise.resolve(null),
-    ]).then(([maskImg, texImg, logoCutoutImg, modelCutoutImg]) => {
+    ]).then(([maskImg, texImg, logoCutoutImg, pencilCutoutImg, modelCutoutImg]) => {
       if (isCancelled || !ctx) return;
       ctx.clearRect(0, 0, 1000, 1000);
       if (!maskImg) return;
@@ -219,7 +282,13 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
         ctx.drawImage(logoCutoutImg, 0, 0, 1000, 1000);
       }
 
-      // 4. Punch out model cut perimeter so phone metal frame shows for back-only cuts
+      // 4. Punch out pencil groove/charging area so tablet body shines through
+      if (pencilCutoutImg) {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.drawImage(pencilCutoutImg, 0, 0, 1000, 1000);
+      }
+
+      // 5. Punch out model cut perimeter so phone metal frame shows for back-only cuts
       if (modelCutoutImg) {
         ctx.globalCompositeOperation = 'destination-out';
         ctx.drawImage(modelCutoutImg, 0, 0, 1000, 1000);
@@ -232,7 +301,7 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
     return () => {
       isCancelled = true;
     };
-  }, [maskUrl, textureUrl, fallbackColor, logoCutoutUrl, modelCutoutUrl]);
+  }, [maskUrl, textureUrl, fallbackColor, logoCutoutUrl, pencilCutoutUrl, modelCutoutUrl]);
 
   return (
     <canvas
@@ -399,11 +468,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [selectedSimFinish, setSelectedSimFinish] = useState<string>('swarm');
   const [selectedLayerFinishes, setSelectedLayerFinishes] = useState<Record<string, string>>({});
   const [activeSimTestingPartId, setActiveSimTestingPartId] = useState<string>('');
-  const [selectedCoverage, setSelectedCoverage] = useState<'back_only' | 'model_cut'>('back_only');
+  const [selectedCoverage, setSelectedCoverage] = useState<'model_cut' | 'model_360'>('model_cut');
   const [selectedLogoCutout, setSelectedLogoCutout] = useState<boolean>(true);
+  const [selectedPencilCutout, setSelectedPencilCutout] = useState<boolean>(true);
   const [activeSimView, setActiveSimView] = useState<string>('main_view');
   const [selectedSimColor, setSelectedSimColor] = useState<string>('space-gray');
   const [simFinishGroupFilter, setSimFinishGroupFilter] = useState<string>('all');
+  const [customPartInputOpen, setCustomPartInputOpen] = useState<boolean>(false);
+  const [customPartName, setCustomPartName] = useState<string>('');
 
   const loadData = async (quiet = false, allProducts = showAllProducts) => {
     try {
@@ -555,8 +627,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
         setSelectedSimLayers(initialSim);
         setSelectedLayerFinishes(initialFinishes);
         setActiveSimTestingPartId(cleanedLayers[0]?.id || '');
-        setSelectedCoverage('back_only');
+        setSelectedCoverage('model_cut');
         setSelectedLogoCutout(true);
+        setSelectedPencilCutout(true);
         if (profile.views && profile.views.length > 0) {
           setActiveSimView(profile.views[0].id);
         }
@@ -945,11 +1018,34 @@ export const ConfiguratorStudioPage: React.FC = () => {
     let replacedCount = 0;
 
     const newViews = (editingProfile.views || []).map((v) => {
-      if ((replaceScope === 'all' || replaceScope === 'chassis') && v.background_url && v.background_url.includes(query)) {
-        replacedCount++;
-        return { ...v, background_url: v.background_url.split(query).join(replacement) };
+      let updatedView = { ...v };
+      if (replaceScope === 'all' || replaceScope === 'chassis') {
+        if (v.background_url && v.background_url.includes(query)) {
+          replacedCount++;
+          updatedView.background_url = v.background_url.split(query).join(replacement);
+        }
+        if (v.logo_cutout_mask_url && v.logo_cutout_mask_url.includes(query)) {
+          replacedCount++;
+          updatedView.logo_cutout_mask_url = v.logo_cutout_mask_url.split(query).join(replacement);
+        }
+        if (v.pencil_cutout_mask_url && v.pencil_cutout_mask_url.includes(query)) {
+          replacedCount++;
+          updatedView.pencil_cutout_mask_url = v.pencil_cutout_mask_url.split(query).join(replacement);
+        }
+        if (v.model_cut_mask_url && v.model_cut_mask_url.includes(query)) {
+          replacedCount++;
+          updatedView.model_cut_mask_url = v.model_cut_mask_url.split(query).join(replacement);
+        }
+        if (v.shadow_png_url && v.shadow_png_url.includes(query)) {
+          replacedCount++;
+          updatedView.shadow_png_url = v.shadow_png_url.split(query).join(replacement);
+        }
+        if (v.highlight_png_url && v.highlight_png_url.includes(query)) {
+          replacedCount++;
+          updatedView.highlight_png_url = v.highlight_png_url.split(query).join(replacement);
+        }
       }
-      return v;
+      return updatedView;
     });
 
     const newLayers = (editingProfile.layers || []).map((layer) => {
@@ -975,6 +1071,18 @@ export const ConfiguratorStudioPage: React.FC = () => {
             replacedCount++;
             patchedAsset.mask_svg_url = viewAsset.mask_svg_url.split(query).join(replacement);
           }
+          if (viewAsset.logo_cutout_url && viewAsset.logo_cutout_url.includes(query)) {
+            replacedCount++;
+            patchedAsset.logo_cutout_url = viewAsset.logo_cutout_url.split(query).join(replacement);
+          }
+          if (viewAsset.pencil_cutout_url && viewAsset.pencil_cutout_url.includes(query)) {
+            replacedCount++;
+            patchedAsset.pencil_cutout_url = viewAsset.pencil_cutout_url.split(query).join(replacement);
+          }
+          if (viewAsset.model_cutout_url && viewAsset.model_cutout_url.includes(query)) {
+            replacedCount++;
+            patchedAsset.model_cutout_url = viewAsset.model_cutout_url.split(query).join(replacement);
+          }
           if (viewAsset.shadow_png_url && viewAsset.shadow_png_url.includes(query)) {
             replacedCount++;
             patchedAsset.shadow_png_url = viewAsset.shadow_png_url.split(query).join(replacement);
@@ -990,10 +1098,27 @@ export const ConfiguratorStudioPage: React.FC = () => {
       };
     });
 
+    let updatedCoverage = editingProfile.coverage_and_cutouts ? { ...editingProfile.coverage_and_cutouts } : undefined;
+    if (updatedCoverage && (replaceScope === 'all' || replaceScope === 'chassis')) {
+      if (updatedCoverage.logo_cutout_mask_url && updatedCoverage.logo_cutout_mask_url.includes(query)) {
+        replacedCount++;
+        updatedCoverage.logo_cutout_mask_url = updatedCoverage.logo_cutout_mask_url.split(query).join(replacement);
+      }
+      if (updatedCoverage.pencil_cutout_mask_url && updatedCoverage.pencil_cutout_mask_url.includes(query)) {
+        replacedCount++;
+        updatedCoverage.pencil_cutout_mask_url = updatedCoverage.pencil_cutout_mask_url.split(query).join(replacement);
+      }
+      if (updatedCoverage.model_cut_mask_url && updatedCoverage.model_cut_mask_url.includes(query)) {
+        replacedCount++;
+        updatedCoverage.model_cut_mask_url = updatedCoverage.model_cut_mask_url.split(query).join(replacement);
+      }
+    }
+
     setEditingProfile({
       ...editingProfile,
       views: newViews,
       layers: newLayers,
+      coverage_and_cutouts: updatedCoverage,
     });
 
     showToast(
@@ -1799,7 +1924,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
   }, [globalAuditReport, globalAuditFilter]);
 
   // Layer manipulation helpers
-  const handleAddPresetLayer = (preset: (typeof COMMON_PRESET_LAYERS)[0]) => {
+  const handleAddPresetLayer = (preset: SkinPartPreset) => {
     if (!editingProfile) return;
     const slug = preset.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
 
@@ -1833,6 +1958,121 @@ export const ConfiguratorStudioPage: React.FC = () => {
     setSelectedSimLayers((prev) => ({ ...prev, [slug]: newLayer.default_selected }));
     setSelectedLayerId(slug);
     showToast('info', 'Part Added', `Added "${preset.name}". Select finishes below to map textures.`);
+  };
+
+  const handleApplyFamilyPresetPack = (familyKey: string) => {
+    if (!editingProfile) return;
+    const pack = DEVICE_FAMILY_PRESET_PACKS[familyKey];
+    if (!pack) return;
+
+    let addedCount = 0;
+    const newLayers = [...editingProfile.layers];
+    const newSimLayers = { ...selectedSimLayers };
+
+    pack.parts.forEach((part) => {
+      const slug = part.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
+      if (!newLayers.some((l) => l.id === slug || l.name.toLowerCase() === part.name.toLowerCase())) {
+        const newLayer: ConfiguratorLayer = {
+          id: slug,
+          name: part.name,
+          group: part.group as any,
+          is_required: part.is_required,
+          is_optional: part.is_optional,
+          default_selected: !part.is_optional,
+          extra_price: part.extra_price,
+          z_index: newLayers.length + 1,
+          allowed_finish_groups: ['Signature skins', 'Colors', 'Natural'],
+          assets_by_view: {
+            [activeSimView || 'main_view']: {
+              render_texture_map: {},
+            },
+          },
+        };
+        newLayers.push(newLayer);
+        newSimLayers[slug] = newLayer.default_selected;
+        addedCount++;
+      }
+    });
+
+    // Also auto-configure default coverage mode and cutouts matching family if not explicitly set
+    const currentCoverage = editingProfile.coverage_and_cutouts || {};
+    let newCoverageType = currentCoverage.coverage_type;
+    let hasLogo = currentCoverage.has_logo_cutout;
+    let hasPencil = currentCoverage.has_pencil_cutout;
+
+    if (!newCoverageType) {
+      if (familyKey === 'phone') {
+        newCoverageType = 'model_cut_and_360';
+        hasLogo = true;
+      } else if (familyKey === 'foldable') {
+        newCoverageType = 'model_cut_only';
+      } else if (familyKey === 'tablet') {
+        newCoverageType = 'none';
+        hasLogo = true;
+        hasPencil = true;
+      } else if (familyKey === 'laptop') {
+        newCoverageType = 'none';
+        hasLogo = true;
+      } else {
+        newCoverageType = 'none';
+      }
+    }
+
+    setEditingProfile({
+      ...editingProfile,
+      layers: newLayers,
+      coverage_and_cutouts: {
+        ...currentCoverage,
+        coverage_type: newCoverageType,
+        has_logo_cutout: hasLogo ?? true,
+        has_pencil_cutout: hasPencil ?? false,
+      },
+    });
+
+    setSelectedSimLayers(newSimLayers);
+    if (newLayers.length > 0 && !selectedLayerId) {
+      setSelectedLayerId(newLayers[0].id);
+    }
+    showToast('success', 'Preset Applied', `Applied "${pack.label}" (${addedCount} parts added).`);
+  };
+
+  const handleCreateCustomLayer = (rawName: string) => {
+    if (!editingProfile || !rawName.trim()) return;
+    const name = rawName.trim();
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
+
+    if (editingProfile.layers.some((l) => l.id === slug)) {
+      showToast('error', 'Duplicate Layer', `Part with ID "${slug}" already exists.`);
+      return;
+    }
+
+    const newLayer: ConfiguratorLayer = {
+      id: slug,
+      name,
+      group: 'accent',
+      is_required: false,
+      is_optional: true,
+      default_selected: false,
+      extra_price: 15000,
+      z_index: editingProfile.layers.length + 1,
+      allowed_finish_groups: ['Signature skins', 'Colors', 'Natural'],
+      assets_by_view: {
+        [activeSimView || 'main_view']: {
+          render_texture_map: {},
+        },
+      },
+    };
+
+    setEditingProfile({
+      ...editingProfile,
+      layers: [...editingProfile.layers, newLayer],
+    });
+
+    setSelectedSimLayers((prev) => ({ ...prev, [slug]: false }));
+    setSelectedLayerId(slug);
+    setCustomPartName('');
+    setCustomPartInputOpen(false);
+    showToast('success', 'Custom Part Created', `Created custom skin part "${name}".`);
   };
 
   const handleRemoveLayer = (layerId: string) => {
@@ -2225,8 +2465,15 @@ export const ConfiguratorStudioPage: React.FC = () => {
       }
     });
 
+    // Coverage upcharge (e.g. Model 360 wrap)
+    const covType = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none');
+    if (covType === 'model_cut_and_360' && selectedCoverage === 'model_360') {
+      const extra360 = Number(editingProfile.coverage_and_cutouts?.model_360_extra_price) || 40000;
+      total += extra360;
+    }
+
     return total;
-  }, [editingProfile, selectedSimLayers, selectedLayerFinishes, selectedSimFinish, finishes]);
+  }, [editingProfile, selectedSimLayers, selectedLayerFinishes, selectedSimFinish, finishes, selectedCoverage]);
 
   // Catalog Stats
   const stats = useMemo(() => {
@@ -3967,33 +4214,39 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               const textureToTile = activeFinish?.texture_url || '';
                               const fallbackColor = activeFinish?.color_hex || '#18181b';
 
-                              const defaultTargetId =
-                                skinLayers.find((layer) => layer.group === 'primary' || (layer.name || '').toLowerCase().includes('back'))?.id ||
-                                skinLayers[0]?.id;
-                              const logoTargetId = editingProfile.coverage_and_cutouts?.logo_target_layer_id || defaultTargetId;
-                              const coverageTargetId = editingProfile.coverage_and_cutouts?.coverage_target_layer_id || defaultTargetId;
-
-                              const isLogoTarget = l.id === logoTargetId;
-                              const isCoverageTarget = l.id === coverageTargetId;
-
                               const logoMaskUrl =
+                                currentView?.logo_cutout_mask_url ||
                                 editingProfile.coverage_and_cutouts?.logo_cutout_mask_url ||
-                                assets.logo_cutout_url ||
-                                currentView?.logo_url;
-                              const modelMaskUrl =
+                                assets.logo_cutout_url;
+                              const pencilMaskUrl =
+                                currentView?.pencil_cutout_mask_url ||
+                                editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url ||
+                                assets.pencil_cutout_url;
+                              const modelCutMaskUrl =
+                                currentView?.model_cut_mask_url ||
                                 editingProfile.coverage_and_cutouts?.model_cut_mask_url ||
                                 assets.model_cutout_url;
 
-                              const effectiveLogoCutout = selectedLogoCutout && isLogoTarget ? logoMaskUrl : undefined;
-                              const effectiveModelCutout = selectedCoverage === 'model_cut' && isCoverageTarget ? modelMaskUrl : undefined;
+                              const covMode = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none');
+                              const isModelCutOnly = covMode === 'model_cut_only';
+                              const hasCoverageOptions = covMode === 'model_cut_and_360';
+
+                              const shouldApplyModelCut = isModelCutOnly || (hasCoverageOptions && selectedCoverage === 'model_cut');
+                              const shouldApplyLogoCutout = selectedLogoCutout && (editingProfile.coverage_and_cutouts?.has_logo_cutout ?? true);
+                              const shouldApplyPencilCutout = selectedPencilCutout && Boolean(editingProfile.coverage_and_cutouts?.has_pencil_cutout);
+
+                              const effectiveLogoCutout = shouldApplyLogoCutout ? logoMaskUrl : undefined;
+                              const effectivePencilCutout = shouldApplyPencilCutout ? pencilMaskUrl : undefined;
+                              const effectiveModelCutout = shouldApplyModelCut ? modelCutMaskUrl : undefined;
 
                               return (
                                 <V2SkinCanvasLayer
-                                  key={`v2-canvas-${l.id}-${layerFinishSlug}-${selectedLogoCutout ? 'logo' : 'nologo'}-${selectedCoverage}`}
+                                  key={`v2-canvas-${l.id}-${layerFinishSlug}-${selectedLogoCutout ? 'logo' : 'nologo'}-${selectedPencilCutout ? 'pencil' : 'nopencil'}-${selectedCoverage}`}
                                   maskUrl={assets.mask_svg_url}
                                   textureUrl={textureToTile}
                                   fallbackColor={fallbackColor}
                                   logoCutoutUrl={effectiveLogoCutout}
+                                  pencilCutoutUrl={effectivePencilCutout}
                                   modelCutoutUrl={effectiveModelCutout}
                                   zIndex={(l.z_index || 1) + 5}
                                   layerName={l.name}
@@ -4069,20 +4322,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 />
                               )}
                             </React.Fragment>
-                          )}
-
-                          {/* Layer 4: Optional Hardware Accent / Logo Overlay */}
-                          {currentView?.logo_url && (
-                            <img
-                              key={`logo-${currentView.id}`}
-                              src={currentView.logo_url}
-                              alt={`${currentView.name} Logo`}
-                              style={{ zIndex: 30 }}
-                              className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                              onError={(e) => {
-                                (e.target as HTMLElement).style.display = 'none';
-                              }}
-                            />
                           )}
                         </div>
                       </div>
@@ -4252,36 +4491,107 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             </div>
                           )}
 
-                          {/* Coverage Style Toggle */}
-                          {Boolean(editingProfile.coverage_and_cutouts?.has_model_cut || editingProfile.coverage_and_cutouts?.model_cut_mask_url) && (
+                          {/* Pencil Cutout Toggle (Tablets: iPad, Galaxy Tab) */}
+                          {Boolean(editingProfile.coverage_and_cutouts?.has_pencil_cutout) && (
                             <div className="flex items-center gap-1.5 bg-zinc-900/80 p-1 rounded-xl border border-white/10">
-                              <span className="text-[11px] text-zinc-400 font-medium px-2">Coverage:</span>
+                              <span className="text-[11px] text-zinc-400 font-medium px-2">Pencil Groove:</span>
                               <button
                                 type="button"
-                                onClick={() => setSelectedCoverage('back_only')}
+                                onClick={() => setSelectedPencilCutout(true)}
                                 className={clsx(
                                   'px-2.5 py-1 rounded-lg text-xs font-sans transition-all cursor-pointer',
-                                  selectedCoverage === 'back_only'
-                                    ? 'bg-sky-500 text-black font-bold shadow-sm'
+                                  selectedPencilCutout
+                                    ? 'bg-[#f3aa18] text-black font-bold shadow-sm'
                                     : 'text-zinc-400 hover:text-white'
                                 )}
                               >
-                                Back Only
+                                With Cutout
                               </button>
                               <button
                                 type="button"
-                                onClick={() => setSelectedCoverage('model_cut')}
+                                onClick={() => setSelectedPencilCutout(false)}
                                 className={clsx(
                                   'px-2.5 py-1 rounded-lg text-xs font-sans transition-all cursor-pointer',
-                                  selectedCoverage === 'model_cut'
-                                    ? 'bg-sky-500 text-black font-bold shadow-sm'
+                                  !selectedPencilCutout
+                                    ? 'bg-[#f3aa18] text-black font-bold shadow-sm'
                                     : 'text-zinc-400 hover:text-white'
                                 )}
                               >
-                                Full Frame 360
+                                Solid (Covered)
                               </button>
                             </div>
                           )}
+
+                          {/* Coverage Style Toggle */}
+                          {(() => {
+                            const covType = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none');
+                            if (covType === 'none') return null;
+
+                            if (covType === 'model_cut_only') {
+                              return (
+                                <div className="flex items-center gap-1.5 bg-zinc-900/80 px-2.5 py-1 rounded-xl border border-white/10 text-xs">
+                                  <span className="text-[11px] text-zinc-400 font-medium">Coverage:</span>
+                                  <span className="px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 font-bold border border-sky-500/30 text-[11px]">
+                                    Model Cut (Flat Back Only)
+                                  </span>
+                                </div>
+                              );
+                            }
+
+                            if (covType === 'model_360_only') {
+                              return (
+                                <div className="flex items-center gap-1.5 bg-zinc-900/80 px-2.5 py-1 rounded-xl border border-white/10 text-xs">
+                                  <span className="text-[11px] text-zinc-400 font-medium">Coverage:</span>
+                                  <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 text-[11px]">
+                                    Model 360 Full Wrap
+                                  </span>
+                                </div>
+                              );
+                            }
+
+                            const extra360 = Number(editingProfile.coverage_and_cutouts?.model_360_extra_price) || 40000;
+                            return (
+                              <div className="flex items-center gap-1.5 bg-zinc-900/80 p-1 rounded-xl border border-white/10">
+                                <span className="text-[11px] text-zinc-400 font-medium px-2">Coverage:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedCoverage('model_cut')}
+                                  className={clsx(
+                                    'px-2.5 py-1 rounded-lg text-xs font-sans transition-all cursor-pointer',
+                                    selectedCoverage === 'model_cut'
+                                      ? 'bg-sky-500 text-black font-bold shadow-sm'
+                                      : 'text-zinc-400 hover:text-white'
+                                  )}
+                                >
+                                  Model Cut
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedCoverage('model_360')}
+                                  className={clsx(
+                                    'px-2.5 py-1 rounded-lg text-xs font-sans transition-all cursor-pointer flex items-center gap-1.5',
+                                    selectedCoverage === 'model_360'
+                                      ? 'bg-sky-500 text-black font-bold shadow-sm'
+                                      : 'text-zinc-400 hover:text-white'
+                                  )}
+                                >
+                                  <span>Model 360</span>
+                                  {extra360 > 0 && (
+                                    <span
+                                      className={clsx(
+                                        'text-[10px] font-mono px-1.5 py-0.2 rounded-full',
+                                        selectedCoverage === 'model_360'
+                                          ? 'bg-black/20 text-black font-bold'
+                                          : 'bg-sky-500/20 text-sky-300 font-semibold'
+                                      )}
+                                    >
+                                      +{extra360 >= 1000 ? `${Math.round(extra360 / 1000)}k` : extra360}
+                                    </span>
+                                  )}
+                                </button>
+                              </div>
+                            );
+                          })()}
 
                           {/* Chassis Base Color Swatches */}
                           {editingProfile.device_colors && editingProfile.device_colors.length > 0 && (
@@ -4382,11 +4692,45 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         {/* TAB 1: SKIN PARTS & TEXTURES */}
                         {inspectorTab === 'layers' && (
                           <div className="space-y-6">
+                            {/* Family Preset Packs Header */}
+                            <div className="p-3.5 rounded-2xl bg-zinc-900/80 border border-white/10 space-y-2.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                                  <Sparkles className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                  Apply Preset Pack
+                                </span>
+                                <span className="text-[10px] text-zinc-500 font-sans">
+                                  Device: {editingProfile.family}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                                {Object.entries(DEVICE_FAMILY_PRESET_PACKS).map(([fKey, pack]) => {
+                                  const isActive = editingProfile.family === fKey;
+                                  return (
+                                    <button
+                                      key={fKey}
+                                      type="button"
+                                      onClick={() => handleApplyFamilyPresetPack(fKey)}
+                                      className={clsx(
+                                        'px-2 py-1.5 rounded-xl text-xs font-sans transition-all text-left border flex items-center gap-1.5 cursor-pointer',
+                                        isActive
+                                          ? 'bg-[#f3aa18]/15 border-[#f3aa18]/40 text-white font-bold shadow-xs'
+                                          : 'bg-zinc-950/60 border-white/5 text-zinc-400 hover:text-white hover:bg-zinc-900'
+                                      )}
+                                      title={`Parts: ${pack.parts.map((p) => p.name).join(', ')}`}
+                                    >
+                                      <span>{pack.label}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
                             {/* Part Selector Horizontal Pills */}
                             <div className="space-y-2">
                               <div className="flex items-center justify-between">
                                 <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                                  Customizable Skin Parts
+                                  Customizable Skin Parts ({skinLayers.length})
                                 </label>
                                 <span className="text-[11px] text-zinc-500 font-mono">
                                   Angle: {currentView?.name}
@@ -4399,6 +4743,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   const assignedCount = Object.keys(
                                     layer.assets_by_view?.[currentView?.id || 'main_view']?.render_texture_map || {}
                                   ).filter((k) => Boolean(layer.assets_by_view?.[currentView?.id || 'main_view']?.render_texture_map?.[k])).length;
+                                  const extraPrice = Number(layer.extra_price) || 0;
 
                                   return (
                                     <button
@@ -4413,6 +4758,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       )}
                                     >
                                       <span>{layer.name}</span>
+                                      {extraPrice > 0 && (
+                                        <span
+                                          className={clsx(
+                                            'text-[10px] font-mono px-1.5 py-0.2 rounded-full font-bold',
+                                            isSelected ? 'bg-black/20 text-black' : 'bg-amber-400/20 text-amber-300'
+                                          )}
+                                        >
+                                          +{extraPrice >= 1000 ? `${Math.round(extraPrice / 1000)}k` : extraPrice}
+                                        </span>
+                                      )}
                                       <span
                                         className={clsx(
                                           'text-[10px] font-mono px-1.5 py-0.5 rounded-full',
@@ -4425,25 +4780,77 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   );
                                 })}
 
-                                {/* Quick Add Preset Part Dropdown */}
-                                <div className="relative inline-block">
-                                  <select
-                                    onChange={(e) => {
-                                      const preset = COMMON_PRESET_LAYERS.find((p) => p.name === e.target.value);
-                                      if (preset) handleAddPresetLayer(preset);
-                                      e.target.value = '';
-                                    }}
-                                    className="px-3 py-2 text-xs font-sans rounded-xl bg-zinc-900 border border-dashed border-white/20 hover:border-[#f3aa18] text-[#f3aa18] font-bold cursor-pointer focus:outline-none transition-colors"
-                                    defaultValue=""
-                                  >
-                                    <option value="" disabled>+ Add Skin Part...</option>
-                                    {COMMON_PRESET_LAYERS.map((preset) => (
-                                      <option key={preset.name} value={preset.name}>
-                                        {preset.name} (+IDR {preset.extra_price.toLocaleString('id-ID')})
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
+                                {/* Quick Add Chip or Custom Part */}
+                                {!customPartInputOpen ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="relative inline-block">
+                                      <select
+                                        onChange={(e) => {
+                                          const preset = COMMON_PRESET_LAYERS.find((p) => p.name === e.target.value);
+                                          if (preset) handleAddPresetLayer(preset);
+                                          e.target.value = '';
+                                        }}
+                                        className="px-3 py-2 text-xs font-sans rounded-xl bg-zinc-900 border border-dashed border-white/20 hover:border-[#f3aa18] text-[#f3aa18] font-bold cursor-pointer focus:outline-none transition-colors"
+                                        defaultValue=""
+                                      >
+                                        <option value="" disabled>+ Add Preset Part...</option>
+                                        {COMMON_PRESET_LAYERS.map((preset) => (
+                                          <option key={preset.name} value={preset.name}>
+                                            {preset.name} (+IDR {preset.extra_price.toLocaleString('id-ID')})
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => setCustomPartInputOpen(true)}
+                                      className="px-3 py-2 text-xs font-sans rounded-xl bg-zinc-900 border border-white/10 hover:border-white/25 text-zinc-300 hover:text-white cursor-pointer transition-colors"
+                                    >
+                                      + Custom Part
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1.5 bg-zinc-900 p-1 rounded-xl border border-[#f3aa18]/40">
+                                    <input
+                                      type="text"
+                                      placeholder="e.g. Logo Inlay or Hinge"
+                                      value={customPartName}
+                                      onChange={(e) => setCustomPartName(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && customPartName.trim()) {
+                                          handleCreateCustomLayer(customPartName);
+                                          setCustomPartName('');
+                                          setCustomPartInputOpen(false);
+                                        } else if (e.key === 'Escape') {
+                                          setCustomPartInputOpen(false);
+                                        }
+                                      }}
+                                      autoFocus
+                                      className="px-2.5 py-1 text-xs rounded-lg bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18] w-36"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (customPartName.trim()) {
+                                          handleCreateCustomLayer(customPartName);
+                                          setCustomPartName('');
+                                          setCustomPartInputOpen(false);
+                                        }
+                                      }}
+                                      disabled={!customPartName.trim()}
+                                      className="px-2.5 py-1 text-xs rounded-lg bg-[#f3aa18] text-black font-bold hover:bg-[#ffb72b] disabled:opacity-50 cursor-pointer transition-colors"
+                                    >
+                                      Add
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setCustomPartInputOpen(false)}
+                                      className="p-1 rounded-lg text-zinc-400 hover:text-white cursor-pointer"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </div>
 
@@ -4477,9 +4884,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   </div>
                                 </div>
 
-                                {/* Part Attributes: Required & Up-charge */}
-                                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-white/5">
-                                  <label className="flex items-center gap-2.5 p-2 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans cursor-pointer">
+                                {/* Part Attributes: Required, Pre-selected, Extra Price */}
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-white/5">
+                                  <label className="flex items-center gap-2 p-2.5 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans cursor-pointer">
                                     <input
                                       type="checkbox"
                                       checked={currentActiveLayer.is_required}
@@ -4491,10 +4898,24 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       }
                                       className="w-4 h-4 rounded text-[#f3aa18] focus:ring-0 focus:outline-none accent-[#f3aa18] cursor-pointer"
                                     />
-                                    <span className="text-zinc-200 font-medium">Required Part</span>
+                                    <span className="text-zinc-200 font-medium">Required</span>
                                   </label>
 
-                                  <div className="flex items-center justify-between p-2 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans">
+                                  <label className="flex items-center gap-2 p-2.5 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={currentActiveLayer.default_selected}
+                                      onChange={(e) =>
+                                        handleUpdateLayer(currentActiveLayer.id, {
+                                          default_selected: e.target.checked,
+                                        })
+                                      }
+                                      className="w-4 h-4 rounded text-[#f3aa18] focus:ring-0 focus:outline-none accent-[#f3aa18] cursor-pointer"
+                                    />
+                                    <span className="text-zinc-200 font-medium">Pre-selected</span>
+                                  </label>
+
+                                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans">
                                     <span className="text-zinc-400 font-medium">Extra Price:</span>
                                     <div className="flex items-center gap-1">
                                       <span className="text-zinc-500 font-mono text-[11px]">IDR</span>
@@ -5127,52 +5548,159 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   </div>
                                 </div>
 
-                                <div className="space-y-1.5 pt-2 border-t border-white/5">
-                                  <label className="block text-xs font-bold text-zinc-300 flex items-center justify-between">
-                                    <span>Hardware Accent / Logo Overlay URL (Optional)</span>
-                                    {currentView.logo_url && <span className="text-emerald-400 text-[10px] font-mono">Configured</span>}
-                                  </label>
-                                  <div className="flex gap-2">
-                                    <input
-                                      type="url"
-                                      placeholder="https://exacoat.com/wp-content/uploads/iPhone-17-Pro-Logo.png"
-                                      value={currentView.logo_url || ''}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        setEditingProfile({
-                                          ...editingProfile,
-                                          views: editingProfile.views.map((v) => (v.id === currentView.id ? { ...v, logo_url: val.trim() } : v)),
-                                        });
-                                      }}
-                                      className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setMediaPickerConfig({
-                                          isOpen: true,
-                                          title: `Select Logo / Accent Overlay: ${currentView.name}`,
-                                          recommendedDimensions: '1000x1000 Transparent PNG',
-                                          currentUrl: currentView.logo_url || '',
-                                          onSelect: (url) => {
-                                            setEditingProfile({
-                                              ...editingProfile,
-                                              views: editingProfile.views.map((v) => (v.id === currentView.id ? { ...v, logo_url: url } : v)),
-                                            });
-                                          },
-                                        })
-                                      }
-                                      className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
-                                      title="Browse WordPress Media Library"
-                                    >
-                                      <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                      <span>Browse</span>
-                                    </button>
-                                  </div>
-                                  <p className="text-[11px] text-zinc-400">
-                                    Transparent PNG with metallic reflection or logo artwork. Displays directly over the cutout in the skin layer.
-                                  </p>
-                                </div>
+                                 {/* Angle Cutout Masks (v2 Compositing) */}
+                                 <div className="space-y-3 pt-3 border-t border-white/5">
+                                   <div>
+                                     <h5 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                       <Sliders className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                       Angle Cutout Masks (v2 Destination-Out)
+                                     </h5>
+                                     <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
+                                       1000x1000 alpha masks erased from all applied skins on this angle. Erasing reveals the underlying hardware base chassis render.
+                                     </p>
+                                   </div>
+
+                                   {/* Angle Logo Cutout Mask */}
+                                   <div className="space-y-1.5 bg-black/30 p-3 rounded-xl border border-white/5">
+                                     <div className="flex items-center justify-between">
+                                       <span className="text-xs font-bold text-zinc-300">Logo Cutout Mask (Apple / Brand Logo)</span>
+                                       {(currentView.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url) && (
+                                         <span className="text-emerald-400 text-[10px] font-mono">Configured</span>
+                                       )}
+                                     </div>
+                                     <div className="flex gap-2">
+                                       <input
+                                         type="url"
+                                         placeholder="https://exacoat.com/uploads/iPhone-18-Pro-Logo-Cutout.png"
+                                         value={currentView.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url || ''}
+                                         onChange={(e) => {
+                                           const val = e.target.value.trim();
+                                           handleSetViewField(currentView.id, 'logo_cutout_mask_url', val);
+                                           if (currentView.is_default || currentView.id === 'main_view') {
+                                             handleSetCoverageAndCutouts('logo_cutout_mask_url', val);
+                                           }
+                                         }}
+                                         className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] placeholder:text-zinc-600"
+                                       />
+                                       <button
+                                         type="button"
+                                         onClick={() =>
+                                           setMediaPickerConfig({
+                                             isOpen: true,
+                                             title: `Select Logo Cutout Mask: ${currentView.name}`,
+                                             recommendedDimensions: '1000x1000 Transparent PNG',
+                                             currentUrl: currentView.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url || '',
+                                             onSelect: (url) => {
+                                               handleSetViewField(currentView.id, 'logo_cutout_mask_url', url);
+                                               if (currentView.is_default || currentView.id === 'main_view') {
+                                                 handleSetCoverageAndCutouts('logo_cutout_mask_url', url);
+                                               }
+                                             },
+                                           })
+                                         }
+                                         className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
+                                         title="Browse WordPress Media Library"
+                                       >
+                                         <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                         <span>Browse</span>
+                                       </button>
+                                     </div>
+                                   </div>
+
+                                   {/* Angle Pencil Cutout Mask */}
+                                   <div className="space-y-1.5 bg-black/30 p-3 rounded-xl border border-white/5">
+                                     <div className="flex items-center justify-between">
+                                       <span className="text-xs font-bold text-zinc-300">Pencil Groove Cutout Mask (iPad / Galaxy Tab)</span>
+                                       {(currentView.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) && (
+                                         <span className="text-emerald-400 text-[10px] font-mono">Configured</span>
+                                       )}
+                                     </div>
+                                     <div className="flex gap-2">
+                                       <input
+                                         type="url"
+                                         placeholder="https://exacoat.com/uploads/iPad-Pro-Pencil-Cutout.png"
+                                         value={currentView.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url || ''}
+                                         onChange={(e) => {
+                                           const val = e.target.value.trim();
+                                           handleSetViewField(currentView.id, 'pencil_cutout_mask_url', val);
+                                           if (currentView.is_default || currentView.id === 'main_view') {
+                                             handleSetCoverageAndCutouts('pencil_cutout_mask_url', val);
+                                           }
+                                         }}
+                                         className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] placeholder:text-zinc-600"
+                                       />
+                                       <button
+                                         type="button"
+                                         onClick={() =>
+                                           setMediaPickerConfig({
+                                             isOpen: true,
+                                             title: `Select Pencil Cutout Mask: ${currentView.name}`,
+                                             recommendedDimensions: '1000x1000 Transparent PNG',
+                                             currentUrl: currentView.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url || '',
+                                             onSelect: (url) => {
+                                               handleSetViewField(currentView.id, 'pencil_cutout_mask_url', url);
+                                               if (currentView.is_default || currentView.id === 'main_view') {
+                                                 handleSetCoverageAndCutouts('pencil_cutout_mask_url', url);
+                                               }
+                                             },
+                                           })
+                                         }
+                                         className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
+                                         title="Browse WordPress Media Library"
+                                       >
+                                         <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                         <span>Browse</span>
+                                       </button>
+                                     </div>
+                                   </div>
+
+                                   {/* Angle Model Cut Frame Mask */}
+                                   <div className="space-y-1.5 bg-black/30 p-3 rounded-xl border border-white/5">
+                                     <div className="flex items-center justify-between">
+                                       <span className="text-xs font-bold text-zinc-300">Model Cut Perimeter Mask (Frame Flaps)</span>
+                                       {(currentView.model_cut_mask_url || editingProfile.coverage_and_cutouts?.model_cut_mask_url) && (
+                                         <span className="text-emerald-400 text-[10px] font-mono">Configured</span>
+                                       )}
+                                     </div>
+                                     <div className="flex gap-2">
+                                       <input
+                                         type="url"
+                                         placeholder="https://exacoat.com/uploads/iPhone-18-Pro-Frame-Cut.png"
+                                         value={currentView.model_cut_mask_url || editingProfile.coverage_and_cutouts?.model_cut_mask_url || ''}
+                                         onChange={(e) => {
+                                           const val = e.target.value.trim();
+                                           handleSetViewField(currentView.id, 'model_cut_mask_url', val);
+                                           if (currentView.is_default || currentView.id === 'main_view') {
+                                             handleSetCoverageAndCutouts('model_cut_mask_url', val);
+                                           }
+                                         }}
+                                         className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
+                                       />
+                                       <button
+                                         type="button"
+                                         onClick={() =>
+                                           setMediaPickerConfig({
+                                             isOpen: true,
+                                             title: `Select Model Cut Mask: ${currentView.name}`,
+                                             recommendedDimensions: '1000x1000 Transparent PNG',
+                                             currentUrl: currentView.model_cut_mask_url || editingProfile.coverage_and_cutouts?.model_cut_mask_url || '',
+                                             onSelect: (url) => {
+                                               handleSetViewField(currentView.id, 'model_cut_mask_url', url);
+                                               if (currentView.is_default || currentView.id === 'main_view') {
+                                                 handleSetCoverageAndCutouts('model_cut_mask_url', url);
+                                               }
+                                             },
+                                           })
+                                         }
+                                         className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
+                                         title="Browse WordPress Media Library"
+                                       >
+                                         <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                         <span>Browse</span>
+                                       </button>
+                                     </div>
+                                   </div>
+                                 </div>
 
                                 {/* 3D Shading & Specular Highlights for this Angle */}
                                 <div className="space-y-4 pt-3 border-t border-white/5">
@@ -5317,176 +5845,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </div>
                             )}
 
-                            {/* Coverage & Cutout Options (v2 Modern Engine) */}
-                            <div className="p-4 rounded-2xl bg-zinc-900/70 border border-white/10 space-y-4">
-                              <div>
-                                <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                                  <Sliders className="w-4 h-4 text-[#f3aa18]" />
-                                  Coverage & Cutout Options (v2 Architecture)
-                                </h4>
-                                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                                  Configure configurable buyer choices for logo cutouts and 360 wrap coverage. These dynamically punch holes through the target skin layer.
-                                </p>
-                              </div>
 
-                              {/* 1. Apple / Brand Logo Cutout Choice */}
-                              <div className="p-3.5 rounded-xl bg-black/40 border border-white/5 space-y-3">
-                                <div className="flex items-center justify-between">
-                                  <label className="flex items-center gap-2.5 cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={editingProfile.coverage_and_cutouts?.has_logo_cutout ?? true}
-                                      onChange={(e) => handleSetCoverageAndCutouts('has_logo_cutout', e.target.checked)}
-                                      className="rounded border-zinc-700 bg-zinc-900 text-[#f3aa18] focus:ring-[#f3aa18]/30 w-4 h-4"
-                                    />
-                                    <span className="text-xs font-bold text-white">Offer Logo Cutout Choice</span>
-                                  </label>
-                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/5 text-zinc-400">
-                                    Buyer Option
-                                  </span>
-                                </div>
-                                <p className="text-[11px] text-zinc-400 leading-normal">
-                                  Allows buyer to choose between With Logo Cutout or Solid (No Logo).
-                                </p>
-
-                                {(editingProfile.coverage_and_cutouts?.has_logo_cutout ?? true) && (
-                                  <div className="space-y-2.5 pt-2 border-t border-white/5">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                      <div>
-                                        <label className="text-[11px] font-medium text-zinc-300 block mb-1">Target Skin Layer</label>
-                                        <select
-                                          value={editingProfile.coverage_and_cutouts?.logo_target_layer_id || skinLayers.find((l) => l.group === 'primary' || (l.name || '').toLowerCase().includes('back'))?.id || skinLayers[0]?.id || ''}
-                                          onChange={(e) => handleSetCoverageAndCutouts('logo_target_layer_id', e.target.value)}
-                                          className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
-                                        >
-                                          {skinLayers.map((l) => (
-                                            <option key={l.id} value={l.id}>
-                                              {l.name} ({l.id})
-                                            </option>
-                                          ))}
-                                        </select>
-                                      </div>
-                                    </div>
-
-                                    <div className="space-y-1">
-                                      <label className="text-[11px] font-medium text-zinc-300 flex items-center justify-between">
-                                        <span>Logo Cutout Mask Silhouette URL</span>
-                                        {editingProfile.coverage_and_cutouts?.logo_cutout_mask_url && (
-                                          <span className="text-emerald-400 text-[10px] font-mono">Configured</span>
-                                        )}
-                                      </label>
-                                      <div className="flex gap-2">
-                                        <input
-                                          type="url"
-                                          placeholder="https://exacoat.com/wp-content/uploads/iPhone-17-Pro-Logo.png"
-                                          value={editingProfile.coverage_and_cutouts?.logo_cutout_mask_url || ''}
-                                          onChange={(e) => handleSetCoverageAndCutouts('logo_cutout_mask_url', e.target.value.trim())}
-                                          className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] placeholder:text-zinc-600"
-                                        />
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setMediaPickerConfig({
-                                              isOpen: true,
-                                              title: 'Select Logo Cutout Silhouette Mask',
-                                              recommendedDimensions: '1000x1000 Transparent PNG',
-                                              currentUrl: editingProfile.coverage_and_cutouts?.logo_cutout_mask_url || '',
-                                              onSelect: (url) => handleSetCoverageAndCutouts('logo_cutout_mask_url', url),
-                                            })
-                                          }
-                                          className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
-                                        >
-                                          <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                          <span>Browse</span>
-                                        </button>
-                                      </div>
-                                      <span className="text-[10px] text-zinc-500 block">
-                                        Erased via destination-out so the metallic logo on the hardware base shines through.
-                                      </span>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* 2. Coverage Choices (Back Only vs Full Frame 360) */}
-                              <div className="p-3.5 rounded-xl bg-black/40 border border-white/5 space-y-3">
-                                <div className="flex items-center justify-between">
-                                  <label className="flex items-center gap-2.5 cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={editingProfile.coverage_and_cutouts?.has_model_cut ?? false}
-                                      onChange={(e) => handleSetCoverageAndCutouts('has_model_cut', e.target.checked)}
-                                      className="rounded border-zinc-700 bg-zinc-900 text-[#f3aa18] focus:ring-[#f3aa18]/30 w-4 h-4"
-                                    />
-                                    <span className="text-xs font-bold text-white">Offer Coverage Choices (Back Only vs 360)</span>
-                                  </label>
-                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/5 text-zinc-400">
-                                    Buyer Option
-                                  </span>
-                                </div>
-                                <p className="text-[11px] text-zinc-400 leading-normal">
-                                  Allows buyer to choose between Back Only cut (clean flat glass) or Model Cut / Full Frame 360.
-                                </p>
-
-                                {editingProfile.coverage_and_cutouts?.has_model_cut && (
-                                  <div className="space-y-2.5 pt-2 border-t border-white/5">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                      <div>
-                                        <label className="text-[11px] font-medium text-zinc-300 block mb-1">Target Skin Layer</label>
-                                        <select
-                                          value={editingProfile.coverage_and_cutouts?.coverage_target_layer_id || skinLayers.find((l) => l.group === 'primary' || (l.name || '').toLowerCase().includes('back'))?.id || skinLayers[0]?.id || ''}
-                                          onChange={(e) => handleSetCoverageAndCutouts('coverage_target_layer_id', e.target.value)}
-                                          className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
-                                        >
-                                          {skinLayers.map((l) => (
-                                            <option key={l.id} value={l.id}>
-                                              {l.name} ({l.id})
-                                            </option>
-                                          ))}
-                                        </select>
-                                      </div>
-                                    </div>
-
-                                    <div className="space-y-1">
-                                      <label className="text-[11px] font-medium text-zinc-300 flex items-center justify-between">
-                                        <span>Model Cut Perimeter Silhouette Mask URL</span>
-                                        {editingProfile.coverage_and_cutouts?.model_cut_mask_url && (
-                                          <span className="text-emerald-400 text-[10px] font-mono">Configured</span>
-                                        )}
-                                      </label>
-                                      <div className="flex gap-2">
-                                        <input
-                                          type="url"
-                                          placeholder="https://exacoat.com/wp-content/uploads/iPhone-17-Pro-Frame-Cut.png"
-                                          value={editingProfile.coverage_and_cutouts?.model_cut_mask_url || ''}
-                                          onChange={(e) => handleSetCoverageAndCutouts('model_cut_mask_url', e.target.value.trim())}
-                                          className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] placeholder:text-zinc-600"
-                                        />
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setMediaPickerConfig({
-                                              isOpen: true,
-                                              title: 'Select Model Cut Perimeter Silhouette Mask',
-                                              recommendedDimensions: '1000x1000 Transparent PNG',
-                                              currentUrl: editingProfile.coverage_and_cutouts?.model_cut_mask_url || '',
-                                              onSelect: (url) => handleSetCoverageAndCutouts('model_cut_mask_url', url),
-                                            })
-                                          }
-                                          className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
-                                        >
-                                          <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                          <span>Browse</span>
-                                        </button>
-                                      </div>
-                                      <span className="text-[10px] text-zinc-500 block">
-                                        Punches out side flaps when buyer selects Back Only so bare phone metal frame shows.
-                                      </span>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
 
                               {/* Add Viewing Angle Helper */}
                               <div className="pt-3 border-t border-white/5 space-y-2">
@@ -5583,6 +5942,118 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
                                 Base storefront values, sizing multipliers, and configurator rendering engine mode.
                               </p>
+                            </div>
+
+                            {/* Buyer Options & Coverage Architecture */}
+                            <div className="p-4 rounded-2xl bg-zinc-900/70 border border-white/10 space-y-4">
+                              <div>
+                                <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                  <Sliders className="w-4 h-4 text-[#f3aa18]" />
+                                  Buyer Options & Coverage Architecture
+                                </h4>
+                                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                                  Configure configurable buyer choices available at checkout (Model Coverage, Logo Cutout, Pencil Groove).
+                                </p>
+                              </div>
+
+                              {/* Coverage Mode Selection */}
+                              <div className="space-y-2 pt-2 border-t border-white/5">
+                                <label className="block text-xs font-bold text-zinc-300">
+                                  Model Coverage Options
+                                </label>
+                                <div className="grid grid-cols-2 gap-2">
+                                  {[
+                                    { id: 'none', label: 'None (Flat Cut)', desc: 'Laptops, Keyboards, Accessories' },
+                                    { id: 'model_cut_and_360', label: 'Model Cut & 360', desc: 'Smartphones (iPhone, S24)' },
+                                    { id: 'model_cut_only', label: 'Model Cut Only', desc: 'Foldables (Z Flip/Fold)' },
+                                    { id: 'model_360_only', label: '360 Wrap Only', desc: 'Full Wrap only' },
+                                  ].map((mode) => {
+                                    const currentCov = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none');
+                                    const isSelected = currentCov === mode.id;
+                                    return (
+                                      <button
+                                        key={mode.id}
+                                        type="button"
+                                        onClick={() => handleSetCoverageAndCutouts('coverage_type', mode.id)}
+                                        className={clsx(
+                                          'p-2.5 rounded-xl border text-left transition-all cursor-pointer',
+                                          isSelected
+                                            ? 'bg-sky-500/15 border-sky-400 text-white font-bold shadow-xs'
+                                            : 'bg-zinc-950/60 border-white/5 text-zinc-400 hover:text-white hover:bg-zinc-900'
+                                        )}
+                                      >
+                                        <p className="text-xs">{mode.label}</p>
+                                        <p className="text-[10px] text-zinc-500 mt-0.5">{mode.desc}</p>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+
+                                {/* Up-charge for Model 360 when choice is available */}
+                                {(editingProfile.coverage_and_cutouts?.coverage_type === 'model_cut_and_360' ||
+                                  (!editingProfile.coverage_and_cutouts?.coverage_type && editingProfile.coverage_and_cutouts?.has_model_cut)) && (
+                                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans mt-2">
+                                    <div>
+                                      <span className="text-zinc-300 font-medium block">Model 360 Extra Price:</span>
+                                      <span className="text-[10px] text-zinc-500">Upcharge added when buyer selects Full Frame 360 wrap</span>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <span className="text-zinc-500 font-mono text-[11px]">IDR</span>
+                                      <input
+                                        type="number"
+                                        step="5000"
+                                        value={editingProfile.coverage_and_cutouts?.model_360_extra_price ?? 40000}
+                                        onChange={(e) =>
+                                          handleSetCoverageAndCutouts('model_360_extra_price', Number(e.target.value) || 0)
+                                        }
+                                        className="w-24 px-2 py-0.5 text-xs font-mono text-right rounded bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Logo Cutout Option */}
+                              <div className="pt-2 border-t border-white/5 space-y-2">
+                                <label className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans cursor-pointer">
+                                  <div className="flex items-center gap-2.5">
+                                    <input
+                                      type="checkbox"
+                                      checked={editingProfile.coverage_and_cutouts?.has_logo_cutout !== false}
+                                      onChange={(e) => handleSetCoverageAndCutouts('has_logo_cutout', e.target.checked)}
+                                      className="w-4 h-4 rounded text-[#f3aa18] focus:ring-0 accent-[#f3aa18] cursor-pointer"
+                                    />
+                                    <div>
+                                      <span className="text-zinc-200 font-medium block">Offer Logo Cutout Choice</span>
+                                      <span className="text-[10px] text-zinc-500">Allows customer to choose between With Cutout or Solid (No Logo)</span>
+                                    </div>
+                                  </div>
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-zinc-400">
+                                    All Devices
+                                  </span>
+                                </label>
+                              </div>
+
+                              {/* Pencil Cutout Option (Tablets) */}
+                              <div className="pt-2 border-t border-white/5 space-y-2">
+                                <label className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans cursor-pointer">
+                                  <div className="flex items-center gap-2.5">
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(editingProfile.coverage_and_cutouts?.has_pencil_cutout)}
+                                      onChange={(e) => handleSetCoverageAndCutouts('has_pencil_cutout', e.target.checked)}
+                                      className="w-4 h-4 rounded text-[#f3aa18] focus:ring-0 accent-[#f3aa18] cursor-pointer"
+                                    />
+                                    <div>
+                                      <span className="text-zinc-200 font-medium block">Offer Pencil Cutout Choice</span>
+                                      <span className="text-[10px] text-zinc-500">Allows customer to choose With Cutout or Solid for Apple Pencil / S-Pen strip</span>
+                                    </div>
+                                  </div>
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                                    Tablets
+                                  </span>
+                                </label>
+                              </div>
                             </div>
 
                             {/* Base Price & Scale */}
