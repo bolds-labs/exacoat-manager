@@ -18,6 +18,9 @@ import {
   GlobalFinish,
   fetchGlobalFinishesDirect,
   saveGlobalFinishDirect,
+  deleteGlobalFinishDirect,
+  reorderFinishGroupsDirect,
+  saveAllGlobalFinishesDirect,
   extractShadingDirect,
   revalidateStorefrontWebDirect,
 } from '../lib/wordpressBridge';
@@ -455,6 +458,34 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [masterTextureGroupFilter, setMasterTextureGroupFilter] = useState('all');
   const [savingFinishId, setSavingFinishId] = useState<string | null>(null);
   const [editingFinishUrls, setEditingFinishUrls] = useState<Record<string, string>>({});
+  const [editingFinishThumbnails, setEditingFinishThumbnails] = useState<Record<string, string>>({});
+  const [editingFinishNames, setEditingFinishNames] = useState<Record<string, string>>({});
+  const [editingFinishGroups, setEditingFinishGroups] = useState<Record<string, string>>({});
+  const [editingFinishPrices, setEditingFinishPrices] = useState<Record<string, number>>({});
+  const [editingFinishCustomFlags, setEditingFinishCustomFlags] = useState<Record<string, boolean>>({});
+  const [storedFinishGroups, setStoredFinishGroups] = useState<string[]>([]);
+  const [isManagingGroups, setIsManagingGroups] = useState(false);
+  const [newGroupNameInput, setNewGroupNameInput] = useState('');
+  const [showAddNewFinishModal, setShowAddNewFinishModal] = useState(false);
+  const [isCreatingFinish, setIsCreatingFinish] = useState(false);
+  const [deletingFinishId, setDeletingFinishId] = useState<string | null>(null);
+  const [newFinishForm, setNewFinishForm] = useState<{
+    name: string;
+    slug: string;
+    group: string;
+    thumbnail: string;
+    texture_url: string;
+    extra_price: number;
+    is_custom_per_device: boolean;
+  }>({
+    name: '',
+    slug: '',
+    group: 'Signature skins',
+    thumbnail: '',
+    texture_url: '',
+    extra_price: 0,
+    is_custom_per_device: false,
+  });
 
   // WordPress Media Library Picker state
   const [mediaPickerConfig, setMediaPickerConfig] = useState<{
@@ -526,6 +557,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
       }
       if (finishesRes.success && Array.isArray(finishesRes.finishes)) {
         setFinishes(finishesRes.finishes);
+        if (Array.isArray(finishesRes.groups) && finishesRes.groups.length > 0) {
+          setStoredFinishGroups(finishesRes.groups);
+        } else {
+          const derived = Array.from(new Set(finishesRes.finishes.map((f) => f.group).filter(Boolean) as string[]));
+          setStoredFinishGroups(derived);
+        }
       }
     } catch (err: any) {
       console.warn('Configurator studio load warning:', err);
@@ -2468,46 +2505,224 @@ export const ConfiguratorStudioPage: React.FC = () => {
     );
   }, [categories, categorySearch]);
 
-  // Save master texture for a global finish (v2 engine)
-  const handleSaveMasterTexture = async (finish: GlobalFinish) => {
+  // Save master finish properties (thumbnail, texture, name, group, price, custom per device)
+  const handleSaveMasterFinish = async (finish: GlobalFinish) => {
     const customUrl = editingFinishUrls[finish.id];
-    const newUrl = customUrl !== undefined ? customUrl.trim() : (finish.texture_url || finish.thumbnail || '');
+    const newTexture = customUrl !== undefined ? customUrl.trim() : (finish.texture_url || finish.thumbnail || '');
+    const customThumb = editingFinishThumbnails[finish.id];
+    const newThumb = customThumb !== undefined ? customThumb.trim() : (finish.thumbnail || '');
+    const customName = editingFinishNames[finish.id];
+    const newName = customName !== undefined ? customName.trim() : finish.name;
+    const customGroup = editingFinishGroups[finish.id];
+    const newGroup = customGroup !== undefined ? customGroup.trim() : finish.group;
+    const customPrice = editingFinishPrices[finish.id];
+    const newPrice = customPrice !== undefined ? customPrice : finish.extra_price;
+    const customFlag = editingFinishCustomFlags[finish.id];
+    const newCustomFlag = customFlag !== undefined ? customFlag : Boolean(finish.is_custom_per_device);
+
     try {
       setSavingFinishId(finish.id);
       const res = await saveGlobalFinishDirect({
         id: finish.id,
         slug: finish.slug,
-        name: finish.name,
-        group: finish.group,
-        thumbnail: finish.thumbnail,
-        texture_url: newUrl,
-        extra_price: finish.extra_price,
+        name: newName,
+        group: newGroup,
+        thumbnail: newThumb,
+        texture_url: newTexture,
+        extra_price: newPrice,
         in_stock: finish.in_stock,
         class_name: finish.class_name,
+        is_custom_per_device: newCustomFlag,
       });
       if (res.success) {
-        showToast('success', 'Master Texture Saved', `Global master texture for "${finish.name}" updated successfully.`);
-        setFinishes((prev) =>
-          prev.map((f) => (f.id === finish.id ? { ...f, texture_url: newUrl } : f))
-        );
+        showToast('success', 'Finish Saved', `Finish "${newName}" updated successfully.`);
+        if (Array.isArray(res.finishes)) {
+          setFinishes(res.finishes);
+        } else {
+          setFinishes((prev) =>
+            prev.map((f) =>
+              f.id === finish.id
+                ? {
+                    ...f,
+                    name: newName,
+                    group: newGroup,
+                    thumbnail: newThumb,
+                    texture_url: newTexture,
+                    extra_price: newPrice,
+                    is_custom_per_device: newCustomFlag,
+                  }
+                : f
+            )
+          );
+        }
+        if (Array.isArray(res.groups)) {
+          setStoredFinishGroups(res.groups);
+        }
       } else {
-        showToast('error', 'Save Failed', res.error || 'Failed updating master texture');
+        showToast('error', 'Save Failed', res.error || 'Failed updating finish');
       }
     } catch (err: any) {
-      showToast('error', 'Error', err.message || 'Error saving master texture');
+      showToast('error', 'Error', err.message || 'Error saving finish');
     } finally {
       setSavingFinishId(null);
     }
   };
 
+  // Delete a finish
+  const handleDeleteFinish = async (id: string) => {
+    try {
+      setSavingFinishId(id);
+      const res = await deleteGlobalFinishDirect(id);
+      if (res.success) {
+        showToast('success', 'Finish Deleted', 'Finish removed from global inventory.');
+        if (Array.isArray(res.finishes)) {
+          setFinishes(res.finishes);
+        } else {
+          setFinishes((prev) => prev.filter((f) => f.id !== id && f.slug !== id));
+        }
+        if (Array.isArray(res.groups)) {
+          setStoredFinishGroups(res.groups);
+        }
+        setDeletingFinishId(null);
+      } else {
+        showToast('error', 'Delete Failed', res.error || 'Failed deleting finish');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message || 'Error deleting finish');
+    } finally {
+      setSavingFinishId(null);
+    }
+  };
+
+  // Create a brand new finish
+  const handleCreateNewFinish = async () => {
+    if (!newFinishForm.name.trim()) {
+      showToast('error', 'Missing Name', 'Please enter a name for the finish.');
+      return;
+    }
+    const slug =
+      newFinishForm.slug.trim() ||
+      newFinishForm.name
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+    if (!slug) {
+      showToast('error', 'Invalid Slug', 'Please provide a valid slug.');
+      return;
+    }
+    try {
+      setIsCreatingFinish(true);
+      const res = await saveGlobalFinishDirect({
+        id: slug,
+        slug,
+        name: newFinishForm.name.trim(),
+        group: newFinishForm.group.trim() || 'Signature skins',
+        thumbnail: newFinishForm.thumbnail.trim(),
+        texture_url: newFinishForm.texture_url.trim() || newFinishForm.thumbnail.trim(),
+        extra_price: Number(newFinishForm.extra_price) || 0,
+        in_stock: true,
+        class_name: `cfg-${slug}`,
+        is_custom_per_device: Boolean(newFinishForm.is_custom_per_device),
+      });
+      if (res.success) {
+        showToast('success', 'Finish Created', `Added finish "${newFinishForm.name.trim()}".`);
+        if (Array.isArray(res.finishes)) {
+          setFinishes(res.finishes);
+        }
+        if (Array.isArray(res.groups)) {
+          setStoredFinishGroups(res.groups);
+        }
+        setShowAddNewFinishModal(false);
+        setNewFinishForm({
+          name: '',
+          slug: '',
+          group: storedFinishGroups[0] || 'Signature skins',
+          thumbnail: '',
+          texture_url: '',
+          extra_price: 0,
+          is_custom_per_device: false,
+        });
+      } else {
+        showToast('error', 'Creation Failed', res.error || 'Could not create finish.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message || 'Error creating finish.');
+    } finally {
+      setIsCreatingFinish(false);
+    }
+  };
+
+  // Move a group up or down in sequence
+  const handleMoveGroup = async (groupName: string, direction: 'up' | 'down') => {
+    const currentGroups = [...storedFinishGroups];
+    const idx = currentGroups.indexOf(groupName);
+    if (idx === -1) return;
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= currentGroups.length) return;
+
+    const temp = currentGroups[idx];
+    currentGroups[idx] = currentGroups[targetIdx];
+    currentGroups[targetIdx] = temp;
+
+    setStoredFinishGroups(currentGroups);
+
+    try {
+      const res = await reorderFinishGroupsDirect(currentGroups);
+      if (res.success) {
+        showToast('success', 'Groups Reordered', `Group "${groupName}" moved ${direction}.`);
+        if (Array.isArray(res.groups)) {
+          setStoredFinishGroups(res.groups);
+        }
+      } else {
+        showToast('error', 'Reorder Failed', res.error || 'Failed saving group order');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message || 'Error reordering groups');
+    }
+  };
+
+  // Add a new finish group
+  const handleAddNewGroup = async () => {
+    const trimmed = newGroupNameInput.trim();
+    if (!trimmed) return;
+    if (storedFinishGroups.includes(trimmed)) {
+      showToast('info', 'Group Exists', `Group "${trimmed}" already exists.`);
+      setNewGroupNameInput('');
+      return;
+    }
+    const updated = [...storedFinishGroups, trimmed];
+    setStoredFinishGroups(updated);
+    setNewGroupNameInput('');
+    try {
+      const res = await reorderFinishGroupsDirect(updated);
+      if (res.success) {
+        showToast('success', 'Group Added', `Added new group "${trimmed}".`);
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message || 'Error adding group');
+    }
+  };
+
   // Finish groups for filter tabs
   const finishGroups = useMemo(() => {
-    const groups = new Set<string>();
+    const rawGroups = new Set<string>();
     finishes.forEach((f) => {
-      if (f.group) groups.add(f.group);
+      if (f.group) rawGroups.add(f.group);
     });
-    return ['all', ...Array.from(groups).sort()];
-  }, [finishes]);
+    storedFinishGroups.forEach((g) => {
+      if (g) rawGroups.add(g);
+    });
+    const sorted = Array.from(rawGroups).sort((a, b) => {
+      const idxA = storedFinishGroups.indexOf(a);
+      const idxB = storedFinishGroups.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+    return ['all', ...sorted];
+  }, [finishes, storedFinishGroups]);
 
   // Filtered profiles for catalog grid
   const filteredProfiles = useMemo(() => {
@@ -3596,7 +3811,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
       {showMasterTexturesModal &&
         createPortal(
           <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-            <div className="w-full max-w-4xl max-h-[90vh] rounded-3xl bg-[#121215] border border-white/15 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="w-full max-w-5xl max-h-[92vh] rounded-3xl bg-[#121215] border border-white/15 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
               {/* Header */}
               <div className="p-5 border-b border-white/10 flex items-start justify-between gap-4 bg-zinc-900/50">
                 <div className="flex items-start gap-3">
@@ -3611,19 +3826,130 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       </span>
                     </div>
                     <p className="text-xs text-zinc-400 mt-0.5 max-w-xl">
-                      In the v2 Modern Engine, you only set the master textured image once per finish. All devices automatically inherit this texture and clip it using their alpha mask.
+                      Configure universal swatch thumbnails, master textures, and group sequence for all v2 devices.
                     </p>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setShowMasterTexturesModal(false)}
-                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer transition-colors shrink-0"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setIsManagingGroups(!isManagingGroups)}
+                    className={clsx(
+                      'px-3 py-1.5 rounded-xl text-xs font-sans font-medium flex items-center gap-1.5 transition-colors cursor-pointer border',
+                      isManagingGroups
+                        ? 'bg-[#f3aa18]/20 border-[#f3aa18]/40 text-[#f3aa18]'
+                        : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border-white/10'
+                    )}
+                  >
+                    <Sliders className="w-3.5 h-3.5" />
+                    <span>Manage Groups</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewFinishForm({
+                        name: '',
+                        slug: '',
+                        group: storedFinishGroups[0] || 'Signature skins',
+                        thumbnail: '',
+                        texture_url: '',
+                        extra_price: 0,
+                        is_custom_per_device: false,
+                      });
+                      setShowAddNewFinishModal(true);
+                    }}
+                    className="px-3 py-1.5 rounded-xl text-xs font-sans font-semibold bg-sky-500 hover:bg-sky-400 text-black flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Finish</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowMasterTexturesModal(false)}
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
+
+              {/* Group Management & Reordering Tray */}
+              {isManagingGroups && (
+                <div className="p-4 bg-zinc-950 border-b border-white/10 space-y-2.5 animate-in slide-in-from-top-2 duration-150">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Sliders className="w-3.5 h-3.5 text-[#f3aa18]" />
+                      <span className="text-xs font-bold text-white uppercase tracking-wider">
+                        Finish Groups Order
+                      </span>
+                      <InfoTooltip content="Reorder groups to change tab priority across all v2 configurators (e.g. move Limited first)." />
+                    </div>
+                    <span className="text-[11px] text-zinc-400 font-mono">
+                      {storedFinishGroups.length} Groups
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {storedFinishGroups.map((grp, idx) => (
+                      <div
+                        key={grp}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-zinc-900 border border-white/10 text-xs font-sans text-zinc-200"
+                      >
+                        <button
+                          type="button"
+                          disabled={idx === 0}
+                          onClick={() => handleMoveGroup(grp, 'up')}
+                          className={clsx(
+                            'p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer',
+                            idx === 0 ? 'opacity-20 cursor-not-allowed' : 'text-zinc-400 hover:text-white'
+                          )}
+                          title="Move Left / Up"
+                        >
+                          <ChevronUp className="w-3 h-3 -rotate-90" />
+                        </button>
+                        <span className="font-semibold text-white px-1">{grp}</span>
+                        <button
+                          type="button"
+                          disabled={idx === storedFinishGroups.length - 1}
+                          onClick={() => handleMoveGroup(grp, 'down')}
+                          className={clsx(
+                            'p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer',
+                            idx === storedFinishGroups.length - 1 ? 'opacity-20 cursor-not-allowed' : 'text-zinc-400 hover:text-white'
+                          )}
+                          title="Move Right / Down"
+                        >
+                          <ChevronDown className="w-3 h-3 -rotate-90" />
+                        </button>
+                      </div>
+                    ))}
+
+                    {/* Quick Add Group */}
+                    <div className="flex items-center gap-1 bg-zinc-900 p-0.5 rounded-xl border border-white/10">
+                      <input
+                        type="text"
+                        placeholder="New group..."
+                        value={newGroupNameInput}
+                        onChange={(e) => setNewGroupNameInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleAddNewGroup();
+                        }}
+                        className="px-2 py-1 text-xs rounded-lg bg-zinc-950 border border-white/5 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18] w-28"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddNewGroup}
+                        disabled={!newGroupNameInput.trim()}
+                        className="px-2 py-1 text-xs font-semibold rounded-lg bg-[#f3aa18] text-black hover:bg-[#ffb72b] disabled:opacity-40 cursor-pointer transition-colors"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Filter & Search Bar */}
               <div className="p-4 border-b border-white/10 bg-zinc-900/30 flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -3666,8 +3992,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Finishes Grid / List */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-3">
+              {/* Finishes List */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-4">
                 {finishes
                   .filter((f) => {
                     const q = masterTextureSearch.toLowerCase().trim();
@@ -3678,126 +4004,291 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     return matchesSearch && matchesGroup;
                   })
                   .map((f) => {
-                    const currentInput =
+                    const currentThumbInput =
+                      editingFinishThumbnails[f.id] !== undefined
+                        ? editingFinishThumbnails[f.id]
+                        : f.thumbnail || '';
+                    const currentTextureInput =
                       editingFinishUrls[f.id] !== undefined
                         ? editingFinishUrls[f.id]
                         : f.texture_url || '';
-                    const previewUrl = currentInput.trim() || f.texture_url || f.thumbnail;
-                    const isCustomTextureSet = Boolean(f.texture_url && f.texture_url !== f.thumbnail);
+                    const currentNameInput =
+                      editingFinishNames[f.id] !== undefined
+                        ? editingFinishNames[f.id]
+                        : f.name;
+                    const currentGroupInput =
+                      editingFinishGroups[f.id] !== undefined
+                        ? editingFinishGroups[f.id]
+                        : f.group;
+                    const currentPriceInput =
+                      editingFinishPrices[f.id] !== undefined
+                        ? editingFinishPrices[f.id]
+                        : f.extra_price || 0;
+                    const currentCustomFlag =
+                      editingFinishCustomFlags[f.id] !== undefined
+                        ? editingFinishCustomFlags[f.id]
+                        : Boolean(f.is_custom_per_device);
+
                     const isSaving = savingFinishId === f.id;
                     const hasUnsavedChanges =
-                      editingFinishUrls[f.id] !== undefined &&
-                      editingFinishUrls[f.id].trim() !== (f.texture_url || '');
+                      (editingFinishThumbnails[f.id] !== undefined &&
+                        editingFinishThumbnails[f.id].trim() !== (f.thumbnail || '')) ||
+                      (editingFinishUrls[f.id] !== undefined &&
+                        editingFinishUrls[f.id].trim() !== (f.texture_url || '')) ||
+                      (editingFinishNames[f.id] !== undefined &&
+                        editingFinishNames[f.id].trim() !== f.name) ||
+                      (editingFinishGroups[f.id] !== undefined &&
+                        editingFinishGroups[f.id] !== f.group) ||
+                      (editingFinishPrices[f.id] !== undefined &&
+                        editingFinishPrices[f.id] !== (f.extra_price || 0)) ||
+                      (editingFinishCustomFlags[f.id] !== undefined &&
+                        editingFinishCustomFlags[f.id] !== Boolean(f.is_custom_per_device));
 
                     return (
                       <div
                         key={f.id}
-                        className="p-4 rounded-2xl bg-zinc-900/60 border border-white/10 hover:border-white/20 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
+                        className="p-4 rounded-2xl bg-zinc-900/70 border border-white/10 hover:border-white/20 transition-all space-y-3.5"
                       >
-                        {/* Left Info: Thumbnail Swatch + Name + Group */}
-                        <div className="flex items-center gap-3.5 min-w-[200px] shrink-0">
-                          <div className="w-12 h-12 rounded-xl bg-zinc-800 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center relative">
-                            {previewUrl ? (
-                              <img
-                                src={previewUrl}
-                                alt={f.name}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  (e.target as HTMLElement).style.display = 'none';
-                                }}
-                              />
-                            ) : (
-                              <Sparkles className="w-5 h-5 text-zinc-600" />
-                            )}
+                        {/* Row 1: Header / Properties */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 pb-2.5">
+                          <div className="flex flex-wrap items-center gap-2.5">
+                            <input
+                              type="text"
+                              value={currentNameInput}
+                              onChange={(e) =>
+                                setEditingFinishNames((prev) => ({ ...prev, [f.id]: e.target.value }))
+                              }
+                              className="text-sm font-bold text-white bg-transparent border-b border-white/10 focus:border-sky-400 focus:outline-none px-1 py-0.5 w-36 sm:w-44"
+                              placeholder="Finish Name"
+                            />
+                            <select
+                              value={currentGroupInput}
+                              onChange={(e) =>
+                                setEditingFinishGroups((prev) => ({ ...prev, [f.id]: e.target.value }))
+                              }
+                              className="px-2.5 py-1 text-xs rounded-xl bg-zinc-950 border border-white/10 text-zinc-200 focus:outline-none focus:border-sky-400 cursor-pointer"
+                            >
+                              {storedFinishGroups.map((g) => (
+                                <option key={g} value={g}>
+                                  {g}
+                                </option>
+                              ))}
+                            </select>
+                            <span className="text-[10px] font-mono text-zinc-500 bg-white/5 px-2 py-0.5 rounded-lg">
+                              {f.slug}
+                            </span>
                           </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="text-xs font-bold text-white">{f.name}</h4>
-                              <span
-                                className={clsx(
-                                  'text-[9px] font-mono px-1.5 py-0.5 rounded-full uppercase tracking-wider font-semibold border',
-                                  isCustomTextureSet
-                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                                    : 'bg-zinc-800 text-zinc-400 border-zinc-700'
-                                )}
-                              >
-                                {isCustomTextureSet ? 'v2 Master Set' : 'Using Thumbnail'}
-                              </span>
+
+                          <div className="flex items-center gap-3">
+                            {/* Extra Price Input */}
+                            <div className="flex items-center gap-1 text-xs">
+                              <span className="text-zinc-500 font-mono text-[11px]">+IDR</span>
+                              <input
+                                type="number"
+                                step="5000"
+                                value={currentPriceInput}
+                                onChange={(e) =>
+                                  setEditingFinishPrices((prev) => ({
+                                    ...prev,
+                                    [f.id]: Number(e.target.value) || 0,
+                                  }))
+                                }
+                                className="w-20 px-2 py-1 text-xs font-mono text-right rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-sky-400"
+                              />
                             </div>
-                            <p className="text-[11px] text-zinc-400 mt-0.5 font-mono">
-                              {f.group} : <span className="text-zinc-500">{f.slug}</span>
-                            </p>
+
+                            {/* Custom per device toggle */}
+                            <label className="flex items-center gap-1.5 text-xs text-zinc-300 cursor-pointer px-2 py-1 rounded-lg bg-zinc-950/60 border border-white/5 hover:border-white/15 transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={currentCustomFlag}
+                                onChange={(e) =>
+                                  setEditingFinishCustomFlags((prev) => ({
+                                    ...prev,
+                                    [f.id]: e.target.checked,
+                                  }))
+                                }
+                                className="w-3.5 h-3.5 rounded text-purple-400 focus:ring-0 accent-purple-500 cursor-pointer"
+                              />
+                              <span className="text-[11px] font-medium">Custom per device</span>
+                              <InfoTooltip content="When enabled, this finish only appears on devices where you upload custom artwork for this device in the Skins tab." />
+                            </label>
                           </div>
                         </div>
 
-                        {/* Middle: Input Field for texture_url */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <div className="relative flex-1">
-                              <input
-                                type="text"
-                                placeholder="https://exacoat.com/uploads/textures/master-texture.png"
-                                value={currentInput}
-                                onChange={(e) =>
-                                  setEditingFinishUrls((prev) => ({ ...prev, [f.id]: e.target.value }))
-                                }
-                                className="w-full pl-3 pr-16 py-2 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
-                              />
-                              {currentInput.trim() && (
-                                <a
-                                  href={currentInput.trim()}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-mono text-sky-400 hover:underline flex items-center gap-1"
-                                >
-                                  <span>View</span>
-                                  <ExternalLink className="w-2.5 h-2.5" />
-                                </a>
-                              )}
+                        {/* Row 2: Dual Image Editors (Thumbnail vs Master Texture) */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                          {/* Image 1: Swatch Thumbnail */}
+                          <div className="p-3 rounded-xl bg-zinc-950/70 border border-white/5 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-semibold text-zinc-300">
+                                1. Swatch Thumbnail
+                              </span>
+                              <span className="text-[10px] font-mono text-zinc-500">
+                                Selector & Tooltip Swatch
+                              </span>
                             </div>
+
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-11 h-11 rounded-xl bg-zinc-900 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center relative">
+                                {currentThumbInput ? (
+                                  <img
+                                    src={currentThumbInput}
+                                    alt="Thumbnail"
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      (e.target as HTMLElement).style.display = 'none';
+                                    }}
+                                  />
+                                ) : (
+                                  <Sparkles className="w-4 h-4 text-zinc-600" />
+                                )}
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <input
+                                  type="text"
+                                  placeholder="https://media.exacoat.com/...-Thumbnail.jpg"
+                                  value={currentThumbInput}
+                                  onChange={(e) =>
+                                    setEditingFinishThumbnails((prev) => ({
+                                      ...prev,
+                                      [f.id]: e.target.value,
+                                    }))
+                                  }
+                                  className="w-full px-2.5 py-1.5 text-xs font-mono rounded-lg bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                                />
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setMediaPickerConfig({
+                                    isOpen: true,
+                                    title: `Select Swatch Thumbnail: ${currentNameInput}`,
+                                    recommendedDimensions: 'Square Swatch Thumbnail (150x150 or 500x500)',
+                                    currentUrl: currentThumbInput,
+                                    onSelect: (url) =>
+                                      setEditingFinishThumbnails((prev) => ({
+                                        ...prev,
+                                        [f.id]: url,
+                                      })),
+                                  })
+                                }
+                                className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 cursor-pointer transition-colors shrink-0"
+                                title="Browse WordPress Media Library"
+                              >
+                                <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Image 2: Master Texture (v2) */}
+                          <div className="p-3 rounded-xl bg-zinc-950/70 border border-white/5 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-semibold text-zinc-300">
+                                2. Master Texture (v2)
+                              </span>
+                              <span className="text-[10px] font-mono text-zinc-500">
+                                Masked by Device Alpha Cut
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-11 h-11 rounded-xl bg-zinc-900 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center relative">
+                                {currentTextureInput ? (
+                                  <img
+                                    src={currentTextureInput}
+                                    alt="Texture"
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      (e.target as HTMLElement).style.display = 'none';
+                                    }}
+                                  />
+                                ) : (
+                                  <Sparkles className="w-4 h-4 text-zinc-600" />
+                                )}
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <input
+                                  type="text"
+                                  placeholder="https://exacoat.com/uploads/textures/master-texture.png"
+                                  value={currentTextureInput}
+                                  onChange={(e) =>
+                                    setEditingFinishUrls((prev) => ({
+                                      ...prev,
+                                      [f.id]: e.target.value,
+                                    }))
+                                  }
+                                  className="w-full px-2.5 py-1.5 text-xs font-mono rounded-lg bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                                />
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setMediaPickerConfig({
+                                    isOpen: true,
+                                    title: `Select Master Texture: ${currentNameInput}`,
+                                    recommendedDimensions: 'High-Res Tileable Texture (1000x1000)',
+                                    currentUrl: currentTextureInput,
+                                    onSelect: (url) =>
+                                      setEditingFinishUrls((prev) => ({
+                                        ...prev,
+                                        [f.id]: url,
+                                      })),
+                                  })
+                                }
+                                className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 cursor-pointer transition-colors shrink-0"
+                                title="Browse WordPress Media Library"
+                              >
+                                <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Row 3: Actions (Save & Delete) */}
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-[11px] text-zinc-500">
+                            {currentCustomFlag
+                              ? 'Custom skin: requires uploaded artwork on each device to be shown.'
+                              : 'Universal finish: automatically available across all devices.'}
+                          </span>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setDeletingFinishId(f.id)}
+                              className="px-2.5 py-1.5 text-xs text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors cursor-pointer flex items-center gap-1"
+                              title={`Delete ${f.name}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Delete</span>
+                            </button>
 
                             <button
                               type="button"
-                              onClick={() =>
-                                setMediaPickerConfig({
-                                  isOpen: true,
-                                  title: `Select Master Texture: ${f.name}`,
-                                  recommendedDimensions: 'High-Res Tileable Texture PNG/JPG',
-                                  currentUrl: currentInput,
-                                  onSelect: (url) => {
-                                    setEditingFinishUrls((prev) => ({ ...prev, [f.id]: url }));
-                                  },
-                                })
-                              }
-                              className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
-                              title="Browse WordPress Media Library"
+                              onClick={() => handleSaveMasterFinish(f)}
+                              disabled={isSaving || !hasUnsavedChanges}
+                              className={clsx(
+                                'px-3.5 py-1.5 text-xs font-sans font-semibold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+                                hasUnsavedChanges
+                                  ? 'bg-sky-500 hover:bg-sky-400 text-black shadow-md'
+                                  : 'bg-white/5 text-zinc-400 border border-white/10'
+                              )}
                             >
-                              <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
-                              <span>Browse</span>
+                              {isSaving ? (
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Check className="w-3.5 h-3.5" />
+                              )}
+                              <span>
+                                {isSaving ? 'Saving...' : hasUnsavedChanges ? 'Save Changes' : 'Saved'}
+                              </span>
                             </button>
                           </div>
-                        </div>
-
-                        {/* Right: Save Button */}
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => handleSaveMasterTexture(f)}
-                            disabled={isSaving || !hasUnsavedChanges}
-                            className={clsx(
-                              'px-3.5 py-2 text-xs font-sans font-semibold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
-                              hasUnsavedChanges
-                                ? 'bg-sky-500 hover:bg-sky-400 text-black shadow-md'
-                                : 'bg-white/5 text-zinc-400 border border-white/10'
-                            )}
-                          >
-                            {isSaving ? (
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <Check className="w-3.5 h-3.5" />
-                            )}
-                            <span>{isSaving ? 'Saving...' : hasUnsavedChanges ? 'Save Texture' : 'Saved'}</span>
-                          </button>
                         </div>
                       </div>
                     );
@@ -3815,6 +4306,226 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium cursor-pointer transition-colors"
                 >
                   Done
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* Add New Finish Modal */}
+      {showAddNewFinishModal &&
+        createPortal(
+          <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+            <div className="w-full max-w-lg rounded-3xl bg-zinc-950 border border-white/15 p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400">
+                    <Plus className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Add New Finish (v2)</h3>
+                    <p className="text-[11px] text-zinc-400">Create a new global finish available on v2 configurators.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAddNewFinishModal(false)}
+                  className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-zinc-300 mb-1">Finish Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Everything"
+                      value={newFinishForm.name}
+                      onChange={(e) => {
+                        const name = e.target.value;
+                        const autoSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+                        setNewFinishForm((prev) => ({
+                          ...prev,
+                          name,
+                          slug: prev.slug === '' || prev.slug === prev.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') ? autoSlug : prev.slug,
+                        }));
+                      }}
+                      className="w-full px-3 py-1.5 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-zinc-300 mb-1">Slug</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. everything"
+                      value={newFinishForm.slug}
+                      onChange={(e) => setNewFinishForm((prev) => ({ ...prev, slug: e.target.value }))}
+                      className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-zinc-300 mb-1">Group</label>
+                    <select
+                      value={newFinishForm.group}
+                      onChange={(e) => setNewFinishForm((prev) => ({ ...prev, group: e.target.value }))}
+                      className="w-full px-3 py-1.5 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-sky-400 cursor-pointer"
+                    >
+                      {storedFinishGroups.map((g) => (
+                        <option key={g} value={g}>
+                          {g}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-zinc-300 mb-1">Extra Price (IDR)</label>
+                    <input
+                      type="number"
+                      step="5000"
+                      value={newFinishForm.extra_price}
+                      onChange={(e) => setNewFinishForm((prev) => ({ ...prev, extra_price: Number(e.target.value) || 0 }))}
+                      className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-sky-400"
+                    />
+                  </div>
+                </div>
+
+                {/* Swatch Thumbnail URL */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                    1. Swatch Thumbnail URL (Selector & Circle preview)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="https://media.exacoat.com/...-Thumbnail.jpg"
+                      value={newFinishForm.thumbnail}
+                      onChange={(e) => setNewFinishForm((prev) => ({ ...prev, thumbnail: e.target.value }))}
+                      className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setMediaPickerConfig({
+                          isOpen: true,
+                          title: 'Select Swatch Thumbnail',
+                          recommendedDimensions: 'Square Swatch Thumbnail (150x150 or 500x500)',
+                          currentUrl: newFinishForm.thumbnail,
+                          onSelect: (url) => setNewFinishForm((prev) => ({ ...prev, thumbnail: url })),
+                        })
+                      }
+                      className="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-white/10 cursor-pointer"
+                    >
+                      <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Master Texture URL */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                    2. Master Texture URL (Tileable pattern masked by v2 canvas)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="https://exacoat.com/uploads/textures/master.png"
+                      value={newFinishForm.texture_url}
+                      onChange={(e) => setNewFinishForm((prev) => ({ ...prev, texture_url: e.target.value }))}
+                      className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setMediaPickerConfig({
+                          isOpen: true,
+                          title: 'Select Master Texture',
+                          recommendedDimensions: 'High-Res Tileable Texture (1000x1000)',
+                          currentUrl: newFinishForm.texture_url,
+                          onSelect: (url) => setNewFinishForm((prev) => ({ ...prev, texture_url: url })),
+                        })
+                      }
+                      className="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-white/10 cursor-pointer"
+                    >
+                      <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Custom Design per device checkbox */}
+                <label className="flex items-start gap-2.5 p-3 rounded-xl bg-zinc-900/60 border border-white/5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newFinishForm.is_custom_per_device}
+                    onChange={(e) => setNewFinishForm((prev) => ({ ...prev, is_custom_per_device: e.target.checked }))}
+                    className="w-4 h-4 rounded text-purple-400 accent-purple-500 mt-0.5 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-white block">Custom Design per Device (e.g. Everything Skins)</span>
+                    <span className="text-[11px] text-zinc-400 leading-relaxed block mt-0.5">
+                      Only displays on devices where custom artwork for this finish is uploaded in the device's Skins tab.
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <div className="pt-3 border-t border-white/10 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowAddNewFinishModal(false)}
+                  className="px-4 py-2 text-xs font-sans rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateNewFinish}
+                  disabled={isCreatingFinish || !newFinishForm.name.trim()}
+                  className="px-4 py-2 text-xs font-sans font-semibold rounded-xl bg-sky-500 hover:bg-sky-400 text-black flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isCreatingFinish ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                  <span>{isCreatingFinish ? 'Creating...' : 'Create Finish'}</span>
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* Delete Finish Confirmation Modal */}
+      {deletingFinishId &&
+        createPortal(
+          <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+            <div className="w-full max-w-sm rounded-3xl bg-zinc-950 border border-rose-500/20 p-5 shadow-2xl space-y-3.5 text-center animate-in fade-in zoom-in-95 duration-150">
+              <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 mx-auto">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white">Delete Finish?</h4>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Are you sure you want to remove this finish from global inventory? It will no longer be available in configurators.
+                </p>
+              </div>
+              <div className="pt-2 flex items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDeletingFinishId(null)}
+                  className="px-3.5 py-1.5 text-xs font-sans rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteFinish(deletingFinishId)}
+                  className="px-4 py-1.5 text-xs font-sans font-semibold rounded-xl bg-rose-500 hover:bg-rose-400 text-white cursor-pointer transition-colors shadow-sm"
+                >
+                  Delete
                 </button>
               </div>
             </div>
@@ -4253,16 +4964,41 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 const activeTestPartId = activeSimTestingPartId || skinLayers[0]?.id || '';
                 const activeTestLayer = skinLayers.find((l) => l.id === activeTestPartId) || skinLayers[0];
 
-                const isFinishAllowedOnTestPart = (fSlug: string) => {
-                  if (!activeTestLayer?.allowed_finish_slugs || activeTestLayer.allowed_finish_slugs.length === 0) return true;
-                  const norm = fSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
-                  return activeTestLayer.allowed_finish_slugs.some(
-                    (as) => as.toLowerCase().replace(/[^a-z0-9]/g, '') === norm
-                  );
+                const isFinishAllowedOnTestPart = (f: GlobalFinish) => {
+                  const fSlug = f.slug || f.id;
+                  if (activeTestLayer?.allowed_finish_slugs && activeTestLayer.allowed_finish_slugs.length > 0) {
+                    const norm = fSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    const allowed = activeTestLayer.allowed_finish_slugs.some(
+                      (as) => as.toLowerCase().replace(/[^a-z0-9]/g, '') === norm
+                    );
+                    if (!allowed) return false;
+                  }
+                  // If custom design per device (e.g. Everything Skins), only show if this layer has uploaded texture
+                  if (f.is_custom_per_device) {
+                    const viewAssets =
+                      activeTestLayer?.assets_by_view?.[activeSimView] ||
+                      activeTestLayer?.assets_by_view?.['main_view'] ||
+                      Object.values(activeTestLayer?.assets_by_view || {})[0];
+                    const hasCustom = Boolean(
+                      viewAssets?.render_texture_map?.[fSlug] ||
+                        (activeTestLayer as any)?.render_texture_map?.[fSlug]
+                    );
+                    if (!hasCustom) return false;
+                  }
+                  return true;
                 };
 
-                const testPartFinishes = finishes.filter((f) => isFinishAllowedOnTestPart(f.slug || f.id));
-                const testPartGroups = Array.from(new Set(testPartFinishes.map((f) => f.group).filter(Boolean) as string[]));
+                const testPartFinishes = finishes.filter((f) => isFinishAllowedOnTestPart(f));
+                const testPartGroups = Array.from(
+                  new Set(testPartFinishes.map((f) => f.group).filter(Boolean) as string[])
+                ).sort((a, b) => {
+                  const idxA = storedFinishGroups.indexOf(a);
+                  const idxB = storedFinishGroups.indexOf(b);
+                  if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                  if (idxA !== -1) return -1;
+                  if (idxB !== -1) return 1;
+                  return a.localeCompare(b);
+                });
                 const displayTestFinishes = testPartFinishes.filter((f) => {
                   if (simFinishGroupFilter === 'all') return true;
                   return f.group === simFinishGroupFilter;
@@ -5540,6 +6276,127 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     </div>
                                   )}
                                 </div>
+
+                                {/* Dedicated Section: Custom Device Artworks (e.g. Everything Skins) */}
+                                {finishes.filter((f) => f.is_custom_per_device).length > 0 && (
+                                  <div className="p-3.5 rounded-2xl bg-purple-950/20 border border-purple-500/25 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                                        <span className="text-xs font-bold text-white uppercase tracking-wider">
+                                          Custom Device Finishes ({finishes.filter((f) => f.is_custom_per_device).length})
+                                        </span>
+                                        <InfoTooltip content="Finishes with unique artwork per device (like Everything Skins). Upload artwork here to activate on this device." />
+                                      </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                      {finishes
+                                        .filter((f) => f.is_custom_per_device)
+                                        .map((f) => {
+                                          const finishSlug = f.slug || f.id;
+                                          const normSlug = finishSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                          const currentAssets =
+                                            currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view'] || {};
+                                          const currentMap = currentAssets.render_texture_map || {};
+                                          const matchedKey = Object.keys(currentMap).find(
+                                            (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === normSlug
+                                          );
+                                          const currentUrl = matchedKey ? currentMap[matchedKey] : '';
+                                          const isConfigured = Boolean(currentUrl);
+
+                                          return (
+                                            <div
+                                              key={`custom-finish-${f.id}`}
+                                              className="p-2.5 rounded-xl bg-zinc-900/90 border border-white/5 flex items-center justify-between gap-3"
+                                            >
+                                              <div className="flex items-center gap-2.5 min-w-0">
+                                                <div className="w-10 h-10 rounded-xl bg-zinc-950 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center">
+                                                  {currentUrl ? (
+                                                    <img
+                                                      src={currentUrl}
+                                                      alt={f.name}
+                                                      className="w-full h-full object-cover"
+                                                      onError={(e) => {
+                                                        (e.target as HTMLElement).style.display = 'none';
+                                                      }}
+                                                    />
+                                                  ) : f.thumbnail ? (
+                                                    <img
+                                                      src={f.thumbnail}
+                                                      alt={f.name}
+                                                      className="w-full h-full object-cover opacity-50"
+                                                      onError={(e) => {
+                                                        (e.target as HTMLElement).style.display = 'none';
+                                                      }}
+                                                    />
+                                                  ) : (
+                                                    <Sparkles className="w-4 h-4 text-purple-400/50" />
+                                                  )}
+                                                </div>
+                                                <div className="min-w-0">
+                                                  <div className="flex items-center gap-1.5">
+                                                    <span className="text-xs font-bold text-white truncate">
+                                                      {f.name}
+                                                    </span>
+                                                    <span
+                                                      className={clsx(
+                                                        'text-[9px] font-mono px-1.5 py-0.2 rounded-full font-semibold border',
+                                                        isConfigured
+                                                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                                          : 'bg-zinc-800 text-zinc-500 border-zinc-700'
+                                                      )}
+                                                    >
+                                                      {isConfigured ? 'Active on device' : 'Hidden on device'}
+                                                    </span>
+                                                  </div>
+                                                  <span className="text-[10px] text-zinc-400 font-mono block truncate">
+                                                    {f.group} : {finishSlug}
+                                                  </span>
+                                                </div>
+                                              </div>
+
+                                              <div className="flex items-center gap-1.5 shrink-0">
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    setMediaPickerConfig({
+                                                      isOpen: true,
+                                                      title: `Select Artwork: ${f.name} (${currentActiveLayer.name})`,
+                                                      recommendedDimensions: '1000x1000 High-Res Device Artwork PNG',
+                                                      currentUrl: currentUrl,
+                                                      onSelect: (url) =>
+                                                        handleSetFinishTexture(currentActiveLayer.id, finishSlug, url),
+                                                    })
+                                                  }
+                                                  className={clsx(
+                                                    'px-2.5 py-1.5 rounded-xl text-xs font-sans transition-colors cursor-pointer flex items-center gap-1.5 font-medium',
+                                                    isConfigured
+                                                      ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10'
+                                                      : 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 font-semibold'
+                                                  )}
+                                                >
+                                                  <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                                  <span>{isConfigured ? 'Change' : 'Upload / Set'}</span>
+                                                </button>
+                                                {isConfigured && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                      handleSetFinishTexture(currentActiveLayer.id, finishSlug, '')
+                                                    }
+                                                    className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer transition-colors"
+                                                    title="Remove artwork (hides finish from this device)"
+                                                  >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                  </button>
+                                                )}
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                    </div>
+                                  </div>
+                                )}
 
                                 {/* Collapsible Accordion: Optional Advanced Texture Map Overrides */}
                                 <div className="pt-2 border-t border-white/5">
@@ -7066,14 +7923,33 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       <label className="block text-xs font-bold text-zinc-300">
                         Photoshop Transparent PNG URL
                       </label>
-                      <input
-                        type="url"
-                        placeholder="https://exacoat.com/wp-content/uploads/renders/finish.png"
-                        value={tempTextureUrl}
-                        onChange={(e) => setTempTextureUrl(e.target.value)}
-                        autoFocus
-                        className="w-full px-3.5 py-2.5 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="url"
+                          placeholder="https://exacoat.com/wp-content/uploads/renders/finish.png"
+                          value={tempTextureUrl}
+                          onChange={(e) => setTempTextureUrl(e.target.value)}
+                          autoFocus
+                          className="w-full px-3.5 py-2.5 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setMediaPickerConfig({
+                              isOpen: true,
+                              title: `Select Texture: ${editingTextureModal.finishName}`,
+                              recommendedDimensions: '1000x1000 Transparent PNG',
+                              currentUrl: tempTextureUrl,
+                              onSelect: (url) => setTempTextureUrl(url),
+                            })
+                          }
+                          className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-medium flex items-center gap-1.5 cursor-pointer shrink-0"
+                          title="Browse WordPress Media Library"
+                        >
+                          <FolderOpen className="w-4 h-4 text-[#f3aa18]" />
+                          <span>Browse</span>
+                        </button>
+                      </div>
                       <p className="text-[11px] text-zinc-500 leading-relaxed">
                         Transparent PNG overlay of this specific finish texture created in Photoshop for this device angle.
                       </p>

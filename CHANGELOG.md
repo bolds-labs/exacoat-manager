@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.81] - 2026-09-20
+
+### Dual-Image Master Finishes, Group Ordering, Custom Device Artwork & Media Library Overhaul
+- **Dual-Image Master Finish Architecture**:
+  - Configures both Image 1 (Swatch Thumbnail for selector circles/tooltips) and Image 2 (Master Texture clipped by device cut masks on v2 canvas).
+  - Both images have dedicated inputs, live 44x44 checkered previews, and direct 1-click WordPress Media Library browsing.
+- **Finish & Group Management**:
+  - Added "+ Add Finish" modal to create new global finishes with custom names, slugs, groups, thumbnails, textures, and extra prices.
+  - Added Delete Finish workflow with confirmation dialog.
+  - Added "Manage Groups" tray enabling operators to reorder groups left/right (up/down) and add new groups.
+  - Group sequence is persisted in WordPress database option `exacoat_global_finish_groups` via REST API.
+- **Custom Design per Device ("Everything Skins")**:
+  - Finishes with `is_custom_per_device` flag are registered globally but only appear on devices where custom artwork is uploaded.
+  - Dedicated "Custom Device Finishes" card in the Studio Skins tab provides 1-click upload or assignment per device part.
+  - Storefront (`configurator-loader.ts`) and Studio Live Dock filter out custom finishes unless artwork is set on that device, cleanly suppressing empty groups.
+- **WordPress Media Library 2-Column List View Overhaul (`MediaLibraryModal.tsx`)**:
+  - Eliminated UI layout shifts by enforcing fixed modal containers (`h-[480px]`).
+  - Implemented 2-column detailed list view displaying full filenames, checkered thumbnails, file extensions, and emerald-highlighted dimension badges for 1000x1000 assets.
+
 ## [0.0.80] - 2026-09-20
 
 ### Configurator Studio: Apple and Notion-Inspired Sidebar Redesign & Universal Cutout Punching

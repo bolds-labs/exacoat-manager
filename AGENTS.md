@@ -541,6 +541,30 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Walls of text are strictly avoided: explanatory details are tucked into interactive hover tooltips (`InfoTooltip`).
   - Layer rows feature compact up/down reordering, visibility toggle, bold layer name, clear price indicators (`Base` or `+IDR 30k`), and single-click delete.
 
+---
 
+## 27. Dual-Image Master Finishes, Group Ordering, and Custom Device Designs ("Everything Skins")
 
+- **Dual-Image Master Finish Architecture**:
+  In the v2 Modern Engine, every global finish (`GlobalFinish`) requires two distinct image roles:
+  1. **Image 1: Swatch Thumbnail (`thumbnail`)**:
+     A square image swatch (e.g. `https://media.exacoat.com/.../Swarm-Texture-Thumbnail.jpg`) used exclusively for circular selector swatches, tooltips, and finish picker previews.
+  2. **Image 2: Master Texture (`texture_url`)**:
+     A seamless, high-resolution tileable texture drawn onto the 1000x1000 canvas and clipped by the device's alpha SVG/PNG cut mask (`destination-in`).
+  - Dual Image Management: In Configurator Studio, both images have independent inputs, 44x44 checkered live previews, and direct 1-click integration with the WordPress Media Library modal.
 
+- **Custom Design per Device Invariant ("Everything Skins")**:
+  - Certain skins (such as "Everything", "Acid", or bespoke collaborative editions) have unique artwork tailored per individual phone chassis rather than a universal repeating pattern.
+  - Finishes support the `is_custom_per_device` boolean flag:
+    - When enabled, the finish is registered in the global inventory (under groups like "Limited") but is **strictly hidden** by default across all device configurators.
+    - It is only rendered and selectable on devices where the operator has uploaded that device's bespoke artwork in the device's Skins tab (`assets_by_view[viewId].render_texture_map[finishSlug]`).
+    - Storefront and Studio Evaluators (`configurator-loader.ts` and `ConfiguratorStudioPage.tsx`): Exclude `is_custom_per_device` finishes from choices and group tabs unless `render_texture_map[f.slug]` is defined and non-empty. If a group has only custom finishes and none are set for the active device, the group tab is cleanly suppressed.
+
+- **Universal Finish Group Ordering & Storefront Tab Priority**:
+  - Group sequence is persisted storewide in WordPress database option `exacoat_global_finish_groups` via REST endpoint `POST /wp-json/exacoat-core/v1/finishes/reorder-groups`.
+  - In Configurator Studio, the Master Textures modal provides a "Manage Groups" tray where operators can move groups left/right (up/down) and add new groups (e.g. placing "Limited" at index 0).
+  - Storefront and Live Studio Dock (`parseV2ConfiguratorProfile` and `testPartGroups`): Sort group tabs strictly by `storedFinishGroups.indexOf(groupName)`. Placing "Limited" first immediately bubbles the Limited tab to the front of all v2 device configurators storewide.
+
+- **WordPress Media Library 2-Column List View (`MediaLibraryModal.tsx`)**:
+  - Layout Shift Prevention: Outer dialog and media containers enforce strict fixed dimensions (`h-[480px]`), eliminating vertical layout jitter while querying or paginating uploads.
+  - Two-Column Detailed List: Replaces truncated icon tiles with a comfortable two-column card view displaying full filenames, checkered thumbnails, file extensions, and emerald-highlighted dimension tags for 1000x1000 canvas assets.

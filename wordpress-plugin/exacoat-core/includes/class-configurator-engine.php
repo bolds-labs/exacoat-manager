@@ -19,6 +19,7 @@ class Exacoat_Configurator_Engine {
 
 	const OPTION_KEY = 'exacoat_global_finishes';
 	const LEGACY_OPTION_KEY = 'artmatter_global_finishes';
+	const GROUPS_OPTION_KEY = 'exacoat_global_finish_groups';
 	const PROFILE_META_KEY = '_exacoat_configurator_profile';
 	const CONFIGURATOR_FLAG_META_KEY = '_is_configurator';
 	const AUDIT_TIME_META_KEY = '_configurator_last_audited';
@@ -26,6 +27,21 @@ class Exacoat_Configurator_Engine {
 	const AUDIT_ISSUES_META_KEY = '_configurator_audit_issues';
 
 	private static $cached_finishes = null;
+
+	public static function get_finish_groups(): array {
+		$groups = get_option( self::GROUPS_OPTION_KEY, null );
+		if ( empty( $groups ) || ! is_array( $groups ) ) {
+			$groups = [ 'Limited', 'Signature skins', 'Pastels & Colors', 'Special editions' ];
+			update_option( self::GROUPS_OPTION_KEY, $groups );
+		}
+		return array_values( array_unique( array_filter( array_map( 'sanitize_text_field', $groups ) ) ) );
+	}
+
+	public static function save_finish_groups( array $groups ): bool {
+		$sanitized = array_values( array_unique( array_filter( array_map( 'sanitize_text_field', $groups ) ) ) );
+		update_option( self::GROUPS_OPTION_KEY, $sanitized );
+		return true;
+	}
 
 	public static function init(): void {
 		add_action( 'rest_api_init', [ __CLASS__, 'register_rest_routes' ] );
@@ -388,6 +404,27 @@ class Exacoat_Configurator_Engine {
 			'permission_callback' => [ __CLASS__, 'verify_permission' ],
 		] );
 
+		// POST /finishes/delete: Delete a finish
+		$register( '/finishes/delete', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_delete_finish' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+		] );
+
+		// POST /finishes/reorder-groups: Save finish groups order
+		$register( '/finishes/reorder-groups', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_save_finish_groups' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+		] );
+
+		// POST /finishes/save-all: Batch save finishes and groups
+		$register( '/finishes/save-all', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_save_all_finishes' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+		] );
+
 		// 4. GET /configurator/profiles: List all products and their configurator profiles
 		$register( '/configurator/profiles', [
 			'methods'             => 'GET',
@@ -504,9 +541,11 @@ class Exacoat_Configurator_Engine {
 
 	public static function rest_get_finishes( WP_REST_Request $request ): WP_REST_Response {
 		$finishes = self::get_finishes();
+		$groups   = self::get_finish_groups();
 		$response = rest_ensure_response( [
 			'success'  => true,
 			'finishes' => $finishes,
+			'groups'   => $groups,
 			'total'    => count( $finishes ),
 		] );
 		$response->header( 'Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=300' );
@@ -547,6 +586,7 @@ class Exacoat_Configurator_Engine {
 			'in_stock' => $in_stock,
 			'message'  => "Stock status updated for '{$id}'.",
 			'finishes' => $finishes,
+			'groups'   => self::get_finish_groups(),
 		] );
 	}
 
@@ -566,59 +606,142 @@ class Exacoat_Configurator_Engine {
 		$texture_url = esc_url_raw( $params['texture_url'] ?? '' );
 		$extra_price = isset( $params['extra_price'] ) ? (float) $params['extra_price'] : 0.0;
 		$in_stock = isset( $params['in_stock'] ) ? (bool) $params['in_stock'] : true;
+		$is_custom_per_device = ! empty( $params['is_custom_per_device'] );
+		$order = isset( $params['order'] ) ? (int) $params['order'] : 0;
 
 		$finishes = self::get_finishes();
 		$updated = false;
 
 		foreach ( $finishes as &$f ) {
 			if ( ( $f['id'] ?? '' ) === $id || ( $f['slug'] ?? '' ) === $slug ) {
-				$f['name']        = $name;
-				$f['group']       = $group;
-				$f['class_name']  = $class_name;
+				$f['name']                 = $name;
+				$f['group']                = $group;
+				$f['class_name']           = $class_name;
 				if ( ! empty( $thumbnail ) || isset( $params['thumbnail'] ) ) {
 					$f['thumbnail'] = $thumbnail;
 				}
 				if ( ! empty( $texture_url ) || isset( $params['texture_url'] ) ) {
 					$f['texture_url'] = $texture_url;
 				}
-				$f['extra_price'] = $extra_price;
-				$f['in_stock']    = $in_stock;
-				$updated          = true;
+				$f['extra_price']          = $extra_price;
+				$f['in_stock']             = $in_stock;
+				$f['is_custom_per_device'] = $is_custom_per_device;
+				if ( isset( $params['order'] ) ) {
+					$f['order'] = $order;
+				}
+				$updated = true;
 				break;
 			}
 		}
 
 		if ( ! $updated ) {
 			$finishes[] = [
-				'id'          => $id,
-				'slug'        => $slug,
-				'name'        => $name,
-				'group'       => $group,
-				'class_name'  => $class_name,
-				'thumbnail'   => $thumbnail,
-				'texture_url' => $texture_url ?: $thumbnail,
-				'extra_price' => $extra_price,
-				'in_stock'    => $in_stock,
+				'id'                   => $id,
+				'slug'                 => $slug,
+				'name'                 => $name,
+				'group'                => $group,
+				'class_name'           => $class_name,
+				'thumbnail'            => $thumbnail,
+				'texture_url'          => $texture_url ?: $thumbnail,
+				'extra_price'          => $extra_price,
+				'in_stock'             => $in_stock,
+				'is_custom_per_device' => $is_custom_per_device,
+				'order'                => $order,
 			];
+		}
+
+		self::save_finishes( $finishes );
+
+		// Auto-register new group if not present
+		$groups = self::get_finish_groups();
+		if ( ! empty( $group ) && ! in_array( $group, $groups, true ) ) {
+			$groups[] = $group;
+			self::save_finish_groups( $groups );
+		}
+
+		return rest_ensure_response( [
+			'success'  => true,
+			'message'  => $updated ? "Finish '{$name}' updated." : "Finish '{$name}' created.",
+			'finish'   => [
+				'id'                   => $id,
+				'slug'                 => $slug,
+				'name'                 => $name,
+				'group'                => $group,
+				'class_name'           => $class_name,
+				'thumbnail'            => $thumbnail,
+				'texture_url'          => $texture_url,
+				'extra_price'          => $extra_price,
+				'in_stock'             => $in_stock,
+				'is_custom_per_device' => $is_custom_per_device,
+				'order'                => $order,
+			],
+			'finishes' => $finishes,
+			'groups'   => self::get_finish_groups(),
+		] );
+	}
+
+	public static function rest_delete_finish( WP_REST_Request $request ): WP_REST_Response {
+		$params = $request->get_json_params() ?: $request->get_params();
+		$id = sanitize_text_field( (string) ( $params['id'] ?? $params['slug'] ?? '' ) );
+
+		if ( empty( $id ) ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Finish id is required.' ], 400 );
+		}
+
+		$finishes = self::get_finishes();
+		$initial_count = count( $finishes );
+		$finishes = array_values( array_filter( $finishes, function( $f ) use ( $id ) {
+			return ( $f['id'] ?? '' ) !== $id && ( $f['slug'] ?? '' ) !== $id;
+		} ) );
+
+		if ( count( $finishes ) === $initial_count ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => "Finish '{$id}' not found." ], 404 );
 		}
 
 		self::save_finishes( $finishes );
 
 		return rest_ensure_response( [
 			'success'  => true,
-			'message'  => $updated ? "Finish '{$name}' updated." : "Finish '{$name}' created.",
-			'finish'   => [
-				'id'          => $id,
-				'slug'        => $slug,
-				'name'        => $name,
-				'group'       => $group,
-				'class_name'  => $class_name,
-				'thumbnail'   => $thumbnail,
-				'texture_url' => $texture_url,
-				'extra_price' => $extra_price,
-				'in_stock'    => $in_stock,
-			],
+			'message'  => "Finish '{$id}' deleted.",
 			'finishes' => $finishes,
+			'groups'   => self::get_finish_groups(),
+		] );
+	}
+
+	public static function rest_save_finish_groups( WP_REST_Request $request ): WP_REST_Response {
+		$params = $request->get_json_params() ?: $request->get_params();
+		$groups = $params['groups'] ?? null;
+
+		if ( ! is_array( $groups ) ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Groups must be an array.' ], 400 );
+		}
+
+		self::save_finish_groups( $groups );
+
+		return rest_ensure_response( [
+			'success' => true,
+			'message' => 'Finish groups reordered.',
+			'groups'  => self::get_finish_groups(),
+		] );
+	}
+
+	public static function rest_save_all_finishes( WP_REST_Request $request ): WP_REST_Response {
+		$params = $request->get_json_params() ?: $request->get_params();
+		$finishes = $params['finishes'] ?? null;
+		$groups = $params['groups'] ?? null;
+
+		if ( is_array( $groups ) ) {
+			self::save_finish_groups( $groups );
+		}
+		if ( is_array( $finishes ) ) {
+			self::save_finishes( $finishes );
+		}
+
+		return rest_ensure_response( [
+			'success'  => true,
+			'message'  => 'All finishes and groups updated.',
+			'finishes' => self::get_finishes(),
+			'groups'   => self::get_finish_groups(),
 		] );
 	}
 

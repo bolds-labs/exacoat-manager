@@ -429,6 +429,8 @@ export interface GlobalFinish {
   in_stock: boolean;
   extra_price: number;
   class_name?: string;
+  is_custom_per_device?: boolean;
+  order?: number;
 }
 
 export const DEFAULT_GLOBAL_FINISHES: GlobalFinish[] = [
@@ -1996,7 +1998,7 @@ export async function updateReviewRewardSettingsDirect(settings: ReviewRewardSet
 
 const FINISHES_STORAGE_KEY = 'exacoat_finishes_inventory_cache';
 
-export async function fetchGlobalFinishesDirect(): Promise<{ success: boolean; finishes: GlobalFinish[]; error?: string }> {
+export async function fetchGlobalFinishesDirect(): Promise<{ success: boolean; finishes: GlobalFinish[]; groups?: string[]; error?: string }> {
   let localFinishes: GlobalFinish[] = DEFAULT_GLOBAL_FINISHES;
   try {
     const cached = typeof localStorage !== 'undefined' ? localStorage.getItem(FINISHES_STORAGE_KEY) : null;
@@ -2019,6 +2021,7 @@ export async function fetchGlobalFinishesDirect(): Promise<{ success: boolean; f
       return {
         success: true,
         finishes: data.finishes,
+        groups: Array.isArray(data?.groups) ? data.groups : undefined,
       };
     }
   } catch {}
@@ -2032,6 +2035,7 @@ export async function fetchGlobalFinishesDirect(): Promise<{ success: boolean; f
         return {
           success: true,
           finishes: nextData.finishes,
+          groups: Array.isArray(nextData?.groups) ? nextData.groups : undefined,
         };
       }
     }
@@ -2087,7 +2091,7 @@ export async function toggleFinishStockDirect(id: string, inStock: boolean): Pro
   };
 }
 
-export async function saveGlobalFinishDirect(finish: Partial<GlobalFinish>): Promise<{ success: boolean; finishes?: GlobalFinish[]; error?: string }> {
+export async function saveGlobalFinishDirect(finish: Partial<GlobalFinish>): Promise<{ success: boolean; finishes?: GlobalFinish[]; groups?: string[]; error?: string }> {
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/finishes/save`;
 
@@ -2098,9 +2102,84 @@ export async function saveGlobalFinishDirect(finish: Partial<GlobalFinish>): Pro
       body: JSON.stringify(finish),
     });
     const data = await res.json();
+    if (res.ok && !!data?.success && Array.isArray(data?.finishes)) {
+      try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(data.finishes)); } catch {}
+    }
     return {
       success: res.ok && !!data?.success,
       finishes: data?.finishes,
+      groups: data?.groups,
+      error: data?.error || data?.message,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function deleteGlobalFinishDirect(id: string): Promise<{ success: boolean; finishes?: GlobalFinish[]; groups?: string[]; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/finishes/delete`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+    const data = await res.json();
+    if (res.ok && !!data?.success && Array.isArray(data?.finishes)) {
+      try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(data.finishes)); } catch {}
+    }
+    return {
+      success: res.ok && !!data?.success,
+      finishes: data?.finishes,
+      groups: data?.groups,
+      error: data?.error || data?.message,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function reorderFinishGroupsDirect(groups: string[]): Promise<{ success: boolean; groups?: string[]; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/finishes/reorder-groups`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ groups }),
+    });
+    const data = await res.json();
+    return {
+      success: res.ok && !!data?.success,
+      groups: data?.groups,
+      error: data?.error || data?.message,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function saveAllGlobalFinishesDirect(finishes: GlobalFinish[], groups?: string[]): Promise<{ success: boolean; finishes?: GlobalFinish[]; groups?: string[]; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/finishes/save-all`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ finishes, groups }),
+    });
+    const data = await res.json();
+    if (res.ok && !!data?.success && Array.isArray(data?.finishes)) {
+      try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(data.finishes)); } catch {}
+    }
+    return {
+      success: res.ok && !!data?.success,
+      finishes: data?.finishes,
+      groups: data?.groups,
       error: data?.error || data?.message,
     };
   } catch (err: any) {
