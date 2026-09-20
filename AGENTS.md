@@ -936,6 +936,22 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - **Transactional Emails & Order Views**: `class-checkout-engine.php:filter_order_item_thumbnail` and `class-order-manager.php:1541` dynamically inspect `_configured_image_url`, `_configurator_image`, and `image_url` to display the customized skin in WooCommerce emails, checkout receipts, and Exacoat Manager Order Detail drawers.
   - **Exacoat Manager Bridge Enrichment**: `enrichOrder` in `wordpressBridge.ts` extracts `_configured_image_url` into `item.image_url` for immediate visual inspection by operators and fulfillment staff.
 
+---
+
+## 52. Finish Reordering, Group Changes & Texture Update Integrity Invariant
+
+- **Deterministic Composite Fingerprint Invariant**:
+  - Previously, composite image cache fingerprints relied on positional array indices (`${c.layerId}_${c.choiceId}` where `choiceId = layerNumId * 1000 + cIdx + 1`).
+  - Positional indices are vulnerable to collisions: swapping or reordering finishes changes `cIdx`, meaning finish B could inherit the cached composite key previously generated for finish A.
+  - Upgraded fingerprint generation in `device-skin-configurator.tsx`:
+    `${c.layerId}_${c.choiceSlug}${texHash}`
+    where `choiceSlug` is the permanent identifier (e.g. `swarm`, `black-camo`) and `texHash` is a deterministic 4-character hash of the master texture URL.
+- **Three Operational Invariants**:
+  1. **Reordering Finishes**: Reordering finishes within a group or moving them up/down changes display position in the UI tabs but preserves the stable slug (`swarm`). The composite image fingerprint remains identical and never collides with adjacent textures.
+  2. **Group Changes**: Changing a finish's group (e.g. moving from "Signature skins" to "Special editions") alters catalog categorization only. The visual texture and composite fingerprint remain completely unchanged.
+  3. **Texture File Updates**: When an administrator uploads a new or higher-resolution texture file for an existing finish, the texture URL changes, causing `texHash` to change automatically (e.g. `_8f3a` to `_9k1c`). A brand new composite file is generated and uploaded to WordPress, bypassing stale browser and CDN edge caches without breaking historical order composite images.
+
+
 
 
 
