@@ -83,6 +83,7 @@ export const MediaLibraryModal: React.FC<MediaLibraryModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       maxWidth="5xl"
+      zIndex="z-[200]"
       title={
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-[#f3aa18]/15 border border-[#f3aa18]/30 flex items-center justify-center text-[#f3aa18]">

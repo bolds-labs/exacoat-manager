@@ -495,8 +495,12 @@ export interface ConfiguratorLayer {
   assets_by_view?: Record<string, {
     base_hardware_body_url?: string;
     mask_svg_url?: string;
+    logo_cutout_url?: string;
+    model_cutout_url?: string;
     shadow_png_url?: string;
     highlight_png_url?: string;
+    shadow_opacity?: number;
+    highlight_opacity?: number;
     render_texture_map?: Record<string, string>;
   }>;
   legacy_id?: number;

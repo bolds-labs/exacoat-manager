@@ -475,6 +475,13 @@ class Exacoat_Configurator_Engine {
 			'callback'            => [ __CLASS__, 'rest_get_media_list' ],
 			'permission_callback' => '__return_true',
 		] );
+
+		// 17. POST /configurator/extract-shading: Extract multiply shadow and screen highlight PNGs from a neutral render
+		$register( '/configurator/extract-shading', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_extract_shading' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+		] );
 	}
 
 
@@ -846,6 +853,161 @@ class Exacoat_Configurator_Engine {
 		$response->header( 'Access-Control-Allow-Origin', '*' );
 		$response->header( 'Access-Control-Allow-Methods', 'GET, OPTIONS' );
 		return $response;
+	}
+
+	/**
+	 * REST Endpoint: Extract smooth multiply shadow and screen highlight PNG overlays from a neutral white render
+	 */
+	public static function rest_extract_shading( WP_REST_Request $request ): WP_REST_Response {
+		$params = $request->get_json_params() ?: $request->get_params();
+		$source_url = esc_url_raw( trim( $params['source_image_url'] ?? '' ) );
+		$shadow_contrast = isset( $params['shadow_contrast'] ) ? max( 0.5, min( 2.5, (float) $params['shadow_contrast'] ) ) : 1.2;
+		$highlight_contrast = isset( $params['highlight_contrast'] ) ? max( 0.5, min( 2.5, (float) $params['highlight_contrast'] ) ) : 1.0;
+
+		if ( empty( $source_url ) ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Source image URL is required' ], 400 );
+		}
+
+		if ( ! extension_loaded( 'gd' ) ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'PHP GD extension is required on server for image extraction' ], 500 );
+		}
+
+		// Download or fetch source image
+		$response = wp_remote_get( $source_url, [
+			'timeout' => 30,
+			'sslverify' => false,
+			'headers' => [ 'User-Agent' => 'Exacoat-Manager/1.0' ],
+		] );
+
+		if ( is_wp_error( $response ) || wp_remote_retrieve_response_code( $response ) !== 200 ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Unable to fetch source image: ' . ( is_wp_error( $response ) ? $response->get_error_message() : 'HTTP ' . wp_remote_retrieve_response_code( $response ) ) ], 400 );
+		}
+
+		$image_data = wp_remote_retrieve_body( $response );
+		$src_img = @imagecreatefromstring( $image_data );
+		if ( ! $src_img ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Invalid image format. PNG with transparency is recommended.' ], 400 );
+		}
+
+		$width = imagesx( $src_img );
+		$height = imagesy( $src_img );
+
+		// Target directory in wp-content/uploads/configurator-shading/
+		$upload_dir = wp_upload_dir();
+		$shading_dir = trailingslashit( $upload_dir['basedir'] ) . 'configurator-shading';
+		$shading_url = trailingslashit( $upload_dir['baseurl'] ) . 'configurator-shading';
+
+		if ( ! file_exists( $shading_dir ) ) {
+			wp_mkdir_p( $shading_dir );
+		}
+
+		// Find base luminance by sampling non-transparent pixels
+		$lum_samples = [];
+		for ( $y = 0; $y < $height; $y += 5 ) {
+			for ( $x = 0; $x < $width; $x += 5 ) {
+				$rgba = imagecolorat( $src_img, $x, $y );
+				$a = ( $rgba >> 24 ) & 0x7F; // GD alpha: 0 = opaque, 127 = transparent
+				if ( $a < 64 ) {
+					$r = ( $rgba >> 16 ) & 0xFF;
+					$g = ( $rgba >> 8 ) & 0xFF;
+					$b = $rgba & 0xFF;
+					$lum = 0.299 * $r + 0.587 * $g + 0.114 * $b;
+					$lum_samples[] = $lum;
+				}
+			}
+		}
+
+		if ( empty( $lum_samples ) ) {
+			imagedestroy( $src_img );
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'No visible skin pixels detected in source image' ], 400 );
+		}
+
+		sort( $lum_samples );
+		// Median luminance is the flat neutral vinyl surface
+		$base_lum = $lum_samples[ intval( count( $lum_samples ) * 0.5 ) ];
+		if ( $base_lum < 180 ) {
+			$base_lum = 240.0;
+		}
+
+		// Create TrueColor images with alpha channel
+		$shadow_img = imagecreatetruecolor( $width, $height );
+		imagealphablending( $shadow_img, false );
+		imagesavealpha( $shadow_img, true );
+		$transparent_black = imagecolorallocatealpha( $shadow_img, 0, 0, 0, 127 );
+		imagefill( $shadow_img, 0, 0, $transparent_black );
+
+		$highlight_img = imagecreatetruecolor( $width, $height );
+		imagealphablending( $highlight_img, false );
+		imagesavealpha( $highlight_img, true );
+		$transparent_white = imagecolorallocatealpha( $highlight_img, 255, 255, 255, 127 );
+		imagefill( $highlight_img, 0, 0, $transparent_white );
+
+		for ( $y = 0; $y < $height; $y++ ) {
+			for ( $x = 0; $x < $width; $x++ ) {
+				$rgba = imagecolorat( $src_img, $x, $y );
+				$gd_alpha = ( $rgba >> 24 ) & 0x7F; // 0 (opaque) to 127 (transparent)
+				if ( $gd_alpha >= 120 ) {
+					continue;
+				}
+
+				$r = ( $rgba >> 16 ) & 0xFF;
+				$g = ( $rgba >> 8 ) & 0xFF;
+				$b = $rgba & 0xFF;
+				$lum = 0.299 * $r + 0.587 * $g + 0.114 * $b;
+				$norm_alpha = ( 127 - $gd_alpha ) / 127.0; // 0.0 to 1.0
+
+				// Shadow: where lum < base_lum
+				if ( $lum < $base_lum ) {
+					$shadow_factor = ( $base_lum - $lum ) / max( 1.0, $base_lum );
+					$shadow_strength = min( 1.0, $shadow_factor * $shadow_contrast ) * $norm_alpha;
+					if ( $shadow_strength > 0.01 ) {
+						// In GD: 0 = opaque, 127 = transparent
+						$gd_sh_alpha = intval( 127 - ( $shadow_strength * 127.0 ) );
+						$col = imagecolorallocatealpha( $shadow_img, 0, 0, 0, max( 0, min( 127, $gd_sh_alpha ) ) );
+						imagesetpixel( $shadow_img, $x, $y, $col );
+					}
+				}
+
+				// Highlight: where lum > base_lum
+				if ( $lum > $base_lum ) {
+					$hl_factor = ( $lum - $base_lum ) / max( 1.0, 255.0 - $base_lum );
+					$hl_strength = min( 1.0, $hl_factor * $highlight_contrast ) * $norm_alpha;
+					if ( $hl_strength > 0.01 ) {
+						$gd_hl_alpha = intval( 127 - ( $hl_strength * 127.0 ) );
+						$col = imagecolorallocatealpha( $highlight_img, 255, 255, 255, max( 0, min( 127, $gd_hl_alpha ) ) );
+						imagesetpixel( $highlight_img, $x, $y, $col );
+					}
+				}
+			}
+		}
+
+		// Generate file names based on source hash
+		$hash = substr( md5( $source_url ), 0, 10 );
+		$filename_base = sanitize_title( pathinfo( parse_url( $source_url, PHP_URL_PATH ), PATHINFO_FILENAME ) );
+		if ( empty( $filename_base ) ) $filename_base = 'shading';
+
+		$shadow_filename = "{$filename_base}-shadow-{$hash}.png";
+		$highlight_filename = "{$filename_base}-highlight-{$hash}.png";
+
+		$shadow_path = $shading_dir . '/' . $shadow_filename;
+		$highlight_path = $shading_dir . '/' . $highlight_filename;
+
+		imagepng( $shadow_img, $shadow_path, 8 );
+		imagepng( $highlight_img, $highlight_path, 8 );
+
+		imagedestroy( $src_img );
+		imagedestroy( $shadow_img );
+		imagedestroy( $highlight_img );
+
+		$res = new WP_REST_Response( [
+			'success'       => true,
+			'message'       => 'Shadow and highlight overlays extracted successfully.',
+			'shadow_url'    => $shading_url . '/' . $shadow_filename,
+			'highlight_url' => $shading_url . '/' . $highlight_filename,
+			'base_lum'      => round( $base_lum, 1 ),
+		] );
+		$res->header( 'Access-Control-Allow-Origin', '*' );
+		return $res;
 	}
 
 	/**
@@ -1262,9 +1424,19 @@ class Exacoat_Configurator_Engine {
 
 		// 1. Check if Modern Composable Profile exists
 		$modern_profile = get_post_meta( $product_id, self::PROFILE_META_KEY, true );
+		$profile = null;
 		if ( ! empty( $modern_profile ) ) {
-			$profile = is_string( $modern_profile ) ? json_decode( $modern_profile, true ) : $modern_profile;
-		} else {
+			if ( is_array( $modern_profile ) ) {
+				$profile = $modern_profile;
+			} elseif ( is_string( $modern_profile ) ) {
+				$profile = json_decode( $modern_profile, true );
+				if ( ! is_array( $profile ) ) {
+					$profile = json_decode( wp_unslash( $modern_profile ), true );
+				}
+			}
+		}
+		
+		if ( empty( $profile ) || ! is_array( $profile ) ) {
 			// Auto-convert legacy MKL on-the-fly
 			$profile = self::convert_mkl_to_profile( $product_id );
 		}
@@ -1296,7 +1468,7 @@ class Exacoat_Configurator_Engine {
 			'base_price'           => (float) ( $params['base_price'] ?? 0 ),
 			'currency'             => sanitize_text_field( $params['currency'] ?? 'IDR' ),
 			'size_multiplier'      => (float) ( $params['size_multiplier'] ?? 1.0 ),
-			'configurator_version' => in_array( $params['configurator_version'] ?? '', [ 'v1', 'v2' ], true ) ? $params['configurator_version'] : 'v1',
+			'configurator_version' => in_array( $params['configurator_version'] ?? '', [ 'v1', 'v2' ], true ) ? $params['configurator_version'] : 'v2',
 			'device_colors'        => is_array( $params['device_colors'] ?? null ) ? $params['device_colors'] : [],
 			'views'                => is_array( $params['views'] ?? null ) ? $params['views'] : [],
 			'layers'               => is_array( $params['layers'] ?? null ) ? $params['layers'] : [],
@@ -1304,7 +1476,8 @@ class Exacoat_Configurator_Engine {
 			'updated_at'           => current_time( 'mysql' ),
 		];
 
-		update_post_meta( $product_id, self::PROFILE_META_KEY, wp_json_encode( $profile ) );
+		// Use wp_slash so WordPress update_metadata does not strip quotes or slashes from JSON
+		update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile ) ) );
 
 		// Sync WooCommerce product price with configurator base_price
 		if ( isset( $params['base_price'] ) && (float) $params['base_price'] >= 0 ) {

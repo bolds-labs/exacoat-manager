@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.71] - 2026-09-20
+
+### v2 Canvas Punch Cutouts, Shading Extraction Engine & Dynamic Opacity Controls
+- **Aspect-Ratio Preserving Texture Scaling**:
+  - Upgraded `<V2SkinCanvasLayer>` to compute center-crop scale (`Math.max(1000/w, 1000/h)`), ensuring master finish textures are never stretched or squeezed.
+- **Canvas `destination-out` Cutout Punching (Logo & Model Cut)**:
+  - Supports punch masks for Apple logo cutouts (`logo_cutout_url`) and Model Cut perimeter framing (`model_cutout_url`).
+  - Uses `ctx.globalCompositeOperation = 'destination-out'` to physically erase vinyl pixels, cleanly exposing the underlying phone chassis metal and logo.
+- **Raytraced Shading Extraction Endpoint (`POST /configurator/extract-shading`)**:
+  - Integrated server-side PHP GD endpoint that analyzes neutral Matte White 3D CAD renders.
+  - Automatically isolates raytraced ambient occlusion and camera plateau drop shadows into a transparent Multiply Shadow PNG, and isolates curved chamfers into a Screen Highlight PNG.
+  - Generates web-ready assets saved directly to `wp-content/uploads/configurator-shading/`.
+- **Interactive Shading Extractor Modal & Dynamic Sliders**:
+  - Added dedicated "Extract Shading from 3D Render" modal in Configurator Studio with customizable Shadow Contrast and Highlight Sensitivity sliders.
+  - Added dynamic live sliders on each layer: **Shadow Opacity (0% to 100%)** and **Highlight Opacity (0% to 100%)**, combining baked raytraced accuracy with interactive tuning.
+- **WordPress Post Meta `wp_slash` Persistence Fix**:
+  - Wrapped `rest_save_product_configurator` JSON encoding in `wp_slash()`, resolving the core WordPress `update_metadata` bug that stripped backslashes from URLs and quotes.
+- **Modal Stacking & Inspector Sidebar Expansion**:
+  - Configured `MediaLibraryModal` to render at `z-[200]` with customizable `zIndex` prop, preventing it from being occluded by studio overlays.
+  - Widened Studio inspector sidebar default width to 540px (resizable up to 950px) for comfortable asset configuration.
+- **Studio Non-Closing Save**:
+  - Updated "Save Configurator" action to save and update state in place with toast feedback without kicking operators out of the active studio editor.
+
 ## [0.0.69] - 2026-09-20
 
 ### Category Combobox Dropdown & v2 Master Finish Textures Architecture

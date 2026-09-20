@@ -2519,6 +2519,59 @@ export async function toggleProductConfiguratorDirect(
   }
 }
 
+export async function extractShadingDirect(
+  sourceImageUrl: string,
+  options?: {
+    shadow_contrast?: number;
+    highlight_contrast?: number;
+  }
+): Promise<{
+  success: boolean;
+  shadow_url?: string;
+  highlight_url?: string;
+  base_lum?: number;
+  message?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/configurator/extract-shading`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        source_image_url: sourceImageUrl,
+        shadow_contrast: options?.shadow_contrast ?? 1.2,
+        highlight_contrast: options?.highlight_contrast ?? 1.0,
+      }),
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        shadow_url: data.shadow_url,
+        highlight_url: data.highlight_url,
+        base_lum: data.base_lum,
+        message: data.message,
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || 'Failed extracting shading overlays',
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err.message || 'Network error extracting shading',
+    };
+  }
+}
+
 export async function markDeviceAuditedDirect(data: {
   product_id: number;
   audit_status: 'clean' | 'issues';
@@ -2657,7 +2710,7 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
     if (res.ok && data?.success && data?.profile) {
       const cleanLayers = (data.profile.layers || []).filter((l: any) => {
         const lName = (l.name || '').toLowerCase();
-        return lName !== 'device' && !lName.includes('device-body') && !lName.includes('model') && !lName.includes('coverage') && !lName.includes('360') && !lName.includes('series') && !lName.includes('logo') && !lName.includes('cutout');
+        return lName !== 'device' && !lName.includes('device-body');
       });
 
       return {
@@ -2685,7 +2738,7 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
         if (parsedModern && (parsedModern.layers || parsedModern.views)) {
           const cleanLayers = (parsedModern.layers || []).filter((l: any) => {
             const lName = (l.name || '').toLowerCase();
-            return lName !== 'device' && !lName.includes('device-body') && !lName.includes('model') && !lName.includes('coverage') && !lName.includes('360') && !lName.includes('series') && !lName.includes('logo') && !lName.includes('cutout');
+            return lName !== 'device' && !lName.includes('device-body');
           });
           const finishesRes = await fetchGlobalFinishesDirect();
           return {

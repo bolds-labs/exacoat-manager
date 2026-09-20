@@ -14,6 +14,7 @@ interface ModalProps {
   children: React.ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | '6xl' | '7xl' | 'full';
   className?: string;
+  zIndex?: string;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -26,6 +27,7 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   maxWidth = 'lg',
   className,
+  zIndex = 'z-50',
 }) => {
   const [isMounted, setIsMounted] = useState(isOpen);
   const [isVisible, setIsVisible] = useState(false);
@@ -80,7 +82,7 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   const modalContent = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-6 overflow-y-auto font-sans">
+    <div className={clsx("fixed inset-0 flex items-center justify-center p-2.5 sm:p-6 overflow-y-auto font-sans", zIndex)}>
       {/* Pure Monochrome Dark Backdrop with Blur & Transition */}
       <div
         className={clsx(

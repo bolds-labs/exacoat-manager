@@ -303,3 +303,32 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Accessory: 0.8x
 - **Universal Surcharge Formula**:
   Signature and premium finish group up-prices (configured globally in Finishes) are dynamically multiplied by the device's `size_multiplier` (e.g. IDR 30,000 * 2.5x = +IDR 75,000 on Laptop). Operators do not need to configure extra prices individually per device.
+
+---
+
+## 20. v2 Canvas Cutout Punching & Modal Stacking Architecture
+
+- **`destination-out` Punching Invariant**:
+  When punching holes into a skin layer (such as the Apple logo cutout or Model Cut perimeter frame to reveal phone chassis metal):
+  - Canvas renders base master texture -> clips boundary using alpha mask (`mask_svg_url`) via `destination-in`.
+  - Logo cutout silhouette (`logo_cutout_url`) is drawn using `ctx.globalCompositeOperation = 'destination-out'`.
+  - Model cut silhouette (`model_cutout_url`) is drawn using `ctx.globalCompositeOperation = 'destination-out'`.
+  This physically erases the vinyl pixels at those coordinates, cleanly exposing the hardware base chassis below.
+- **WordPress Post Meta JSON Unslash Invariant**:
+  WordPress core's `update_metadata()` runs `$meta_value = wp_unslash( $meta_value )`. When saving JSON profiles containing escaped slashes in URLs or quotes, unslashing corrupts the JSON string. `update_post_meta( $id, $key, wp_slash( wp_json_encode( $profile ) ) )` is strictly mandatory.
+- **Modal Stacking & z-Index Hierarchy**:
+  - Fullscreen Studio runs at `z-[100]`.
+  - In-studio dialogs (Master Textures modal, Shading Extractor modal) run at `z-[120]` to `z-[150]`.
+  - `MediaLibraryModal` accepts a configurable `zIndex` prop defaulting to `'z-50'`, and runs at `zIndex="z-[200]"` in Studio so it always renders cleanly on top of any active dialog.
+
+---
+
+## 21. v2 Shading Engine: 3D Raytraced Extraction vs Dynamic Controls
+
+- **3D Geometric Elevation Invariant**:
+  Flat 2D CSS/SVG filters (such as `drop-shadow` or `box-shadow`) only apply to the outer element bounds and cannot simulate internal 3D height elevations (such as camera plateau drop shadows cast downwards onto the back glass, camera lens bevels, or physical edge falloffs).
+- **The Hybrid Architecture**:
+  The optimal approach combines baked 3D raytraced precision with real-time dynamic slider control:
+  1. **One-Time Extraction from Matte White 3D Render**: `POST /configurator/extract-shading` processes a neutral white CAD render (`iPhone-17-Pro-Skins-Matte-White.png`), extracting a transparent Multiply Shadow PNG (`mix-blend-mode: multiply`) and a Screen Highlight PNG (`mix-blend-mode: screen`).
+  2. **Dynamic Live Intensity Controls**: In Configurator Studio, operators tune **Shadow Opacity (0% to 100%)** and **Highlight Opacity (0% to 100%)** sliders per layer/device. This provides complete interactive control without sacrificing raytraced realism across any vinyl finish.
+
