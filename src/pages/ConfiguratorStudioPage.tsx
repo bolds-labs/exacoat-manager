@@ -58,8 +58,41 @@ import {
   Wand2,
   GripVertical,
   Tag,
+  AlertCircle,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+
+export interface AssetAuditItem {
+  id: string;
+  type: 'chassis' | 'texture' | 'overlay';
+  viewId: string;
+  viewName: string;
+  layerId?: string;
+  layerName?: string;
+  finishSlug?: string;
+  finishName?: string;
+  url: string;
+  status: 'healthy' | 'broken' | 'empty';
+  error?: string;
+}
+
+export interface GhostAngleReport {
+  viewId: string;
+  viewName: string;
+  chassisStatus: 'healthy' | 'broken' | 'missing';
+  chassisUrl: string;
+  mappedTexturesCount: number;
+}
+
+export interface AssetAuditReport {
+  timestamp: string;
+  totalProbed: number;
+  healthyCount: number;
+  brokenCount: number;
+  emptyCount: number;
+  ghostAngles: GhostAngleReport[];
+  items: AssetAuditItem[];
+}
 
 const COMMON_PRESET_LAYERS = [
   { name: 'Back Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
@@ -142,6 +175,13 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [replaceText, setReplaceText] = useState('');
   const [replaceScope, setReplaceScope] = useState<'all' | 'textures' | 'chassis'>('all');
 
+  // Asset Integrity Audit Modal state
+  const [showAssetAuditModal, setShowAssetAuditModal] = useState(false);
+  const [isAuditingAssets, setIsAuditingAssets] = useState(false);
+  const [auditProgress, setAuditProgress] = useState<{ completed: number; total: number }>({ completed: 0, total: 0 });
+  const [auditReport, setAuditReport] = useState<AssetAuditReport | null>(null);
+  const [auditFilter, setAuditFilter] = useState<'all' | 'broken' | 'ghost' | 'empty' | 'healthy'>('all');
+
   // Texture URL Edit Dialog state
   const [editingTextureModal, setEditingTextureModal] = useState<{
     layerId: string;
@@ -191,7 +231,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (showFindReplaceModal) {
+        if (showAssetAuditModal) {
+          setShowAssetAuditModal(false);
+        } else if (showFindReplaceModal) {
           setShowFindReplaceModal(false);
         } else if (editingTextureModal) {
           setEditingTextureModal(null);
@@ -208,7 +250,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [showFindReplaceModal, editingTextureModal, duplicateModal, priceEditModal, selectedProductId]);
+  }, [showAssetAuditModal, showFindReplaceModal, editingTextureModal, duplicateModal, priceEditModal, selectedProductId]);
 
   useEffect(() => {
     if (selectedProductId !== null) {
@@ -616,6 +658,397 @@ export const ConfiguratorStudioPage: React.FC = () => {
     );
     setShowFindReplaceModal(false);
   };
+
+  // Asset Integrity Audit Helpers & Handlers
+  const normalizeAssetUrl = (url: string): string => {
+    let clean = url.trim();
+    if (clean.startsWith('//')) {
+      clean = 'https:' + clean;
+    } else if (clean.startsWith('/')) {
+      clean = 'https://exacoat.com' + clean;
+    }
+    return clean;
+  };
+
+  const probeImageUrl = (rawUrl: string, timeoutMs = 7000): Promise<{ ok: boolean; error?: string }> => {
+    return new Promise((resolve) => {
+      if (!rawUrl || typeof rawUrl !== 'string' || !rawUrl.trim()) {
+        resolve({ ok: false, error: 'Empty URL' });
+        return;
+      }
+      const cleanUrl = normalizeAssetUrl(rawUrl);
+      const img = new Image();
+      let timer: any = null;
+
+      const cleanup = () => {
+        if (timer) clearTimeout(timer);
+        img.onload = null;
+        img.onerror = null;
+      };
+
+      timer = setTimeout(() => {
+        cleanup();
+        resolve({ ok: false, error: 'Request timed out (server unreachable)' });
+      }, timeoutMs);
+
+      img.onload = () => {
+        cleanup();
+        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+          resolve({ ok: true });
+        } else {
+          resolve({ ok: false, error: 'Zero dimensions (corrupted or empty image)' });
+        }
+      };
+
+      img.onerror = () => {
+        cleanup();
+        resolve({ ok: false, error: 'Image failed to load (HTTP 404, redirect, or CORS error)' });
+      };
+
+      img.src = cleanUrl;
+    });
+  };
+
+  const handleStartAssetAudit = async () => {
+    if (!editingProfile) return;
+    setIsAuditingAssets(true);
+    setShowAssetAuditModal(true);
+
+    const itemsToProbe: Array<{
+      id: string;
+      type: 'chassis' | 'texture' | 'overlay';
+      viewId: string;
+      viewName: string;
+      layerId?: string;
+      layerName?: string;
+      finishSlug?: string;
+      finishName?: string;
+      url: string;
+    }> = [];
+
+    // 1. Hardware chassis background URLs
+    (editingProfile.views || []).forEach((v) => {
+      itemsToProbe.push({
+        id: `chassis-${v.id}`,
+        type: 'chassis',
+        viewId: v.id,
+        viewName: v.name,
+        url: (v.background_url || '').trim(),
+      });
+    });
+
+    // 2. Composable Layer textures and overlays
+    (editingProfile.layers || []).forEach((layer) => {
+      (editingProfile.views || []).forEach((v) => {
+        const viewAsset =
+          layer.assets_by_view?.[v.id] ||
+          layer.assets_by_view?.['main_view'] ||
+          Object.values(layer.assets_by_view || {})[0];
+
+        if (viewAsset) {
+          // Texture maps
+          Object.entries(viewAsset.render_texture_map || {}).forEach(([slug, urlVal]) => {
+            const finishObj = finishes.find((f) => (f.slug || f.id) === slug);
+            itemsToProbe.push({
+              id: `texture-${layer.id}-${v.id}-${slug}`,
+              type: 'texture',
+              viewId: v.id,
+              viewName: v.name,
+              layerId: layer.id,
+              layerName: layer.name,
+              finishSlug: slug,
+              finishName: finishObj?.name || slug,
+              url: typeof urlVal === 'string' ? urlVal.trim() : '',
+            });
+          });
+
+          // Modern v2 Overlays
+          if (viewAsset.mask_svg_url) {
+            itemsToProbe.push({
+              id: `overlay-mask-${layer.id}-${v.id}`,
+              type: 'overlay',
+              viewId: v.id,
+              viewName: v.name,
+              layerId: layer.id,
+              layerName: `${layer.name} (Mask SVG)`,
+              url: viewAsset.mask_svg_url.trim(),
+            });
+          }
+          if (viewAsset.shadow_png_url) {
+            itemsToProbe.push({
+              id: `overlay-shadow-${layer.id}-${v.id}`,
+              type: 'overlay',
+              viewId: v.id,
+              viewName: v.name,
+              layerId: layer.id,
+              layerName: `${layer.name} (Shadow PNG)`,
+              url: viewAsset.shadow_png_url.trim(),
+            });
+          }
+          if (viewAsset.highlight_png_url) {
+            itemsToProbe.push({
+              id: `overlay-highlight-${layer.id}-${v.id}`,
+              type: 'overlay',
+              viewId: v.id,
+              viewName: v.name,
+              layerId: layer.id,
+              layerName: `${layer.name} (Highlight PNG)`,
+              url: viewAsset.highlight_png_url.trim(),
+            });
+          }
+        }
+      });
+    });
+
+    setAuditProgress({ completed: 0, total: itemsToProbe.length });
+
+    // Concurrent probe worker pool (concurrency: 6)
+    const auditedItems: AssetAuditItem[] = [];
+    const concurrency = 6;
+    let index = 0;
+    let completedCount = 0;
+
+    const worker = async () => {
+      while (index < itemsToProbe.length) {
+        const itemIdx = index++;
+        const target = itemsToProbe[itemIdx];
+
+        if (!target.url) {
+          auditedItems[itemIdx] = {
+            ...target,
+            status: 'empty',
+            error: 'No image URL assigned',
+          };
+        } else {
+          const probeResult = await probeImageUrl(target.url);
+          auditedItems[itemIdx] = {
+            ...target,
+            status: probeResult.ok ? 'healthy' : 'broken',
+            error: probeResult.error,
+          };
+        }
+
+        completedCount++;
+        setAuditProgress({ completed: completedCount, total: itemsToProbe.length });
+      }
+    };
+
+    const workers = Array.from({ length: Math.min(concurrency, itemsToProbe.length) }, () => worker());
+    await Promise.all(workers);
+
+    // Ghost Angle Detection: 0 active mapped finish textures AND broken/missing chassis render
+    const ghostAngles: GhostAngleReport[] = [];
+    (editingProfile.views || []).forEach((v) => {
+      const chassisItem = auditedItems.find((it) => it.type === 'chassis' && it.viewId === v.id);
+      const chassisStatus = !v.background_url?.trim()
+        ? 'missing'
+        : chassisItem?.status === 'broken'
+        ? 'broken'
+        : 'healthy';
+
+      // Count non-empty mapped textures for this specific angle
+      let mappedTexturesCount = 0;
+      (editingProfile.layers || []).forEach((layer) => {
+        const viewAsset = layer.assets_by_view?.[v.id];
+        if (viewAsset && viewAsset.render_texture_map) {
+          Object.values(viewAsset.render_texture_map).forEach((u) => {
+            if (typeof u === 'string' && u.trim().length > 0) {
+              mappedTexturesCount++;
+            }
+          });
+        }
+      });
+
+      if (mappedTexturesCount === 0 && chassisStatus !== 'healthy') {
+        ghostAngles.push({
+          viewId: v.id,
+          viewName: v.name,
+          chassisStatus,
+          chassisUrl: v.background_url || '',
+          mappedTexturesCount,
+        });
+      }
+    });
+
+    const healthyCount = auditedItems.filter((i) => i.status === 'healthy').length;
+    const brokenCount = auditedItems.filter((i) => i.status === 'broken').length;
+    const emptyCount = auditedItems.filter((i) => i.status === 'empty').length;
+
+    const report: AssetAuditReport = {
+      timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      totalProbed: auditedItems.length,
+      healthyCount,
+      brokenCount,
+      emptyCount,
+      ghostAngles,
+      items: auditedItems,
+    };
+
+    setAuditReport(report);
+    setIsAuditingAssets(false);
+
+    if (brokenCount > 0 || ghostAngles.length > 0) {
+      setAuditFilter('broken');
+    } else {
+      setAuditFilter('all');
+    }
+  };
+
+  const handleRemoveGhostAngle = (ghostViewId: string, ghostViewName: string) => {
+    if (!editingProfile) return;
+    if (editingProfile.views.length <= 1) {
+      showToast('error', 'Cannot Remove', 'A device configurator must have at least one viewing angle.');
+      return;
+    }
+
+    const remainingViews = editingProfile.views.filter((v) => v.id !== ghostViewId);
+    const cleanedLayers = (editingProfile.layers || []).map((layer) => {
+      const newAssetsByView = { ...(layer.assets_by_view || {}) };
+      delete newAssetsByView[ghostViewId];
+      return {
+        ...layer,
+        assets_by_view: newAssetsByView,
+      };
+    });
+
+    setEditingProfile({
+      ...editingProfile,
+      views: remainingViews,
+      layers: cleanedLayers,
+    });
+
+    if (activeSimView === ghostViewId) {
+      setActiveSimView(remainingViews[0]?.id || 'main_view');
+    }
+
+    if (auditReport) {
+      const updatedGhostAngles = auditReport.ghostAngles.filter((g) => g.viewId !== ghostViewId);
+      const updatedItems = auditReport.items.filter((it) => it.viewId !== ghostViewId);
+      setAuditReport({
+        ...auditReport,
+        ghostAngles: updatedGhostAngles,
+        items: updatedItems,
+        totalProbed: updatedItems.length,
+        brokenCount: updatedItems.filter((i) => i.status === 'broken').length,
+        emptyCount: updatedItems.filter((i) => i.status === 'empty').length,
+        healthyCount: updatedItems.filter((i) => i.status === 'healthy').length,
+      });
+    }
+
+    showToast(
+      'success',
+      'Ghost Angle Removed',
+      `Angle "${ghostViewName}" and its unused mappings have been removed. Click Save Configurator to persist.`
+    );
+  };
+
+  const handlePruneEmptyMappings = () => {
+    if (!editingProfile) return;
+    let prunedCount = 0;
+
+    const cleanedLayers = (editingProfile.layers || []).map((layer) => {
+      const newAssetsByView: Record<string, any> = {};
+      Object.entries(layer.assets_by_view || {}).forEach(([vId, vAsset]: [string, any]) => {
+        const cleanTextureMap: Record<string, string> = {};
+        Object.entries(vAsset.render_texture_map || {}).forEach(([slug, urlVal]) => {
+          if (typeof urlVal === 'string' && urlVal.trim().length > 0) {
+            cleanTextureMap[slug] = urlVal;
+          } else {
+            prunedCount++;
+          }
+        });
+        newAssetsByView[vId] = {
+          ...vAsset,
+          render_texture_map: cleanTextureMap,
+        };
+      });
+
+      return {
+        ...layer,
+        assets_by_view: newAssetsByView,
+      };
+    });
+
+    setEditingProfile({
+      ...editingProfile,
+      layers: cleanedLayers,
+    });
+
+    if (auditReport) {
+      const updatedItems = auditReport.items.filter((it) => !(it.type === 'texture' && it.status === 'empty'));
+      setAuditReport({
+        ...auditReport,
+        items: updatedItems,
+        emptyCount: 0,
+        totalProbed: updatedItems.length,
+      });
+    }
+
+    showToast(
+      'success',
+      'Empty Mappings Pruned',
+      `Pruned ${prunedCount} empty texture mappings across all layers. Click Save Configurator to persist.`
+    );
+  };
+
+  const handleClearBrokenTexture = (item: AssetAuditItem) => {
+    if (!editingProfile || !item.layerId || !item.finishSlug) return;
+
+    const targetLayerId = item.layerId;
+    const targetFinishSlug = item.finishSlug;
+    const targetViewId = item.viewId;
+
+    const updatedLayers = (editingProfile.layers || []).map((layer) => {
+      if (layer.id !== targetLayerId) return layer;
+      const vAsset = layer.assets_by_view?.[targetViewId] || {};
+      const newTextureMap = { ...(vAsset.render_texture_map || {}) };
+      delete newTextureMap[targetFinishSlug];
+
+      return {
+        ...layer,
+        assets_by_view: {
+          ...(layer.assets_by_view || {}),
+          [targetViewId]: {
+            ...vAsset,
+            render_texture_map: newTextureMap,
+          },
+        },
+      };
+    });
+
+    setEditingProfile({
+      ...editingProfile,
+      layers: updatedLayers,
+    });
+
+    if (auditReport) {
+      const updatedItems = auditReport.items.filter((it) => it.id !== item.id);
+      setAuditReport({
+        ...auditReport,
+        items: updatedItems,
+        brokenCount: updatedItems.filter((i) => i.status === 'broken').length,
+        totalProbed: updatedItems.length,
+      });
+    }
+
+    showToast(
+      'info',
+      'Texture Unassigned',
+      `Cleared broken URL for ${item.layerName} (${item.finishName}).`
+    );
+  };
+
+  const filteredAuditItems = useMemo(() => {
+    if (!auditReport) return [];
+    if (auditFilter === 'broken') return auditReport.items.filter((i) => i.status === 'broken');
+    if (auditFilter === 'empty') return auditReport.items.filter((i) => i.status === 'empty');
+    if (auditFilter === 'healthy') return auditReport.items.filter((i) => i.status === 'healthy');
+    if (auditFilter === 'ghost') {
+      const ghostViewIds = new Set(auditReport.ghostAngles.map((g) => g.viewId));
+      return auditReport.items.filter((i) => ghostViewIds.has(i.viewId));
+    }
+    return auditReport.items;
+  }, [auditReport, auditFilter]);
 
   // Layer manipulation helpers
   const handleAddPresetLayer = (preset: (typeof COMMON_PRESET_LAYERS)[0]) => {
@@ -1469,6 +1902,31 @@ export const ConfiguratorStudioPage: React.FC = () => {
               <div className="flex items-center gap-2.5 shrink-0">
                 <button
                   type="button"
+                  onClick={handleStartAssetAudit}
+                  disabled={!editingProfile || isAuditingAssets}
+                  className="px-3.5 py-2 text-xs font-sans font-semibold rounded-xl border border-white/10 hover:bg-white/5 text-zinc-200 hover:text-white transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  title="Audit all views, chassis images, and finish textures for 404/broken URLs and ghost angles"
+                >
+                  {isAuditingAssets ? (
+                    <RefreshCw className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
+                  ) : (
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  )}
+                  <span>Audit Assets</span>
+                  {auditReport && auditReport.brokenCount > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-400 text-[10px] font-bold border border-rose-500/30">
+                      {auditReport.brokenCount}
+                    </span>
+                  )}
+                  {auditReport && auditReport.ghostAngles.length > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-bold border border-amber-500/30">
+                      {auditReport.ghostAngles.length} ghost
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setShowFindReplaceModal(true)}
                   disabled={!editingProfile}
                   className="px-3.5 py-2 text-xs font-sans font-semibold rounded-xl border border-white/10 hover:bg-white/5 text-zinc-200 hover:text-white transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
@@ -2294,37 +2752,89 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </div>
                             )}
 
-                            {/* Add Viewing Angle Helper */}
-                            <div className="pt-3 border-t border-white/5 space-y-2">
-                              <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
-                                Quick Add Device Angle
-                              </label>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleAddView('Back View')}
-                                  className="px-3 py-1.5 text-xs font-sans rounded-xl bg-zinc-900 border border-white/10 hover:border-white/20 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-                                >
-                                  + Back View
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleAddView('Inner View')}
-                                  className="px-3 py-1.5 text-xs font-sans rounded-xl bg-zinc-900 border border-white/10 hover:border-white/20 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-                                >
-                                  + Inner View
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleAddView('Trackpad View')}
-                                  className="px-3 py-1.5 text-xs font-sans rounded-xl bg-zinc-900 border border-white/10 hover:border-white/20 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-                                >
-                                  + Trackpad View
-                                </button>
+                              {/* Add Viewing Angle Helper */}
+                              <div className="pt-3 border-t border-white/5 space-y-2">
+                                <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
+                                  Quick Add Device Angle
+                                </label>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddView('Back View')}
+                                    className="px-3 py-1.5 text-xs font-sans rounded-xl bg-zinc-900 border border-white/10 hover:border-white/20 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                                  >
+                                    + Back View
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddView('Inner View')}
+                                    className="px-3 py-1.5 text-xs font-sans rounded-xl bg-zinc-900 border border-white/10 hover:border-white/20 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                                  >
+                                    + Inner View
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddView('Trackpad View')}
+                                    className="px-3 py-1.5 text-xs font-sans rounded-xl bg-zinc-900 border border-white/10 hover:border-white/20 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                                  >
+                                    + Trackpad View
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Asset Integrity & Ghost Angle Audit Helper */}
+                              <div className="pt-3 border-t border-white/5 space-y-3">
+                                <div className="p-4 rounded-2xl bg-zinc-900/60 border border-white/10 space-y-3">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2.5">
+                                      <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                                      <div>
+                                        <h5 className="text-xs font-bold text-white">Asset Integrity & Ghost Angle Audit</h5>
+                                        <p className="text-[11px] text-zinc-400">
+                                          Verify all chassis renders and finish textures return 200 OK.
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={handleStartAssetAudit}
+                                      disabled={isAuditingAssets}
+                                      className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 text-xs font-medium flex items-center gap-1.5 cursor-pointer transition-colors shrink-0"
+                                    >
+                                      {isAuditingAssets ? (
+                                        <>
+                                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                          <span>Auditing...</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <ShieldCheck className="w-3.5 h-3.5" />
+                                          <span>Run Audit</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+                                  {auditReport && auditReport.ghostAngles.length > 0 && (
+                                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 text-xs text-amber-300">
+                                      <div className="flex items-center gap-2">
+                                        <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+                                        <span>
+                                          {auditReport.ghostAngles.length} ghost angle detected ({auditReport.ghostAngles.map((g) => g.viewName).join(', ')}).
+                                        </span>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowAssetAuditModal(true)}
+                                        className="text-[11px] underline font-bold hover:text-amber-200 cursor-pointer shrink-0"
+                                      >
+                                        View & Clean Up
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        )}
+                          )}
 
                         {/* TAB 3: DEVICE SETTINGS & ARCHITECTURE */}
                         {inspectorTab === 'settings' && (
@@ -2691,6 +3201,350 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         className="px-5 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black transition-colors cursor-pointer"
                       >
                         Save Texture URL
+                      </button>
+                    </div>
+                  </div>
+                </div>,
+                document.body
+              )}
+
+            {/* 5. Asset Integrity Audit Modal */}
+            {showAssetAuditModal &&
+              createPortal(
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                  <div className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl bg-zinc-950 border border-white/15 shadow-2xl overflow-hidden font-sans">
+                    {/* Header */}
+                    <div className="p-5 border-b border-white/10 flex items-center justify-between gap-4 bg-zinc-900/50">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                          <ShieldCheck className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-bold text-white">Asset Integrity & Health Audit</h3>
+                            {editingProfile && (
+                              <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-zinc-300 font-mono">
+                                {editingProfile.device_name}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-zinc-400 mt-0.5">
+                            Probing viewing angles, hardware chassis renders, and finish textures for 200 OK responses.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleStartAssetAudit}
+                          disabled={isAuditingAssets}
+                          className="px-3 py-1.5 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+                        >
+                          <RefreshCw className={clsx('w-3.5 h-3.5', isAuditingAssets && 'animate-spin text-[#f3aa18]')} />
+                          <span>{isAuditingAssets ? 'Auditing...' : 'Re-run Audit'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowAssetAuditModal(false)}
+                          className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar during audit */}
+                    {isAuditingAssets && (
+                      <div className="bg-zinc-900 px-5 py-3 border-b border-white/10 flex items-center justify-between text-xs text-zinc-300">
+                        <div className="flex items-center gap-2">
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#f3aa18]" />
+                          <span>
+                            Auditing assets: {auditProgress.completed} of {auditProgress.total} completed...
+                          </span>
+                        </div>
+                        <span className="font-mono text-zinc-400">
+                          {auditProgress.total > 0
+                            ? Math.round((auditProgress.completed / auditProgress.total) * 100)
+                            : 0}
+                          %
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Content Body */}
+                    <div className="flex-1 overflow-y-auto p-5 space-y-5">
+                      {/* Stat Cards */}
+                      {auditReport && (
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                          <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5">
+                            <span className="text-[11px] text-zinc-400 block font-medium">Total Assets</span>
+                            <span className="text-xl font-bold font-mono text-white mt-1 block">
+                              {auditReport.totalProbed}
+                            </span>
+                          </div>
+                          <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+                            <span className="text-[11px] text-emerald-400 block font-medium flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Healthy (200 OK)</span>
+                            </span>
+                            <span className="text-xl font-bold font-mono text-emerald-400 mt-1 block">
+                              {auditReport.healthyCount}
+                            </span>
+                          </div>
+                          <div className="p-3 rounded-xl bg-rose-500/5 border border-rose-500/20">
+                            <span className="text-[11px] text-rose-400 block font-medium flex items-center gap-1.5">
+                              <AlertTriangle className="w-3.5 h-3.5" />
+                              <span>Broken / 404</span>
+                            </span>
+                            <span className="text-xl font-bold font-mono text-rose-400 mt-1 block">
+                              {auditReport.brokenCount}
+                            </span>
+                          </div>
+                          <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                            <span className="text-[11px] text-amber-400 block font-medium flex items-center gap-1.5">
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              <span>Ghost Angles</span>
+                            </span>
+                            <span className="text-xl font-bold font-mono text-amber-400 mt-1 block">
+                              {auditReport.ghostAngles.length}
+                            </span>
+                          </div>
+                          <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5">
+                            <span className="text-[11px] text-zinc-400 block font-medium">Empty Mappings</span>
+                            <span className="text-xl font-bold font-mono text-zinc-400 mt-1 block">
+                              {auditReport.emptyCount}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Ghost Angle Action Callout */}
+                      {auditReport && auditReport.ghostAngles.length > 0 && (
+                        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-3">
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
+                              <AlertCircle className="w-4 h-4" />
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="text-xs font-bold text-amber-300">
+                                Ghost Viewing Angle Detected ({auditReport.ghostAngles.length})
+                              </h4>
+                              <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
+                                This product contains viewing angles that have 0 finish texture maps and missing or broken chassis images.
+                                This usually happens when copying from another device template (e.g. tablet cloned from an iPad with side view).
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2 pt-2 border-t border-amber-500/20">
+                            {auditReport.ghostAngles.map((ghost) => (
+                              <div
+                                key={ghost.viewId}
+                                className="p-3 rounded-lg bg-black/40 border border-amber-500/20 flex flex-wrap items-center justify-between gap-3 text-xs"
+                              >
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-white">{ghost.viewName}</span>
+                                    <span className="font-mono text-[11px] text-zinc-400">(Angle ID: {ghost.viewId})</span>
+                                  </div>
+                                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                                    Chassis: <span className="text-rose-400">{ghost.chassisStatus}</span> • Textures:{' '}
+                                    <span className="text-amber-400">{ghost.mappedTexturesCount} assigned</span>
+                                  </p>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveGhostAngle(ghost.viewId, ghost.viewName)}
+                                  className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-medium flex items-center gap-1.5 cursor-pointer transition-colors"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Remove Ghost Angle</span>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Empty Mappings Prune Callout */}
+                      {auditReport && auditReport.emptyCount > 0 && (
+                        <div className="p-3.5 rounded-xl bg-zinc-900/80 border border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs">
+                          <div className="flex items-center gap-2.5">
+                            <Tag className="w-4 h-4 text-zinc-400 shrink-0" />
+                            <div>
+                              <span className="text-zinc-200 font-semibold block">
+                                {auditReport.emptyCount} empty texture mappings found
+                              </span>
+                              <span className="text-zinc-400 text-[11px] block mt-0.5">
+                                Empty strings ("") cluttering database records from template cloning.
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handlePruneEmptyMappings}
+                            className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-zinc-200 hover:text-white border border-white/10 text-xs font-medium cursor-pointer transition-colors"
+                          >
+                            Prune Empty Mappings
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Filter Tabs */}
+                      {auditReport && (
+                        <div className="flex items-center gap-1.5 border-b border-white/10 pb-2 overflow-x-auto">
+                          {(
+                            [
+                              { key: 'all', label: 'All Items', count: auditReport.totalProbed },
+                              { key: 'broken', label: 'Broken / 404', count: auditReport.brokenCount },
+                              { key: 'ghost', label: 'Ghost Angles', count: auditReport.ghostAngles.length },
+                              { key: 'empty', label: 'Empty', count: auditReport.emptyCount },
+                              { key: 'healthy', label: 'Healthy', count: auditReport.healthyCount },
+                            ] as const
+                          ).map((tab) => (
+                            <button
+                              key={tab.key}
+                              type="button"
+                              onClick={() => setAuditFilter(tab.key)}
+                              className={clsx(
+                                'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5',
+                                auditFilter === tab.key
+                                  ? 'bg-[#f3aa18] text-black font-bold'
+                                  : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                              )}
+                            >
+                              <span>{tab.label}</span>
+                              <span
+                                className={clsx(
+                                  'text-[10px] px-1.5 py-0.2 rounded-full font-mono',
+                                  auditFilter === tab.key
+                                    ? 'bg-black/20 text-black'
+                                    : 'bg-white/5 text-zinc-400'
+                                )}
+                              >
+                                {tab.count}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Audit Results List */}
+                      <div className="space-y-2">
+                        {filteredAuditItems.length === 0 ? (
+                          <div className="p-8 rounded-xl bg-zinc-900/30 border border-white/5 text-center text-xs text-zinc-400">
+                            {isAuditingAssets ? 'Probing image URLs...' : 'No items match the selected filter.'}
+                          </div>
+                        ) : (
+                          filteredAuditItems.map((item) => (
+                            <div
+                              key={item.id}
+                              className="p-3 rounded-xl bg-zinc-900/60 border border-white/5 hover:border-white/10 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                            >
+                              <div className="min-w-0 flex-1 space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span
+                                    className={clsx(
+                                      'text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider',
+                                      item.status === 'healthy' && 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
+                                      item.status === 'broken' && 'bg-rose-500/15 text-rose-400 border border-rose-500/30',
+                                      item.status === 'empty' && 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                                    )}
+                                  >
+                                    {item.status === 'healthy' ? '200 OK' : item.status === 'broken' ? 'Broken' : 'Empty'}
+                                  </span>
+
+                                  <span className="text-[10px] px-2 py-0.5 rounded bg-white/5 text-zinc-300 border border-white/10 capitalize">
+                                    {item.type}
+                                  </span>
+
+                                  <span className="text-white font-medium">
+                                    {item.layerName ? `${item.layerName} • ` : ''}
+                                    {item.finishName || item.viewName}
+                                  </span>
+
+                                  <span className="text-[11px] text-zinc-500">
+                                    (Angle: {item.viewName})
+                                  </span>
+                                </div>
+
+                                {item.url ? (
+                                  <div className="flex items-center gap-2 text-zinc-400 font-mono text-[11px]">
+                                    <span className="truncate max-w-lg" title={item.url}>
+                                      {item.url}
+                                    </span>
+                                    <a
+                                      href={item.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-zinc-500 hover:text-sky-400 shrink-0"
+                                      title="Open URL in new tab"
+                                    >
+                                      <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  </div>
+                                ) : (
+                                  <span className="text-zinc-500 italic text-[11px]">No URL assigned</span>
+                                )}
+
+                                {item.error && (
+                                  <p className="text-[11px] text-rose-400 flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3 shrink-0" />
+                                    <span>{item.error}</span>
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Actions */}
+                              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                {item.type === 'texture' && item.layerId && item.finishSlug && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleOpenTextureModal(
+                                        item.layerId!,
+                                        item.layerName || '',
+                                        item.finishSlug!,
+                                        item.finishName || item.finishSlug!,
+                                        item.url,
+                                        undefined
+                                      );
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 text-[11px] font-medium cursor-pointer transition-colors"
+                                  >
+                                    Edit URL
+                                  </button>
+                                )}
+
+                                {item.type === 'texture' && item.status === 'broken' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleClearBrokenTexture(item)}
+                                    className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[11px] font-medium cursor-pointer transition-colors"
+                                  >
+                                    Clear
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="p-4 border-t border-white/10 flex items-center justify-between bg-zinc-900/50 text-xs">
+                      <span className="text-zinc-400 text-[11px]">
+                        Changes made here take effect immediately in the studio workspace. Click "Save Configurator" when finished.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowAssetAuditModal(false)}
+                        className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium cursor-pointer transition-colors"
+                      >
+                        Close Audit
                       </button>
                     </div>
                   </div>

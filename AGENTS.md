@@ -190,3 +190,21 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
    git commit -m "feat/fix(scope): clear description without em dashes"
    git push origin main
    ```
+
+---
+
+## 13. Configurator Asset Integrity & Ghost Angle Architecture
+
+- **Ghost Angle Invariant**:
+  A viewing angle in WooCommerce configurator metadata (`_mkl_product_configurator_angles`) is classified as a **Ghost Angle** if:
+  1. It has 0 active, non-empty finish texture maps across all composable skin layers, **and**
+  2. Its hardware chassis render (`view.background_url`) is missing or fails to load (404/redirect).
+- **Template Duplication Chain**:
+  When new device models are created by duplicating older products (e.g. tablet cloned from an iPad Pro template), legacy viewing angles (such as `Side View`) and empty texture maps (`""`) can leak into the new product.
+- **Audit Tooling in Studio**:
+  Configurator Studio (`src/pages/ConfiguratorStudioPage.tsx`) provides an integrated Asset Integrity Audit:
+  - Probes all chassis images, layer texture PNGs, and canvas overlays via concurrent browser image requests.
+  - Automatically identifies ghost angles and provides 1-click removal of ghost angles and unused layer assets.
+  - Provides 1-click pruning of empty texture entries (`""`) from the option cache.
+- **Storefront Addon Synchronization**:
+  Tablets with flat back skin cuts only (such as Xiaomi Pad models) must never offer "Add Side Frame Skin" in `addon-evaluator.ts`. Side wrap skins are reserved strictly for tablets and foldables with physical flat-edge vinyl cuts (such as iPad Pro models and Galaxy Tab S series).
