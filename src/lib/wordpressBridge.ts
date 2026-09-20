@@ -3116,6 +3116,56 @@ export async function duplicateProductDirect(params: {
   }
 }
 
+export interface StorefrontRevalidationResponse {
+  success: boolean;
+  message?: string;
+  results?: {
+    nextjs?: {
+      success: boolean;
+      status_code?: number;
+      details?: any;
+      error?: string;
+    };
+    cloudflare?: {
+      success?: boolean;
+      configured?: boolean;
+      status_code?: number;
+      details?: any;
+      error?: string;
+      message?: string;
+    };
+  };
+  error?: string;
+}
+
+export async function revalidateStorefrontWebDirect(params?: {
+  slug?: string;
+  category?: string;
+  tag?: string;
+  path?: string;
+  purge_everything?: boolean;
+}): Promise<StorefrontRevalidationResponse> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/configurator/revalidate-web`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(params || {}),
+    });
+    const data = await res.json();
+    return {
+      success: res.ok && !!data?.success,
+      message: data?.message,
+      results: data?.results,
+      error: data?.error || data?.message,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 // ==========================================
 // Tracking Number Pool & Auto-Resi Engine
 // ==========================================

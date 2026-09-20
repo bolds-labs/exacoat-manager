@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.77] - 2026-09-20
+
+### Dual Storefront Revalidation & Admin Draft Preview Architecture
+- **On-Demand Storefront Cache Revalidation**:
+  - Implemented `POST /configurator/revalidate-web` in `class-configurator-engine.php` and `revalidateStorefrontWebDirect()` in `wordpressBridge.ts`.
+  - Dispatches immediate ISR cache invalidation to Next.js storefront (`POST https://web.exacoat.com/api/revalidate?secret=...`).
+  - Automatically clears Next.js cache tags (`products`, `configurators`, `product-{slug}`, `category-{category}`) and paths (`/product/{slug}`, `/shop/{category}`, `/shop`, `/`).
+- **Cloudflare Edge Cache Integration**:
+  - Automatically queries Cloudflare Zone credentials from `wp-config.php` (`EXA_CLOUDFLARE_ZONE_ID`, `EXACOAT_CLOUDFLARE_ZONE_ID`, `CLOUDFLARE_ZONE_ID`, `AM_CLOUDFLARE_ZONE_ID` and corresponding API tokens).
+  - Purges specific storefront URLs or full network cache via Cloudflare Zone API v4 (`https://api.cloudflare.com/client/v4/zones/{zone_id}/purge_cache`).
+- **Automated Lifecycle Hooks**:
+  - Automatically triggers dual revalidation upon saving configurator profiles (`rest_save_product_configurator`), changing prices (`rest_set_product_price`), duplicating devices (`rest_duplicate_product`), toggling configurator status (`rest_toggle_configurator`), and standard WooCommerce product updates (`save_post_product`).
+- **Studio Quick-Action Controls**:
+  - Added dedicated "Revalidate Web" buttons in the Configurator Studio PageHeroHeader and Studio Editor header with real-time spinners and toast notifications.
+- **Admin Draft Preview on Storefront**:
+  - Storefront detects authenticated administrator session cookies (`exacoat_customer_session`).
+  - Allows admins to discover and test draft products on `web.exacoat.com` with a prominent amber sticky notice banner while remaining completely hidden from the public.
+
 ## [0.0.76] - 2026-09-20
 
 ### Configurator Studio v2: Per-Angle Hardware Color CAD Renders, Device Production Variants & Accents Preset Refinement

@@ -30,6 +30,9 @@ class Exacoat_Configurator_Engine {
 	public static function init(): void {
 		add_action( 'rest_api_init', [ __CLASS__, 'register_rest_routes' ] );
 
+		// Hook into post save for product cache revalidation
+		add_action( 'save_post_product', [ __CLASS__, 'on_product_saved' ], 20, 2 );
+
 		// Hook into WooCommerce product REST response and data loading
 		add_filter( 'woocommerce_rest_prepare_product_object', [ __CLASS__, 'enrich_wc_product_configurator_meta' ], 10, 3 );
 
@@ -482,6 +485,13 @@ class Exacoat_Configurator_Engine {
 			'callback'            => [ __CLASS__, 'rest_extract_shading' ],
 			'permission_callback' => [ __CLASS__, 'verify_permission' ],
 		] );
+
+		// 18. POST /configurator/revalidate-web: On-demand cache revalidation for web.exacoat.com and Cloudflare
+		$register( '/configurator/revalidate-web', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_revalidate_web' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+		] );
 	}
 
 
@@ -690,6 +700,11 @@ class Exacoat_Configurator_Engine {
 		}
 
 		update_post_meta( $pid, self::CONFIGURATOR_FLAG_META_KEY, $is_cfg ? 'yes' : 'no' );
+
+		$post = get_post( $pid );
+		self::trigger_storefront_revalidation( [
+			'slug' => $post ? $post->post_name : '',
+		] );
 
 		return rest_ensure_response( [
 			'success'         => true,
@@ -1512,10 +1527,17 @@ class Exacoat_Configurator_Engine {
 			Exacoat_Logger::log( 'info', 'configurator', "Configurator profile updated for Product #{$product_id} ({$profile['device_name']})" );
 		}
 
+		// Trigger storefront Next.js ISR revalidation and Cloudflare cache purge
+		$reval_results = self::trigger_storefront_revalidation( [
+			'slug'     => $profile['device_slug'] ?? '',
+			'category' => $profile['category'] ?? '',
+		] );
+
 		return rest_ensure_response( [
-			'success' => true,
-			'message' => "Configurator profile saved successfully.",
-			'profile' => $profile,
+			'success'      => true,
+			'message'      => "Configurator profile saved successfully.",
+			'profile'      => $profile,
+			'revalidation' => $reval_results,
 		] );
 	}
 
@@ -1599,11 +1621,17 @@ class Exacoat_Configurator_Engine {
 			Exacoat_Logger::log( 'info', 'configurator', "Price updated to IDR {$price} for Product #{$product_id} ({$product->get_name()})" );
 		}
 
+		// Trigger storefront Next.js ISR revalidation and Cloudflare cache purge
+		$reval_results = self::trigger_storefront_revalidation( [
+			'slug' => $product->get_slug(),
+		] );
+
 		return rest_ensure_response( [
-			'success'    => true,
-			'product_id' => $product_id,
-			'price'      => $price,
-			'message'    => "Price updated successfully to IDR " . number_format( $price, 0, ',', '.' ),
+			'success'      => true,
+			'product_id'   => $product_id,
+			'price'        => $price,
+			'message'      => "Price updated successfully to IDR " . number_format( $price, 0, ',', '.' ),
+			'revalidation' => $reval_results,
 		] );
 	}
 
@@ -1788,14 +1816,20 @@ class Exacoat_Configurator_Engine {
 			Exacoat_Logger::log( 'info', 'configurator', "Product duplicated: #{$source_id} to #{$new_pid} ({$new_name}) in draft status" );
 		}
 
+		// Trigger storefront Next.js ISR revalidation and Cloudflare cache purge
+		$reval_results = self::trigger_storefront_revalidation( [
+			'slug' => $new_slug,
+		] );
+
 		return rest_ensure_response( [
-			'success'    => true,
-			'product_id' => $new_pid,
-			'name'       => $new_name,
-			'slug'       => $new_slug,
-			'price'      => $price_to_set,
-			'status'     => 'draft',
-			'message'    => "Product duplicated successfully as draft #{$new_pid} ({$new_name})",
+			'success'      => true,
+			'product_id'   => $new_pid,
+			'name'         => $new_name,
+			'slug'         => $new_slug,
+			'price'        => $price_to_set,
+			'status'       => 'draft',
+			'message'      => "Product duplicated successfully as draft #{$new_pid} ({$new_name})",
+			'revalidation' => $reval_results,
 		] );
 	}
 
@@ -1894,6 +1928,143 @@ class Exacoat_Configurator_Engine {
 				}
 			}
 		}
+	}
+
+	/**
+	 * Hook triggered when any product post is saved/updated in WordPress.
+	 */
+	public static function on_product_saved( $post_id, $post ): void {
+		if ( wp_is_post_autosave( $post_id ) || wp_is_post_revision( $post_id ) ) {
+			return;
+		}
+		if ( ! $post || 'product' !== $post->post_type ) {
+			return;
+		}
+		$slug = $post->post_name;
+		self::trigger_storefront_revalidation( [ 'slug' => $slug ] );
+	}
+
+	/**
+	 * Dual Revalidation: triggers Next.js storefront on-demand ISR revalidation and Cloudflare Edge Cache purge.
+	 */
+	public static function trigger_storefront_revalidation( array $params = [] ): array {
+		$slug      = sanitize_title( $params['slug'] ?? '' );
+		$category  = sanitize_title( $params['category'] ?? '' );
+		$tag       = sanitize_text_field( $params['tag'] ?? 'products' );
+		$path      = sanitize_text_field( $params['path'] ?? '' );
+		$purge_all = ! empty( $params['purge_everything'] );
+
+		$results = [
+			'nextjs'     => null,
+			'cloudflare' => null,
+		];
+
+		// 1. Next.js storefront revalidation (web.exacoat.com)
+		$storefront_base = defined( 'EXACOAT_STOREFRONT_URL' ) ? EXACOAT_STOREFRONT_URL : 'https://web.exacoat.com';
+		$secret = defined( 'EXACOAT_REVALIDATE_SECRET' ) ? EXACOAT_REVALIDATE_SECRET : 'exacoat_revalidate_secret_2026';
+		$revalidate_url = trailingslashit( $storefront_base ) . 'api/revalidate?secret=' . rawurlencode( $secret );
+
+		$payload = [
+			'tag'      => $tag,
+			'slug'     => $slug,
+			'category' => $category,
+			'path'     => $path,
+		];
+
+		$response = wp_remote_post( $revalidate_url, [
+			'headers' => [ 'Content-Type' => 'application/json' ],
+			'body'    => wp_json_encode( $payload ),
+			'timeout' => 8,
+		] );
+
+		if ( is_wp_error( $response ) ) {
+			$results['nextjs'] = [
+				'success' => false,
+				'error'   => $response->get_error_message(),
+			];
+		} else {
+			$status_code = wp_remote_retrieve_response_code( $response );
+			$body = json_decode( wp_remote_retrieve_body( $response ), true );
+			$results['nextjs'] = [
+				'success'     => ( 200 === $status_code && ! empty( $body['success'] ) ),
+				'status_code' => $status_code,
+				'details'     => $body,
+			];
+		}
+
+		// 2. Cloudflare Edge Cache Purge (if credentials configured)
+		$zone_id = defined( 'EXA_CLOUDFLARE_ZONE_ID' ) ? EXA_CLOUDFLARE_ZONE_ID : ( defined( 'EXACOAT_CLOUDFLARE_ZONE_ID' ) ? EXACOAT_CLOUDFLARE_ZONE_ID : ( defined( 'CLOUDFLARE_ZONE_ID' ) ? CLOUDFLARE_ZONE_ID : ( defined( 'AM_CLOUDFLARE_ZONE_ID' ) ? AM_CLOUDFLARE_ZONE_ID : ( getenv( 'EXA_CLOUDFLARE_ZONE_ID' ) ?: ( class_exists( 'Exacoat_Core' ) ? Exacoat_Core::get_setting( 'cloudflare_zone_id', '' ) : '' ) ) ) ) );
+		$api_token = defined( 'EXA_CLOUDFLARE_API_TOKEN' ) ? EXA_CLOUDFLARE_API_TOKEN : ( defined( 'EXACOAT_CLOUDFLARE_API_TOKEN' ) ? EXACOAT_CLOUDFLARE_API_TOKEN : ( defined( 'CLOUDFLARE_API_TOKEN' ) ? CLOUDFLARE_API_TOKEN : ( defined( 'AM_CLOUDFLARE_API_TOKEN' ) ? AM_CLOUDFLARE_API_TOKEN : ( getenv( 'EXA_CLOUDFLARE_API_TOKEN' ) ?: ( class_exists( 'Exacoat_Core' ) ? Exacoat_Core::get_setting( 'cloudflare_api_token', '' ) : '' ) ) ) ) );
+
+		if ( ! empty( $zone_id ) && ! empty( $api_token ) ) {
+			if ( $purge_all ) {
+				$cf_payload = [ 'purge_everything' => true ];
+			} else {
+				$files = [
+					'https://web.exacoat.com/',
+					'https://web.exacoat.com/shop',
+					'https://exacoat.com/',
+					'https://exacoat.com/shop/',
+				];
+				if ( ! empty( $slug ) ) {
+					$files[] = "https://web.exacoat.com/product/{$slug}";
+					$files[] = "https://exacoat.com/product/{$slug}";
+				}
+				if ( ! empty( $category ) ) {
+					$files[] = "https://web.exacoat.com/shop/{$category}";
+				}
+				$cf_payload = [ 'files' => array_values( array_unique( $files ) ) ];
+			}
+
+			$cf_res = wp_remote_post( 'https://api.cloudflare.com/client/v4/zones/' . rawurlencode( trim( $zone_id ) ) . '/purge_cache', [
+				'headers' => [
+					'Authorization' => 'Bearer ' . trim( $api_token ),
+					'Content-Type'  => 'application/json',
+				],
+				'body'    => wp_json_encode( $cf_payload ),
+				'timeout' => 12,
+			] );
+
+			if ( is_wp_error( $cf_res ) ) {
+				$results['cloudflare'] = [
+					'success' => false,
+					'error'   => $cf_res->get_error_message(),
+				];
+			} else {
+				$cf_code = wp_remote_retrieve_response_code( $cf_res );
+				$cf_body = json_decode( wp_remote_retrieve_body( $cf_res ), true );
+				$results['cloudflare'] = [
+					'success'     => ( 200 === $cf_code && ! empty( $cf_body['success'] ) ),
+					'status_code' => $cf_code,
+					'details'     => $cf_body,
+				];
+			}
+		} else {
+			$results['cloudflare'] = [
+				'configured' => false,
+				'message'    => 'Cloudflare credentials not configured in wp-config.php or settings.',
+			];
+		}
+
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log( 'info', 'configurator', "Storefront revalidation triggered for slug: '{$slug}', category: '{$category}'" );
+		}
+
+		return $results;
+	}
+
+	/**
+	 * REST Endpoint: On-demand cache revalidation for web.exacoat.com and Cloudflare
+	 */
+	public static function rest_revalidate_web( WP_REST_Request $request ): WP_REST_Response {
+		$params = $request->get_json_params() ?: $request->get_params();
+		$results = self::trigger_storefront_revalidation( $params );
+
+		return rest_ensure_response( [
+			'success' => ( ! empty( $results['nextjs']['success'] ) || ! empty( $results['cloudflare']['success'] ) ),
+			'results' => $results,
+			'message' => 'Storefront web cache revalidation completed.',
+		] );
 	}
 }
 

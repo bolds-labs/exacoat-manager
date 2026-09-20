@@ -423,3 +423,31 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Tested interactively in the Studio viewport tester dock with live price updates.
 - **Cutout Punching vs Skin Layer Invariant**:
   Logo Cutout is not a skin part. Operators do not create a "Logo Skin" or "Logo Cutout" layer. A transparent alpha mask of the logo is punched via canvas `destination-out` through all applied skin layers, revealing the metallic brand logo on Layer 1 (Hardware Chassis Render).
+
+---
+
+## 27. Dual Storefront Revalidation & Admin Draft Preview Architecture
+
+- **On-Demand ISR Revalidation Invariant**:
+  `web.exacoat.com` uses Next.js Incremental Static Regeneration (ISR). Changes made in Exacoat Manager (such as saving profiles, updating pricing, duplicating products, or toggling configurators) must be reflected immediately on the live storefront without waiting for the default 3,600s cache TTL.
+- **Dual Pipeline Mechanism**:
+  1. **Next.js Storefront Invalidation**:
+     Calls `POST https://web.exacoat.com/api/revalidate?secret=...`.
+     Invalidates specific Next.js cache tags (`products`, `configurators`, `product-{slug}`, `category-{category}`) and paths (`/product/{slug}`, `/shop/{category}`, `/shop`, `/`).
+  2. **Cloudflare Edge Cache Purge**:
+     Queries Cloudflare Zone credentials from `wp-config.php` (`EXA_CLOUDFLARE_ZONE_ID`, `EXACOAT_CLOUDFLARE_ZONE_ID`, `CLOUDFLARE_ZONE_ID`, `AM_CLOUDFLARE_ZONE_ID` and corresponding API tokens).
+     Dispatches purge requests directly to `https://api.cloudflare.com/client/v4/zones/{zone_id}/purge_cache` for storefront URLs or full network cache.
+- **Automatic Lifecycle Triggers**:
+  - `rest_save_product_configurator` (profile save)
+  - `rest_set_product_price` (product price update)
+  - `rest_duplicate_product` (device cloning)
+  - `rest_toggle_configurator` (configurator flag change)
+  - `save_post_product` (WordPress admin product saves)
+- **Manual Studio Triggers**:
+  - Main Catalog header: "Revalidate Web" button purges catalog cache across Next.js and Cloudflare.
+  - Studio Editor header: "Revalidate Web" button purges the specific active device profile and category cache.
+- **Admin Draft Preview on Storefront**:
+  - Authenticated administrators (`role === 'super_admin'` or `roles.includes('administrator')`) possessing the `exacoat_customer_session` cookie can discover and preview draft products directly on `web.exacoat.com` with `cache: "no-store"`.
+  - Displays a prominent amber sticky notice banner at the top of the product page indicating draft status and offering a direct link to open the device in Configurator Studio.
+  - For unauthenticated or public visitors, draft products return a strict 404 Not Found response and are completely excluded from category catalogs.
+
