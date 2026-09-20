@@ -621,4 +621,33 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **Optional Layer Status Badge Invariant**:
   Optional unselected layers display an `Optional` status pill instead of `+ Add`, clarifying that the layer is an optional skin piece rather than an unconfigured requirement.
 
+---
+
+## 39. Master Texture Resolution, 3D Multiply Shading, and Sidebar Layout Invariants
+
+- **Authoritative Master Texture Resolution (No Static Overrides)**:
+  - `lib/configurator/finishes-stock-override.json` is strictly prohibited from hijacking `fetchGlobalFinishes()`. Static override files lack `texture_url` definitions, causing v2 skins to fall back to low-resolution swatch thumbnails (e.g. macro photos of wrinkled paper).
+  - `fetchGlobalFinishes()` in `configurator-loader.ts` must always query WordPress REST API (`${CMS_ORIGIN}/wp-json/exacoat-core/v1/finishes`) first to load live master textures (`texture_url`), group sequences, and inventory status.
+  - Default fallbacks (`DEFAULT_GLOBAL_FINISHES`) contain full `texture_url` links for all 22 materials so offline environments never render swatch thumbnails on the 3D canvas.
+
+- **Authoritative Finish Group Ordering (`Limited` > `Signature skins` > `Colors` > `Natural`)**:
+  - `globalFinishGroupsCache` defaults to `["Limited", "Signature skins", "Colors", "Natural"]` and is dynamically updated by the WordPress database option `exacoat_global_finish_groups`.
+  - Group sequence comparison in `parseV2ConfiguratorProfile` uses case-insensitive index matching (`findGroupIndex`), guaranteeing that group tabs on desktop and mobile carousels strictly follow the sequence set in Configurator Studio.
+  - Primary/back skin layers automatically include "Limited" finishes (such as Titanium+) even on older device profiles whose `allowed_finish_groups` only stored legacy groups.
+
+- **3D CAD Multiply Shading & Specular Highlight Architecture**:
+  - Shading images (`shadow_png_url` or `shading_image_url`) are evaluated across both `currentView` and individual layer assets (`layerAsset?.shadow_png_url`).
+  - In CSS `mix-blend-mode: multiply`, pure white pixels (`#FFFFFF`) are mathematically transparent (`1.0 * background = background`), while ambient occlusion bevels and camera plateau drop shadows naturally darken the texture beneath.
+  - White CAD renders (such as `iPhone-17-Pro-Skins-Matte-White.png`) must never be suppressed in multiply shadow mode.
+  - In contrast, `mix-blend-mode: screen` strictly requires an extracted specular highlight map (`highlight_png_url`) or zero opacity (`highlight_opacity = 0`) to prevent solid white screens.
+
+- **Logo Cutout Option Discovery**:
+  - In `device-skin-configurator.tsx`, `hasLogoCutoutOption` must check `data.v2Profile.coverage_and_cutouts.logo_cutout_mask_url`, `currentView.logo_cutout_mask_url`, and `layer.assets_by_view.*.logo_cutout_url`.
+  - Checking only `has_logo_cutout` on legacy profiles causes false negatives when the flag is undefined even though cutout mask assets exist.
+
+- **Configurator Sidebar Hierarchy (Skins First, Coverage & Cutouts at Bottom)**:
+  - The customer workflow in `device-skin-configurator.tsx` renders skin selection accordions (`interactiveLayers.map(...)` for Back Skin, Additional Camera & Back Glass, etc.) first.
+  - Hardware coverage (Model Cut vs Model 360) and cutout toggles (Logo Cutout, Pencil Cutout, Custom Hardware Cutouts) are positioned at the bottom of the sidebar beneath all skin part accordions.
+
+
 
