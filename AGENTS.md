@@ -602,3 +602,23 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
     2. **Tablet & Laptop**: 2.0x multiplier (+IDR 60,000 default signature finish surcharge).
   - Multipliers can still be fine-tuned via the numeric stepper if a specific device requires bespoke sizing.
 
+---
+
+## 38. Modern Configurator Swatch Grouping, Staging Proxy, and Cutout Architecture
+
+- **v2 Swatch Grouping Invariant (`choice.parent = groupNameToIdMap[f.group]`)**:
+  In v2 profile loading (`lib/server/configurator-loader.ts`), choices must be mapped to their corresponding group ID (`groupNameToIdMap[f.group]`) rather than defaulting to `parent: 0`. This allows storefront category carousels (Limited, Signature skins, Colors, Natural) to group finishes properly into organized tabs matching v1.
+- **Dynamic Layer Finishes Synthesis Invariant**:
+  When a device layer defines texture maps (`l.assets_by_view[viewId].render_texture_map`) for a finish (e.g. `titanium-plus`) that does not yet exist in the global catalog cache, the loader dynamically synthesizes the finish definition into `allFinishesList`, guaranteeing it immediately renders in the device options without requiring WordPress cache revalidation.
+- **Staging Uploads vs Edge CDN Mask Invariant (`maskMediaUrl`)**:
+  `media.exacoat.com` is configured as an edge CDN proxy pointing strictly to production `exacoat.com`. Media uploaded to staging (`staging.exacoat.com/wp-content/uploads/...`) does not exist on production and returns 404 if rewritten to `media.exacoat.com`. `maskMediaUrl` must strictly preserve `staging.exacoat.com` URLs intact.
+- **Canvas Washout Prevention & CAD Render Guard**:
+  Solid opaque white CAD renders (such as `iPhone-17-Pro-Skins-Matte-White.png`) must never be rendered using `mixBlendMode: "screen"`, as pure white pixels (1.0) under screen blend completely wash out the canvas. Highlight maps strictly require an extracted transparent highlight PNG (`highlight_png_url`), while multiplying shadow maps require a clean multiply shadow PNG (`shadow_png_url`).
+- **Hardware Bare Device & Color Selector Layout Invariant**:
+  Device hardware color swatches sit directly adjacent to the "Hold to view bare device" pill at the bottom right of the canvas, displayed as circles only with no cluttering text labels.
+- **V1-Parity Radio Cards for Coverage and Cutouts**:
+  Model Coverage (Model Cut vs Model 360), Logo Cutout, and Custom Cutouts (e.g. Apple Pencil Strip, S-Pen slot) use standardized 2-column radio cards with pill badges (e.g. "Case-Friendly", "Full Protection", "Logo Exposed", or custom configurable badge text) and interactive `(i)` info drawer tooltips rather than simple boolean switches. Custom cutouts dynamically support custom pill text and description configured in Studio.
+- **Optional Layer Status Badge Invariant**:
+  Optional unselected layers display an `Optional` status pill instead of `+ Add`, clarifying that the layer is an optional skin piece rather than an unconfigured requirement.
+
+
