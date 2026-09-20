@@ -31,10 +31,34 @@ class Exacoat_Configurator_Engine {
 	public static function get_finish_groups(): array {
 		$groups = get_option( self::GROUPS_OPTION_KEY, null );
 		if ( empty( $groups ) || ! is_array( $groups ) ) {
-			$groups = [ 'Limited', 'Signature skins', 'Pastels & Colors', 'Special editions' ];
+			$finishes = self::get_finishes();
+			$derived  = array_values( array_unique( array_filter( array_column( $finishes, 'group' ) ) ) );
+			$groups   = ! empty( $derived ) ? $derived : [ 'Limited', 'Signature skins', 'Colors', 'Natural' ];
 			update_option( self::GROUPS_OPTION_KEY, $groups );
 		}
-		return array_values( array_unique( array_filter( array_map( 'sanitize_text_field', $groups ) ) ) );
+
+		// Prune any stored groups that have zero finishes in catalog unless explicitly populated
+		$finishes      = self::get_finishes();
+		$active_groups = array_unique( array_filter( array_column( $finishes, 'group' ) ) );
+		$sanitized     = array_values( array_unique( array_filter( array_map( 'sanitize_text_field', $groups ) ) ) );
+
+		// Filter out phantom empty groups (e.g. Pastels & Colors, Special editions) that have 0 finishes
+		$valid_groups = array_values( array_filter( $sanitized, function( $g ) use ( $active_groups ) {
+			return in_array( $g, $active_groups, true );
+		} ) );
+
+		// Append any active groups missing from the sequence
+		foreach ( $active_groups as $ag ) {
+			if ( ! in_array( $ag, $valid_groups, true ) ) {
+				$valid_groups[] = $ag;
+			}
+		}
+
+		if ( empty( $valid_groups ) ) {
+			$valid_groups = [ 'Limited', 'Signature skins', 'Colors', 'Natural' ];
+		}
+
+		return $valid_groups;
 	}
 
 	public static function save_finish_groups( array $groups ): bool {
@@ -608,6 +632,8 @@ class Exacoat_Configurator_Engine {
 		$in_stock = isset( $params['in_stock'] ) ? (bool) $params['in_stock'] : true;
 		$is_custom_per_device = ! empty( $params['is_custom_per_device'] );
 		$order = isset( $params['order'] ) ? (int) $params['order'] : 0;
+		$badge_text = sanitize_text_field( $params['badge_text'] ?? '' );
+		$badge_color = sanitize_text_field( $params['badge_color'] ?? '' );
 
 		$finishes = self::get_finishes();
 		$updated = false;
@@ -626,6 +652,8 @@ class Exacoat_Configurator_Engine {
 				$f['extra_price']          = $extra_price;
 				$f['in_stock']             = $in_stock;
 				$f['is_custom_per_device'] = $is_custom_per_device;
+				$f['badge_text']           = $badge_text;
+				$f['badge_color']          = $badge_color;
 				if ( isset( $params['order'] ) ) {
 					$f['order'] = $order;
 				}
@@ -646,6 +674,8 @@ class Exacoat_Configurator_Engine {
 				'extra_price'          => $extra_price,
 				'in_stock'             => $in_stock,
 				'is_custom_per_device' => $is_custom_per_device,
+				'badge_text'           => $badge_text,
+				'badge_color'          => $badge_color,
 				'order'                => $order,
 			];
 		}
@@ -734,6 +764,15 @@ class Exacoat_Configurator_Engine {
 			self::save_finish_groups( $groups );
 		}
 		if ( is_array( $finishes ) ) {
+			foreach ( $finishes as &$item ) {
+				if ( isset( $item['badge_text'] ) ) {
+					$item['badge_text'] = sanitize_text_field( $item['badge_text'] );
+				}
+				if ( isset( $item['badge_color'] ) ) {
+					$item['badge_color'] = sanitize_text_field( $item['badge_color'] );
+				}
+			}
+			unset( $item );
 			self::save_finishes( $finishes );
 		}
 

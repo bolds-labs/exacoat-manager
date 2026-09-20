@@ -462,6 +462,21 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [editingFinishGroups, setEditingFinishGroups] = useState<Record<string, string>>({});
   const [editingFinishPrices, setEditingFinishPrices] = useState<Record<string, number>>({});
   const [editingFinishCustomFlags, setEditingFinishCustomFlags] = useState<Record<string, boolean>>({});
+  const [editingFinishBadgeTexts, setEditingFinishBadgeTexts] = useState<Record<string, string>>({});
+  const [editingFinishBadgeColors, setEditingFinishBadgeColors] = useState<Record<string, string>>({});
+  const [imagePickerModal, setImagePickerModal] = useState<{
+    isOpen: boolean;
+    finishId: string;
+    finishName: string;
+    type: 'thumbnail' | 'texture';
+    currentUrl: string;
+  }>({
+    isOpen: false,
+    finishId: '',
+    finishName: '',
+    type: 'thumbnail',
+    currentUrl: '',
+  });
   const [storedFinishGroups, setStoredFinishGroups] = useState<string[]>([]);
   const [isManagingGroups, setIsManagingGroups] = useState(false);
   const [newGroupNameInput, setNewGroupNameInput] = useState('');
@@ -476,6 +491,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
     texture_url: string;
     extra_price: number;
     is_custom_per_device: boolean;
+    badge_text: string;
+    badge_color: string;
   }>({
     name: '',
     slug: '',
@@ -484,6 +501,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
     texture_url: '',
     extra_price: 0,
     is_custom_per_device: false,
+    badge_text: '',
+    badge_color: '#f3aa18',
   });
 
   // WordPress Media Library Picker state
@@ -2512,7 +2531,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     );
   }, [categories, categorySearch]);
 
-  // Save master finish properties (thumbnail, texture, name, group, price, custom per device)
+  // Save master finish properties (thumbnail, texture, name, group, price, custom per device, badge)
   const handleSaveMasterFinish = async (finish: GlobalFinish) => {
     const customUrl = editingFinishUrls[finish.id];
     const newTexture = customUrl !== undefined ? customUrl.trim() : (finish.texture_url || finish.thumbnail || '');
@@ -2526,6 +2545,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
     const newPrice = customPrice !== undefined ? customPrice : finish.extra_price;
     const customFlag = editingFinishCustomFlags[finish.id];
     const newCustomFlag = customFlag !== undefined ? customFlag : Boolean(finish.is_custom_per_device);
+    const customBadgeText = editingFinishBadgeTexts[finish.id];
+    const newBadgeText = customBadgeText !== undefined ? customBadgeText.trim() : (finish.badge_text || '');
+    const customBadgeColor = editingFinishBadgeColors[finish.id];
+    const newBadgeColor = customBadgeColor !== undefined ? customBadgeColor.trim() : (finish.badge_color || '#f3aa18');
 
     try {
       setSavingFinishId(finish.id);
@@ -2540,6 +2563,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
         in_stock: finish.in_stock,
         class_name: finish.class_name,
         is_custom_per_device: newCustomFlag,
+        badge_text: newBadgeText,
+        badge_color: newBadgeColor,
       });
       if (res.success) {
         showToast('success', 'Finish Saved', `Finish "${newName}" updated successfully.`);
@@ -2557,6 +2582,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     texture_url: newTexture,
                     extra_price: newPrice,
                     is_custom_per_device: newCustomFlag,
+                    badge_text: newBadgeText,
+                    badge_color: newBadgeColor,
                   }
                 : f
             )
@@ -2631,6 +2658,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
         in_stock: true,
         class_name: `cfg-${slug}`,
         is_custom_per_device: Boolean(newFinishForm.is_custom_per_device),
+        badge_text: newFinishForm.badge_text?.trim() || '',
+        badge_color: newFinishForm.badge_color?.trim() || '#f3aa18',
       });
       if (res.success) {
         showToast('success', 'Finish Created', `Added finish "${newFinishForm.name.trim()}".`);
@@ -2649,6 +2678,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
           texture_url: '',
           extra_price: 0,
           is_custom_per_device: false,
+          badge_text: '',
+          badge_color: '#f3aa18',
         });
       } else {
         showToast('error', 'Creation Failed', res.error || 'Could not create finish.');
@@ -2711,14 +2742,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
     }
   };
 
-  // Finish groups for filter tabs
+  // Finish groups for filter tabs (only active groups that have finishes)
   const finishGroups = useMemo(() => {
     const rawGroups = new Set<string>();
     finishes.forEach((f) => {
       if (f.group) rawGroups.add(f.group);
-    });
-    storedFinishGroups.forEach((g) => {
-      if (g) rawGroups.add(g);
     });
     const sorted = Array.from(rawGroups).sort((a, b) => {
       const idxA = storedFinishGroups.indexOf(a);
@@ -3284,160 +3312,176 @@ export const ConfiguratorStudioPage: React.FC = () => {
           <p className="text-xs text-zinc-500 mt-1">Try broadening your search query or selecting a different category.</p>
         </GlassCard>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredProfiles.map((p) => (
-            <GlassCard
-              key={p.product_id}
-              className="p-5 flex flex-col justify-between hover:border-white/20 transition-all group"
-            >
-              <div>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center shrink-0">
-                      {getFamilyIcon(p.family)}
-                    </div>
-                    <div className="min-w-0">
-                      <h4 className="text-sm font-bold text-white truncate">{p.name}</h4>
-                      <p className="text-[11px] text-zinc-400 truncate mt-0.5">
+        <div className="rounded-2xl border border-white/10 overflow-hidden bg-zinc-950/60 shadow-xl">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs font-sans border-collapse">
+              <thead>
+                <tr className="border-b border-white/10 bg-zinc-900/60 text-[11px] uppercase tracking-wider font-semibold text-zinc-400">
+                  <th className="py-3 px-4 w-10 text-center">Status</th>
+                  <th className="py-3 px-4 min-w-[220px]">Device / Model</th>
+                  <th className="py-3 px-4 min-w-[150px]">Category</th>
+                  <th className="py-3 px-3 text-center">Engine</th>
+                  <th className="py-3 px-3 text-center">Configurator</th>
+                  <th className="py-3 px-4 text-center">Setup</th>
+                  <th className="py-3 px-4 text-right">Price</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {filteredProfiles.map((p) => {
+                  const isAuditedClean =
+                    p.last_audited_at &&
+                    p.audit_status !== 'issues' &&
+                    !(p.audit_issues && p.audit_issues > 0);
+                  const isAuditedIssues =
+                    p.last_audited_at &&
+                    (p.audit_status === 'issues' || Boolean(p.audit_issues && p.audit_issues > 0));
+
+                  return (
+                    <tr
+                      key={p.product_id}
+                      onClick={() => handleOpenEditor(p.product_id)}
+                      className="hover:bg-white/[0.03] transition-colors cursor-pointer group"
+                    >
+                      {/* Status Dot */}
+                      <td className="py-3 px-4 text-center">
+                        <span
+                          className={clsx(
+                            'inline-block w-2.5 h-2.5 rounded-full',
+                            isAuditedClean
+                              ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]'
+                              : isAuditedIssues
+                              ? 'bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.6)]'
+                              : 'bg-zinc-600'
+                          )}
+                          title={
+                            isAuditedClean
+                              ? 'Audited clean'
+                              : isAuditedIssues
+                              ? `Issues detected (${p.audit_issues || 1})`
+                              : 'Unaudited'
+                          }
+                        />
+                      </td>
+
+                      {/* Device Name & SKU */}
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-white group-hover:text-[#f3aa18] transition-colors">
+                            {p.name}
+                          </span>
+                          <span className="text-[10px] font-mono text-zinc-500 bg-white/5 px-1.5 py-0.5 rounded">
+                            #{p.product_id}
+                          </span>
+                          {p.status === 'draft' && (
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                              Draft
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Category */}
+                      <td className="py-3 px-4 text-zinc-400 truncate max-w-[180px]">
                         {p.categories.join(', ') || 'Uncategorized'}
-                      </p>
-                    </div>
-                  </div>
+                      </td>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      disabled={togglingConfiguratorId === p.product_id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleConfiguratorStatus(p.product_id, p.is_configurator !== false);
-                      }}
-                      className={clsx(
-                        'text-[10px] font-sans px-2 py-0.5 rounded-full border font-semibold flex items-center gap-1 transition-all cursor-pointer',
-                        p.is_configurator !== false
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-                          : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:bg-zinc-700 hover:text-white'
-                      )}
-                      title={
-                        p.is_configurator !== false
-                          ? 'Active Configurator. Click to exclude from configurators.'
-                          : 'Excluded from configurators. Click to enable as device configurator.'
-                      }
-                    >
-                      {togglingConfiguratorId === p.product_id ? (
-                        <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-                      ) : p.is_configurator !== false ? (
-                        <CheckCircle2 className="w-2.5 h-2.5" />
-                      ) : (
-                        <AlertCircle className="w-2.5 h-2.5 text-zinc-500" />
-                      )}
-                      <span>{p.is_configurator !== false ? 'Configurator' : 'Excluded'}</span>
-                    </button>
+                      {/* Engine */}
+                      <td className="py-3 px-3 text-center">
+                        <span
+                          className={clsx(
+                            'text-[10px] font-mono px-2 py-0.5 rounded-md border font-medium',
+                            (p.configurator_version || 'v1') === 'v2'
+                              ? 'bg-white/10 text-white border-white/20'
+                              : 'bg-zinc-900 text-zinc-400 border-white/5'
+                          )}
+                        >
+                          {(p.configurator_version || 'v1') === 'v2' ? 'v2' : 'v1'}
+                        </span>
+                      </td>
 
-                    <span
-                      className={clsx(
-                        'text-[10px] font-sans px-2 py-0.5 rounded-full border uppercase tracking-wider font-semibold',
-                        (p.configurator_version || 'v1') === 'v2'
-                          ? 'bg-sky-500/10 text-sky-400 border-sky-500/30'
-                          : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                      )}
-                    >
-                      {(p.configurator_version || 'v1') === 'v2' ? 'v2 Modern' : 'v1 Legacy'}
-                    </span>
-
-                    {p.status === 'draft' && (
-                      <span
-                        className="text-[10px] font-sans px-2 py-0.5 rounded-full border uppercase tracking-wider font-bold bg-amber-500/15 text-amber-300 border-amber-500/40"
-                        title="Product is currently in Draft status (unpublished on webstore)"
+                      {/* Configurator Toggle */}
+                      <td
+                        className="py-3 px-3 text-center"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        Draft
-                      </span>
-                    )}
-                  </div>
-                </div>
+                        <button
+                          type="button"
+                          disabled={togglingConfiguratorId === p.product_id}
+                          onClick={() => handleToggleConfiguratorStatus(p.product_id, p.is_configurator !== false)}
+                          className={clsx(
+                            'text-[10px] font-sans px-2.5 py-1 rounded-full border font-semibold inline-flex items-center gap-1 transition-all cursor-pointer',
+                            p.is_configurator !== false
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                              : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:bg-zinc-700 hover:text-white'
+                          )}
+                          title={
+                            p.is_configurator !== false
+                              ? 'Active Configurator. Click to exclude.'
+                              : 'Excluded. Click to enable.'
+                          }
+                        >
+                          {togglingConfiguratorId === p.product_id ? (
+                            <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                          ) : p.is_configurator !== false ? (
+                            <CheckCircle2 className="w-2.5 h-2.5" />
+                          ) : (
+                            <AlertCircle className="w-2.5 h-2.5 text-zinc-500" />
+                          )}
+                          <span>{p.is_configurator !== false ? 'Active' : 'Excluded'}</span>
+                        </button>
+                      </td>
 
-                <div className="mt-4 pt-3 border-t border-white/[0.06] grid grid-cols-3 gap-2 text-center">
-                  <div
-                    onClick={() => handleOpenPriceModal(p)}
-                    className="p-2 rounded-xl bg-white/[0.02] border border-white/5 hover:border-[#f3aa18]/40 cursor-pointer transition-colors group/price"
-                    title="Click to set product price"
-                  >
-                    <p className="text-[10px] text-zinc-500 font-sans flex items-center justify-center gap-1">
-                      <span>Price</span>
-                      <Edit3 className="w-2.5 h-2.5 text-zinc-500 group-hover/price:text-[#f3aa18]" />
-                    </p>
-                    <p className="text-xs font-mono font-bold text-white group-hover/price:text-[#f3aa18] mt-0.5">
-                      IDR {p.price.toLocaleString('id-ID')}
-                    </p>
-                  </div>
-                  <div className="p-2 rounded-xl bg-white/[0.02] border border-white/5">
-                    <p className="text-[10px] text-zinc-500 font-sans">Views</p>
-                    <p className="text-xs font-sans font-bold text-sky-400 mt-0.5">
-                      {p.views_count} {p.views_count === 1 ? 'Angle' : 'Angles'}
-                    </p>
-                  </div>
-                  <div className="p-2 rounded-xl bg-white/[0.02] border border-white/5">
-                    <p className="text-[10px] text-zinc-500 font-sans">Parts</p>
-                    <p className="text-xs font-sans font-bold text-emerald-400 mt-0.5">
-                      {p.layers_count} {p.layers_count === 1 ? 'Layer' : 'Layers'}
-                    </p>
-                  </div>
-                </div>
-              </div>
+                      {/* Setup Specs */}
+                      <td className="py-3 px-4 text-center font-mono text-[11px] text-zinc-400">
+                        <span>{p.views_count}v</span>
+                        <span className="mx-1 text-zinc-600">•</span>
+                        <span>{p.layers_count}L</span>
+                      </td>
 
-              <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-[11px] font-mono text-zinc-500 shrink-0">SKU #{p.product_id}</span>
-                  {p.last_audited_at ? (
-                    p.audit_status === 'issues' || Boolean(p.audit_issues && p.audit_issues > 0) ? (
-                      <span
-                        className="inline-flex items-center gap-1 text-[10px] font-sans px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/30 shrink-0 font-medium"
-                        title={`Audited with issues (${p.audit_issues || 1} issues detected)`}
+                      {/* Price */}
+                      <td
+                        className="py-3 px-4 text-right"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenPriceModal(p);
+                        }}
                       >
-                        <AlertTriangle className="w-2.5 h-2.5" />
-                        <span>{p.audit_issues ? `${p.audit_issues} Issues` : 'Issues'}</span>
-                      </span>
-                    ) : (
-                      <span
-                        className="inline-flex items-center gap-1 text-[10px] font-sans px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0 font-medium"
-                        title={`Audited clean: ${new Date(p.last_audited_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                        <span className="font-mono font-medium text-white hover:text-[#f3aa18] transition-colors inline-flex items-center gap-1 cursor-pointer">
+                          IDR {p.price.toLocaleString('id-ID')}
+                          <Edit3 className="w-2.5 h-2.5 text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </span>
+                      </td>
+
+                      {/* Actions */}
+                      <td
+                        className="py-3 px-4 text-right"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        <ShieldCheck className="w-2.5 h-2.5" />
-                        <span>Audited</span>
-                      </span>
-                    )
-                  ) : (
-                    <span
-                      className="inline-flex items-center gap-1 text-[10px] font-sans px-2 py-0.5 rounded-full bg-zinc-800/80 text-zinc-400 border border-zinc-700/60 shrink-0 font-medium"
-                      title="Device has not been audited yet"
-                    >
-                      <ShieldAlert className="w-2.5 h-2.5 text-zinc-500" />
-                      <span>Unaudited</span>
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleOpenDuplicateModal(p)}
-                    className="px-3 py-1.5 text-xs font-sans font-medium rounded-xl border border-white/10 hover:bg-white/10 text-zinc-300 hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer"
-                    title="Duplicate product & configurator profile"
-                  >
-                    <Copy className="w-3 h-3 text-sky-400" />
-                    <span>Duplicate</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleOpenEditor(p.product_id)}
-                    className="px-3.5 py-1.5 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Sliders className="w-3.5 h-3.5 text-[#f3aa18]" />
-                    <span>Open Studio</span>
-                  </button>
-                </div>
-              </div>
-            </GlassCard>
-          ))}
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDuplicateModal(p)}
+                            className="p-1.5 rounded-lg border border-white/10 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                            title="Duplicate product & profile"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditor(p.product_id)}
+                            className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-white/10 hover:bg-[#f3aa18] hover:text-black text-white transition-colors cursor-pointer"
+                          >
+                            Open
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -3822,18 +3866,18 @@ export const ConfiguratorStudioPage: React.FC = () => {
               {/* Header */}
               <div className="p-5 border-b border-white/10 flex items-start justify-between gap-4 bg-zinc-900/50">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-[#f3aa18]/15 border border-[#f3aa18]/30 flex items-center justify-center text-[#f3aa18] shrink-0">
                     <Sparkles className="w-5 h-5" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="text-sm font-bold text-white">Global Master Finish Textures (v2 Engine)</h3>
-                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-300 border border-sky-500/20 font-mono">
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 text-zinc-300 border border-white/10 font-mono">
                         {finishes.length} Finishes
                       </span>
                     </div>
                     <p className="text-xs text-zinc-400 mt-0.5 max-w-xl">
-                      Configure universal swatch thumbnails, master textures, and group sequence for all v2 devices.
+                      Configure universal swatch thumbnails, master textures, notice badges, and group sequence for all v2 devices.
                     </p>
                   </div>
                 </div>
@@ -3864,10 +3908,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         texture_url: '',
                         extra_price: 0,
                         is_custom_per_device: false,
+                        badge_text: '',
+                        badge_color: '#f3aa18',
                       });
                       setShowAddNewFinishModal(true);
                     }}
-                    className="px-3 py-1.5 rounded-xl text-xs font-sans font-semibold bg-sky-500 hover:bg-sky-400 text-black flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+                    className="px-3 py-1.5 rounded-xl text-xs font-sans font-semibold bg-[#f3aa18] hover:bg-[#ffb72b] text-black flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Add Finish</span>
@@ -3967,7 +4013,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     placeholder="Search finish by name or slug..."
                     value={masterTextureSearch}
                     onChange={(e) => setMasterTextureSearch(e.target.value)}
-                    className="w-full pl-8 pr-7 py-1.5 text-xs font-sans rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-500 focus:outline-none focus:border-sky-500"
+                    className="w-full pl-8 pr-7 py-1.5 text-xs font-sans rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]"
                   />
                   {masterTextureSearch && (
                     <button
@@ -3989,7 +4035,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       className={clsx(
                         'px-2.5 py-1 rounded-lg text-xs font-sans whitespace-nowrap transition-colors cursor-pointer capitalize',
                         masterTextureGroupFilter === group
-                          ? 'bg-sky-500/20 text-sky-300 font-bold border border-sky-500/40'
+                          ? 'bg-[#f3aa18]/20 text-[#f3aa18] font-bold border border-[#f3aa18]/40'
                           : 'text-zinc-400 hover:text-white hover:bg-white/5'
                       )}
                     >
@@ -4000,7 +4046,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
               </div>
 
               {/* Finishes List */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="flex-1 overflow-y-auto p-5 space-y-3.5">
                 {finishes
                   .filter((f) => {
                     const q = masterTextureSearch.toLowerCase().trim();
@@ -4009,6 +4055,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     const matchesGroup =
                       masterTextureGroupFilter === 'all' || f.group === masterTextureGroupFilter;
                     return matchesSearch && matchesGroup;
+                  })
+                  .sort((a, b) => {
+                    const groupA = editingFinishGroups[a.id] || a.group || '';
+                    const groupB = editingFinishGroups[b.id] || b.group || '';
+                    const idxA = storedFinishGroups.indexOf(groupA);
+                    const idxB = storedFinishGroups.indexOf(groupB);
+                    if (idxA !== -1 && idxB !== -1 && idxA !== idxB) return idxA - idxB;
+                    if (idxA !== -1 && idxB === -1) return -1;
+                    if (idxA === -1 && idxB !== -1) return 1;
+                    return (a.name || '').localeCompare(b.name || '');
                   })
                   .map((f) => {
                     const currentThumbInput =
@@ -4035,6 +4091,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       editingFinishCustomFlags[f.id] !== undefined
                         ? editingFinishCustomFlags[f.id]
                         : Boolean(f.is_custom_per_device);
+                    const currentBadgeTextInput =
+                      editingFinishBadgeTexts[f.id] !== undefined
+                        ? editingFinishBadgeTexts[f.id]
+                        : (f.badge_text || '');
+                    const currentBadgeColorInput =
+                      editingFinishBadgeColors[f.id] !== undefined
+                        ? editingFinishBadgeColors[f.id]
+                        : (f.badge_color || '#f3aa18');
 
                     const isSaving = savingFinishId === f.id;
                     const hasUnsavedChanges =
@@ -4049,14 +4113,18 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       (editingFinishPrices[f.id] !== undefined &&
                         editingFinishPrices[f.id] !== (f.extra_price || 0)) ||
                       (editingFinishCustomFlags[f.id] !== undefined &&
-                        editingFinishCustomFlags[f.id] !== Boolean(f.is_custom_per_device));
+                        editingFinishCustomFlags[f.id] !== Boolean(f.is_custom_per_device)) ||
+                      (editingFinishBadgeTexts[f.id] !== undefined &&
+                        editingFinishBadgeTexts[f.id].trim() !== (f.badge_text || '')) ||
+                      (editingFinishBadgeColors[f.id] !== undefined &&
+                        editingFinishBadgeColors[f.id].trim() !== (f.badge_color || '#f3aa18'));
 
                     return (
                       <div
                         key={f.id}
-                        className="p-4 rounded-2xl bg-zinc-900/70 border border-white/10 hover:border-white/20 transition-all space-y-3.5"
+                        className="p-4 rounded-2xl bg-zinc-900/70 border border-white/10 hover:border-white/20 transition-all space-y-3"
                       >
-                        {/* Row 1: Header / Properties */}
+                        {/* Row 1: Properties & Inputs */}
                         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 pb-2.5">
                           <div className="flex flex-wrap items-center gap-2.5">
                             <input
@@ -4065,7 +4133,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               onChange={(e) =>
                                 setEditingFinishNames((prev) => ({ ...prev, [f.id]: e.target.value }))
                               }
-                              className="text-sm font-bold text-white bg-transparent border-b border-white/10 focus:border-sky-400 focus:outline-none px-1 py-0.5 w-36 sm:w-44"
+                              className="text-sm font-bold text-white bg-transparent border-b border-white/10 focus:border-[#f3aa18] focus:outline-none px-1 py-0.5 w-36 sm:w-44"
                               placeholder="Finish Name"
                             />
                             <select
@@ -4073,7 +4141,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               onChange={(e) =>
                                 setEditingFinishGroups((prev) => ({ ...prev, [f.id]: e.target.value }))
                               }
-                              className="px-2.5 py-1 text-xs rounded-xl bg-zinc-950 border border-white/10 text-zinc-200 focus:outline-none focus:border-sky-400 cursor-pointer"
+                              className="px-2.5 py-1 text-xs rounded-xl bg-zinc-950 border border-white/10 text-zinc-200 focus:outline-none focus:border-[#f3aa18] cursor-pointer"
                             >
                               {storedFinishGroups.map((g) => (
                                 <option key={g} value={g}>
@@ -4084,6 +4152,44 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             <span className="text-[10px] font-mono text-zinc-500 bg-white/5 px-2 py-0.5 rounded-lg">
                               {f.slug}
                             </span>
+
+                            {/* Notice / Badge Pill Configuration */}
+                            <div className="flex items-center gap-1.5 bg-zinc-950 px-2 py-1 rounded-xl border border-white/10">
+                              <span className="text-[10px] text-zinc-500 font-mono">Badge:</span>
+                              <input
+                                type="text"
+                                placeholder="NEW, HOT, etc."
+                                value={currentBadgeTextInput}
+                                maxLength={15}
+                                onChange={(e) =>
+                                  setEditingFinishBadgeTexts((prev) => ({
+                                    ...prev,
+                                    [f.id]: e.target.value,
+                                  }))
+                                }
+                                className="w-20 sm:w-24 text-[11px] font-medium text-white bg-transparent focus:outline-none placeholder:text-zinc-600"
+                              />
+                              <input
+                                type="color"
+                                value={currentBadgeColorInput || '#f3aa18'}
+                                onChange={(e) =>
+                                  setEditingFinishBadgeColors((prev) => ({
+                                    ...prev,
+                                    [f.id]: e.target.value,
+                                  }))
+                                }
+                                className="w-4 h-4 rounded cursor-pointer border-0 bg-transparent p-0"
+                                title="Pick badge color"
+                              />
+                              {currentBadgeTextInput.trim() && (
+                                <span
+                                  className="px-1.5 py-0.5 rounded text-[8.5px] font-bold uppercase tracking-wider text-black font-mono shadow-xs shrink-0"
+                                  style={{ backgroundColor: currentBadgeColorInput || '#f3aa18' }}
+                                >
+                                  {currentBadgeTextInput.trim()}
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           <div className="flex items-center gap-3">
@@ -4100,7 +4206,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     [f.id]: Number(e.target.value) || 0,
                                   }))
                                 }
-                                className="w-20 px-2 py-1 text-xs font-mono text-right rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-sky-400"
+                                className="w-20 px-2 py-1 text-xs font-mono text-right rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
                               />
                             </div>
 
@@ -4115,29 +4221,33 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     [f.id]: e.target.checked,
                                   }))
                                 }
-                                className="w-3.5 h-3.5 rounded text-purple-400 focus:ring-0 accent-purple-500 cursor-pointer"
+                                className="w-3.5 h-3.5 rounded text-amber-400 focus:ring-0 accent-amber-500 cursor-pointer"
                               />
                               <span className="text-[11px] font-medium">Custom per device</span>
-                              <InfoTooltip content="When enabled, this finish only appears on devices where you upload custom artwork for this device in the Skins tab." />
+                              <InfoTooltip content="When enabled, this finish only appears on devices where custom artwork is uploaded in the Skins tab." />
                             </label>
                           </div>
                         </div>
 
-                        {/* Row 2: Dual Image Editors (Thumbnail vs Master Texture) */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                          {/* Image 1: Swatch Thumbnail */}
-                          <div className="p-3 rounded-xl bg-zinc-950/70 border border-white/5 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-semibold text-zinc-300">
-                                1. Swatch Thumbnail
-                              </span>
-                              <span className="text-[10px] font-mono text-zinc-500">
-                                Selector & Tooltip Swatch
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-11 h-11 rounded-xl bg-zinc-900 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center relative">
+                        {/* Row 2: Image Pickers (Clean Clickable Squares) */}
+                        <div className="flex flex-wrap items-center justify-between gap-4 p-3 rounded-xl bg-zinc-950/70 border border-white/5">
+                          <div className="flex flex-wrap items-center gap-6">
+                            {/* Image 1: Swatch Thumbnail */}
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setImagePickerModal({
+                                    isOpen: true,
+                                    finishId: f.id,
+                                    finishName: currentNameInput,
+                                    type: 'thumbnail',
+                                    currentUrl: currentThumbInput,
+                                  })
+                                }
+                                className="w-12 h-12 rounded-xl bg-zinc-900 border border-white/10 hover:border-amber-400/60 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105"
+                                title="Click to assign Swatch Thumbnail"
+                              >
                                 {currentThumbInput ? (
                                   <img
                                     src={currentThumbInput}
@@ -4148,61 +4258,42 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     }}
                                   />
                                 ) : (
-                                  <Sparkles className="w-4 h-4 text-zinc-600" />
+                                  <div className="text-zinc-600 group-hover:text-amber-400 transition-colors flex flex-col items-center justify-center gap-0.5">
+                                    <ImageIcon className="w-4 h-4" />
+                                  </div>
                                 )}
+                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                  <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                                </div>
+                              </button>
+                              <div className="flex flex-col">
+                                <span className="text-xs font-semibold text-zinc-200">
+                                  Swatch Thumbnail
+                                </span>
+                                <span className="text-[10px] font-mono text-zinc-500">
+                                  {currentThumbInput ? 'Assigned' : 'Not set'}
+                                </span>
                               </div>
+                            </div>
 
-                              <div className="flex-1 min-w-0">
-                                <input
-                                  type="text"
-                                  placeholder="https://media.exacoat.com/...-Thumbnail.jpg"
-                                  value={currentThumbInput}
-                                  onChange={(e) =>
-                                    setEditingFinishThumbnails((prev) => ({
-                                      ...prev,
-                                      [f.id]: e.target.value,
-                                    }))
-                                  }
-                                  className="w-full px-2.5 py-1.5 text-xs font-mono rounded-lg bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
-                                />
-                              </div>
+                            <div className="h-8 w-px bg-white/10 hidden sm:block" />
 
+                            {/* Image 2: Master Texture (v2) */}
+                            <div className="flex items-center gap-3">
                               <button
                                 type="button"
                                 onClick={() =>
-                                  setMediaPickerConfig({
+                                  setImagePickerModal({
                                     isOpen: true,
-                                    title: `Select Swatch Thumbnail: ${currentNameInput}`,
-                                    recommendedDimensions: 'Square Swatch Thumbnail (150x150 or 500x500)',
-                                    currentUrl: currentThumbInput,
-                                    onSelect: (url) =>
-                                      setEditingFinishThumbnails((prev) => ({
-                                        ...prev,
-                                        [f.id]: url,
-                                      })),
+                                    finishId: f.id,
+                                    finishName: currentNameInput,
+                                    type: 'texture',
+                                    currentUrl: currentTextureInput,
                                   })
                                 }
-                                className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 cursor-pointer transition-colors shrink-0"
-                                title="Browse WordPress Media Library"
+                                className="w-12 h-12 rounded-xl bg-zinc-900 border border-white/10 hover:border-amber-400/60 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105"
+                                title="Click to assign Master Texture (v2)"
                               >
-                                <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Image 2: Master Texture (v2) */}
-                          <div className="p-3 rounded-xl bg-zinc-950/70 border border-white/5 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-semibold text-zinc-300">
-                                2. Master Texture (v2)
-                              </span>
-                              <span className="text-[10px] font-mono text-zinc-500">
-                                Masked by Device Alpha Cut
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-11 h-11 rounded-xl bg-zinc-900 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center relative">
                                 {currentTextureInput ? (
                                   <img
                                     src={currentTextureInput}
@@ -4213,57 +4304,26 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     }}
                                   />
                                 ) : (
-                                  <Sparkles className="w-4 h-4 text-zinc-600" />
+                                  <div className="text-zinc-600 group-hover:text-amber-400 transition-colors flex flex-col items-center justify-center gap-0.5">
+                                    <Sparkles className="w-4 h-4" />
+                                  </div>
                                 )}
-                              </div>
-
-                              <div className="flex-1 min-w-0">
-                                <input
-                                  type="text"
-                                  placeholder="https://exacoat.com/uploads/textures/master-texture.png"
-                                  value={currentTextureInput}
-                                  onChange={(e) =>
-                                    setEditingFinishUrls((prev) => ({
-                                      ...prev,
-                                      [f.id]: e.target.value,
-                                    }))
-                                  }
-                                  className="w-full px-2.5 py-1.5 text-xs font-mono rounded-lg bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
-                                />
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setMediaPickerConfig({
-                                    isOpen: true,
-                                    title: `Select Master Texture: ${currentNameInput}`,
-                                    recommendedDimensions: 'High-Res Tileable Texture (1000x1000)',
-                                    currentUrl: currentTextureInput,
-                                    onSelect: (url) =>
-                                      setEditingFinishUrls((prev) => ({
-                                        ...prev,
-                                        [f.id]: url,
-                                      })),
-                                  })
-                                }
-                                className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 cursor-pointer transition-colors shrink-0"
-                                title="Browse WordPress Media Library"
-                              >
-                                <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                  <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                                </div>
                               </button>
+                              <div className="flex flex-col">
+                                <span className="text-xs font-semibold text-zinc-200">
+                                  Master Texture (v2)
+                                </span>
+                                <span className="text-[10px] font-mono text-zinc-500">
+                                  {currentTextureInput ? 'Assigned' : 'Not set'}
+                                </span>
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        {/* Row 3: Actions (Save & Delete) */}
-                        <div className="flex items-center justify-between pt-1">
-                          <span className="text-[11px] text-zinc-500">
-                            {currentCustomFlag
-                              ? 'Custom skin: requires uploaded artwork on each device to be shown.'
-                              : 'Universal finish: automatically available across all devices.'}
-                          </span>
-
+                          {/* Row 3: Actions (Save & Delete) */}
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
@@ -4282,7 +4342,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               className={clsx(
                                 'px-3.5 py-1.5 text-xs font-sans font-semibold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
                                 hasUnsavedChanges
-                                  ? 'bg-sky-500 hover:bg-sky-400 text-black shadow-md'
+                                  ? 'bg-[#f3aa18] hover:bg-[#ffb72b] text-black shadow-md'
                                   : 'bg-white/5 text-zinc-400 border border-white/10'
                               )}
                             >
@@ -4320,6 +4380,154 @@ export const ConfiguratorStudioPage: React.FC = () => {
           document.body
         )}
 
+      {/* Image Picker / Assignment Modal */}
+      {imagePickerModal.isOpen &&
+        createPortal(
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+            <div className="w-full max-w-lg rounded-2xl bg-[#121215] border border-white/15 shadow-2xl p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-[#f3aa18]/15 border border-[#f3aa18]/30 flex items-center justify-center text-[#f3aa18]">
+                    <ImageIcon className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white">
+                      {imagePickerModal.type === 'thumbnail'
+                        ? 'Assign Swatch Thumbnail'
+                        : 'Assign Master Texture (v2)'}
+                    </h3>
+                    <p className="text-[11px] text-zinc-400">
+                      Finish: <span className="text-white font-semibold">{imagePickerModal.finishName}</span>
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setImagePickerModal((prev) => ({ ...prev, isOpen: false }))}
+                  className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Preview & Dimension Hint */}
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-950 border border-white/5">
+                <div className="w-16 h-16 rounded-xl bg-zinc-900 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center">
+                  {imagePickerModal.currentUrl ? (
+                    <img
+                      src={imagePickerModal.currentUrl}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <Sparkles className="w-5 h-5 text-zinc-600" />
+                  )}
+                </div>
+                <div className="text-xs text-zinc-400 space-y-1">
+                  <p className="font-semibold text-zinc-200">
+                    {imagePickerModal.type === 'thumbnail'
+                      ? 'Swatch Thumbnail (150x150 or 500x500)'
+                      : 'Master Texture (1000x1000 Tileable Texture)'}
+                  </p>
+                  <p className="text-[11px] text-zinc-500">
+                    {imagePickerModal.type === 'thumbnail'
+                      ? 'Used in category carousels, swatch pills, and tooltip previews.'
+                      : 'Universal master texture dynamically masked by device alpha cutouts.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* URL Input */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-zinc-300">
+                  Image URL
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    placeholder="https://exacoat.com/wp-content/uploads/..."
+                    value={imagePickerModal.currentUrl}
+                    onChange={(e) =>
+                      setImagePickerModal((prev) => ({ ...prev, currentUrl: e.target.value }))
+                    }
+                    className="flex-1 px-3 py-2 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
+                  />
+                  {imagePickerModal.currentUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setImagePickerModal((prev) => ({ ...prev, currentUrl: '' }))}
+                      className="px-2.5 py-2 text-xs rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 cursor-pointer"
+                      title="Clear URL"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* WordPress Media Library Option */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMediaPickerConfig({
+                      isOpen: true,
+                      title: `Select ${imagePickerModal.type === 'thumbnail' ? 'Swatch Thumbnail' : 'Master Texture'}: ${imagePickerModal.finishName}`,
+                      recommendedDimensions:
+                        imagePickerModal.type === 'thumbnail'
+                          ? 'Square Swatch Thumbnail (150x150 or 500x500)'
+                          : 'High-Res Tileable Texture (1000x1000)',
+                      currentUrl: imagePickerModal.currentUrl,
+                      onSelect: (url) => {
+                        setImagePickerModal((prev) => ({ ...prev, currentUrl: url }));
+                      },
+                    });
+                  }}
+                  className="w-full py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white border border-white/10 text-xs font-medium flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                >
+                  <FolderOpen className="w-4 h-4 text-[#f3aa18]" />
+                  <span>Browse WordPress Media Library</span>
+                </button>
+              </div>
+
+              {/* Dialog Actions */}
+              <div className="pt-3 border-t border-white/10 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setImagePickerModal((prev) => ({ ...prev, isOpen: false }))}
+                  className="px-4 py-2 text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (imagePickerModal.type === 'thumbnail') {
+                      setEditingFinishThumbnails((prev) => ({
+                        ...prev,
+                        [imagePickerModal.finishId]: imagePickerModal.currentUrl.trim(),
+                      }));
+                    } else {
+                      setEditingFinishUrls((prev) => ({
+                        ...prev,
+                        [imagePickerModal.finishId]: imagePickerModal.currentUrl.trim(),
+                      }));
+                    }
+                    setImagePickerModal((prev) => ({ ...prev, isOpen: false }));
+                  }}
+                  className="px-4 py-2 text-xs font-semibold rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black transition-colors cursor-pointer"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
       {/* Add New Finish Modal */}
       {showAddNewFinishModal &&
         createPortal(
@@ -4327,7 +4535,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
             <div className="w-full max-w-lg rounded-3xl bg-zinc-950 border border-white/15 p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
               <div className="flex items-center justify-between border-b border-white/10 pb-3">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400">
+                  <div className="w-8 h-8 rounded-lg bg-[#f3aa18]/15 border border-[#f3aa18]/30 flex items-center justify-center text-[#f3aa18]">
                     <Plus className="w-4 h-4" />
                   </div>
                   <div>
@@ -4361,7 +4569,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           slug: prev.slug === '' || prev.slug === prev.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') ? autoSlug : prev.slug,
                         }));
                       }}
-                      className="w-full px-3 py-1.5 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                      className="w-full px-3 py-1.5 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
                     />
                   </div>
                   <div>
@@ -4371,7 +4579,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       placeholder="e.g. everything"
                       value={newFinishForm.slug}
                       onChange={(e) => setNewFinishForm((prev) => ({ ...prev, slug: e.target.value }))}
-                      className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                      className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
                     />
                   </div>
                 </div>
@@ -4382,7 +4590,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     <select
                       value={newFinishForm.group}
                       onChange={(e) => setNewFinishForm((prev) => ({ ...prev, group: e.target.value }))}
-                      className="w-full px-3 py-1.5 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-sky-400 cursor-pointer"
+                      className="w-full px-3 py-1.5 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] cursor-pointer"
                     >
                       {storedFinishGroups.map((g) => (
                         <option key={g} value={g}>
@@ -4398,8 +4606,40 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       step="5000"
                       value={newFinishForm.extra_price}
                       onChange={(e) => setNewFinishForm((prev) => ({ ...prev, extra_price: Number(e.target.value) || 0 }))}
-                      className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-sky-400"
+                      className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
                     />
+                  </div>
+                </div>
+
+                {/* Badge Notice & Color */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-zinc-300 mb-1">Badge Notice (e.g. NEW, HOT)</label>
+                    <input
+                      type="text"
+                      placeholder="NEW, LEAVING SOON, etc."
+                      value={newFinishForm.badge_text}
+                      maxLength={15}
+                      onChange={(e) => setNewFinishForm((prev) => ({ ...prev, badge_text: e.target.value }))}
+                      className="w-full px-3 py-1.5 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-zinc-300 mb-1">Badge Pill Color</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={newFinishForm.badge_color || '#f3aa18'}
+                        onChange={(e) => setNewFinishForm((prev) => ({ ...prev, badge_color: e.target.value }))}
+                        className="w-8 h-8 rounded-lg cursor-pointer border border-white/10 bg-zinc-900 p-0.5"
+                      />
+                      <input
+                        type="text"
+                        value={newFinishForm.badge_color}
+                        onChange={(e) => setNewFinishForm((prev) => ({ ...prev, badge_color: e.target.value }))}
+                        className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -4414,7 +4654,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       placeholder="https://media.exacoat.com/...-Thumbnail.jpg"
                       value={newFinishForm.thumbnail}
                       onChange={(e) => setNewFinishForm((prev) => ({ ...prev, thumbnail: e.target.value }))}
-                      className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                      className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
                     />
                     <button
                       type="button"
@@ -4445,7 +4685,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       placeholder="https://exacoat.com/uploads/textures/master.png"
                       value={newFinishForm.texture_url}
                       onChange={(e) => setNewFinishForm((prev) => ({ ...prev, texture_url: e.target.value }))}
-                      className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                      className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
                     />
                     <button
                       type="button"
@@ -4471,7 +4711,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     type="checkbox"
                     checked={newFinishForm.is_custom_per_device}
                     onChange={(e) => setNewFinishForm((prev) => ({ ...prev, is_custom_per_device: e.target.checked }))}
-                    className="w-4 h-4 rounded text-purple-400 accent-purple-500 mt-0.5 cursor-pointer"
+                    className="w-4 h-4 rounded text-amber-400 accent-amber-500 mt-0.5 cursor-pointer"
                   />
                   <div>
                     <span className="text-xs font-bold text-white block">Custom Design per Device (e.g. Everything Skins)</span>
@@ -4494,7 +4734,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   type="button"
                   onClick={handleCreateNewFinish}
                   disabled={isCreatingFinish || !newFinishForm.name.trim()}
-                  className="px-4 py-2 text-xs font-sans font-semibold rounded-xl bg-sky-500 hover:bg-sky-400 text-black flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  className="px-4 py-2 text-xs font-sans font-semibold rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   {isCreatingFinish ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
                   <span>{isCreatingFinish ? 'Creating...' : 'Create Finish'}</span>
@@ -7104,7 +7344,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     className={clsx(
                                       'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
                                       selectedPencilCutout
-                                        ? 'bg-emerald-500 text-black font-semibold'
+                                        ? 'bg-[#f3aa18] text-black font-semibold'
                                         : 'text-zinc-400 hover:text-white'
                                     )}
                                   >
@@ -7116,7 +7356,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     className={clsx(
                                       'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
                                       !selectedPencilCutout
-                                        ? 'bg-emerald-500 text-black font-semibold'
+                                        ? 'bg-[#f3aa18] text-black font-semibold'
                                         : 'text-zinc-400 hover:text-white'
                                     )}
                                   >
@@ -7132,12 +7372,40 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     type="checkbox"
                                     checked={Boolean(editingProfile.coverage_and_cutouts?.has_pencil_cutout)}
                                     onChange={(e) => handleSetCoverageAndCutouts('has_pencil_cutout', e.target.checked)}
-                                    className="w-3.5 h-3.5 rounded text-emerald-400 focus:ring-0 accent-emerald-400 cursor-pointer"
+                                    className="w-3.5 h-3.5 rounded text-[#f3aa18] focus:ring-0 accent-[#f3aa18] cursor-pointer"
                                   />
                                   <span className="text-zinc-300 font-medium text-xs">Buyer Choice on Webstore</span>
                                 </div>
                                 <InfoTooltip text="Allows buyers to choose 'With Cutout' or 'Solid' for this hardware cutout on the webstore." />
                               </label>
+
+                              {/* Custom Cutout Pill Badge & Tooltip Description */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div className="space-y-1">
+                                  <div className="flex items-center justify-between text-[11px]">
+                                    <span className="text-zinc-400 font-medium">Pill Badge (Storefront)</span>
+                                  </div>
+                                  <input
+                                    type="text"
+                                    placeholder="e.g. RECOMMENDED, NEW"
+                                    value={editingProfile.coverage_and_cutouts?.pencil_cutout_pill || ''}
+                                    onChange={(e) => handleSetCoverageAndCutouts('pencil_cutout_pill', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] placeholder:text-zinc-600"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <div className="flex items-center justify-between text-[11px]">
+                                    <span className="text-zinc-400 font-medium">Tooltip Description</span>
+                                  </div>
+                                  <input
+                                    type="text"
+                                    placeholder="Storefront tooltip description..."
+                                    value={editingProfile.coverage_and_cutouts?.pencil_cutout_description || ''}
+                                    onChange={(e) => handleSetCoverageAndCutouts('pencil_cutout_description', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] placeholder:text-zinc-600"
+                                  />
+                                </div>
+                              </div>
 
                               {/* Pencil Cutout Mask URL */}
                               <div className="space-y-1">
@@ -7164,7 +7432,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         handleSetCoverageAndCutouts('has_pencil_cutout', true);
                                       }
                                     }}
-                                    className="w-full px-2.5 py-1.5 text-xs font-mono rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-emerald-400 placeholder:text-zinc-600"
+                                    className="w-full px-2.5 py-1.5 text-xs font-mono rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] placeholder:text-zinc-600"
                                   />
                                   <button
                                     type="button"
@@ -7210,7 +7478,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     className={clsx(
                                       'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
                                       selectedCoverage === 'model_cut'
-                                        ? 'bg-sky-500 text-black font-semibold'
+                                        ? 'bg-[#f3aa18] text-black font-semibold'
                                         : 'text-zinc-400 hover:text-white'
                                     )}
                                   >
@@ -7222,7 +7490,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     className={clsx(
                                       'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
                                       selectedCoverage === 'model_360'
-                                        ? 'bg-sky-500 text-black font-semibold'
+                                        ? 'bg-[#f3aa18] text-black font-semibold'
                                         : 'text-zinc-400 hover:text-white'
                                     )}
                                   >
@@ -7251,7 +7519,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         className={clsx(
                                           'px-2.5 py-1.5 rounded-lg border text-left transition-all cursor-pointer text-xs',
                                           isSelected
-                                            ? 'bg-sky-500/15 border-sky-400 text-white font-semibold'
+                                            ? 'bg-[#f3aa18]/15 border-[#f3aa18] text-white font-semibold'
                                             : 'bg-zinc-950/60 border-white/5 text-zinc-400 hover:text-white hover:bg-zinc-900'
                                         )}
                                       >
@@ -7260,6 +7528,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     );
                                   })}
                                 </div>
+                              </div>
 
                                 {/* Upcharge for Model 360 */}
                                 {(editingProfile.coverage_and_cutouts?.coverage_type === 'model_cut_and_360' ||
@@ -7283,7 +7552,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     </div>
                                   </div>
                                 )}
-                              </div>
 
                               {/* Model Cut Perimeter Mask */}
                               <div className="space-y-1">

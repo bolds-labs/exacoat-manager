@@ -538,6 +538,8 @@ export interface DeviceCoverageAndCutouts {
   has_pencil_cutout?: boolean;
   pencil_cutout_mask_url?: string;
   pencil_cutout_label?: string;
+  pencil_cutout_description?: string;
+  pencil_cutout_pill?: string;
   has_model_cut?: boolean;
   model_cut_mask_url?: string;
   logo_target_layer_id?: string;
