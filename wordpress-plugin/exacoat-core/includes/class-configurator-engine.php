@@ -37,14 +37,17 @@ class Exacoat_Configurator_Engine {
 			update_option( self::GROUPS_OPTION_KEY, $groups );
 		}
 
-		// Prune any stored groups that have zero finishes in catalog unless explicitly populated
+		// Preserve all user-configured groups; only prune known obsolete legacy sample groups if empty
 		$finishes      = self::get_finishes();
-		$active_groups = array_unique( array_filter( array_column( $finishes, 'group' ) ) );
+		$active_groups = array_values( array_unique( array_filter( array_column( $finishes, 'group' ) ) ) );
 		$sanitized     = array_values( array_unique( array_filter( array_map( 'sanitize_text_field', $groups ) ) ) );
 
-		// Filter out phantom empty groups (e.g. Pastels & Colors, Special editions) that have 0 finishes
-		$valid_groups = array_values( array_filter( $sanitized, function( $g ) use ( $active_groups ) {
-			return in_array( $g, $active_groups, true );
+		$obsolete_legacy_defaults = [ 'Pastels & Colors', 'Special editions' ];
+		$valid_groups = array_values( array_filter( $sanitized, function( $g ) use ( $active_groups, $obsolete_legacy_defaults ) {
+			if ( in_array( $g, $obsolete_legacy_defaults, true ) && ! in_array( $g, $active_groups, true ) ) {
+				return false;
+			}
+			return true;
 		} ) );
 
 		// Append any active groups missing from the sequence

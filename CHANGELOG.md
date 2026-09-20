@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.92] - 2026-09-21
+
+### Finish Group Persistence & Preservation Fix in Master Textures
+- **Empty & Custom Group Preservation Invariant**:
+  - User-created finish groups (such as newly added groups like "Other" or custom brand lines) are permanently preserved in the WordPress database option `_exacoat_finish_groups`, even if they currently contain 0 assigned finishes.
+  - Fixed backend `Exacoat_Configurator_Engine::get_finish_groups()` which previously pruned any group not actively present in `$active_groups`, causing newly added groups to vanish immediately upon moving or saving.
+  - Restricted pruning exclusively to obsolete legacy sample default groups (`Pastels & Colors`, `Special editions`) when empty.
+- **Studio Group Management Tray Enhancements**:
+  - Synchronized `res.groups` response across `handleAddNewGroup`, `handleMoveGroup`, and `handleDeleteGroup`.
+  - Added live finish count badges (`(0)`, `(5)`) next to each group chip in the Group Management tray.
+  - Added 1-click empty group deletion (`handleDeleteGroup`), while guarding against deleting groups that still contain active finishes.
+  - Updated Master Textures filter tabs to include all stored finish groups, with a clean empty state card displayed when viewing groups with 0 finishes.
+
 ## [0.0.91] - 2026-09-21
 
 ### Strict Separation of Production Variants from Logo Cutouts & Coverage Options

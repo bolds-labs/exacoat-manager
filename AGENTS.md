@@ -853,4 +853,17 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Studio filters variants during profile loading (`handleOpenDevice`), modern conversion (`handleConvertToV2`), and saving (`handleSaveProfile`).
   - Pricing Settings tab and simulator dock filter variants so legacy cached payloads never render duplicate logo cutout pills or zero-dollar production price rows.
 
+---
+
+## 48. Finish Group Persistence & Preservation Invariant
+
+- **Empty and Custom Group Persistence**:
+  - Store administrators frequently create finish groups (e.g. "Other", "Limited Drop", "Wood Series") before assigning finishes to them.
+  - User-created finish groups must be permanently preserved in the database option `_exacoat_finish_groups` even if they currently contain 0 finishes.
+  - `get_finish_groups()` in `class-configurator-engine.php` must NEVER prune non-empty or user-configured groups simply because they have 0 finishes. Pruning is strictly limited to obsolete legacy defaults (`Pastels & Colors`, `Special editions`).
+- **Group Management Tray & Lifecycle Sync**:
+  - Reordering or adding groups (`handleAddNewGroup`, `handleMoveGroup`) synchronizes `storedFinishGroups` with the backend response (`res.groups`).
+  - Studio displays live finish counts on each group chip (e.g. `Other (0)`).
+  - Admins can explicitly delete empty groups with 1 click via `handleDeleteGroup`, while deletion of non-empty groups is blocked with a descriptive notice prompting finish reassignment first.
+
 

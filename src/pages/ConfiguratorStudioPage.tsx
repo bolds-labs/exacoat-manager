@@ -2866,9 +2866,44 @@ export const ConfiguratorStudioPage: React.FC = () => {
       const res = await reorderFinishGroupsDirect(updated);
       if (res.success) {
         showToast('success', 'Group Added', `Added new group "${trimmed}".`);
+        if (Array.isArray(res.groups)) {
+          setStoredFinishGroups(res.groups);
+        }
+      } else {
+        showToast('error', 'Add Failed', res.error || 'Failed adding group');
       }
     } catch (err: any) {
       showToast('error', 'Error', err.message || 'Error adding group');
+    }
+  };
+
+  // Remove an empty group
+  const handleDeleteGroup = async (groupName: string) => {
+    const finishesInGroup = finishes.filter(
+      (f) => (editingFinishGroups[f.id] || f.group) === groupName
+    );
+    if (finishesInGroup.length > 0) {
+      showToast(
+        'warning',
+        'Group Not Empty',
+        `Cannot remove "${groupName}" because ${finishesInGroup.length} finish(es) belong to it. Reassign them first.`
+      );
+      return;
+    }
+    const updated = storedFinishGroups.filter((g) => g !== groupName);
+    setStoredFinishGroups(updated);
+    try {
+      const res = await reorderFinishGroupsDirect(updated);
+      if (res.success) {
+        showToast('success', 'Group Removed', `Group "${groupName}" removed.`);
+        if (Array.isArray(res.groups)) {
+          setStoredFinishGroups(res.groups);
+        }
+      } else {
+        showToast('error', 'Remove Failed', res.error || 'Failed removing group');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message || 'Error removing group');
     }
   };
 
@@ -2989,11 +3024,15 @@ export const ConfiguratorStudioPage: React.FC = () => {
     return { activeCount: active, inactiveCount: inactive };
   }, [finishes, editingFinishActive]);
 
-  // Finish groups for filter tabs (only active groups that have finishes)
+  // Finish groups for filter tabs (all stored groups + any groups in finishes)
   const finishGroups = useMemo(() => {
     const rawGroups = new Set<string>();
+    storedFinishGroups.forEach((g) => {
+      if (g) rawGroups.add(g);
+    });
     finishes.forEach((f) => {
-      if (f.group) rawGroups.add(f.group);
+      const grp = editingFinishGroups[f.id] || f.group;
+      if (grp) rawGroups.add(grp);
     });
     const sorted = Array.from(rawGroups).sort((a, b) => {
       const idxA = storedFinishGroups.indexOf(a);
@@ -3004,7 +3043,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
       return a.localeCompare(b);
     });
     return ['all', ...sorted];
-  }, [finishes, storedFinishGroups]);
+  }, [finishes, storedFinishGroups, editingFinishGroups]);
 
   // Filtered profiles for catalog grid
   const filteredProfiles = useMemo(() => {
@@ -4204,38 +4243,62 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    {storedFinishGroups.map((grp, idx) => (
-                      <div
-                        key={grp}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-zinc-900 border border-white/10 text-xs font-sans text-zinc-200"
-                      >
-                        <button
-                          type="button"
-                          disabled={idx === 0}
-                          onClick={() => handleMoveGroup(grp, 'up')}
-                          className={clsx(
-                            'p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer',
-                            idx === 0 ? 'opacity-20 cursor-not-allowed' : 'text-zinc-400 hover:text-white'
-                          )}
-                          title="Move Left / Up"
+                    {storedFinishGroups.map((grp, idx) => {
+                      const count = finishes.filter(
+                        (f) => (editingFinishGroups[f.id] || f.group) === grp
+                      ).length;
+
+                      return (
+                        <div
+                          key={grp}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-zinc-900 border border-white/10 text-xs font-sans text-zinc-200 shadow-xs"
                         >
-                          <ChevronUp className="w-3 h-3 -rotate-90" />
-                        </button>
-                        <span className="font-semibold text-white px-1">{grp}</span>
-                        <button
-                          type="button"
-                          disabled={idx === storedFinishGroups.length - 1}
-                          onClick={() => handleMoveGroup(grp, 'down')}
-                          className={clsx(
-                            'p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer',
-                            idx === storedFinishGroups.length - 1 ? 'opacity-20 cursor-not-allowed' : 'text-zinc-400 hover:text-white'
-                          )}
-                          title="Move Right / Down"
-                        >
-                          <ChevronDown className="w-3 h-3 -rotate-90" />
-                        </button>
-                      </div>
-                    ))}
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            onClick={() => handleMoveGroup(grp, 'up')}
+                            className={clsx(
+                              'p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer',
+                              idx === 0 ? 'opacity-20 cursor-not-allowed' : 'text-zinc-400 hover:text-white'
+                            )}
+                            title="Move Left / Up"
+                          >
+                            <ChevronUp className="w-3 h-3 -rotate-90" />
+                          </button>
+                          <span className="font-semibold text-white px-1">{grp}</span>
+                          <span className="text-[10px] text-zinc-500 font-mono pr-0.5">({count})</span>
+                          <button
+                            type="button"
+                            disabled={idx === storedFinishGroups.length - 1}
+                            onClick={() => handleMoveGroup(grp, 'down')}
+                            className={clsx(
+                              'p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer',
+                              idx === storedFinishGroups.length - 1 ? 'opacity-20 cursor-not-allowed' : 'text-zinc-400 hover:text-white'
+                            )}
+                            title="Move Right / Down"
+                          >
+                            <ChevronDown className="w-3 h-3 -rotate-90" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteGroup(grp)}
+                            className={clsx(
+                              'p-0.5 rounded transition-colors cursor-pointer ml-0.5',
+                              count === 0
+                                ? 'text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10'
+                                : 'text-zinc-700 hover:text-zinc-500'
+                            )}
+                            title={
+                              count === 0
+                                ? `Remove empty group "${grp}"`
+                                : `Group "${grp}" has ${count} finish(es)`
+                            }
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
 
                     {/* Quick Add Group */}
                     <div className="flex items-center gap-1 bg-zinc-900 p-0.5 rounded-xl border border-white/10">
@@ -4352,37 +4415,58 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
               {/* Finishes List */}
               <div className="flex-1 overflow-y-auto p-5 space-y-3.5">
-                {finishes
-                  .filter((f) => {
-                    const q = masterTextureSearch.toLowerCase().trim();
-                    const matchesSearch =
-                      !q || f.name.toLowerCase().includes(q) || (f.slug || f.id).toLowerCase().includes(q);
-                    const matchesGroup =
-                      masterTextureGroupFilter === 'all' || f.group === masterTextureGroupFilter;
-                    const isActive =
-                      editingFinishActive[f.id] !== undefined
-                        ? editingFinishActive[f.id]
-                        : f.is_active !== false;
-                    const matchesActive =
-                      masterTextureActiveFilter === 'all' ||
-                      (masterTextureActiveFilter === 'active' && isActive) ||
-                      (masterTextureActiveFilter === 'inactive' && !isActive);
-                    return matchesSearch && matchesGroup && matchesActive;
-                  })
-                  .sort((a, b) => {
-                    const groupA = editingFinishGroups[a.id] || a.group || '';
-                    const groupB = editingFinishGroups[b.id] || b.group || '';
-                    const idxA = storedFinishGroups.indexOf(groupA);
-                    const idxB = storedFinishGroups.indexOf(groupB);
-                    if (idxA !== -1 && idxB !== -1 && idxA !== idxB) return idxA - idxB;
-                    if (idxA !== -1 && idxB === -1) return -1;
-                    if (idxA === -1 && idxB !== -1) return 1;
-                    const orderA = a.order ?? 0;
-                    const orderB = b.order ?? 0;
-                    if (orderA !== orderB) return orderA - orderB;
-                    return (a.name || '').localeCompare(b.name || '');
-                  })
-                  .map((f) => {
+                {(() => {
+                  const filteredMasterFinishes = finishes
+                    .filter((f) => {
+                      const q = masterTextureSearch.toLowerCase().trim();
+                      const matchesSearch =
+                        !q || f.name.toLowerCase().includes(q) || (f.slug || f.id).toLowerCase().includes(q);
+                      const matchesGroup =
+                        masterTextureGroupFilter === 'all' ||
+                        (editingFinishGroups[f.id] || f.group) === masterTextureGroupFilter;
+                      const isActive =
+                        editingFinishActive[f.id] !== undefined
+                          ? editingFinishActive[f.id]
+                          : f.is_active !== false;
+                      const matchesActive =
+                        masterTextureActiveFilter === 'all' ||
+                        (masterTextureActiveFilter === 'active' && isActive) ||
+                        (masterTextureActiveFilter === 'inactive' && !isActive);
+                      return matchesSearch && matchesGroup && matchesActive;
+                    })
+                    .sort((a, b) => {
+                      const groupA = editingFinishGroups[a.id] || a.group || '';
+                      const groupB = editingFinishGroups[b.id] || b.group || '';
+                      const idxA = storedFinishGroups.indexOf(groupA);
+                      const idxB = storedFinishGroups.indexOf(groupB);
+                      if (idxA !== -1 && idxB !== -1 && idxA !== idxB) return idxA - idxB;
+                      if (idxA !== -1 && idxB === -1) return -1;
+                      if (idxA === -1 && idxB !== -1) return 1;
+                      const orderA = a.order ?? 0;
+                      const orderB = b.order ?? 0;
+                      if (orderA !== orderB) return orderA - orderB;
+                      return (a.name || '').localeCompare(b.name || '');
+                    });
+
+                  if (filteredMasterFinishes.length === 0) {
+                    return (
+                      <div className="p-12 text-center rounded-2xl bg-zinc-950/40 border border-dashed border-white/10 space-y-2.5 my-4">
+                        <Layers className="w-9 h-9 text-zinc-600 mx-auto" />
+                        <p className="text-sm font-semibold text-zinc-300">
+                          {masterTextureGroupFilter !== 'all'
+                            ? `No finishes in "${masterTextureGroupFilter}" yet`
+                            : 'No finishes match your search or filter'}
+                        </p>
+                        <p className="text-xs text-zinc-500 max-w-md mx-auto">
+                          {masterTextureGroupFilter !== 'all'
+                            ? 'You can assign existing finishes to this group using the group dropdown on any finish card, or click "+ Add Finish" above.'
+                            : 'Try adjusting your search terms or filter selection.'}
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return filteredMasterFinishes.map((f) => {
                     const currentThumbInput =
                       editingFinishThumbnails[f.id] !== undefined
                         ? editingFinishThumbnails[f.id]
@@ -4929,7 +5013,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         </div>
                       </div>
                     );
-                  })}
+                  });
+                })()}
               </div>
 
               {/* Footer */}
