@@ -1550,6 +1550,33 @@ export const ConfiguratorStudioPage: React.FC = () => {
     });
   };
 
+  const handleSetLayerOverlayUrl = (
+    layerId: string,
+    key: 'mask_svg_url' | 'shadow_png_url' | 'highlight_png_url',
+    url: string
+  ) => {
+    if (!editingProfile) return;
+    const viewId = activeSimView || 'main_view';
+    setEditingProfile({
+      ...editingProfile,
+      layers: editingProfile.layers.map((l) => {
+        if (l.id !== layerId) return l;
+        const currentAssets = l.assets_by_view || {};
+        const currentViewAssets = currentAssets[viewId] || {};
+        return {
+          ...l,
+          assets_by_view: {
+            ...currentAssets,
+            [viewId]: {
+              ...currentViewAssets,
+              [key]: url.trim(),
+            },
+          },
+        };
+      }),
+    });
+  };
+
   const handleSetViewBackground = (viewId: string, bgUrl: string) => {
     if (!editingProfile) return;
     setEditingProfile({
@@ -2984,6 +3011,42 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             );
                             const texUrl = matchedKey ? assets.render_texture_map?.[matchedKey] || '' : '';
 
+                            // v2 Engine: Dynamic Mask Compositing
+                            if (editingProfile.configurator_version === 'v2' && assets.mask_svg_url) {
+                              const activeFinish = finishes.find((f) => f.slug === selectedSimFinish || f.id === selectedSimFinish);
+                              const textureToTile = texUrl || activeFinish?.thumbnail || '';
+                              return (
+                                <div
+                                  key={`v2-mask-${l.id}`}
+                                  style={{
+                                    zIndex: (l.z_index || 1) + 5,
+                                    maskImage: `url("${assets.mask_svg_url}")`,
+                                    WebkitMaskImage: `url("${assets.mask_svg_url}")`,
+                                    maskSize: 'contain',
+                                    WebkitMaskSize: 'contain',
+                                    maskRepeat: 'no-repeat',
+                                    WebkitMaskRepeat: 'no-repeat',
+                                    maskPosition: 'center',
+                                    WebkitMaskPosition: 'center',
+                                  }}
+                                  className="absolute inset-0 w-full h-full pointer-events-none"
+                                >
+                                  {textureToTile ? (
+                                    <img
+                                      src={textureToTile}
+                                      alt={l.name}
+                                      className="w-full h-full object-cover pointer-events-none"
+                                      onError={(e) => {
+                                        (e.target as HTMLElement).style.display = 'none';
+                                      }}
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full bg-zinc-600" />
+                                  )}
+                                </div>
+                              );
+                            }
+
                             if (!texUrl) return null;
 
                             return (
@@ -3368,6 +3431,60 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     </div>
                                   )}
                                 </div>
+
+                                {/* v2 Modern Engine Overlays (Mask & Realistic Shadow) */}
+                                {editingProfile.configurator_version === 'v2' && (
+                                  <div className="p-3.5 rounded-xl bg-sky-950/25 border border-sky-500/25 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+                                        <span className="text-xs font-bold text-white uppercase tracking-wider">
+                                          v2 Modern Canvas Overlays ({currentView?.name})
+                                        </span>
+                                      </div>
+                                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-500/10 text-sky-300 border border-sky-500/20">
+                                        Angle: {currentView?.id}
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-zinc-400 leading-relaxed">
+                                      v2 clips global texture swatches using an alpha mask and renders photorealistic ambient occlusion. All images must be on the exact same 1000x1000px canvas as the device chassis.
+                                    </p>
+
+                                    <div className="space-y-2.5 pt-1">
+                                      <div>
+                                        <label className="text-[10px] font-mono text-zinc-300 block mb-1 flex items-center justify-between">
+                                          <span>Vector / Alpha Mask URL (SVG or 1000x1000 Alpha PNG)</span>
+                                          {currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url && (
+                                            <span className="text-emerald-400 text-[10px]">Configured</span>
+                                          )}
+                                        </label>
+                                        <input
+                                          type="text"
+                                          placeholder="https://exacoat.com/uploads/device-part-mask.png"
+                                          value={currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url || ''}
+                                          onChange={(e) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'mask_svg_url', e.target.value)}
+                                          className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                                        />
+                                      </div>
+
+                                      <div>
+                                        <label className="text-[10px] font-mono text-zinc-300 block mb-1 flex items-center justify-between">
+                                          <span>Multiply Shadow & Ambient Occlusion (1000x1000 Transparent PNG)</span>
+                                          {currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.shadow_png_url && (
+                                            <span className="text-emerald-400 text-[10px]">Configured</span>
+                                          )}
+                                        </label>
+                                        <input
+                                          type="text"
+                                          placeholder="https://exacoat.com/uploads/device-part-shadow.png"
+                                          value={currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.shadow_png_url || ''}
+                                          onChange={(e) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'shadow_png_url', e.target.value)}
+                                          className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <div className="p-8 rounded-2xl bg-zinc-900/40 border border-dashed border-white/10 text-center">
