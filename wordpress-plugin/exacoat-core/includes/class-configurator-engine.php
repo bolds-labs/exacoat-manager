@@ -1495,6 +1495,17 @@ class Exacoat_Configurator_Engine {
 
 		// Use wp_slash so WordPress update_metadata does not strip quotes or slashes from JSON
 		update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile ) ) );
+		update_post_meta( $product_id, self::CONFIGURATOR_FLAG_META_KEY, 'yes' );
+		update_post_meta( $product_id, '_configurator_version', $profile['configurator_version'] );
+		update_post_meta( $product_id, '_device_family', $profile['family'] );
+		update_post_meta( $product_id, '_size_multiplier', $profile['size_multiplier'] );
+
+		// When saving a modern v2 profile, clean up conflicting obsolete MKL layers and content
+		// so legacy fallback on duplicated products never shadows the v2 profile
+		if ( $profile['configurator_version'] === 'v2' ) {
+			delete_post_meta( $product_id, '_mkl_product_configurator_layers' );
+			delete_post_meta( $product_id, '_mkl_product_configurator_content' );
+		}
 
 		// Sync WooCommerce product price with configurator base_price
 		if ( isset( $params['base_price'] ) && (float) $params['base_price'] >= 0 ) {

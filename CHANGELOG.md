@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.79] - 2026-09-20
+
+### Configurator Studio v2: 4-Stage Redesign & Storefront Duplicated Product Resolution
+- **Storefront Duplicated Product v2 Profile Priority**:
+  - Solved issue where duplicated products (e.g. iPhone 18 Pro Max cloned from iPhone 17 Pro Max) failed to apply saved v2 profiles on `exacoat-web`.
+  - Backend (`class-configurator-engine.php`): saving a v2 profile now explicitly deletes legacy MKL post meta keys (`_mkl_product_configurator_layers` and `_mkl_product_configurator_content`), sets `_configurator_version = 'v2'`, and updates `_is_configurator = 'yes'`.
+  - Storefront (`configurator-loader.ts`): loader prioritizes `_exacoat_configurator_profile` whenever `configurator_version === 'v2'` or v2 views exist, preventing old MKL metadata from overriding v2 configurations.
+- **Inspector Redesign into 4 Focused Stages**:
+  - Restructured Studio inspector into 4 clean stages: `Device`, `Skins`, `Cutouts`, and `Pricing`.
+  - Stage 1 (`Device`): Centralizes hardware chassis render (Layer 1), angle switcher, single-source 3D raytraced shading & highlights with opacity sliders and extractor, device hardware colors (visual-only, strictly excluded from cart metadata), and asset integrity audit.
+  - Stage 2 (`Skins`): Composable skin parts vertical stack with Figma/Photoshop order, quick presets (`Additional Accents`, `Additional Camera`, `Additional Camera & Back Glass`), custom parts with collision-free unique slugs, optional skin layer toggles with upcharges, and support for custom finish texture overrides (such as S26 Ultra Everything skins).
+  - Stage 3 (`Cutouts`): Unified alpha masks and buyer options for Logo Cutout, Pencil Groove Cutout, and Model Coverage & Perimeter Frame Cut, complete with in-studio simulation preview toggles (`[Cutout]` vs `[Solid]`, `[Model Cut]` vs `[Model 360]`).
+  - Stage 4 (`Pricing`): Storefront publication status (Draft vs Published), base price (IDR), family sizing multipliers, universal signature upcharge calculation breakdown, production variants, and URL Find & Replace.
+
 ## [0.0.78] - 2026-09-20
 
 ### Configurator Studio: Complete v1 Legacy Device Backward Compatibility & Multi-Angle Resolution

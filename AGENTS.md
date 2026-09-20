@@ -492,4 +492,34 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **v1 Badge Hygiene in Vertical Layer Stack**:
   v1 devices use pre-cut texture slice maps rather than 1000x1000 SVG/PNG alpha masks. The vertical layer stack displays `✓ {count} Textures` (emerald) or `No Textures` (amber) for v1 devices, reserving `✓ Mask` and `No Mask` strictly for modern v2 devices.
 
+---
+
+## 34. Studio v2 Redesign into 4 Focused Stages & Storefront Duplication Resolution
+
+- **Storefront Duplication Resolution & v2 Priority**:
+  When products are duplicated in WooCommerce (e.g. iPhone 18 Pro Max cloned from iPhone 17 Pro Max), legacy MKL post meta keys (`_mkl_product_configurator_layers`, `_mkl_product_configurator_content`) can persist on the new product and override v2 profile data on the storefront.
+  - Backend Invariant (`class-configurator-engine.php`): When saving a v2 profile, `rest_save_product_configurator` explicitly calls `delete_post_meta()` for legacy MKL keys, sets `_configurator_version = 'v2'`, and updates `_is_configurator = 'yes'`.
+  - Storefront Invariant (`configurator-loader.ts`): The loader evaluates `_exacoat_configurator_profile` first. If `profile.configurator_version === 'v2'` or `profile.views` exists, it immediately returns the v2 profile without falling back to legacy MKL layers.
+- **Device Hardware Colors (Visual Preview Only)**:
+  Device hardware colors (e.g. Desert Titanium, Natural Titanium, Black, White) allow shoppers to preview skin combinations against their device's exact hardware color.
+  - Excluded from Cart & Order Metadata: Hardware color selections are visual-only in the viewport canvas and are strictly excluded from WooCommerce line items, cart session data, and checkout metadata.
+- **Primary & Additional Composable Skin Layers**:
+  - Primary skin (e.g. "Back Skin", "Top Skin") is renameable, assigned to viewing angles, and automatically displays the global finish swatch tooltip.
+  - Additional skin layers support 1-click presets: `Additional Accents`, `Additional Camera`, `Additional Camera & Back Glass`. Multiple accents can be added without ID collisions via auto-generated unique slugs (`slug_timestamp`).
+  - Optional toggle: Additional skins can be set as optional, adding interactive checkboxes on the storefront and canvas with configurable pricing (e.g. `+Rp 30.000`).
+  - Custom Finish Texture Overrides: For special skin releases (such as S26 Ultra Everything skin), operators can specify a custom texture URL in `assets.render_texture_map[finishSlug]` to render a bespoke texture on canvas while keeping the global finish thumbnail in swatch tooltips.
+- **Unified Cutouts & Coverage Architecture**:
+  Centralized in the dedicated **Cutouts** inspector stage (`inspectorTab === 'cutouts'`):
+  - 1000x1000 alpha masks erased from vinyl layers via canvas `destination-out`, cleanly exposing the metallic base chassis render below.
+  - Combines storefront buyer option toggles ("Offer Logo Cutout Choice", "Offer Pencil Cutout Choice", "Model Coverage Mode") and alpha mask URLs in single unified cards.
+  - In-Studio Simulation Controls: Interactive toggle buttons allow operators to test cutout states directly inside the inspector (`[Cutout]` vs `[Solid]`, `[Model Cut]` vs `[Model 360]`) with instant canvas updates.
+- **Pricing, Sizing & Production Settings Stage**:
+  Centralized in the dedicated **Pricing** inspector stage (`inspectorTab === 'pricing'`):
+  - Storefront publication status: 1-click toggle between `Draft (Unpublished)` and `Published (Live)`.
+  - Base regular price (IDR) synchronized directly with WooCommerce.
+  - Family sizing multiplier (Phone 1.0x, Foldable 1.3x, Tablet 1.8x, Keyboard 2.0x, Laptop 2.5x, Console 2.0x, Accessory 0.8x) with live signature finish surcharge calculation breakdown.
+  - Physical hardware production variants (Wi-Fi Only vs Cellular) with per-option surcharges.
+  - Rendering engine architecture switcher (v2 Modern vs v1 Legacy) and URL Find & Replace tool.
+
+
 
