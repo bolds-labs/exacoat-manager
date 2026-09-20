@@ -81,6 +81,7 @@ import {
   RotateCw,
   Maximize2,
   Sun,
+  Lock,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { MediaLibraryModal } from '../components/modals/MediaLibraryModal';
@@ -706,8 +707,15 @@ export const ConfiguratorStudioPage: React.FC = () => {
           return devImg ? { ...v, background_url: devImg } : v;
         });
 
+        const devFamily = res.profile.family || 'phone';
+        const isBigFamily = devFamily === 'laptop' || devFamily === 'tablet';
+        const normalizedMultiplier = isBigFamily
+          ? 2.0
+          : (res.profile.size_multiplier || 1.0);
+
         const profile: DeviceConfiguratorProfile = {
           ...res.profile,
+          size_multiplier: normalizedMultiplier,
           views: viewsWithBody,
           layers: cleanedLayers,
         };
@@ -779,7 +787,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
             family: fallbackSummary.family || 'phone',
             base_price: fallbackSummary.price || 0,
             currency: 'IDR',
-            size_multiplier: fallbackSummary.size_multiplier || 1.0,
+            size_multiplier: (fallbackSummary.family === 'laptop' || fallbackSummary.family === 'tablet') ? 2.0 : (fallbackSummary.size_multiplier || 1.0),
             texture_scale: fallbackSummary.texture_scale ?? 0.75,
             is_configurable: true,
             configurator_version: fallbackSummary.configurator_version || 'v1',
@@ -835,8 +843,57 @@ export const ConfiguratorStudioPage: React.FC = () => {
     setSelectedLayerId('');
   };
 
+  const handleConvertToV2 = () => {
+    if (!editingProfile) return;
+    const isBig = editingProfile.family === 'laptop' || editingProfile.family === 'tablet';
+    const normalizedMultiplier = isBig ? 2.0 : (editingProfile.size_multiplier || 1.0);
+
+    const upgradedViews = (editingProfile.views || []).map((v) => ({
+      ...v,
+      texture_scale: v.texture_scale ?? editingProfile.texture_scale ?? 0.75,
+      shadow_png_url: v.shadow_png_url || '',
+      shading_image_url: v.shading_image_url || '',
+    }));
+
+    const upgradedLayers = (editingProfile.layers || []).map((l) => ({
+      ...l,
+      texture_size: l.texture_size || (isBig ? 'big' : 'small'),
+    }));
+
+    const existingCoverage = editingProfile.coverage_and_cutouts;
+    const upgradedCoverage: DeviceCoverageAndCutouts = {
+      has_logo_cutout: existingCoverage?.has_logo_cutout ?? true,
+      logo_cutout_mask_url: existingCoverage?.logo_cutout_mask_url || '',
+      has_pencil_cutout: existingCoverage?.has_pencil_cutout ?? false,
+      pencil_cutout_mask_url: existingCoverage?.pencil_cutout_mask_url || '',
+      has_model_cut: existingCoverage?.has_model_cut ?? false,
+      model_cut_mask_url: existingCoverage?.model_cut_mask_url || '',
+      coverage_type: existingCoverage?.coverage_type || 'none',
+      model_360_extra_price: existingCoverage?.model_360_extra_price ?? 40000,
+    };
+
+    setEditingProfile({
+      ...editingProfile,
+      configurator_version: 'v2',
+      size_multiplier: normalizedMultiplier,
+      views: upgradedViews,
+      layers: upgradedLayers,
+      coverage_and_cutouts: upgradedCoverage,
+    });
+
+    showToast(
+      'success',
+      'Converted to v2 Modern Engine',
+      'Device upgraded to v2. Alpha masks, 3D shading, and save controls are now unlocked.'
+    );
+  };
+
   const handleSaveProfile = async () => {
     if (!editingProfile) return;
+    if (editingProfile.configurator_version !== 'v2') {
+      showToast('warning', 'Device is Read-Only', 'Legacy v1 devices cannot be saved directly to protect webstore MKL data. Convert to v2 Modern Engine first.');
+      return;
+    }
     setIsSavingProfile(true);
     try {
       const res = await saveProductConfiguratorProfileDirect(editingProfile);
@@ -5609,24 +5666,36 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   <span>{isRevalidatingWeb ? 'Revalidating...' : 'Revalidate Web'}</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={handleSaveProfile}
-                  disabled={isSavingProfile || !editingProfile}
-                  className="px-5 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-gradient-to-b from-[#f6b328] to-[#ea9c0f] hover:brightness-105 active:scale-[0.985] text-[#08090b] transition-all flex items-center gap-2 shadow-lg shadow-[#f3aa18]/15 cursor-pointer disabled:opacity-50"
-                >
-                  {isSavingProfile ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Saving Changes...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-4 h-4" />
-                      <span>Save Configurator</span>
-                    </>
-                  )}
-                </button>
+                {editingProfile?.configurator_version !== 'v2' ? (
+                  <button
+                    type="button"
+                    onClick={handleConvertToV2}
+                    className="px-5 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-gradient-to-b from-amber-400 to-[#f3aa18] hover:brightness-105 active:scale-[0.985] text-black transition-all flex items-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer"
+                    title="Upgrade this legacy device to the v2 modern engine to customize layers, masks, and shading"
+                  >
+                    <Sparkles className="w-4 h-4 text-black" />
+                    <span>Convert to v2 Modern Engine</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSaveProfile}
+                    disabled={isSavingProfile || !editingProfile}
+                    className="px-5 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-gradient-to-b from-[#f6b328] to-[#ea9c0f] hover:brightness-105 active:scale-[0.985] text-[#08090b] transition-all flex items-center gap-2 shadow-lg shadow-[#f3aa18]/15 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSavingProfile ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Saving Changes...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span>Save Configurator</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </header>
 
@@ -5758,6 +5827,29 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden bg-zinc-950">
                     {/* LEFT / CENTER PANE: Spacious Interactive Device Canvas */}
                     <div className="flex-1 flex flex-col min-h-0 relative border-b lg:border-b-0 border-white/10 bg-radial from-zinc-900/40 via-zinc-950 to-zinc-950 overflow-hidden">
+                      {/* Legacy v1 Read-Only Notice Banner */}
+                      {editingProfile.configurator_version !== 'v2' && (
+                        <div className="bg-amber-500/10 border-b border-amber-500/20 px-5 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs z-20 shrink-0">
+                          <div className="flex items-center gap-2.5 text-amber-300">
+                            <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                            <div>
+                              <span className="font-bold">Legacy v1 Configurator (Read-Only Mode)</span>
+                              <span className="text-zinc-400 ml-2">
+                                Locked to protect live WooCommerce MKL settings. Convert to v2 to customize alpha masks, layer textures, and optional 3D shadows.
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleConvertToV2}
+                            className="px-3 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-black font-bold text-xs cursor-pointer transition-colors shadow-sm flex items-center gap-1.5 shrink-0"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>Convert to v2 Modern Engine</span>
+                          </button>
+                        </div>
+                      )}
+
                       {/* Top Bar on Stage: Viewing Angles & Layer Toggles */}
                       <div className="p-5 flex flex-wrap items-center justify-between gap-3 z-10">
                         {/* Viewing Angle Pills */}
@@ -6024,6 +6116,38 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             );
                           })}
 
+                          {/* v1 Logo Cutout Overlay (Rendered above vinyl skin at zIndex 35 when logo is active) */}
+                          {editingProfile.configurator_version !== 'v2' && selectedLogoCutout && (() => {
+                            const logoUrl =
+                              currentView?.logo_image_url ||
+                              currentView?.logo_cutout_mask_url ||
+                              editingProfile.coverage_and_cutouts?.logo_cutout_mask_url ||
+                              (() => {
+                                const logoVar = editingProfile.variants?.find((v) =>
+                                  v.id.toLowerCase().includes('logo') || v.name.toLowerCase().includes('logo')
+                                );
+                                const withOpt =
+                                  logoVar?.options?.find(
+                                    (o) => o.image_url && (!o.id.toLowerCase().includes('without') && !o.name.toLowerCase().includes('without'))
+                                  ) || logoVar?.options?.find((o) => o.image_url);
+                                return withOpt?.image_url;
+                              })();
+
+                            if (!logoUrl) return null;
+
+                            return (
+                              <img
+                                src={logoUrl}
+                                alt="Logo Cutout"
+                                style={{ zIndex: 35 }}
+                                className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity"
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = 'none';
+                                }}
+                              />
+                            );
+                          })()}
+
                           {/* Layer 3: Realistic 3D Shading & Specular Highlights (Single Source) */}
                           {editingProfile.configurator_version === 'v2' && currentView && (() => {
                             const shadingSrc =
@@ -6226,7 +6350,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               <span className="text-[11px] text-zinc-400 font-medium px-2">Logo:</span>
                               <button
                                 type="button"
-                                onClick={() => setSelectedLogoCutout(true)}
+                                onClick={() => {
+                                  setSelectedLogoCutout(true);
+                                  const logoVar = editingProfile.variants?.find((v) => v.id.toLowerCase().includes('logo') || v.name.toLowerCase().includes('logo'));
+                                  if (logoVar) {
+                                    const withOpt = logoVar.options.find((o) => !o.id.toLowerCase().includes('without') && !o.name.toLowerCase().includes('without'));
+                                    if (withOpt) {
+                                      setSelectedSimVariants((prev) => ({ ...prev, [logoVar.id]: withOpt.id }));
+                                    }
+                                  }
+                                }}
                                 className={clsx(
                                   'px-2.5 py-1 rounded-lg text-xs font-sans transition-all cursor-pointer',
                                   selectedLogoCutout
@@ -6238,7 +6371,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => setSelectedLogoCutout(false)}
+                                onClick={() => {
+                                  setSelectedLogoCutout(false);
+                                  const logoVar = editingProfile.variants?.find((v) => v.id.toLowerCase().includes('logo') || v.name.toLowerCase().includes('logo'));
+                                  if (logoVar) {
+                                    const withoutOpt = logoVar.options.find((o) => o.id.toLowerCase().includes('without') || o.name.toLowerCase().includes('without'));
+                                    if (withoutOpt) {
+                                      setSelectedSimVariants((prev) => ({ ...prev, [logoVar.id]: withoutOpt.id }));
+                                    }
+                                  }
+                                }}
                                 className={clsx(
                                   'px-2.5 py-1 rounded-lg text-xs font-sans transition-all cursor-pointer',
                                   !selectedLogoCutout
@@ -6292,7 +6434,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               return (
                                 <div className="flex items-center gap-1.5 bg-zinc-900/80 px-2.5 py-1 rounded-xl border border-white/10 text-xs">
                                   <span className="text-[11px] text-zinc-400 font-medium">Coverage:</span>
-                                  <span className="px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 font-bold border border-sky-500/30 text-[11px]">
+                                  <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 text-[11px]">
                                     Model Cut (Flat Back Only)
                                   </span>
                                 </div>
@@ -6320,7 +6462,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   className={clsx(
                                     'px-2.5 py-1 rounded-lg text-xs font-sans transition-all cursor-pointer',
                                     selectedCoverage === 'model_cut'
-                                      ? 'bg-sky-500 text-black font-bold shadow-sm'
+                                      ? 'bg-[#f3aa18] text-black font-bold shadow-sm'
                                       : 'text-zinc-400 hover:text-white'
                                   )}
                                 >
@@ -6332,7 +6474,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   className={clsx(
                                     'px-2.5 py-1 rounded-lg text-xs font-sans transition-all cursor-pointer flex items-center gap-1.5',
                                     selectedCoverage === 'model_360'
-                                      ? 'bg-sky-500 text-black font-bold shadow-sm'
+                                      ? 'bg-[#f3aa18] text-black font-bold shadow-sm'
                                       : 'text-zinc-400 hover:text-white'
                                   )}
                                 >
@@ -6343,7 +6485,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         'text-[10px] font-mono px-1.5 py-0.2 rounded-full',
                                         selectedCoverage === 'model_360'
                                           ? 'bg-black/20 text-black font-bold'
-                                          : 'bg-sky-500/20 text-sky-300 font-semibold'
+                                          : 'bg-amber-500/20 text-amber-300 font-semibold'
                                       )}
                                     >
                                       +{extra360 >= 1000 ? `${Math.round(extra360 / 1000)}k` : extra360}
@@ -6356,42 +6498,55 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                           {/* Production Device Variants (e.g. Wi-Fi vs Cellular) */}
                           {editingProfile.variants && editingProfile.variants.length > 0 &&
-                            editingProfile.variants.map((v) => {
-                              const activeOptId = selectedSimVariants[v.id] || v.options[0]?.id;
-                              return (
-                                <div key={v.id} className="flex items-center gap-1.5 bg-zinc-900/80 p-1 rounded-xl border border-white/10">
-                                  <span className="text-[11px] text-zinc-400 font-medium px-2">{v.name}:</span>
-                                  {v.options.map((opt) => {
-                                    const isSelected = activeOptId === opt.id;
-                                    return (
-                                      <button
-                                        key={opt.id}
-                                        type="button"
-                                        onClick={() => setSelectedSimVariants((prev) => ({ ...prev, [v.id]: opt.id }))}
-                                        className={clsx(
-                                          'px-2.5 py-1 rounded-lg text-xs font-sans transition-all cursor-pointer flex items-center gap-1.5',
-                                          isSelected
-                                            ? 'bg-sky-500 text-black font-bold shadow-sm'
-                                            : 'text-zinc-400 hover:text-white'
-                                        )}
-                                      >
-                                        <span>{opt.name}</span>
-                                        {opt.price_diff && opt.price_diff > 0 ? (
-                                          <span
-                                            className={clsx(
-                                              'text-[10px] font-mono px-1 rounded',
-                                              isSelected ? 'bg-black/20 text-black font-bold' : 'bg-white/10 text-zinc-300'
-                                            )}
-                                          >
-                                            +{opt.price_diff >= 1000 ? `${Math.round(opt.price_diff / 1000)}k` : opt.price_diff}
-                                          </span>
-                                        ) : null}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              );
-                            })}
+                            editingProfile.variants
+                              .filter((v) => {
+                                const isLogoVar = v.id.toLowerCase().includes('logo') || v.name.toLowerCase().includes('logo');
+                                const hasDedicatedLogoToggle = editingProfile.coverage_and_cutouts?.has_logo_cutout !== false || Boolean(currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url);
+                                return !(isLogoVar && hasDedicatedLogoToggle);
+                              })
+                              .map((v) => {
+                                const activeOptId = selectedSimVariants[v.id] || v.options[0]?.id;
+                                return (
+                                  <div key={v.id} className="flex items-center gap-1.5 bg-zinc-900/80 p-1 rounded-xl border border-white/10">
+                                    <span className="text-[11px] text-zinc-400 font-medium px-2">{v.name}:</span>
+                                    {v.options.map((opt) => {
+                                      const isSelected = activeOptId === opt.id;
+                                      return (
+                                        <button
+                                          key={opt.id}
+                                          type="button"
+                                          onClick={() => {
+                                            setSelectedSimVariants((prev) => ({ ...prev, [v.id]: opt.id }));
+                                            const isLogoVar = v.id.toLowerCase().includes('logo') || v.name.toLowerCase().includes('logo');
+                                            if (isLogoVar) {
+                                              const isWith = !opt.id.toLowerCase().includes('without') && !opt.name.toLowerCase().includes('without');
+                                              setSelectedLogoCutout(isWith);
+                                            }
+                                          }}
+                                          className={clsx(
+                                            'px-2.5 py-1 rounded-lg text-xs font-sans transition-all cursor-pointer flex items-center gap-1.5',
+                                            isSelected
+                                              ? 'bg-[#f3aa18] text-black font-bold shadow-sm'
+                                              : 'text-zinc-400 hover:text-white'
+                                          )}
+                                        >
+                                          <span>{opt.name}</span>
+                                          {opt.price_diff && opt.price_diff > 0 ? (
+                                            <span
+                                              className={clsx(
+                                                'text-[10px] font-mono px-1 rounded',
+                                                isSelected ? 'bg-black/20 text-black font-bold' : 'bg-white/10 text-zinc-300'
+                                              )}
+                                            >
+                                              +{opt.price_diff >= 1000 ? `${Math.round(opt.price_diff / 1000)}k` : opt.price_diff}
+                                            </span>
+                                          ) : null}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })}
                         </div>
                       </div>
                     </div>
@@ -7625,123 +7780,36 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   )}
                                 </div>
 
-                                {/* 3D Shading & Specular Highlights for this Angle */}
-                                <div className="space-y-3 pt-3 border-t border-white/5">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-1.5">
-                                      <Layers className="w-3.5 h-3.5 text-amber-400" />
-                                      <span className="text-xs font-bold text-white">Angle 3D Shading & Highlights</span>
-                                      <InfoTooltip content="Universal 1000x1000 transparent PNG shading map for this angle. Applied with multiply blend mode across all skin finishes." />
+                                {/* 3D Shading & Specular Highlights for this Angle (v2 Modern Engine Only) */}
+                                {editingProfile.configurator_version === 'v2' && (
+                                  <div className="space-y-3 pt-3 border-t border-white/5">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-1.5">
+                                        <Layers className="w-3.5 h-3.5 text-amber-400" />
+                                        <span className="text-xs font-bold text-white">Angle 3D Shading & Highlights</span>
+                                        <InfoTooltip content="Universal 1000x1000 transparent PNG shading map for this angle (optional). If not set, renders cleanly without shading." />
+                                      </div>
+                                      {(currentView.shadow_png_url || currentView.shading_image_url) ? (
+                                        <span className="text-emerald-400 text-[10px] font-mono font-semibold">Configured</span>
+                                      ) : (
+                                        <span className="text-zinc-500 text-[10px] font-mono">Not set (clean)</span>
+                                      )}
                                     </div>
-                                    {(currentView.shadow_png_url || currentView.shading_image_url) ? (
-                                      <span className="text-emerald-400 text-[10px] font-mono font-semibold">Configured</span>
-                                    ) : (
-                                      <span className="text-zinc-500 text-[10px] font-mono">Not set</span>
-                                    )}
-                                  </div>
 
-                                  {/* Single Shading Image Map Card with White Preview Thumbnail */}
-                                  <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3">
-                                    <div className="flex items-center gap-3">
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setMediaPickerConfig({
-                                            isOpen: true,
-                                            title: `Select 3D Shading Map: ${currentView.name}`,
-                                            recommendedDimensions: '1000x1000 Transparent PNG',
-                                            currentUrl: currentView.shadow_png_url || currentView.shading_image_url || '',
-                                            onSelect: (url) => {
-                                              handleSetViewField(currentView.id, 'shadow_png_url', url);
-                                              handleSetViewField(currentView.id, 'shading_image_url', url);
-                                              if (editingProfile?.layers) {
-                                                const cleanedLayers = editingProfile.layers.map((layer) => {
-                                                  if (!layer.assets_by_view?.[currentView.id]) return layer;
-                                                  const nextAssets = { ...layer.assets_by_view };
-                                                  const vAsset = { ...nextAssets[currentView.id] };
-                                                  delete vAsset.shadow_png_url;
-                                                  delete vAsset.highlight_png_url;
-                                                  delete vAsset.shading_image_url;
-                                                  nextAssets[currentView.id] = vAsset;
-                                                  return { ...layer, assets_by_view: nextAssets };
-                                                });
-                                                setEditingProfile((prev) => prev ? { ...prev, layers: cleanedLayers } : prev);
-                                              }
-                                            },
-                                          })
-                                        }
-                                        className="w-14 h-14 rounded-xl bg-white border border-white/20 hover:border-amber-400/60 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105 shadow-sm"
-                                        title="Click to select 3D Shading PNG from Media Library"
-                                      >
-                                        {(currentView.shadow_png_url || currentView.shading_image_url) ? (
-                                          <img
-                                            src={currentView.shadow_png_url || currentView.shading_image_url}
-                                            alt="3D Shading Map"
-                                            className="w-full h-full object-contain p-1"
-                                            onError={(e) => {
-                                              (e.target as HTMLElement).style.display = 'none';
-                                            }}
-                                          />
-                                        ) : (
-                                          <div className="text-zinc-400 group-hover:text-amber-500 transition-colors flex flex-col items-center justify-center gap-0.5">
-                                            <Layers className="w-4 h-4" />
-                                            <span className="text-[9px] font-semibold">Shading</span>
-                                          </div>
-                                        )}
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                                          <Edit3 className="w-3.5 h-3.5 text-amber-400" />
-                                        </div>
-                                      </button>
-
-                                      <div className="flex-1 min-w-0">
-                                        <p
-                                          className="text-[11px] font-mono text-zinc-300 truncate"
-                                          title={currentView.shadow_png_url || currentView.shading_image_url || ''}
-                                        >
-                                          {(currentView.shadow_png_url || currentView.shading_image_url)
-                                            ? (currentView.shadow_png_url || currentView.shading_image_url)?.split('/').pop()
-                                            : 'Click white square to browse media library'}
-                                        </p>
-                                        <div className="flex items-center gap-2 mt-1.5">
-                                          <button
-                                            type="button"
-                                            onClick={() =>
-                                              setMediaPickerConfig({
-                                                isOpen: true,
-                                                title: `Select 3D Shading Map: ${currentView.name}`,
-                                                recommendedDimensions: '1000x1000 Transparent PNG',
-                                                currentUrl: currentView.shadow_png_url || currentView.shading_image_url || '',
-                                                onSelect: (url) => {
-                                                  handleSetViewField(currentView.id, 'shadow_png_url', url);
-                                                  handleSetViewField(currentView.id, 'shading_image_url', url);
-                                                  if (editingProfile?.layers) {
-                                                    const cleanedLayers = editingProfile.layers.map((layer) => {
-                                                      if (!layer.assets_by_view?.[currentView.id]) return layer;
-                                                      const nextAssets = { ...layer.assets_by_view };
-                                                      const vAsset = { ...nextAssets[currentView.id] };
-                                                      delete vAsset.shadow_png_url;
-                                                      delete vAsset.highlight_png_url;
-                                                      delete vAsset.shading_image_url;
-                                                      nextAssets[currentView.id] = vAsset;
-                                                      return { ...layer, assets_by_view: nextAssets };
-                                                    });
-                                                    setEditingProfile((prev) => prev ? { ...prev, layers: cleanedLayers } : prev);
-                                                  }
-                                                },
-                                              })
-                                            }
-                                            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-[11px] font-medium flex items-center gap-1 cursor-pointer transition-colors shrink-0"
-                                            title="Browse WordPress Media Library"
-                                          >
-                                            <FolderOpen className="w-3 h-3 text-[#f3aa18]" />
-                                            <span>Browse</span>
-                                          </button>
-                                          {(currentView.shadow_png_url || currentView.shading_image_url) && (
-                                            <button
-                                              type="button"
-                                              onClick={() => {
-                                                handleSetViewField(currentView.id, 'shadow_png_url', '');
-                                                handleSetViewField(currentView.id, 'shading_image_url', '');
+                                    {/* Single Shading Image Map Card with White Preview Thumbnail */}
+                                    <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3">
+                                      <div className="flex items-center gap-3">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setMediaPickerConfig({
+                                              isOpen: true,
+                                              title: `Select 3D Shading Map: ${currentView.name}`,
+                                              recommendedDimensions: '1000x1000 Transparent PNG',
+                                              currentUrl: currentView.shadow_png_url || currentView.shading_image_url || '',
+                                              onSelect: (url) => {
+                                                handleSetViewField(currentView.id, 'shadow_png_url', url);
+                                                handleSetViewField(currentView.id, 'shading_image_url', url);
                                                 if (editingProfile?.layers) {
                                                   const cleanedLayers = editingProfile.layers.map((layer) => {
                                                     if (!layer.assets_by_view?.[currentView.id]) return layer;
@@ -7755,73 +7823,162 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                   });
                                                   setEditingProfile((prev) => prev ? { ...prev, layers: cleanedLayers } : prev);
                                                 }
+                                              },
+                                            })
+                                          }
+                                          className="w-14 h-14 rounded-xl bg-white border border-white/20 hover:border-amber-400/60 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105 shadow-sm"
+                                          title="Click to select 3D Shading PNG from Media Library"
+                                        >
+                                          {(currentView.shadow_png_url || currentView.shading_image_url) ? (
+                                            <img
+                                              src={currentView.shadow_png_url || currentView.shading_image_url}
+                                              alt="3D Shading Map"
+                                              className="w-full h-full object-contain p-1"
+                                              onError={(e) => {
+                                                (e.target as HTMLElement).style.display = 'none';
                                               }}
-                                              className="p-1 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                                              title="Clear Shading Map"
-                                            >
-                                              <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
+                                            />
+                                          ) : (
+                                            <div className="text-zinc-400 group-hover:text-amber-500 transition-colors flex flex-col items-center justify-center gap-0.5">
+                                              <Layers className="w-4 h-4" />
+                                              <span className="text-[9px] font-semibold">Shading</span>
+                                            </div>
                                           )}
+                                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                            <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                                          </div>
+                                        </button>
+
+                                        <div className="flex-1 min-w-0">
+                                          <p
+                                            className="text-[11px] font-mono text-zinc-300 truncate"
+                                            title={currentView.shadow_png_url || currentView.shading_image_url || ''}
+                                          >
+                                            {(currentView.shadow_png_url || currentView.shading_image_url)
+                                              ? (currentView.shadow_png_url || currentView.shading_image_url)?.split('/').pop()
+                                              : 'Click white square to browse media library'}
+                                          </p>
+                                          <div className="flex items-center gap-2 mt-1.5">
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                setMediaPickerConfig({
+                                                  isOpen: true,
+                                                  title: `Select 3D Shading Map: ${currentView.name}`,
+                                                  recommendedDimensions: '1000x1000 Transparent PNG',
+                                                  currentUrl: currentView.shadow_png_url || currentView.shading_image_url || '',
+                                                  onSelect: (url) => {
+                                                    handleSetViewField(currentView.id, 'shadow_png_url', url);
+                                                    handleSetViewField(currentView.id, 'shading_image_url', url);
+                                                    if (editingProfile?.layers) {
+                                                      const cleanedLayers = editingProfile.layers.map((layer) => {
+                                                        if (!layer.assets_by_view?.[currentView.id]) return layer;
+                                                        const nextAssets = { ...layer.assets_by_view };
+                                                        const vAsset = { ...nextAssets[currentView.id] };
+                                                        delete vAsset.shadow_png_url;
+                                                        delete vAsset.highlight_png_url;
+                                                        delete vAsset.shading_image_url;
+                                                        nextAssets[currentView.id] = vAsset;
+                                                        return { ...layer, assets_by_view: nextAssets };
+                                                      });
+                                                      setEditingProfile((prev) => prev ? { ...prev, layers: cleanedLayers } : prev);
+                                                    }
+                                                  },
+                                                })
+                                              }
+                                              className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-[11px] font-medium flex items-center gap-1 cursor-pointer transition-colors shrink-0"
+                                              title="Browse WordPress Media Library"
+                                            >
+                                              <FolderOpen className="w-3 h-3 text-[#f3aa18]" />
+                                              <span>Browse</span>
+                                            </button>
+                                            {(currentView.shadow_png_url || currentView.shading_image_url) && (
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  handleSetViewField(currentView.id, 'shadow_png_url', '');
+                                                  handleSetViewField(currentView.id, 'shading_image_url', '');
+                                                  if (editingProfile?.layers) {
+                                                    const cleanedLayers = editingProfile.layers.map((layer) => {
+                                                      if (!layer.assets_by_view?.[currentView.id]) return layer;
+                                                      const nextAssets = { ...layer.assets_by_view };
+                                                      const vAsset = { ...nextAssets[currentView.id] };
+                                                      delete vAsset.shadow_png_url;
+                                                      delete vAsset.highlight_png_url;
+                                                      delete vAsset.shading_image_url;
+                                                      nextAssets[currentView.id] = vAsset;
+                                                      return { ...layer, assets_by_view: nextAssets };
+                                                    });
+                                                    setEditingProfile((prev) => prev ? { ...prev, layers: cleanedLayers } : prev);
+                                                  }
+                                                }}
+                                                className="p-1 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                                                title="Clear Shading Map"
+                                              >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                              </button>
+                                            )}
+                                          </div>
                                         </div>
                                       </div>
-                                    </div>
 
-                                    {/* Shading Tone Note */}
-                                    <div className="pt-2.5 border-t border-white/5 flex items-center justify-between text-xs">
-                                      <span className="text-[11px] text-zinc-400">
-                                        Shadow & highlight tones are tuned per finish in Master Textures (v2).
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => setShowMasterTexturesModal(true)}
-                                        className="text-[11px] text-[#f3aa18] hover:text-[#ffb72b] font-semibold cursor-pointer transition-colors flex items-center gap-1"
-                                      >
-                                        <span>Tone Settings</span>
-                                        <span>&rarr;</span>
-                                      </button>
-                                    </div>
-                                  </div>
-
-                                  {/* Angle Texture Zoom / Scale Card */}
-                                  <div className="space-y-3 bg-black/30 p-3.5 rounded-xl border border-white/5">
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-xs font-bold text-zinc-200">Angle Texture Zoom / Scale</span>
-                                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 font-bold border border-sky-500/30">
-                                          {Math.round(((currentView.texture_scale ?? 0.75)) * 100)}%
-                                          {(currentView.texture_scale ?? 0.75) === 0.75 ? ' (Default)' : ''}
+                                      {/* Shading Tone Note */}
+                                      <div className="pt-2.5 border-t border-white/5 flex items-center justify-between text-xs">
+                                        <span className="text-[11px] text-zinc-400">
+                                          Shadow & highlight tones are tuned per finish in Master Textures (v2).
                                         </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => setShowMasterTexturesModal(true)}
+                                          className="text-[11px] text-[#f3aa18] hover:text-[#ffb72b] font-semibold cursor-pointer transition-colors flex items-center gap-1"
+                                        >
+                                          <span>Tone Settings</span>
+                                          <span>&rarr;</span>
+                                        </button>
                                       </div>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleSetViewField(currentView.id, 'texture_scale', 0.75)}
-                                        className="text-[10px] font-mono text-zinc-400 hover:text-white px-2 py-1 rounded bg-white/5 hover:bg-white/10 transition-colors border border-white/10 cursor-pointer"
-                                        title="Reset to 75% default"
-                                      >
-                                        Reset 75%
-                                      </button>
                                     </div>
-                                    <p className="text-[11px] text-zinc-400">
-                                      Custom texture pattern scale for this viewing angle (accounts for different zoom/POV).
-                                    </p>
-                                    <div className="flex items-center gap-3 pt-1">
-                                      <span className="text-[10px] font-mono text-zinc-500">50%</span>
-                                      <input
-                                        type="range"
-                                        min="50"
-                                        max="150"
-                                        step="5"
-                                        value={Math.round(((currentView.texture_scale ?? 0.75)) * 100)}
-                                        onChange={(e) => {
-                                          const val = Number(e.target.value) / 100;
-                                          handleSetViewField(currentView.id, 'texture_scale', val);
-                                        }}
-                                        className="w-full accent-sky-400 cursor-pointer h-2 bg-zinc-800 rounded-lg appearance-none"
-                                      />
-                                      <span className="text-[10px] font-mono text-zinc-500">150%</span>
+
+                                    {/* Angle Texture Zoom / Scale Card */}
+                                    <div className="space-y-3 bg-black/30 p-3.5 rounded-xl border border-white/5">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs font-bold text-zinc-200">Angle Texture Zoom / Scale</span>
+                                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 font-bold border border-sky-500/30">
+                                            {Math.round(((currentView.texture_scale ?? 0.75)) * 100)}%
+                                            {(currentView.texture_scale ?? 0.75) === 0.75 ? ' (Default)' : ''}
+                                          </span>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSetViewField(currentView.id, 'texture_scale', 0.75)}
+                                          className="text-[10px] font-mono text-zinc-400 hover:text-white px-2 py-1 rounded bg-white/5 hover:bg-white/10 transition-colors border border-white/10 cursor-pointer"
+                                          title="Reset to 75% default"
+                                        >
+                                          Reset 75%
+                                        </button>
+                                      </div>
+                                      <p className="text-[11px] text-zinc-400">
+                                        Custom texture pattern scale for this viewing angle (accounts for different zoom/POV).
+                                      </p>
+                                      <div className="flex items-center gap-3 pt-1">
+                                        <span className="text-[10px] font-mono text-zinc-500">50%</span>
+                                        <input
+                                          type="range"
+                                          min="50"
+                                          max="150"
+                                          step="5"
+                                          value={Math.round(((currentView.texture_scale ?? 0.75)) * 100)}
+                                          onChange={(e) => {
+                                            const val = Number(e.target.value) / 100;
+                                            handleSetViewField(currentView.id, 'texture_scale', val);
+                                          }}
+                                          className="w-full accent-sky-400 cursor-pointer h-2 bg-zinc-800 rounded-lg appearance-none"
+                                        />
+                                        <span className="text-[10px] font-mono text-zinc-500">150%</span>
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
+                                )}
 
                                 <div className="pt-2 border-t border-white/5 flex items-center justify-between">
                                   {editingProfile.views.length > 1 && (
@@ -8696,12 +8853,25 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             </div>
 
                             {/* Device Production Variants */}
-                            <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3">
+                            <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3.5">
                               <div className="flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-1.5">
-                                  <Cpu className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                  <span className="text-xs font-semibold text-white">Production Variants</span>
-                                  <InfoTooltip text="Physical hardware variants (e.g. Wi-Fi Only vs Cellular) requiring different vinyl cut templates in production." />
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-lg bg-[#f3aa18]/10 border border-[#f3aa18]/20 flex items-center justify-center shrink-0">
+                                    <Cpu className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-bold text-white">Production Variants</span>
+                                      {editingProfile.variants && editingProfile.variants.length > 0 && (
+                                        <span className="px-1.5 py-0.2 rounded-full bg-white/10 text-[10px] font-mono font-semibold text-zinc-300">
+                                          {editingProfile.variants.length}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                                      Hardware models (e.g. Wi-Fi vs Cellular) requiring distinct vinyl cut templates.
+                                    </p>
+                                  </div>
                                 </div>
                                 <button
                                   type="button"
@@ -8716,22 +8886,32 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     };
                                     handleSetVariants([...(editingProfile.variants || []), newVariant]);
                                   }}
-                                  className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-white text-[11px] font-medium cursor-pointer transition-colors flex items-center gap-1"
+                                  className="px-3 py-1.5 rounded-lg bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 border border-[#f3aa18]/30 text-[#f3aa18] hover:text-amber-300 text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 shrink-0 shadow-xs"
                                 >
-                                  <Plus className="w-3 h-3" />
-                                  <span>Add</span>
+                                  <Plus className="w-3.5 h-3.5" />
+                                  <span>Add Group</span>
                                 </button>
                               </div>
 
                               {(!editingProfile.variants || editingProfile.variants.length === 0) ? (
-                                <p className="text-[11px] text-zinc-500 italic py-1">
-                                  No variants configured. Standard single template cut will be used.
-                                </p>
+                                <div className="p-4 rounded-xl bg-zinc-950/60 border border-dashed border-white/10 text-center space-y-1">
+                                  <p className="text-xs font-medium text-zinc-400">No physical cut variants configured</p>
+                                  <p className="text-[11px] text-zinc-500">
+                                    Standard single template cut will be used for production across all orders.
+                                  </p>
+                                </div>
                               ) : (
-                                <div className="space-y-2.5">
+                                <div className="space-y-3">
                                   {editingProfile.variants.map((v, vIdx) => (
-                                    <div key={v.id || vIdx} className="p-2.5 rounded-lg bg-zinc-950/70 border border-white/5 space-y-2">
-                                      <div className="flex items-center justify-between gap-2">
+                                    <div
+                                      key={v.id || vIdx}
+                                      className="p-3 rounded-xl bg-zinc-950/80 border border-white/10 hover:border-white/15 transition-all space-y-3 shadow-xs"
+                                    >
+                                      {/* Variant Card Header */}
+                                      <div className="flex items-center gap-2">
+                                        <span className="px-2 py-0.5 rounded-md bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/25 text-[10px] font-mono font-bold shrink-0">
+                                          #{vIdx + 1}
+                                        </span>
                                         <input
                                           type="text"
                                           value={v.name}
@@ -8740,8 +8920,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                             next[vIdx] = { ...next[vIdx], name: e.target.value };
                                             handleSetVariants(next);
                                           }}
-                                          placeholder="Variant Name"
-                                          className="px-2 py-0.5 text-xs font-medium rounded bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] flex-1"
+                                          placeholder="Variant Group Name (e.g. Connectivity or Model Edition)"
+                                          className="flex-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18] transition-colors"
                                         />
                                         <button
                                           type="button"
@@ -8749,15 +8929,27 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                             const next = (editingProfile.variants || []).filter((_, idx) => idx !== vIdx);
                                             handleSetVariants(next);
                                           }}
-                                          className="p-1 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer"
+                                          className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer shrink-0"
+                                          title="Remove Variant Group"
                                         >
                                           <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                       </div>
 
-                                      <div className="space-y-1 pt-1 border-t border-white/5">
+                                      {/* Options List */}
+                                      <div className="space-y-1.5 pt-1 border-t border-white/5">
+                                        <div className="flex items-center justify-between text-[10px] font-mono text-zinc-500 uppercase tracking-wider px-1">
+                                          <span>Option Name</span>
+                                          <span>Price Extra (+IDR)</span>
+                                        </div>
                                         {v.options.map((opt, oIdx) => (
-                                          <div key={opt.id || oIdx} className="flex items-center gap-1.5 text-xs">
+                                          <div
+                                            key={opt.id || oIdx}
+                                            className="flex items-center gap-2 p-1.5 rounded-lg bg-zinc-900/60 border border-white/5 hover:border-white/10 transition-colors"
+                                          >
+                                            <span className="w-5 h-5 rounded-md bg-zinc-800 text-zinc-400 text-[10px] font-mono flex items-center justify-center shrink-0">
+                                              {oIdx + 1}
+                                            </span>
                                             <input
                                               type="text"
                                               value={opt.name}
@@ -8768,11 +8960,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                 next[vIdx] = { ...next[vIdx], options: opts };
                                                 handleSetVariants(next);
                                               }}
-                                              placeholder="Option name"
-                                              className="flex-1 px-2 py-0.5 text-xs rounded bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                                              placeholder="Option name (e.g. Wi-Fi Only)"
+                                              className="flex-1 px-2.5 py-1 text-xs rounded-lg bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18] transition-colors"
                                             />
-                                            <div className="flex items-center gap-1 shrink-0">
-                                              <span className="text-[10px] text-zinc-500 font-mono">+</span>
+                                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-zinc-950 border border-white/10 shrink-0">
+                                              <span className="text-[10px] text-zinc-500 font-mono font-semibold">+IDR</span>
                                               <input
                                                 type="number"
                                                 step="5000"
@@ -8784,7 +8976,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                   next[vIdx] = { ...next[vIdx], options: opts };
                                                   handleSetVariants(next);
                                                 }}
-                                                className="w-16 px-1.5 py-0.5 text-xs font-mono text-right rounded bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                                                className="w-20 text-xs font-mono text-right bg-transparent text-white focus:outline-none"
                                               />
                                             </div>
                                             {v.options.length > 1 && (
@@ -8796,13 +8988,15 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                   next[vIdx] = { ...next[vIdx], options: opts };
                                                   handleSetVariants(next);
                                                 }}
-                                                className="p-0.5 text-zinc-500 hover:text-rose-400 cursor-pointer"
+                                                className="p-1 rounded-md text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer transition-colors shrink-0"
+                                                title="Remove Option"
                                               >
-                                                <X className="w-3 h-3" />
+                                                <X className="w-3.5 h-3.5" />
                                               </button>
                                             )}
                                           </div>
                                         ))}
+
                                         <button
                                           type="button"
                                           onClick={() => {
@@ -8817,9 +9011,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                             };
                                             handleSetVariants(next);
                                           }}
-                                          className="text-[10px] text-[#f3aa18] hover:underline font-medium cursor-pointer pt-0.5 block"
+                                          className="w-full py-1.5 px-3 rounded-lg border border-dashed border-white/15 hover:border-[#f3aa18]/40 hover:bg-[#f3aa18]/5 text-[11px] font-medium text-zinc-400 hover:text-[#f3aa18] transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-1"
                                         >
-                                          + Add Option
+                                          <Plus className="w-3 h-3" />
+                                          <span>Add Cut Option</span>
                                         </button>
                                       </div>
                                     </div>

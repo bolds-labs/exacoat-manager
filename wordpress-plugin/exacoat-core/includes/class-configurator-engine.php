@@ -1409,10 +1409,10 @@ class Exacoat_Configurator_Engine {
 
 		if ( strpos( $cat_lower, 'macbook' ) !== false || strpos( $cat_lower, 'laptop' ) !== false ) {
 			$family = 'laptop';
-			$size_multiplier = 2.5;
+			$size_multiplier = 2.0;
 		} elseif ( strpos( $cat_lower, 'pad' ) !== false || strpos( $cat_lower, 'tablet' ) !== false ) {
 			$family = 'tablet';
-			$size_multiplier = 1.8;
+			$size_multiplier = 2.0;
 		} elseif ( strpos( $cat_lower, 'fold' ) !== false || strpos( $cat_lower, 'flip' ) !== false ) {
 			$family = 'foldable';
 			$size_multiplier = 1.3;
@@ -1516,6 +1516,8 @@ class Exacoat_Configurator_Engine {
 		// Convert Layers
 		$normalized_layers = [];
 		$variants = [];
+		$logo_cutout_by_view = [];
+		$has_logo_layer = false;
 
 		if ( is_array( $layers ) ) {
 			foreach ( $layers as $idx => $l ) {
@@ -1533,17 +1535,59 @@ class Exacoat_Configurator_Engine {
 				$is_required = ( ( $l['required'] ?? '' ) === '1' || ( $l['required'] ?? false ) === true );
 				$is_optional = ( ( $l['can_deselect'] ?? '' ) === '1' || strpos( (string) ( $l['class_name'] ?? '' ), 'optional' ) !== false );
 				$is_selector = strpos( (string) ( $l['class_name'] ?? '' ), 'none-hover' ) !== false || in_array( $layer_name_lower, [ 'model', 'series', 'iphone model', 'ipad series', 'ipad version', 'device model', 'connectivity' ] );
+				$is_logo = ( strpos( $layer_name_lower, 'logo' ) !== false || strpos( $layer_name_lower, 'cutout' ) !== false );
 
 				$raw_choices = $content_by_layer[ $layer_id_num ] ?? [];
+
+				if ( $is_logo ) {
+					$has_logo_layer = true;
+					foreach ( $raw_choices as $ch ) {
+						$ch_name_lower = strtolower( $ch['name'] ?? '' );
+						if ( ! empty( $ch['images'] ) && is_array( $ch['images'] ) ) {
+							foreach ( $ch['images'] as $img_obj ) {
+								$url = $img_obj['image']['url'] ?? '';
+								if ( empty( $url ) ) continue;
+								$angle_id = $img_obj['angleId'] ?? null;
+								$angle_name = $img_obj['angle_name'] ?? '';
+
+								$matched = false;
+								foreach ( $views as $v ) {
+									if ( ( $angle_id && (int) ( $v['legacy_id'] ?? 0 ) === (int) $angle_id ) || ( $angle_name && strcasecmp( $v['name'], $angle_name ) === 0 ) ) {
+										$logo_cutout_by_view[ $v['id'] ] = $url;
+										$matched = true;
+									}
+								}
+								if ( ! $matched ) {
+									foreach ( $views as $v ) {
+										if ( empty( $logo_cutout_by_view[ $v['id'] ] ) ) {
+											$logo_cutout_by_view[ $v['id'] ] = $url;
+										}
+									}
+								}
+							}
+						}
+					}
+				}
 
 				if ( $is_selector ) {
 					$options = [];
 					foreach ( $raw_choices as $ch ) {
 						if ( empty( $ch['is_group'] ) && ! empty( $ch['name'] ) ) {
+							$opt_img = '';
+							if ( ! empty( $ch['images'] ) && is_array( $ch['images'] ) ) {
+								foreach ( $ch['images'] as $img_obj ) {
+									if ( ! empty( $img_obj['image']['url'] ) ) {
+										$opt_img = $img_obj['image']['url'];
+										break;
+									}
+								}
+							}
+							$price_val = isset( $ch['price'] ) ? (float) $ch['price'] : ( isset( $ch['extra_price'] ) ? (float) $ch['extra_price'] : 0 );
 							$options[] = [
 								'id'         => sanitize_title( $ch['name'] ),
 								'name'       => $ch['name'],
-								'price_diff' => isset( $ch['price'] ) ? (float) $ch['price'] : 0,
+								'price_diff' => $price_val,
+								'image_url'  => $opt_img,
 							];
 						}
 					}
@@ -1576,8 +1620,9 @@ class Exacoat_Configurator_Engine {
 					if ( ! empty( $ch['is_group'] ) ) continue;
 					$ch_name = $ch['name'] ?? '';
 					$ch_slug = sanitize_title( $ch_name );
-					if ( isset( $ch['price'] ) && (float) $ch['price'] > 0 && $layer_extra_price === 0 ) {
-						$layer_extra_price = (float) $ch['price'];
+					$ch_price = isset( $ch['price'] ) ? (float) $ch['price'] : ( isset( $ch['extra_price'] ) ? (float) $ch['extra_price'] : 0 );
+					if ( $ch_price > 0 && $layer_extra_price === 0 ) {
+						$layer_extra_price = $ch_price;
 					}
 
 					if ( ! empty( $ch['images'] ) && is_array( $ch['images'] ) ) {
@@ -1632,6 +1677,24 @@ class Exacoat_Configurator_Engine {
 			}
 		}
 
+		// Assign logo cutout mask to views if discovered
+		foreach ( $views as &$v ) {
+			if ( ! empty( $logo_cutout_by_view[ $v['id'] ] ) ) {
+				$v['logo_cutout_mask_url'] = $logo_cutout_by_view[ $v['id'] ];
+				$v['logo_image_url'] = $logo_cutout_by_view[ $v['id'] ];
+			}
+		}
+		unset( $v );
+
+		$primary_logo_url = reset( $logo_cutout_by_view ) ?: '';
+		$coverage_and_cutouts = [
+			'has_logo_cutout'      => $has_logo_layer || ! empty( $primary_logo_url ) || ( $family === 'laptop' ) || strpos( $cat_lower, 'macbook' ) !== false || strpos( $cat_lower, 'iphone' ) !== false,
+			'logo_cutout_mask_url' => $primary_logo_url,
+			'has_pencil_cutout'    => false,
+			'has_model_cut'        => false,
+			'coverage_type'        => 'none',
+		];
+
 		$base_price = (float) ( $product->get_price() ?: $product->get_regular_price() ?: 0 );
 
 		return [
@@ -1650,6 +1713,7 @@ class Exacoat_Configurator_Engine {
 			'views'                => $views,
 			'layers'               => $normalized_layers,
 			'variants'             => $variants,
+			'coverage_and_cutouts' => $coverage_and_cutouts,
 			'updated_at'           => current_time( 'mysql' ),
 		];
 	}
@@ -1737,7 +1801,7 @@ class Exacoat_Configurator_Engine {
 				'layers_count'         => count( $profile_data['layers'] ?? [] ),
 				'views_count'          => count( $profile_data['views'] ?? [] ),
 				'family'               => $profile_data['family'] ?? 'phone',
-				'size_multiplier'      => $profile_data['size_multiplier'] ?? 1.0,
+				'size_multiplier'      => ( in_array( $profile_data['family'] ?? '', [ 'laptop', 'tablet' ], true ) && in_array( (float) ( $profile_data['size_multiplier'] ?? 1.0 ), [ 2.5, 1.8, 1.0 ], true ) ) ? 2.0 : ( $profile_data['size_multiplier'] ?? 1.0 ),
 				'texture_scale'        => isset( $profile_data['views'][0]['texture_scale'] ) ? (float) $profile_data['views'][0]['texture_scale'] : ( isset( $profile_data['texture_scale'] ) ? (float) $profile_data['texture_scale'] : 0.75 ),
 				'last_audited_at'      => ! empty( $last_audited ) ? $last_audited : null,
 				'audit_status'         => ! empty( $audit_status ) ? $audit_status : 'unaudited',

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.90] - 2026-09-21
+
+### Legacy v1 Read-Only Protection, Convert to v2 Engine, Standardized 2.0x Multiplier & Production Variants UI
+- **Legacy v1 Read-Only Safeguard**:
+  - Locked all legacy v1 configurator devices in Read-Only Mode (`configurator_version !== 'v2'`) to prevent unintended mutation or corruption of live WooCommerce MKL settings powering `web.exacoat.com`.
+  - Replaced header "Save Configurator" action with "Convert to v2 Modern Engine" and added an amber notice banner above the device viewport.
+- **Convert to v2 Modern Engine & Optional 3D Shadows Workflow**:
+  - Implemented 1-click in-memory conversion upgrading `configurator_version` to `'v2'`, normalizing laptop/tablet size multipliers to 2.0x, and unlocking studio editing.
+  - In v2 Modern Engine, 3D shadows are completely optional: if no shadow PNG is uploaded (`shadow_png_url`), devices render cleanly without shadow until CAD renders become available.
+- **Standardized 2.0x Size Multiplier for Laptops and Tablets**:
+  - Standardized size multiplier to `2.0` across all laptops and tablets (replacing legacy `2.5` and `1.8`), establishing uniform +IDR 60,000 premium material up-prices across the webstore and Studio simulation.
+  - Updated in PHP backend (`convert_mkl_to_profile`, `rest_get_configurator_profiles`), TypeScript bridge (`wordpressBridge.ts`), and Studio device initialization (`handleOpenDevice`, `handleConvertToV2`).
+- **Production Variants UI Overhaul**:
+  - Completely redesigned production variants from raw cramped input boxes into a clean, modern card interface with index badges (`#1`), group name inputs, option index pills, formatted price differential inputs (`+IDR [amount]`), and dashed "+ Add Cut Option" action buttons.
+- **v1 MacBook Neo Apple Logo Overlay & Viewport Parity**:
+  - Restored missing Apple logo on MacBook Neo (`#542139`) and other v1 devices in the viewport canvas by rendering the v1 logo cutout overlay image (`Macbook-Neo-Logo.png` at z-index 35) on top of the vinyl skin when logo cutout is enabled.
+  - Synchronized Logo Cutout toggle in the simulator dock bidirectionally with device variants.
+- **Views Tab v1 Hygiene**:
+  - Strictly hid "Angle 3D Shading & Highlights" and "Angle Texture Zoom / Scale" controls when inspecting v1 devices, eliminating irrelevant controls.
+
 ## [0.0.89] - 2026-09-21
 
 ### Finish Texture Reordering within Groups & Global Finish Deactivation (is_active)

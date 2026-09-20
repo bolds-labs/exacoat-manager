@@ -475,6 +475,7 @@ export interface ConfiguratorView {
   canvas_dimensions?: { width: number; height: number };
   background_url?: string;
   logo_url?: string;
+  logo_image_url?: string;
   logo_cutout_mask_url?: string;
   pencil_cutout_mask_url?: string;
   model_cut_mask_url?: string;
@@ -526,6 +527,7 @@ export interface ConfiguratorVariantOption {
   id: string;
   name: string;
   price_diff?: number;
+  image_url?: string;
 }
 
 export interface ConfiguratorVariant {

@@ -804,4 +804,37 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - 1-Click Toggle: Operators can toggle active status with 1 click using the Active / Inactive button in the card header, synchronizing immediately via `POST /wp-json/exacoat-core/v1/finishes/toggle-active`.
   - Status Filtering: Master Textures modal header includes live filter pills: All, Active, and Inactive with dynamic device counts.
 
+---
+
+## 46. Legacy v1 Read-Only Protection, Convert to v2 Engine & Production Variants Overhaul
+
+- **Legacy v1 Read-Only Mode & Storefront Protection Invariant**:
+  - Live products on `web.exacoat.com` read directly from raw WooCommerce MKL post meta (`_mkl_product_configurator_*`).
+  - To prevent accidental corruption or schema breakage of live storefront products, all legacy v1 products in Exacoat Manager's Configurator Studio are locked in Read-Only Mode (`editingProfile.configurator_version !== 'v2'`).
+  - The header "Save Configurator" action is replaced with "Convert to v2 Modern Engine", and direct save attempts trigger a warning toast prompting conversion.
+  - An amber notice banner is displayed above the viewport canvas clarifying that legacy MKL settings are protected.
+
+- **Convert to v2 Modern Engine & Optional 3D Shadows Workflow**:
+  - Clicking "Convert to v2 Modern Engine" upgrades `configurator_version` to `'v2'` in memory, initializes modern view texture scaling and optional shading properties, normalizes size multipliers, and unlocks studio editing and save actions.
+  - In v2 Modern Engine, 3D shading is completely optional: if an admin has not yet uploaded a shadow map (`shadow_png_url` is empty), the viewport and storefront render cleanly without shadows. The operator can upload or extract shading whenever CAD renders become available.
+
+- **Standardized 2.0x Multiplier for Laptops and Tablets**:
+  - Size multipliers for laptops and tablets are standardized to `2.0` across the entire system (replacing legacy `2.5` and `1.8`).
+  - Standardizes premium finish up-prices to +IDR 60,000 (IDR 30,000 * 2.0x) on both webstore checkout and Studio simulation.
+  - Applied in PHP backend (`convert_mkl_to_profile`, `rest_get_configurator_profiles`), TypeScript bridge (`wordpressBridge.ts`), and Studio device initialization (`handleOpenDevice`, `handleConvertToV2`).
+
+- **Production Variants Modern Card Interface**:
+  - Replaced cramped, unstyled input boxes with an Antislop-compliant structured card interface.
+  - Variant groups feature numeric badges (`#1`, `#2`), descriptive titles, and delete group actions.
+  - Option rows feature sequential index pills, clean option title inputs, formatted price differential inputs (`+IDR [amount]`), and delete option buttons.
+  - Empty state provides a clean explanation that single template cuts will be used for production.
+
+- **v1 Logo Cutout Overlay & Viewport Parity**:
+  - In legacy v1 MKL, MacBook and Apple devices render the metallic brand logo as an image overlay on top of the vinyl skin (`Macbook-Neo-Logo.png` at z-index 35).
+  - Studio viewport renders this logo overlay directly for v1 devices when logo cutout is enabled, restoring the missing Apple logo preview on MacBook Neo (`#542139`).
+  - In the simulator dock, the Logo Cutout toggle synchronizes bidirectionally with the device variants map.
+
+- **Views Tab v1 Hygiene**:
+  - Controls for "Angle 3D Shading & Highlights" and "Angle Texture Zoom / Scale" are strictly hidden when inspecting v1 devices (`configurator_version !== 'v2'`), eliminating confusion from irrelevant controls.
+
 

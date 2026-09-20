@@ -2566,9 +2566,9 @@ export async function fetchConfiguratorProfilesDirect(params?: {
         const catLower = cat.toLowerCase();
         let family: DeviceFamily = 'phone';
         let size_multiplier = 1.0;
-        if (catLower.includes('macbook') || catLower.includes('laptop')) { family = 'laptop'; size_multiplier = 2.5; }
+        if (catLower.includes('macbook') || catLower.includes('laptop')) { family = 'laptop'; size_multiplier = 2.0; }
         else if (catLower.includes('keyboard')) { family = 'keyboard'; size_multiplier = 2.0; }
-        else if (catLower.includes('pad') || catLower.includes('tablet')) { family = 'tablet'; size_multiplier = 1.8; }
+        else if (catLower.includes('pad') || catLower.includes('tablet')) { family = 'tablet'; size_multiplier = 2.0; }
         else if (catLower.includes('fold') || catLower.includes('flip')) { family = 'foldable'; size_multiplier = 1.3; }
 
         return {
@@ -2901,9 +2901,9 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
       const catLower = cat.toLowerCase();
       let family: DeviceFamily = 'phone';
       let size_multiplier = 1.0;
-      if (catLower.includes('macbook') || catLower.includes('laptop')) { family = 'laptop'; size_multiplier = 2.5; }
+      if (catLower.includes('macbook') || catLower.includes('laptop')) { family = 'laptop'; size_multiplier = 2.0; }
       else if (catLower.includes('keyboard')) { family = 'keyboard'; size_multiplier = 2.0; }
-      else if (catLower.includes('pad') || catLower.includes('tablet')) { family = 'tablet'; size_multiplier = 1.8; }
+      else if (catLower.includes('pad') || catLower.includes('tablet')) { family = 'tablet'; size_multiplier = 2.0; }
       else if (catLower.includes('fold') || catLower.includes('flip')) { family = 'foldable'; size_multiplier = 1.3; }
 
       const convertedViews = (angles.length > 0 ? angles : [{ _id: 1, name: 'Main View' }]).map((a: any, idx: number) => {
@@ -2916,6 +2916,7 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
           aspect_ratio: '1:1' as const,
           canvas_dimensions: { width: 1000, height: 1000 },
           background_url: '',
+          logo_cutout_mask_url: '',
         };
       });
 
@@ -2947,15 +2948,44 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
         }
       });
 
+      // Extract Logo Cutout overlay image from MKL layers if present
+      const logoLayer = layers.find((l: any) => {
+        const n = (l.name || '').toLowerCase();
+        return n.includes('logo') || n.includes('cutout');
+      });
+      let logoOverlayUrl = '';
+      if (logoLayer) {
+        const logoChoices = contentByLayer[logoLayer._id] || [];
+        logoChoices.forEach((ch: any) => {
+          const chName = (ch.name || '').toLowerCase();
+          if (chName.includes('with') || chName.includes('logo') || (ch.images && ch.images.length > 0)) {
+            (ch.images || []).forEach((im: any) => {
+              const url = im.image?.url;
+              if (url) {
+                logoOverlayUrl = url;
+                const matchingView = convertedViews.find((v: any) => v.legacy_id === im.angleId || v.name === im.angle_name);
+                if (matchingView) {
+                  matchingView.logo_cutout_mask_url = url;
+                }
+              }
+            });
+          }
+        });
+      }
+
+      // Fallback logo URL to all views if matched
+      if (logoOverlayUrl) {
+        convertedViews.forEach((v: any) => {
+          if (!v.logo_cutout_mask_url) v.logo_cutout_mask_url = logoOverlayUrl;
+        });
+      }
+
       // Detect Coverage and Logo Cutout options from layers
       const hasCoverageFromLayers = layers.some((l: any) => {
         const n = (l.name || '').toLowerCase();
         return n.includes('model') || n.includes('coverage') || n.includes('360');
       });
-      const hasLogoFromLayers = layers.some((l: any) => {
-        const n = (l.name || '').toLowerCase();
-        return n.includes('logo') || n.includes('cutout');
-      });
+      const hasLogoFromLayers = Boolean(logoLayer);
 
       const convertedVariants: any[] = [];
       if (hasCoverageFromLayers || family === 'phone') {
@@ -2973,7 +3003,7 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
           id: 'logo_cutout',
           name: 'Logo Cutout',
           options: [
-            { id: 'with_logo', name: 'With Logo Cutout', price_diff: 0 },
+            { id: 'with_logo', name: 'With Logo Cutout', price_diff: 0, image_url: logoOverlayUrl || undefined },
             { id: 'without_logo', name: 'Without Logo Cutout', price_diff: 0 },
           ],
         });
@@ -2999,7 +3029,14 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
           base_hardware_body_url: Object.values(deviceBodyByView)[0] || ''
         };
 
+        let layerExtraPrice = 0;
+
         rawChoices.forEach((ch: any) => {
+          const chPrice = Number(ch.price || ch.extra_price) || 0;
+          if (chPrice > 0 && layerExtraPrice === 0) {
+            layerExtraPrice = chPrice;
+          }
+
           if (!ch.is_group && ch.name && ch.images && ch.images.length > 0) {
             const chSlug = ch.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
             ch.images.forEach((im: any) => {
@@ -3031,7 +3068,7 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
           is_required: l.required === '1' || l.required === true,
           is_optional: l.can_deselect === '1' || (l.class_name && l.class_name.includes('optional')),
           default_selected: l.required === '1' || !l.can_deselect,
-          extra_price: 0,
+          extra_price: layerExtraPrice,
           z_index: idx + 1,
           allowed_finish_groups: ['Signature skins', 'Colors', 'Natural'],
           allowed_finish_slugs: allowedFinishSlugs,
@@ -3087,6 +3124,13 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
           views: convertedViews.length > 0 ? convertedViews : [{ id: 'main_view', name: 'Main View', is_default: true, aspect_ratio: '1:1', canvas_dimensions: { width: 1000, height: 1000 } }],
           layers: convertedLayers,
           variants: convertedVariants,
+          coverage_and_cutouts: {
+            has_logo_cutout: Boolean(logoOverlayUrl || hasLogoFromLayers || family === 'laptop'),
+            logo_cutout_mask_url: logoOverlayUrl,
+            has_pencil_cutout: false,
+            has_model_cut: false,
+            coverage_type: 'none',
+          },
         },
         finishes: finishesRes.finishes || []
       };
