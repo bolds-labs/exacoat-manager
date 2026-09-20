@@ -12,6 +12,9 @@ import {
   setProductPriceDirect,
   duplicateProductDirect,
   toggleProductConfiguratorDirect,
+  markDeviceAuditedDirect,
+  batchMarkDevicesAuditedDirect,
+  resetDeviceAuditDirect,
   GlobalFinish,
   fetchGlobalFinishesDirect,
 } from '../lib/wordpressBridge';
@@ -56,6 +59,7 @@ import {
   Monitor,
   Settings,
   ShieldCheck,
+  ShieldAlert,
   Wand2,
   GripVertical,
   Tag,
@@ -146,6 +150,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [filterConfigured, setFilterConfigured] = useState<'all' | 'configured' | 'pending'>('all');
   const [filterVersion, setFilterVersion] = useState<'all' | 'v1' | 'v2'>('all');
+  const [filterAudit, setFilterAudit] = useState<'all' | 'audited' | 'unaudited' | 'issues'>('all');
+  const [globalAuditMode, setGlobalAuditMode] = useState<'all' | 'unaudited'>('all');
   const [showAllProducts, setShowAllProducts] = useState(false);
   const [togglingConfiguratorId, setTogglingConfiguratorId] = useState<number | null>(null);
 
@@ -967,6 +973,31 @@ export const ConfiguratorStudioPage: React.FC = () => {
     setAuditReport(report);
     setIsAuditingAssets(false);
 
+    // Persist single device audit record to WooCommerce post meta
+    const totalIssues = brokenCount + ghostAngles.length;
+    const auditStatus = totalIssues > 0 ? 'issues' : 'clean';
+    const nowIso = new Date().toISOString();
+
+    markDeviceAuditedDirect({
+      product_id: editingProfile.product_id,
+      audit_status: auditStatus,
+      audit_issues: totalIssues,
+      last_audited_at: nowIso,
+    }).catch(console.warn);
+
+    setProfiles((prev) =>
+      prev.map((p) =>
+        p.product_id === editingProfile.product_id
+          ? {
+              ...p,
+              last_audited_at: nowIso,
+              audit_status: auditStatus,
+              audit_issues: totalIssues,
+            }
+          : p
+      )
+    );
+
     if (brokenCount > 0 || ghostAngles.length > 0) {
       setAuditFilter('broken');
     } else {
@@ -1131,13 +1162,27 @@ export const ConfiguratorStudioPage: React.FC = () => {
   }, [auditReport, auditFilter]);
 
   // Global Catalog-Wide Audit Handlers
-  const handleStartGlobalCatalogAudit = async () => {
-    if (profiles.length === 0) return;
+  const handleStartGlobalCatalogAudit = async (mode: 'all' | 'unaudited' = 'all') => {
+    setGlobalAuditMode(mode);
+    const targetProfiles =
+      mode === 'unaudited'
+        ? profiles.filter((p) => !p.last_audited_at || p.audit_status === 'unaudited')
+        : profiles;
+
+    if (targetProfiles.length === 0) {
+      showToast(
+        'info',
+        'All Devices Audited',
+        'All products in the catalog have already been audited. Run "Audit All Devices" to re-scan.'
+      );
+      return;
+    }
+
     setIsAuditingGlobal(true);
     setShowGlobalAuditModal(true);
     setGlobalAuditProgress({
       scannedDevices: 0,
-      totalDevices: profiles.length,
+      totalDevices: targetProfiles.length,
       currentDeviceName: 'Starting catalog scan...',
     });
 
@@ -1148,11 +1193,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
     let totalEmptyMappings = 0;
     let devicesWithIssues = 0;
 
-    for (let i = 0; i < profiles.length; i++) {
-      const p = profiles[i];
+    for (let i = 0; i < targetProfiles.length; i++) {
+      const p = targetProfiles[i];
       setGlobalAuditProgress({
         scannedDevices: i,
-        totalDevices: profiles.length,
+        totalDevices: targetProfiles.length,
         currentDeviceName: p.name,
       });
 
@@ -1335,14 +1380,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
     }
 
     setGlobalAuditProgress({
-      scannedDevices: profiles.length,
-      totalDevices: profiles.length,
+      scannedDevices: targetProfiles.length,
+      totalDevices: targetProfiles.length,
       currentDeviceName: 'Scan complete.',
     });
 
     const finalReport: GlobalCatalogAuditReport = {
       timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      totalDevicesScanned: profiles.length,
+      totalDevicesScanned: targetProfiles.length,
       totalAssetsProbed,
       devicesWithIssues,
       totalBrokenAssets,
@@ -1353,6 +1398,39 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
     setGlobalAuditReport(finalReport);
     setIsAuditingGlobal(false);
+
+    // Persist all audit results to WooCommerce post meta
+    const nowIso = new Date().toISOString();
+    const auditRowsToPersist = deviceSummaries.map((ds) => {
+      const issues = ds.brokenCount + ds.ghostAngles.length;
+      return {
+        product_id: ds.productId,
+        audit_status: (issues > 0 ? 'issues' : 'clean') as 'issues' | 'clean',
+        audit_issues: issues,
+        last_audited_at: nowIso,
+      };
+    });
+
+    if (auditRowsToPersist.length > 0) {
+      batchMarkDevicesAuditedDirect(auditRowsToPersist).catch(console.warn);
+
+      // Optimistically update profiles in state
+      setProfiles((prev) =>
+        prev.map((p) => {
+          const matched = auditRowsToPersist.find((r) => r.product_id === p.product_id);
+          if (matched) {
+            return {
+              ...p,
+              last_audited_at: matched.last_audited_at,
+              audit_status: matched.audit_status,
+              audit_issues: matched.audit_issues,
+            };
+          }
+          return p;
+        })
+      );
+    }
+
     if (devicesWithIssues > 0) {
       setGlobalAuditFilter('issues');
     } else {
@@ -1785,9 +1863,18 @@ export const ConfiguratorStudioPage: React.FC = () => {
       const matchesVersion =
         filterVersion === 'all' ? true : (p.configurator_version || 'v1') === filterVersion;
 
-      return matchesSearch && matchesCat && matchesStatus && matchesVersion;
+      const matchesAudit =
+        filterAudit === 'all'
+          ? true
+          : filterAudit === 'audited'
+          ? Boolean(p.last_audited_at) && p.audit_status !== 'issues'
+          : filterAudit === 'unaudited'
+          ? !p.last_audited_at || p.audit_status === 'unaudited'
+          : p.audit_status === 'issues' || Boolean(p.audit_issues && p.audit_issues > 0);
+
+      return matchesSearch && matchesCat && matchesStatus && matchesVersion && matchesAudit;
     });
-  }, [profiles, searchQuery, selectedCategory, filterConfigured, filterVersion]);
+  }, [profiles, searchQuery, selectedCategory, filterConfigured, filterVersion, filterAudit]);
 
   // Live Price Calculation in Simulator
   const simulatedTotalPrice = useMemo(() => {
@@ -1818,7 +1905,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
     const total = profiles.length;
     const configured = profiles.filter((p) => p.is_configurable).length;
     const multiAngle = profiles.filter((p) => p.views_count > 1).length;
-    return { total, configured, multiAngle };
+    const audited = profiles.filter((p) => Boolean(p.last_audited_at)).length;
+    const unaudited = profiles.filter((p) => !p.last_audited_at || p.audit_status === 'unaudited').length;
+    const issues = profiles.filter((p) => p.audit_status === 'issues' || Boolean(p.audit_issues && p.audit_issues > 0)).length;
+    return { total, configured, multiAngle, audited, unaudited, issues };
   }, [profiles]);
 
   const getFamilyIcon = (family: DeviceFamily) => {
@@ -1850,21 +1940,49 @@ export const ConfiguratorStudioPage: React.FC = () => {
               <RefreshCw className={clsx('w-3.5 h-3.5', isRefreshing && 'animate-spin text-[#f3aa18]')} />
               Refresh Catalog
             </button>
+            {stats.unaudited > 0 ? (
+              <button
+                type="button"
+                onClick={() => handleStartGlobalCatalogAudit('unaudited')}
+                disabled={isAuditingGlobal || profiles.length === 0}
+                className="px-4 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
+                title="Scan only devices that have not been audited yet"
+              >
+                {isAuditingGlobal && globalAuditMode === 'unaudited' ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                    <span>Auditing Unaudited ({stats.unaudited})...</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Audit Unaudited ({stats.unaudited})</span>
+                  </>
+                )}
+              </button>
+            ) : null}
+
             <button
-              onClick={handleStartGlobalCatalogAudit}
+              type="button"
+              onClick={() => handleStartGlobalCatalogAudit('all')}
               disabled={isAuditingGlobal || profiles.length === 0}
-              className="px-4 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
+              className={clsx(
+                'px-4 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50',
+                stats.unaudited === 0
+                  ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30'
+                  : 'border border-white/10 hover:bg-white/[0.06] text-zinc-300 font-medium'
+              )}
               title="Audit all devices across the catalog for 404 images, broken textures, and ghost angles"
             >
-              {isAuditingGlobal ? (
+              {isAuditingGlobal && globalAuditMode === 'all' ? (
                 <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#f3aa18]" />
                   <span>Auditing All Devices...</span>
                 </>
               ) : (
                 <>
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Audit All Devices</span>
+                  <ShieldCheck className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>Audit All ({stats.total})</span>
                 </>
               )}
             </button>
@@ -1899,7 +2017,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
       )}
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <GlassCard className="p-4 flex items-center gap-4">
           <div className="w-11 h-11 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-[#f3aa18] shrink-0">
             <Layers className="w-5 h-5" />
@@ -1912,11 +2030,21 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
         <GlassCard className="p-4 flex items-center gap-4">
           <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-            <CheckCircle2 className="w-5 h-5" />
+            <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-[11px] font-sans font-medium text-zinc-400 uppercase tracking-wider">Composable Ready</p>
-            <p className="text-2xl font-mono font-bold text-emerald-400 mt-0.5">{stats.configured}</p>
+            <p className="text-[11px] font-sans font-medium text-zinc-400 uppercase tracking-wider">Audited Clean</p>
+            <p className="text-2xl font-mono font-bold text-emerald-400 mt-0.5">{Math.max(0, stats.audited - stats.issues)}</p>
+          </div>
+        </GlassCard>
+
+        <GlassCard className="p-4 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+            <ShieldAlert className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-sans font-medium text-zinc-400 uppercase tracking-wider">Unaudited Devices</p>
+            <p className="text-2xl font-mono font-bold text-amber-400 mt-0.5">{stats.unaudited}</p>
           </div>
         </GlassCard>
 
@@ -2029,6 +2157,64 @@ export const ConfiguratorStudioPage: React.FC = () => {
             >
               v2 Modern
             </button>
+          </div>
+
+          {/* Audit Status Filter Selector */}
+          <div className="flex items-center gap-1 bg-zinc-900/60 p-1 rounded-xl border border-white/10 shrink-0">
+            <button
+              type="button"
+              onClick={() => setFilterAudit('all')}
+              className={clsx(
+                'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer',
+                filterAudit === 'all' ? 'bg-white/15 text-white font-bold' : 'text-zinc-400 hover:text-white'
+              )}
+            >
+              All Audit
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterAudit('audited')}
+              className={clsx(
+                'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer flex items-center gap-1.5',
+                filterAudit === 'audited'
+                  ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40'
+                  : 'text-zinc-400 hover:text-white'
+              )}
+              title="Show devices that have been audited and verified clean"
+            >
+              <ShieldCheck className="w-3 h-3 text-emerald-400" />
+              <span>Audited ({Math.max(0, stats.audited - stats.issues)})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterAudit('unaudited')}
+              className={clsx(
+                'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer flex items-center gap-1.5',
+                filterAudit === 'unaudited'
+                  ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40'
+                  : 'text-zinc-400 hover:text-white'
+              )}
+              title="Show devices that need auditing"
+            >
+              <ShieldAlert className="w-3 h-3 text-amber-400" />
+              <span>Unaudited ({stats.unaudited})</span>
+            </button>
+            {stats.issues > 0 && (
+              <button
+                type="button"
+                onClick={() => setFilterAudit('issues')}
+                className={clsx(
+                  'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer flex items-center gap-1.5',
+                  filterAudit === 'issues'
+                    ? 'bg-rose-500/20 text-rose-300 font-bold border border-rose-500/40'
+                    : 'text-zinc-400 hover:text-white'
+                )}
+                title="Show devices with broken textures or ghost angles"
+              >
+                <AlertTriangle className="w-3 h-3 text-rose-400" />
+                <span>Issues ({stats.issues})</span>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5 overflow-x-auto">
@@ -2156,7 +2342,36 @@ export const ConfiguratorStudioPage: React.FC = () => {
               </div>
 
               <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between gap-2">
-                <span className="text-[11px] font-mono text-zinc-500 shrink-0">SKU #{p.product_id}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-[11px] font-mono text-zinc-500 shrink-0">SKU #{p.product_id}</span>
+                  {p.last_audited_at ? (
+                    p.audit_status === 'issues' || Boolean(p.audit_issues && p.audit_issues > 0) ? (
+                      <span
+                        className="inline-flex items-center gap-1 text-[10px] font-sans px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/30 shrink-0 font-medium"
+                        title={`Audited with issues (${p.audit_issues || 1} issues detected)`}
+                      >
+                        <AlertTriangle className="w-2.5 h-2.5" />
+                        <span>{p.audit_issues ? `${p.audit_issues} Issues` : 'Issues'}</span>
+                      </span>
+                    ) : (
+                      <span
+                        className="inline-flex items-center gap-1 text-[10px] font-sans px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0 font-medium"
+                        title={`Audited clean: ${new Date(p.last_audited_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                      >
+                        <ShieldCheck className="w-2.5 h-2.5" />
+                        <span>Audited</span>
+                      </span>
+                    )
+                  ) : (
+                    <span
+                      className="inline-flex items-center gap-1 text-[10px] font-sans px-2 py-0.5 rounded-full bg-zinc-800/80 text-zinc-400 border border-zinc-700/60 shrink-0 font-medium"
+                      title="Device has not been audited yet"
+                    >
+                      <ShieldAlert className="w-2.5 h-2.5 text-zinc-500" />
+                      <span>Unaudited</span>
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -2207,14 +2422,40 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {stats.unaudited > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleStartGlobalCatalogAudit('unaudited')}
+                      disabled={isAuditingGlobal}
+                      className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+                      title="Audit only non-audited devices"
+                    >
+                      <RefreshCw
+                        className={clsx(
+                          'w-3.5 h-3.5',
+                          isAuditingGlobal && globalAuditMode === 'unaudited' && 'animate-spin text-amber-400'
+                        )}
+                      />
+                      <span>
+                        {isAuditingGlobal && globalAuditMode === 'unaudited'
+                          ? 'Auditing Unaudited...'
+                          : `Audit Unaudited (${stats.unaudited})`}
+                      </span>
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={handleStartGlobalCatalogAudit}
+                    onClick={() => handleStartGlobalCatalogAudit('all')}
                     disabled={isAuditingGlobal}
                     className="px-3 py-1.5 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
                   >
-                    <RefreshCw className={clsx('w-3.5 h-3.5', isAuditingGlobal && 'animate-spin text-[#f3aa18]')} />
-                    <span>{isAuditingGlobal ? 'Auditing Catalog...' : 'Re-run Full Audit'}</span>
+                    <RefreshCw
+                      className={clsx(
+                        'w-3.5 h-3.5',
+                        isAuditingGlobal && globalAuditMode === 'all' && 'animate-spin text-[#f3aa18]'
+                      )}
+                    />
+                    <span>{isAuditingGlobal && globalAuditMode === 'all' ? 'Auditing All...' : 'Audit All Devices'}</span>
                   </button>
                   <button
                     type="button"

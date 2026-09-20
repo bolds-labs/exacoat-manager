@@ -231,3 +231,25 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **Catalog Pagination**:
   `rest_get_configurator_profiles` accepts `per_page` up to `500` (or `per_page: -1`) to load the entire store catalog in a single request, eliminating the previous 100-item cutoff.
 
+---
+
+## 15. Persistent Device Audit Tracking & Catalog Audit Workflow
+
+- **Shared State Persistence Invariant**:
+  Audit status must never be stored in browser `localStorage` (Rule 3). In a multi-admin setup, device audit history is permanently recorded in WooCommerce post meta:
+  - `_configurator_last_audited`: ISO timestamp string of the last scan completion.
+  - `_configurator_audit_status`: `'clean'` (0 broken assets, 0 ghost angles) or `'issues'` (one or more broken assets or ghost angles).
+  - `_configurator_audit_issues`: Integer count of detected broken assets and ghost angles.
+- **REST Persistence Endpoints**:
+  - `POST /configurator/mark-audited`: Persists audit outcome for an individual device.
+  - `POST /configurator/batch-mark-audited`: Efficient batch persistence for catalog-wide audits.
+  - `POST /configurator/reset-audit`: Clears audit records for individual devices or the entire catalog.
+- **Targeted Audit vs Full Catalog Scan**:
+  - **Audit Unaudited ({count})**: Filters catalog to products where `last_audited_at` is empty or status is `'unaudited'`. Allows operators to pick up incremental audits without re-probing hundreds of already-verified devices.
+  - **Audit All ({count})**: Re-probes all active configurators catalog-wide to catch newly expired CDN URLs or broken chassis links.
+- **Studio UI & Card Badges**:
+  - Top bar metrics row tracks **Audited Clean** and **Unaudited Devices** in real time.
+  - Catalog filter bar includes **All Audit**, **Audited**, **Unaudited**, and **Issues** tabs.
+  - Each product card displays persistent status badges (`[✓ Audited]`, `[! Issues]`, `[Unaudited]`) next to SKU.
+
+

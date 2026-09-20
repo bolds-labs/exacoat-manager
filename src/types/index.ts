@@ -545,4 +545,7 @@ export interface ConfiguratorProfileSummary {
   views_count: number;
   family: DeviceFamily;
   size_multiplier: number;
+  last_audited_at?: string | null;
+  audit_status?: 'clean' | 'issues' | 'unaudited';
+  audit_issues?: number;
 }

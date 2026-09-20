@@ -2517,6 +2517,89 @@ export async function toggleProductConfiguratorDirect(
   }
 }
 
+export async function markDeviceAuditedDirect(data: {
+  product_id: number;
+  audit_status: 'clean' | 'issues';
+  audit_issues?: number;
+  last_audited_at?: string;
+}): Promise<{ success: boolean; message?: string }> {
+  try {
+    const base = getWordPressBaseUrl();
+    const url = `${base}/wp-json/exacoat-core/v1/configurator/mark-audited`;
+
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    const resData = await res.json();
+    return {
+      success: Boolean(res.ok && resData?.success),
+      message: resData?.message,
+    };
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+
+export async function batchMarkDevicesAuditedDirect(results: Array<{
+  product_id: number;
+  audit_status: 'clean' | 'issues';
+  audit_issues?: number;
+  last_audited_at?: string;
+}>): Promise<{ success: boolean; updated?: number; message?: string }> {
+  try {
+    const base = getWordPressBaseUrl();
+    const url = `${base}/wp-json/exacoat-core/v1/configurator/batch-mark-audited`;
+
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ results }),
+    });
+
+    const resData = await res.json();
+    return {
+      success: Boolean(res.ok && resData?.success),
+      updated: resData?.updated,
+      message: resData?.message,
+    };
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+
+export async function resetDeviceAuditDirect(productId?: number, all = false): Promise<{ success: boolean; message?: string }> {
+  try {
+    const base = getWordPressBaseUrl();
+    const url = `${base}/wp-json/exacoat-core/v1/configurator/reset-audit`;
+
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ product_id: productId, all }),
+    });
+
+    const resData = await res.json();
+    return {
+      success: Boolean(res.ok && resData?.success),
+      message: resData?.message,
+    };
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+
 export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | string): Promise<{
   success: boolean;
   profile?: DeviceConfiguratorProfile;

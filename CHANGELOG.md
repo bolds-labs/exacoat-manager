@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.68] - 2026-09-20
+
+### Persistent Device Audit Tracking & Unaudited Scanning Workflow
+- **Persistent Device Audit Invariants in Post Meta**:
+  - Implemented `_configurator_last_audited`, `_configurator_audit_status` (`clean` | `issues`), and `_configurator_audit_issues` in WooCommerce product post meta.
+  - Strictly prevents browser `localStorage` isolation (Rule 3 Invariant), allowing multiple operators across different physical workstations to see unified audit statuses in real time.
+- **REST Persistence Endpoints**:
+  - Added `POST /configurator/mark-audited` to persist single device audit results.
+  - Added `POST /configurator/batch-mark-audited` for bulk audit result persistence during catalog scans.
+  - Added `POST /configurator/reset-audit` to reset audit status on single products or the entire catalog.
+  - Updated `rest_get_configurator_profiles` to return `last_audited_at`, `audit_status`, and `audit_issues` on all profile summaries.
+- **Targeted vs Full Catalog Scanning**:
+  - Added **Audit Unaudited ({count})** button in top bar and modal header to quickly audit only new or unverified devices without rescanning the entire catalog.
+  - Maintained **Audit All ({count})** button to re-probe all devices catalog-wide.
+  - Automatically hides "Audit Unaudited" button once all devices are verified clean.
+- **Studio Interface & Card Hygiene**:
+  - Added **Audited Clean** and **Unaudited Devices** counters in the metrics row.
+  - Added filter tabs in the catalog filter bar: **All Audit**, **Audited**, **Unaudited**, and **Issues**.
+  - Added persistent visual status badges on each product card (`[✓ Audited]`, `[! Issues]`, `[Unaudited]`) next to SKU.
+
 ## [0.0.67] - 2026-09-20
 
 ### Device Configurator Checkbox, Catalog Scope & 500-Product Retrieval

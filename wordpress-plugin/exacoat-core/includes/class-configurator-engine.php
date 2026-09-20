@@ -21,6 +21,9 @@ class Exacoat_Configurator_Engine {
 	const LEGACY_OPTION_KEY = 'artmatter_global_finishes';
 	const PROFILE_META_KEY = '_exacoat_configurator_profile';
 	const CONFIGURATOR_FLAG_META_KEY = '_is_configurator';
+	const AUDIT_TIME_META_KEY = '_configurator_last_audited';
+	const AUDIT_STATUS_META_KEY = '_configurator_audit_status';
+	const AUDIT_ISSUES_META_KEY = '_configurator_audit_issues';
 
 	private static $cached_finishes = null;
 
@@ -437,6 +440,27 @@ class Exacoat_Configurator_Engine {
 			'callback'            => [ __CLASS__, 'rest_toggle_configurator' ],
 			'permission_callback' => [ __CLASS__, 'verify_permission' ],
 		] );
+
+		// 13. POST /configurator/mark-audited: Mark a single device as audited with timestamp & issues
+		$register( '/configurator/mark-audited', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_mark_audited' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+		] );
+
+		// 14. POST /configurator/batch-mark-audited: Batch mark multiple devices as audited
+		$register( '/configurator/batch-mark-audited', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_batch_mark_audited' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+		] );
+
+		// 15. POST /configurator/reset-audit: Reset audit records for a device or all devices
+		$register( '/configurator/reset-audit', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_reset_audit' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+		] );
 	}
 
 
@@ -643,6 +667,96 @@ class Exacoat_Configurator_Engine {
 			'product_id'      => $pid,
 			'is_configurator' => $is_cfg,
 			'message'         => $is_cfg ? 'Product enabled as configurator device.' : 'Product excluded from configurator devices.',
+		] );
+	}
+
+	/**
+	 * REST Endpoint: Mark a single device profile as audited
+	 */
+	public static function rest_mark_audited( WP_REST_Request $request ): WP_REST_Response {
+		$params = $request->get_json_params() ?: $request->get_params();
+		$pid = (int) ( $params['product_id'] ?? 0 );
+		$status = sanitize_text_field( $params['audit_status'] ?? 'clean' );
+		$issues = (int) ( $params['audit_issues'] ?? 0 );
+		$timestamp = sanitize_text_field( $params['last_audited_at'] ?? current_time( 'mysql' ) );
+
+		if ( ! $pid || ! get_post( $pid ) ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Invalid product ID' ], 400 );
+		}
+
+		update_post_meta( $pid, self::AUDIT_TIME_META_KEY, $timestamp );
+		update_post_meta( $pid, self::AUDIT_STATUS_META_KEY, $status );
+		update_post_meta( $pid, self::AUDIT_ISSUES_META_KEY, $issues );
+
+		return rest_ensure_response( [
+			'success'         => true,
+			'product_id'      => $pid,
+			'last_audited_at' => $timestamp,
+			'audit_status'    => $status,
+			'audit_issues'    => $issues,
+		] );
+	}
+
+	/**
+	 * REST Endpoint: Batch mark multiple devices as audited
+	 */
+	public static function rest_batch_mark_audited( WP_REST_Request $request ): WP_REST_Response {
+		$params = $request->get_json_params() ?: $request->get_params();
+		$results = $params['results'] ?? [];
+		if ( ! is_array( $results ) ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Results must be an array' ], 400 );
+		}
+
+		$updated = 0;
+		$now = current_time( 'mysql' );
+		foreach ( $results as $row ) {
+			$pid = (int) ( $row['product_id'] ?? 0 );
+			if ( ! $pid || ! get_post( $pid ) ) continue;
+
+			$status = sanitize_text_field( $row['audit_status'] ?? 'clean' );
+			$issues = (int) ( $row['audit_issues'] ?? 0 );
+			$ts = sanitize_text_field( $row['last_audited_at'] ?? $now );
+
+			update_post_meta( $pid, self::AUDIT_TIME_META_KEY, $ts );
+			update_post_meta( $pid, self::AUDIT_STATUS_META_KEY, $status );
+			update_post_meta( $pid, self::AUDIT_ISSUES_META_KEY, $issues );
+			$updated++;
+		}
+
+		return rest_ensure_response( [
+			'success' => true,
+			'updated' => $updated,
+			'message' => "Successfully marked {$updated} devices as audited.",
+		] );
+	}
+
+	/**
+	 * REST Endpoint: Reset audit status for a device or all devices
+	 */
+	public static function rest_reset_audit( WP_REST_Request $request ): WP_REST_Response {
+		$params = $request->get_json_params() ?: $request->get_params();
+		$pid = (int) ( $params['product_id'] ?? 0 );
+		$all = ! empty( $params['all'] );
+
+		if ( $all ) {
+			delete_post_meta_by_key( self::AUDIT_TIME_META_KEY );
+			delete_post_meta_by_key( self::AUDIT_STATUS_META_KEY );
+			delete_post_meta_by_key( self::AUDIT_ISSUES_META_KEY );
+			return rest_ensure_response( [ 'success' => true, 'message' => 'Cleared all device audit records.' ] );
+		}
+
+		if ( ! $pid || ! get_post( $pid ) ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Invalid product ID' ], 400 );
+		}
+
+		delete_post_meta( $pid, self::AUDIT_TIME_META_KEY );
+		delete_post_meta( $pid, self::AUDIT_STATUS_META_KEY );
+		delete_post_meta( $pid, self::AUDIT_ISSUES_META_KEY );
+
+		return rest_ensure_response( [
+			'success'    => true,
+			'product_id' => $pid,
+			'message'    => 'Audit status reset for device.',
 		] );
 	}
 
@@ -1009,6 +1123,10 @@ class Exacoat_Configurator_Engine {
 			$product = wc_get_product( $pid );
 			$cats = wp_get_post_terms( $pid, 'product_cat', [ 'fields' => 'names' ] );
 
+			$last_audited = get_post_meta( $pid, self::AUDIT_TIME_META_KEY, true );
+			$audit_status = get_post_meta( $pid, self::AUDIT_STATUS_META_KEY, true );
+			$audit_issues = (int) get_post_meta( $pid, self::AUDIT_ISSUES_META_KEY, true );
+
 			$profiles[] = [
 				'product_id'           => $pid,
 				'name'                 => $product ? $product->get_name() : $p->post_title,
@@ -1023,6 +1141,9 @@ class Exacoat_Configurator_Engine {
 				'views_count'          => count( $profile_data['views'] ?? [] ),
 				'family'               => $profile_data['family'] ?? 'phone',
 				'size_multiplier'      => $profile_data['size_multiplier'] ?? 1.0,
+				'last_audited_at'      => ! empty( $last_audited ) ? $last_audited : null,
+				'audit_status'         => ! empty( $audit_status ) ? $audit_status : 'unaudited',
+				'audit_issues'         => $audit_issues,
 			];
 		}
 
