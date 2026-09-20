@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { PageHeroHeader } from '../components/ui/PageHeroHeader';
 import { GlassCard } from '../components/ui/GlassCard';
@@ -17,6 +17,7 @@ import {
   resetDeviceAuditDirect,
   GlobalFinish,
   fetchGlobalFinishesDirect,
+  saveGlobalFinishDirect,
 } from '../lib/wordpressBridge';
 import {
   DeviceConfiguratorProfile,
@@ -47,6 +48,7 @@ import {
   Edit3,
   Filter,
   HelpCircle,
+  Folder,
   FolderSync,
   DollarSign,
   ChevronDown,
@@ -238,6 +240,29 @@ export const ConfiguratorStudioPage: React.FC = () => {
   } | null>(null);
   const [tempTextureUrl, setTempTextureUrl] = useState('');
 
+  // Category combobox dropdown state
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const [categorySearch, setCategorySearch] = useState('');
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Global Master Textures Modal state (v2 Engine)
+  const [showMasterTexturesModal, setShowMasterTexturesModal] = useState(false);
+  const [masterTextureSearch, setMasterTextureSearch] = useState('');
+  const [masterTextureGroupFilter, setMasterTextureGroupFilter] = useState('all');
+  const [savingFinishId, setSavingFinishId] = useState<string | null>(null);
+  const [editingFinishUrls, setEditingFinishUrls] = useState<Record<string, string>>({});
+
+  // Close category dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(e.target as Node)) {
+        setCategoryDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Live Simulator test state
   const [selectedSimLayers, setSelectedSimLayers] = useState<Record<string, boolean>>({});
   const [selectedSimFinish, setSelectedSimFinish] = useState<string>('swarm');
@@ -279,7 +304,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (showGlobalAuditModal) {
+        if (categoryDropdownOpen) {
+          setCategoryDropdownOpen(false);
+        } else if (showMasterTexturesModal) {
+          setShowMasterTexturesModal(false);
+        } else if (showGlobalAuditModal) {
           setShowGlobalAuditModal(false);
         } else if (showAssetAuditModal) {
           setShowAssetAuditModal(false);
@@ -300,7 +329,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [showGlobalAuditModal, showAssetAuditModal, showFindReplaceModal, editingTextureModal, duplicateModal, priceEditModal, selectedProductId]);
+  }, [categoryDropdownOpen, showMasterTexturesModal, showGlobalAuditModal, showAssetAuditModal, showFindReplaceModal, editingTextureModal, duplicateModal, priceEditModal, selectedProductId]);
 
   useEffect(() => {
     if (selectedProductId !== null) {
@@ -1827,10 +1856,62 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const categories = useMemo(() => {
     const list = new Set<string>();
     profiles.forEach((p) => {
-      p.categories.forEach((c) => list.add(c));
+      (p.categories || []).forEach((c) => list.add(c));
     });
     return ['all', ...Array.from(list).sort()];
   }, [profiles]);
+
+  // Category device counts for combobox display
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: profiles.length };
+    profiles.forEach((p) => {
+      (p.categories || []).forEach((c) => {
+        counts[c] = (counts[c] || 0) + 1;
+      });
+    });
+    return counts;
+  }, [profiles]);
+
+  // Filtered categories for combobox search
+  const filteredCategories = useMemo(() => {
+    const q = categorySearch.toLowerCase().trim();
+    if (!q) return categories;
+    return categories.filter((c) =>
+      c === 'all' ? 'all categories'.includes(q) : c.toLowerCase().includes(q)
+    );
+  }, [categories, categorySearch]);
+
+  // Save master texture for a global finish (v2 engine)
+  const handleSaveMasterTexture = async (finish: GlobalFinish) => {
+    const customUrl = editingFinishUrls[finish.id];
+    const newUrl = customUrl !== undefined ? customUrl.trim() : (finish.texture_url || finish.thumbnail || '');
+    try {
+      setSavingFinishId(finish.id);
+      const res = await saveGlobalFinishDirect({
+        id: finish.id,
+        slug: finish.slug,
+        name: finish.name,
+        group: finish.group,
+        thumbnail: finish.thumbnail,
+        texture_url: newUrl,
+        extra_price: finish.extra_price,
+        in_stock: finish.in_stock,
+        class_name: finish.class_name,
+      });
+      if (res.success) {
+        showToast('success', 'Master Texture Saved', `Global master texture for "${finish.name}" updated successfully.`);
+        setFinishes((prev) =>
+          prev.map((f) => (f.id === finish.id ? { ...f, texture_url: newUrl } : f))
+        );
+      } else {
+        showToast('error', 'Save Failed', res.error || 'Failed updating master texture');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message || 'Error saving master texture');
+    } finally {
+      setSavingFinishId(null);
+    }
+  };
 
   // Finish groups for filter tabs
   const finishGroups = useMemo(() => {
@@ -1939,6 +2020,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
             >
               <RefreshCw className={clsx('w-3.5 h-3.5', isRefreshing && 'animate-spin text-[#f3aa18]')} />
               Refresh Catalog
+            </button>
+            <button
+              onClick={() => setShowMasterTexturesModal(true)}
+              className="px-4 py-2 text-xs font-sans font-medium rounded-xl border border-sky-500/30 hover:bg-sky-500/10 text-sky-300 transition-colors flex items-center gap-2 cursor-pointer"
+              title="Manage global master finish textures used by all v2 Modern configurators"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+              <span>Master Textures (v2)</span>
             </button>
             {stats.unaudited > 0 ? (
               <button
@@ -2217,21 +2306,133 @@ export const ConfiguratorStudioPage: React.FC = () => {
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 overflow-x-auto">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
+          {/* Category Combobox Dropdown */}
+          <div className="relative shrink-0" ref={categoryDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
+              className={clsx(
+                'px-3 py-1.5 text-xs font-sans rounded-xl transition-all cursor-pointer flex items-center gap-2 border shadow-xs',
+                selectedCategory !== 'all'
+                  ? 'bg-[#f3aa18]/15 text-[#f3aa18] border-[#f3aa18]/40 font-semibold'
+                  : 'bg-zinc-900/80 text-zinc-300 border-white/10 hover:border-white/20 hover:text-white'
+              )}
+              title="Filter catalog by device category / brand"
+            >
+              <Folder className={clsx('w-3.5 h-3.5', selectedCategory !== 'all' ? 'text-[#f3aa18]' : 'text-zinc-400')} />
+              <span className="capitalize">
+                {selectedCategory === 'all' ? 'All Categories' : selectedCategory}
+              </span>
+              <span
                 className={clsx(
-                  'px-3 py-1.5 text-xs font-sans rounded-lg transition-colors capitalize whitespace-nowrap cursor-pointer',
-                  selectedCategory === cat
-                    ? 'bg-white/10 text-white font-bold border border-white/20'
-                    : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'
+                  'text-[10px] font-mono px-1.5 py-0.5 rounded-full font-bold',
+                  selectedCategory !== 'all'
+                    ? 'bg-[#f3aa18]/25 text-[#f3aa18]'
+                    : 'bg-white/10 text-zinc-400'
                 )}
               >
-                {cat === 'all' ? 'All Categories' : cat}
-              </button>
-            ))}
+                {categoryCounts[selectedCategory] ?? profiles.length}
+              </span>
+              <ChevronDown
+                className={clsx(
+                  'w-3.5 h-3.5 text-zinc-400 transition-transform duration-200',
+                  categoryDropdownOpen && 'rotate-180 text-white'
+                )}
+              />
+            </button>
+
+            {/* Floating Popover Dropdown */}
+            {categoryDropdownOpen && (
+              <div className="absolute left-0 lg:right-0 lg:left-auto top-full mt-1.5 z-50 w-72 rounded-2xl bg-[#121215]/95 backdrop-blur-xl border border-white/10 shadow-2xl p-2 animate-in fade-in zoom-in-95 duration-150">
+                {/* Search Header */}
+                <div className="relative mb-2">
+                  <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search categories..."
+                    value={categorySearch}
+                    onChange={(e) => setCategorySearch(e.target.value)}
+                    autoFocus
+                    className="w-full pl-8 pr-7 py-1.5 text-xs font-sans rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/50"
+                  />
+                  {categorySearch && (
+                    <button
+                      type="button"
+                      onClick={() => setCategorySearch('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white p-0.5 cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Reset to All Categories Quick Action */}
+                {selectedCategory !== 'all' && (
+                  <div className="pb-1.5 mb-1.5 border-b border-white/5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategory('all');
+                        setCategoryDropdownOpen(false);
+                      }}
+                      className="w-full px-2.5 py-1.5 rounded-xl text-xs font-sans text-left transition-colors flex items-center justify-between text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <RefreshCw className="w-3 h-3 text-zinc-500" />
+                        <span>Reset to All Categories</span>
+                      </span>
+                      <span className="text-[10px] font-mono text-zinc-500">{profiles.length}</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Categories Options List */}
+                <div className="max-h-64 overflow-y-auto space-y-0.5 pr-1">
+                  {filteredCategories.length === 0 ? (
+                    <div className="py-4 text-center text-xs text-zinc-500">No categories match search</div>
+                  ) : (
+                    filteredCategories.map((cat) => {
+                      const isSelected = selectedCategory === cat;
+                      const count = categoryCounts[cat] || 0;
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCategory(cat);
+                            setCategoryDropdownOpen(false);
+                          }}
+                          className={clsx(
+                            'w-full px-2.5 py-1.5 rounded-xl text-xs font-sans text-left transition-colors flex items-center justify-between group cursor-pointer',
+                            isSelected
+                              ? 'bg-[#f3aa18]/15 text-[#f3aa18] font-semibold'
+                              : 'text-zinc-300 hover:bg-white/5 hover:text-white'
+                          )}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <span
+                              className={clsx(
+                                'w-1.5 h-1.5 rounded-full shrink-0',
+                                isSelected ? 'bg-[#f3aa18]' : 'bg-zinc-600 group-hover:bg-zinc-400'
+                              )}
+                            />
+                            <span className="capitalize truncate">
+                              {cat === 'all' ? 'All Categories' : cat}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-white/5 text-zinc-400">
+                              {count}
+                            </span>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-[#f3aa18]" />}
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -2770,6 +2971,214 @@ export const ConfiguratorStudioPage: React.FC = () => {
           document.body
         )}
 
+      {/* Global Master Textures Modal (v2 Engine) */}
+      {showMasterTexturesModal &&
+        createPortal(
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+            <div className="w-full max-w-4xl max-h-[90vh] rounded-3xl bg-[#121215] border border-white/15 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+              {/* Header */}
+              <div className="p-5 border-b border-white/10 flex items-start justify-between gap-4 bg-zinc-900/50">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-white">Global Master Finish Textures (v2 Engine)</h3>
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-300 border border-sky-500/20 font-mono">
+                        {finishes.length} Finishes
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-0.5 max-w-xl">
+                      In the v2 Modern Engine, you only set the master textured image once per finish. All devices automatically inherit this texture and clip it using their alpha mask.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowMasterTexturesModal(false)}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer transition-colors shrink-0"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Filter & Search Bar */}
+              <div className="p-4 border-b border-white/10 bg-zinc-900/30 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="relative w-full sm:w-72">
+                  <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search finish by name or slug..."
+                    value={masterTextureSearch}
+                    onChange={(e) => setMasterTextureSearch(e.target.value)}
+                    className="w-full pl-8 pr-7 py-1.5 text-xs font-sans rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-500 focus:outline-none focus:border-sky-500"
+                  />
+                  {masterTextureSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setMasterTextureSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white p-0.5 cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
+                  {finishGroups.map((group) => (
+                    <button
+                      key={group}
+                      type="button"
+                      onClick={() => setMasterTextureGroupFilter(group)}
+                      className={clsx(
+                        'px-2.5 py-1 rounded-lg text-xs font-sans whitespace-nowrap transition-colors cursor-pointer capitalize',
+                        masterTextureGroupFilter === group
+                          ? 'bg-sky-500/20 text-sky-300 font-bold border border-sky-500/40'
+                          : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                      )}
+                    >
+                      {group === 'all' ? 'All Groups' : group}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Finishes Grid / List */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-3">
+                {finishes
+                  .filter((f) => {
+                    const q = masterTextureSearch.toLowerCase().trim();
+                    const matchesSearch =
+                      !q || f.name.toLowerCase().includes(q) || (f.slug || f.id).toLowerCase().includes(q);
+                    const matchesGroup =
+                      masterTextureGroupFilter === 'all' || f.group === masterTextureGroupFilter;
+                    return matchesSearch && matchesGroup;
+                  })
+                  .map((f) => {
+                    const currentInput =
+                      editingFinishUrls[f.id] !== undefined
+                        ? editingFinishUrls[f.id]
+                        : f.texture_url || '';
+                    const previewUrl = currentInput.trim() || f.texture_url || f.thumbnail;
+                    const isCustomTextureSet = Boolean(f.texture_url && f.texture_url !== f.thumbnail);
+                    const isSaving = savingFinishId === f.id;
+                    const hasUnsavedChanges =
+                      editingFinishUrls[f.id] !== undefined &&
+                      editingFinishUrls[f.id].trim() !== (f.texture_url || '');
+
+                    return (
+                      <div
+                        key={f.id}
+                        className="p-4 rounded-2xl bg-zinc-900/60 border border-white/10 hover:border-white/20 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
+                      >
+                        {/* Left Info: Thumbnail Swatch + Name + Group */}
+                        <div className="flex items-center gap-3.5 min-w-[200px] shrink-0">
+                          <div className="w-12 h-12 rounded-xl bg-zinc-800 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center relative">
+                            {previewUrl ? (
+                              <img
+                                src={previewUrl}
+                                alt={f.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <Sparkles className="w-5 h-5 text-zinc-600" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-xs font-bold text-white">{f.name}</h4>
+                              <span
+                                className={clsx(
+                                  'text-[9px] font-mono px-1.5 py-0.5 rounded-full uppercase tracking-wider font-semibold border',
+                                  isCustomTextureSet
+                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                    : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                                )}
+                              >
+                                {isCustomTextureSet ? 'v2 Master Set' : 'Using Thumbnail'}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-zinc-400 mt-0.5 font-mono">
+                              {f.group} : <span className="text-zinc-500">{f.slug}</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Middle: Input Field for texture_url */}
+                        <div className="flex-1 min-w-0">
+                          <div className="relative flex items-center">
+                            <input
+                              type="text"
+                              placeholder="https://exacoat.com/uploads/textures/master-texture.png"
+                              value={currentInput}
+                              onChange={(e) =>
+                                setEditingFinishUrls((prev) => ({ ...prev, [f.id]: e.target.value }))
+                              }
+                              className="w-full pl-3 pr-20 py-2 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                            />
+                            {currentInput.trim() && (
+                              <a
+                                href={currentInput.trim()}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="absolute right-3 text-[10px] font-mono text-sky-400 hover:underline flex items-center gap-1"
+                              >
+                                <span>Preview</span>
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Right: Save Button */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleSaveMasterTexture(f)}
+                            disabled={isSaving || !hasUnsavedChanges}
+                            className={clsx(
+                              'px-3.5 py-2 text-xs font-sans font-semibold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+                              hasUnsavedChanges
+                                ? 'bg-sky-500 hover:bg-sky-400 text-black shadow-md'
+                                : 'bg-white/5 text-zinc-400 border border-white/10'
+                            )}
+                          >
+                            {isSaving ? (
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Check className="w-3.5 h-3.5" />
+                            )}
+                            <span>{isSaving ? 'Saving...' : hasUnsavedChanges ? 'Save Texture' : 'Saved'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-white/10 flex items-center justify-between bg-zinc-900/50 text-xs">
+                <span className="text-zinc-400 text-[11px]">
+                  Changes saved here apply storewide across all v2 Modern device configurators in real time.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowMasterTexturesModal(false)}
+                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium cursor-pointer transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
       {/* Quick Price Edit Dialog */}
       {priceEditModal &&
         createPortal(
@@ -3255,7 +3664,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             // v2 Engine: Dynamic Mask Compositing
                             if (editingProfile.configurator_version === 'v2' && assets.mask_svg_url) {
                               const activeFinish = finishes.find((f) => f.slug === selectedSimFinish || f.id === selectedSimFinish);
-                              const textureToTile = texUrl || activeFinish?.thumbnail || '';
+                              const textureToTile = texUrl || activeFinish?.texture_url || activeFinish?.thumbnail || '';
                               return (
                                 <div
                                   key={`v2-mask-${l.id}`}
@@ -3688,8 +4097,23 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       </span>
                                     </div>
                                     <p className="text-[11px] text-zinc-400 leading-relaxed">
-                                      v2 clips global texture swatches using an alpha mask and renders photorealistic ambient occlusion. All images must be on the exact same 1000x1000px canvas as the device chassis.
+                                      v2 clips global master texture swatches using an alpha mask and renders photorealistic ambient occlusion. All images must be on the exact same 1000x1000px canvas as the device chassis.
                                     </p>
+
+                                    <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/25 flex items-center justify-between gap-3">
+                                      <div className="text-[11px] text-sky-200">
+                                        <span className="font-semibold block text-sky-100">Global Finish Textures</span>
+                                        <span>Master textures apply to all v2 devices storewide.</span>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowMasterTexturesModal(true)}
+                                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 flex items-center gap-1.5 cursor-pointer shrink-0 transition-colors"
+                                      >
+                                        <Sparkles className="w-3 h-3 text-sky-400" />
+                                        <span>Manage Master Textures</span>
+                                      </button>
+                                    </div>
 
                                     <div className="space-y-2.5 pt-1">
                                       <div>

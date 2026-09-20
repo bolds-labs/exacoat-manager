@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.69] - 2026-09-20
+
+### Category Combobox Dropdown & v2 Master Finish Textures Architecture
+- **Searchable Category Combobox Dropdown**:
+  - Replaced the overflowing horizontal category button strip with a compact, glassmorphic combobox dropdown.
+  - Features real-time brand/category search filtering, dynamic device counts per category (`categoryCounts`), active selection checkmarks, and 1-click reset to "All Categories".
+- **v2 Master Texture Architecture**:
+  - Added `texture_url` field to `GlobalFinish` in `wordpressBridge.ts` and `exacoat-core` (`class-configurator-engine.php`).
+  - Operators configure the master textured image once per finish (e.g. Swarm, Black Camo, Patina) and all v2 Modern devices inherit it automatically, clipped by their device alpha mask.
+  - Configurator stage viewport evaluates `customLayerTexUrl || activeFinish.texture_url || activeFinish.thumbnail`.
+- **Global Master Textures Manager in Configurator Studio**:
+  - Added **Master Textures (v2)** button in the Studio top bar and Layer Settings inspector.
+  - Provides a dedicated modal allowing operators to search finishes, inspect live previews of master textures, and save updated texture URLs with real-time feedback.
+- **Materials & Finishes Inventory Upgrades (`MaterialsStockPage`)**:
+  - Added **Edit Material** modal to configure material details and master texture URLs.
+  - Added "Master Texture Image URL (v2)" field to the "Add Finish" modal.
+  - Added v2 texture readiness badges on all material cards (`Master Ready` vs `Using Swatch`).
+
 ## [0.0.68] - 2026-09-20
 
 ### Persistent Device Audit Tracking & Unaudited Scanning Workflow

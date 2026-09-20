@@ -22,6 +22,7 @@ import {
   Filter,
   Check,
   X,
+  Edit3,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -42,9 +43,13 @@ export const MaterialsStockPage: React.FC = () => {
     group: 'Signature skins',
     slug: '',
     thumbnail: '',
+    texture_url: '',
     extra_price: 0,
     in_stock: true,
   });
+
+  // Edit Material Modal State
+  const [editingFinish, setEditingFinish] = useState<GlobalFinish | null>(null);
 
   const loadFinishes = async (quiet = false) => {
     try {
@@ -120,6 +125,7 @@ export const MaterialsStockPage: React.FC = () => {
         group: newFinish.group,
         class_name: `cfg-${slug}`,
         thumbnail: newFinish.thumbnail.trim(),
+        texture_url: newFinish.texture_url.trim() || newFinish.thumbnail.trim(),
         extra_price: Number(newFinish.extra_price) || 0,
         in_stock: newFinish.in_stock,
       });
@@ -132,12 +138,48 @@ export const MaterialsStockPage: React.FC = () => {
           group: 'Signature skins',
           slug: '',
           thumbnail: '',
+          texture_url: '',
           extra_price: 0,
           in_stock: true,
         });
         loadFinishes(true);
       } else {
         showToast('error', 'Registration Failed', res.error || 'Failed registering finish');
+      }
+    } catch (err: any) {
+      showToast('error', 'Save Error', err.message || 'Error saving finish');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUpdateFinish = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingFinish || !editingFinish.name.trim()) {
+      showToast('error', 'Validation Error', 'Finish name is required');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const res = await saveGlobalFinishDirect({
+        id: editingFinish.id,
+        name: editingFinish.name.trim(),
+        slug: editingFinish.slug,
+        group: editingFinish.group,
+        class_name: editingFinish.class_name,
+        thumbnail: editingFinish.thumbnail.trim(),
+        texture_url: (editingFinish.texture_url || '').trim(),
+        extra_price: Number(editingFinish.extra_price) || 0,
+        in_stock: editingFinish.in_stock,
+      });
+
+      if (res.success) {
+        showToast('success', 'Material Updated', `Finish "${editingFinish.name}" updated successfully.`);
+        setEditingFinish(null);
+        loadFinishes(true);
+      } else {
+        showToast('error', 'Update Failed', res.error || 'Failed updating finish');
       }
     } catch (err: any) {
       showToast('error', 'Save Error', err.message || 'Error saving finish');
@@ -349,31 +391,58 @@ export const MaterialsStockPage: React.FC = () => {
                     <span className="text-zinc-500">CSS Class:</span>
                     <span className="text-zinc-400 truncate max-w-[140px]">{finish.class_name || finish.slug}</span>
                   </div>
+
+                  {/* v2 Master Texture Info */}
+                  <div className="mt-2 pt-2 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono">
+                    <span className="text-zinc-500">v2 Texture:</span>
+                    <span
+                      className={clsx(
+                        'text-[10px] px-1.5 py-0.5 rounded-full font-bold',
+                        finish.texture_url && finish.texture_url !== finish.thumbnail
+                          ? 'text-sky-300 bg-sky-500/15'
+                          : 'text-zinc-400 bg-white/5'
+                      )}
+                    >
+                      {finish.texture_url && finish.texture_url !== finish.thumbnail ? 'Master Ready' : 'Using Swatch'}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Stock Toggle Action */}
-                <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between">
-                  <span className="text-xs text-zinc-400 font-sans">
-                    {finish.in_stock ? 'Available storewide' : 'Disabled storewide'}
-                  </span>
-
+                <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between gap-2">
                   <button
                     type="button"
-                    onClick={() => handleToggleStock(finish)}
-                    disabled={isUpdating}
-                    className={clsx(
-                      'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50',
-                      finish.in_stock ? 'bg-emerald-500' : 'bg-zinc-700'
-                    )}
-                    aria-label={`Toggle stock for ${finish.name}`}
+                    onClick={() => setEditingFinish({ ...finish })}
+                    className="px-2.5 py-1 text-xs font-sans rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Edit material details and v2 master texture"
                   >
-                    <span
-                      className={clsx(
-                        'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out',
-                        finish.in_stock ? 'translate-x-5' : 'translate-x-0'
-                      )}
-                    />
+                    <Edit3 className="w-3 h-3 text-[#f3aa18]" />
+                    <span>Edit</span>
                   </button>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-zinc-400 font-sans">
+                      {finish.in_stock ? 'In Stock' : 'Depleted'}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => handleToggleStock(finish)}
+                      disabled={isUpdating}
+                      className={clsx(
+                        'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50',
+                        finish.in_stock ? 'bg-emerald-500' : 'bg-zinc-700'
+                      )}
+                      aria-label={`Toggle stock for ${finish.name}`}
+                    >
+                      <span
+                        className={clsx(
+                          'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out',
+                          finish.in_stock ? 'translate-x-5' : 'translate-x-0'
+                        )}
+                      />
+                    </button>
+                  </div>
                 </div>
               </GlassCard>
             );
@@ -428,7 +497,7 @@ export const MaterialsStockPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-mono text-zinc-400 mb-1">Thumbnail Image URL</label>
+                <label className="block text-xs font-mono text-zinc-400 mb-1">Swatch Thumbnail URL</label>
                 <input
                   type="url"
                   placeholder="https://exacoat.com/wp-content/uploads/..."
@@ -436,6 +505,22 @@ export const MaterialsStockPage: React.FC = () => {
                   onChange={(e) => setNewFinish({ ...newFinish, thumbnail: e.target.value })}
                   className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-zinc-400 mb-1">
+                  Master Texture Image URL (v2 Engine)
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://exacoat.com/wp-content/uploads/textures/master.png"
+                  value={newFinish.texture_url}
+                  onChange={(e) => setNewFinish({ ...newFinish, texture_url: e.target.value })}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
+                />
+                <p className="text-[10px] text-zinc-500 mt-1">
+                  Full-bleed high-res texture inherited by all v2 Modern phone models.
+                </p>
               </div>
 
               <div>
@@ -476,6 +561,136 @@ export const MaterialsStockPage: React.FC = () => {
                   className="px-4 py-2 text-xs font-mono font-bold rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {isSaving ? 'Saving...' : 'Register Material'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Material Modal */}
+      {editingFinish && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in">
+          <div className="w-full max-w-md bg-[#121215] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-[#f3aa18]/15 border border-[#f3aa18]/30 flex items-center justify-center text-[#f3aa18]">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Edit Material Finish</h3>
+                  <p className="text-xs text-zinc-400">Configure swatch and v2 master texture</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingFinish(null)}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateFinish} className="space-y-4">
+              <div>
+                <label className="block text-xs font-mono text-zinc-400 mb-1">Finish Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={editingFinish.name}
+                  onChange={(e) => setEditingFinish({ ...editingFinish, name: e.target.value })}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-zinc-400 mb-1">Category Group</label>
+                <select
+                  value={editingFinish.group}
+                  onChange={(e) => setEditingFinish({ ...editingFinish, group: e.target.value })}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                >
+                  <option value="Signature skins">Signature skins</option>
+                  <option value="Colors">Colors</option>
+                  <option value="Natural">Natural</option>
+                  <option value="Custom Edition">Custom Edition</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-zinc-400 mb-1">Swatch Thumbnail URL</label>
+                <input
+                  type="url"
+                  value={editingFinish.thumbnail}
+                  onChange={(e) => setEditingFinish({ ...editingFinish, thumbnail: e.target.value })}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-zinc-400 mb-1 flex items-center justify-between">
+                  <span>Master Texture Image URL (v2 Engine)</span>
+                  {editingFinish.texture_url && (
+                    <a
+                      href={editingFinish.texture_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[10px] text-sky-400 hover:underline flex items-center gap-1"
+                    >
+                      <span>Preview</span>
+                      <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                  )}
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://exacoat.com/uploads/textures/master-texture.png"
+                  value={editingFinish.texture_url || ''}
+                  onChange={(e) => setEditingFinish({ ...editingFinish, texture_url: e.target.value })}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
+                />
+                <p className="text-[10px] text-zinc-500 mt-1">
+                  High-res texture inherited by all v2 configurators. Clipped automatically by device masks.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-zinc-400 mb-1">Extra Surcharge (IDR)</label>
+                <input
+                  type="number"
+                  value={editingFinish.extra_price ?? 0}
+                  onChange={(e) => setEditingFinish({ ...editingFinish, extra_price: Number(e.target.value) })}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/60 border border-white/5">
+                <div>
+                  <p className="text-xs font-bold text-white">Stock Availability</p>
+                  <p className="text-[11px] text-zinc-500">Enable in product configurators</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={editingFinish.in_stock}
+                  onChange={(e) => setEditingFinish({ ...editingFinish, in_stock: e.target.checked })}
+                  className="w-4 h-4 rounded text-[#f3aa18] focus:ring-0 bg-zinc-800 border-white/20"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingFinish(null)}
+                  className="px-4 py-2 text-xs font-mono rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="px-4 py-2 text-xs font-mono font-bold rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {isSaving ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>

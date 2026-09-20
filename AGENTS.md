@@ -252,4 +252,20 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Catalog filter bar includes **All Audit**, **Audited**, **Unaudited**, and **Issues** tabs.
   - Each product card displays persistent status badges (`[✓ Audited]`, `[! Issues]`, `[Unaudited]`) next to SKU.
 
+---
+
+## 16. Configurator v2 Master Textures & Category Combobox Architecture
+
+- **v2 Master Texture Inheritance Invariant**:
+  In v2 Modern Engine, operators do not upload slice textures per phone model or part. All devices automatically inherit high-resolution master finish textures (`texture_url` on `GlobalFinish` persisted in `exacoat_global_finishes`), clipped on the client or canvas by each device's 1000x1000 alpha mask (`mask_svg_url`).
+- **Texture URL Hierarchy**:
+  Viewport rendering and simulation evaluate textures in order:
+  `customLayerTexUrl || activeFinish.texture_url || activeFinish.thumbnail || ''`.
+- **Global Master Textures Management**:
+  - Managed globally in **Materials & Finishes Inventory** (`MaterialsStockPage.tsx`) via dedicated Edit Material modal and "Master Texture URL (v2)" field.
+  - Directly accessible inside **Configurator Studio** (`ConfiguratorStudioPage.tsx`) via the "Master Textures (v2)" header button and layer inspector shortcut, enabling operators to inspect live previews and update master textures without leaving the studio.
+- **Category Combobox Dropdown**:
+  Replaces overflowing horizontal category button strips with a compact, glassmorphic combobox dropdown featuring real-time brand search, live device counts per category, and 1-click reset to "All Categories".
+
+
 

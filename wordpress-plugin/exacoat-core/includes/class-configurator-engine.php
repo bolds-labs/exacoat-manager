@@ -287,6 +287,13 @@ class Exacoat_Configurator_Engine {
 			update_option( self::LEGACY_OPTION_KEY, $finishes );
 		}
 
+		// Ensure texture_url field exists on all returned finishes
+		foreach ( $finishes as &$f ) {
+			if ( ! isset( $f['texture_url'] ) ) {
+				$f['texture_url'] = $f['thumbnail'] ?? '';
+			}
+		}
+
 		self::$cached_finishes = $finishes;
 		return self::$cached_finishes;
 	}
@@ -532,6 +539,7 @@ class Exacoat_Configurator_Engine {
 		$group = sanitize_text_field( $params['group'] ?? 'Signature skins' );
 		$class_name = sanitize_html_class( $params['class_name'] ?? ( 'cfg-' . $slug ) );
 		$thumbnail = esc_url_raw( $params['thumbnail'] ?? '' );
+		$texture_url = esc_url_raw( $params['texture_url'] ?? '' );
 		$extra_price = isset( $params['extra_price'] ) ? (float) $params['extra_price'] : 0.0;
 		$in_stock = isset( $params['in_stock'] ) ? (bool) $params['in_stock'] : true;
 
@@ -543,7 +551,12 @@ class Exacoat_Configurator_Engine {
 				$f['name']        = $name;
 				$f['group']       = $group;
 				$f['class_name']  = $class_name;
-				$f['thumbnail']   = $thumbnail;
+				if ( ! empty( $thumbnail ) || isset( $params['thumbnail'] ) ) {
+					$f['thumbnail'] = $thumbnail;
+				}
+				if ( ! empty( $texture_url ) || isset( $params['texture_url'] ) ) {
+					$f['texture_url'] = $texture_url;
+				}
 				$f['extra_price'] = $extra_price;
 				$f['in_stock']    = $in_stock;
 				$updated          = true;
@@ -559,6 +572,7 @@ class Exacoat_Configurator_Engine {
 				'group'       => $group,
 				'class_name'  => $class_name,
 				'thumbnail'   => $thumbnail,
+				'texture_url' => $texture_url ?: $thumbnail,
 				'extra_price' => $extra_price,
 				'in_stock'    => $in_stock,
 			];
@@ -576,6 +590,7 @@ class Exacoat_Configurator_Engine {
 				'group'       => $group,
 				'class_name'  => $class_name,
 				'thumbnail'   => $thumbnail,
+				'texture_url' => $texture_url,
 				'extra_price' => $extra_price,
 				'in_stock'    => $in_stock,
 			],

@@ -424,6 +424,7 @@ export interface GlobalFinish {
   group: string;
   slug: string;
   thumbnail: string;
+  texture_url?: string;
   in_stock: boolean;
   extra_price: number;
   class_name?: string;
