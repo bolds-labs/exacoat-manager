@@ -94,6 +94,30 @@ export interface AssetAuditReport {
   items: AssetAuditItem[];
 }
 
+export interface DeviceAuditSummary {
+  productId: number;
+  deviceName: string;
+  category: string;
+  family: string;
+  totalAssets: number;
+  healthyCount: number;
+  brokenCount: number;
+  emptyCount: number;
+  ghostAngles: GhostAngleReport[];
+  brokenItems: AssetAuditItem[];
+}
+
+export interface GlobalCatalogAuditReport {
+  timestamp: string;
+  totalDevicesScanned: number;
+  totalAssetsProbed: number;
+  devicesWithIssues: number;
+  totalBrokenAssets: number;
+  totalGhostAngles: number;
+  totalEmptyMappings: number;
+  deviceSummaries: DeviceAuditSummary[];
+}
+
 const COMMON_PRESET_LAYERS = [
   { name: 'Back Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
   { name: 'Camera Accent', group: 'accent', is_required: false, is_optional: true, extra_price: 15000 },
@@ -182,6 +206,18 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [auditReport, setAuditReport] = useState<AssetAuditReport | null>(null);
   const [auditFilter, setAuditFilter] = useState<'all' | 'broken' | 'ghost' | 'empty' | 'healthy'>('all');
 
+  // Global Catalog-Wide Asset Audit state
+  const [showGlobalAuditModal, setShowGlobalAuditModal] = useState(false);
+  const [isAuditingGlobal, setIsAuditingGlobal] = useState(false);
+  const [isCleaningGlobalGhosts, setIsCleaningGlobalGhosts] = useState(false);
+  const [globalAuditProgress, setGlobalAuditProgress] = useState<{
+    scannedDevices: number;
+    totalDevices: number;
+    currentDeviceName: string;
+  }>({ scannedDevices: 0, totalDevices: 0, currentDeviceName: '' });
+  const [globalAuditReport, setGlobalAuditReport] = useState<GlobalCatalogAuditReport | null>(null);
+  const [globalAuditFilter, setGlobalAuditFilter] = useState<'all' | 'issues' | 'ghost' | 'clean'>('issues');
+
   // Texture URL Edit Dialog state
   const [editingTextureModal, setEditingTextureModal] = useState<{
     layerId: string;
@@ -231,7 +267,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (showAssetAuditModal) {
+        if (showGlobalAuditModal) {
+          setShowGlobalAuditModal(false);
+        } else if (showAssetAuditModal) {
           setShowAssetAuditModal(false);
         } else if (showFindReplaceModal) {
           setShowFindReplaceModal(false);
@@ -250,7 +288,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [showAssetAuditModal, showFindReplaceModal, editingTextureModal, duplicateModal, priceEditModal, selectedProductId]);
+  }, [showGlobalAuditModal, showAssetAuditModal, showFindReplaceModal, editingTextureModal, duplicateModal, priceEditModal, selectedProductId]);
 
   useEffect(() => {
     if (selectedProductId !== null) {
@@ -1050,6 +1088,337 @@ export const ConfiguratorStudioPage: React.FC = () => {
     return auditReport.items;
   }, [auditReport, auditFilter]);
 
+  // Global Catalog-Wide Audit Handlers
+  const handleStartGlobalCatalogAudit = async () => {
+    if (profiles.length === 0) return;
+    setIsAuditingGlobal(true);
+    setShowGlobalAuditModal(true);
+    setGlobalAuditProgress({
+      scannedDevices: 0,
+      totalDevices: profiles.length,
+      currentDeviceName: 'Starting catalog scan...',
+    });
+
+    const deviceSummaries: DeviceAuditSummary[] = [];
+    let totalAssetsProbed = 0;
+    let totalBrokenAssets = 0;
+    let totalGhostAngles = 0;
+    let totalEmptyMappings = 0;
+    let devicesWithIssues = 0;
+
+    for (let i = 0; i < profiles.length; i++) {
+      const p = profiles[i];
+      setGlobalAuditProgress({
+        scannedDevices: i,
+        totalDevices: profiles.length,
+        currentDeviceName: p.name,
+      });
+
+      try {
+        const res = await fetchProductConfiguratorProfileDirect(p.product_id);
+        if (!res.success || !res.profile) continue;
+        const profile = res.profile;
+
+        const itemsToProbe: Array<{
+          id: string;
+          type: 'chassis' | 'texture' | 'overlay';
+          viewId: string;
+          viewName: string;
+          layerId?: string;
+          layerName?: string;
+          finishSlug?: string;
+          finishName?: string;
+          url: string;
+        }> = [];
+
+        (profile.views || []).forEach((v) => {
+          itemsToProbe.push({
+            id: `chassis-${v.id}`,
+            type: 'chassis',
+            viewId: v.id,
+            viewName: v.name,
+            url: (v.background_url || '').trim(),
+          });
+        });
+
+        (profile.layers || []).forEach((layer) => {
+          (profile.views || []).forEach((v) => {
+            const viewAsset =
+              layer.assets_by_view?.[v.id] ||
+              layer.assets_by_view?.['main_view'] ||
+              Object.values(layer.assets_by_view || {})[0];
+
+            if (viewAsset) {
+              Object.entries(viewAsset.render_texture_map || {}).forEach(([slug, urlVal]) => {
+                const finishObj = finishes.find((f) => (f.slug || f.id) === slug);
+                itemsToProbe.push({
+                  id: `texture-${layer.id}-${v.id}-${slug}`,
+                  type: 'texture',
+                  viewId: v.id,
+                  viewName: v.name,
+                  layerId: layer.id,
+                  layerName: layer.name,
+                  finishSlug: slug,
+                  finishName: finishObj?.name || slug,
+                  url: typeof urlVal === 'string' ? urlVal.trim() : '',
+                });
+              });
+
+              if (viewAsset.mask_svg_url) {
+                itemsToProbe.push({
+                  id: `overlay-mask-${layer.id}-${v.id}`,
+                  type: 'overlay',
+                  viewId: v.id,
+                  viewName: v.name,
+                  layerId: layer.id,
+                  layerName: `${layer.name} (Mask SVG)`,
+                  url: viewAsset.mask_svg_url.trim(),
+                });
+              }
+              if (viewAsset.shadow_png_url) {
+                itemsToProbe.push({
+                  id: `overlay-shadow-${layer.id}-${v.id}`,
+                  type: 'overlay',
+                  viewId: v.id,
+                  viewName: v.name,
+                  layerId: layer.id,
+                  layerName: `${layer.name} (Shadow PNG)`,
+                  url: viewAsset.shadow_png_url.trim(),
+                });
+              }
+              if (viewAsset.highlight_png_url) {
+                itemsToProbe.push({
+                  id: `overlay-highlight-${layer.id}-${v.id}`,
+                  type: 'overlay',
+                  viewId: v.id,
+                  viewName: v.name,
+                  layerId: layer.id,
+                  layerName: `${layer.name} (Highlight PNG)`,
+                  url: viewAsset.highlight_png_url.trim(),
+                });
+              }
+            }
+          });
+        });
+
+        const auditedItems: AssetAuditItem[] = [];
+        const concurrency = 6;
+        let itemIndex = 0;
+
+        const worker = async () => {
+          while (itemIndex < itemsToProbe.length) {
+            const idx = itemIndex++;
+            const target = itemsToProbe[idx];
+            if (!target.url) {
+              auditedItems[idx] = {
+                ...target,
+                status: 'empty',
+                error: 'No image URL assigned',
+              };
+            } else {
+              const probeRes = await probeImageUrl(target.url);
+              auditedItems[idx] = {
+                ...target,
+                status: probeRes.ok ? 'healthy' : 'broken',
+                error: probeRes.error,
+              };
+            }
+          }
+        };
+
+        const workers = Array.from({ length: Math.min(concurrency, itemsToProbe.length) }, () => worker());
+        await Promise.all(workers);
+
+        const ghostAngles: GhostAngleReport[] = [];
+        (profile.views || []).forEach((v) => {
+          const chassisItem = auditedItems.find((it) => it.type === 'chassis' && it.viewId === v.id);
+          const chassisStatus = !v.background_url?.trim()
+            ? 'missing'
+            : chassisItem?.status === 'broken'
+            ? 'broken'
+            : 'healthy';
+
+          let mappedTexturesCount = 0;
+          (profile.layers || []).forEach((layer) => {
+            const viewAsset = layer.assets_by_view?.[v.id];
+            if (viewAsset && viewAsset.render_texture_map) {
+              Object.values(viewAsset.render_texture_map).forEach((u) => {
+                if (typeof u === 'string' && u.trim().length > 0) {
+                  mappedTexturesCount++;
+                }
+              });
+            }
+          });
+
+          if (mappedTexturesCount === 0 && chassisStatus !== 'healthy') {
+            ghostAngles.push({
+              viewId: v.id,
+              viewName: v.name,
+              chassisStatus,
+              chassisUrl: v.background_url || '',
+              mappedTexturesCount,
+            });
+          }
+        });
+
+        const healthyCount = auditedItems.filter((it) => it.status === 'healthy').length;
+        const brokenCount = auditedItems.filter((it) => it.status === 'broken').length;
+        const emptyCount = auditedItems.filter((it) => it.status === 'empty').length;
+        const brokenItems = auditedItems.filter((it) => it.status === 'broken');
+
+        totalAssetsProbed += auditedItems.length;
+        totalBrokenAssets += brokenCount;
+        totalGhostAngles += ghostAngles.length;
+        totalEmptyMappings += emptyCount;
+
+        if (brokenCount > 0 || ghostAngles.length > 0) {
+          devicesWithIssues++;
+        }
+
+        deviceSummaries.push({
+          productId: p.product_id,
+          deviceName: p.name,
+          category: p.categories?.[0] || profile.category || 'General',
+          family: p.family,
+          totalAssets: auditedItems.length,
+          healthyCount,
+          brokenCount,
+          emptyCount,
+          ghostAngles,
+          brokenItems,
+        });
+      } catch (err) {
+        console.warn(`Failed auditing product #${p.product_id}:`, err);
+      }
+    }
+
+    setGlobalAuditProgress({
+      scannedDevices: profiles.length,
+      totalDevices: profiles.length,
+      currentDeviceName: 'Scan complete.',
+    });
+
+    const finalReport: GlobalCatalogAuditReport = {
+      timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      totalDevicesScanned: profiles.length,
+      totalAssetsProbed,
+      devicesWithIssues,
+      totalBrokenAssets,
+      totalGhostAngles,
+      totalEmptyMappings,
+      deviceSummaries,
+    };
+
+    setGlobalAuditReport(finalReport);
+    setIsAuditingGlobal(false);
+    if (devicesWithIssues > 0) {
+      setGlobalAuditFilter('issues');
+    } else {
+      setGlobalAuditFilter('all');
+    }
+  };
+
+  const handleBulkCleanGhostAngles = async () => {
+    if (!globalAuditReport) return;
+    const devicesToClean = globalAuditReport.deviceSummaries.filter((d) => d.ghostAngles.length > 0);
+    if (devicesToClean.length === 0) {
+      showToast('info', 'No Ghost Angles', 'No ghost viewing angles found in the scanned catalog.');
+      return;
+    }
+
+    setIsCleaningGlobalGhosts(true);
+    let cleanedCount = 0;
+    let failedCount = 0;
+
+    for (const d of devicesToClean) {
+      try {
+        const res = await fetchProductConfiguratorProfileDirect(d.productId);
+        if (!res.success || !res.profile) {
+          failedCount++;
+          continue;
+        }
+
+        const profile = res.profile;
+        const ghostViewIds = new Set(d.ghostAngles.map((g) => g.viewId));
+        const remainingViews = (profile.views || []).filter((v) => !ghostViewIds.has(v.id));
+
+        if (remainingViews.length === 0) {
+          failedCount++;
+          continue;
+        }
+
+        const cleanedLayers = (profile.layers || []).map((layer) => {
+          const newAssets = { ...(layer.assets_by_view || {}) };
+          ghostViewIds.forEach((gId) => {
+            delete newAssets[gId];
+          });
+          return {
+            ...layer,
+            assets_by_view: newAssets,
+          };
+        });
+
+        const saveRes = await saveProductConfiguratorProfileDirect({
+          ...profile,
+          views: remainingViews,
+          layers: cleanedLayers,
+        });
+
+        if (saveRes.success) {
+          cleanedCount++;
+        } else {
+          failedCount++;
+        }
+      } catch (err) {
+        failedCount++;
+      }
+    }
+
+    setIsCleaningGlobalGhosts(false);
+    showToast(
+      'success',
+      'Bulk Cleaning Complete',
+      `Removed ghost angles from ${cleanedCount} devices.${failedCount > 0 ? ` (${failedCount} failed)` : ''}`
+    );
+
+    await loadData(true);
+
+    const updatedSummaries = globalAuditReport.deviceSummaries.map((d) => {
+      if (d.ghostAngles.length > 0) {
+        return {
+          ...d,
+          ghostAngles: [],
+        };
+      }
+      return d;
+    });
+
+    setGlobalAuditReport({
+      ...globalAuditReport,
+      totalGhostAngles: 0,
+      devicesWithIssues: updatedSummaries.filter((d) => d.brokenCount > 0).length,
+      deviceSummaries: updatedSummaries,
+    });
+  };
+
+  const filteredGlobalSummaries = useMemo(() => {
+    if (!globalAuditReport) return [];
+    if (globalAuditFilter === 'issues') {
+      return globalAuditReport.deviceSummaries.filter(
+        (d) => d.brokenCount > 0 || d.ghostAngles.length > 0
+      );
+    }
+    if (globalAuditFilter === 'ghost') {
+      return globalAuditReport.deviceSummaries.filter((d) => d.ghostAngles.length > 0);
+    }
+    if (globalAuditFilter === 'clean') {
+      return globalAuditReport.deviceSummaries.filter(
+        (d) => d.brokenCount === 0 && d.ghostAngles.length === 0
+      );
+    }
+    return globalAuditReport.deviceSummaries;
+  }, [globalAuditReport, globalAuditFilter]);
+
   // Layer manipulation helpers
   const handleAddPresetLayer = (preset: (typeof COMMON_PRESET_LAYERS)[0]) => {
     if (!editingProfile) return;
@@ -1410,6 +1779,24 @@ export const ConfiguratorStudioPage: React.FC = () => {
               Refresh Catalog
             </button>
             <button
+              onClick={handleStartGlobalCatalogAudit}
+              disabled={isAuditingGlobal || profiles.length === 0}
+              className="px-4 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
+              title="Audit all devices across the catalog for 404 images, broken textures, and ghost angles"
+            >
+              {isAuditingGlobal ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Auditing All Devices...</span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Audit All Devices</span>
+                </>
+              )}
+            </button>
+            <button
               onClick={handleBatchMigrate}
               disabled={isMigrating}
               className="px-4 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
@@ -1662,6 +2049,353 @@ export const ConfiguratorStudioPage: React.FC = () => {
           ))}
         </div>
       )}
+
+      {/* Global Catalog Asset Audit Dialog */}
+      {showGlobalAuditModal &&
+        createPortal(
+          <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="w-full max-w-5xl max-h-[90vh] flex flex-col rounded-2xl bg-zinc-950 border border-white/15 shadow-2xl overflow-hidden font-sans">
+              {/* Header */}
+              <div className="p-5 border-b border-white/10 flex items-center justify-between gap-4 bg-zinc-900/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-white">Catalog-Wide Asset Integrity Audit</h3>
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-zinc-300 font-mono">
+                        {profiles.length} Catalog Devices
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Batch auditing all products for 404 broken textures, missing chassis renders, and ghost viewing angles.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleStartGlobalCatalogAudit}
+                    disabled={isAuditingGlobal}
+                    className="px-3 py-1.5 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+                  >
+                    <RefreshCw className={clsx('w-3.5 h-3.5', isAuditingGlobal && 'animate-spin text-[#f3aa18]')} />
+                    <span>{isAuditingGlobal ? 'Auditing Catalog...' : 'Re-run Full Audit'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowGlobalAuditModal(false)}
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Progress Bar during global audit */}
+              {isAuditingGlobal && (
+                <div className="bg-zinc-900 px-5 py-3 border-b border-white/10 space-y-2">
+                  <div className="flex items-center justify-between text-xs text-zinc-300">
+                    <div className="flex items-center gap-2">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#f3aa18]" />
+                      <span>
+                        Auditing device {globalAuditProgress.scannedDevices} of {globalAuditProgress.totalDevices}:{' '}
+                        <strong className="text-white">{globalAuditProgress.currentDeviceName}</strong>
+                      </span>
+                    </div>
+                    <span className="font-mono text-zinc-400">
+                      {globalAuditProgress.totalDevices > 0
+                        ? Math.round((globalAuditProgress.scannedDevices / globalAuditProgress.totalDevices) * 100)
+                        : 0}
+                      %
+                    </span>
+                  </div>
+                  <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-[#f3aa18] to-emerald-400 h-full transition-all duration-300"
+                      style={{
+                        width: `${
+                          globalAuditProgress.totalDevices > 0
+                            ? (globalAuditProgress.scannedDevices / globalAuditProgress.totalDevices) * 100
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-5">
+                {/* Metric Summary Cards */}
+                {globalAuditReport && (
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5">
+                      <span className="text-[11px] text-zinc-400 block font-medium">Scanned Devices</span>
+                      <span className="text-xl font-bold font-mono text-white mt-1 block">
+                        {globalAuditReport.totalDevicesScanned}
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-rose-500/5 border border-rose-500/20">
+                      <span className="text-[11px] text-rose-400 block font-medium flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        <span>Devices with Issues</span>
+                      </span>
+                      <span className="text-xl font-bold font-mono text-rose-400 mt-1 block">
+                        {globalAuditReport.devicesWithIssues}
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                      <span className="text-[11px] text-amber-400 block font-medium flex items-center gap-1.5">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        <span>Ghost Angles</span>
+                      </span>
+                      <span className="text-xl font-bold font-mono text-amber-400 mt-1 block">
+                        {globalAuditReport.totalGhostAngles}
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-rose-500/5 border border-rose-500/20">
+                      <span className="text-[11px] text-rose-400 block font-medium flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        <span>Broken URLs</span>
+                      </span>
+                      <span className="text-xl font-bold font-mono text-rose-400 mt-1 block">
+                        {globalAuditReport.totalBrokenAssets}
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+                      <span className="text-[11px] text-emerald-400 block font-medium flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Total Assets Probed</span>
+                      </span>
+                      <span className="text-xl font-bold font-mono text-emerald-400 mt-1 block">
+                        {globalAuditReport.totalAssetsProbed}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Bulk Ghost Angle Cleanup Banner */}
+                {globalAuditReport && globalAuditReport.totalGhostAngles > 0 && (
+                  <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-start gap-3 max-w-xl">
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
+                        <AlertCircle className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-amber-300">
+                          {globalAuditReport.totalGhostAngles} Ghost Viewing Angles Detected
+                        </h4>
+                        <p className="text-xs text-zinc-300 mt-0.5 leading-relaxed">
+                          These angles have 0 mapped textures and broken or missing hardware chassis images (such as Xiaomi Pad devices cloned from iPad Pro templates).
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleBulkCleanGhostAngles}
+                      disabled={isCleaningGlobalGhosts}
+                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:brightness-105 text-black text-xs font-bold uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-500/20 disabled:opacity-50 transition-all shrink-0"
+                    >
+                      {isCleaningGlobalGhosts ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Cleaning All Ghost Angles...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Bulk Remove All Ghost Angles</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* Filter Tabs */}
+                {globalAuditReport && (
+                  <div className="flex items-center gap-1.5 border-b border-white/10 pb-2 overflow-x-auto">
+                    {(
+                      [
+                        {
+                          key: 'issues',
+                          label: 'Devices with Issues',
+                          count: globalAuditReport.devicesWithIssues,
+                        },
+                        {
+                          key: 'ghost',
+                          label: 'Ghost Angles Only',
+                          count: globalAuditReport.deviceSummaries.filter((d) => d.ghostAngles.length > 0).length,
+                        },
+                        {
+                          key: 'all',
+                          label: 'All Devices',
+                          count: globalAuditReport.totalDevicesScanned,
+                        },
+                        {
+                          key: 'clean',
+                          label: 'Healthy / Clean',
+                          count: globalAuditReport.deviceSummaries.filter(
+                            (d) => d.brokenCount === 0 && d.ghostAngles.length === 0
+                          ).length,
+                        },
+                      ] as const
+                    ).map((tab) => (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        onClick={() => setGlobalAuditFilter(tab.key)}
+                        className={clsx(
+                          'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5',
+                          globalAuditFilter === tab.key
+                            ? 'bg-[#f3aa18] text-black font-bold'
+                            : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                        )}
+                      >
+                        <span>{tab.label}</span>
+                        <span
+                          className={clsx(
+                            'text-[10px] px-1.5 py-0.2 rounded-full font-mono',
+                            globalAuditFilter === tab.key
+                              ? 'bg-black/20 text-black'
+                              : 'bg-white/5 text-zinc-400'
+                          )}
+                        >
+                          {tab.count}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Device Results List */}
+                <div className="space-y-3">
+                  {filteredGlobalSummaries.length === 0 ? (
+                    <div className="p-8 rounded-xl bg-zinc-900/30 border border-white/5 text-center text-xs text-zinc-400">
+                      {isAuditingGlobal ? 'Probing catalog devices...' : 'No devices match the selected filter.'}
+                    </div>
+                  ) : (
+                    filteredGlobalSummaries.map((d) => (
+                      <div
+                        key={d.productId}
+                        className="p-4 rounded-xl bg-zinc-900/60 border border-white/5 hover:border-white/10 transition-colors space-y-3"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-sm font-bold text-white">{d.deviceName}</h4>
+                              <span className="text-[11px] font-mono text-zinc-500">#{d.productId}</span>
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-zinc-400 border border-white/10 capitalize">
+                                {d.category}
+                              </span>
+                            </div>
+                            <p className="text-xs text-zinc-400 mt-0.5">
+                              {d.totalAssets} total assets probed • {d.healthyCount} healthy (200 OK)
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {d.ghostAngles.length > 0 && (
+                              <span className="text-[11px] px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 font-medium flex items-center gap-1.5">
+                                <AlertCircle className="w-3.5 h-3.5" />
+                                <span>{d.ghostAngles.length} Ghost Angle{d.ghostAngles.length > 1 ? 's' : ''}</span>
+                              </span>
+                            )}
+
+                            {d.brokenCount > 0 ? (
+                              <span className="text-[11px] px-2.5 py-1 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-400 font-medium flex items-center gap-1.5">
+                                <AlertTriangle className="w-3.5 h-3.5" />
+                                <span>{d.brokenCount} Broken URLs</span>
+                              </span>
+                            ) : (
+                              d.ghostAngles.length === 0 && (
+                                <span className="text-[11px] px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-medium flex items-center gap-1.5">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>All Assets Healthy</span>
+                                </span>
+                              )
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowGlobalAuditModal(false);
+                                handleOpenEditor(d.productId);
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 cursor-pointer ml-1"
+                            >
+                              <Sliders className="w-3.5 h-3.5 text-[#f3aa18]" />
+                              <span>Open in Studio</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Ghost angles breakdown for this device */}
+                        {d.ghostAngles.length > 0 && (
+                          <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 space-y-1">
+                            <span className="font-bold block">Ghost Angles Identified:</span>
+                            {d.ghostAngles.map((g) => (
+                              <div key={g.viewId} className="flex items-center justify-between text-[11px] text-zinc-300">
+                                <span>
+                                  • {g.viewName} (ID: {g.viewId}) - Chassis: {g.chassisStatus}, Textures: {g.mappedTexturesCount}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Broken items sample for this device */}
+                        {d.brokenItems.length > 0 && (
+                          <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300 space-y-1 font-mono text-[11px]">
+                            <span className="font-sans font-bold block text-rose-400">Broken Images ({d.brokenItems.length}):</span>
+                            {d.brokenItems.slice(0, 3).map((item) => (
+                              <div key={item.id} className="flex items-center justify-between gap-2">
+                                <span className="truncate max-w-md">
+                                  {item.layerName ? `${item.layerName} • ` : ''}{item.finishName || item.viewName}: {item.url}
+                                </span>
+                                <a
+                                  href={item.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-sky-400 hover:underline shrink-0"
+                                >
+                                  Test URL
+                                </a>
+                              </div>
+                            ))}
+                            {d.brokenItems.length > 3 && (
+                              <span className="text-zinc-500 font-sans italic text-[10px] block">
+                                + {d.brokenItems.length - 3} more broken images. Open in Studio to view all.
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-white/10 flex items-center justify-between bg-zinc-900/50 text-xs">
+                <span className="text-zinc-400 text-[11px]">
+                  Click "Open in Studio" on any device to inspect its interactive canvas or edit texture URLs directly.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowGlobalAuditModal(false)}
+                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium cursor-pointer transition-colors"
+                >
+                  Close Audit
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
 
       {/* Quick Price Edit Dialog */}
       {priceEditModal &&
