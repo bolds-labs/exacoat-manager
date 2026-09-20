@@ -568,3 +568,37 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **WordPress Media Library 2-Column List View (`MediaLibraryModal.tsx`)**:
   - Layout Shift Prevention: Outer dialog and media containers enforce strict fixed dimensions (`h-[480px]`), eliminating vertical layout jitter while querying or paginating uploads.
   - Two-Column Detailed List: Replaces truncated icon tiles with a comfortable two-column card view displaying full filenames, checkered thumbnails, file extensions, and emerald-highlighted dimension tags for 1000x1000 canvas assets.
+
+---
+
+## 38. Configurator Persistence Architecture & Refined Cutout/Angle Rules
+
+- **Database Storage & Persistence Invariants (Never LocalStorage)**:
+  - **Device Profiles**: Saved in MySQL `wp_postmeta` under meta key `_exacoat_configurator_profile` on each product ID (`update_post_meta($id, '_exacoat_configurator_profile', wp_slash(wp_json_encode($profile)))`).
+  - **Global Master Finishes**: Saved in MySQL `wp_options` under option key `exacoat_global_finishes`.
+  - **Finish Group Sequences**: Saved in MySQL `wp_options` under option key `exacoat_global_finish_groups`.
+  - **Audit Metadata**: Saved in `wp_postmeta` under `_configurator_last_audited`, `_configurator_audit_status`, and `_configurator_audit_issues`.
+  - **Zero LocalStorage Risk**: All state is saved to the WordPress database via authenticated REST endpoints. Rebuilding frontend code, clearing browser cache, switching computers, or restarting devices never causes data loss.
+
+- **Custom Renamable Cutouts (`pencil_cutout_label`)**:
+  - Previously hardcoded as "Stylus / Pencil Cutout", the cutout slot is generalized as a custom, renamable hardware cutout.
+  - Operators can label it according to device hardware (e.g. "Apple Pencil Cutout", "S-Pen Cutout", "Antenna Band Cutout", or "Custom Cutout").
+  - Automatic Buyer Option Invariant: Whenever a cutout mask URL (`pencil_cutout_mask_url`) is configured, the system automatically enables `has_pencil_cutout = true`, ensuring buyers on the webstore (`exacoat-web`) are presented with an interactive toggle choice ("With Cutout" vs "Solid / Without Cutout").
+  - Order Metadata Persistence: Selections are passed through `customLayers` into WooCommerce cart and order line item meta so production operators know exactly whether to cut the vinyl with or without the cutout opening.
+
+- **Custom Named Angles**:
+  - Configurator Studio provides a dedicated custom angle name input allowing operators to add any viewing perspective (e.g. "Front View", "Closed View", "Side Frame Angle", "Keyboard Deck").
+  - Slugs are sanitized and deduplicated automatically.
+  - Active angle names can be renamed inline directly from the angle header card.
+
+- **Preset Layer Hygiene & Pricing Invariants**:
+  - "Additional Camera & Back Glass" preset layer is standardized at IDR 85,000 extra price.
+  - Redundant legacy "Top Lid" preset is removed in favor of "Top Skin".
+  - Quick Add buttons and Quick Preset packs are pruned from the Skins tab for clean, intentional layer additions.
+
+- **Simplified Device Family Multipliers**:
+  - Streamlined to two operational categories:
+    1. **Phone**: 1.0x multiplier (+IDR 30,000 default signature finish surcharge).
+    2. **Tablet & Laptop**: 2.0x multiplier (+IDR 60,000 default signature finish surcharge).
+  - Multipliers can still be fine-tuned via the numeric stepper if a specific device requires bespoke sizing.
+
