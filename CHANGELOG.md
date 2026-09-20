@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.80] - 2026-09-20
+
+### Configurator Studio: Apple and Notion-Inspired Sidebar Redesign & Universal Cutout Punching
+- **Universal Cutout Punching (`V2SkinCanvasLayer`)**:
+  - Solved issue where pre-cut skin overlays that lack masks (such as Back Glass Skin overlaying Back Skin) were not being cut out by logo, pencil, or model cutouts on both manager preview and webstore canvas.
+  - Made `maskUrl` optional in `V2SkinCanvasLayer` across `exacoat-manager` and `exacoat-web`.
+  - When `maskUrl` is missing but `textureUrl` is present, the pre-cut texture is rendered directly onto the 1000x1000 HTML5 canvas, and canvas `destination-out` punches through `logoCutoutUrl`, `pencilCutoutUrl`, and `modelCutoutUrl`.
+- **Embedded Hardware Body Colors per View**:
+  - Moved hardware color configuration directly inside each viewing angle card under the Hardware Body Image URL.
+  - Color swatches, names, hex codes, and view-specific body image URLs are configured directly per angle with 1-click WordPress Media Library browsing.
+  - Completely removed the redundant detached bottom card.
+- **Apple & Notion-Inspired Sidebar Overhaul with Tooltips**:
+  - Removed confusing clutter badges (`Included`, `FRONT`, `BASE`, `✓ Mask`, `No Mask`, `✓ Textures`, `No Textures`).
+  - Completely removed the redundant 21-swatch finish simulation grid from the sidebar (since all finishes are already interactive on the canvas and tester dock).
+  - Compact layer stack with reorder controls, visibility toggle, price indicator, and inline name editing.
+  - Eliminated walls of text by migrating explanatory guidance into interactive hover tooltips (`InfoTooltip`).
+  - Streamlined Cutouts & Coverage and Pricing & Settings stages into compact, modern glassmorphic cards.
+
 ## [0.0.79] - 2026-09-20
 
 ### Configurator Studio v2: 4-Stage Redesign & Storefront Duplicated Product Resolution

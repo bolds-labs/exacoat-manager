@@ -207,8 +207,20 @@ const COMMON_PRESET_LAYERS: SkinPartPreset[] = [
   { name: 'Hinge / Spine', group: 'accent', is_required: false, is_optional: true, extra_price: 25000 },
 ];
 
+const InfoTooltip: React.FC<{ content?: string; text?: string }> = ({ content, text }) => {
+  const tooltipText = content || text || '';
+  return (
+    <span className="relative group inline-flex items-center text-zinc-500 hover:text-zinc-300 transition-colors cursor-help" title={tooltipText}>
+      <HelpCircle className="w-3.5 h-3.5" />
+      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block w-52 sm:w-60 p-2.5 rounded-xl bg-zinc-900/95 border border-white/10 text-[11px] leading-relaxed text-zinc-300 font-normal shadow-xl backdrop-blur-md z-50 normal-case tracking-normal text-left">
+        {tooltipText}
+      </span>
+    </span>
+  );
+};
+
 interface V2SkinCanvasLayerProps {
-  maskUrl: string;
+  maskUrl?: string;
   textureUrl?: string;
   fallbackColor?: string;
   logoCutoutUrl?: string;
@@ -232,7 +244,8 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !maskUrl) return;
+    if (!canvas) return;
+    if (!maskUrl && !textureUrl) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -243,14 +256,20 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
       return new Promise((resolve) => {
         if (!src || !src.trim()) return resolve(null);
         const img = new Image();
+        img.crossOrigin = 'anonymous';
         img.onload = () => resolve(img);
-        img.onerror = () => resolve(null);
+        img.onerror = () => {
+          const retryImg = new Image();
+          retryImg.onload = () => resolve(retryImg);
+          retryImg.onerror = () => resolve(null);
+          retryImg.src = src.trim();
+        };
         img.src = src.trim();
       });
     };
 
     Promise.all([
-      loadImage(maskUrl),
+      maskUrl ? loadImage(maskUrl) : Promise.resolve(null),
       textureUrl ? loadImage(textureUrl) : Promise.resolve(null),
       logoCutoutUrl ? loadImage(logoCutoutUrl) : Promise.resolve(null),
       pencilCutoutUrl ? loadImage(pencilCutoutUrl) : Promise.resolve(null),
@@ -258,25 +277,32 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
     ]).then(([maskImg, texImg, logoCutoutImg, pencilCutoutImg, modelCutoutImg]) => {
       if (isCancelled || !ctx) return;
       ctx.clearRect(0, 0, 1000, 1000);
-      if (!maskImg) return;
+      if (!maskImg && !texImg) return;
 
-      // 1. Draw master texture with native aspect-ratio cover scaling (no squeezing)
+      // 1. Draw master texture with native aspect-ratio cover scaling (no squeezing), or pre-cut texture directly
       if (texImg && texImg.width > 0 && texImg.height > 0) {
-        const scale = Math.max(1000 / texImg.width, 1000 / texImg.height);
-        const drawW = texImg.width * scale;
-        const drawH = texImg.height * scale;
-        const drawX = (1000 - drawW) / 2;
-        const drawY = (1000 - drawH) / 2;
-        ctx.drawImage(texImg, drawX, drawY, drawW, drawH);
-      } else {
+        if (maskImg) {
+          const scale = Math.max(1000 / texImg.width, 1000 / texImg.height);
+          const drawW = texImg.width * scale;
+          const drawH = texImg.height * scale;
+          const drawX = (1000 - drawW) / 2;
+          const drawY = (1000 - drawH) / 2;
+          ctx.drawImage(texImg, drawX, drawY, drawW, drawH);
+        } else {
+          // Pre-cut texture overlay drawn directly on 1000x1000 canvas
+          ctx.drawImage(texImg, 0, 0, 1000, 1000);
+        }
+      } else if (maskImg) {
         // Fallback color fill
         ctx.fillStyle = fallbackColor || '#18181b';
         ctx.fillRect(0, 0, 1000, 1000);
       }
 
-      // 2. Clip with vinyl skin alpha mask (keeps skin area only)
-      ctx.globalCompositeOperation = 'destination-in';
-      ctx.drawImage(maskImg, 0, 0, 1000, 1000);
+      // 2. Clip with vinyl skin alpha mask if present
+      if (maskImg) {
+        ctx.globalCompositeOperation = 'destination-in';
+        ctx.drawImage(maskImg, 0, 0, 1000, 1000);
+      }
 
       // 3. Punch out logo hole from the skin so hardware base chassis shines through
       if (logoCutoutImg) {
@@ -4408,12 +4434,23 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             );
 
                             // v2 Engine: Dynamic Canvas Compositing with Alpha Mask & Buyer Cutouts
-                            if (editingProfile.configurator_version === 'v2' && assets.mask_svg_url) {
+                            if (editingProfile.configurator_version === 'v2') {
                               const customTex = assets.render_texture_map?.[layerFinishSlug] ||
                                 assets.render_texture_map?.[activeFinish?.slug || ''] ||
                                 assets.render_texture_map?.[activeFinish?.id || ''];
-                              const textureToTile = customTex || activeFinish?.texture_url || '';
+
+                              const textureMap = assets.render_texture_map || {};
+                              const simNorm = layerFinishSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
+                              const matchedKey = Object.keys(textureMap).find(
+                                (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === simNorm
+                              );
+                              const mappedTex = matchedKey ? textureMap[matchedKey] || '' : '';
+                              const textureToTile = customTex || mappedTex || activeFinish?.texture_url || '';
                               const fallbackColor = activeFinish?.color_hex || '#18181b';
+
+                              if (!assets.mask_svg_url && !textureToTile) {
+                                return null;
+                              }
 
                               const logoMaskUrl =
                                 currentView?.logo_cutout_mask_url ||
@@ -4970,10 +5007,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     <h3 className="text-xs font-bold text-white uppercase tracking-wider">
                                       Customizable Skin Parts ({skinLayers.length})
                                     </h3>
+                                    <InfoTooltip content="Ordered Front to Back. Parts on top render above lower parts in viewport and canvas." />
                                   </div>
-                                  <p className="text-[11px] text-zinc-400 mt-0.5">
-                                    Layer hierarchy is ordered Front to Back. Parts on top render above lower parts.
-                                  </p>
                                 </div>
 
                                 <div className="flex items-center gap-1.5 shrink-0">
@@ -4982,7 +5017,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     <button
                                       type="button"
                                       onClick={() => setIsPresetDropdownOpen(!isPresetDropdownOpen)}
-                                      className="px-2.5 py-1.5 text-xs font-sans rounded-xl bg-zinc-900 border border-dashed border-[#f3aa18]/40 hover:border-[#f3aa18] text-[#f3aa18] font-bold cursor-pointer transition-all flex items-center gap-1.5 shadow-sm hover:bg-[#f3aa18]/10"
+                                      className="px-2.5 py-1.5 text-xs font-sans rounded-xl bg-zinc-900 border border-dashed border-[#f3aa18]/40 hover:border-[#f3aa18] text-[#f3aa18] font-bold cursor-pointer transition-all flex items-center gap-1.5 shadow-xs hover:bg-[#f3aa18]/10"
                                     >
                                       <Plus className="w-3.5 h-3.5" />
                                       <span>Add Part</span>
@@ -5174,12 +5209,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     const isSelected = (currentActiveLayer?.id || '') === layer.id;
                                     const isVisible = selectedSimLayers[layer.id] !== false;
                                     const extraPrice = Number(layer.extra_price) || 0;
-                                    const viewAsset = layer.assets_by_view?.[currentView?.id || 'main_view'];
-                                    const hasMask = Boolean(viewAsset?.mask_svg_url);
-                                    const totalLayerTextures = Object.values(layer.assets_by_view || {}).reduce(
-                                      (sum, v) => sum + Object.keys(v.render_texture_map || {}).length,
-                                      0
-                                    );
 
                                     return (
                                       <div
@@ -5188,12 +5217,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         className={clsx(
                                           'p-2.5 rounded-xl transition-all border flex items-center justify-between gap-2.5 cursor-pointer select-none group',
                                           isSelected
-                                            ? 'bg-[#f3aa18]/10 border-[#f3aa18]/60 shadow-sm shadow-[#f3aa18]/10'
+                                            ? 'bg-[#f3aa18]/10 border-[#f3aa18]/60 shadow-xs shadow-[#f3aa18]/10'
                                             : 'bg-zinc-900/80 border-white/5 hover:border-white/15 hover:bg-zinc-900'
                                         )}
                                       >
-                                        {/* Left: Reorder priority controls & visibility */}
-                                        <div className="flex items-center gap-1.5 shrink-0">
+                                        {/* Left: Reorder priority controls, visibility & name */}
+                                        <div className="flex items-center gap-1.5 shrink-0 min-w-0">
                                           {/* Reorder Buttons */}
                                           <div className="flex flex-col -space-y-1" onClick={(e) => e.stopPropagation()}>
                                             <button
@@ -5243,66 +5272,27 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                             {isVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                                           </button>
 
-                                          {/* Layer Name & z-index badge */}
-                                          <div className="flex items-center gap-2 min-w-0">
-                                            <span
-                                              className={clsx(
-                                                'text-xs font-semibold truncate',
-                                                isSelected ? 'text-white font-bold' : 'text-zinc-200 group-hover:text-white'
-                                              )}
-                                            >
-                                              {layer.name}
-                                            </span>
-                                            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-white/5 text-zinc-400 shrink-0">
-                                              z: {layer.z_index || 1}
-                                            </span>
-                                          </div>
+                                          {/* Layer Name */}
+                                          <span
+                                            className={clsx(
+                                              'text-xs font-semibold truncate',
+                                              isSelected ? 'text-white font-bold' : 'text-zinc-200 group-hover:text-white'
+                                            )}
+                                          >
+                                            {layer.name}
+                                          </span>
                                         </div>
 
-                                        {/* Center: Position tag, group, price, mask badge */}
-                                        <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-                                          {isFirst && (
-                                            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#f3aa18]/20 text-[#f3aa18] font-bold border border-[#f3aa18]/30">
-                                              FRONT
-                                            </span>
-                                          )}
-                                          {isLast && (
-                                            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
-                                              BASE
-                                            </span>
-                                          )}
-                                          <span className="text-[10px] font-sans px-1.5 py-0.5 rounded bg-white/5 text-zinc-400 capitalize hidden sm:inline-block">
-                                            {layer.group || 'primary'}
-                                          </span>
+                                        {/* Right: Price indicator & Delete button */}
+                                        <div className="flex items-center gap-2 shrink-0">
                                           {extraPrice > 0 ? (
-                                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 font-bold border border-amber-500/20">
+                                            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 font-bold border border-amber-500/20">
                                               +IDR {extraPrice >= 1000 ? `${Math.round(extraPrice / 1000)}k` : extraPrice}
                                             </span>
                                           ) : (
-                                            <span className="text-[10px] font-mono text-zinc-500 hidden sm:inline-block">
-                                              Included
+                                            <span className="text-[10px] font-mono text-zinc-500">
+                                              Base
                                             </span>
-                                          )}
-                                          {editingProfile.configurator_version === 'v2' ? (
-                                            hasMask ? (
-                                              <span className="text-[10px] font-mono text-emerald-400/90 hidden md:inline-block" title="Alpha mask configured for this angle">
-                                                ✓ Mask
-                                              </span>
-                                            ) : (
-                                              <span className="text-[10px] font-mono text-amber-400/70 hidden md:inline-block" title="No alpha mask set for current angle">
-                                                No Mask
-                                              </span>
-                                            )
-                                          ) : (
-                                            totalLayerTextures > 0 ? (
-                                              <span className="text-[10px] font-mono text-emerald-400 hidden md:inline-block" title={`${totalLayerTextures} textures configured across angles`}>
-                                                ✓ {totalLayerTextures} Textures
-                                              </span>
-                                            ) : (
-                                              <span className="text-[10px] font-mono text-amber-400/70 hidden md:inline-block" title="No texture slices mapped yet">
-                                                No Textures
-                                              </span>
-                                            )
                                           )}
 
                                           {/* Direct Delete Button */}
@@ -5312,7 +5302,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                               e.stopPropagation();
                                               handleRemoveLayer(layer.id);
                                             }}
-                                            className="p-1.5 text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer ml-1"
+                                            className="p-1.5 text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
                                             title={`Delete "${layer.name}"`}
                                           >
                                             <Trash2 className="w-3.5 h-3.5" />
@@ -5329,16 +5319,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             {currentActiveLayer ? (
                               <div className="p-4 rounded-2xl bg-zinc-900/70 border border-white/10 space-y-4">
                                 <div className="flex items-center justify-between gap-3">
-                                  <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="flex items-center gap-2 min-w-0 flex-1">
                                     <input
                                       type="text"
                                       value={currentActiveLayer.name}
                                       onChange={(e) =>
                                         handleUpdateLayer(currentActiveLayer.id, { name: e.target.value })
                                       }
-                                      className="font-bold text-white text-sm bg-transparent border-b border-white/10 focus:border-[#f3aa18] focus:outline-none px-1 py-0.5"
+                                      className="font-bold text-white text-sm bg-transparent border-b border-white/10 focus:border-[#f3aa18] focus:outline-none px-1 py-0.5 flex-1 min-w-0"
                                     />
-                                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-zinc-400">
+                                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-zinc-400 shrink-0">
                                       {currentActiveLayer.id}
                                     </span>
                                   </div>
@@ -5357,7 +5347,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                                 {/* Part Attributes: Required, Pre-selected, Extra Price */}
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-white/5">
-                                  <label className="flex items-center gap-2 p-2.5 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans cursor-pointer">
+                                  <label className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans cursor-pointer">
+                                    <span className="text-zinc-200 font-medium">Required</span>
                                     <input
                                       type="checkbox"
                                       checked={currentActiveLayer.is_required}
@@ -5369,10 +5360,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       }
                                       className="w-4 h-4 rounded text-[#f3aa18] focus:ring-0 focus:outline-none accent-[#f3aa18] cursor-pointer"
                                     />
-                                    <span className="text-zinc-200 font-medium">Required</span>
                                   </label>
 
-                                  <label className="flex items-center gap-2 p-2.5 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans cursor-pointer">
+                                  <label className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans cursor-pointer">
+                                    <span className="text-zinc-200 font-medium">Pre-selected</span>
                                     <input
                                       type="checkbox"
                                       checked={currentActiveLayer.default_selected}
@@ -5383,7 +5374,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       }
                                       className="w-4 h-4 rounded text-[#f3aa18] focus:ring-0 focus:outline-none accent-[#f3aa18] cursor-pointer"
                                     />
-                                    <span className="text-zinc-200 font-medium">Pre-selected</span>
                                   </label>
 
                                   <div className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans">
@@ -5405,12 +5395,58 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   </div>
                                 </div>
 
+                                {/* v2 Modern Engine Alpha Mask */}
+                                {editingProfile.configurator_version === 'v2' && (
+                                  <div className="p-3.5 rounded-xl bg-sky-950/25 border border-sky-500/25 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-1.5">
+                                        <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+                                        <span className="text-xs font-bold text-white uppercase tracking-wider">
+                                          Skin Part Alpha Mask ({currentView?.name})
+                                        </span>
+                                        <InfoTooltip content="1000x1000 transparent PNG or SVG defining physical cut bounds. Global textures are automatically clipped inside." />
+                                      </div>
+                                      {currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url && (
+                                        <span className="text-emerald-400 text-[10px] font-mono font-semibold">Configured</span>
+                                      )}
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                      <input
+                                        type="text"
+                                        placeholder="https://exacoat.com/uploads/device-part-mask.png"
+                                        value={currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url || ''}
+                                        onChange={(e) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'mask_svg_url', e.target.value)}
+                                        className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setMediaPickerConfig({
+                                            isOpen: true,
+                                            title: `Select Alpha Mask: ${currentActiveLayer.name}`,
+                                            recommendedDimensions: '1000x1000 Alpha PNG or SVG',
+                                            currentUrl: currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url || '',
+                                            onSelect: (url) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'mask_svg_url', url),
+                                          })
+                                        }
+                                        className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
+                                        title="Browse WordPress Media Library"
+                                      >
+                                        <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                        <span>Browse</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
                                 {/* Finish Availability Restrictions */}
                                 <div className="p-3 rounded-xl bg-zinc-950/60 border border-white/5 space-y-2.5">
                                   <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1.5">
                                       <Filter className="w-3.5 h-3.5 text-[#f3aa18]" />
                                       <span className="text-xs font-bold text-zinc-300">Material Availability</span>
+                                      <InfoTooltip content="Restrict which materials are available for this specific part, or allow All materials." />
                                     </div>
                                     <div className="flex items-center gap-1.5">
                                       <button
@@ -5505,306 +5541,24 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   )}
                                 </div>
 
-                                {/* v2 Modern Engine Alpha Mask */}
-                                {editingProfile.configurator_version === 'v2' && (
-                                  <div className="p-3.5 rounded-xl bg-sky-950/25 border border-sky-500/25 space-y-3">
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-2">
-                                        <Sparkles className="w-3.5 h-3.5 text-sky-400" />
-                                        <span className="text-xs font-bold text-white uppercase tracking-wider">
-                                          Skin Part Alpha Mask ({currentView?.name})
-                                        </span>
-                                      </div>
-                                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-500/10 text-sky-300 border border-sky-500/20">
-                                        Angle: {currentView?.id}
-                                      </span>
-                                    </div>
-                                    <p className="text-[11px] text-zinc-400 leading-relaxed">
-                                      Provide the 1000x1000 alpha mask (transparent PNG or SVG) defining the physical cut of this skin part. Global master textures are automatically clipped inside this mask.
-                                    </p>
+                                {/* Collapsible Accordion: Optional Advanced Texture Map Overrides */}
+                                <div className="pt-2 border-t border-white/5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowV2AdvancedOverrides(!showV2AdvancedOverrides)}
+                                    className="w-full py-2 px-3 rounded-xl bg-zinc-900/60 hover:bg-zinc-900 border border-white/5 text-xs text-zinc-400 hover:text-white flex items-center justify-between cursor-pointer transition-colors"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <Sliders className="w-3.5 h-3.5 text-zinc-500" />
+                                      <span>Advanced: Custom Texture Overrides (Optional)</span>
+                                    </span>
+                                    <ChevronDown
+                                      className={clsx('w-3.5 h-3.5 text-zinc-500 transition-transform duration-200', showV2AdvancedOverrides && 'rotate-180')}
+                                    />
+                                  </button>
 
-                                    <div className="space-y-1.5 pt-1">
-                                      <label className="text-[10px] font-mono text-zinc-300 block flex items-center justify-between">
-                                        <span>Part Alpha Mask URL (1000x1000 PNG / SVG)</span>
-                                        {currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url && (
-                                          <span className="text-emerald-400 text-[10px] font-semibold">Configured</span>
-                                        )}
-                                      </label>
-                                      <div className="flex gap-2">
-                                        <input
-                                          type="text"
-                                          placeholder="https://exacoat.com/uploads/device-part-mask.png"
-                                          value={currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url || ''}
-                                          onChange={(e) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'mask_svg_url', e.target.value)}
-                                          className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
-                                        />
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setMediaPickerConfig({
-                                              isOpen: true,
-                                              title: `Select Alpha Mask: ${currentActiveLayer.name}`,
-                                              recommendedDimensions: '1000x1000 Alpha PNG or SVG',
-                                              currentUrl: currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url || '',
-                                              onSelect: (url) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'mask_svg_url', url),
-                                            })
-                                          }
-                                          className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
-                                          title="Browse WordPress Media Library"
-                                        >
-                                          <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                          <span>Browse</span>
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="p-8 rounded-2xl bg-zinc-900/40 border border-dashed border-white/10 text-center">
-                                <p className="text-xs text-zinc-400">No customizable skin parts added yet.</p>
-                                <p className="text-[11px] text-zinc-500 mt-1">
-                                  Select a preset above to create your first customizable layer.
-                                </p>
-                              </div>
-                            )}
-
-                            {/* Finish Swatches Grid */}
-                            {currentActiveLayer && (
-                              <div className="space-y-3">
-                                {editingProfile.configurator_version === 'v2' ? (
-                                  /* v2 Modern Engine: Clean Swatch Simulator & Global Master Inheritance */
-                                  <div className="space-y-3">
-                                    <div className="space-y-2.5">
-                                      <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                          <Palette className="w-3.5 h-3.5 text-sky-400" />
-                                          <h5 className="text-xs font-bold text-white uppercase tracking-wider">
-                                            Finish Simulation ({filteredFinishesForDisplay.length})
-                                          </h5>
-                                        </div>
-                                        <button
-                                          type="button"
-                                          onClick={() => setShowMasterTexturesModal(true)}
-                                          className="text-[11px] font-sans text-sky-400 hover:text-sky-300 flex items-center gap-1 cursor-pointer transition-colors"
-                                        >
-                                          <Sparkles className="w-3 h-3" />
-                                          <span>Manage Master Textures</span>
-                                        </button>
-                                      </div>
-
-                                      <p className="text-[11px] text-zinc-400 leading-relaxed">
-                                        Click any finish swatch to simulate the dynamic masked texture live on the phone. All v2 finishes inherit global master textures automatically.
-                                      </p>
-
-                                      {/* Category Filter Pills */}
-                                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                                        {finishGroups.map((group) => (
-                                          <button
-                                            key={group}
-                                            type="button"
-                                            onClick={() => setFinishCategoryFilter(group)}
-                                            className={clsx(
-                                              'px-2.5 py-1 rounded-lg text-[11px] font-sans whitespace-nowrap transition-colors cursor-pointer',
-                                              finishCategoryFilter === group
-                                                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 font-bold'
-                                                : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                                            )}
-                                          >
-                                            {group === 'all' ? 'All Finishes' : group}
-                                          </button>
-                                        ))}
-                                      </div>
-                                    </div>
-
-                                    {/* v2 Modern Swatches Grid */}
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[360px] overflow-y-auto pr-1">
-                                      {filteredFinishesForDisplay.map((f) => {
-                                        const finishSlug = f.slug || f.id;
-                                        const isSimSelected = selectedSimFinish === finishSlug;
-                                        const hasMasterTex = Boolean(f.texture_url);
-                                        const surcharge = (f.extra_price || 0) * (editingProfile.size_multiplier || 1.0);
-
-                                        return (
-                                          <div
-                                            key={f.id}
-                                            onClick={() => setSelectedSimFinish(finishSlug)}
-                                            className={clsx(
-                                              'p-2.5 rounded-2xl border transition-all flex flex-col justify-between gap-2 text-xs cursor-pointer group relative',
-                                              isSimSelected
-                                                ? 'bg-sky-500/15 border-sky-400 shadow-md shadow-sky-500/10 ring-1 ring-sky-400/40'
-                                                : 'bg-zinc-900/60 border-white/10 hover:border-white/20 hover:bg-zinc-900'
-                                            )}
-                                          >
-                                            <div className="flex items-center gap-2.5 min-w-0">
-                                              <div
-                                                className="w-8 h-8 rounded-xl border border-white/10 overflow-hidden shrink-0 flex items-center justify-center relative shadow-xs"
-                                                style={{ backgroundColor: f.color_hex || '#27272a' }}
-                                              >
-                                                {f.thumbnail ? (
-                                                  <img
-                                                    src={f.thumbnail}
-                                                    alt={f.name}
-                                                    className="w-full h-full object-cover"
-                                                    onError={(e) => {
-                                                      (e.target as HTMLElement).style.display = 'none';
-                                                    }}
-                                                  />
-                                                ) : (
-                                                  <div
-                                                    className="w-full h-full"
-                                                    style={{ backgroundColor: f.color_hex || '#3f3f46' }}
-                                                  />
-                                                )}
-                                              </div>
-
-                                              <div className="min-w-0 flex-1">
-                                                <p className={clsx('font-bold truncate text-xs', isSimSelected ? 'text-sky-300' : 'text-white')}>
-                                                  {f.name}
-                                                </p>
-                                                <span className="text-[10px] text-zinc-500 truncate block">
-                                                  {f.group || 'Material'}
-                                                </span>
-                                              </div>
-                                            </div>
-
-                                            <div className="flex items-center justify-between pt-1 border-t border-white/5 text-[10px] font-mono">
-                                              {hasMasterTex ? (
-                                                <span className="text-emerald-400 flex items-center gap-1">
-                                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                                                  Master Set
-                                                </span>
-                                              ) : (
-                                                <span className="text-zinc-500">Color Fallback</span>
-                                              )}
-
-                                              {surcharge > 0 ? (
-                                                <span className="text-amber-400 font-semibold">+IDR {surcharge.toLocaleString('id-ID')}</span>
-                                              ) : (
-                                                <span className="text-zinc-600">IDR 0</span>
-                                              )}
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-
-                                    {/* Collapsible Accordion: Optional Advanced Texture Map Overrides */}
-                                    <div className="pt-2 border-t border-white/5">
-                                      <button
-                                        type="button"
-                                        onClick={() => setShowV2AdvancedOverrides(!showV2AdvancedOverrides)}
-                                        className="w-full py-2 px-3 rounded-xl bg-zinc-900/60 hover:bg-zinc-900 border border-white/5 text-xs text-zinc-400 hover:text-white flex items-center justify-between cursor-pointer transition-colors"
-                                      >
-                                        <span className="flex items-center gap-2">
-                                          <Sliders className="w-3.5 h-3.5 text-zinc-500" />
-                                          <span>Advanced: Custom Texture Overrides (Optional)</span>
-                                        </span>
-                                        <ChevronDown
-                                          className={clsx('w-3.5 h-3.5 text-zinc-500 transition-transform duration-200', showV2AdvancedOverrides && 'rotate-180')}
-                                        />
-                                      </button>
-
-                                      {showV2AdvancedOverrides && (
-                                        <div className="mt-3 p-3 rounded-2xl bg-zinc-950/80 border border-white/10 space-y-3">
-                                          <div className="flex items-center gap-2 p-2 rounded-xl bg-zinc-900/60 border border-white/5">
-                                            <input
-                                              type="text"
-                                              placeholder="https://exacoat.com/uploads/iPhone-Back-{finish}.png"
-                                              value={autofillPrefix}
-                                              onChange={(e) => setAutofillPrefix(e.target.value)}
-                                              className="px-3 py-1.5 text-xs rounded-lg bg-zinc-950 border border-white/10 text-white font-mono flex-1 placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
-                                            />
-                                            <button
-                                              type="button"
-                                              onClick={() => handleAutofillLayerTextures(currentActiveLayer.id)}
-                                              className="px-3 py-1.5 text-xs font-sans font-bold uppercase tracking-wider rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer transition-colors shrink-0"
-                                            >
-                                              Autofill All
-                                            </button>
-                                          </div>
-
-                                          <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-                                            {filteredFinishesForDisplay.map((f) => {
-                                              const finishSlug = f.slug || f.id;
-                                              const normSlug = finishSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
-                                              const matchedKey = Object.keys(textureMap).find(
-                                                (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === normSlug
-                                              );
-                                              const currentUrl = matchedKey ? textureMap[matchedKey] : '';
-                                              const isAssigned = Boolean(currentUrl);
-
-                                              return (
-                                                <div
-                                                  key={`override-${f.id}`}
-                                                  className="p-2 rounded-xl bg-zinc-900 border border-white/5 flex items-center justify-between gap-2"
-                                                >
-                                                  <span className="text-xs text-zinc-300 truncate">{f.name}</span>
-                                                  <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                      setEditingTextureModal({
-                                                        layerId: currentActiveLayer.id,
-                                                        layerName: currentActiveLayer.name,
-                                                        finishSlug,
-                                                        finishName: f.name,
-                                                        initialUrl: currentUrl,
-                                                        thumbnail: f.thumbnail,
-                                                      })
-                                                    }
-                                                    className={clsx(
-                                                      'text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors font-mono',
-                                                      isAssigned
-                                                        ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                                                        : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                                                    )}
-                                                  >
-                                                    {isAssigned ? 'Edit' : 'Set URL'}
-                                                  </button>
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  /* v1 Legacy View: Full Texture Maps Grid with Autofill */
-                                  <div className="space-y-3">
-                                    <div className="space-y-2.5">
-                                      <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                          <Palette className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                          <h5 className="text-xs font-bold text-white uppercase tracking-wider">
-                                            Texture Maps ({filteredFinishesForDisplay.length})
-                                          </h5>
-                                        </div>
-                                        <span className="text-[11px] text-zinc-400">
-                                          Click swatch to test, or click URL button to edit image
-                                        </span>
-                                      </div>
-
-                                      {/* Category Filter Pills */}
-                                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                                        {finishGroups.map((group) => (
-                                          <button
-                                            key={group}
-                                            type="button"
-                                            onClick={() => setFinishCategoryFilter(group)}
-                                            className={clsx(
-                                              'px-2.5 py-1 rounded-lg text-[11px] font-sans whitespace-nowrap transition-colors cursor-pointer',
-                                              finishCategoryFilter === group
-                                                ? 'bg-white/15 text-white font-bold'
-                                                : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                                            )}
-                                          >
-                                            {group === 'all' ? 'All Finishes' : group}
-                                          </button>
-                                        ))}
-                                      </div>
-
-                                      {/* Quick Autofill Helper */}
+                                  {showV2AdvancedOverrides && (
+                                    <div className="mt-3 p-3 rounded-2xl bg-zinc-950/80 border border-white/10 space-y-3">
                                       <div className="flex items-center gap-2 p-2 rounded-xl bg-zinc-900/60 border border-white/5">
                                         <input
                                           type="text"
@@ -5821,105 +5575,58 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                           Autofill All
                                         </button>
                                       </div>
-                                    </div>
 
-                                    {/* Swatches Grid */}
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[380px] overflow-y-auto pr-1">
-                                      {filteredFinishesForDisplay.map((f) => {
-                                        const finishSlug = f.slug || f.id;
-                                        const normSlug = finishSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
-                                        const matchedKey = Object.keys(textureMap).find(
-                                          (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === normSlug
-                                        );
-                                        const currentUrl = matchedKey ? textureMap[matchedKey] : '';
-                                        const isAssigned = Boolean(currentUrl);
-                                        const isSimSelected = selectedSimFinish === finishSlug;
+                                      <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                                        {filteredFinishesForDisplay.map((f) => {
+                                          const finishSlug = f.slug || f.id;
+                                          const normSlug = finishSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                          const matchedKey = Object.keys(textureMap).find(
+                                            (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === normSlug
+                                          );
+                                          const currentUrl = matchedKey ? textureMap[matchedKey] : '';
+                                          const isAssigned = Boolean(currentUrl);
 
-                                        return (
-                                          <div
-                                            key={f.id}
-                                            onClick={() => setSelectedSimFinish(finishSlug)}
-                                            className={clsx(
-                                              'p-3 rounded-2xl border transition-all flex flex-col justify-between gap-2.5 text-xs cursor-pointer group relative',
-                                              isSimSelected
-                                                ? 'bg-white/10 border-[#f3aa18] shadow-md shadow-[#f3aa18]/15'
-                                                : isAssigned
-                                                ? 'bg-zinc-900/90 border-white/10 hover:border-white/25'
-                                                : 'bg-zinc-900/40 border-white/5 hover:border-white/20'
-                                            )}
-                                          >
-                                            <div className="flex items-center gap-2.5 min-w-0">
-                                              <div className="w-9 h-9 rounded-xl bg-zinc-800 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center">
-                                                {currentUrl ? (
-                                                  <img
-                                                    src={currentUrl}
-                                                    alt={f.name}
-                                                    className="w-full h-full object-cover"
-                                                    onError={(e) => {
-                                                      (e.target as HTMLElement).style.display = 'none';
-                                                    }}
-                                                  />
-                                                ) : f.thumbnail ? (
-                                                  <img
-                                                    src={f.thumbnail}
-                                                    alt={f.name}
-                                                    className="w-full h-full object-cover opacity-60"
-                                                  />
-                                                ) : (
-                                                  <Sparkles className="w-3.5 h-3.5 text-zinc-600" />
-                                                )}
-                                              </div>
-
-                                              <div className="min-w-0 flex-1">
-                                                <p className="font-bold text-white truncate text-xs">{f.name}</p>
-                                                <span className="text-[10px] text-zinc-400 truncate block">
-                                                  {f.group || 'Material'}
-                                                </span>
-                                              </div>
-                                            </div>
-
-                                            <div className="flex items-center justify-between pt-1.5 border-t border-white/5">
-                                              {isAssigned ? (
-                                                <span className="inline-flex items-center gap-1 text-[10px] font-sans font-medium text-emerald-400">
-                                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                                                  Mapped
-                                                </span>
-                                              ) : (
-                                                <span className="text-[10px] text-zinc-500 font-sans">
-                                                  Unassigned
-                                                </span>
-                                              )}
-
+                                          return (
+                                            <div
+                                              key={`override-${f.id}`}
+                                              className="p-2 rounded-xl bg-zinc-900 border border-white/5 flex items-center justify-between gap-2"
+                                            >
+                                              <span className="text-xs text-zinc-300 truncate">{f.name}</span>
                                               <button
                                                 type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  handleOpenTextureModal(
-                                                    currentActiveLayer.id,
-                                                    currentActiveLayer.name,
+                                                onClick={() =>
+                                                  setEditingTextureModal({
+                                                    layerId: currentActiveLayer.id,
+                                                    layerName: currentActiveLayer.name,
                                                     finishSlug,
-                                                    f.name,
-                                                    currentUrl,
-                                                    f.thumbnail
-                                                  );
-                                                }}
+                                                    finishName: f.name,
+                                                    initialUrl: currentUrl,
+                                                    thumbnail: f.thumbnail,
+                                                  })
+                                                }
                                                 className={clsx(
-                                                  'p-1.5 rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1',
+                                                  'text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors font-mono',
                                                   isAssigned
-                                                    ? 'text-zinc-400 hover:text-white hover:bg-white/10'
-                                                    : 'text-[#f3aa18] hover:text-[#ffb72b] bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20'
+                                                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                                    : 'bg-zinc-800 text-zinc-400 hover:text-white'
                                                 )}
-                                                title="Edit Transparent Texture PNG URL"
                                               >
-                                                <LinkIcon className="w-3 h-3" />
+                                                {isAssigned ? 'Edit' : 'Set URL'}
                                               </button>
                                             </div>
-                                          </div>
-                                        );
-                                      })}
+                                          );
+                                        })}
+                                      </div>
                                     </div>
-                                  </div>
-                                )}
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="p-8 rounded-2xl bg-zinc-900/40 border border-dashed border-white/10 text-center">
+                                <p className="text-xs text-zinc-400">No customizable skin parts added yet.</p>
+                                <p className="text-[11px] text-zinc-500 mt-1">
+                                  Select a preset above to create your first customizable layer.
+                                </p>
                               </div>
                             )}
                           </div>
@@ -5928,29 +5635,29 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         {/* TAB 1: DEVICE HARDWARE CHASSIS (LAYER 1) */}
                         {inspectorTab === 'device' && (
                           <div className="space-y-6">
-                            <div>
-                              <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
                                 <Smartphone className="w-4 h-4 text-sky-400" />
-                                Device Hardware Chassis (Layer 1)
-                              </h4>
-                              <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                                The neutral hardware body render of the device (ports, camera bump, chassis). All customizable skin layers are composited on top of this.
-                              </p>
+                                <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                                  Device Hardware Chassis (Layer 1)
+                                </h4>
+                                <InfoTooltip content="The neutral hardware body render of the device (ports, camera bump, chassis). All customizable skin layers are composited on top of this." />
+                              </div>
                             </div>
 
                             {/* Angle Switcher for Hardware Image */}
-                            <div className="space-y-3">
+                            <div className="space-y-2">
                               <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
                                 Configure Angle
                               </label>
-                              <div className="flex flex-wrap items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-1.5">
                                 {editingProfile.views.map((v) => (
                                   <button
                                     key={v.id}
                                     type="button"
                                     onClick={() => setActiveSimView(v.id)}
                                     className={clsx(
-                                      'px-3.5 py-1.5 rounded-xl text-xs font-sans transition-all cursor-pointer flex items-center gap-1.5 font-medium',
+                                      'px-3 py-1.5 rounded-xl text-xs font-sans transition-all cursor-pointer flex items-center gap-1.5 font-medium',
                                       activeSimView === v.id
                                         ? 'bg-sky-500 text-black font-bold shadow-sm'
                                         : 'bg-zinc-900 border border-white/10 text-zinc-400 hover:text-white'
@@ -5965,9 +5672,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             {/* Active Angle Hardware Base Details */}
                             {currentView && (
                               <div className="p-4 rounded-2xl bg-zinc-900/70 border border-white/10 space-y-4">
-                                <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-3.5">
                                   {currentView.background_url ? (
-                                    <div className="w-16 h-16 rounded-2xl bg-zinc-950 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center p-1.5">
+                                    <div className="w-14 h-14 rounded-xl bg-zinc-950 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center p-1">
                                       <img
                                         src={currentView.background_url}
                                         alt={currentView.name}
@@ -5975,22 +5682,25 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       />
                                     </div>
                                   ) : (
-                                    <div className="w-16 h-16 rounded-2xl bg-zinc-950 border-2 border-dashed border-zinc-700 overflow-hidden shrink-0 flex items-center justify-center text-zinc-600">
-                                      <Smartphone className="w-7 h-7" />
+                                    <div className="w-14 h-14 rounded-xl bg-zinc-950 border-2 border-dashed border-zinc-700 overflow-hidden shrink-0 flex items-center justify-center text-zinc-600">
+                                      <Smartphone className="w-6 h-6" />
                                     </div>
                                   )}
 
                                   <div className="min-w-0">
                                     <p className="font-bold text-white text-sm">{currentView.name}</p>
-                                    <p className="text-[11px] text-zinc-400 mt-0.5">Angle ID: {currentView.id}</p>
+                                    <p className="text-[11px] font-mono text-zinc-400 mt-0.5">Angle ID: {currentView.id}</p>
                                   </div>
                                 </div>
 
                                 <div className="space-y-1.5">
-                                  <label className="block text-xs font-bold text-zinc-300 flex items-center justify-between">
-                                    <span>Hardware Body Image URL</span>
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs font-bold text-zinc-300">Hardware Body Image URL</span>
+                                      <InfoTooltip content="1000x1000 transparent PNG render of the base device body for this angle." />
+                                    </div>
                                     {currentView.background_url && <span className="text-emerald-400 text-[10px] font-mono">Configured</span>}
-                                  </label>
+                                  </div>
                                   <div className="flex gap-2">
                                     <input
                                       type="url"
@@ -6019,19 +5729,187 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   </div>
                                 </div>
 
+                                {/* Hardware Body Colors for this Angle */}
+                                <div className="space-y-3 pt-3 border-t border-white/5">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-1.5">
+                                      <Palette className="w-3.5 h-3.5 text-sky-400" />
+                                      <span className="text-xs font-bold text-white">Hardware Body Colors</span>
+                                      <InfoTooltip content="Physical chassis colors (e.g. Desert Titanium, Natural Titanium, Black, White). Visual preview only in configurator viewport; strictly excluded from cart and order metadata." />
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const newColor = {
+                                          id: `color_${Date.now()}`,
+                                          name: 'New Color',
+                                          hex: '#535559',
+                                          body_image_url: currentView.background_url || '',
+                                          body_images_by_view: {
+                                            [currentView.id]: currentView.background_url || '',
+                                          },
+                                        };
+                                        const nextColors = [...(editingProfile.device_colors || []), newColor];
+                                        setEditingProfile({
+                                          ...editingProfile,
+                                          device_colors: nextColors,
+                                        });
+                                        setSelectedSimColor(newColor.id);
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/20 text-[11px] font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                                    >
+                                      <Plus className="w-3 h-3" />
+                                      <span>Add Color</span>
+                                    </button>
+                                  </div>
+
+                                  {/* Colors List for current view */}
+                                  {(!editingProfile.device_colors || editingProfile.device_colors.length === 0) ? (
+                                    <p className="text-[11px] text-zinc-500 italic py-1">
+                                      No color variants. Uses default body image above.
+                                    </p>
+                                  ) : (
+                                    <div className="space-y-2.5">
+                                      {editingProfile.device_colors.map((color, idx) => {
+                                        const currentAngleImg =
+                                          (color as any)?.body_images_by_view?.[currentView.id] ||
+                                          (currentView.is_default || currentView.id === 'main_view' ? color.body_image_url : '') ||
+                                          '';
+
+                                        return (
+                                          <div
+                                            key={color.id || idx}
+                                            className="p-3 rounded-xl bg-zinc-950/80 border border-white/10 space-y-2.5"
+                                          >
+                                            <div className="flex items-center gap-2">
+                                              {/* Swatch color picker */}
+                                              <div
+                                                className="relative w-6 h-6 rounded-full border border-white/20 overflow-hidden shrink-0 cursor-pointer shadow-xs"
+                                                title="Pick swatch color"
+                                              >
+                                                <input
+                                                  type="color"
+                                                  value={color.hex || '#535559'}
+                                                  onChange={(e) => {
+                                                    const nextColors = [...(editingProfile.device_colors || [])];
+                                                    nextColors[idx] = { ...nextColors[idx], hex: e.target.value };
+                                                    setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                                  }}
+                                                  className="absolute -top-2 -left-2 w-10 h-10 cursor-pointer border-0 p-0"
+                                                />
+                                              </div>
+
+                                              {/* Color Name */}
+                                              <input
+                                                type="text"
+                                                placeholder="Color name (e.g. Natural Titanium)"
+                                                value={color.name}
+                                                onChange={(e) => {
+                                                  const nextColors = [...(editingProfile.device_colors || [])];
+                                                  nextColors[idx] = { ...nextColors[idx], name: e.target.value };
+                                                  setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                                }}
+                                                className="flex-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
+                                              />
+
+                                              {/* Hex input */}
+                                              <input
+                                                type="text"
+                                                placeholder="#535559"
+                                                value={color.hex}
+                                                onChange={(e) => {
+                                                  const nextColors = [...(editingProfile.device_colors || [])];
+                                                  nextColors[idx] = { ...nextColors[idx], hex: e.target.value };
+                                                  setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                                }}
+                                                className="w-20 px-2 py-1 text-xs font-mono rounded-lg bg-zinc-900 border border-white/10 text-zinc-300 focus:outline-none focus:border-sky-400 text-center"
+                                              />
+
+                                              {/* Delete Color */}
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const nextColors = editingProfile.device_colors?.filter((_, i) => i !== idx) || [];
+                                                  setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                                  if (selectedSimColor === color.id) {
+                                                    setSelectedSimColor(nextColors[0]?.id || '');
+                                                  }
+                                                }}
+                                                className="p-1.5 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer"
+                                                title="Delete Color Variant"
+                                              >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                              </button>
+                                            </div>
+
+                                            {/* Chassis image URL for current angle */}
+                                            <div className="flex gap-2">
+                                              <input
+                                                type="url"
+                                                placeholder={`Chassis image for ${color.name || 'color'}...`}
+                                                value={currentAngleImg}
+                                                onChange={(e) => {
+                                                  const url = e.target.value.trim();
+                                                  const nextColors = [...(editingProfile.device_colors || [])];
+                                                  const viewId = currentView.id || 'main_view';
+                                                  const updatedByView = { ...((nextColors[idx] as any).body_images_by_view || {}), [viewId]: url };
+                                                  nextColors[idx] = {
+                                                    ...nextColors[idx],
+                                                    body_images_by_view: updatedByView,
+                                                    body_image_url: currentView.is_default || viewId === 'main_view' ? url : (nextColors[idx].body_image_url || url),
+                                                  };
+                                                  setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                                }}
+                                                className="w-full px-2.5 py-1 text-[11px] font-mono rounded-lg bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
+                                              />
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  setMediaPickerConfig({
+                                                    isOpen: true,
+                                                    title: `Select Chassis Render for ${color.name} (${currentView.name})`,
+                                                    recommendedDimensions: '1000x1000 Transparent PNG',
+                                                    currentUrl: currentAngleImg,
+                                                    onSelect: (url) => {
+                                                      const nextColors = [...(editingProfile.device_colors || [])];
+                                                      const viewId = currentView.id || 'main_view';
+                                                      const updatedByView = { ...((nextColors[idx] as any).body_images_by_view || {}), [viewId]: url };
+                                                      nextColors[idx] = {
+                                                        ...nextColors[idx],
+                                                        body_images_by_view: updatedByView,
+                                                        body_image_url: currentView.is_default || viewId === 'main_view' ? url : (nextColors[idx].body_image_url || url),
+                                                      };
+                                                      setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                                    },
+                                                  })
+                                                }
+                                                className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-[11px] font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
+                                                title="Browse Media Library"
+                                              >
+                                                <FolderOpen className="w-3 h-3 text-[#f3aa18]" />
+                                                <span>Browse</span>
+                                              </button>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+
                                 {/* Hardware Accent / Logo Overlay URL (v1 Overlay) */}
                                 <div className="space-y-1.5 bg-black/30 p-3 rounded-xl border border-white/5">
                                   <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-zinc-300">
-                                      Hardware Accent / Logo Overlay URL (v1 Overlay)
-                                    </span>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs font-bold text-zinc-300">
+                                        Hardware Accent / Logo Overlay (v1 Overlay)
+                                      </span>
+                                      <InfoTooltip content="Rendered directly on top of skin vinyl layers (e.g. metallic Apple logo, camera lens reflections, or brand badge)." />
+                                    </div>
                                     {currentView.logo_url && (
                                       <span className="text-emerald-400 text-[10px] font-mono">Configured</span>
                                     )}
                                   </div>
-                                  <p className="text-[11px] text-zinc-400 leading-relaxed">
-                                    Rendered directly on top of skin vinyl layers (e.g. metallic Apple logo, camera lens reflections, or brand badge).
-                                  </p>
                                   <div className="flex gap-2">
                                     <input
                                       type="url"
@@ -6065,17 +5943,13 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   </div>
                                 </div>
 
-                                {/* 3D Shading & Specular Highlights for this Angle (Single Source) */}
-                                <div className="space-y-4 pt-3 border-t border-white/5">
+                                {/* 3D Shading & Specular Highlights for this Angle */}
+                                <div className="space-y-3 pt-3 border-t border-white/5">
                                   <div className="flex items-center justify-between">
-                                    <div>
-                                      <label className="text-xs font-bold text-white flex items-center gap-1.5">
-                                        <Wand2 className="w-3.5 h-3.5 text-amber-400" />
-                                        <span>Angle 3D Shading & Highlights</span>
-                                      </label>
-                                      <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
-                                        Single neutral CAD render or AO map. Dark tones multiply to cast shadows, and bright specular tones screen to add surface shine.
-                                      </p>
+                                    <div className="flex items-center gap-1.5">
+                                      <Wand2 className="w-3.5 h-3.5 text-amber-400" />
+                                      <span className="text-xs font-bold text-white">Angle 3D Shading & Highlights</span>
+                                      <InfoTooltip content="Single neutral CAD render or AO map. Dark tones multiply to cast shadows, and bright specular tones screen to add surface shine." />
                                     </div>
                                     <button
                                       type="button"
@@ -6093,7 +5967,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   {/* Single Shading Image Map Card */}
                                   <div className="space-y-3 bg-black/30 p-3.5 rounded-xl border border-white/5">
                                     <div className="flex items-center justify-between">
-                                      <span className="text-xs font-bold text-zinc-200">Shading & Highlight Map (Single Source)</span>
+                                      <span className="text-xs font-bold text-zinc-200">Shading & Highlight Map</span>
                                       {(currentView.shading_image_url || currentView.shadow_png_url) && (
                                         <span className="text-emerald-400 text-[10px] font-mono">Active</span>
                                       )}
@@ -6151,7 +6025,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       {/* Multiply Shadow Opacity */}
                                       <div className="space-y-1">
                                         <div className="flex items-center justify-between text-[11px]">
-                                          <span className="text-zinc-400 font-medium">Shadow Opacity (Multiply):</span>
+                                          <span className="text-zinc-400 font-medium">Shadow (Multiply):</span>
                                           <span className="font-mono font-bold text-amber-400">
                                             {Math.round((currentView.shadow_opacity ?? 0.85) * 100)}%
                                           </span>
@@ -6170,7 +6044,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       {/* Screen Highlight Opacity */}
                                       <div className="space-y-1">
                                         <div className="flex items-center justify-between text-[11px]">
-                                          <span className="text-zinc-400 font-medium">Highlight Opacity (Screen):</span>
+                                          <span className="text-zinc-400 font-medium">Highlight (Screen):</span>
                                           <span className="font-mono font-bold text-sky-400">
                                             {Math.round((currentView.highlight_opacity ?? 0.35) * 100)}%
                                           </span>
@@ -6203,195 +6077,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 </div>
                               </div>
                             )}
-
-                            {/* Device Hardware Colors (Chassis Finishes) */}
-                            <div className="p-4 rounded-2xl bg-zinc-900/70 border border-white/10 space-y-3">
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <div>
-                                  <h5 className="text-xs font-bold text-white flex items-center gap-2">
-                                    <Palette className="w-3.5 h-3.5 text-sky-400" />
-                                    Device Hardware Colors (Optional, Visual Only)
-                                  </h5>
-                                  <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
-                                    Physical chassis colors (e.g. Desert Titanium, Natural Titanium, Black, White). Visual preview only in configurator viewport. Strictly excluded from cart, checkout, and order metadata on exacoat-web.
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const newColor = {
-                                        id: `color_${Date.now()}`,
-                                        name: 'New Color',
-                                        hex: '#535559',
-                                      };
-                                      setEditingProfile({
-                                        ...editingProfile,
-                                        device_colors: [...(editingProfile.device_colors || []), newColor],
-                                      });
-                                      setSelectedSimColor(newColor.id);
-                                    }}
-                                    className="px-2.5 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/20 text-xs font-medium flex items-center gap-1.5 cursor-pointer transition-colors shrink-0"
-                                  >
-                                    <Plus className="w-3.5 h-3.5" />
-                                    <span>Add Color</span>
-                                  </button>
-                                  {editingProfile.device_colors && editingProfile.device_colors.length > 0 && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setEditingProfile({
-                                          ...editingProfile,
-                                          device_colors: [],
-                                        });
-                                        setSelectedSimColor('');
-                                      }}
-                                      className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-rose-400 border border-white/10 text-xs font-medium cursor-pointer transition-colors shrink-0"
-                                      title="Remove all colors so viewport selector is hidden"
-                                    >
-                                      Clear
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Colors List */}
-                              {(!editingProfile.device_colors || editingProfile.device_colors.length === 0) ? (
-                                <div className="p-3.5 rounded-xl bg-zinc-950/50 border border-dashed border-white/10 text-center text-xs text-zinc-500">
-                                  No hardware colors configured. Viewport selector will remain hidden and display the default chassis image above.
-                                </div>
-                              ) : (
-                                <div className="space-y-3 pt-1">
-                                  {editingProfile.device_colors.map((color, idx) => {
-                                    const currentAngleImg =
-                                      (color as any)?.body_images_by_view?.[currentView?.id || 'main_view'] ||
-                                      (currentView?.is_default || currentView?.id === 'main_view' ? color.body_image_url : '') ||
-                                      '';
-                                    return (
-                                      <div
-                                        key={color.id || idx}
-                                        className="p-3 rounded-xl bg-zinc-950 border border-white/10 space-y-2"
-                                      >
-                                        <div className="flex items-center gap-2">
-                                          {/* Swatch color picker */}
-                                          <div className="relative w-6 h-6 rounded-full border border-white/20 overflow-hidden shrink-0 cursor-pointer shadow-sm">
-                                            <input
-                                              type="color"
-                                              value={color.hex || '#535559'}
-                                              onChange={(e) => {
-                                                const nextColors = [...(editingProfile.device_colors || [])];
-                                                nextColors[idx] = { ...nextColors[idx], hex: e.target.value };
-                                                setEditingProfile({ ...editingProfile, device_colors: nextColors });
-                                              }}
-                                              className="absolute -top-2 -left-2 w-10 h-10 cursor-pointer border-0 p-0"
-                                            />
-                                          </div>
-
-                                          {/* Color Name */}
-                                          <input
-                                            type="text"
-                                            placeholder="e.g. Natural Titanium, Desert Titanium"
-                                            value={color.name}
-                                            onChange={(e) => {
-                                              const nextColors = [...(editingProfile.device_colors || [])];
-                                              nextColors[idx] = { ...nextColors[idx], name: e.target.value };
-                                              setEditingProfile({ ...editingProfile, device_colors: nextColors });
-                                            }}
-                                            className="flex-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
-                                          />
-
-                                          {/* Hex text input */}
-                                          <input
-                                            type="text"
-                                            placeholder="#535559"
-                                            value={color.hex}
-                                            onChange={(e) => {
-                                              const nextColors = [...(editingProfile.device_colors || [])];
-                                              nextColors[idx] = { ...nextColors[idx], hex: e.target.value };
-                                              setEditingProfile({ ...editingProfile, device_colors: nextColors });
-                                            }}
-                                            className="w-20 px-2 py-1.5 text-xs font-mono rounded-lg bg-zinc-900 border border-white/10 text-zinc-300 focus:outline-none focus:border-sky-400 text-center"
-                                          />
-
-                                          {/* Delete Color */}
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              const nextColors = editingProfile.device_colors?.filter((_, i) => i !== idx) || [];
-                                              setEditingProfile({ ...editingProfile, device_colors: nextColors });
-                                              if (selectedSimColor === color.id) {
-                                                setSelectedSimColor(nextColors[0]?.id || '');
-                                              }
-                                            }}
-                                            className="p-1.5 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer"
-                                            title="Remove Color"
-                                          >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                          </button>
-                                        </div>
-
-                                        {/* Per-Angle Body Image URL */}
-                                        <div className="space-y-1 pt-1 border-t border-white/5">
-                                          <div className="flex items-center justify-between text-[11px]">
-                                            <span className="text-zinc-400">
-                                              Chassis Image for <span className="text-white font-semibold">{currentView?.name || 'Active Angle'}</span>:
-                                            </span>
-                                            {currentAngleImg && <span className="text-emerald-400 font-mono text-[10px]">Configured</span>}
-                                          </div>
-                                          <div className="flex gap-2">
-                                            <input
-                                              type="url"
-                                              placeholder="https://exacoat.com/wp-content/uploads/iPhone-18-Pro-Desert-Titanium.png"
-                                              value={currentAngleImg}
-                                              onChange={(e) => {
-                                                const url = e.target.value.trim();
-                                                const nextColors = [...(editingProfile.device_colors || [])];
-                                                const viewId = currentView?.id || 'main_view';
-                                                const updatedByView = { ...((nextColors[idx] as any).body_images_by_view || {}), [viewId]: url };
-                                                nextColors[idx] = {
-                                                  ...nextColors[idx],
-                                                  body_images_by_view: updatedByView,
-                                                  body_image_url: currentView?.is_default || viewId === 'main_view' ? url : (nextColors[idx].body_image_url || url),
-                                                };
-                                                setEditingProfile({ ...editingProfile, device_colors: nextColors });
-                                              }}
-                                              className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
-                                            />
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                setMediaPickerConfig({
-                                                  isOpen: true,
-                                                  title: `Select Chassis Render for ${color.name} (${currentView?.name})`,
-                                                  recommendedDimensions: '1000x1000 Transparent PNG',
-                                                  currentUrl: currentAngleImg,
-                                                  onSelect: (url) => {
-                                                    const nextColors = [...(editingProfile.device_colors || [])];
-                                                    const viewId = currentView?.id || 'main_view';
-                                                    const updatedByView = { ...((nextColors[idx] as any).body_images_by_view || {}), [viewId]: url };
-                                                    nextColors[idx] = {
-                                                      ...nextColors[idx],
-                                                      body_images_by_view: updatedByView,
-                                                      body_image_url: currentView?.is_default || viewId === 'main_view' ? url : (nextColors[idx].body_image_url || url),
-                                                    };
-                                                    setEditingProfile({ ...editingProfile, device_colors: nextColors });
-                                                  },
-                                                })
-                                              }
-                                              className="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
-                                              title="Browse WordPress Media Library"
-                                            >
-                                              <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                              <span>Browse</span>
-                                            </button>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
 
                             {/* Add Viewing Angle Helper */}
                             <div className="pt-3 border-t border-white/5 space-y-2">
@@ -6479,64 +6164,51 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                         {/* TAB 3: CUTOUTS & COVERAGE (v2 DESTINATION-OUT) */}
                         {inspectorTab === 'cutouts' && (
-                          <div className="space-y-6">
-                            <div>
-                              <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                                <Sliders className="w-4 h-4 text-amber-400" />
-                                Cutouts & Coverage Architecture (v2)
-                              </h4>
-                              <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                                1000x1000 alpha masks erased from vinyl (destination-out) revealing the metallic hardware chassis underneath. Configure cutout masks and storefront buyer options.
-                              </p>
-                            </div>
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                              <div className="flex items-center gap-2">
+                                <Sliders className="w-4 h-4 text-[#f3aa18]" />
+                                <h4 className="text-xs font-semibold text-white">Cutouts & Coverage</h4>
+                                <InfoTooltip text="1000x1000 alpha masks erased from vinyl layers via canvas destination-out to expose the metallic hardware chassis underneath." />
+                              </div>
 
-                            {/* Angle Switcher for Cutout Masks */}
-                            {editingProfile.views.length > 1 && (
-                              <div className="space-y-2">
-                                <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
-                                  Configure Cutouts for Angle
-                                </label>
-                                <div className="flex flex-wrap items-center gap-2">
+                              {/* Angle Switcher for Cutout Masks */}
+                              {editingProfile.views.length > 1 && (
+                                <div className="flex items-center gap-1 bg-zinc-900 p-0.5 rounded-lg border border-white/5 text-[11px]">
                                   {editingProfile.views.map((v) => (
                                     <button
                                       key={v.id}
                                       type="button"
                                       onClick={() => setActiveSimView(v.id)}
                                       className={clsx(
-                                        'px-3 py-1 rounded-xl text-xs font-sans transition-all cursor-pointer flex items-center gap-1.5 font-medium',
+                                        'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
                                         activeSimView === v.id
-                                          ? 'bg-amber-500 text-black font-bold shadow-sm'
-                                          : 'bg-zinc-900 border border-white/10 text-zinc-400 hover:text-white'
+                                          ? 'bg-[#f3aa18] text-black font-semibold shadow-xs'
+                                          : 'text-zinc-400 hover:text-white'
                                       )}
                                     >
-                                      <span>{v.name}</span>
+                                      {v.name}
                                     </button>
                                   ))}
                                 </div>
-                              </div>
-                            )}
+                              )}
+                            </div>
 
                             {/* SECTION 1: LOGO CUTOUT */}
-                            <div className="p-4 rounded-2xl bg-zinc-900/70 border border-white/10 space-y-4">
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <h5 className="text-xs font-bold text-white flex items-center gap-2">
-                                    <Sliders className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                    Logo Cutout (Apple / Brand Logo)
-                                  </h5>
-                                  <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
-                                    Punches a silhouette hole in the vinyl to reveal the metallic brand logo from the hardware chassis underneath.
-                                  </p>
+                            <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-semibold text-white">Logo Cutout</span>
+                                  <InfoTooltip text="Erases a silhouette hole in the skin to reveal the metallic brand logo from the hardware chassis underneath." />
                                 </div>
-                                <div className="flex items-center gap-1.5 bg-black/40 px-2.5 py-1 rounded-xl border border-white/10 text-xs shrink-0">
-                                  <span className="text-[10px] text-zinc-400 font-medium">Test View:</span>
+                                <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-lg border border-white/10 text-[11px] shrink-0">
                                   <button
                                     type="button"
                                     onClick={() => setSelectedLogoCutout(true)}
                                     className={clsx(
-                                      'px-2 py-0.5 rounded-lg text-[11px] font-medium transition-all cursor-pointer',
+                                      'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
                                       selectedLogoCutout
-                                        ? 'bg-[#f3aa18] text-black font-bold shadow-sm'
+                                        ? 'bg-[#f3aa18] text-black font-semibold'
                                         : 'text-zinc-400 hover:text-white'
                                     )}
                                   >
@@ -6546,9 +6218,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     type="button"
                                     onClick={() => setSelectedLogoCutout(false)}
                                     className={clsx(
-                                      'px-2 py-0.5 rounded-lg text-[11px] font-medium transition-all cursor-pointer',
+                                      'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
                                       !selectedLogoCutout
-                                        ? 'bg-[#f3aa18] text-black font-bold shadow-sm'
+                                        ? 'bg-[#f3aa18] text-black font-semibold'
                                         : 'text-zinc-400 hover:text-white'
                                     )}
                                   >
@@ -6558,38 +6230,31 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </div>
 
                               {/* Storefront Buyer Option */}
-                              <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-950 border border-white/5 text-xs font-sans cursor-pointer hover:border-white/10 transition-colors">
-                                <div className="flex items-center gap-2.5">
+                              <label className="flex items-center justify-between p-2 rounded-lg bg-zinc-950/60 border border-white/5 text-xs cursor-pointer hover:border-white/10 transition-colors">
+                                <div className="flex items-center gap-2">
                                   <input
                                     type="checkbox"
                                     checked={editingProfile.coverage_and_cutouts?.has_logo_cutout !== false}
                                     onChange={(e) => handleSetCoverageAndCutouts('has_logo_cutout', e.target.checked)}
-                                    className="w-4 h-4 rounded text-[#f3aa18] focus:ring-0 accent-[#f3aa18] cursor-pointer"
+                                    className="w-3.5 h-3.5 rounded text-[#f3aa18] focus:ring-0 accent-[#f3aa18] cursor-pointer"
                                   />
-                                  <div>
-                                    <span className="text-zinc-200 font-medium block">Offer Logo Cutout Choice to Buyer</span>
-                                    <span className="text-[10px] text-zinc-500">Allows customer to choose between "With Cutout" or "Solid (No Logo)" on exacoat-web</span>
-                                  </div>
+                                  <span className="text-zinc-300 font-medium text-xs">Buyer Choice on Webstore</span>
                                 </div>
-                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-zinc-400">
-                                  Storefront
-                                </span>
+                                <InfoTooltip text="Allows the customer on the webstore to toggle between 'With Cutout' or 'Solid (No Logo)'." />
                               </label>
 
                               {/* Logo Cutout Mask URL */}
-                              <div className="space-y-1.5 bg-black/30 p-3 rounded-xl border border-white/5">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-zinc-300">
-                                    Logo Cutout Mask URL (1000x1000 Transparent PNG)
-                                  </span>
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="text-zinc-400 font-medium">Mask URL (1000x1000 PNG)</span>
                                   {(currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url) && (
-                                    <span className="text-emerald-400 text-[10px] font-mono">Configured</span>
+                                    <span className="text-emerald-400 font-mono text-[10px]">Configured</span>
                                   )}
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex gap-1.5">
                                   <input
                                     type="url"
-                                    placeholder="https://exacoat.com/wp-content/uploads/iPhone-18-Pro-Logo-Cutout.png"
+                                    placeholder="https://exacoat.com/wp-content/uploads/logo-cutout.png"
                                     value={currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url || ''}
                                     onChange={(e) => {
                                       const val = e.target.value.trim();
@@ -6600,7 +6265,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         handleSetCoverageAndCutouts('logo_cutout_mask_url', val);
                                       }
                                     }}
-                                    className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] placeholder:text-zinc-600"
+                                    className="w-full px-2.5 py-1.5 text-xs font-mono rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] placeholder:text-zinc-600"
                                   />
                                   <button
                                     type="button"
@@ -6620,8 +6285,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         },
                                       })
                                     }
-                                    className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
-                                    title="Browse WordPress Media Library"
+                                    className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
                                   >
                                     <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
                                     <span>Browse</span>
@@ -6630,27 +6294,21 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </div>
                             </div>
 
-                            {/* SECTION 2: PENCIL GROOVE CUTOUT (Tablets & Foldables) */}
-                            <div className="p-4 rounded-2xl bg-zinc-900/70 border border-white/10 space-y-4">
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <h5 className="text-xs font-bold text-white flex items-center gap-2">
-                                    <Sliders className="w-3.5 h-3.5 text-emerald-400" />
-                                    Pencil Groove Cutout (iPad / Galaxy Tab)
-                                  </h5>
-                                  <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
-                                    Cutout strip for magnetic stylus charging (Apple Pencil or S-Pen).
-                                  </p>
+                            {/* SECTION 2: PENCIL GROOVE CUTOUT */}
+                            <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-semibold text-white">Stylus / Pencil Cutout</span>
+                                  <InfoTooltip text="Cutout strip for magnetic stylus charging (Apple Pencil or S-Pen on tablets and foldables)." />
                                 </div>
-                                <div className="flex items-center gap-1.5 bg-black/40 px-2.5 py-1 rounded-xl border border-white/10 text-xs shrink-0">
-                                  <span className="text-[10px] text-zinc-400 font-medium">Test View:</span>
+                                <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-lg border border-white/10 text-[11px] shrink-0">
                                   <button
                                     type="button"
                                     onClick={() => setSelectedPencilCutout(true)}
                                     className={clsx(
-                                      'px-2 py-0.5 rounded-lg text-[11px] font-medium transition-all cursor-pointer',
+                                      'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
                                       selectedPencilCutout
-                                        ? 'bg-emerald-500 text-black font-bold shadow-sm'
+                                        ? 'bg-emerald-500 text-black font-semibold'
                                         : 'text-zinc-400 hover:text-white'
                                     )}
                                   >
@@ -6660,9 +6318,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     type="button"
                                     onClick={() => setSelectedPencilCutout(false)}
                                     className={clsx(
-                                      'px-2 py-0.5 rounded-lg text-[11px] font-medium transition-all cursor-pointer',
+                                      'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
                                       !selectedPencilCutout
-                                        ? 'bg-emerald-500 text-black font-bold shadow-sm'
+                                        ? 'bg-emerald-500 text-black font-semibold'
                                         : 'text-zinc-400 hover:text-white'
                                     )}
                                   >
@@ -6672,38 +6330,31 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </div>
 
                               {/* Storefront Buyer Option */}
-                              <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-950 border border-white/5 text-xs font-sans cursor-pointer hover:border-white/10 transition-colors">
-                                <div className="flex items-center gap-2.5">
+                              <label className="flex items-center justify-between p-2 rounded-lg bg-zinc-950/60 border border-white/5 text-xs cursor-pointer hover:border-white/10 transition-colors">
+                                <div className="flex items-center gap-2">
                                   <input
                                     type="checkbox"
                                     checked={Boolean(editingProfile.coverage_and_cutouts?.has_pencil_cutout)}
                                     onChange={(e) => handleSetCoverageAndCutouts('has_pencil_cutout', e.target.checked)}
-                                    className="w-4 h-4 rounded text-emerald-400 focus:ring-0 accent-emerald-400 cursor-pointer"
+                                    className="w-3.5 h-3.5 rounded text-emerald-400 focus:ring-0 accent-emerald-400 cursor-pointer"
                                   />
-                                  <div>
-                                    <span className="text-zinc-200 font-medium block">Offer Pencil Cutout Choice to Buyer</span>
-                                    <span className="text-[10px] text-zinc-500">Allows customer to choose "With Cutout" or "Solid" for stylus magnetic strip</span>
-                                  </div>
+                                  <span className="text-zinc-300 font-medium text-xs">Buyer Choice on Webstore</span>
                                 </div>
-                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
-                                  Tablets
-                                </span>
+                                <InfoTooltip text="Allows tablet buyers to choose 'With Cutout' or 'Solid' for the stylus charging strip." />
                               </label>
 
                               {/* Pencil Cutout Mask URL */}
-                              <div className="space-y-1.5 bg-black/30 p-3 rounded-xl border border-white/5">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-zinc-300">
-                                    Pencil Cutout Mask URL (1000x1000 Transparent PNG)
-                                  </span>
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="text-zinc-400 font-medium">Mask URL (1000x1000 PNG)</span>
                                   {(currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) && (
-                                    <span className="text-emerald-400 text-[10px] font-mono">Configured</span>
+                                    <span className="text-emerald-400 font-mono text-[10px]">Configured</span>
                                   )}
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex gap-1.5">
                                   <input
                                     type="url"
-                                    placeholder="https://exacoat.com/wp-content/uploads/iPad-Pro-Pencil-Cutout.png"
+                                    placeholder="https://exacoat.com/wp-content/uploads/pencil-cutout.png"
                                     value={currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url || ''}
                                     onChange={(e) => {
                                       const val = e.target.value.trim();
@@ -6714,7 +6365,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         handleSetCoverageAndCutouts('pencil_cutout_mask_url', val);
                                       }
                                     }}
-                                    className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-emerald-400 placeholder:text-zinc-600"
+                                    className="w-full px-2.5 py-1.5 text-xs font-mono rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-emerald-400 placeholder:text-zinc-600"
                                   />
                                   <button
                                     type="button"
@@ -6734,8 +6385,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         },
                                       })
                                     }
-                                    className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
-                                    title="Browse WordPress Media Library"
+                                    className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
                                   >
                                     <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
                                     <span>Browse</span>
@@ -6745,26 +6395,20 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             </div>
 
                             {/* SECTION 3: MODEL CUT & 360 COVERAGE */}
-                            <div className="p-4 rounded-2xl bg-zinc-900/70 border border-white/10 space-y-4">
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <h5 className="text-xs font-bold text-white flex items-center gap-2">
-                                    <Sliders className="w-3.5 h-3.5 text-sky-400" />
-                                    Model Coverage & Perimeter Frame Cut
-                                  </h5>
-                                  <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
-                                    Controls whether buyer can choose between Model Cut (Back Only) and Full Frame 360 wrap.
-                                  </p>
+                            <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-semibold text-white">Model Coverage</span>
+                                  <InfoTooltip text="Configures whether buyers can choose between Model Cut (Back Only) and Full Frame 360 wrap." />
                                 </div>
-                                <div className="flex items-center gap-1.5 bg-black/40 px-2.5 py-1 rounded-xl border border-white/10 text-xs shrink-0">
-                                  <span className="text-[10px] text-zinc-400 font-medium">Test View:</span>
+                                <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-lg border border-white/10 text-[11px] shrink-0">
                                   <button
                                     type="button"
                                     onClick={() => setSelectedCoverage('model_cut')}
                                     className={clsx(
-                                      'px-2 py-0.5 rounded-lg text-[11px] font-medium transition-all cursor-pointer',
+                                      'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
                                       selectedCoverage === 'model_cut'
-                                        ? 'bg-sky-500 text-black font-bold shadow-sm'
+                                        ? 'bg-sky-500 text-black font-semibold'
                                         : 'text-zinc-400 hover:text-white'
                                     )}
                                   >
@@ -6774,28 +6418,26 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     type="button"
                                     onClick={() => setSelectedCoverage('model_360')}
                                     className={clsx(
-                                      'px-2 py-0.5 rounded-lg text-[11px] font-medium transition-all cursor-pointer',
+                                      'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
                                       selectedCoverage === 'model_360'
-                                        ? 'bg-sky-500 text-black font-bold shadow-sm'
+                                        ? 'bg-sky-500 text-black font-semibold'
                                         : 'text-zinc-400 hover:text-white'
                                     )}
                                   >
-                                    Model 360
+                                    360 Wrap
                                   </button>
                                 </div>
                               </div>
 
                               {/* Coverage Mode Selection */}
-                              <div className="space-y-2">
-                                <label className="block text-xs font-bold text-zinc-300">
-                                  Model Coverage Mode
-                                </label>
-                                <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-1.5">
+                                <span className="text-[11px] text-zinc-400 font-medium">Coverage Mode</span>
+                                <div className="grid grid-cols-2 gap-1.5">
                                   {[
-                                    { id: 'none', label: 'None (Flat Cut)', desc: 'Laptops, Keyboards, Accessories' },
-                                    { id: 'model_cut_and_360', label: 'Model Cut & 360', desc: 'Smartphones (iPhone, Galaxy S)' },
-                                    { id: 'model_cut_only', label: 'Model Cut Only', desc: 'Foldables (Z Flip/Fold)' },
-                                    { id: 'model_360_only', label: '360 Wrap Only', desc: 'Full Wrap only' },
+                                    { id: 'none', label: 'None (Flat Cut)' },
+                                    { id: 'model_cut_and_360', label: 'Model Cut & 360' },
+                                    { id: 'model_cut_only', label: 'Model Cut Only' },
+                                    { id: 'model_360_only', label: '360 Wrap Only' },
                                   ].map((mode) => {
                                     const currentCov = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none');
                                     const isSelected = currentCov === mode.id;
@@ -6805,14 +6447,13 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         type="button"
                                         onClick={() => handleSetCoverageAndCutouts('coverage_type', mode.id)}
                                         className={clsx(
-                                          'p-2.5 rounded-xl border text-left transition-all cursor-pointer',
+                                          'px-2.5 py-1.5 rounded-lg border text-left transition-all cursor-pointer text-xs',
                                           isSelected
-                                            ? 'bg-sky-500/15 border-sky-400 text-white font-bold shadow-xs'
+                                            ? 'bg-sky-500/15 border-sky-400 text-white font-semibold'
                                             : 'bg-zinc-950/60 border-white/5 text-zinc-400 hover:text-white hover:bg-zinc-900'
                                         )}
                                       >
-                                        <p className="text-xs">{mode.label}</p>
-                                        <p className="text-[10px] text-zinc-500 mt-0.5">{mode.desc}</p>
+                                        {mode.label}
                                       </button>
                                     );
                                   })}
@@ -6821,13 +6462,13 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 {/* Upcharge for Model 360 */}
                                 {(editingProfile.coverage_and_cutouts?.coverage_type === 'model_cut_and_360' ||
                                   (!editingProfile.coverage_and_cutouts?.coverage_type && editingProfile.coverage_and_cutouts?.has_model_cut)) && (
-                                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans mt-2">
-                                    <div>
-                                      <span className="text-zinc-300 font-medium block">Model 360 Extra Price:</span>
-                                      <span className="text-[10px] text-zinc-500">Upcharge added when buyer selects Full Frame 360 wrap</span>
+                                  <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-950/60 border border-white/5 text-xs mt-2">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-zinc-300 font-medium">360 Extra Price</span>
+                                      <InfoTooltip text="Upcharge added when buyer selects Full Frame 360 wrap over standard Model Cut." />
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0">
-                                      <span className="text-zinc-500 font-mono text-[11px]">IDR</span>
+                                      <span className="text-zinc-500 font-mono text-[10px]">IDR</span>
                                       <input
                                         type="number"
                                         step="5000"
@@ -6835,7 +6476,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         onChange={(e) =>
                                           handleSetCoverageAndCutouts('model_360_extra_price', Number(e.target.value) || 0)
                                         }
-                                        className="w-24 px-2 py-0.5 text-xs font-mono text-right rounded bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                                        className="w-20 px-2 py-0.5 text-xs font-mono text-right rounded bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
                                       />
                                     </div>
                                   </div>
@@ -6843,22 +6484,20 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </div>
 
                               {/* Model Cut Perimeter Mask */}
-                              <div className="space-y-1.5 bg-black/30 p-3 rounded-xl border border-white/5">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-zinc-300">
-                                    Model Cut Perimeter Mask (Frame Flaps)
-                                  </span>
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-zinc-400 font-medium">Perimeter Mask (Frame Flaps)</span>
+                                    <InfoTooltip text="Erases outer side frame flaps when Model Cut (Back Only) is selected on webstore." />
+                                  </div>
                                   {(currentView?.model_cut_mask_url || editingProfile.coverage_and_cutouts?.model_cut_mask_url) && (
-                                    <span className="text-emerald-400 text-[10px] font-mono">Configured</span>
+                                    <span className="text-emerald-400 font-mono text-[10px]">Configured</span>
                                   )}
                                 </div>
-                                <p className="text-[11px] text-zinc-400 leading-relaxed">
-                                  Erases outer side frame flaps when Model Cut (Back Only) is selected on storefront.
-                                </p>
-                                <div className="flex gap-2">
+                                <div className="flex gap-1.5">
                                   <input
                                     type="url"
-                                    placeholder="https://exacoat.com/wp-content/uploads/iPhone-18-Pro-Frame-Cut.png"
+                                    placeholder="https://exacoat.com/wp-content/uploads/frame-cut.png"
                                     value={currentView?.model_cut_mask_url || editingProfile.coverage_and_cutouts?.model_cut_mask_url || ''}
                                     onChange={(e) => {
                                       const val = e.target.value.trim();
@@ -6869,7 +6508,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         handleSetCoverageAndCutouts('model_cut_mask_url', val);
                                       }
                                     }}
-                                    className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
+                                    className="w-full px-2.5 py-1.5 text-xs font-mono rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
                                   />
                                   <button
                                     type="button"
@@ -6889,8 +6528,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         },
                                       })
                                     }
-                                    className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
-                                    title="Browse WordPress Media Library"
+                                    className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
                                   >
                                     <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
                                     <span>Browse</span>
@@ -6903,25 +6541,24 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                         {/* TAB 4: PRICING, SIZING & PRODUCTION SETTINGS */}
                         {inspectorTab === 'pricing' && (
-                          <div className="space-y-6">
-                            <div>
-                              <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                              <div className="flex items-center gap-2">
                                 <DollarSign className="w-4 h-4 text-emerald-400" />
-                                Device Pricing & Configuration Settings
-                              </h4>
-                              <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                                Base storefront pricing, family sizing multipliers, physical hardware variants, and configurator rendering engine mode.
-                              </p>
+                                <h4 className="text-xs font-semibold text-white">Pricing & Settings</h4>
+                                <InfoTooltip text="Storefront pricing, family sizing multipliers for finishes, production variants, and rendering engine." />
+                              </div>
+                              <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+                                {editingProfile.status || 'publish'}
+                              </span>
                             </div>
 
-                            {/* Base Price & Scale */}
-                            <div className="p-4 rounded-2xl bg-zinc-900/70 border border-white/10 space-y-4">
-                              {/* Product Publication Status */}
-                              <div>
-                                <label className="block text-xs font-bold text-zinc-300 mb-1.5">
-                                  Storefront Publication Status
-                                </label>
-                                <div className="grid grid-cols-2 gap-2">
+                            {/* Base Price & Family Multipliers */}
+                            <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3">
+                              {/* Publication Status */}
+                              <div className="space-y-1">
+                                <span className="text-[11px] text-zinc-400 font-medium">Storefront Status</span>
+                                <div className="grid grid-cols-2 gap-1.5">
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -6931,14 +6568,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       })
                                     }
                                     className={clsx(
-                                      'px-3 py-2 text-xs font-sans font-medium rounded-xl border flex items-center justify-center gap-2 transition-all cursor-pointer',
+                                      'px-3 py-1.5 text-xs font-medium rounded-lg border flex items-center justify-center gap-2 transition-all cursor-pointer',
                                       (editingProfile.status || 'publish') === 'draft'
-                                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm'
+                                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-xs'
                                         : 'bg-zinc-950/60 text-zinc-400 border-white/10 hover:text-white hover:bg-zinc-900'
                                     )}
                                   >
-                                    <span className="w-2 h-2 rounded-full bg-amber-400" />
-                                    <span>Draft (Unpublished)</span>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                    <span>Draft</span>
                                   </button>
                                   <button
                                     type="button"
@@ -6949,202 +6586,148 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       })
                                     }
                                     className={clsx(
-                                      'px-3 py-2 text-xs font-sans font-medium rounded-xl border flex items-center justify-center gap-2 transition-all cursor-pointer',
+                                      'px-3 py-1.5 text-xs font-medium rounded-lg border flex items-center justify-center gap-2 transition-all cursor-pointer',
                                       (editingProfile.status || 'publish') === 'publish'
-                                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
+                                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-xs'
                                         : 'bg-zinc-950/60 text-zinc-400 border-white/10 hover:text-white hover:bg-zinc-900'
                                     )}
                                   >
-                                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                                    <span>Published (Live)</span>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                    <span>Published</span>
                                   </button>
                                 </div>
-                                <p className="text-[11px] text-zinc-500 mt-1">
-                                  {(editingProfile.status || 'publish') === 'draft'
-                                    ? 'Hidden from live webstore. Editable here in Studio until published.'
-                                    : 'Live and discoverable on web.exacoat.com for customer checkout.'}
-                                </p>
                               </div>
 
-                              <div>
-                                <label className="block text-xs font-bold text-zinc-300 mb-1.5">Base Price (IDR)</label>
-                                <input
-                                  type="number"
-                                  value={editingProfile.base_price}
-                                  onChange={(e) =>
-                                    setEditingProfile({ ...editingProfile, base_price: Number(e.target.value) || 0 })
-                                  }
-                                  className="w-full px-3.5 py-2 text-xs rounded-xl bg-zinc-950 border border-white/10 text-white font-mono focus:outline-none focus:border-[#f3aa18]"
-                                />
-                                <p className="text-[11px] text-zinc-500 mt-1">
-                                  Synchronized directly with WooCommerce product regular price.
-                                </p>
-                              </div>
+                              <div className="grid grid-cols-2 gap-2 pt-1">
+                                <div>
+                                  <div className="flex items-center gap-1 mb-1 text-[11px]">
+                                    <span className="text-zinc-400 font-medium">Base Price (IDR)</span>
+                                    <InfoTooltip text="Base device price synchronized directly with WooCommerce regular price." />
+                                  </div>
+                                  <input
+                                    type="number"
+                                    value={editingProfile.base_price}
+                                    onChange={(e) =>
+                                      setEditingProfile({ ...editingProfile, base_price: Number(e.target.value) || 0 })
+                                    }
+                                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-white/10 text-white font-mono focus:outline-none focus:border-[#f3aa18]"
+                                  />
+                                </div>
 
-                              <div>
-                                <label className="block text-xs font-bold text-zinc-300 mb-1.5">Device Family</label>
-                                <select
-                                  value={editingProfile.family}
-                                  onChange={(e) => {
-                                    const nextFamily = e.target.value as DeviceFamily;
-                                    const familyMultipliers: Record<string, number> = {
-                                      phone: 1.0,
-                                      foldable: 1.3,
-                                      tablet: 1.8,
-                                      keyboard: 2.0,
-                                      laptop: 2.5,
-                                      console: 2.0,
-                                      accessory: 0.8,
-                                      case: 1.0,
-                                    };
-                                    const nextMult = familyMultipliers[nextFamily] ?? 1.0;
-                                    setEditingProfile({
-                                      ...editingProfile,
-                                      family: nextFamily,
-                                      size_multiplier: nextMult,
-                                    });
-                                  }}
-                                  className="w-full px-3.5 py-2 text-xs rounded-xl bg-zinc-950 border border-white/10 text-white font-sans focus:outline-none focus:border-[#f3aa18]"
-                                >
-                                  <option value="phone">Phone (1.0x)</option>
-                                  <option value="foldable">Foldable / Flip (1.3x)</option>
-                                  <option value="tablet">iPad / Tablet (1.8x)</option>
-                                  <option value="keyboard">Magic Keyboard / Folio (2.0x)</option>
-                                  <option value="laptop">Laptop / MacBook (2.5x)</option>
-                                  <option value="console">Gaming Console (2.0x)</option>
-                                  <option value="case">Hybrid Case (1.0x)</option>
-                                  <option value="accessory">Accessory (0.8x)</option>
-                                </select>
-                              </div>
-
-                              <div>
-                                <label className="block text-xs font-bold text-zinc-300 mb-1.5">
-                                  Size Surcharge Multiplier
-                                </label>
-                                <input
-                                  type="number"
-                                  step="0.1"
-                                  value={editingProfile.size_multiplier}
-                                  onChange={(e) =>
-                                    setEditingProfile({
-                                      ...editingProfile,
-                                      size_multiplier: Number(e.target.value) || 1.0,
-                                    })
-                                  }
-                                  className="w-full px-3.5 py-2 text-xs rounded-xl bg-zinc-950 border border-white/10 text-white font-mono focus:outline-none focus:border-[#f3aa18]"
-                                />
-                                <p className="text-[11px] text-zinc-500 mt-1">
-                                  Multiplied against premium finish group up-prices (e.g. 1.0x for phones, 2.5x for laptops).
-                                </p>
-                              </div>
-
-                              {/* Universal Pricing Explanation */}
-                              <div className="p-3 rounded-xl bg-[#f3aa18]/10 border border-[#f3aa18]/25 text-xs space-y-1.5">
-                                <div className="flex items-center justify-between">
-                                  <span className="font-bold text-[#f3aa18] flex items-center gap-1.5">
-                                    <DollarSign className="w-3.5 h-3.5" />
-                                    Universal Signature Pricing
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setShowMasterTexturesModal(true)}
-                                    className="text-[10px] text-[#f3aa18] underline font-medium hover:text-white cursor-pointer"
+                                <div>
+                                  <div className="flex items-center gap-1 mb-1 text-[11px]">
+                                    <span className="text-zinc-400 font-medium">Device Family</span>
+                                    <InfoTooltip text="Category scale used to automatically calculate premium material surcharges." />
+                                  </div>
+                                  <select
+                                    value={editingProfile.family}
+                                    onChange={(e) => {
+                                      const nextFamily = e.target.value as DeviceFamily;
+                                      const familyMultipliers: Record<string, number> = {
+                                        phone: 1.0,
+                                        foldable: 1.3,
+                                        tablet: 1.8,
+                                        keyboard: 2.0,
+                                        laptop: 2.5,
+                                        console: 2.0,
+                                        accessory: 0.8,
+                                        case: 1.0,
+                                      };
+                                      const nextMult = familyMultipliers[nextFamily] ?? 1.0;
+                                      setEditingProfile({
+                                        ...editingProfile,
+                                        family: nextFamily,
+                                        size_multiplier: nextMult,
+                                      });
+                                    }}
+                                    className="w-full px-2 py-1.5 text-xs rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
                                   >
-                                    Manage Finishes
-                                  </button>
+                                    <option value="phone">Phone (1.0x)</option>
+                                    <option value="foldable">Foldable (1.3x)</option>
+                                    <option value="tablet">Tablet (1.8x)</option>
+                                    <option value="keyboard">Keyboard (2.0x)</option>
+                                    <option value="laptop">Laptop (2.5x)</option>
+                                    <option value="console">Console (2.0x)</option>
+                                    <option value="case">Case (1.0x)</option>
+                                    <option value="accessory">Accessory (0.8x)</option>
+                                  </select>
                                 </div>
-                                <p className="text-[11px] text-zinc-300 leading-relaxed">
-                                  Signature finishes (e.g. Swarm, Black Camo, Patina) add their extra surcharge storewide. On this device, a base IDR 30,000 surcharge equals{' '}
-                                  <strong className="text-white font-mono">
+                              </div>
+
+                              {/* Size Multiplier and Surcharge Summary */}
+                              <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-950/60 border border-white/5 text-xs">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-zinc-300 font-medium">Size Multiplier</span>
+                                  <InfoTooltip text="Multiplied against premium finish group up-prices (e.g. IDR 30,000 * 2.5x = IDR 75,000)." />
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    value={editingProfile.size_multiplier}
+                                    onChange={(e) =>
+                                      setEditingProfile({
+                                        ...editingProfile,
+                                        size_multiplier: Number(e.target.value) || 1.0,
+                                      })
+                                    }
+                                    className="w-16 px-2 py-0.5 text-xs font-mono text-right rounded bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                                  />
+                                  <span className="text-[11px] text-amber-400 font-mono">
                                     +IDR {Math.round(30000 * (editingProfile.size_multiplier || 1.0)).toLocaleString('id-ID')}
-                                  </strong>{' '}
-                                  ({editingProfile.size_multiplier || 1.0}x multiplier).
-                                </p>
+                                  </span>
+                                </div>
                               </div>
                             </div>
 
-                            {/* Device Production Variants (Template Splits) */}
-                            <div className="p-4 rounded-2xl bg-zinc-900/70 border border-white/10 space-y-4">
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                                    <Cpu className="w-4 h-4 text-[#f3aa18]" />
-                                    Device Production Variants
-                                  </h4>
-                                  <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                                    Physical hardware variants (e.g. Wi-Fi Only vs Cellular) that require different vinyl cutting templates in production.
-                                  </p>
+                            {/* Device Production Variants */}
+                            <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-1.5">
+                                  <Cpu className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                  <span className="text-xs font-semibold text-white">Production Variants</span>
+                                  <InfoTooltip text="Physical hardware variants (e.g. Wi-Fi Only vs Cellular) requiring different vinyl cut templates in production." />
                                 </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  {(!editingProfile.variants || editingProfile.variants.length === 0) && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        handleSetVariants([
-                                          {
-                                            id: 'connectivity',
-                                            name: 'Connectivity',
-                                            options: [
-                                              { id: 'wifi', name: 'Wi-Fi Only', price_diff: 0 },
-                                              { id: 'cellular', name: 'Wi-Fi + Cellular', price_diff: 0 },
-                                            ],
-                                          },
-                                        ]);
-                                        setSelectedSimVariants({ connectivity: 'wifi' });
-                                      }}
-                                      className="px-2.5 py-1 rounded-xl bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 border border-[#f3aa18]/30 text-[#f3aa18] text-xs font-medium cursor-pointer transition-colors"
-                                    >
-                                      + iPad Connectivity
-                                    </button>
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const nextIdx = (editingProfile.variants?.length || 0) + 1;
-                                      const newVariant: ConfiguratorVariant = {
-                                        id: `variant_${Date.now()}`,
-                                        name: `Variant ${nextIdx}`,
-                                        options: [
-                                          { id: `opt_${Date.now()}_1`, name: 'Standard', price_diff: 0 },
-                                        ],
-                                      };
-                                      const next = [...(editingProfile.variants || []), newVariant];
-                                      handleSetVariants(next);
-                                    }}
-                                    className="px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white text-xs font-medium cursor-pointer transition-colors flex items-center gap-1"
-                                  >
-                                    <Plus className="w-3 h-3" />
-                                    <span>Add Variant</span>
-                                  </button>
-                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const nextIdx = (editingProfile.variants?.length || 0) + 1;
+                                    const newVariant: ConfiguratorVariant = {
+                                      id: `variant_${Date.now()}`,
+                                      name: `Variant ${nextIdx}`,
+                                      options: [
+                                        { id: `opt_${Date.now()}_1`, name: 'Standard', price_diff: 0 },
+                                      ],
+                                    };
+                                    handleSetVariants([...(editingProfile.variants || []), newVariant]);
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-white text-[11px] font-medium cursor-pointer transition-colors flex items-center gap-1"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                  <span>Add</span>
+                                </button>
                               </div>
 
                               {(!editingProfile.variants || editingProfile.variants.length === 0) ? (
-                                <div className="p-3.5 rounded-xl bg-zinc-950/40 border border-dashed border-white/10 text-center space-y-1">
-                                  <p className="text-xs text-zinc-400">No production variants configured.</p>
-                                  <p className="text-[11px] text-zinc-500">
-                                    This device uses a single cutting template for all orders. Add a variant if the hardware has multiple physical body editions (e.g. Wi-Fi vs Cellular antenna bands).
-                                  </p>
-                                </div>
+                                <p className="text-[11px] text-zinc-500 italic py-1">
+                                  No variants configured. Standard single template cut will be used.
+                                </p>
                               ) : (
-                                <div className="space-y-3">
+                                <div className="space-y-2.5">
                                   {editingProfile.variants.map((v, vIdx) => (
-                                    <div key={v.id || vIdx} className="p-3.5 rounded-xl bg-zinc-950/70 border border-white/5 space-y-3">
+                                    <div key={v.id || vIdx} className="p-2.5 rounded-lg bg-zinc-950/70 border border-white/5 space-y-2">
                                       <div className="flex items-center justify-between gap-2">
-                                        <div className="flex-1 flex items-center gap-2">
-                                          <span className="text-xs text-zinc-400 font-medium">Variant Name:</span>
-                                          <input
-                                            type="text"
-                                            value={v.name}
-                                            onChange={(e) => {
-                                              const next = [...(editingProfile.variants || [])];
-                                              next[vIdx] = { ...next[vIdx], name: e.target.value };
-                                              handleSetVariants(next);
-                                            }}
-                                            placeholder="e.g. Connectivity"
-                                            className="px-2.5 py-1 text-xs rounded-lg bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] w-44 font-semibold"
-                                          />
-                                        </div>
+                                        <input
+                                          type="text"
+                                          value={v.name}
+                                          onChange={(e) => {
+                                            const next = [...(editingProfile.variants || [])];
+                                            next[vIdx] = { ...next[vIdx], name: e.target.value };
+                                            handleSetVariants(next);
+                                          }}
+                                          placeholder="Variant Name"
+                                          className="px-2 py-0.5 text-xs font-medium rounded bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] flex-1"
+                                        />
                                         <button
                                           type="button"
                                           onClick={() => {
@@ -7152,87 +6735,77 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                             handleSetVariants(next);
                                           }}
                                           className="p-1 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer"
-                                          title="Remove Variant"
                                         >
                                           <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                       </div>
 
-                                      {/* Options for this variant */}
-                                      <div className="space-y-2 pt-2 border-t border-white/5">
-                                        <div className="flex items-center justify-between text-[11px] text-zinc-400">
-                                          <span>Production Options:</span>
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              const next = [...(editingProfile.variants || [])];
-                                              const optIdx = next[vIdx].options.length + 1;
-                                              next[vIdx] = {
-                                                ...next[vIdx],
-                                                options: [
-                                                  ...next[vIdx].options,
-                                                  { id: `opt_${Date.now()}`, name: `Option ${optIdx}`, price_diff: 0 },
-                                                ],
-                                              };
-                                              handleSetVariants(next);
-                                            }}
-                                            className="text-[10px] text-[#f3aa18] hover:underline font-medium cursor-pointer"
-                                          >
-                                            + Add Option
-                                          </button>
-                                        </div>
-
-                                        <div className="space-y-1.5">
-                                          {v.options.map((opt, oIdx) => (
-                                            <div key={opt.id || oIdx} className="flex items-center gap-2 bg-zinc-900/60 px-2.5 py-1.5 rounded-lg border border-white/5">
+                                      <div className="space-y-1 pt-1 border-t border-white/5">
+                                        {v.options.map((opt, oIdx) => (
+                                          <div key={opt.id || oIdx} className="flex items-center gap-1.5 text-xs">
+                                            <input
+                                              type="text"
+                                              value={opt.name}
+                                              onChange={(e) => {
+                                                const next = [...(editingProfile.variants || [])];
+                                                const opts = [...next[vIdx].options];
+                                                opts[oIdx] = { ...opts[oIdx], name: e.target.value };
+                                                next[vIdx] = { ...next[vIdx], options: opts };
+                                                handleSetVariants(next);
+                                              }}
+                                              placeholder="Option name"
+                                              className="flex-1 px-2 py-0.5 text-xs rounded bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                                            />
+                                            <div className="flex items-center gap-1 shrink-0">
+                                              <span className="text-[10px] text-zinc-500 font-mono">+</span>
                                               <input
-                                                type="text"
-                                                value={opt.name}
+                                                type="number"
+                                                step="5000"
+                                                value={opt.price_diff || 0}
                                                 onChange={(e) => {
                                                   const next = [...(editingProfile.variants || [])];
                                                   const opts = [...next[vIdx].options];
-                                                  opts[oIdx] = { ...opts[oIdx], name: e.target.value };
+                                                  opts[oIdx] = { ...opts[oIdx], price_diff: Number(e.target.value) || 0 };
                                                   next[vIdx] = { ...next[vIdx], options: opts };
                                                   handleSetVariants(next);
                                                 }}
-                                                placeholder="e.g. Wi-Fi Only"
-                                                className="flex-1 px-2 py-0.5 text-xs rounded bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                                                className="w-16 px-1.5 py-0.5 text-xs font-mono text-right rounded bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
                                               />
-                                              <div className="flex items-center gap-1 shrink-0">
-                                                <span className="text-[10px] text-zinc-500 font-mono">+IDR</span>
-                                                <input
-                                                  type="number"
-                                                  step="5000"
-                                                  value={opt.price_diff || 0}
-                                                  onChange={(e) => {
-                                                    const next = [...(editingProfile.variants || [])];
-                                                    const opts = [...next[vIdx].options];
-                                                    opts[oIdx] = { ...opts[oIdx], price_diff: Number(e.target.value) || 0 };
-                                                    next[vIdx] = { ...next[vIdx], options: opts };
-                                                    handleSetVariants(next);
-                                                  }}
-                                                  className="w-20 px-1.5 py-0.5 text-xs font-mono text-right rounded bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
-                                                  title="Optional price surcharge for this variant"
-                                                />
-                                              </div>
-                                              {v.options.length > 1 && (
-                                                <button
-                                                  type="button"
-                                                  onClick={() => {
-                                                    const next = [...(editingProfile.variants || [])];
-                                                    const opts = next[vIdx].options.filter((_, idx) => idx !== oIdx);
-                                                    next[vIdx] = { ...next[vIdx], options: opts };
-                                                    handleSetVariants(next);
-                                                  }}
-                                                  className="p-1 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer"
-                                                  title="Remove Option"
-                                                >
-                                                  <X className="w-3 h-3" />
-                                                </button>
-                                              )}
                                             </div>
-                                          ))}
-                                        </div>
+                                            {v.options.length > 1 && (
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const next = [...(editingProfile.variants || [])];
+                                                  const opts = next[vIdx].options.filter((_, idx) => idx !== oIdx);
+                                                  next[vIdx] = { ...next[vIdx], options: opts };
+                                                  handleSetVariants(next);
+                                                }}
+                                                className="p-0.5 text-zinc-500 hover:text-rose-400 cursor-pointer"
+                                              >
+                                                <X className="w-3 h-3" />
+                                              </button>
+                                            )}
+                                          </div>
+                                        ))}
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const next = [...(editingProfile.variants || [])];
+                                            const optIdx = next[vIdx].options.length + 1;
+                                            next[vIdx] = {
+                                              ...next[vIdx],
+                                              options: [
+                                                ...next[vIdx].options,
+                                                { id: `opt_${Date.now()}`, name: `Option ${optIdx}`, price_diff: 0 },
+                                              ],
+                                            };
+                                            handleSetVariants(next);
+                                          }}
+                                          className="text-[10px] text-[#f3aa18] hover:underline font-medium cursor-pointer pt-0.5 block"
+                                        >
+                                          + Add Option
+                                        </button>
                                       </div>
                                     </div>
                                   ))}
@@ -7240,49 +6813,41 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               )}
                             </div>
 
-                            {/* Configurator Engine Architecture */}
-                            <div className="p-4 rounded-2xl bg-zinc-900/70 border border-white/10 space-y-3">
-                              <label className="block text-xs font-bold text-zinc-300">
-                                Rendering Engine Architecture
-                              </label>
-
-                              <div className="grid grid-cols-2 gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setEditingProfile({ ...editingProfile, configurator_version: 'v1' })}
-                                  className={clsx(
-                                    'p-3 rounded-xl border text-left transition-all cursor-pointer',
-                                    (editingProfile.configurator_version || 'v1') === 'v1'
-                                      ? 'bg-amber-500/15 border-amber-500/50 text-white'
-                                      : 'bg-zinc-950 border-white/5 text-zinc-400 hover:text-white'
-                                  )}
-                                >
-                                  <p className="font-bold text-xs">v1 Legacy</p>
-                                  <p className="text-[10px] text-zinc-400 mt-1 leading-snug">
-                                    Dual-layer Photoshop PNG overlays. Backwards compatible with live store.
-                                  </p>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => setEditingProfile({ ...editingProfile, configurator_version: 'v2' })}
-                                  className={clsx(
-                                    'p-3 rounded-xl border text-left transition-all cursor-pointer',
-                                    editingProfile.configurator_version === 'v2'
-                                      ? 'bg-sky-500/15 border-sky-500/50 text-white'
-                                      : 'bg-zinc-950 border-white/5 text-zinc-400 hover:text-white'
-                                  )}
-                                >
-                                  <p className="font-bold text-xs">v2 Modern</p>
-                                  <p className="text-[10px] text-zinc-400 mt-1 leading-snug">
-                                    Vector clipping masks, dynamic color tints, and realistic multiply shadows.
-                                  </p>
-                                </button>
+                            {/* Engine Architecture & Find-Replace Action */}
+                            <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-semibold text-white">Engine Architecture</span>
+                                  <InfoTooltip text="v2 Modern uses HTML5 canvas destination-in masking, universal master textures, and destination-out cutout punching." />
+                                </div>
+                                <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-lg border border-white/10 text-[11px]">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingProfile({ ...editingProfile, configurator_version: 'v1' })}
+                                    className={clsx(
+                                      'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
+                                      (editingProfile.configurator_version || 'v1') === 'v1'
+                                        ? 'bg-amber-500 text-black font-semibold'
+                                        : 'text-zinc-400 hover:text-white'
+                                    )}
+                                  >
+                                    v1 Legacy
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingProfile({ ...editingProfile, configurator_version: 'v2' })}
+                                    className={clsx(
+                                      'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
+                                      editingProfile.configurator_version === 'v2'
+                                        ? 'bg-sky-500 text-black font-semibold'
+                                        : 'text-zinc-400 hover:text-white'
+                                    )}
+                                  >
+                                    v2 Modern
+                                  </button>
+                                </div>
                               </div>
-                            </div>
 
-                            {/* Find & Replace Tool Button */}
-                            <div className="pt-2">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -7290,10 +6855,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   setReplaceText('');
                                   setShowFindReplaceModal(true);
                                 }}
-                                className="w-full py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-xs font-medium text-zinc-300 hover:text-white flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                                className="w-full py-2 px-3 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-white/10 text-xs font-medium text-zinc-300 hover:text-white flex items-center justify-center gap-2 cursor-pointer transition-colors mt-2"
                               >
                                 <Wand2 className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                <span>Find & Replace in Image URLs</span>
+                                <span>Find & Replace in URLs</span>
                               </button>
                             </div>
                           </div>

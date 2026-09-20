@@ -521,5 +521,26 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Physical hardware production variants (Wi-Fi Only vs Cellular) with per-option surcharges.
   - Rendering engine architecture switcher (v2 Modern vs v1 Legacy) and URL Find & Replace tool.
 
+---
+
+## 26. Configurator Studio Apple & Notion Sidebar Overhaul and Universal Cutout Punching
+
+- **Embedded Per-View Hardware Colors Invariant**:
+  Hardware color configurations are directly embedded within each viewing angle card right under the hardware body image URL, rather than separated in a disconnected bottom card.
+  - Each view maintains its own chassis body image URL per color variant, alongside color name, hex code swatch, and 1-click WordPress Media Library integration.
+  - The colors remain strictly visual-only in the viewport canvas and are never recorded in line item meta or cart orders.
+- **Universal Cutout Punching Invariant (`V2SkinCanvasLayer`)**:
+  - Previously, skin layers lacking an SVG vector mask (such as pre-cut overlay PNGs like Back Glass Skin or standalone camera vinyl) bypassed canvas `destination-out` because they fell back to basic `<img>` rendering.
+  - `V2SkinCanvasLayer` (in both `exacoat-manager` and `exacoat-web`) treats `maskUrl` as optional:
+    - If `maskUrl` is present: renders master texture and clips via `ctx.globalCompositeOperation = 'destination-in'`.
+    - If `maskUrl` is absent but `textureUrl` is present: draws the pre-cut texture directly onto the 1000x1000 canvas.
+    - In both cases: punches through all active cutouts (`logoCutoutUrl`, `pencilCutoutUrl`, `modelCutoutUrl`) via `ctx.globalCompositeOperation = 'destination-out'`.
+    - All skin layers, whether masked or pre-cut overlays, are guaranteed to receive logo and frame cutouts cleanly.
+- **Apple & Notion Aesthetic and Tooltip Discipline (`InfoTooltip`)**:
+  - Clutter badges (`Included`, `FRONT`, `BASE`, `✓ Mask`, `No Mask`, `✓ Textures`, `No Textures`) and the redundant 21-swatch finish simulation grid have been removed from the sidebar.
+  - Walls of text are strictly avoided: explanatory details are tucked into interactive hover tooltips (`InfoTooltip`).
+  - Layer rows feature compact up/down reordering, visibility toggle, bold layer name, clear price indicators (`Base` or `+IDR 30k`), and single-click delete.
+
+
 
 
