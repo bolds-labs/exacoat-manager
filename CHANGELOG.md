@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.84] - 2026-09-21
+
+### Double-Buffered Canvas Crossfade, Dual Resolution Master Textures, Media Slot Previews & Part Texture Controls
+- **Double-Buffered Skin Swatch Crossfade**:
+  - Eliminated bare device flickering when switching skins: previous skin texture stays 100% visible on back canvas while the new texture downloads.
+  - New texture fades in smoothly on front canvas directly on top (opacity `0 -> 1` in 220ms), completely preventing bare chassis flash.
+- **Dual Resolution Master Textures**:
+  - Added support for large master textures (`texture_big_url`, 3000x2000) for laptops, keyboards, and tablets alongside standard textures (`texture_url`, 2000x3000).
+  - Devices automatically select `texture_big_url` for laptop and tablet families or when configured per-part.
+- **Per-Part Texture Controls**:
+  - Added Texture Zoom / Scale slider (50% to 150%, default 75% for ~25% smaller pattern definition).
+  - Added Texture Rotation buttons (0°, 90°, 180°, 270°).
+  - Added Texture Resolution selector (Auto, Standard, Big).
+- **Out of Stock Inventory Flag**:
+  - Added real-time In Stock / Out of Stock toggle in Master Textures modal; Patina set to out of stock.
+- **Studio Media Slot Previews**:
+  - Replaced raw URL text inputs for Alpha Masks, Hardware Chassis Renders, and Cutout Masks with clickable 56x56 square thumbnail previews opening the WordPress Media Library.
+- **Cleaned Badges & Swatch Header**:
+  - Removed redundant 'Included' labels from Coverage and Cutout accordions and cards.
+  - Lowered 'NEW' badge slightly for flush alignment with swatch rims.
+
 ## [0.0.81] - 2026-09-20
 
 ### Dual-Image Master Finishes, Group Ordering, Custom Device Artwork & Media Library Overhaul

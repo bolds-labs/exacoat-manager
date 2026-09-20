@@ -516,6 +516,9 @@ export interface ConfiguratorLayer {
     render_texture_map?: Record<string, string>;
   }>;
   legacy_id?: number;
+  texture_rotation?: number;
+  texture_scale?: number;
+  texture_size?: 'auto' | 'small' | 'big';
 }
 
 export interface ConfiguratorVariantOption {

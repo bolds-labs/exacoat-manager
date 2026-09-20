@@ -105,14 +105,15 @@ class Exacoat_Configurator_Engine {
 				'in_stock'    => true,
 			],
 			[
-				'id'          => 'black-camo',
-				'slug'        => 'black-camo',
-				'name'        => 'Black Camo',
-				'group'       => 'Signature skins',
-				'class_name'  => 'cfg-black-camo',
-				'thumbnail'   => 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
-				'extra_price' => 30000,
-				'in_stock'    => true,
+				'id'              => 'black-camo',
+				'slug'            => 'black-camo',
+				'name'            => 'Black Camo',
+				'group'           => 'Signature skins',
+				'class_name'      => 'cfg-black-camo',
+				'thumbnail'       => 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
+				'texture_big_url' => 'https://staging.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Black-Camo.jpg',
+				'extra_price'     => 30000,
+				'in_stock'        => true,
 			],
 			[
 				'id'          => 'patina',
@@ -122,7 +123,7 @@ class Exacoat_Configurator_Engine {
 				'class_name'  => 'cfg-patina',
 				'thumbnail'   => 'https://exacoat.com/wp-content/uploads/Patina-Texture-Thumbnail.jpg',
 				'extra_price' => 30000,
-				'in_stock'    => true,
+				'in_stock'    => false,
 			],
 			[
 				'id'          => 'slate',
@@ -628,6 +629,7 @@ class Exacoat_Configurator_Engine {
 		$class_name = sanitize_html_class( $params['class_name'] ?? ( 'cfg-' . $slug ) );
 		$thumbnail = esc_url_raw( $params['thumbnail'] ?? '' );
 		$texture_url = esc_url_raw( $params['texture_url'] ?? '' );
+		$texture_big_url = esc_url_raw( $params['texture_big_url'] ?? '' );
 		$extra_price = isset( $params['extra_price'] ) ? (float) $params['extra_price'] : 0.0;
 		$in_stock = isset( $params['in_stock'] ) ? (bool) $params['in_stock'] : true;
 		$is_custom_per_device = ! empty( $params['is_custom_per_device'] );
@@ -648,6 +650,9 @@ class Exacoat_Configurator_Engine {
 				}
 				if ( ! empty( $texture_url ) || isset( $params['texture_url'] ) ) {
 					$f['texture_url'] = $texture_url;
+				}
+				if ( ! empty( $texture_big_url ) || isset( $params['texture_big_url'] ) ) {
+					$f['texture_big_url'] = $texture_big_url;
 				}
 				$f['extra_price']          = $extra_price;
 				$f['in_stock']             = $in_stock;
@@ -671,6 +676,7 @@ class Exacoat_Configurator_Engine {
 				'class_name'           => $class_name,
 				'thumbnail'            => $thumbnail,
 				'texture_url'          => $texture_url ?: $thumbnail,
+				'texture_big_url'      => $texture_big_url,
 				'extra_price'          => $extra_price,
 				'in_stock'             => $in_stock,
 				'is_custom_per_device' => $is_custom_per_device,
@@ -700,6 +706,7 @@ class Exacoat_Configurator_Engine {
 				'class_name'           => $class_name,
 				'thumbnail'            => $thumbnail,
 				'texture_url'          => $texture_url,
+				'texture_big_url'      => $texture_big_url,
 				'extra_price'          => $extra_price,
 				'in_stock'             => $in_stock,
 				'is_custom_per_device' => $is_custom_per_device,

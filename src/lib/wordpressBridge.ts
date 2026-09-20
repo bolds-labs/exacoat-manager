@@ -425,6 +425,7 @@ export interface GlobalFinish {
   slug: string;
   thumbnail: string;
   texture_url?: string;
+  texture_big_url?: string;
   color_hex?: string;
   in_stock: boolean;
   extra_price: number;
@@ -437,8 +438,8 @@ export interface GlobalFinish {
 
 export const DEFAULT_GLOBAL_FINISHES: GlobalFinish[] = [
   { id: 'swarm', name: 'Swarm', group: 'Signature skins', slug: 'swarm', thumbnail: 'https://exacoat.com/wp-content/uploads/Swarm-Texture-Thumbnail.jpg', color_hex: '#1f2024', in_stock: true, extra_price: 30000 },
-  { id: 'black-camo', name: 'Black Camo', group: 'Signature skins', slug: 'black-camo', thumbnail: 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg', color_hex: '#2a2b2e', in_stock: true, extra_price: 30000 },
-  { id: 'patina', name: 'Patina', group: 'Signature skins', slug: 'patina', thumbnail: 'https://exacoat.com/wp-content/uploads/Patina-Texture-Thumbnail.jpg', color_hex: '#325c56', in_stock: true, extra_price: 30000 },
+  { id: 'black-camo', name: 'Black Camo', group: 'Signature skins', slug: 'black-camo', thumbnail: 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg', texture_big_url: 'https://staging.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Black-Camo.jpg', color_hex: '#2a2b2e', in_stock: true, extra_price: 30000 },
+  { id: 'patina', name: 'Patina', group: 'Signature skins', slug: 'patina', thumbnail: 'https://exacoat.com/wp-content/uploads/Patina-Texture-Thumbnail.jpg', color_hex: '#325c56', in_stock: false, extra_price: 30000 },
   { id: 'slate', name: 'Slate', group: 'Signature skins', slug: 'slate', thumbnail: 'https://exacoat.com/wp-content/uploads/Slate-Texture-Thumbnail.jpg', color_hex: '#4a4d52', in_stock: true, extra_price: 30000 },
   { id: 'dragon-black', name: 'Dragon Black', group: 'Signature skins', slug: 'dragon-black', thumbnail: 'https://exacoat.com/wp-content/uploads/Dragon-Black-Texture-Thumbnail.jpg', color_hex: '#1c1c1e', in_stock: true, extra_price: 0 },
   { id: 'carbon-fiber-black', name: 'Carbon Fiber Black', group: 'Signature skins', slug: 'carbon-fiber-black', thumbnail: 'https://exacoat.com/wp-content/uploads/Carbon-Fiber-Black-Texture-Thumbnail.jpg', color_hex: '#202022', in_stock: true, extra_price: 0 },

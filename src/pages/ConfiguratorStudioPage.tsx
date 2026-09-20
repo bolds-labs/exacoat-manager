@@ -77,6 +77,8 @@ import {
   FolderOpen,
   Cpu,
   Globe,
+  RotateCw,
+  Maximize2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { MediaLibraryModal } from '../components/modals/MediaLibraryModal';
@@ -230,6 +232,8 @@ interface V2SkinCanvasLayerProps {
   modelCutoutUrl?: string;
   zIndex: number;
   layerName: string;
+  textureRotation?: number;
+  textureScale?: number;
 }
 
 const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
@@ -241,6 +245,8 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
   modelCutoutUrl,
   zIndex,
   layerName,
+  textureRotation = 0,
+  textureScale = 0.75,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -281,15 +287,26 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
       ctx.clearRect(0, 0, 1000, 1000);
       if (!maskImg && !texImg) return;
 
-      // 1. Draw master texture with native aspect-ratio cover scaling (no squeezing), or pre-cut texture directly
+      // 1. Draw master texture with native aspect-ratio cover scaling, rotation, and zoom
       if (texImg && texImg.width > 0 && texImg.height > 0) {
         if (maskImg) {
-          const scale = Math.max(1000 / texImg.width, 1000 / texImg.height);
-          const drawW = texImg.width * scale;
-          const drawH = texImg.height * scale;
-          const drawX = (1000 - drawW) / 2;
-          const drawY = (1000 - drawH) / 2;
-          ctx.drawImage(texImg, drawX, drawY, drawW, drawH);
+          const rot = (textureRotation || 0) % 360;
+          const isRotated90 = rot === 90 || rot === 270;
+          const effectiveTexW = isRotated90 ? texImg.height : texImg.width;
+          const effectiveTexH = isRotated90 ? texImg.width : texImg.height;
+          const baseScale = Math.max(1000 / effectiveTexW, 1000 / effectiveTexH);
+          const zoom = typeof textureScale === 'number' && textureScale > 0 ? textureScale : 0.75;
+          const effectiveScale = baseScale * zoom;
+
+          ctx.save();
+          ctx.translate(500, 500);
+          if (rot !== 0) {
+            ctx.rotate((rot * Math.PI) / 180);
+          }
+          const drawW = texImg.width * effectiveScale;
+          const drawH = texImg.height * effectiveScale;
+          ctx.drawImage(texImg, -drawW / 2, -drawH / 2, drawW, drawH);
+          ctx.restore();
         } else {
           // Pre-cut texture overlay drawn directly on 1000x1000 canvas
           ctx.drawImage(texImg, 0, 0, 1000, 1000);
@@ -331,7 +348,7 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
     return () => {
       isCancelled = true;
     };
-  }, [maskUrl, textureUrl, fallbackColor, logoCutoutUrl, pencilCutoutUrl, modelCutoutUrl]);
+  }, [maskUrl, textureUrl, fallbackColor, logoCutoutUrl, pencilCutoutUrl, modelCutoutUrl, textureRotation, textureScale]);
 
   return (
     <canvas
@@ -457,10 +474,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [masterTextureGroupFilter, setMasterTextureGroupFilter] = useState('all');
   const [savingFinishId, setSavingFinishId] = useState<string | null>(null);
   const [editingFinishUrls, setEditingFinishUrls] = useState<Record<string, string>>({});
+  const [editingFinishBigUrls, setEditingFinishBigUrls] = useState<Record<string, string>>({});
   const [editingFinishThumbnails, setEditingFinishThumbnails] = useState<Record<string, string>>({});
   const [editingFinishNames, setEditingFinishNames] = useState<Record<string, string>>({});
   const [editingFinishGroups, setEditingFinishGroups] = useState<Record<string, string>>({});
   const [editingFinishPrices, setEditingFinishPrices] = useState<Record<string, number>>({});
+  const [editingFinishStock, setEditingFinishStock] = useState<Record<string, boolean>>({});
   const [editingFinishCustomFlags, setEditingFinishCustomFlags] = useState<Record<string, boolean>>({});
   const [editingFinishBadgeTexts, setEditingFinishBadgeTexts] = useState<Record<string, string>>({});
   const [editingFinishBadgeColors, setEditingFinishBadgeColors] = useState<Record<string, string>>({});
@@ -468,7 +487,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     isOpen: boolean;
     finishId: string;
     finishName: string;
-    type: 'thumbnail' | 'texture';
+    type: 'thumbnail' | 'texture' | 'texture_big';
     currentUrl: string;
   }>({
     isOpen: false,
@@ -2531,10 +2550,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
     );
   }, [categories, categorySearch]);
 
-  // Save master finish properties (thumbnail, texture, name, group, price, custom per device, badge)
+  // Save master finish properties (thumbnail, texture, big texture, name, group, price, in_stock, custom per device, badge)
   const handleSaveMasterFinish = async (finish: GlobalFinish) => {
     const customUrl = editingFinishUrls[finish.id];
     const newTexture = customUrl !== undefined ? customUrl.trim() : (finish.texture_url || finish.thumbnail || '');
+    const customBigUrl = editingFinishBigUrls[finish.id];
+    const newBigTexture = customBigUrl !== undefined ? customBigUrl.trim() : (finish.texture_big_url || '');
     const customThumb = editingFinishThumbnails[finish.id];
     const newThumb = customThumb !== undefined ? customThumb.trim() : (finish.thumbnail || '');
     const customName = editingFinishNames[finish.id];
@@ -2543,6 +2564,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
     const newGroup = customGroup !== undefined ? customGroup.trim() : finish.group;
     const customPrice = editingFinishPrices[finish.id];
     const newPrice = customPrice !== undefined ? customPrice : finish.extra_price;
+    const customStock = editingFinishStock[finish.id];
+    const newStock = customStock !== undefined ? customStock : (finish.in_stock !== false);
     const customFlag = editingFinishCustomFlags[finish.id];
     const newCustomFlag = customFlag !== undefined ? customFlag : Boolean(finish.is_custom_per_device);
     const customBadgeText = editingFinishBadgeTexts[finish.id];
@@ -2559,8 +2582,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
         group: newGroup,
         thumbnail: newThumb,
         texture_url: newTexture,
+        texture_big_url: newBigTexture,
         extra_price: newPrice,
-        in_stock: finish.in_stock,
+        in_stock: newStock,
         class_name: finish.class_name,
         is_custom_per_device: newCustomFlag,
         badge_text: newBadgeText,
@@ -2580,7 +2604,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     group: newGroup,
                     thumbnail: newThumb,
                     texture_url: newTexture,
+                    texture_big_url: newBigTexture,
                     extra_price: newPrice,
+                    in_stock: newStock,
                     is_custom_per_device: newCustomFlag,
                     badge_text: newBadgeText,
                     badge_color: newBadgeColor,
@@ -4075,6 +4101,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       editingFinishUrls[f.id] !== undefined
                         ? editingFinishUrls[f.id]
                         : f.texture_url || '';
+                    const currentTextureBigInput =
+                      editingFinishBigUrls[f.id] !== undefined
+                        ? editingFinishBigUrls[f.id]
+                        : f.texture_big_url || '';
                     const currentNameInput =
                       editingFinishNames[f.id] !== undefined
                         ? editingFinishNames[f.id]
@@ -4087,6 +4117,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       editingFinishPrices[f.id] !== undefined
                         ? editingFinishPrices[f.id]
                         : f.extra_price || 0;
+                    const currentStockInput =
+                      editingFinishStock[f.id] !== undefined
+                        ? editingFinishStock[f.id]
+                        : (f.in_stock !== false);
                     const currentCustomFlag =
                       editingFinishCustomFlags[f.id] !== undefined
                         ? editingFinishCustomFlags[f.id]
@@ -4106,12 +4140,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         editingFinishThumbnails[f.id].trim() !== (f.thumbnail || '')) ||
                       (editingFinishUrls[f.id] !== undefined &&
                         editingFinishUrls[f.id].trim() !== (f.texture_url || '')) ||
+                      (editingFinishBigUrls[f.id] !== undefined &&
+                        editingFinishBigUrls[f.id].trim() !== (f.texture_big_url || '')) ||
                       (editingFinishNames[f.id] !== undefined &&
                         editingFinishNames[f.id].trim() !== f.name) ||
                       (editingFinishGroups[f.id] !== undefined &&
                         editingFinishGroups[f.id] !== f.group) ||
                       (editingFinishPrices[f.id] !== undefined &&
                         editingFinishPrices[f.id] !== (f.extra_price || 0)) ||
+                      (editingFinishStock[f.id] !== undefined &&
+                        editingFinishStock[f.id] !== (f.in_stock !== false)) ||
                       (editingFinishCustomFlags[f.id] !== undefined &&
                         editingFinishCustomFlags[f.id] !== Boolean(f.is_custom_per_device)) ||
                       (editingFinishBadgeTexts[f.id] !== undefined &&
@@ -4193,6 +4231,27 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           </div>
 
                           <div className="flex items-center gap-3">
+                            {/* In Stock / Out of Stock Toggle */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditingFinishStock((prev) => ({
+                                  ...prev,
+                                  [f.id]: !currentStockInput,
+                                }))
+                              }
+                              className={clsx(
+                                'flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono transition-all cursor-pointer select-none',
+                                currentStockInput
+                                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
+                                  : 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
+                              )}
+                              title={currentStockInput ? 'Click to mark Out of Stock' : 'Click to mark In Stock'}
+                            >
+                              <span className={clsx('w-2 h-2 rounded-full', currentStockInput ? 'bg-emerald-400' : 'bg-rose-400')} />
+                              <span className="text-[11px] font-semibold">{currentStockInput ? 'In Stock' : 'Out of Stock'}</span>
+                            </button>
+
                             {/* Extra Price Input */}
                             <div className="flex items-center gap-1 text-xs">
                               <span className="text-zinc-500 font-mono text-[11px]">+IDR</span>
@@ -4278,7 +4337,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                             <div className="h-8 w-px bg-white/10 hidden sm:block" />
 
-                            {/* Image 2: Master Texture (v2) */}
+                            {/* Image 2: Master Texture (v2 Standard) */}
                             <div className="flex items-center gap-3">
                               <button
                                 type="button"
@@ -4292,7 +4351,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   })
                                 }
                                 className="w-12 h-12 rounded-xl bg-zinc-900 border border-white/10 hover:border-amber-400/60 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105"
-                                title="Click to assign Master Texture (v2)"
+                                title="Click to assign Master Texture (Standard)"
                               >
                                 {currentTextureInput ? (
                                   <img
@@ -4314,10 +4373,56 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </button>
                               <div className="flex flex-col">
                                 <span className="text-xs font-semibold text-zinc-200">
-                                  Master Texture (v2)
+                                  Master Texture (Standard)
                                 </span>
                                 <span className="text-[10px] font-mono text-zinc-500">
                                   {currentTextureInput ? 'Assigned' : 'Not set'}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="h-8 w-px bg-white/10 hidden sm:block" />
+
+                            {/* Image 3: Master Texture (Big / Laptop) */}
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setImagePickerModal({
+                                    isOpen: true,
+                                    finishId: f.id,
+                                    finishName: currentNameInput,
+                                    type: 'texture_big',
+                                    currentUrl: currentTextureBigInput,
+                                  })
+                                }
+                                className="w-12 h-12 rounded-xl bg-zinc-900 border border-white/10 hover:border-amber-400/60 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105"
+                                title="Click to assign Master Texture (Big / Laptop & Tablet)"
+                              >
+                                {currentTextureBigInput ? (
+                                  <img
+                                    src={currentTextureBigInput}
+                                    alt="Big Texture"
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      (e.target as HTMLElement).style.display = 'none';
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="text-zinc-600 group-hover:text-amber-400 transition-colors flex flex-col items-center justify-center gap-0.5">
+                                    <Laptop className="w-4 h-4" />
+                                  </div>
+                                )}
+                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                  <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                                </div>
+                              </button>
+                              <div className="flex flex-col">
+                                <span className="text-xs font-semibold text-zinc-200">
+                                  Big Texture (Laptop / Tablet)
+                                </span>
+                                <span className="text-[10px] font-mono text-zinc-500">
+                                  {currentTextureBigInput ? 'Assigned' : 'Optional (Auto)'}
                                 </span>
                               </div>
                             </div>
@@ -4394,7 +4499,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     <h3 className="text-sm font-bold text-white">
                       {imagePickerModal.type === 'thumbnail'
                         ? 'Assign Swatch Thumbnail'
-                        : 'Assign Master Texture (v2)'}
+                        : imagePickerModal.type === 'texture_big'
+                        ? 'Assign Master Texture (Big / Laptop & Tablet)'
+                        : 'Assign Master Texture (Standard)'}
                     </h3>
                     <p className="text-[11px] text-zinc-400">
                       Finish: <span className="text-white font-semibold">{imagePickerModal.finishName}</span>
@@ -4430,11 +4537,15 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   <p className="font-semibold text-zinc-200">
                     {imagePickerModal.type === 'thumbnail'
                       ? 'Swatch Thumbnail (150x150 or 500x500)'
-                      : 'Master Texture (1000x1000 Tileable Texture)'}
+                      : imagePickerModal.type === 'texture_big'
+                      ? 'Large Master Texture (3000x2000 for Laptops & Tablets)'
+                      : 'Master Texture (2000x3000 Tileable Texture)'}
                   </p>
                   <p className="text-[11px] text-zinc-500">
                     {imagePickerModal.type === 'thumbnail'
                       ? 'Used in category carousels, swatch pills, and tooltip previews.'
+                      : imagePickerModal.type === 'texture_big'
+                      ? 'High-res large master texture used for laptops, tablets, and wide devices.'
                       : 'Universal master texture dynamically masked by device alpha cutouts.'}
                   </p>
                 </div>
@@ -4475,11 +4586,19 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   onClick={() => {
                     setMediaPickerConfig({
                       isOpen: true,
-                      title: `Select ${imagePickerModal.type === 'thumbnail' ? 'Swatch Thumbnail' : 'Master Texture'}: ${imagePickerModal.finishName}`,
+                      title: `Select ${
+                        imagePickerModal.type === 'thumbnail'
+                          ? 'Swatch Thumbnail'
+                          : imagePickerModal.type === 'texture_big'
+                          ? 'Big Master Texture'
+                          : 'Master Texture'
+                      }: ${imagePickerModal.finishName}`,
                       recommendedDimensions:
                         imagePickerModal.type === 'thumbnail'
                           ? 'Square Swatch Thumbnail (150x150 or 500x500)'
-                          : 'High-Res Tileable Texture (1000x1000)',
+                          : imagePickerModal.type === 'texture_big'
+                          ? 'High-Res Large Texture (3000x2000)'
+                          : 'High-Res Standard Texture (2000x3000)',
                       currentUrl: imagePickerModal.currentUrl,
                       onSelect: (url) => {
                         setImagePickerModal((prev) => ({ ...prev, currentUrl: url }));
@@ -4507,6 +4626,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   onClick={() => {
                     if (imagePickerModal.type === 'thumbnail') {
                       setEditingFinishThumbnails((prev) => ({
+                        ...prev,
+                        [imagePickerModal.finishId]: imagePickerModal.currentUrl.trim(),
+                      }));
+                    } else if (imagePickerModal.type === 'texture_big') {
+                      setEditingFinishBigUrls((prev) => ({
                         ...prev,
                         [imagePickerModal.finishId]: imagePickerModal.currentUrl.trim(),
                       }));
@@ -5428,7 +5552,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === simNorm
                               );
                               const mappedTex = matchedKey ? textureMap[matchedKey] || '' : '';
-                              const textureToTile = customTex || mappedTex || activeFinish?.texture_url || '';
+
+                              const isBigDevice = editingProfile.family === 'laptop' || editingProfile.family === 'tablet';
+                              const useBigTexture = l.texture_size === 'big' || (l.texture_size !== 'small' && isBigDevice);
+                              const activeTextureUrl = (useBigTexture && activeFinish?.texture_big_url)
+                                ? activeFinish.texture_big_url
+                                : activeFinish?.texture_url || '';
+
+                              const textureToTile = customTex || mappedTex || activeTextureUrl;
                               const fallbackColor = activeFinish?.color_hex || '#18181b';
 
                               if (!assets.mask_svg_url && !textureToTile) {
@@ -5471,6 +5602,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   modelCutoutUrl={effectiveModelCutout}
                                   zIndex={(l.z_index || 1) + 5}
                                   layerName={l.name}
+                                  textureRotation={l.texture_rotation ?? 0}
+                                  textureScale={l.texture_scale ?? 0.75}
                                 />
                               );
                             }
@@ -6305,45 +6438,207 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                                 {/* v2 Modern Engine Alpha Mask */}
                                 {editingProfile.configurator_version === 'v2' && (
-                                  <div className="p-3.5 rounded-xl bg-sky-950/25 border border-sky-500/25 space-y-3">
+                                  <div className="p-3.5 rounded-xl bg-sky-950/25 border border-sky-500/25 space-y-3.5">
                                     <div className="flex items-center justify-between">
                                       <div className="flex items-center gap-1.5">
                                         <Sparkles className="w-3.5 h-3.5 text-sky-400" />
                                         <span className="text-xs font-bold text-white uppercase tracking-wider">
-                                          Skin Part Alpha Mask ({currentView?.name})
+                                          Skin Part Alpha Mask ({currentView?.name || 'Main View'})
                                         </span>
                                         <InfoTooltip content="1000x1000 transparent PNG or SVG defining physical cut bounds. Global textures are automatically clipped inside." />
                                       </div>
-                                      {currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url && (
+                                      {currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url ? (
                                         <span className="text-emerald-400 text-[10px] font-mono font-semibold">Configured</span>
+                                      ) : (
+                                        <span className="text-zinc-500 text-[10px] font-mono">Not set</span>
                                       )}
                                     </div>
 
-                                    <div className="flex gap-2">
-                                      <input
-                                        type="text"
-                                        placeholder="https://exacoat.com/uploads/device-part-mask.png"
-                                        value={currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url || ''}
-                                        onChange={(e) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'mask_svg_url', e.target.value)}
-                                        className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
-                                      />
+                                    {/* Media Slot Row: Square Thumbnail Preview & Details */}
+                                    <div className="flex items-center gap-3">
                                       <button
                                         type="button"
                                         onClick={() =>
                                           setMediaPickerConfig({
                                             isOpen: true,
-                                            title: `Select Alpha Mask: ${currentActiveLayer.name}`,
+                                            title: `Select Alpha Mask: ${currentActiveLayer.name} (${currentView?.name || 'Main View'})`,
                                             recommendedDimensions: '1000x1000 Alpha PNG or SVG',
                                             currentUrl: currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url || '',
                                             onSelect: (url) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'mask_svg_url', url),
                                           })
                                         }
-                                        className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
-                                        title="Browse WordPress Media Library"
+                                        className="w-14 h-14 rounded-xl bg-zinc-950 border border-white/10 hover:border-sky-400/60 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105"
+                                        title="Click to select Alpha Mask from WordPress Media Library"
                                       >
-                                        <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                        <span>Browse</span>
+                                        {currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url ? (
+                                          <img
+                                            src={currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url}
+                                            alt="Alpha Mask"
+                                            className="w-full h-full object-contain p-1"
+                                            onError={(e) => {
+                                              (e.target as HTMLElement).style.display = 'none';
+                                            }}
+                                          />
+                                        ) : (
+                                          <div className="text-zinc-600 group-hover:text-sky-400 transition-colors flex flex-col items-center justify-center gap-0.5">
+                                            <Plus className="w-4 h-4" />
+                                            <span className="text-[9px] font-semibold">Mask</span>
+                                          </div>
+                                        )}
+                                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                          <Edit3 className="w-3.5 h-3.5 text-sky-400" />
+                                        </div>
                                       </button>
+
+                                      <div className="flex-1 min-w-0">
+                                        <p
+                                          className="text-[11px] font-mono text-zinc-300 truncate"
+                                          title={currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url || ''}
+                                        >
+                                          {currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url
+                                            ? currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url?.split('/').pop()
+                                            : 'Click square thumbnail to browse media library'}
+                                        </p>
+                                        <div className="flex items-center gap-2 mt-1.5">
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setMediaPickerConfig({
+                                                isOpen: true,
+                                                title: `Select Alpha Mask: ${currentActiveLayer.name} (${currentView?.name || 'Main View'})`,
+                                                recommendedDimensions: '1000x1000 Alpha PNG or SVG',
+                                                currentUrl: currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url || '',
+                                                onSelect: (url) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'mask_svg_url', url),
+                                              })
+                                            }
+                                            className="text-[11px] text-sky-400 hover:text-sky-300 font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                                          >
+                                            <FolderOpen className="w-3 h-3 text-[#f3aa18]" />
+                                            <span>Browse Media</span>
+                                          </button>
+                                          {currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url && (
+                                            <>
+                                              <span className="text-zinc-700">|</span>
+                                              <button
+                                                type="button"
+                                                onClick={() => handleSetLayerOverlayUrl(currentActiveLayer.id, 'mask_svg_url', '')}
+                                                className="text-[11px] text-zinc-500 hover:text-rose-400 font-medium cursor-pointer transition-colors"
+                                              >
+                                                Clear
+                                              </button>
+                                            </>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Per-Part Texture Controls: Zoom / Scale, Rotation, Resolution */}
+                                    <div className="pt-3 border-t border-sky-500/20 space-y-3">
+                                      {/* Row 1: Texture Zoom / Scale */}
+                                      <div>
+                                        <div className="flex items-center justify-between text-xs mb-1">
+                                          <span className="text-zinc-300 font-medium flex items-center gap-1">
+                                            <Maximize2 className="w-3 h-3 text-sky-400" />
+                                            <span>Texture Zoom / Scale</span>
+                                          </span>
+                                          <span className="font-mono text-[11px] text-sky-400 font-bold">
+                                            {Math.round(((currentActiveLayer.texture_scale ?? 0.75)) * 100)}%
+                                            {(currentActiveLayer.texture_scale ?? 0.75) === 0.75 && ' (Default)'}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <input
+                                            type="range"
+                                            min="50"
+                                            max="150"
+                                            step="5"
+                                            value={Math.round(((currentActiveLayer.texture_scale ?? 0.75)) * 100)}
+                                            onChange={(e) => {
+                                              const val = Number(e.target.value) / 100;
+                                              handleUpdateLayer(currentActiveLayer.id, { texture_scale: val });
+                                            }}
+                                            className="w-full accent-sky-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg appearance-none"
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={() => handleUpdateLayer(currentActiveLayer.id, { texture_scale: 0.75 })}
+                                            className="text-[10px] font-mono text-zinc-500 hover:text-zinc-300 px-1.5 py-0.5 rounded bg-white/5 cursor-pointer shrink-0"
+                                            title="Reset to 75% default"
+                                          >
+                                            Reset
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      {/* Row 2: Texture Rotation & Resolution */}
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                        {/* Texture Rotation */}
+                                        <div className="p-2 rounded-lg bg-zinc-950/60 border border-white/5 space-y-1.5">
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-[11px] font-medium text-zinc-300 flex items-center gap-1">
+                                              <RotateCw className="w-3 h-3 text-sky-400" />
+                                              <span>Rotation</span>
+                                            </span>
+                                            <span className="text-[10px] font-mono text-zinc-400">
+                                              {currentActiveLayer.texture_rotation ?? 0}°
+                                            </span>
+                                          </div>
+                                          <div className="flex items-center gap-1">
+                                            {([0, 90, 180, 270] as const).map((deg) => {
+                                              const isActive = (currentActiveLayer.texture_rotation ?? 0) === deg;
+                                              return (
+                                                <button
+                                                  key={deg}
+                                                  type="button"
+                                                  onClick={() => handleUpdateLayer(currentActiveLayer.id, { texture_rotation: deg })}
+                                                  className={clsx(
+                                                    'flex-1 py-1 rounded text-[11px] font-mono font-medium transition-all cursor-pointer',
+                                                    isActive
+                                                      ? 'bg-sky-500/20 text-sky-300 font-bold border border-sky-500/40'
+                                                      : 'bg-white/5 text-zinc-400 hover:text-white'
+                                                  )}
+                                                >
+                                                  {deg}°
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+
+                                        {/* Master Texture Resolution */}
+                                        <div className="p-2 rounded-lg bg-zinc-950/60 border border-white/5 space-y-1.5">
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-[11px] font-medium text-zinc-300 flex items-center gap-1">
+                                              <Laptop className="w-3 h-3 text-sky-400" />
+                                              <span>Texture Size</span>
+                                            </span>
+                                            <span className="text-[10px] font-mono text-zinc-400">
+                                              {currentActiveLayer.texture_size === 'big' ? 'Big (Laptop)' : currentActiveLayer.texture_size === 'small' ? 'Standard' : 'Auto'}
+                                            </span>
+                                          </div>
+                                          <div className="flex items-center gap-1">
+                                            {(['auto', 'small', 'big'] as const).map((sz) => {
+                                              const currentSz = currentActiveLayer.texture_size || 'auto';
+                                              const isActive = currentSz === sz;
+                                              return (
+                                                <button
+                                                  key={sz}
+                                                  type="button"
+                                                  onClick={() => handleUpdateLayer(currentActiveLayer.id, { texture_size: sz })}
+                                                  className={clsx(
+                                                    'flex-1 py-1 rounded text-[10px] font-medium transition-all cursor-pointer capitalize',
+                                                    isActive
+                                                      ? 'bg-sky-500/20 text-sky-300 font-bold border border-sky-500/40'
+                                                      : 'bg-white/5 text-zinc-400 hover:text-white'
+                                                  )}
+                                                >
+                                                  {sz === 'small' ? 'Standard' : sz}
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      </div>
                                     </div>
                                   </div>
                                 )}
@@ -6728,22 +7023,20 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   </div>
                                 </div>
 
-                                <div className="space-y-1.5">
+                                <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 space-y-2.5">
                                   <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-1.5">
-                                      <span className="text-xs font-bold text-zinc-300">Hardware Body Image URL</span>
+                                      <span className="text-xs font-bold text-zinc-300">Hardware Chassis Render ({currentView.name})</span>
                                       <InfoTooltip content="1000x1000 transparent PNG render of the base device body for this angle." />
                                     </div>
-                                    {currentView.background_url && <span className="text-emerald-400 text-[10px] font-mono">Configured</span>}
+                                    {currentView.background_url ? (
+                                      <span className="text-emerald-400 text-[10px] font-mono font-semibold">Configured</span>
+                                    ) : (
+                                      <span className="text-zinc-500 text-[10px] font-mono">Not set</span>
+                                    )}
                                   </div>
-                                  <div className="flex gap-2">
-                                    <input
-                                      type="url"
-                                      placeholder="https://exacoat.com/wp-content/uploads/renders/device-body.png"
-                                      value={currentView.background_url || ''}
-                                      onChange={(e) => handleSetViewBackground(currentView.id, e.target.value)}
-                                      className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
-                                    />
+
+                                  <div className="flex items-center gap-3">
                                     <button
                                       type="button"
                                       onClick={() =>
@@ -6755,12 +7048,66 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                           onSelect: (url) => handleSetViewBackground(currentView.id, url),
                                         })
                                       }
-                                      className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
-                                      title="Browse WordPress Media Library"
+                                      className="w-14 h-14 rounded-xl bg-zinc-950 border border-white/10 hover:border-sky-400/60 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105"
+                                      title="Click to select Hardware Chassis Render from Media Library"
                                     >
-                                      <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                      <span>Browse</span>
+                                      {currentView.background_url ? (
+                                        <img
+                                          src={currentView.background_url}
+                                          alt="Hardware Chassis"
+                                          className="w-full h-full object-contain p-1"
+                                          onError={(e) => {
+                                            (e.target as HTMLElement).style.display = 'none';
+                                          }}
+                                        />
+                                      ) : (
+                                        <div className="text-zinc-600 group-hover:text-sky-400 transition-colors flex flex-col items-center justify-center gap-0.5">
+                                          <Smartphone className="w-4 h-4" />
+                                          <span className="text-[9px] font-semibold">Chassis</span>
+                                        </div>
+                                      )}
+                                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                        <Edit3 className="w-3.5 h-3.5 text-sky-400" />
+                                      </div>
                                     </button>
+
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-[11px] font-mono text-zinc-300 truncate" title={currentView.background_url || ''}>
+                                        {currentView.background_url
+                                          ? currentView.background_url.split('/').pop()
+                                          : 'Click square thumbnail to browse media library'}
+                                      </p>
+                                      <div className="flex items-center gap-2 mt-1.5">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setMediaPickerConfig({
+                                              isOpen: true,
+                                              title: `Select Hardware Chassis: ${currentView.name}`,
+                                              recommendedDimensions: '1000x1000 Transparent PNG',
+                                              currentUrl: currentView.background_url || '',
+                                              onSelect: (url) => handleSetViewBackground(currentView.id, url),
+                                            })
+                                          }
+                                          className="text-[11px] text-sky-400 hover:text-sky-300 font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                                        >
+                                          <FolderOpen className="w-3 h-3 text-[#f3aa18]" />
+                                          <span>Browse Media</span>
+                                        </button>
+                                        {currentView.background_url && (
+                                          <>
+                                            <span className="text-zinc-700">|</span>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleSetViewBackground(currentView.id, '')}
+                                              className="text-[11px] text-zinc-500 hover:text-rose-400 font-medium cursor-pointer transition-colors"
+                                            >
+                                              Clear
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
 
@@ -7272,30 +7619,17 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 <InfoTooltip text="Allows the customer on the webstore to toggle between 'With Cutout' or 'Solid (No Logo)'." />
                               </label>
 
-                              {/* Logo Cutout Mask URL */}
-                              <div className="space-y-1">
+                              {/* Logo Cutout Mask Slot */}
+                              <div className="space-y-2 pt-1 border-t border-white/5">
                                 <div className="flex items-center justify-between text-[11px]">
-                                  <span className="text-zinc-400 font-medium">Mask URL (1000x1000 PNG)</span>
-                                  {(currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url) && (
-                                    <span className="text-emerald-400 font-mono text-[10px]">Configured</span>
+                                  <span className="text-zinc-400 font-medium">Logo Cutout Mask (1000x1000 PNG)</span>
+                                  {(currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url) ? (
+                                    <span className="text-emerald-400 font-mono text-[10px] font-semibold">Configured</span>
+                                  ) : (
+                                    <span className="text-zinc-500 font-mono text-[10px]">Not set</span>
                                   )}
                                 </div>
-                                <div className="flex gap-1.5">
-                                  <input
-                                    type="url"
-                                    placeholder="https://exacoat.com/wp-content/uploads/logo-cutout.png"
-                                    value={currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url || ''}
-                                    onChange={(e) => {
-                                      const val = e.target.value.trim();
-                                      if (currentView) {
-                                        handleSetViewField(currentView.id, 'logo_cutout_mask_url', val);
-                                      }
-                                      if (currentView?.is_default || currentView?.id === 'main_view' || !editingProfile.coverage_and_cutouts?.logo_cutout_mask_url) {
-                                        handleSetCoverageAndCutouts('logo_cutout_mask_url', val);
-                                      }
-                                    }}
-                                    className="w-full px-2.5 py-1.5 text-xs font-mono rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] placeholder:text-zinc-600"
-                                  />
+                                <div className="flex items-center gap-3">
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -7314,11 +7648,81 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         },
                                       })
                                     }
-                                    className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
+                                    className="w-14 h-14 rounded-xl bg-zinc-950 border border-white/10 hover:border-amber-400/60 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105"
+                                    title="Click to select Logo Cutout Mask from Media Library"
                                   >
-                                    <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                    <span>Browse</span>
+                                    {(currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url) ? (
+                                      <img
+                                        src={currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url}
+                                        alt="Logo Cutout Mask"
+                                        className="w-full h-full object-contain p-1"
+                                        onError={(e) => {
+                                          (e.target as HTMLElement).style.display = 'none';
+                                        }}
+                                      />
+                                    ) : (
+                                      <div className="text-zinc-600 group-hover:text-amber-400 transition-colors flex flex-col items-center justify-center gap-0.5">
+                                        <Plus className="w-4 h-4" />
+                                        <span className="text-[9px] font-semibold">Mask</span>
+                                      </div>
+                                    )}
+                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                      <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                                    </div>
                                   </button>
+
+                                  <div className="flex-1 min-w-0">
+                                    <p
+                                      className="text-[11px] font-mono text-zinc-300 truncate"
+                                      title={currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url || ''}
+                                    >
+                                      {(currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url)
+                                        ? (currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url)?.split('/').pop()
+                                        : 'Click square thumbnail to browse media library'}
+                                    </p>
+                                    <div className="flex items-center gap-2 mt-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setMediaPickerConfig({
+                                            isOpen: true,
+                                            title: `Select Logo Cutout Mask: ${currentView?.name || 'Active Angle'}`,
+                                            recommendedDimensions: '1000x1000 Transparent PNG',
+                                            currentUrl: currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url || '',
+                                            onSelect: (url) => {
+                                              if (currentView) {
+                                                handleSetViewField(currentView.id, 'logo_cutout_mask_url', url);
+                                              }
+                                              if (currentView?.is_default || currentView?.id === 'main_view' || !editingProfile.coverage_and_cutouts?.logo_cutout_mask_url) {
+                                                handleSetCoverageAndCutouts('logo_cutout_mask_url', url);
+                                              }
+                                            },
+                                          })
+                                        }
+                                        className="text-[11px] text-amber-400 hover:text-amber-300 font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                                      >
+                                        <FolderOpen className="w-3 h-3 text-[#f3aa18]" />
+                                        <span>Browse Media</span>
+                                      </button>
+                                      {(currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url) && (
+                                        <>
+                                          <span className="text-zinc-700">|</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              if (currentView) {
+                                                handleSetViewField(currentView.id, 'logo_cutout_mask_url', '');
+                                              }
+                                              handleSetCoverageAndCutouts('logo_cutout_mask_url', '');
+                                            }}
+                                            className="text-[11px] text-zinc-500 hover:text-rose-400 font-medium cursor-pointer transition-colors"
+                                          >
+                                            Clear
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -7408,32 +7812,17 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </div>
 
                               {/* Pencil Cutout Mask URL */}
-                              <div className="space-y-1">
+                              {/* Stylus Cutout Mask Slot */}
+                              <div className="space-y-2 pt-1 border-t border-white/5">
                                 <div className="flex items-center justify-between text-[11px]">
-                                  <span className="text-zinc-400 font-medium">Mask URL (1000x1000 PNG)</span>
-                                  {(currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) && (
-                                    <span className="text-emerald-400 font-mono text-[10px]">Configured</span>
+                                  <span className="text-zinc-400 font-medium">Cutout Mask (1000x1000 PNG)</span>
+                                  {(currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) ? (
+                                    <span className="text-emerald-400 font-mono text-[10px] font-semibold">Configured</span>
+                                  ) : (
+                                    <span className="text-zinc-500 font-mono text-[10px]">Not set</span>
                                   )}
                                 </div>
-                                <div className="flex gap-1.5">
-                                  <input
-                                    type="url"
-                                    placeholder="https://exacoat.com/wp-content/uploads/pencil-cutout.png"
-                                    value={currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url || ''}
-                                    onChange={(e) => {
-                                      const val = e.target.value.trim();
-                                      if (currentView) {
-                                        handleSetViewField(currentView.id, 'pencil_cutout_mask_url', val);
-                                      }
-                                      if (currentView?.is_default || currentView?.id === 'main_view' || !editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) {
-                                        handleSetCoverageAndCutouts('pencil_cutout_mask_url', val);
-                                      }
-                                      if (val) {
-                                        handleSetCoverageAndCutouts('has_pencil_cutout', true);
-                                      }
-                                    }}
-                                    className="w-full px-2.5 py-1.5 text-xs font-mono rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] placeholder:text-zinc-600"
-                                  />
+                                <div className="flex items-center gap-3">
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -7455,11 +7844,84 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         },
                                       })
                                     }
-                                    className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
+                                    className="w-14 h-14 rounded-xl bg-zinc-950 border border-white/10 hover:border-amber-400/60 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105"
+                                    title="Click to select Cutout Mask from Media Library"
                                   >
-                                    <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                    <span>Browse</span>
+                                    {(currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) ? (
+                                      <img
+                                        src={currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url}
+                                        alt="Cutout Mask"
+                                        className="w-full h-full object-contain p-1"
+                                        onError={(e) => {
+                                          (e.target as HTMLElement).style.display = 'none';
+                                        }}
+                                      />
+                                    ) : (
+                                      <div className="text-zinc-600 group-hover:text-amber-400 transition-colors flex flex-col items-center justify-center gap-0.5">
+                                        <Plus className="w-4 h-4" />
+                                        <span className="text-[9px] font-semibold">Mask</span>
+                                      </div>
+                                    )}
+                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                      <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                                    </div>
                                   </button>
+
+                                  <div className="flex-1 min-w-0">
+                                    <p
+                                      className="text-[11px] font-mono text-zinc-300 truncate"
+                                      title={currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url || ''}
+                                    >
+                                      {(currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url)
+                                        ? (currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url)?.split('/').pop()
+                                        : 'Click square thumbnail to browse media library'}
+                                    </p>
+                                    <div className="flex items-center gap-2 mt-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setMediaPickerConfig({
+                                            isOpen: true,
+                                            title: `Select Cutout Mask: ${editingProfile.coverage_and_cutouts?.pencil_cutout_label || 'Stylus Cutout'}`,
+                                            recommendedDimensions: '1000x1000 Transparent PNG',
+                                            currentUrl: currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url || '',
+                                            onSelect: (url) => {
+                                              if (currentView) {
+                                                handleSetViewField(currentView.id, 'pencil_cutout_mask_url', url);
+                                              }
+                                              if (currentView?.is_default || currentView?.id === 'main_view' || !editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) {
+                                                handleSetCoverageAndCutouts('pencil_cutout_mask_url', url);
+                                              }
+                                              if (url) {
+                                                handleSetCoverageAndCutouts('has_pencil_cutout', true);
+                                              }
+                                            },
+                                          })
+                                        }
+                                        className="text-[11px] text-amber-400 hover:text-amber-300 font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                                      >
+                                        <FolderOpen className="w-3 h-3 text-[#f3aa18]" />
+                                        <span>Browse Media</span>
+                                      </button>
+                                      {(currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) && (
+                                        <>
+                                          <span className="text-zinc-700">|</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              if (currentView) {
+                                                handleSetViewField(currentView.id, 'pencil_cutout_mask_url', '');
+                                              }
+                                              handleSetCoverageAndCutouts('pencil_cutout_mask_url', '');
+                                            }}
+                                            className="text-[11px] text-zinc-500 hover:text-rose-400 font-medium cursor-pointer transition-colors"
+                                          >
+                                            Clear
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -7553,33 +8015,20 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   </div>
                                 )}
 
-                              {/* Model Cut Perimeter Mask */}
-                              <div className="space-y-1">
+                              {/* Model Cut Perimeter Mask Slot */}
+                              <div className="space-y-2 pt-1 border-t border-white/5">
                                 <div className="flex items-center justify-between text-[11px]">
                                   <div className="flex items-center gap-1.5">
                                     <span className="text-zinc-400 font-medium">Perimeter Mask (Frame Flaps)</span>
                                     <InfoTooltip text="Erases outer side frame flaps when Model Cut (Back Only) is selected on webstore." />
                                   </div>
-                                  {(currentView?.model_cut_mask_url || editingProfile.coverage_and_cutouts?.model_cut_mask_url) && (
-                                    <span className="text-emerald-400 font-mono text-[10px]">Configured</span>
+                                  {(currentView?.model_cut_mask_url || editingProfile.coverage_and_cutouts?.model_cut_mask_url) ? (
+                                    <span className="text-emerald-400 font-mono text-[10px] font-semibold">Configured</span>
+                                  ) : (
+                                    <span className="text-zinc-500 font-mono text-[10px]">Not set</span>
                                   )}
                                 </div>
-                                <div className="flex gap-1.5">
-                                  <input
-                                    type="url"
-                                    placeholder="https://exacoat.com/wp-content/uploads/frame-cut.png"
-                                    value={currentView?.model_cut_mask_url || editingProfile.coverage_and_cutouts?.model_cut_mask_url || ''}
-                                    onChange={(e) => {
-                                      const val = e.target.value.trim();
-                                      if (currentView) {
-                                        handleSetViewField(currentView.id, 'model_cut_mask_url', val);
-                                      }
-                                      if (currentView?.is_default || currentView?.id === 'main_view' || !editingProfile.coverage_and_cutouts?.model_cut_mask_url) {
-                                        handleSetCoverageAndCutouts('model_cut_mask_url', val);
-                                      }
-                                    }}
-                                    className="w-full px-2.5 py-1.5 text-xs font-mono rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
-                                  />
+                                <div className="flex items-center gap-3">
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -7598,11 +8047,81 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         },
                                       })
                                     }
-                                    className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
+                                    className="w-14 h-14 rounded-xl bg-zinc-950 border border-white/10 hover:border-amber-400/60 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105"
+                                    title="Click to select Model Cut Mask from Media Library"
                                   >
-                                    <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                    <span>Browse</span>
+                                    {(currentView?.model_cut_mask_url || editingProfile.coverage_and_cutouts?.model_cut_mask_url) ? (
+                                      <img
+                                        src={currentView?.model_cut_mask_url || editingProfile.coverage_and_cutouts?.model_cut_mask_url}
+                                        alt="Model Cut Mask"
+                                        className="w-full h-full object-contain p-1"
+                                        onError={(e) => {
+                                          (e.target as HTMLElement).style.display = 'none';
+                                        }}
+                                      />
+                                    ) : (
+                                      <div className="text-zinc-600 group-hover:text-amber-400 transition-colors flex flex-col items-center justify-center gap-0.5">
+                                        <Plus className="w-4 h-4" />
+                                        <span className="text-[9px] font-semibold">Mask</span>
+                                      </div>
+                                    )}
+                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                      <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                                    </div>
                                   </button>
+
+                                  <div className="flex-1 min-w-0">
+                                    <p
+                                      className="text-[11px] font-mono text-zinc-300 truncate"
+                                      title={currentView?.model_cut_mask_url || editingProfile.coverage_and_cutouts?.model_cut_mask_url || ''}
+                                    >
+                                      {(currentView?.model_cut_mask_url || editingProfile.coverage_and_cutouts?.model_cut_mask_url)
+                                        ? (currentView?.model_cut_mask_url || editingProfile.coverage_and_cutouts?.model_cut_mask_url)?.split('/').pop()
+                                        : 'Click square thumbnail to browse media library'}
+                                    </p>
+                                    <div className="flex items-center gap-2 mt-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setMediaPickerConfig({
+                                            isOpen: true,
+                                            title: `Select Model Cut Mask: ${currentView?.name || 'Active Angle'}`,
+                                            recommendedDimensions: '1000x1000 Transparent PNG',
+                                            currentUrl: currentView?.model_cut_mask_url || editingProfile.coverage_and_cutouts?.model_cut_mask_url || '',
+                                            onSelect: (url) => {
+                                              if (currentView) {
+                                                handleSetViewField(currentView.id, 'model_cut_mask_url', url);
+                                              }
+                                              if (currentView?.is_default || currentView?.id === 'main_view' || !editingProfile.coverage_and_cutouts?.model_cut_mask_url) {
+                                                handleSetCoverageAndCutouts('model_cut_mask_url', url);
+                                              }
+                                            },
+                                          })
+                                        }
+                                        className="text-[11px] text-amber-400 hover:text-amber-300 font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                                      >
+                                        <FolderOpen className="w-3 h-3 text-[#f3aa18]" />
+                                        <span>Browse Media</span>
+                                      </button>
+                                      {(currentView?.model_cut_mask_url || editingProfile.coverage_and_cutouts?.model_cut_mask_url) && (
+                                        <>
+                                          <span className="text-zinc-700">|</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              if (currentView) {
+                                                handleSetViewField(currentView.id, 'model_cut_mask_url', '');
+                                              }
+                                              handleSetCoverageAndCutouts('model_cut_mask_url', '');
+                                            }}
+                                            className="text-[11px] text-zinc-500 hover:text-rose-400 font-medium cursor-pointer transition-colors"
+                                          >
+                                            Clear
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             </div>

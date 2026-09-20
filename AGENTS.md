@@ -673,8 +673,43 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 
 - **Unclipped Thumbnail Custom Tag ('NEW')**:
   - Rendered on the outer capsule container rather than inside the `overflow-hidden` rounded div, preventing the capsule border from clipping custom badges.
-  - Positioned top center (`-top-1.5 left-1/2 -translate-x-1/2 z-20`) with slightly larger sizing (`text-[7.5px] sm:text-[8px] px-2 py-[1.5px] font-bold font-mono`).
+  - Positioned top center (`-top-0.5 left-1/2 -translate-x-1/2 z-20`) with slightly larger sizing (`text-[7.5px] sm:text-[8px] px-2 py-[1.5px] font-bold font-mono`).
   - Swatch containers provide `pt-2` headroom so badges never clip against carousel edges or category headers.
+
+---
+
+## 41. Double-Buffered Skin Crossfade, Dual Resolution Master Textures, and Per-Part Texture Controls
+
+- **Double-Buffered Canvas Crossfade Invariant (No Bare Device Flash)**:
+  - When switching between finishes or swatch choices, the canvas must never unmount or flash the bare device chassis underneath.
+  - In `stacked-layer-canvas.tsx`, the component key uses stable identifiers (`v2-${layer.id}-${currentAngleId}`) without `choice.id`.
+  - `V2SkinCanvasLayer` implements a dual-buffered canvas architecture:
+    - The previous skin texture remains 100% visible on the back canvas while the new high-resolution texture downloads into browser memory.
+    - Once the new texture is fully loaded and drawn to the front canvas, the front canvas smoothly fades in directly on top (opacity `0 -> 1` in 220ms).
+    - After the fade transition completes, the back canvas is updated to the new texture and the front canvas resets to 0. Bare hardware chassis is never exposed during transitions.
+
+- **Dual-Resolution Master Textures (`texture_url` vs `texture_big_url`)**:
+  - Standard master textures (such as `Exacoat-Texture-Small-Black-Camo.jpg`, 2000x3000 portrait) are optimized for smartphones and small handheld accessories.
+  - Large master textures (`texture_big_url`, such as `Exacoat-Texture-Big-Black-Camo.jpg`, 3000x2000 landscape) provide fine-grained pattern definition across expansive laptop lids, keyboard decks, and tablet backs without texture blurring.
+  - Automatic Resolution Hierarchy: In both webstore and Studio, devices automatically resolve `texture_big_url` when `family === 'laptop' || family === 'tablet'` or when a layer's `texture_size === 'big'`, falling back to standard `texture_url`.
+
+- **Per-Part Texture Transformation Controls**:
+  - `ConfiguratorLayer` persists individual texture transformation properties in WordPress post meta:
+    - `texture_scale`: Float scale multiplier (0.50x to 1.50x, default 0.75x for 25% smaller pattern scale).
+    - `texture_rotation`: Discrete rotation angle (0°, 90°, 180°, 270°).
+    - `texture_size`: Resolution override (`'auto'`, `'small'`, `'big'`).
+  - Canvas transformation rotates around center `(500, 500)` with `ctx.translate(500, 500)` and `ctx.rotate(rad)`, accurately swapping dimensions on 90° and 270° turns.
+
+- **Out of Stock Inventory Flag for Master Finishes (`in_stock`)**:
+  - Global finishes support `in_stock: boolean` (default `true`).
+  - Finishes marked out of stock (such as Patina) display out-of-stock indicators, are disabled from buyer selection, and can be toggled in real time in Configurator Studio's Master Textures modal.
+
+- **Studio Media Slot Previews (No Raw URL Inputs)**:
+  - Raw text inputs for Alpha Masks, Hardware Chassis Renders, and Cutout Masks (Logo, Stylus, Model Cut) are replaced with clickable 56x56 square thumbnail previews opening the WordPress Media Library modal directly.
+  - Each media slot displays the file basename, status pill (`Configured` vs `Not set`), a direct `Browse Media` action, and a single-click `Clear` button.
+
+- **Removal of Redundant 'Included' Badges**:
+  - The redundant label 'Included' is removed across Coverage accordions, Model Cut cards, and Cutout choice pills. If an option carries an up-charge, `+{price}` is displayed; if base, no price badge is shown.
 
 
 
