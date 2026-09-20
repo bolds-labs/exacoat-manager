@@ -395,7 +395,7 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 
 ---
 
-## 23. Single-Source 3D Shading & Viewport Hardware Color Architecture
+## 25. Single-Source 3D Shading & Viewport Hardware Color Architecture
 
 - **Single-Source 3D Shading Invariant**:
   In v2 modern engine, viewing angles do not require separate shadow and highlight files. A single image (`shading_image_url` on `ConfiguratorView`), such as a neutral CAD render or ambient occlusion map, provides both depth channels simultaneously:
@@ -406,7 +406,20 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Device hardware chassis finishes (e.g. Titanium, Silver, Space Gray) are displayed directly inside the viewport canvas stage as a floating glassmorphic pill, not in an accordion menu.
   - **Single Color Gate**: When a device has 0 or 1 hardware color configured (`device_colors.length <= 1`), the selector is completely hidden from the viewport.
   - **Visual Simulation Only**: Hardware chassis colors are strictly visual aids for buyers to preview cutouts against their device finish. Hardware color is never passed to WooCommerce order item metadata or checkout line items.
-  - **Clean Fallback Policy**: Fallback profiles and newly created devices default to `device_colors: []` (empty array) rather than hardcoding 4 Apple colors across non-Apple devices. Operators explicitly configure colors or load presets (Titanium, MacBook/iPad) when needed.
+  - **Clean Fallback Policy**: Fallback profiles and newly created devices default to `device_colors: []` (empty array) rather than hardcoding 4 Apple colors across non-Apple devices. Operators explicitly configure colors when needed without mock presets.
 
+---
 
+## 26. Per-Angle Hardware Color CAD Renders & Device Production Variants Architecture
 
+- **Per-Angle Hardware Color CAD Invariant**:
+  Different device colorways (such as Cosmic Orange vs Space Gray) have different CAD renders across viewing perspectives. Storing `body_images_by_view: Record<string, string>` on each color in `device_colors` allows Layer 1 to dynamically render `(activeColor.body_images_by_view?.[currentView.id] || activeColor.body_image_url || currentView.background_url)`.
+  This replaces flat CSS tinting with true photorealistic CAD geometry for each angle.
+- **Device Production Variants (Template Splits)**:
+  Physical device variants (e.g. iPad Wi-Fi Only vs Wi-Fi + Cellular) require different vinyl cutting templates in production due to physical antenna bands or SIM trays.
+  - Configured in Studio Settings tab via `variants: ConfiguratorVariant[]`.
+  - Stored natively in WooCommerce post meta via REST endpoint `saveProductConfiguratorProfileDirect`.
+  - Supports optional variant option price differences (`price_diff`), dynamically factored into storefront and tester total prices.
+  - Tested interactively in the Studio viewport tester dock with live price updates.
+- **Cutout Punching vs Skin Layer Invariant**:
+  Logo Cutout is not a skin part. Operators do not create a "Logo Skin" or "Logo Cutout" layer. A transparent alpha mask of the logo is punched via canvas `destination-out` through all applied skin layers, revealing the metallic brand logo on Layer 1 (Hardware Chassis Render).

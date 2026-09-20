@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.76] - 2026-09-20
+
+### Configurator Studio v2: Per-Angle Hardware Color CAD Renders, Device Production Variants & Accents Preset Refinement
+- **Integrated Hardware Color CAD Renders**:
+  - Replaced flat CSS color overlays with per-angle hardware body image URLs (`body_images_by_view[currentView.id]`) for each hardware colorway.
+  - When switching colors in the floating viewport pill (e.g. Cosmic Orange vs Space Gray), the chassis render swaps to the exact photorealistic CAD image for the active viewing angle.
+  - Added dedicated per-angle Image URL inputs with direct WordPress Media Library browsing in Tab 2 (Hardware Base).
+  - Removed all hardcoded mock color presets. Fallbacks default cleanly to an empty list without imposing Apple colors on third-party devices.
+- **Device Production Variants (Template Splits)**:
+  - Added full support for physical device hardware variants (e.g. iPad Wi-Fi Only vs Wi-Fi + Cellular) that require different vinyl cutting templates in production.
+  - Added a dedicated "Device Production Variants" manager in Tab 3 (Settings) with 1-click iPad Connectivity preset, custom variant addition, and configurable option price surcharges (+IDR).
+  - Added real-time interactive variant selector pills in the tester dock with live simulated total price updates.
+- **Accents Preset & Non-Destructive Preset Packs**:
+  - Changed 'Camera Accent' preset to 'Accents' with standard IDR 35,000 extra price.
+  - Built a custom glassmorphic dropdown with frosted backdrop, colored indicator dots, and formatted currency badges for adding preset layers.
+  - Removed 'Top Back Skin', 'Bottom Back Skin', and 'Pencil Skin' from common presets.
+  - Simplified Foldable preset pack to Back Skin, Camera Skin (+15k), and Hinge / Spine (+25k).
+  - Simplified Tablet preset pack to Back Skin and Accents (+35k).
+  - Configured preset pack selection to strictly append customizable skin parts without wiping or replacing existing layers, and without altering coverage or cutouts.
+- **Larger Viewport Canvas**:
+  - Expanded the viewport canvas preview box from max-w-[420px] to max-w-[560px] lg:max-w-[620px] xl:max-w-[680px] for high-resolution visual inspection.
+- **Cutout Punching vs Skin Layer Invariant**:
+  - Formalized that Logo Cutout is not a skin layer; it is an angle-level alpha mask that punches holes through all applied skins using destination-out compositing, cleanly revealing the metallic brand logo on Layer 1.
+
 ## [0.0.75] - 2026-09-20
 
 ### Configurator v2 Single-Source 3D Shading & Viewport Hardware Color Architecture

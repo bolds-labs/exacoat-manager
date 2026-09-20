@@ -27,6 +27,7 @@ import {
   ConfiguratorView,
   DeviceFamily,
   DeviceCoverageAndCutouts,
+  ConfiguratorVariant,
 } from '../types';
 import {
   Layers,
@@ -69,6 +70,7 @@ import {
   Tag,
   AlertCircle,
   FolderOpen,
+  Cpu,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { MediaLibraryModal } from '../components/modals/MediaLibraryModal';
@@ -146,6 +148,7 @@ export const DEVICE_FAMILY_PRESET_PACKS: Record<string, { label: string; family:
       { name: 'Back Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
       { name: 'Camera Skin', group: 'accent', is_required: false, is_optional: true, extra_price: 15000 },
       { name: 'Back Glass Skin', group: 'accent', is_required: false, is_optional: true, extra_price: 25000 },
+      { name: 'Accents', group: 'accent', is_required: false, is_optional: true, extra_price: 35000 },
       { name: 'Frame / Sides', group: 'protection', is_required: false, is_optional: true, extra_price: 30000 },
     ],
   },
@@ -153,8 +156,7 @@ export const DEVICE_FAMILY_PRESET_PACKS: Record<string, { label: string; family:
     label: 'Foldable (Z Flip / Fold)',
     family: 'foldable',
     parts: [
-      { name: 'Top Back Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
-      { name: 'Bottom Back Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
+      { name: 'Back Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
       { name: 'Camera Skin', group: 'accent', is_required: false, is_optional: true, extra_price: 15000 },
       { name: 'Hinge / Spine', group: 'accent', is_required: false, is_optional: true, extra_price: 25000 },
     ],
@@ -174,8 +176,7 @@ export const DEVICE_FAMILY_PRESET_PACKS: Record<string, { label: string; family:
     family: 'tablet',
     parts: [
       { name: 'Back Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
-      { name: 'Camera Accent', group: 'accent', is_required: false, is_optional: true, extra_price: 15000 },
-      { name: 'Pencil Skin', group: 'accent', is_required: false, is_optional: true, extra_price: 25000 },
+      { name: 'Accents', group: 'accent', is_required: false, is_optional: true, extra_price: 35000 },
     ],
   },
   keyboard: {
@@ -191,18 +192,15 @@ export const DEVICE_FAMILY_PRESET_PACKS: Record<string, { label: string; family:
 
 const COMMON_PRESET_LAYERS: SkinPartPreset[] = [
   { name: 'Back Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
+  { name: 'Accents', group: 'accent', is_required: false, is_optional: true, extra_price: 35000 },
   { name: 'Camera Skin', group: 'accent', is_required: false, is_optional: true, extra_price: 15000 },
   { name: 'Back Glass Skin', group: 'accent', is_required: false, is_optional: true, extra_price: 25000 },
-  { name: 'Camera Accent', group: 'accent', is_required: false, is_optional: true, extra_price: 15000 },
   { name: 'Frame / Sides', group: 'protection', is_required: false, is_optional: true, extra_price: 30000 },
   { name: 'Top Lid', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
   { name: 'Bottom Base', group: 'primary', is_required: false, is_optional: true, extra_price: 120000 },
   { name: 'Trackpad', group: 'accent', is_required: false, is_optional: true, extra_price: 40000 },
   { name: 'Palm Rest', group: 'accent', is_required: false, is_optional: true, extra_price: 80000 },
-  { name: 'Top Back Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
-  { name: 'Bottom Back Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
   { name: 'Hinge / Spine', group: 'accent', is_required: false, is_optional: true, extra_price: 25000 },
-  { name: 'Pencil Skin', group: 'accent', is_required: false, is_optional: true, extra_price: 25000 },
 ];
 
 interface V2SkinCanvasLayerProps {
@@ -476,6 +474,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [simFinishGroupFilter, setSimFinishGroupFilter] = useState<string>('all');
   const [customPartInputOpen, setCustomPartInputOpen] = useState<boolean>(false);
   const [customPartName, setCustomPartName] = useState<string>('');
+  const [isPresetDropdownOpen, setIsPresetDropdownOpen] = useState<boolean>(false);
+  const [selectedSimVariants, setSelectedSimVariants] = useState<Record<string, string>>({});
 
   const loadData = async (quiet = false, allProducts = showAllProducts) => {
     try {
@@ -630,6 +630,15 @@ export const ConfiguratorStudioPage: React.FC = () => {
         setSelectedCoverage('model_cut');
         setSelectedLogoCutout(true);
         setSelectedPencilCutout(true);
+        const initialVariants: Record<string, string> = {};
+        if (profile.variants && profile.variants.length > 0) {
+          profile.variants.forEach((v) => {
+            if (v.options && v.options.length > 0) {
+              initialVariants[v.id] = v.options[0].id;
+            }
+          });
+        }
+        setSelectedSimVariants(initialVariants);
         if (profile.views && profile.views.length > 0) {
           setActiveSimView(profile.views[0].id);
         }
@@ -1990,46 +1999,20 @@ export const ConfiguratorStudioPage: React.FC = () => {
       }
     });
 
-    // Also auto-configure default coverage mode and cutouts matching family if not explicitly set
-    const currentCoverage = editingProfile.coverage_and_cutouts || {};
-    let newCoverageType = currentCoverage.coverage_type;
-    let hasLogo = currentCoverage.has_logo_cutout;
-    let hasPencil = currentCoverage.has_pencil_cutout;
-
-    if (!newCoverageType) {
-      if (familyKey === 'phone') {
-        newCoverageType = 'model_cut_and_360';
-        hasLogo = true;
-      } else if (familyKey === 'foldable') {
-        newCoverageType = 'model_cut_only';
-      } else if (familyKey === 'tablet') {
-        newCoverageType = 'none';
-        hasLogo = true;
-        hasPencil = true;
-      } else if (familyKey === 'laptop') {
-        newCoverageType = 'none';
-        hasLogo = true;
-      } else {
-        newCoverageType = 'none';
-      }
-    }
-
     setEditingProfile({
       ...editingProfile,
       layers: newLayers,
-      coverage_and_cutouts: {
-        ...currentCoverage,
-        coverage_type: newCoverageType,
-        has_logo_cutout: hasLogo ?? true,
-        has_pencil_cutout: hasPencil ?? false,
-      },
     });
 
     setSelectedSimLayers(newSimLayers);
     if (newLayers.length > 0 && !selectedLayerId) {
       setSelectedLayerId(newLayers[0].id);
     }
-    showToast('success', 'Preset Applied', `Applied "${pack.label}" (${addedCount} parts added).`);
+    if (addedCount > 0) {
+      showToast('success', 'Preset Parts Added', `Added ${addedCount} skin part(s) from "${pack.label}" without modifying existing layers.`);
+    } else {
+      showToast('info', 'Already Added', `All skin parts from "${pack.label}" are already added.`);
+    }
   };
 
   const handleCreateCustomLayer = (rawName: string) => {
@@ -2175,6 +2158,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
         ...(editingProfile.coverage_and_cutouts || {}),
         [field]: value,
       },
+    });
+  };
+
+  const handleSetVariants = (variants: ConfiguratorVariant[]) => {
+    if (!editingProfile) return;
+    setEditingProfile({
+      ...editingProfile,
+      variants,
     });
   };
 
@@ -2468,8 +2459,19 @@ export const ConfiguratorStudioPage: React.FC = () => {
       total += extra360;
     }
 
+    // Production variant option price differences (e.g. Wi-Fi + Cellular upcharge)
+    if (editingProfile.variants && editingProfile.variants.length > 0) {
+      editingProfile.variants.forEach((v) => {
+        const selectedOptId = selectedSimVariants[v.id] || v.options[0]?.id;
+        const opt = v.options.find((o) => o.id === selectedOptId);
+        if (opt && opt.price_diff) {
+          total += Number(opt.price_diff) || 0;
+        }
+      });
+    }
+
     return total;
-  }, [editingProfile, selectedSimLayers, selectedLayerFinishes, selectedSimFinish, finishes, selectedCoverage]);
+  }, [editingProfile, selectedSimLayers, selectedLayerFinishes, selectedSimFinish, finishes, selectedCoverage, selectedSimVariants]);
 
   // Catalog Stats
   const stats = useMemo(() => {
@@ -4197,7 +4199,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         )}
 
                         {/* Device Canvas Box */}
-                        <div className="relative w-full max-w-[420px] aspect-square flex items-center justify-center drop-shadow-2xl">
+                        <div className="relative w-full max-w-[560px] lg:max-w-[620px] xl:max-w-[680px] aspect-square flex items-center justify-center drop-shadow-2xl transition-all">
                           {/* Layer 1: Hardware Chassis Base Image */}
                           {currentView?.background_url ? (
                             <div className="absolute inset-0 w-full h-full flex items-center justify-center pointer-events-none z-0">
@@ -4513,7 +4515,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         {/* Row 3: Configurable Choices (Coverage, Logo Cutout, Chassis Color) */}
                         <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-white/5 text-xs">
                           {/* Logo Cutout Toggle */}
-                          {(editingProfile.coverage_and_cutouts?.has_logo_cutout !== false) && (
+                          {(editingProfile.coverage_and_cutouts?.has_logo_cutout !== false || Boolean(currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url)) && (
                             <div className="flex items-center gap-1.5 bg-zinc-900/80 p-1 rounded-xl border border-white/10">
                               <span className="text-[11px] text-zinc-400 font-medium px-2">Logo:</span>
                               <button
@@ -4544,7 +4546,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           )}
 
                           {/* Pencil Cutout Toggle (Tablets: iPad, Galaxy Tab) */}
-                          {Boolean(editingProfile.coverage_and_cutouts?.has_pencil_cutout) && (
+                          {Boolean(editingProfile.coverage_and_cutouts?.has_pencil_cutout || currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) && (
                             <div className="flex items-center gap-1.5 bg-zinc-900/80 p-1 rounded-xl border border-white/10">
                               <span className="text-[11px] text-zinc-400 font-medium px-2">Pencil Groove:</span>
                               <button
@@ -4576,7 +4578,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                           {/* Coverage Style Toggle */}
                           {(() => {
-                            const covType = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none');
+                            const hasModelCutMask = Boolean(currentView?.model_cut_mask_url || editingProfile.coverage_and_cutouts?.model_cut_mask_url);
+                            const covType = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : (hasModelCutMask ? 'model_cut_and_360' : 'none'));
                             if (covType === 'none') return null;
 
                             if (covType === 'model_cut_only') {
@@ -4644,6 +4647,45 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </div>
                             );
                           })()}
+
+                          {/* Production Device Variants (e.g. Wi-Fi vs Cellular) */}
+                          {editingProfile.variants && editingProfile.variants.length > 0 &&
+                            editingProfile.variants.map((v) => {
+                              const activeOptId = selectedSimVariants[v.id] || v.options[0]?.id;
+                              return (
+                                <div key={v.id} className="flex items-center gap-1.5 bg-zinc-900/80 p-1 rounded-xl border border-white/10">
+                                  <span className="text-[11px] text-zinc-400 font-medium px-2">{v.name}:</span>
+                                  {v.options.map((opt) => {
+                                    const isSelected = activeOptId === opt.id;
+                                    return (
+                                      <button
+                                        key={opt.id}
+                                        type="button"
+                                        onClick={() => setSelectedSimVariants((prev) => ({ ...prev, [v.id]: opt.id }))}
+                                        className={clsx(
+                                          'px-2.5 py-1 rounded-lg text-xs font-sans transition-all cursor-pointer flex items-center gap-1.5',
+                                          isSelected
+                                            ? 'bg-sky-500 text-black font-bold shadow-sm'
+                                            : 'text-zinc-400 hover:text-white'
+                                        )}
+                                      >
+                                        <span>{opt.name}</span>
+                                        {opt.price_diff && opt.price_diff > 0 ? (
+                                          <span
+                                            className={clsx(
+                                              'text-[10px] font-mono px-1 rounded',
+                                              isSelected ? 'bg-black/20 text-black font-bold' : 'bg-white/10 text-zinc-300'
+                                            )}
+                                          >
+                                            +{opt.price_diff >= 1000 ? `${Math.round(opt.price_diff / 1000)}k` : opt.price_diff}
+                                          </span>
+                                        ) : null}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })}
                         </div>
                       </div>
                     </div>
@@ -4813,23 +4855,65 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 {/* Quick Add Chip or Custom Part */}
                                 {!customPartInputOpen ? (
                                   <div className="flex items-center gap-1.5">
-                                    <div className="relative inline-block">
-                                      <select
-                                        onChange={(e) => {
-                                          const preset = COMMON_PRESET_LAYERS.find((p) => p.name === e.target.value);
-                                          if (preset) handleAddPresetLayer(preset);
-                                          e.target.value = '';
-                                        }}
-                                        className="px-3 py-2 text-xs font-sans rounded-xl bg-zinc-900 border border-dashed border-white/20 hover:border-[#f3aa18] text-[#f3aa18] font-bold cursor-pointer focus:outline-none transition-colors"
-                                        defaultValue=""
+                                    <div className="relative">
+                                      <button
+                                        type="button"
+                                        onClick={() => setIsPresetDropdownOpen(!isPresetDropdownOpen)}
+                                        className="px-3 py-2 text-xs font-sans rounded-xl bg-zinc-900 border border-dashed border-[#f3aa18]/40 hover:border-[#f3aa18] text-[#f3aa18] font-bold cursor-pointer transition-all flex items-center gap-1.5 shadow-sm hover:bg-[#f3aa18]/10"
                                       >
-                                        <option value="" disabled>+ Add Preset Part...</option>
-                                        {COMMON_PRESET_LAYERS.map((preset) => (
-                                          <option key={preset.name} value={preset.name}>
-                                            {preset.name} (+IDR {preset.extra_price.toLocaleString('id-ID')})
-                                          </option>
-                                        ))}
-                                      </select>
+                                        <Plus className="w-3.5 h-3.5" />
+                                        <span>Add Preset Part</span>
+                                        <ChevronDown className={clsx('w-3.5 h-3.5 transition-transform duration-200', isPresetDropdownOpen && 'rotate-180')} />
+                                      </button>
+                                      {isPresetDropdownOpen && (
+                                        <>
+                                          <div
+                                            className="fixed inset-0 z-40"
+                                            onClick={() => setIsPresetDropdownOpen(false)}
+                                          />
+                                          <div className="absolute left-0 mt-1.5 w-64 max-h-80 overflow-y-auto bg-zinc-950/95 backdrop-blur-xl border border-white/15 rounded-2xl shadow-2xl z-50 p-1.5 space-y-1">
+                                            <div className="px-2.5 py-1.5 text-[10px] uppercase font-bold text-zinc-400 tracking-wider border-b border-white/5 flex items-center justify-between">
+                                              <span>Standard Skin Parts</span>
+                                              <Sparkles className="w-3 h-3 text-[#f3aa18]" />
+                                            </div>
+                                            {COMMON_PRESET_LAYERS.map((preset) => {
+                                              const isAlreadyAdded = skinLayers.some((l) => l.name.toLowerCase() === preset.name.toLowerCase());
+                                              return (
+                                                <button
+                                                  key={preset.name}
+                                                  type="button"
+                                                  disabled={isAlreadyAdded}
+                                                  onClick={() => {
+                                                    handleAddPresetLayer(preset);
+                                                    setIsPresetDropdownOpen(false);
+                                                  }}
+                                                  className={clsx(
+                                                    'w-full text-left px-2.5 py-2 rounded-xl text-xs font-sans flex items-center justify-between transition-colors',
+                                                    isAlreadyAdded
+                                                      ? 'opacity-40 cursor-not-allowed bg-zinc-900/20 text-zinc-500'
+                                                      : 'hover:bg-white/10 text-zinc-200 hover:text-white cursor-pointer group'
+                                                  )}
+                                                >
+                                                  <div className="flex items-center gap-2">
+                                                    <div className={clsx(
+                                                      'w-2 h-2 rounded-full',
+                                                      preset.group === 'primary' ? 'bg-[#f3aa18]' : 'bg-sky-400'
+                                                    )} />
+                                                    <span className="font-medium group-hover:text-[#f3aa18] transition-colors">{preset.name}</span>
+                                                  </div>
+                                                  {preset.extra_price > 0 ? (
+                                                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 font-bold border border-amber-500/20">
+                                                      +IDR {preset.extra_price.toLocaleString('id-ID')}
+                                                    </span>
+                                                  ) : (
+                                                    <span className="text-[10px] font-mono text-zinc-400">Included</span>
+                                                  )}
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        </>
+                                      )}
                                     </div>
                                     <button
                                       type="button"
@@ -5922,118 +6006,140 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 </div>
                               </div>
 
-                              {/* Presets Bar */}
-                              <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                                <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider pr-1">Presets:</span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const titanium = [
-                                      { id: 'natural-titanium', name: 'Natural Titanium', hex: '#9d9891' },
-                                      { id: 'black-titanium', name: 'Black Titanium', hex: '#2c2b29' },
-                                      { id: 'white-titanium', name: 'White Titanium', hex: '#e8e8e6' },
-                                      { id: 'desert-titanium', name: 'Desert Titanium', hex: '#c5b49d' },
-                                    ];
-                                    setEditingProfile({
-                                      ...editingProfile,
-                                      device_colors: titanium,
-                                    });
-                                    setSelectedSimColor('natural-titanium');
-                                  }}
-                                  className="px-2 py-0.5 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-medium cursor-pointer transition-colors"
-                                >
-                                  Titanium (iPhone 16 Pro)
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const macColors = [
-                                      { id: 'space-gray', name: 'Space Gray', hex: '#535559' },
-                                      { id: 'silver', name: 'Silver', hex: '#e3e4e5' },
-                                      { id: 'midnight', name: 'Midnight', hex: '#1e242b' },
-                                      { id: 'starlight', name: 'Starlight', hex: '#f0e4d3' },
-                                    ];
-                                    setEditingProfile({
-                                      ...editingProfile,
-                                      device_colors: macColors,
-                                    });
-                                    setSelectedSimColor('space-gray');
-                                  }}
-                                  className="px-2 py-0.5 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-medium cursor-pointer transition-colors"
-                                >
-                                  MacBook / iPad (4 Colors)
-                                </button>
-                              </div>
-
                               {/* Colors List */}
                               {(!editingProfile.device_colors || editingProfile.device_colors.length === 0) ? (
-                                <div className="p-3 rounded-xl bg-zinc-950/50 border border-dashed border-white/10 text-center text-xs text-zinc-500">
-                                  No hardware colors configured. Viewport selector will remain hidden.
+                                <div className="p-3.5 rounded-xl bg-zinc-950/50 border border-dashed border-white/10 text-center text-xs text-zinc-500">
+                                  No hardware colors configured. Viewport selector will remain hidden and display the default chassis image above.
                                 </div>
                               ) : (
-                                <div className="space-y-2 pt-1">
-                                  {editingProfile.device_colors.map((color, idx) => (
-                                    <div
-                                      key={color.id || idx}
-                                      className="flex items-center gap-2 p-2 rounded-xl bg-zinc-950 border border-white/5"
-                                    >
-                                      {/* Native color picker swatch */}
-                                      <div className="relative w-7 h-7 rounded-full border border-white/20 overflow-hidden shrink-0 cursor-pointer">
-                                        <input
-                                          type="color"
-                                          value={color.hex || '#535559'}
-                                          onChange={(e) => {
-                                            const nextColors = [...(editingProfile.device_colors || [])];
-                                            nextColors[idx] = { ...nextColors[idx], hex: e.target.value };
-                                            setEditingProfile({ ...editingProfile, device_colors: nextColors });
-                                          }}
-                                          className="absolute -top-2 -left-2 w-12 h-12 cursor-pointer border-0 p-0"
-                                        />
-                                      </div>
-
-                                      {/* Color Name */}
-                                      <input
-                                        type="text"
-                                        placeholder="Color Name"
-                                        value={color.name}
-                                        onChange={(e) => {
-                                          const nextColors = [...(editingProfile.device_colors || [])];
-                                          nextColors[idx] = { ...nextColors[idx], name: e.target.value };
-                                          setEditingProfile({ ...editingProfile, device_colors: nextColors });
-                                        }}
-                                        className="flex-1 px-2.5 py-1.5 text-xs rounded-lg bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
-                                      />
-
-                                      {/* Hex text input */}
-                                      <input
-                                        type="text"
-                                        placeholder="#535559"
-                                        value={color.hex}
-                                        onChange={(e) => {
-                                          const nextColors = [...(editingProfile.device_colors || [])];
-                                          nextColors[idx] = { ...nextColors[idx], hex: e.target.value };
-                                          setEditingProfile({ ...editingProfile, device_colors: nextColors });
-                                        }}
-                                        className="w-20 px-2 py-1.5 text-xs font-mono rounded-lg bg-zinc-900 border border-white/10 text-zinc-300 focus:outline-none focus:border-sky-400"
-                                      />
-
-                                      {/* Delete Color */}
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const nextColors = editingProfile.device_colors?.filter((_, i) => i !== idx) || [];
-                                          setEditingProfile({ ...editingProfile, device_colors: nextColors });
-                                          if (selectedSimColor === color.id) {
-                                            setSelectedSimColor(nextColors[0]?.id || '');
-                                          }
-                                        }}
-                                        className="p-1.5 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer"
-                                        title="Remove Color"
+                                <div className="space-y-3 pt-1">
+                                  {editingProfile.device_colors.map((color, idx) => {
+                                    const currentAngleImg =
+                                      (color as any)?.body_images_by_view?.[currentView?.id || 'main_view'] ||
+                                      (currentView?.is_default || currentView?.id === 'main_view' ? color.body_image_url : '') ||
+                                      '';
+                                    return (
+                                      <div
+                                        key={color.id || idx}
+                                        className="p-3 rounded-xl bg-zinc-950 border border-white/10 space-y-2"
                                       >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                  ))}
+                                        <div className="flex items-center gap-2">
+                                          {/* Swatch color picker */}
+                                          <div className="relative w-6 h-6 rounded-full border border-white/20 overflow-hidden shrink-0 cursor-pointer shadow-sm">
+                                            <input
+                                              type="color"
+                                              value={color.hex || '#535559'}
+                                              onChange={(e) => {
+                                                const nextColors = [...(editingProfile.device_colors || [])];
+                                                nextColors[idx] = { ...nextColors[idx], hex: e.target.value };
+                                                setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                              }}
+                                              className="absolute -top-2 -left-2 w-10 h-10 cursor-pointer border-0 p-0"
+                                            />
+                                          </div>
+
+                                          {/* Color Name */}
+                                          <input
+                                            type="text"
+                                            placeholder="e.g. Cosmic Orange, Space Gray"
+                                            value={color.name}
+                                            onChange={(e) => {
+                                              const nextColors = [...(editingProfile.device_colors || [])];
+                                              nextColors[idx] = { ...nextColors[idx], name: e.target.value };
+                                              setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                            }}
+                                            className="flex-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
+                                          />
+
+                                          {/* Hex text input */}
+                                          <input
+                                            type="text"
+                                            placeholder="#535559"
+                                            value={color.hex}
+                                            onChange={(e) => {
+                                              const nextColors = [...(editingProfile.device_colors || [])];
+                                              nextColors[idx] = { ...nextColors[idx], hex: e.target.value };
+                                              setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                            }}
+                                            className="w-20 px-2 py-1.5 text-xs font-mono rounded-lg bg-zinc-900 border border-white/10 text-zinc-300 focus:outline-none focus:border-sky-400 text-center"
+                                          />
+
+                                          {/* Delete Color */}
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const nextColors = editingProfile.device_colors?.filter((_, i) => i !== idx) || [];
+                                              setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                              if (selectedSimColor === color.id) {
+                                                setSelectedSimColor(nextColors[0]?.id || '');
+                                              }
+                                            }}
+                                            className="p-1.5 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer"
+                                            title="Remove Color"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+
+                                        {/* Per-Angle Body Image URL */}
+                                        <div className="space-y-1 pt-1 border-t border-white/5">
+                                          <div className="flex items-center justify-between text-[11px]">
+                                            <span className="text-zinc-400">
+                                              Chassis Image for <span className="text-white font-semibold">{currentView?.name || 'Active Angle'}</span>:
+                                            </span>
+                                            {currentAngleImg && <span className="text-emerald-400 font-mono text-[10px]">Configured</span>}
+                                          </div>
+                                          <div className="flex gap-2">
+                                            <input
+                                              type="url"
+                                              placeholder="https://exacoat.com/wp-content/uploads/iPhone-17-Pro-Body-Cosmic-Orange.png"
+                                              value={currentAngleImg}
+                                              onChange={(e) => {
+                                                const url = e.target.value.trim();
+                                                const nextColors = [...(editingProfile.device_colors || [])];
+                                                const viewId = currentView?.id || 'main_view';
+                                                const updatedByView = { ...((nextColors[idx] as any).body_images_by_view || {}), [viewId]: url };
+                                                nextColors[idx] = {
+                                                  ...nextColors[idx],
+                                                  body_images_by_view: updatedByView,
+                                                  body_image_url: currentView?.is_default || viewId === 'main_view' ? url : (nextColors[idx].body_image_url || url),
+                                                };
+                                                setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                              }}
+                                              className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
+                                            />
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                setMediaPickerConfig({
+                                                  isOpen: true,
+                                                  title: `Select Chassis Render for ${color.name} (${currentView?.name})`,
+                                                  recommendedDimensions: '1000x1000 Transparent PNG',
+                                                  currentUrl: currentAngleImg,
+                                                  onSelect: (url) => {
+                                                    const nextColors = [...(editingProfile.device_colors || [])];
+                                                    const viewId = currentView?.id || 'main_view';
+                                                    const updatedByView = { ...((nextColors[idx] as any).body_images_by_view || {}), [viewId]: url };
+                                                    nextColors[idx] = {
+                                                      ...nextColors[idx],
+                                                      body_images_by_view: updatedByView,
+                                                      body_image_url: currentView?.is_default || viewId === 'main_view' ? url : (nextColors[idx].body_image_url || url),
+                                                    };
+                                                    setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                                  },
+                                                })
+                                              }
+                                              className="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
+                                              title="Browse WordPress Media Library"
+                                            >
+                                              <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                              <span>Browse</span>
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               )}
                             </div>
@@ -6245,6 +6351,183 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   </span>
                                 </label>
                               </div>
+                            </div>
+
+                            {/* Device Production Variants (Template Splits) */}
+                            <div className="p-4 rounded-2xl bg-zinc-900/70 border border-white/10 space-y-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                    <Cpu className="w-4 h-4 text-[#f3aa18]" />
+                                    Device Production Variants
+                                  </h4>
+                                  <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                                    Physical hardware variants (e.g. Wi-Fi Only vs Cellular) that require different vinyl cutting templates in production.
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {(!editingProfile.variants || editingProfile.variants.length === 0) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleSetVariants([
+                                          {
+                                            id: 'connectivity',
+                                            name: 'Connectivity',
+                                            options: [
+                                              { id: 'wifi', name: 'Wi-Fi Only', price_diff: 0 },
+                                              { id: 'cellular', name: 'Wi-Fi + Cellular', price_diff: 0 },
+                                            ],
+                                          },
+                                        ]);
+                                        setSelectedSimVariants({ connectivity: 'wifi' });
+                                      }}
+                                      className="px-2.5 py-1 rounded-xl bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 border border-[#f3aa18]/30 text-[#f3aa18] text-xs font-medium cursor-pointer transition-colors"
+                                    >
+                                      + iPad Connectivity
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const nextIdx = (editingProfile.variants?.length || 0) + 1;
+                                      const newVariant: ConfiguratorVariant = {
+                                        id: `variant_${Date.now()}`,
+                                        name: `Variant ${nextIdx}`,
+                                        options: [
+                                          { id: `opt_${Date.now()}_1`, name: 'Standard', price_diff: 0 },
+                                        ],
+                                      };
+                                      const next = [...(editingProfile.variants || []), newVariant];
+                                      handleSetVariants(next);
+                                    }}
+                                    className="px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white text-xs font-medium cursor-pointer transition-colors flex items-center gap-1"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                    <span>Add Variant</span>
+                                  </button>
+                                </div>
+                              </div>
+
+                              {(!editingProfile.variants || editingProfile.variants.length === 0) ? (
+                                <div className="p-3.5 rounded-xl bg-zinc-950/40 border border-dashed border-white/10 text-center space-y-1">
+                                  <p className="text-xs text-zinc-400">No production variants configured.</p>
+                                  <p className="text-[11px] text-zinc-500">
+                                    This device uses a single cutting template for all orders. Add a variant if the hardware has multiple physical body editions (e.g. Wi-Fi vs Cellular antenna bands).
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="space-y-3">
+                                  {editingProfile.variants.map((v, vIdx) => (
+                                    <div key={v.id || vIdx} className="p-3.5 rounded-xl bg-zinc-950/70 border border-white/5 space-y-3">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="flex-1 flex items-center gap-2">
+                                          <span className="text-xs text-zinc-400 font-medium">Variant Name:</span>
+                                          <input
+                                            type="text"
+                                            value={v.name}
+                                            onChange={(e) => {
+                                              const next = [...(editingProfile.variants || [])];
+                                              next[vIdx] = { ...next[vIdx], name: e.target.value };
+                                              handleSetVariants(next);
+                                            }}
+                                            placeholder="e.g. Connectivity"
+                                            className="px-2.5 py-1 text-xs rounded-lg bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] w-44 font-semibold"
+                                          />
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const next = (editingProfile.variants || []).filter((_, idx) => idx !== vIdx);
+                                            handleSetVariants(next);
+                                          }}
+                                          className="p-1 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer"
+                                          title="Remove Variant"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+
+                                      {/* Options for this variant */}
+                                      <div className="space-y-2 pt-2 border-t border-white/5">
+                                        <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                                          <span>Production Options:</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const next = [...(editingProfile.variants || [])];
+                                              const optIdx = next[vIdx].options.length + 1;
+                                              next[vIdx] = {
+                                                ...next[vIdx],
+                                                options: [
+                                                  ...next[vIdx].options,
+                                                  { id: `opt_${Date.now()}`, name: `Option ${optIdx}`, price_diff: 0 },
+                                                ],
+                                              };
+                                              handleSetVariants(next);
+                                            }}
+                                            className="text-[10px] text-[#f3aa18] hover:underline font-medium cursor-pointer"
+                                          >
+                                            + Add Option
+                                          </button>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                          {v.options.map((opt, oIdx) => (
+                                            <div key={opt.id || oIdx} className="flex items-center gap-2 bg-zinc-900/60 px-2.5 py-1.5 rounded-lg border border-white/5">
+                                              <input
+                                                type="text"
+                                                value={opt.name}
+                                                onChange={(e) => {
+                                                  const next = [...(editingProfile.variants || [])];
+                                                  const opts = [...next[vIdx].options];
+                                                  opts[oIdx] = { ...opts[oIdx], name: e.target.value };
+                                                  next[vIdx] = { ...next[vIdx], options: opts };
+                                                  handleSetVariants(next);
+                                                }}
+                                                placeholder="e.g. Wi-Fi Only"
+                                                className="flex-1 px-2 py-0.5 text-xs rounded bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                                              />
+                                              <div className="flex items-center gap-1 shrink-0">
+                                                <span className="text-[10px] text-zinc-500 font-mono">+IDR</span>
+                                                <input
+                                                  type="number"
+                                                  step="5000"
+                                                  value={opt.price_diff || 0}
+                                                  onChange={(e) => {
+                                                    const next = [...(editingProfile.variants || [])];
+                                                    const opts = [...next[vIdx].options];
+                                                    opts[oIdx] = { ...opts[oIdx], price_diff: Number(e.target.value) || 0 };
+                                                    next[vIdx] = { ...next[vIdx], options: opts };
+                                                    handleSetVariants(next);
+                                                  }}
+                                                  className="w-20 px-1.5 py-0.5 text-xs font-mono text-right rounded bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                                                  title="Optional price surcharge for this variant"
+                                                />
+                                              </div>
+                                              {v.options.length > 1 && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    const next = [...(editingProfile.variants || [])];
+                                                    const opts = next[vIdx].options.filter((_, idx) => idx !== oIdx);
+                                                    next[vIdx] = { ...next[vIdx], options: opts };
+                                                    handleSetVariants(next);
+                                                  }}
+                                                  className="p-1 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer"
+                                                  title="Remove Option"
+                                                >
+                                                  <X className="w-3 h-3" />
+                                                </button>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
 
                             {/* Base Price & Scale */}
