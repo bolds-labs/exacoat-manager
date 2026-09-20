@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.93] - 2026-09-21
+
+### Master Textures Batch Save & Automated Storefront Revalidation
+- **Unified Dirty Tracking & Footer Controls**:
+  - Implemented centralized dirty tracking (`isFinishDirty` and `dirtyFinishes`) across all master finish editing states (texture URLs, thumbnails, names, groups, prices, stock, active status, badges, shadow opacities, highlight opacities).
+  - When unsaved modifications exist, the Master Textures modal footer displays an animated amber indicator (`{count} finish(es) with unsaved changes`), a "Cancel" button to discard uncommitted changes, and a "Save All Changes ({count})" button.
+  - When all changes are saved or clean, the modal footer displays the standard "Done" button.
+- **Individual Card Save State Cleanup**:
+  - Saving an individual finish card via `handleSaveMasterFinish` now cleanly purges that finish from all editing maps upon success, instantly transitioning the card button from "Save Changes" to "Saved".
+  - Replaced inline duplicated dirty check on cards with `isFinishDirty(f)` for consistent state synchronization across the studio.
+- **Automated Storefront Cache Revalidation**:
+  - `rest_save_finish` and `rest_save_all_finishes` in `class-configurator-engine.php` now automatically dispatch cache revalidation requests (`tag=finishes`, `path=/api/configurator/finishes`) to the Next.js storefront (`web.exacoat.com`).
+  - Finishes in v2 Modern Engine are globally inherited: modifying master finishes automatically updates all store configurators without requiring individual product revalidation.
+
 ## [0.0.92] - 2026-09-21
 
 ### Finish Group Persistence & Preservation Fix in Master Textures

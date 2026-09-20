@@ -2640,6 +2640,197 @@ export const ConfiguratorStudioPage: React.FC = () => {
     );
   }, [categories, categorySearch]);
 
+  // Check if an individual master finish has uncommitted edits
+  const isFinishDirty = (f: GlobalFinish): boolean => {
+    const isThumbDirty =
+      editingFinishThumbnails[f.id] !== undefined &&
+      editingFinishThumbnails[f.id].trim() !== (f.thumbnail || '');
+    const isUrlDirty =
+      editingFinishUrls[f.id] !== undefined &&
+      editingFinishUrls[f.id].trim() !== (f.texture_url || '');
+    const isBigUrlDirty =
+      editingFinishBigUrls[f.id] !== undefined &&
+      editingFinishBigUrls[f.id].trim() !== (f.texture_big_url || '');
+    const isNameDirty =
+      editingFinishNames[f.id] !== undefined &&
+      editingFinishNames[f.id].trim() !== f.name;
+    const isGroupDirty =
+      editingFinishGroups[f.id] !== undefined &&
+      editingFinishGroups[f.id] !== f.group;
+    const isPriceDirty =
+      editingFinishPrices[f.id] !== undefined &&
+      editingFinishPrices[f.id] !== (f.extra_price || 0);
+    const isStockDirty =
+      editingFinishStock[f.id] !== undefined &&
+      editingFinishStock[f.id] !== (f.in_stock !== false);
+    const isActiveDirty =
+      editingFinishActive[f.id] !== undefined &&
+      editingFinishActive[f.id] !== (f.is_active !== false);
+    const isCustomDirty =
+      editingFinishCustomFlags[f.id] !== undefined &&
+      editingFinishCustomFlags[f.id] !== Boolean(f.is_custom_per_device);
+    const isBadgeTextDirty =
+      editingFinishBadgeTexts[f.id] !== undefined &&
+      editingFinishBadgeTexts[f.id].trim() !== (f.badge_text || '');
+    const isBadgeColorDirty =
+      editingFinishBadgeColors[f.id] !== undefined &&
+      editingFinishBadgeColors[f.id].trim() !== (f.badge_color || '#f3aa18');
+    const isShadowDirty =
+      editingFinishShadowOpacities[f.id] !== undefined &&
+      editingFinishShadowOpacities[f.id] !== (typeof f.shadow_opacity === 'number' ? f.shadow_opacity : 0.85);
+    const isHighlightDirty =
+      editingFinishHighlightOpacities[f.id] !== undefined &&
+      editingFinishHighlightOpacities[f.id] !== (typeof f.highlight_opacity === 'number' ? f.highlight_opacity : 0.35);
+
+    return (
+      isThumbDirty ||
+      isUrlDirty ||
+      isBigUrlDirty ||
+      isNameDirty ||
+      isGroupDirty ||
+      isPriceDirty ||
+      isStockDirty ||
+      isActiveDirty ||
+      isCustomDirty ||
+      isBadgeTextDirty ||
+      isBadgeColorDirty ||
+      isShadowDirty ||
+      isHighlightDirty
+    );
+  };
+
+  // Array of all master finishes currently with unsaved changes
+  const dirtyFinishes = useMemo(() => {
+    return finishes.filter(isFinishDirty);
+  }, [
+    finishes,
+    editingFinishThumbnails,
+    editingFinishUrls,
+    editingFinishBigUrls,
+    editingFinishNames,
+    editingFinishGroups,
+    editingFinishPrices,
+    editingFinishStock,
+    editingFinishActive,
+    editingFinishCustomFlags,
+    editingFinishBadgeTexts,
+    editingFinishBadgeColors,
+    editingFinishShadowOpacities,
+    editingFinishHighlightOpacities,
+  ]);
+
+  // Discard all uncommitted master finish edits and close
+  const handleDiscardMasterFinishChanges = () => {
+    setEditingFinishUrls({});
+    setEditingFinishBigUrls({});
+    setEditingFinishThumbnails({});
+    setEditingFinishNames({});
+    setEditingFinishGroups({});
+    setEditingFinishPrices({});
+    setEditingFinishStock({});
+    setEditingFinishActive({});
+    setEditingFinishCustomFlags({});
+    setEditingFinishBadgeTexts({});
+    setEditingFinishBadgeColors({});
+    setEditingFinishShadowOpacities({});
+    setEditingFinishHighlightOpacities({});
+    setShowMasterTexturesModal(false);
+  };
+
+  // Batch save all modified master finishes
+  const [isSavingAllFinishes, setIsSavingAllFinishes] = useState(false);
+  const handleSaveAllMasterFinishes = async () => {
+    if (dirtyFinishes.length === 0) return;
+
+    try {
+      setIsSavingAllFinishes(true);
+
+      const updatedFinishes: GlobalFinish[] = finishes.map((f) => {
+        const customUrl = editingFinishUrls[f.id];
+        const newTexture = customUrl !== undefined ? customUrl.trim() : (f.texture_url || f.thumbnail || '');
+        const customBigUrl = editingFinishBigUrls[f.id];
+        const newBigTexture = customBigUrl !== undefined ? customBigUrl.trim() : (f.texture_big_url || '');
+        const customThumb = editingFinishThumbnails[f.id];
+        const newThumb = customThumb !== undefined ? customThumb.trim() : (f.thumbnail || '');
+        const customName = editingFinishNames[f.id];
+        const newName = customName !== undefined ? customName.trim() : f.name;
+        const customGroup = editingFinishGroups[f.id];
+        const newGroup = customGroup !== undefined ? customGroup.trim() : f.group;
+        const customPrice = editingFinishPrices[f.id];
+        const newPrice = customPrice !== undefined ? customPrice : (f.extra_price || 0);
+        const customStock = editingFinishStock[f.id];
+        const newStock = customStock !== undefined ? customStock : (f.in_stock !== false);
+        const customActive = editingFinishActive[f.id];
+        const newActive = customActive !== undefined ? customActive : (f.is_active !== false);
+        const customFlag = editingFinishCustomFlags[f.id];
+        const newCustomFlag = customFlag !== undefined ? customFlag : Boolean(f.is_custom_per_device);
+        const customBadgeText = editingFinishBadgeTexts[f.id];
+        const newBadgeText = customBadgeText !== undefined ? customBadgeText.trim() : (f.badge_text || '');
+        const customBadgeColor = editingFinishBadgeColors[f.id];
+        const newBadgeColor = customBadgeColor !== undefined ? customBadgeColor.trim() : (f.badge_color || '#f3aa18');
+        const customShadow = editingFinishShadowOpacities[f.id];
+        const newShadow = customShadow !== undefined ? customShadow : (typeof f.shadow_opacity === 'number' ? f.shadow_opacity : 0.85);
+        const customHighlight = editingFinishHighlightOpacities[f.id];
+        const newHighlight = customHighlight !== undefined ? customHighlight : (typeof f.highlight_opacity === 'number' ? f.highlight_opacity : 0.35);
+
+        return {
+          ...f,
+          name: newName,
+          group: newGroup,
+          thumbnail: newThumb,
+          texture_url: newTexture,
+          texture_big_url: newBigTexture,
+          extra_price: newPrice,
+          in_stock: newStock,
+          is_active: newActive,
+          is_custom_per_device: newCustomFlag,
+          badge_text: newBadgeText,
+          badge_color: newBadgeColor,
+          shadow_opacity: newShadow,
+          highlight_opacity: newHighlight,
+        };
+      });
+
+      const res = await saveAllGlobalFinishesDirect(updatedFinishes, storedFinishGroups);
+      if (res.success) {
+        showToast(
+          'success',
+          'All Finishes Saved',
+          `Successfully saved all ${dirtyFinishes.length} modified finish(es).`
+        );
+        if (Array.isArray(res.finishes)) {
+          setFinishes(res.finishes);
+        } else {
+          setFinishes(updatedFinishes);
+        }
+        if (Array.isArray(res.groups)) {
+          setStoredFinishGroups(res.groups);
+        }
+
+        // Clear all editing maps
+        setEditingFinishUrls({});
+        setEditingFinishBigUrls({});
+        setEditingFinishThumbnails({});
+        setEditingFinishNames({});
+        setEditingFinishGroups({});
+        setEditingFinishPrices({});
+        setEditingFinishStock({});
+        setEditingFinishActive({});
+        setEditingFinishCustomFlags({});
+        setEditingFinishBadgeTexts({});
+        setEditingFinishBadgeColors({});
+        setEditingFinishShadowOpacities({});
+        setEditingFinishHighlightOpacities({});
+      } else {
+        showToast('error', 'Save Failed', res.error || 'Failed saving finishes.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message || 'Error saving finishes.');
+    } finally {
+      setIsSavingAllFinishes(false);
+    }
+  };
+
   // Save master finish properties (thumbnail, texture, big texture, name, group, price, in_stock, custom per device, badge)
   const handleSaveMasterFinish = async (finish: GlobalFinish) => {
     const customUrl = editingFinishUrls[finish.id];
@@ -2720,6 +2911,21 @@ export const ConfiguratorStudioPage: React.FC = () => {
         if (Array.isArray(res.groups)) {
           setStoredFinishGroups(res.groups);
         }
+
+        // Clean up editing state for this finish so it marks as clean
+        setEditingFinishUrls((prev) => { const n = { ...prev }; delete n[finish.id]; return n; });
+        setEditingFinishBigUrls((prev) => { const n = { ...prev }; delete n[finish.id]; return n; });
+        setEditingFinishThumbnails((prev) => { const n = { ...prev }; delete n[finish.id]; return n; });
+        setEditingFinishNames((prev) => { const n = { ...prev }; delete n[finish.id]; return n; });
+        setEditingFinishGroups((prev) => { const n = { ...prev }; delete n[finish.id]; return n; });
+        setEditingFinishPrices((prev) => { const n = { ...prev }; delete n[finish.id]; return n; });
+        setEditingFinishStock((prev) => { const n = { ...prev }; delete n[finish.id]; return n; });
+        setEditingFinishActive((prev) => { const n = { ...prev }; delete n[finish.id]; return n; });
+        setEditingFinishCustomFlags((prev) => { const n = { ...prev }; delete n[finish.id]; return n; });
+        setEditingFinishBadgeTexts((prev) => { const n = { ...prev }; delete n[finish.id]; return n; });
+        setEditingFinishBadgeColors((prev) => { const n = { ...prev }; delete n[finish.id]; return n; });
+        setEditingFinishShadowOpacities((prev) => { const n = { ...prev }; delete n[finish.id]; return n; });
+        setEditingFinishHighlightOpacities((prev) => { const n = { ...prev }; delete n[finish.id]; return n; });
       } else {
         showToast('error', 'Save Failed', res.error || 'Failed updating finish');
       }
@@ -4218,7 +4424,13 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                   <button
                     type="button"
-                    onClick={() => setShowMasterTexturesModal(false)}
+                    onClick={() => {
+                      if (dirtyFinishes.length > 0) {
+                        handleDiscardMasterFinishChanges();
+                      } else {
+                        setShowMasterTexturesModal(false);
+                      }
+                    }}
                     className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
                   >
                     <X className="w-5 h-5" />
@@ -4525,33 +4737,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         : 0.35;
 
                     const isSaving = savingFinishId === f.id;
-                    const hasUnsavedChanges =
-                      (editingFinishThumbnails[f.id] !== undefined &&
-                        editingFinishThumbnails[f.id].trim() !== (f.thumbnail || '')) ||
-                      (editingFinishUrls[f.id] !== undefined &&
-                        editingFinishUrls[f.id].trim() !== (f.texture_url || '')) ||
-                      (editingFinishBigUrls[f.id] !== undefined &&
-                        editingFinishBigUrls[f.id].trim() !== (f.texture_big_url || '')) ||
-                      (editingFinishNames[f.id] !== undefined &&
-                        editingFinishNames[f.id].trim() !== f.name) ||
-                      (editingFinishGroups[f.id] !== undefined &&
-                        editingFinishGroups[f.id] !== f.group) ||
-                      (editingFinishPrices[f.id] !== undefined &&
-                        editingFinishPrices[f.id] !== (f.extra_price || 0)) ||
-                      (editingFinishStock[f.id] !== undefined &&
-                        editingFinishStock[f.id] !== (f.in_stock !== false)) ||
-                      (editingFinishActive[f.id] !== undefined &&
-                        editingFinishActive[f.id] !== (f.is_active !== false)) ||
-                      (editingFinishCustomFlags[f.id] !== undefined &&
-                        editingFinishCustomFlags[f.id] !== Boolean(f.is_custom_per_device)) ||
-                      (editingFinishBadgeTexts[f.id] !== undefined &&
-                        editingFinishBadgeTexts[f.id].trim() !== (f.badge_text || '')) ||
-                      (editingFinishBadgeColors[f.id] !== undefined &&
-                        editingFinishBadgeColors[f.id].trim() !== (f.badge_color || '#f3aa18')) ||
-                      (editingFinishShadowOpacities[f.id] !== undefined &&
-                        editingFinishShadowOpacities[f.id] !== (typeof f.shadow_opacity === 'number' ? f.shadow_opacity : 0.85)) ||
-                      (editingFinishHighlightOpacities[f.id] !== undefined &&
-                        editingFinishHighlightOpacities[f.id] !== (typeof f.highlight_opacity === 'number' ? f.highlight_opacity : 0.35));
+                    const hasUnsavedChanges = isFinishDirty(f);
 
                     const groupFinishes = finishes
                       .filter((item) => (editingFinishGroups[item.id] || item.group || '') === currentGroupInput)
@@ -5018,17 +5204,58 @@ export const ConfiguratorStudioPage: React.FC = () => {
               </div>
 
               {/* Footer */}
-              <div className="p-4 border-t border-white/10 flex items-center justify-between bg-zinc-900/50 text-xs">
-                <span className="text-zinc-400 text-[11px]">
-                  Changes saved here apply storewide across all v2 Modern device configurators in real time.
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowMasterTexturesModal(false)}
-                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium cursor-pointer transition-colors"
-                >
-                  Done
-                </button>
+              <div className="p-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-3 bg-zinc-900/50 text-xs">
+                {dirtyFinishes.length > 0 ? (
+                  <div className="flex items-center gap-2 text-amber-400">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                    <span className="font-semibold text-xs">
+                      {dirtyFinishes.length} finish{dirtyFinishes.length > 1 ? 'es' : ''} with unsaved changes
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-zinc-400 text-[11px]">
+                    Changes saved here apply storewide across all v2 Modern device configurators in real time.
+                  </span>
+                )}
+                <div className="flex items-center gap-2.5">
+                  {dirtyFinishes.length > 0 ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleDiscardMasterFinishChanges}
+                        disabled={isSavingAllFinishes}
+                        className="px-4 py-2 rounded-xl bg-white/10 hover:bg-rose-500/20 text-zinc-300 hover:text-rose-200 border border-white/10 font-medium cursor-pointer transition-colors disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveAllMasterFinishes}
+                        disabled={isSavingAllFinishes}
+                        className="px-4 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black font-semibold cursor-pointer transition-all shadow-md flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isSavingAllFinishes ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
+                        <span>
+                          {isSavingAllFinishes
+                            ? 'Saving All...'
+                            : `Save All Changes (${dirtyFinishes.length})`}
+                        </span>
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowMasterTexturesModal(false)}
+                      className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium cursor-pointer transition-colors"
+                    >
+                      Done
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>,

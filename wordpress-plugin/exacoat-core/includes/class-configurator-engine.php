@@ -809,6 +809,15 @@ class Exacoat_Configurator_Engine {
 			'finishes' => $finishes,
 			'groups'   => self::get_finish_groups(),
 		] );
+
+		// Automatically trigger storefront cache revalidation
+		self::trigger_storefront_revalidation( [
+			'tag'       => 'finishes',
+			'path'      => '/api/configurator/finishes',
+			'purge_all' => false,
+		] );
+
+		return $response;
 	}
 
 	public static function rest_delete_finish( WP_REST_Request $request ): WP_REST_Response {
@@ -883,12 +892,21 @@ class Exacoat_Configurator_Engine {
 			self::save_finishes( $finishes );
 		}
 
-		return rest_ensure_response( [
+		$response = rest_ensure_response( [
 			'success'  => true,
 			'message'  => 'All finishes and groups updated.',
 			'finishes' => self::get_finishes(),
 			'groups'   => self::get_finish_groups(),
 		] );
+
+		// Automatically trigger storefront cache revalidation
+		self::trigger_storefront_revalidation( [
+			'tag'       => 'finishes',
+			'path'      => '/api/configurator/finishes',
+			'purge_all' => false,
+		] );
+
+		return $response;
 	}
 
 	/**

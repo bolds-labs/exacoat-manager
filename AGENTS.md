@@ -866,4 +866,25 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Studio displays live finish counts on each group chip (e.g. `Other (0)`).
   - Admins can explicitly delete empty groups with 1 click via `handleDeleteGroup`, while deletion of non-empty groups is blocked with a descriptive notice prompting finish reassignment first.
 
+---
+
+## 49. Master Textures Batch Save & Automated Storefront Revalidation
+
+- **Global Master Texture Inheritance Invariant**:
+  - In v2 Modern Engine, device configurators do not store hardcoded texture URLs or finish slice assets in individual WooCommerce product metadata.
+  - Devices store exclusively geometric alpha masks (`mask_svg_url`), optional shadow maps (`shadow_png_url`), and base chassis hardware renders (`view.background_url`).
+  - On the customer storefront (`web.exacoat.com`), all device configurators dynamically inherit master finish textures from the global finishes endpoint (`/api/configurator/finishes` / `/wp-json/exacoat-core/v1/finishes`).
+  - Consequently, **operators do NOT need to revalidate, re-save, or re-audit individual devices when master textures are edited**. Updating a master finish automatically updates every phone, tablet, laptop, and console configurator storewide.
+
+- **Unified Dirty Tracking & Footer Controls**:
+  - `isFinishDirty(f)` centralizes dirty detection across all finish editing states (texture URLs, thumbnails, names, groups, prices, stock, active status, badges, shadow opacities, and highlight opacities).
+  - Modal footer dynamically reflects dirty state:
+    - When dirty: displays animated amber counter badge (`{count} finish(es) with unsaved changes`), "Cancel" button to revert and close, and golden "Save All Changes ({count})" button.
+    - When clean: displays informative operational hint and standard "Done" button.
+  - Individual card saves (`handleSaveMasterFinish`) cleanly purge the saved finish ID from all editing state maps upon success, instantly transitioning the card button from "Save Changes" to "Saved".
+
+- **Automated Next.js Storefront Cache Revalidation**:
+  - Both `rest_save_finish` and `rest_save_all_finishes` in `class-configurator-engine.php` automatically trigger Next.js On-Demand Incremental Static Regeneration (ISR) and Cloudflare edge purge via `Exacoat_Configurator_Engine::trigger_storefront_revalidation()` with `tag=finishes` and `path=/api/configurator/finishes`.
+  - Edge and client caches are purged in real time without manual admin intervention.
+
 
