@@ -26,6 +26,7 @@ import {
   ConfiguratorLayer,
   ConfiguratorView,
   DeviceFamily,
+  DeviceCoverageAndCutouts,
 } from '../types';
 import {
   Layers,
@@ -396,8 +397,13 @@ export const ConfiguratorStudioPage: React.FC = () => {
   // Live Simulator test state
   const [selectedSimLayers, setSelectedSimLayers] = useState<Record<string, boolean>>({});
   const [selectedSimFinish, setSelectedSimFinish] = useState<string>('swarm');
+  const [selectedLayerFinishes, setSelectedLayerFinishes] = useState<Record<string, string>>({});
+  const [activeSimTestingPartId, setActiveSimTestingPartId] = useState<string>('');
+  const [selectedCoverage, setSelectedCoverage] = useState<'back_only' | 'model_cut'>('back_only');
+  const [selectedLogoCutout, setSelectedLogoCutout] = useState<boolean>(true);
   const [activeSimView, setActiveSimView] = useState<string>('main_view');
   const [selectedSimColor, setSelectedSimColor] = useState<string>('space-gray');
+  const [simFinishGroupFilter, setSimFinishGroupFilter] = useState<string>('all');
 
   const loadData = async (quiet = false, allProducts = showAllProducts) => {
     try {
@@ -532,10 +538,25 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
         // Initialize simulator state
         const initialSim: Record<string, boolean> = {};
+        const initialFinishes: Record<string, string> = {};
         cleanedLayers.forEach((l) => {
           initialSim[l.id] = l.default_selected || l.is_required;
+          const lName = (l.name || '').toLowerCase();
+          if (lName.includes('back')) {
+            initialFinishes[l.id] = 'swarm';
+          } else if (lName.includes('camera') && !lName.includes('accent')) {
+            initialFinishes[l.id] = 'matte-black';
+          } else if (lName.includes('accent') || lName.includes('frame')) {
+            initialFinishes[l.id] = 'emerald-green';
+          } else {
+            initialFinishes[l.id] = l.allowed_finish_slugs?.[0] || 'swarm';
+          }
         });
         setSelectedSimLayers(initialSim);
+        setSelectedLayerFinishes(initialFinishes);
+        setActiveSimTestingPartId(cleanedLayers[0]?.id || '');
+        setSelectedCoverage('back_only');
+        setSelectedLogoCutout(true);
         if (profile.views && profile.views.length > 0) {
           setActiveSimView(profile.views[0].id);
         }
@@ -671,8 +692,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
       showToast('error', 'Source Image Required', 'Please provide a 3D render image URL (e.g. Matte White render) to extract shading.');
       return;
     }
-    if (!activeTargetLayer || !editingProfile) {
-      showToast('error', 'No Active Layer', 'Please select a layer in the studio inspector.');
+    if (!editingProfile || !activeTargetView) {
+      showToast('error', 'No Active View', 'Please select a viewing angle in the studio inspector.');
       return;
     }
 
@@ -686,33 +707,26 @@ export const ConfiguratorStudioPage: React.FC = () => {
       if (res.success && res.shadow_url && res.highlight_url) {
         const viewKey = activeTargetView?.id || 'main_view';
 
-        const updatedLayers = (editingProfile.layers || []).map((layer) => {
-          if (layer.id !== activeTargetLayer.id) return layer;
-          const currentAssets = layer.assets_by_view?.[viewKey] || {};
+        const updatedViews = (editingProfile.views || []).map((v) => {
+          if (v.id !== viewKey) return v;
           return {
-            ...layer,
-            assets_by_view: {
-              ...(layer.assets_by_view || {}),
-              [viewKey]: {
-                ...currentAssets,
-                shadow_png_url: res.shadow_url,
-                highlight_png_url: res.highlight_url,
-                shadow_opacity: currentAssets.shadow_opacity ?? 0.85,
-                highlight_opacity: currentAssets.highlight_opacity ?? 0.40,
-              },
-            },
+            ...v,
+            shadow_png_url: res.shadow_url,
+            highlight_png_url: res.highlight_url,
+            shadow_opacity: v.shadow_opacity ?? 0.85,
+            highlight_opacity: v.highlight_opacity ?? 0.40,
           };
         });
 
         setEditingProfile({
           ...editingProfile,
-          layers: updatedLayers,
+          views: updatedViews,
         });
 
         showToast(
           'success',
           'Shading Maps Extracted',
-          'Smooth multiply shadow and screen highlight PNGs generated and applied to layer.'
+          'Smooth multiply shadow and screen highlight PNGs applied to viewing angle.'
         );
         setShowShadingExtractorModal(false);
       } else {
@@ -1909,6 +1923,25 @@ export const ConfiguratorStudioPage: React.FC = () => {
     });
   };
 
+  const handleSetViewField = (viewId: string, field: keyof ConfiguratorView, value: any) => {
+    if (!editingProfile) return;
+    setEditingProfile({
+      ...editingProfile,
+      views: editingProfile.views.map((v) => (v.id === viewId ? { ...v, [field]: value } : v)),
+    });
+  };
+
+  const handleSetCoverageAndCutouts = (field: keyof DeviceCoverageAndCutouts, value: any) => {
+    if (!editingProfile) return;
+    setEditingProfile({
+      ...editingProfile,
+      coverage_and_cutouts: {
+        ...(editingProfile.coverage_and_cutouts || {}),
+        [field]: value,
+      },
+    });
+  };
+
   const handleAutofillLayerTextures = (layerId: string) => {
     if (!editingProfile || !autofillPrefix.trim()) {
       showToast('error', 'Prefix Required', 'Enter a URL prefix pattern like https://exacoat.com/uploads/iPhone-Back-');
@@ -2178,25 +2211,22 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const simulatedTotalPrice = useMemo(() => {
     if (!editingProfile) return 0;
     let total = editingProfile.base_price || 0;
+    const multiplier = editingProfile.size_multiplier || 1.0;
 
-    const activeFinish = finishes.find((f) => f.slug === selectedSimFinish || f.id === selectedSimFinish);
-    const finishTierSurcharge = (activeFinish?.extra_price || 0) * (editingProfile.size_multiplier || 1.0);
-
-    let activeLayerCount = 0;
     editingProfile.layers.forEach((layer) => {
       const isSelected = selectedSimLayers[layer.id] ?? (layer.default_selected || layer.is_required);
       if (isSelected) {
         total += Number(layer.extra_price) || 0;
-        activeLayerCount++;
+        const partFinishSlug = selectedLayerFinishes[layer.id] || selectedSimFinish;
+        const fObj = finishes.find((f) => (f.slug || f.id) === partFinishSlug || f.id === partFinishSlug);
+        if (fObj && (fObj.extra_price || 0) > 0) {
+          total += (fObj.extra_price || 0) * multiplier;
+        }
       }
     });
 
-    if (activeLayerCount > 0) {
-      total += finishTierSurcharge;
-    }
-
     return total;
-  }, [editingProfile, selectedSimLayers, selectedSimFinish, finishes]);
+  }, [editingProfile, selectedSimLayers, selectedLayerFinishes, selectedSimFinish, finishes]);
 
   // Catalog Stats
   const stats = useMemo(() => {
@@ -3789,6 +3819,24 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                 const textureMap = currentLayerAssets.render_texture_map || {};
 
+                const activeTestPartId = activeSimTestingPartId || skinLayers[0]?.id || '';
+                const activeTestLayer = skinLayers.find((l) => l.id === activeTestPartId) || skinLayers[0];
+
+                const isFinishAllowedOnTestPart = (fSlug: string) => {
+                  if (!activeTestLayer?.allowed_finish_slugs || activeTestLayer.allowed_finish_slugs.length === 0) return true;
+                  const norm = fSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
+                  return activeTestLayer.allowed_finish_slugs.some(
+                    (as) => as.toLowerCase().replace(/[^a-z0-9]/g, '') === norm
+                  );
+                };
+
+                const testPartFinishes = finishes.filter((f) => isFinishAllowedOnTestPart(f.slug || f.id));
+                const testPartGroups = Array.from(new Set(testPartFinishes.map((f) => f.group).filter(Boolean) as string[]));
+                const displayTestFinishes = testPartFinishes.filter((f) => {
+                  if (simFinishGroupFilter === 'all') return true;
+                  return f.group === simFinishGroupFilter;
+                });
+
                 return (
                   <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden bg-zinc-950">
                     {/* LEFT / CENTER PANE: Spacious Interactive Device Canvas */}
@@ -3894,30 +3942,55 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               Object.values(l.assets_by_view || {})[0] ||
                               {};
 
-                            const simNorm = selectedSimFinish.toLowerCase().replace(/[^a-z0-9]/g, '');
-                            const matchedKey = Object.keys(assets.render_texture_map || {}).find(
-                              (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === simNorm
+                            const layerFinishSlug = selectedLayerFinishes[l.id] || selectedSimFinish;
+                            const activeFinish = finishes.find(
+                              (f) => (f.slug || f.id) === layerFinishSlug || f.id === layerFinishSlug
                             );
-                            const texUrl = matchedKey ? assets.render_texture_map?.[matchedKey] || '' : '';
 
-                            // v2 Engine: Dynamic Canvas Compositing with Alpha Mask & Logo Cutout
+                            // v2 Engine: Dynamic Canvas Compositing with Alpha Mask & Buyer Cutouts
                             if (editingProfile.configurator_version === 'v2' && assets.mask_svg_url) {
-                              const activeFinish = finishes.find((f) => (f.slug || f.id) === selectedSimFinish || f.id === selectedSimFinish);
-                              const textureToTile = texUrl || activeFinish?.texture_url || '';
+                              const textureToTile = activeFinish?.texture_url || '';
                               const fallbackColor = activeFinish?.color_hex || '#18181b';
+
+                              const defaultTargetId =
+                                skinLayers.find((layer) => layer.group === 'primary' || (layer.name || '').toLowerCase().includes('back'))?.id ||
+                                skinLayers[0]?.id;
+                              const logoTargetId = editingProfile.coverage_and_cutouts?.logo_target_layer_id || defaultTargetId;
+                              const coverageTargetId = editingProfile.coverage_and_cutouts?.coverage_target_layer_id || defaultTargetId;
+
+                              const isLogoTarget = l.id === logoTargetId;
+                              const isCoverageTarget = l.id === coverageTargetId;
+
+                              const logoMaskUrl =
+                                editingProfile.coverage_and_cutouts?.logo_cutout_mask_url ||
+                                assets.logo_cutout_url ||
+                                currentView?.logo_url;
+                              const modelMaskUrl =
+                                editingProfile.coverage_and_cutouts?.model_cut_mask_url ||
+                                assets.model_cutout_url;
+
+                              const effectiveLogoCutout = selectedLogoCutout && isLogoTarget ? logoMaskUrl : undefined;
+                              const effectiveModelCutout = selectedCoverage === 'model_cut' && isCoverageTarget ? modelMaskUrl : undefined;
+
                               return (
                                 <V2SkinCanvasLayer
-                                  key={`v2-canvas-${l.id}`}
+                                  key={`v2-canvas-${l.id}-${layerFinishSlug}-${selectedLogoCutout ? 'logo' : 'nologo'}-${selectedCoverage}`}
                                   maskUrl={assets.mask_svg_url}
                                   textureUrl={textureToTile}
                                   fallbackColor={fallbackColor}
-                                  logoCutoutUrl={assets.logo_cutout_url || currentView?.logo_url}
-                                  modelCutoutUrl={assets.model_cutout_url}
+                                  logoCutoutUrl={effectiveLogoCutout}
+                                  modelCutoutUrl={effectiveModelCutout}
                                   zIndex={(l.z_index || 1) + 5}
                                   layerName={l.name}
                                 />
                               );
                             }
+
+                            const simNorm = layerFinishSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
+                            const matchedKey = Object.keys(assets.render_texture_map || {}).find(
+                              (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === simNorm
+                            );
+                            const texUrl = matchedKey ? assets.render_texture_map?.[matchedKey] || '' : '';
 
                             if (!texUrl) return null;
 
@@ -3935,53 +4008,53 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             );
                           })}
 
-                          {/* Layer 3: Realistic Multiply Shadow Overlay (v2 Engine) */}
-                          {editingProfile.configurator_version === 'v2' &&
-                            skinLayers.map((l) => {
-                              const isChecked = selectedSimLayers[l.id] ?? (l.default_selected || l.is_required);
-                              if (!isChecked) return null;
-
-                              const assets =
-                                l.assets_by_view?.[currentView?.id || 'main_view'] ||
-                                l.assets_by_view?.['main_view'] ||
-                                Object.values(l.assets_by_view || {})[0] ||
-                                {};
-
-                              return (
-                                <React.Fragment key={`shading-${l.id}`}>
-                                  {assets.shadow_png_url && (
-                                    <img
-                                      src={assets.shadow_png_url}
-                                      alt={`${l.name} Shadow`}
-                                      style={{
-                                        zIndex: (l.z_index || 1) + 20,
-                                        mixBlendMode: 'multiply',
-                                        opacity: assets.shadow_opacity ?? 0.85,
-                                      }}
-                                      className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity"
-                                      onError={(e) => {
-                                        (e.target as HTMLElement).style.display = 'none';
-                                      }}
-                                    />
-                                  )}
-                                  {assets.highlight_png_url && (
-                                    <img
-                                      src={assets.highlight_png_url}
-                                      alt={`${l.name} Highlight`}
-                                      style={{
-                                        zIndex: (l.z_index || 1) + 25,
-                                        mixBlendMode: 'screen',
-                                        opacity: assets.highlight_opacity ?? 0.40,
-                                      }}
-                                      className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity"
-                                      onError={(e) => {
-                                        (e.target as HTMLElement).style.display = 'none';
-                                      }}
-                                    />
-                                  )}
-                                </React.Fragment>
-                              );
-                            })}
+                          {/* Layer 3: Realistic Multiply Shadow & Specular Highlights (v2 View Shading) */}
+                          {editingProfile.configurator_version === 'v2' && currentView && (
+                            <React.Fragment key={`view-shading-${currentView.id}`}>
+                              {Boolean(
+                                currentView.shadow_png_url ||
+                                  skinLayers.find((l) => l.assets_by_view?.[currentView.id]?.shadow_png_url)?.assets_by_view?.[currentView.id]?.shadow_png_url
+                              ) && (
+                                <img
+                                  src={
+                                    currentView.shadow_png_url ||
+                                    skinLayers.find((l) => l.assets_by_view?.[currentView.id]?.shadow_png_url)?.assets_by_view?.[currentView.id]?.shadow_png_url
+                                  }
+                                  alt={`${currentView.name} 3D Shadow`}
+                                  style={{
+                                    zIndex: 20,
+                                    mixBlendMode: 'multiply',
+                                    opacity: currentView.shadow_opacity ?? 0.85,
+                                  }}
+                                  className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity"
+                                  onError={(e) => {
+                                    (e.target as HTMLElement).style.display = 'none';
+                                  }}
+                                />
+                              )}
+                              {Boolean(
+                                currentView.highlight_png_url ||
+                                  skinLayers.find((l) => l.assets_by_view?.[currentView.id]?.highlight_png_url)?.assets_by_view?.[currentView.id]?.highlight_png_url
+                              ) && (
+                                <img
+                                  src={
+                                    currentView.highlight_png_url ||
+                                    skinLayers.find((l) => l.assets_by_view?.[currentView.id]?.highlight_png_url)?.assets_by_view?.[currentView.id]?.highlight_png_url
+                                  }
+                                  alt={`${currentView.name} 3D Highlight`}
+                                  style={{
+                                    zIndex: 25,
+                                    mixBlendMode: 'screen',
+                                    opacity: currentView.highlight_opacity ?? 0.40,
+                                  }}
+                                  className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity"
+                                  onError={(e) => {
+                                    (e.target as HTMLElement).style.display = 'none';
+                                  }}
+                                />
+                              )}
+                            </React.Fragment>
+                          )}
 
                           {/* Layer 4: Optional Hardware Accent / Logo Overlay */}
                           {currentView?.logo_url && (
@@ -3999,36 +4072,223 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Bottom Floating Bar on Stage: Price & Active Material Info */}
-                      <div className="p-5 flex items-center justify-between z-10">
-                        <div className="flex items-center gap-3 bg-zinc-900/90 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/10 shadow-lg">
-                          <div className="w-7 h-7 rounded-xl overflow-hidden bg-zinc-800 border border-white/10 shrink-0 flex items-center justify-center">
-                            {(() => {
-                              const activeF = finishes.find(
-                                (f) => (f.slug || f.id) === selectedSimFinish
+                      {/* INTERACTIVE CONFIGURATOR TESTER DOCK */}
+                      <div className="border-t border-white/10 bg-zinc-950/95 backdrop-blur-xl p-4 space-y-3 z-10 shrink-0">
+                        {/* Row 1: Active Part Tabs & Real-Time Price */}
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 overflow-x-auto py-0.5">
+                            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 shrink-0 pr-1">
+                              <Sparkles className="w-3.5 h-3.5 text-[#f3aa18]" />
+                              Part:
+                            </span>
+                            {skinLayers.map((l) => {
+                              const partFinishSlug = selectedLayerFinishes[l.id] || selectedSimFinish;
+                              const partFinish = finishes.find((f) => (f.slug || f.id) === partFinishSlug || f.id === partFinishSlug);
+                              const isTesting = activeTestPartId === l.id;
+                              return (
+                                <button
+                                  key={l.id}
+                                  type="button"
+                                  onClick={() => setActiveSimTestingPartId(l.id)}
+                                  className={clsx(
+                                    'px-3 py-1.5 rounded-xl text-xs font-sans font-medium flex items-center gap-2 transition-all cursor-pointer border shrink-0',
+                                    isTesting
+                                      ? 'bg-white/15 border-white/30 text-white shadow-md ring-1 ring-[#f3aa18]/40'
+                                      : 'bg-zinc-900/80 border-white/5 text-zinc-400 hover:text-white hover:bg-zinc-800/80'
+                                  )}
+                                >
+                                  {partFinish?.thumbnail ? (
+                                    <img src={partFinish.thumbnail} alt={partFinish.name} className="w-3.5 h-3.5 rounded-full object-cover border border-white/20 shrink-0" />
+                                  ) : (
+                                    <span
+                                      className="w-3.5 h-3.5 rounded-full border border-white/20 shrink-0"
+                                      style={{ backgroundColor: partFinish?.color_hex || '#444' }}
+                                    />
+                                  )}
+                                  <span className="font-semibold">{l.name}</span>
+                                  <span className="text-[10px] font-mono text-zinc-400 max-w-[80px] truncate">
+                                    {partFinish?.name || 'Default'}
+                                  </span>
+                                </button>
                               );
-                              return activeF?.thumbnail ? (
-                                <img src={activeF.thumbnail} alt={activeF.name} className="w-full h-full object-cover" />
-                              ) : (
-                                <Sparkles className="w-3.5 h-3.5 text-[#f3aa18]" />
-                              );
-                            })()}
+                            })}
                           </div>
-                          <div>
-                            <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold">Active Texture Test</p>
-                            <p className="text-xs font-bold text-white truncate max-w-[160px]">
-                              {finishes.find((f) => (f.slug || f.id) === selectedSimFinish)?.name || selectedSimFinish}
-                            </p>
+
+                          <div className="flex items-center gap-3 shrink-0 ml-auto">
+                            <div className="text-right">
+                              <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold">Live Total</p>
+                              <p className="text-sm font-mono font-bold text-emerald-400">
+                                IDR {simulatedTotalPrice.toLocaleString('id-ID')}
+                              </p>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3 bg-zinc-900/90 backdrop-blur-md px-5 py-2.5 rounded-2xl border border-white/10 shadow-lg">
-                          <div>
-                            <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold text-right">Calculated Total</p>
-                            <p className="text-base font-mono font-bold text-emerald-400">
-                              IDR {simulatedTotalPrice.toLocaleString('id-ID')}
-                            </p>
+                        {/* Row 2: Finish Swatches for the Active Part */}
+                        <div className="space-y-2 pt-1 border-t border-white/5">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 text-xs">
+                              <button
+                                type="button"
+                                onClick={() => setSimFinishGroupFilter('all')}
+                                className={clsx(
+                                  'px-2.5 py-0.5 rounded-lg text-[11px] font-sans transition-all cursor-pointer border shrink-0',
+                                  simFinishGroupFilter === 'all'
+                                    ? 'bg-[#f3aa18] text-black font-bold border-[#f3aa18]'
+                                    : 'bg-zinc-900 border-white/5 text-zinc-400 hover:text-white'
+                                )}
+                              >
+                                All ({testPartFinishes.length})
+                              </button>
+                              {testPartGroups.map((grp) => (
+                                <button
+                                  key={grp}
+                                  type="button"
+                                  onClick={() => setSimFinishGroupFilter(grp)}
+                                  className={clsx(
+                                    'px-2.5 py-0.5 rounded-lg text-[11px] font-sans transition-all cursor-pointer border shrink-0',
+                                    simFinishGroupFilter === grp
+                                      ? 'bg-[#f3aa18] text-black font-bold border-[#f3aa18]'
+                                      : 'bg-zinc-900 border-white/5 text-zinc-400 hover:text-white'
+                                  )}
+                                >
+                                  {grp}
+                                </button>
+                              ))}
+                            </div>
+                            <span className="text-[10px] text-zinc-500 font-mono hidden sm:inline shrink-0">
+                              Choose finish for {activeTestLayer?.name}
+                            </span>
                           </div>
+
+                          {/* Horizontal Swatches Carousel */}
+                          <div className="flex items-center gap-2 overflow-x-auto py-1 scrollbar-thin scrollbar-thumb-zinc-800">
+                            {displayTestFinishes.map((finish) => {
+                              const fSlug = finish.slug || finish.id;
+                              const currentPartSlug = selectedLayerFinishes[activeTestPartId] || selectedSimFinish;
+                              const isSelected = currentPartSlug === fSlug || currentPartSlug === finish.id;
+                              const extra = (finish.extra_price || 0) * (editingProfile.size_multiplier || 1.0);
+
+                              return (
+                                <button
+                                  key={finish.id}
+                                  type="button"
+                                  title={`${finish.name}${extra > 0 ? ` (+IDR ${extra.toLocaleString('id-ID')})` : ''}`}
+                                  onClick={() => {
+                                    setSelectedLayerFinishes((prev) => ({ ...prev, [activeTestPartId]: fSlug }));
+                                    setSelectedSimFinish(fSlug);
+                                  }}
+                                  className={clsx(
+                                    'group relative w-9 h-9 rounded-xl overflow-hidden shrink-0 border transition-all cursor-pointer flex items-center justify-center p-0.5',
+                                    isSelected
+                                      ? 'border-[#f3aa18] ring-2 ring-[#f3aa18]/40 scale-105'
+                                      : 'border-white/10 hover:border-white/30 hover:scale-105'
+                                  )}
+                                >
+                                  {finish.thumbnail ? (
+                                    <img src={finish.thumbnail} alt={finish.name} className="w-full h-full object-cover rounded-lg" />
+                                  ) : (
+                                    <div className="w-full h-full rounded-lg" style={{ backgroundColor: finish.color_hex || '#333' }} />
+                                  )}
+                                  {isSelected && (
+                                    <div className="absolute inset-0 bg-[#f3aa18]/20 flex items-center justify-center">
+                                      <Check className="w-3.5 h-3.5 text-white drop-shadow-md" />
+                                    </div>
+                                  )}
+                                  {extra > 0 && (
+                                    <span className="absolute bottom-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Row 3: Configurable Choices (Coverage, Logo Cutout, Chassis Color) */}
+                        <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-white/5 text-xs">
+                          {/* Logo Cutout Toggle */}
+                          {(editingProfile.coverage_and_cutouts?.has_logo_cutout !== false) && (
+                            <div className="flex items-center gap-1.5 bg-zinc-900/80 p-1 rounded-xl border border-white/10">
+                              <span className="text-[11px] text-zinc-400 font-medium px-2">Logo:</span>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedLogoCutout(true)}
+                                className={clsx(
+                                  'px-2.5 py-1 rounded-lg text-xs font-sans transition-all cursor-pointer',
+                                  selectedLogoCutout
+                                    ? 'bg-[#f3aa18] text-black font-bold shadow-sm'
+                                    : 'text-zinc-400 hover:text-white'
+                                )}
+                              >
+                                With Cutout
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedLogoCutout(false)}
+                                className={clsx(
+                                  'px-2.5 py-1 rounded-lg text-xs font-sans transition-all cursor-pointer',
+                                  !selectedLogoCutout
+                                    ? 'bg-[#f3aa18] text-black font-bold shadow-sm'
+                                    : 'text-zinc-400 hover:text-white'
+                                )}
+                              >
+                                Solid / No Logo
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Coverage Style Toggle */}
+                          {Boolean(editingProfile.coverage_and_cutouts?.has_model_cut || editingProfile.coverage_and_cutouts?.model_cut_mask_url) && (
+                            <div className="flex items-center gap-1.5 bg-zinc-900/80 p-1 rounded-xl border border-white/10">
+                              <span className="text-[11px] text-zinc-400 font-medium px-2">Coverage:</span>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedCoverage('back_only')}
+                                className={clsx(
+                                  'px-2.5 py-1 rounded-lg text-xs font-sans transition-all cursor-pointer',
+                                  selectedCoverage === 'back_only'
+                                    ? 'bg-sky-500 text-black font-bold shadow-sm'
+                                    : 'text-zinc-400 hover:text-white'
+                                )}
+                              >
+                                Back Only
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedCoverage('model_cut')}
+                                className={clsx(
+                                  'px-2.5 py-1 rounded-lg text-xs font-sans transition-all cursor-pointer',
+                                  selectedCoverage === 'model_cut'
+                                    ? 'bg-sky-500 text-black font-bold shadow-sm'
+                                    : 'text-zinc-400 hover:text-white'
+                                )}
+                              >
+                                Full Frame 360
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Chassis Base Color Swatches */}
+                          {editingProfile.device_colors && editingProfile.device_colors.length > 0 && (
+                            <div className="flex items-center gap-1.5 bg-zinc-900/80 p-1 rounded-xl border border-white/10 ml-auto">
+                              <span className="text-[11px] text-zinc-400 font-medium px-2">Hardware:</span>
+                              {editingProfile.device_colors.map((c) => (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  onClick={() => setSelectedSimColor(c.id)}
+                                  title={c.name}
+                                  className={clsx(
+                                    'w-5 h-5 rounded-full border transition-all cursor-pointer',
+                                    selectedSimColor === c.id
+                                      ? 'border-[#f3aa18] ring-2 ring-[#f3aa18]/50 scale-110'
+                                      : 'border-white/20 hover:border-white/60'
+                                  )}
+                                  style={{ backgroundColor: c.hex }}
+                                />
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -4338,14 +4598,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   )}
                                 </div>
 
-                                {/* v2 Modern Engine Overlays (Mask & Realistic Shadow) */}
+                                {/* v2 Modern Engine Alpha Mask */}
                                 {editingProfile.configurator_version === 'v2' && (
                                   <div className="p-3.5 rounded-xl bg-sky-950/25 border border-sky-500/25 space-y-3">
                                     <div className="flex items-center justify-between">
                                       <div className="flex items-center gap-2">
                                         <Sparkles className="w-3.5 h-3.5 text-sky-400" />
                                         <span className="text-xs font-bold text-white uppercase tracking-wider">
-                                          v2 Modern Canvas Overlays ({currentView?.name})
+                                          Skin Part Alpha Mask ({currentView?.name})
                                         </span>
                                       </div>
                                       <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-500/10 text-sky-300 border border-sky-500/20">
@@ -4353,282 +4613,43 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       </span>
                                     </div>
                                     <p className="text-[11px] text-zinc-400 leading-relaxed">
-                                      v2 clips global master texture swatches using an alpha mask and renders photorealistic ambient occlusion. All images must be on the exact same 1000x1000px canvas as the device chassis.
+                                      Provide the 1000x1000 alpha mask (transparent PNG or SVG) defining the physical cut of this skin part. Global master textures are automatically clipped inside this mask.
                                     </p>
 
-                                    <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/25 flex items-center justify-between gap-3">
-                                      <div className="text-[11px] text-sky-200">
-                                        <span className="font-semibold block text-sky-100">Global Finish Textures</span>
-                                        <span>Master textures apply to all v2 devices storewide.</span>
+                                    <div className="space-y-1.5 pt-1">
+                                      <label className="text-[10px] font-mono text-zinc-300 block flex items-center justify-between">
+                                        <span>Part Alpha Mask URL (1000x1000 PNG / SVG)</span>
+                                        {currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url && (
+                                          <span className="text-emerald-400 text-[10px] font-semibold">Configured</span>
+                                        )}
+                                      </label>
+                                      <div className="flex gap-2">
+                                        <input
+                                          type="text"
+                                          placeholder="https://exacoat.com/uploads/device-part-mask.png"
+                                          value={currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url || ''}
+                                          onChange={(e) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'mask_svg_url', e.target.value)}
+                                          className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setMediaPickerConfig({
+                                              isOpen: true,
+                                              title: `Select Alpha Mask: ${currentActiveLayer.name}`,
+                                              recommendedDimensions: '1000x1000 Alpha PNG or SVG',
+                                              currentUrl: currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url || '',
+                                              onSelect: (url) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'mask_svg_url', url),
+                                            })
+                                          }
+                                          className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
+                                          title="Browse WordPress Media Library"
+                                        >
+                                          <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                          <span>Browse</span>
+                                        </button>
                                       </div>
-                                      <button
-                                        type="button"
-                                        onClick={() => setShowMasterTexturesModal(true)}
-                                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 flex items-center gap-1.5 cursor-pointer shrink-0 transition-colors"
-                                      >
-                                        <Sparkles className="w-3 h-3 text-sky-400" />
-                                        <span>Manage Master Textures</span>
-                                      </button>
                                     </div>
-
-                                     <div className="space-y-3 pt-1">
-                                       {/* 1. Alpha Skin Mask */}
-                                       <div>
-                                         <label className="text-[10px] font-mono text-zinc-300 block mb-1 flex items-center justify-between">
-                                           <span>1. Vector / Alpha Mask URL (1000x1000 Alpha PNG)</span>
-                                           {currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url && (
-                                             <span className="text-emerald-400 text-[10px] font-semibold">Configured</span>
-                                           )}
-                                         </label>
-                                         <div className="flex gap-2">
-                                           <input
-                                             type="text"
-                                             placeholder="https://exacoat.com/uploads/device-part-mask.png"
-                                             value={currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url || ''}
-                                             onChange={(e) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'mask_svg_url', e.target.value)}
-                                             className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
-                                           />
-                                           <button
-                                             type="button"
-                                             onClick={() =>
-                                               setMediaPickerConfig({
-                                                 isOpen: true,
-                                                 title: `Select Alpha Mask: ${currentActiveLayer.name}`,
-                                                 recommendedDimensions: '1000x1000 Alpha PNG or SVG',
-                                                 currentUrl: currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url || '',
-                                                 onSelect: (url) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'mask_svg_url', url),
-                                               })
-                                             }
-                                             className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
-                                             title="Browse WordPress Media Library"
-                                           >
-                                             <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                             <span>Browse</span>
-                                           </button>
-                                         </div>
-                                         <p className="text-[10px] text-zinc-500 mt-0.5">Defines the silhouette boundary for this skin part.</p>
-                                       </div>
-
-                                       {/* 2. Logo Hole Cutout Mask */}
-                                       <div>
-                                         <label className="text-[10px] font-mono text-zinc-300 block mb-1 flex items-center justify-between">
-                                           <span>2. Logo Hole Cutout Mask (1000x1000 Transparent PNG)</span>
-                                           {currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.logo_cutout_url && (
-                                             <span className="text-emerald-400 text-[10px] font-semibold">Configured</span>
-                                           )}
-                                         </label>
-                                         <div className="flex gap-2">
-                                           <input
-                                             type="text"
-                                             placeholder="https://exacoat.com/uploads/device-logo-cutout.png"
-                                             value={currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.logo_cutout_url || ''}
-                                             onChange={(e) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'logo_cutout_url', e.target.value)}
-                                             className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
-                                           />
-                                           <button
-                                             type="button"
-                                             onClick={() =>
-                                               setMediaPickerConfig({
-                                                 isOpen: true,
-                                                 title: `Select Logo Cutout Mask: ${currentActiveLayer.name}`,
-                                                 recommendedDimensions: '1000x1000 Transparent PNG',
-                                                 currentUrl: currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.logo_cutout_url || '',
-                                                 onSelect: (url) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'logo_cutout_url', url),
-                                               })
-                                             }
-                                             className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
-                                             title="Browse WordPress Media Library"
-                                           >
-                                             <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                             <span>Browse</span>
-                                           </button>
-                                         </div>
-                                         <p className="text-[10px] text-zinc-500 mt-0.5">Erases vinyl inside logo shape so the underlying hardware chassis shines through.</p>
-                                       </div>
-
-                                       {/* 3. Model Cut / Frame Cutout Mask */}
-                                       <div>
-                                         <label className="text-[10px] font-mono text-zinc-300 block mb-1 flex items-center justify-between">
-                                           <span>3. Model Cut / Frame Cutout (Optional 1000x1000 PNG)</span>
-                                           {currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.model_cutout_url && (
-                                             <span className="text-emerald-400 text-[10px] font-semibold">Configured</span>
-                                           )}
-                                         </label>
-                                         <div className="flex gap-2">
-                                           <input
-                                             type="text"
-                                             placeholder="https://exacoat.com/uploads/device-model-cutout.png"
-                                             value={currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.model_cutout_url || ''}
-                                             onChange={(e) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'model_cutout_url', e.target.value)}
-                                             className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
-                                           />
-                                           <button
-                                             type="button"
-                                             onClick={() =>
-                                               setMediaPickerConfig({
-                                                 isOpen: true,
-                                                 title: `Select Model Cut Mask: ${currentActiveLayer.name}`,
-                                                 recommendedDimensions: '1000x1000 Transparent PNG',
-                                                 currentUrl: currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.model_cutout_url || '',
-                                                 onSelect: (url) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'model_cutout_url', url),
-                                               })
-                                             }
-                                             className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
-                                             title="Browse WordPress Media Library"
-                                           >
-                                             <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                             <span>Browse</span>
-                                           </button>
-                                         </div>
-                                         <p className="text-[10px] text-zinc-500 mt-0.5">Erases outer edge perimeter for Back-Only / Model Cut vs 360 wrap.</p>
-                                       </div>
-
-                                       {/* 4. Multiply Shadow & Ambient Occlusion */}
-                                       <div className="pt-2 border-t border-white/5 space-y-1.5">
-                                         <label className="text-[10px] font-mono text-zinc-300 block flex items-center justify-between">
-                                           <span>4. Multiply Shadow & Ambient Occlusion (PNG)</span>
-                                           {currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.shadow_png_url && (
-                                             <span className="text-emerald-400 text-[10px] font-semibold">Configured</span>
-                                           )}
-                                         </label>
-                                         <div className="flex gap-2">
-                                           <input
-                                             type="text"
-                                             placeholder="https://exacoat.com/uploads/device-part-shadow.png"
-                                             value={currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.shadow_png_url || ''}
-                                             onChange={(e) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'shadow_png_url', e.target.value)}
-                                             className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
-                                           />
-                                           <button
-                                             type="button"
-                                             onClick={() =>
-                                               setMediaPickerConfig({
-                                                 isOpen: true,
-                                                 title: `Select Shadow / Ambient Occlusion: ${currentActiveLayer.name}`,
-                                                 recommendedDimensions: '1000x1000 Transparent PNG',
-                                                 currentUrl: currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.shadow_png_url || '',
-                                                 onSelect: (url) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'shadow_png_url', url),
-                                               })
-                                             }
-                                             className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
-                                             title="Browse WordPress Media Library"
-                                           >
-                                             <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                             <span>Browse</span>
-                                           </button>
-                                         </div>
-
-                                         {/* Shadow Opacity Dynamic Slider */}
-                                         <div className="flex items-center justify-between gap-3 pt-1">
-                                           <span className="text-[10px] text-zinc-400 font-mono shrink-0">Shadow Opacity:</span>
-                                           <input
-                                             type="range"
-                                             min="0"
-                                             max="1"
-                                             step="0.05"
-                                             value={currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.shadow_opacity ?? 0.85}
-                                             onChange={(e) =>
-                                               handleSetLayerOverlayUrl(
-                                                 currentActiveLayer.id,
-                                                 'shadow_opacity',
-                                                 parseFloat(e.target.value)
-                                               )
-                                             }
-                                             className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#f3aa18]"
-                                           />
-                                           <span className="text-[11px] font-mono text-white shrink-0 w-9 text-right">
-                                             {Math.round(
-                                               (currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.shadow_opacity ?? 0.85) * 100
-                                             )}%
-                                           </span>
-                                         </div>
-                                       </div>
-
-                                       {/* 5. Screen Highlight & Specular Rim Light */}
-                                       <div className="pt-2 border-t border-white/5 space-y-1.5">
-                                         <label className="text-[10px] font-mono text-zinc-300 block flex items-center justify-between">
-                                           <span>5. Screen Highlight & Edge Bevel (PNG)</span>
-                                           {currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.highlight_png_url && (
-                                             <span className="text-emerald-400 text-[10px] font-semibold">Configured</span>
-                                           )}
-                                         </label>
-                                         <div className="flex gap-2">
-                                           <input
-                                             type="text"
-                                             placeholder="https://exacoat.com/uploads/device-part-highlight.png"
-                                             value={currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.highlight_png_url || ''}
-                                             onChange={(e) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'highlight_png_url', e.target.value)}
-                                             className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-sky-400"
-                                           />
-                                           <button
-                                             type="button"
-                                             onClick={() =>
-                                               setMediaPickerConfig({
-                                                 isOpen: true,
-                                                 title: `Select Screen Highlight: ${currentActiveLayer.name}`,
-                                                 recommendedDimensions: '1000x1000 Transparent PNG',
-                                                 currentUrl: currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.highlight_png_url || '',
-                                                 onSelect: (url) => handleSetLayerOverlayUrl(currentActiveLayer.id, 'highlight_png_url', url),
-                                               })
-                                             }
-                                             className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
-                                             title="Browse WordPress Media Library"
-                                           >
-                                             <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                             <span>Browse</span>
-                                           </button>
-                                         </div>
-
-                                         {/* Highlight Opacity Dynamic Slider */}
-                                         <div className="flex items-center justify-between gap-3 pt-1">
-                                           <span className="text-[10px] text-zinc-400 font-mono shrink-0">Highlight Opacity:</span>
-                                           <input
-                                             type="range"
-                                             min="0"
-                                             max="1"
-                                             step="0.05"
-                                             value={currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.highlight_opacity ?? 0.40}
-                                             onChange={(e) =>
-                                               handleSetLayerOverlayUrl(
-                                                 currentActiveLayer.id,
-                                                 'highlight_opacity',
-                                                 parseFloat(e.target.value)
-                                               )
-                                             }
-                                             className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-sky-400"
-                                           />
-                                           <span className="text-[11px] font-mono text-white shrink-0 w-9 text-right">
-                                             {Math.round(
-                                               (currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.highlight_opacity ?? 0.40) * 100
-                                             )}%
-                                           </span>
-                                         </div>
-                                       </div>
-
-                                       {/* 6. Automated Shading Extractor Action Callout */}
-                                       <div className="pt-2 border-t border-sky-500/20 flex items-center justify-between gap-3 bg-sky-500/5 p-2.5 rounded-xl">
-                                         <div className="text-[11px] text-zinc-300">
-                                           <span className="font-bold text-white block flex items-center gap-1.5">
-                                             <Sliders className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                             Extract Shading from 3D Render
-                                           </span>
-                                           <span className="text-zinc-400 text-[10px]">Auto-generate smooth shadow and highlight maps from a Matte White render.</span>
-                                         </div>
-                                         <button
-                                           type="button"
-                                           onClick={() => {
-                                             setShadingSourceUrl(
-                                               currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view']?.mask_svg_url || ''
-                                             );
-                                             setShowShadingExtractorModal(true);
-                                           }}
-                                           className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 text-[#f3aa18] border border-[#f3aa18]/30 flex items-center gap-1.5 cursor-pointer shrink-0 transition-all shadow-sm"
-                                         >
-                                           <Wand2 className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                           <span>Extract Shading</span>
-                                         </button>
-                                       </div>
-                                     </div>
                                   </div>
                                 )}
                               </div>
@@ -5138,6 +5159,134 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   </p>
                                 </div>
 
+                                {/* 3D Shading & Specular Highlights for this Angle */}
+                                <div className="space-y-4 pt-3 border-t border-white/5">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                                        <Wand2 className="w-3.5 h-3.5 text-amber-400" />
+                                        <span>Angle 3D Shading & Highlights</span>
+                                      </label>
+                                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                                        Multiply shadow and screen highlight PNGs composited over all skin pieces.
+                                      </p>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setShadingSourceUrl(currentView.background_url || '');
+                                        setShowShadingExtractorModal(true);
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 text-xs font-medium flex items-center gap-1.5 cursor-pointer transition-colors shrink-0"
+                                    >
+                                      <Wand2 className="w-3 h-3 text-amber-400" />
+                                      <span>Extract from Render</span>
+                                    </button>
+                                  </div>
+
+                                  {/* Multiply Shadow */}
+                                  <div className="space-y-1.5 bg-black/30 p-3 rounded-xl border border-white/5">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-bold text-zinc-300">3D Multiply Shadow PNG</span>
+                                      {currentView.shadow_png_url && <span className="text-emerald-400 text-[10px] font-mono">Active</span>}
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <input
+                                        type="url"
+                                        placeholder="https://exacoat.com/wp-content/uploads/iPhone-Shadow.png"
+                                        value={currentView.shadow_png_url || ''}
+                                        onChange={(e) => handleSetViewField(currentView.id, 'shadow_png_url', e.target.value.trim())}
+                                        className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-amber-400 placeholder:text-zinc-600"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setMediaPickerConfig({
+                                            isOpen: true,
+                                            title: `Select 3D Shadow PNG: ${currentView.name}`,
+                                            recommendedDimensions: '1000x1000 Transparent PNG',
+                                            currentUrl: currentView.shadow_png_url || '',
+                                            onSelect: (url) => handleSetViewField(currentView.id, 'shadow_png_url', url),
+                                          })
+                                        }
+                                        className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
+                                        title="Browse WordPress Media Library"
+                                      >
+                                        <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                        <span>Browse</span>
+                                      </button>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-3 pt-1">
+                                      <span className="text-[11px] text-zinc-400">Shadow Opacity:</span>
+                                      <div className="flex items-center gap-2 flex-1 max-w-[180px]">
+                                        <input
+                                          type="range"
+                                          min="0"
+                                          max="1"
+                                          step="0.05"
+                                          value={currentView.shadow_opacity ?? 0.85}
+                                          onChange={(e) => handleSetViewField(currentView.id, 'shadow_opacity', parseFloat(e.target.value))}
+                                          className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
+                                        />
+                                        <span className="font-mono text-xs text-amber-400 font-bold w-10 text-right">
+                                          {Math.round((currentView.shadow_opacity ?? 0.85) * 100)}%
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Screen Highlight */}
+                                  <div className="space-y-1.5 bg-black/30 p-3 rounded-xl border border-white/5">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-bold text-zinc-300">3D Screen Highlight PNG</span>
+                                      {currentView.highlight_png_url && <span className="text-emerald-400 text-[10px] font-mono">Active</span>}
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <input
+                                        type="url"
+                                        placeholder="https://exacoat.com/wp-content/uploads/iPhone-Highlight.png"
+                                        value={currentView.highlight_png_url || ''}
+                                        onChange={(e) => handleSetViewField(currentView.id, 'highlight_png_url', e.target.value.trim())}
+                                        className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setMediaPickerConfig({
+                                            isOpen: true,
+                                            title: `Select 3D Highlight PNG: ${currentView.name}`,
+                                            recommendedDimensions: '1000x1000 Transparent PNG',
+                                            currentUrl: currentView.highlight_png_url || '',
+                                            onSelect: (url) => handleSetViewField(currentView.id, 'highlight_png_url', url),
+                                          })
+                                        }
+                                        className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
+                                        title="Browse WordPress Media Library"
+                                      >
+                                        <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                        <span>Browse</span>
+                                      </button>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-3 pt-1">
+                                      <span className="text-[11px] text-zinc-400">Highlight Opacity:</span>
+                                      <div className="flex items-center gap-2 flex-1 max-w-[180px]">
+                                        <input
+                                          type="range"
+                                          min="0"
+                                          max="1"
+                                          step="0.05"
+                                          value={currentView.highlight_opacity ?? 0.40}
+                                          onChange={(e) => handleSetViewField(currentView.id, 'highlight_opacity', parseFloat(e.target.value))}
+                                          className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-sky-400"
+                                        />
+                                        <span className="font-mono text-xs text-sky-400 font-bold w-10 text-right">
+                                          {Math.round((currentView.highlight_opacity ?? 0.40) * 100)}%
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
                                 <div className="pt-2 border-t border-white/5 flex items-center justify-between">
                                   {editingProfile.views.length > 1 && (
                                     <button
@@ -5152,6 +5301,177 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 </div>
                               </div>
                             )}
+
+                            {/* Coverage & Cutout Options (v2 Modern Engine) */}
+                            <div className="p-4 rounded-2xl bg-zinc-900/70 border border-white/10 space-y-4">
+                              <div>
+                                <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                  <Sliders className="w-4 h-4 text-[#f3aa18]" />
+                                  Coverage & Cutout Options (v2 Architecture)
+                                </h4>
+                                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                                  Configure configurable buyer choices for logo cutouts and 360 wrap coverage. These dynamically punch holes through the target skin layer.
+                                </p>
+                              </div>
+
+                              {/* 1. Apple / Brand Logo Cutout Choice */}
+                              <div className="p-3.5 rounded-xl bg-black/40 border border-white/5 space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <label className="flex items-center gap-2.5 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={editingProfile.coverage_and_cutouts?.has_logo_cutout ?? true}
+                                      onChange={(e) => handleSetCoverageAndCutouts('has_logo_cutout', e.target.checked)}
+                                      className="rounded border-zinc-700 bg-zinc-900 text-[#f3aa18] focus:ring-[#f3aa18]/30 w-4 h-4"
+                                    />
+                                    <span className="text-xs font-bold text-white">Offer Logo Cutout Choice</span>
+                                  </label>
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/5 text-zinc-400">
+                                    Buyer Option
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-zinc-400 leading-normal">
+                                  Allows buyer to choose between With Logo Cutout or Solid (No Logo).
+                                </p>
+
+                                {(editingProfile.coverage_and_cutouts?.has_logo_cutout ?? true) && (
+                                  <div className="space-y-2.5 pt-2 border-t border-white/5">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                      <div>
+                                        <label className="text-[11px] font-medium text-zinc-300 block mb-1">Target Skin Layer</label>
+                                        <select
+                                          value={editingProfile.coverage_and_cutouts?.logo_target_layer_id || skinLayers.find((l) => l.group === 'primary' || (l.name || '').toLowerCase().includes('back'))?.id || skinLayers[0]?.id || ''}
+                                          onChange={(e) => handleSetCoverageAndCutouts('logo_target_layer_id', e.target.value)}
+                                          className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                                        >
+                                          {skinLayers.map((l) => (
+                                            <option key={l.id} value={l.id}>
+                                              {l.name} ({l.id})
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                      <label className="text-[11px] font-medium text-zinc-300 flex items-center justify-between">
+                                        <span>Logo Cutout Mask Silhouette URL</span>
+                                        {editingProfile.coverage_and_cutouts?.logo_cutout_mask_url && (
+                                          <span className="text-emerald-400 text-[10px] font-mono">Configured</span>
+                                        )}
+                                      </label>
+                                      <div className="flex gap-2">
+                                        <input
+                                          type="url"
+                                          placeholder="https://exacoat.com/wp-content/uploads/iPhone-17-Pro-Logo.png"
+                                          value={editingProfile.coverage_and_cutouts?.logo_cutout_mask_url || ''}
+                                          onChange={(e) => handleSetCoverageAndCutouts('logo_cutout_mask_url', e.target.value.trim())}
+                                          className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] placeholder:text-zinc-600"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setMediaPickerConfig({
+                                              isOpen: true,
+                                              title: 'Select Logo Cutout Silhouette Mask',
+                                              recommendedDimensions: '1000x1000 Transparent PNG',
+                                              currentUrl: editingProfile.coverage_and_cutouts?.logo_cutout_mask_url || '',
+                                              onSelect: (url) => handleSetCoverageAndCutouts('logo_cutout_mask_url', url),
+                                            })
+                                          }
+                                          className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
+                                        >
+                                          <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                          <span>Browse</span>
+                                        </button>
+                                      </div>
+                                      <span className="text-[10px] text-zinc-500 block">
+                                        Erased via destination-out so the metallic logo on the hardware base shines through.
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* 2. Coverage Choices (Back Only vs Full Frame 360) */}
+                              <div className="p-3.5 rounded-xl bg-black/40 border border-white/5 space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <label className="flex items-center gap-2.5 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={editingProfile.coverage_and_cutouts?.has_model_cut ?? false}
+                                      onChange={(e) => handleSetCoverageAndCutouts('has_model_cut', e.target.checked)}
+                                      className="rounded border-zinc-700 bg-zinc-900 text-[#f3aa18] focus:ring-[#f3aa18]/30 w-4 h-4"
+                                    />
+                                    <span className="text-xs font-bold text-white">Offer Coverage Choices (Back Only vs 360)</span>
+                                  </label>
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/5 text-zinc-400">
+                                    Buyer Option
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-zinc-400 leading-normal">
+                                  Allows buyer to choose between Back Only cut (clean flat glass) or Model Cut / Full Frame 360.
+                                </p>
+
+                                {editingProfile.coverage_and_cutouts?.has_model_cut && (
+                                  <div className="space-y-2.5 pt-2 border-t border-white/5">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                      <div>
+                                        <label className="text-[11px] font-medium text-zinc-300 block mb-1">Target Skin Layer</label>
+                                        <select
+                                          value={editingProfile.coverage_and_cutouts?.coverage_target_layer_id || skinLayers.find((l) => l.group === 'primary' || (l.name || '').toLowerCase().includes('back'))?.id || skinLayers[0]?.id || ''}
+                                          onChange={(e) => handleSetCoverageAndCutouts('coverage_target_layer_id', e.target.value)}
+                                          className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                                        >
+                                          {skinLayers.map((l) => (
+                                            <option key={l.id} value={l.id}>
+                                              {l.name} ({l.id})
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                      <label className="text-[11px] font-medium text-zinc-300 flex items-center justify-between">
+                                        <span>Model Cut Perimeter Silhouette Mask URL</span>
+                                        {editingProfile.coverage_and_cutouts?.model_cut_mask_url && (
+                                          <span className="text-emerald-400 text-[10px] font-mono">Configured</span>
+                                        )}
+                                      </label>
+                                      <div className="flex gap-2">
+                                        <input
+                                          type="url"
+                                          placeholder="https://exacoat.com/wp-content/uploads/iPhone-17-Pro-Frame-Cut.png"
+                                          value={editingProfile.coverage_and_cutouts?.model_cut_mask_url || ''}
+                                          onChange={(e) => handleSetCoverageAndCutouts('model_cut_mask_url', e.target.value.trim())}
+                                          className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] placeholder:text-zinc-600"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setMediaPickerConfig({
+                                              isOpen: true,
+                                              title: 'Select Model Cut Perimeter Silhouette Mask',
+                                              recommendedDimensions: '1000x1000 Transparent PNG',
+                                              currentUrl: editingProfile.coverage_and_cutouts?.model_cut_mask_url || '',
+                                              onSelect: (url) => handleSetCoverageAndCutouts('model_cut_mask_url', url),
+                                            })
+                                          }
+                                          className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
+                                        >
+                                          <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                          <span>Browse</span>
+                                        </button>
+                                      </div>
+                                      <span className="text-[10px] text-zinc-500 block">
+                                        Punches out side flaps when buyer selects Back Only so bare phone metal frame shows.
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
 
                               {/* Add Viewing Angle Helper */}
                               <div className="pt-3 border-t border-white/5 space-y-2">
@@ -6015,7 +6335,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       </span>
                     </div>
                     <p className="text-xs text-zinc-400 mt-0.5">
-                      Target: <span className="text-white font-medium">{activeTargetLayer?.name || 'Active Layer'}</span> • Angle: <span className="text-zinc-300 font-mono">{activeTargetView?.name || 'Main View'}</span>
+                      Target Angle: <span className="text-white font-bold">{activeTargetView?.name || 'Main View'}</span> (applies raytraced shading across all skin parts)
                     </p>
                   </div>
                 </div>
@@ -6141,7 +6461,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   ) : (
                     <>
                       <Wand2 className="w-4 h-4 text-black" />
-                      <span>Extract & Apply to Layer</span>
+                      <span>Extract & Apply to Angle</span>
                     </>
                   )}
                 </button>

@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.72] - 2026-09-20
+
+### Decoupled View Shading, Dynamic Coverage & Multi-Part Live Studio Configurator Simulator
+- **Decoupled View-Wide 3D Shading & Specular Highlights**:
+  - Moved raytraced Multiply Shadow PNG (`shadow_png_url`) and Screen Highlight PNG (`highlight_png_url`) from individual skin parts to the viewing angle (`ConfiguratorView`).
+  - View-level shading is composited once over all skin layers at controllable opacities, avoiding duplicate shadow maps on separate parts.
+  - Shading controls (Multiply Shadow URL, Screen Highlight URL, opacity sliders, and 1-click Extraction) are integrated directly in the Hardware Base inspector tab.
+- **Dynamic Coverage & Cutout Architecture (`DeviceCoverageAndCutouts`)**:
+  - Added dedicated Coverage & Cutout Options (v2) card in the Hardware Base inspector tab.
+  - Supports configurable Logo Cutout option (With Logo Cutout vs Solid / No Logo) with custom silhouette mask URL and target layer selection.
+  - Supports configurable Coverage option (Back Only vs Full Frame 360) with custom silhouette mask URL and target layer selection.
+  - Persisted in WordPress database post meta via authenticated REST endpoint (`/configurator/save-profile`).
+- **Interactive Multi-Part Live Configurator Testing Dock**:
+  - Integrated interactive testing dock directly at the bottom of the device stage canvas in Configurator Studio.
+  - Operators can switch between skin parts (Back, Camera, Accents), inspect each part's current finish, and pick from allowed finishes using group filters and live swatches.
+  - Independent finish testing per part (e.g. Swarm back, Matte Black camera, Emerald Green accents) composited simultaneously on the 1000x1000 HTML5 canvas.
+  - Includes live toggles for Logo Cutout and Coverage style with immediate visual feedback.
+  - Real-time Price Calculator dynamically reflects base device price + family size multiplier * finish surcharges per part.
+
 ## [0.0.71] - 2026-09-20
 
 ### v2 Canvas Punch Cutouts, Shading Extraction Engine & Dynamic Opacity Controls

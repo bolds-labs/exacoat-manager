@@ -473,6 +473,10 @@ export interface ConfiguratorView {
   canvas_dimensions?: { width: number; height: number };
   background_url?: string;
   logo_url?: string;
+  shadow_png_url?: string;
+  highlight_png_url?: string;
+  shadow_opacity?: number;
+  highlight_opacity?: number;
   legacy_id?: number;
 }
 
@@ -518,6 +522,21 @@ export interface ConfiguratorVariant {
   options: ConfiguratorVariantOption[];
 }
 
+export interface DeviceCoverageAndCutouts {
+  has_logo_cutout?: boolean;
+  logo_cutout_mask_url?: string;
+  logo_target_layer_id?: string;
+  has_model_cut?: boolean;
+  model_cut_mask_url?: string;
+  coverage_target_layer_id?: string;
+  available_coverages?: Array<{
+    id: string;
+    label: string;
+    extra_price?: number;
+    model_cut_mask_url?: string;
+  }>;
+}
+
 export interface DeviceConfiguratorProfile {
   product_id: number;
   device_slug: string;
@@ -533,6 +552,7 @@ export interface DeviceConfiguratorProfile {
   views: ConfiguratorView[];
   layers: ConfiguratorLayer[];
   variants?: ConfiguratorVariant[];
+  coverage_and_cutouts?: DeviceCoverageAndCutouts;
   updated_at?: string;
 }
 

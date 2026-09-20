@@ -332,3 +332,16 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   1. **One-Time Extraction from Matte White 3D Render**: `POST /configurator/extract-shading` processes a neutral white CAD render (`iPhone-17-Pro-Skins-Matte-White.png`), extracting a transparent Multiply Shadow PNG (`mix-blend-mode: multiply`) and a Screen Highlight PNG (`mix-blend-mode: screen`).
   2. **Dynamic Live Intensity Controls**: In Configurator Studio, operators tune **Shadow Opacity (0% to 100%)** and **Highlight Opacity (0% to 100%)** sliders per layer/device. This provides complete interactive control without sacrificing raytraced realism across any vinyl finish.
 
+---
+
+## 22. Decoupled View Shading, Coverage Options & Multi-Part Live Simulator Architecture
+
+- **View-Level Shading Decoupling Invariant**:
+  Raytraced Multiply Shadow (`shadow_png_url`) and Screen Highlight (`highlight_png_url`) maps represent geometric lighting and ambient occlusion for a specific viewing perspective (e.g. Back View, Inner View). Shading belongs to `ConfiguratorView`, not individual customizable skin parts. This prevents redundant texture duplication across parts and ensures a single composite shadow/highlight pass across all composited layers.
+- **Coverage & Cutout Invariant (`DeviceCoverageAndCutouts`)**:
+  - Logo Cutouts (e.g. Apple logo) and Coverage Styles (Back Only vs Full Frame 360) are configurable buyer-facing options defined on the device profile.
+  - They dynamically target specific skin layers (defaulting to the primary back layer) and punch holes using canvas `destination-out` during runtime compositing.
+  - Persisted centrally in WordPress post meta via authenticated REST endpoint (`/configurator/save-profile`).
+- **Multi-Part Independent Testing Invariant**:
+  Configurator Studio provides an interactive live simulator dock below the viewport. Operators can test combinations of different finishes simultaneously across separate skin parts (e.g. Swarm back, Matte Black camera, Emerald Green accents), toggle Logo Cutouts and Coverage choices, and verify calculated prices with size multipliers in real time.
+

@@ -1,17 +1,17 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.0.71",
+  "version": "0.0.72",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.0.71.zip?v=0.0.71",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.0.72.zip?v=0.0.72",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-20T12:43:27.692Z",
+  "last_updated": "2026-09-20T13:18:47.105Z",
   "sections": {
     "description": "The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.",
-    "changelog": "### Version 0.0.71\n- Shopee API v2 logistics arrangement detection fix for unarranged orders\n- Automatic transient cache sanitization for READY_TO_SHIP orders\n- Multi-channel financial analytics and ledger data reporting"
+    "changelog": "### Version 0.0.72\n- Shopee API v2 logistics arrangement detection fix for unarranged orders\n- Automatic transient cache sanitization for READY_TO_SHIP orders\n- Multi-channel financial analytics and ledger data reporting"
   }
 }

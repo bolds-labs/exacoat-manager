@@ -1473,6 +1473,7 @@ class Exacoat_Configurator_Engine {
 			'views'                => is_array( $params['views'] ?? null ) ? $params['views'] : [],
 			'layers'               => is_array( $params['layers'] ?? null ) ? $params['layers'] : [],
 			'variants'             => is_array( $params['variants'] ?? null ) ? $params['variants'] : [],
+			'coverage_and_cutouts' => is_array( $params['coverage_and_cutouts'] ?? null ) ? $params['coverage_and_cutouts'] : null,
 			'updated_at'           => current_time( 'mysql' ),
 		];
 
