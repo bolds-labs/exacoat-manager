@@ -21,6 +21,7 @@ import {
   deleteGlobalFinishDirect,
   reorderFinishGroupsDirect,
   saveAllGlobalFinishesDirect,
+  toggleFinishActiveDirect,
   extractShadingDirect,
   revalidateStorefrontWebDirect,
 } from '../lib/wordpressBridge';
@@ -473,6 +474,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [showMasterTexturesModal, setShowMasterTexturesModal] = useState(false);
   const [masterTextureSearch, setMasterTextureSearch] = useState('');
   const [masterTextureGroupFilter, setMasterTextureGroupFilter] = useState('all');
+  const [masterTextureActiveFilter, setMasterTextureActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [savingFinishId, setSavingFinishId] = useState<string | null>(null);
   const [editingFinishUrls, setEditingFinishUrls] = useState<Record<string, string>>({});
   const [editingFinishBigUrls, setEditingFinishBigUrls] = useState<Record<string, string>>({});
@@ -481,6 +483,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [editingFinishGroups, setEditingFinishGroups] = useState<Record<string, string>>({});
   const [editingFinishPrices, setEditingFinishPrices] = useState<Record<string, number>>({});
   const [editingFinishStock, setEditingFinishStock] = useState<Record<string, boolean>>({});
+  const [editingFinishActive, setEditingFinishActive] = useState<Record<string, boolean>>({});
   const [editingFinishCustomFlags, setEditingFinishCustomFlags] = useState<Record<string, boolean>>({});
   const [editingFinishBadgeTexts, setEditingFinishBadgeTexts] = useState<Record<string, string>>({});
   const [editingFinishBadgeColors, setEditingFinishBadgeColors] = useState<Record<string, string>>({});
@@ -2572,6 +2575,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
     const newPrice = customPrice !== undefined ? customPrice : finish.extra_price;
     const customStock = editingFinishStock[finish.id];
     const newStock = customStock !== undefined ? customStock : (finish.in_stock !== false);
+    const customActive = editingFinishActive[finish.id];
+    const newActive = customActive !== undefined ? customActive : (finish.is_active !== false);
     const customFlag = editingFinishCustomFlags[finish.id];
     const newCustomFlag = customFlag !== undefined ? customFlag : Boolean(finish.is_custom_per_device);
     const customBadgeText = editingFinishBadgeTexts[finish.id];
@@ -2595,6 +2600,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
         texture_big_url: newBigTexture,
         extra_price: newPrice,
         in_stock: newStock,
+        is_active: newActive,
         class_name: finish.class_name,
         is_custom_per_device: newCustomFlag,
         badge_text: newBadgeText,
@@ -2619,6 +2625,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     texture_big_url: newBigTexture,
                     extra_price: newPrice,
                     in_stock: newStock,
+                    is_active: newActive,
                     is_custom_per_device: newCustomFlag,
                     badge_text: newBadgeText,
                     badge_color: newBadgeColor,
@@ -2696,6 +2703,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
         texture_url: newFinishForm.texture_url.trim() || newFinishForm.thumbnail.trim(),
         extra_price: Number(newFinishForm.extra_price) || 0,
         in_stock: true,
+        is_active: true,
+        order: finishes.length,
         class_name: `cfg-${slug}`,
         is_custom_per_device: Boolean(newFinishForm.is_custom_per_device),
         badge_text: newFinishForm.badge_text?.trim() || '',
@@ -2781,6 +2790,123 @@ export const ConfiguratorStudioPage: React.FC = () => {
       showToast('error', 'Error', err.message || 'Error adding group');
     }
   };
+
+  // Instantly toggle a finish between Active and Inactive
+  const handleToggleFinishActive = async (finish: GlobalFinish) => {
+    const currentActive =
+      editingFinishActive[finish.id] !== undefined
+        ? editingFinishActive[finish.id]
+        : finish.is_active !== false;
+    const nextActive = !currentActive;
+
+    // Optimistically update local map
+    setEditingFinishActive((prev) => ({ ...prev, [finish.id]: nextActive }));
+    setFinishes((prev) =>
+      prev.map((f) => (f.id === finish.id ? { ...f, is_active: nextActive } : f))
+    );
+
+    try {
+      const res = await toggleFinishActiveDirect(finish.id, nextActive);
+      if (res.success) {
+        showToast(
+          'success',
+          nextActive ? 'Finish Activated' : 'Finish Deactivated',
+          `"${finish.name}" is now ${nextActive ? 'Active (Visible on store)' : 'Inactive (Hidden from storefront)'}.`
+        );
+        if (Array.isArray(res.finishes)) {
+          setFinishes(res.finishes);
+        }
+      } else {
+        // Revert on failure
+        setEditingFinishActive((prev) => ({ ...prev, [finish.id]: currentActive }));
+        setFinishes((prev) =>
+          prev.map((f) => (f.id === finish.id ? { ...f, is_active: currentActive } : f))
+        );
+        showToast('error', 'Update Failed', res.error || 'Failed to toggle finish status.');
+      }
+    } catch (err: any) {
+      setEditingFinishActive((prev) => ({ ...prev, [finish.id]: currentActive }));
+      setFinishes((prev) =>
+        prev.map((f) => (f.id === finish.id ? { ...f, is_active: currentActive } : f))
+      );
+      showToast('error', 'Error', err.message || 'Error toggling finish status.');
+    }
+  };
+
+  // Move a finish up or down within its group
+  const handleMoveFinishInGroup = async (finishId: string, direction: 'up' | 'down') => {
+    const target = finishes.find((f) => f.id === finishId);
+    if (!target) return;
+    const targetGroup = editingFinishGroups[target.id] || target.group || '';
+
+    // Get all finishes in this group sorted by their current sequence
+    const groupFinishes = finishes
+      .filter((f) => (editingFinishGroups[f.id] || f.group || '') === targetGroup)
+      .sort((a, b) => {
+        const orderA = a.order ?? 0;
+        const orderB = b.order ?? 0;
+        if (orderA !== orderB) return orderA - orderB;
+        return (a.name || '').localeCompare(b.name || '');
+      });
+
+    const idx = groupFinishes.findIndex((f) => f.id === finishId);
+    if (idx === -1) return;
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= groupFinishes.length) return;
+
+    // Swap in array
+    const temp = groupFinishes[idx];
+    groupFinishes[idx] = groupFinishes[swapIdx];
+    groupFinishes[swapIdx] = temp;
+
+    // Assign sequential order (0, 1, 2, ...) to the items in this group
+    const updatedOrderMap = new Map<string, number>();
+    groupFinishes.forEach((item, index) => {
+      updatedOrderMap.set(item.id, index);
+    });
+
+    const updatedFinishes = finishes.map((f) => {
+      if (updatedOrderMap.has(f.id)) {
+        return { ...f, order: updatedOrderMap.get(f.id)! };
+      }
+      return f;
+    });
+
+    setFinishes(updatedFinishes);
+
+    try {
+      const res = await saveAllGlobalFinishesDirect(updatedFinishes, storedFinishGroups);
+      if (res.success) {
+        showToast(
+          'success',
+          'Finish Reordered',
+          `Moved "${target.name}" ${direction === 'up' ? 'higher' : 'lower'} in "${targetGroup}".`
+        );
+        if (Array.isArray(res.finishes)) {
+          setFinishes(res.finishes);
+        }
+      } else {
+        showToast('error', 'Reorder Failed', res.error || 'Failed to save reordered finishes.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message || 'Error saving finish order.');
+    }
+  };
+
+  // Active / Inactive counts for Master Textures modal
+  const { activeCount, inactiveCount } = useMemo(() => {
+    let active = 0;
+    let inactive = 0;
+    finishes.forEach((f) => {
+      const isActive =
+        editingFinishActive[f.id] !== undefined
+          ? editingFinishActive[f.id]
+          : f.is_active !== false;
+      if (isActive) active++;
+      else inactive++;
+    });
+    return { activeCount: active, inactiveCount: inactive };
+  }, [finishes, editingFinishActive]);
 
   // Finish groups for filter tabs (only active groups that have finishes)
   const finishGroups = useMemo(() => {
@@ -4052,7 +4178,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
               {/* Filter & Search Bar */}
               <div className="p-4 border-b border-white/10 bg-zinc-900/30 flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="relative w-full sm:w-72">
+                <div className="relative w-full sm:w-64 shrink-0">
                   <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
@@ -4072,22 +4198,69 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   )}
                 </div>
 
-                <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
-                  {finishGroups.map((group) => (
+                <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+                  {/* Active / Inactive Status Filter */}
+                  <div className="flex items-center gap-1 bg-zinc-950 p-0.5 rounded-xl border border-white/10 shrink-0">
                     <button
-                      key={group}
                       type="button"
-                      onClick={() => setMasterTextureGroupFilter(group)}
+                      onClick={() => setMasterTextureActiveFilter('all')}
                       className={clsx(
-                        'px-2.5 py-1 rounded-lg text-xs font-sans whitespace-nowrap transition-colors cursor-pointer capitalize',
-                        masterTextureGroupFilter === group
-                          ? 'bg-[#f3aa18]/20 text-[#f3aa18] font-bold border border-[#f3aa18]/40'
-                          : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                        'px-2 py-1 rounded-lg text-xs font-sans transition-colors cursor-pointer',
+                        masterTextureActiveFilter === 'all'
+                          ? 'bg-white/15 text-white font-semibold shadow-xs'
+                          : 'text-zinc-400 hover:text-white'
                       )}
                     >
-                      {group === 'all' ? 'All Groups' : group}
+                      All ({finishes.length})
                     </button>
-                  ))}
+                    <button
+                      type="button"
+                      onClick={() => setMasterTextureActiveFilter('active')}
+                      className={clsx(
+                        'px-2 py-1 rounded-lg text-xs font-sans transition-colors cursor-pointer flex items-center gap-1.5',
+                        masterTextureActiveFilter === 'active'
+                          ? 'bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/40 shadow-xs'
+                          : 'text-zinc-400 hover:text-emerald-400'
+                      )}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      <span>Active ({activeCount})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMasterTextureActiveFilter('inactive')}
+                      className={clsx(
+                        'px-2 py-1 rounded-lg text-xs font-sans transition-colors cursor-pointer flex items-center gap-1.5',
+                        masterTextureActiveFilter === 'inactive'
+                          ? 'bg-zinc-800 text-zinc-200 font-semibold border border-white/20 shadow-xs'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      )}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+                      <span>Inactive ({inactiveCount})</span>
+                    </button>
+                  </div>
+
+                  <div className="h-4 w-px bg-white/10 hidden sm:block" />
+
+                  {/* Group Filter Tabs */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto">
+                    {finishGroups.map((group) => (
+                      <button
+                        key={group}
+                        type="button"
+                        onClick={() => setMasterTextureGroupFilter(group)}
+                        className={clsx(
+                          'px-2.5 py-1 rounded-lg text-xs font-sans whitespace-nowrap transition-colors cursor-pointer capitalize',
+                          masterTextureGroupFilter === group
+                            ? 'bg-[#f3aa18]/20 text-[#f3aa18] font-bold border border-[#f3aa18]/40'
+                            : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                        )}
+                      >
+                        {group === 'all' ? 'All Groups' : group}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -4100,7 +4273,15 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       !q || f.name.toLowerCase().includes(q) || (f.slug || f.id).toLowerCase().includes(q);
                     const matchesGroup =
                       masterTextureGroupFilter === 'all' || f.group === masterTextureGroupFilter;
-                    return matchesSearch && matchesGroup;
+                    const isActive =
+                      editingFinishActive[f.id] !== undefined
+                        ? editingFinishActive[f.id]
+                        : f.is_active !== false;
+                    const matchesActive =
+                      masterTextureActiveFilter === 'all' ||
+                      (masterTextureActiveFilter === 'active' && isActive) ||
+                      (masterTextureActiveFilter === 'inactive' && !isActive);
+                    return matchesSearch && matchesGroup && matchesActive;
                   })
                   .sort((a, b) => {
                     const groupA = editingFinishGroups[a.id] || a.group || '';
@@ -4110,6 +4291,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     if (idxA !== -1 && idxB !== -1 && idxA !== idxB) return idxA - idxB;
                     if (idxA !== -1 && idxB === -1) return -1;
                     if (idxA === -1 && idxB !== -1) return 1;
+                    const orderA = a.order ?? 0;
+                    const orderB = b.order ?? 0;
+                    if (orderA !== orderB) return orderA - orderB;
                     return (a.name || '').localeCompare(b.name || '');
                   })
                   .map((f) => {
@@ -4141,6 +4325,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       editingFinishStock[f.id] !== undefined
                         ? editingFinishStock[f.id]
                         : (f.in_stock !== false);
+                    const currentActiveInput =
+                      editingFinishActive[f.id] !== undefined
+                        ? editingFinishActive[f.id]
+                        : (f.is_active !== false);
                     const currentCustomFlag =
                       editingFinishCustomFlags[f.id] !== undefined
                         ? editingFinishCustomFlags[f.id]
@@ -4182,6 +4370,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         editingFinishPrices[f.id] !== (f.extra_price || 0)) ||
                       (editingFinishStock[f.id] !== undefined &&
                         editingFinishStock[f.id] !== (f.in_stock !== false)) ||
+                      (editingFinishActive[f.id] !== undefined &&
+                        editingFinishActive[f.id] !== (f.is_active !== false)) ||
                       (editingFinishCustomFlags[f.id] !== undefined &&
                         editingFinishCustomFlags[f.id] !== Boolean(f.is_custom_per_device)) ||
                       (editingFinishBadgeTexts[f.id] !== undefined &&
@@ -4193,15 +4383,67 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       (editingFinishHighlightOpacities[f.id] !== undefined &&
                         editingFinishHighlightOpacities[f.id] !== (typeof f.highlight_opacity === 'number' ? f.highlight_opacity : 0.35));
 
+                    const groupFinishes = finishes
+                      .filter((item) => (editingFinishGroups[item.id] || item.group || '') === currentGroupInput)
+                      .sort((a, b) => {
+                        const orderA = a.order ?? 0;
+                        const orderB = b.order ?? 0;
+                        if (orderA !== orderB) return orderA - orderB;
+                        return (a.name || '').localeCompare(b.name || '');
+                      });
+                    const posInGroup = groupFinishes.findIndex((item) => item.id === f.id);
+                    const isFirstInGroup = posInGroup <= 0;
+                    const isLastInGroup = posInGroup === -1 || posInGroup >= groupFinishes.length - 1;
+
                     return (
                       <div
                         key={f.id}
-                        className="p-4 rounded-2xl bg-zinc-900/80 border border-white/10 hover:border-white/20 transition-all space-y-3.5 shadow-sm"
+                        className={clsx(
+                          'p-4 rounded-2xl border transition-all space-y-3.5 shadow-sm',
+                          !currentActiveInput
+                            ? 'bg-zinc-950/60 border-dashed border-zinc-700/60 opacity-80'
+                            : 'bg-zinc-900/80 border-white/10 hover:border-white/20'
+                        )}
                       >
-                        {/* Header: Identification, Surcharge, Stock & Actions */}
+                        {/* Header: Identification, Surcharge, Stock, Active & Actions */}
                         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 pb-3">
-                          {/* Left: Swatch Mini, Name, Group, Slug */}
+                          {/* Left: Reorder, Swatch Mini, Name, Group, Slug, Inactive Badge */}
                           <div className="flex flex-wrap items-center gap-2.5">
+                            {/* Move Up / Down Buttons within Group */}
+                            <div className="flex items-center gap-0.5 bg-zinc-950 p-0.5 rounded-xl border border-white/10 shrink-0">
+                              <button
+                                type="button"
+                                disabled={isFirstInGroup}
+                                onClick={() => handleMoveFinishInGroup(f.id, 'up')}
+                                className={clsx(
+                                  'p-1 rounded-lg transition-colors cursor-pointer',
+                                  isFirstInGroup
+                                    ? 'opacity-20 cursor-not-allowed text-zinc-600'
+                                    : 'text-zinc-400 hover:text-white hover:bg-white/10'
+                                )}
+                                title={isFirstInGroup ? 'First in group' : `Move up in ${currentGroupInput}`}
+                              >
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              </button>
+                              <span className="text-[10px] font-mono px-1 text-zinc-400 select-none font-semibold min-w-5 text-center">
+                                #{posInGroup >= 0 ? posInGroup + 1 : 1}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={isLastInGroup}
+                                onClick={() => handleMoveFinishInGroup(f.id, 'down')}
+                                className={clsx(
+                                  'p-1 rounded-lg transition-colors cursor-pointer',
+                                  isLastInGroup
+                                    ? 'opacity-20 cursor-not-allowed text-zinc-600'
+                                    : 'text-zinc-400 hover:text-white hover:bg-white/10'
+                                )}
+                                title={isLastInGroup ? 'Last in group' : `Move down in ${currentGroupInput}`}
+                              >
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
                             <div className="w-8 h-8 rounded-lg overflow-hidden border border-white/15 bg-zinc-950 shrink-0 flex items-center justify-center">
                               {currentThumbInput ? (
                                 <img src={currentThumbInput} alt="" className="w-full h-full object-cover" />
@@ -4234,10 +4476,37 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             <span className="text-[10px] font-mono text-zinc-500 bg-white/5 px-2 py-0.5 rounded-lg border border-white/5 hidden sm:inline-block">
                               {f.slug}
                             </span>
+                            {!currentActiveInput && (
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300">
+                                Inactive: Hidden from Storefront
+                              </span>
+                            )}
                           </div>
 
-                          {/* Right: In Stock, Price, Delete, Save */}
+                          {/* Right: Active/Inactive, In Stock, Price, Delete, Save */}
                           <div className="flex items-center gap-2.5">
+                            {/* Active / Inactive Toggle Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleFinishActive(f)}
+                              className={clsx(
+                                'flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono transition-all cursor-pointer select-none',
+                                currentActiveInput
+                                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
+                                  : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700/80 hover:text-zinc-200'
+                              )}
+                              title={currentActiveInput ? 'Click to Deactivate (Hide from buyer storefront)' : 'Click to Activate (Show on buyer storefront)'}
+                            >
+                              {currentActiveInput ? (
+                                <Eye className="w-3 h-3 text-emerald-400" />
+                              ) : (
+                                <EyeOff className="w-3 h-3 text-zinc-400" />
+                              )}
+                              <span className="text-[11px] font-semibold">
+                                {currentActiveInput ? 'Active' : 'Inactive'}
+                              </span>
+                            </button>
+
                             {/* In Stock / Out of Stock Toggle */}
                             <button
                               type="button"

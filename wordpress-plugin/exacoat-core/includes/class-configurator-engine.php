@@ -331,11 +331,19 @@ class Exacoat_Configurator_Engine {
 			update_option( self::LEGACY_OPTION_KEY, $finishes );
 		}
 
-		// Ensure texture_url field exists on all returned finishes
+		// Ensure texture_url, order, and is_active fields exist on all returned finishes
+		$idx = 0;
 		foreach ( $finishes as &$f ) {
 			if ( ! isset( $f['texture_url'] ) ) {
 				$f['texture_url'] = $f['thumbnail'] ?? '';
 			}
+			if ( ! isset( $f['order'] ) ) {
+				$f['order'] = $idx;
+			}
+			if ( ! isset( $f['is_active'] ) ) {
+				$f['is_active'] = true;
+			}
+			$idx++;
 		}
 
 		self::$cached_finishes = $finishes;
@@ -416,6 +424,23 @@ class Exacoat_Configurator_Engine {
 					'sanitize_callback' => 'sanitize_text_field',
 				],
 				'in_stock' => [
+					'required' => true,
+					'type'     => 'boolean',
+				],
+			],
+		] );
+
+		// POST /finishes/toggle-active: Toggle active/inactive status for a finish
+		$register( '/finishes/toggle-active', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_toggle_finish_active' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+			'args'                => [
+				'id' => [
+					'required'          => true,
+					'sanitize_callback' => 'sanitize_text_field',
+				],
+				'is_active' => [
 					'required' => true,
 					'type'     => 'boolean',
 				],
@@ -622,6 +647,44 @@ class Exacoat_Configurator_Engine {
 		] );
 	}
 
+	public static function rest_toggle_finish_active( WP_REST_Request $request ): WP_REST_Response {
+		$id = sanitize_text_field( (string) $request->get_param( 'id' ) );
+		$is_active = (bool) $request->get_param( 'is_active' );
+
+		$finishes = self::get_finishes();
+		$found = false;
+
+		foreach ( $finishes as &$f ) {
+			if ( ( $f['id'] ?? '' ) === $id || ( $f['slug'] ?? '' ) === $id ) {
+				$f['is_active'] = $is_active;
+				$found = true;
+				break;
+			}
+		}
+
+		if ( ! $found ) {
+			return new WP_REST_Response( [
+				'success' => false,
+				'message' => "Finish '{$id}' not found.",
+			], 404 );
+		}
+
+		self::save_finishes( $finishes );
+
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log( 'info', 'materials', "Finish '{$id}' status toggled to " . ( $is_active ? 'ACTIVE' : 'INACTIVE' ) );
+		}
+
+		return rest_ensure_response( [
+			'success'   => true,
+			'id'        => $id,
+			'is_active' => $is_active,
+			'message'   => "Active status updated for '{$id}'.",
+			'finishes'  => $finishes,
+			'groups'    => self::get_finish_groups(),
+		] );
+	}
+
 	public static function rest_save_finish( WP_REST_Request $request ): WP_REST_Response {
 		$params = $request->get_json_params() ?: $request->get_params();
 
@@ -639,6 +702,7 @@ class Exacoat_Configurator_Engine {
 		$texture_big_url = esc_url_raw( $params['texture_big_url'] ?? '' );
 		$extra_price = isset( $params['extra_price'] ) ? (float) $params['extra_price'] : 0.0;
 		$in_stock = isset( $params['in_stock'] ) ? (bool) $params['in_stock'] : true;
+		$is_active = isset( $params['is_active'] ) ? (bool) $params['is_active'] : true;
 		$is_custom_per_device = ! empty( $params['is_custom_per_device'] );
 		$order = isset( $params['order'] ) ? (int) $params['order'] : 0;
 		$badge_text = sanitize_text_field( $params['badge_text'] ?? '' );
@@ -665,6 +729,7 @@ class Exacoat_Configurator_Engine {
 				}
 				$f['extra_price']          = $extra_price;
 				$f['in_stock']             = $in_stock;
+				$f['is_active']            = $is_active;
 				$f['is_custom_per_device'] = $is_custom_per_device;
 				$f['badge_text']           = $badge_text;
 				$f['badge_color']          = $badge_color;
@@ -694,6 +759,7 @@ class Exacoat_Configurator_Engine {
 				'texture_big_url'      => $texture_big_url,
 				'extra_price'          => $extra_price,
 				'in_stock'             => $in_stock,
+				'is_active'            => $is_active,
 				'is_custom_per_device' => $is_custom_per_device,
 				'badge_text'           => $badge_text,
 				'badge_color'          => $badge_color,
@@ -731,6 +797,7 @@ class Exacoat_Configurator_Engine {
 				'texture_big_url'      => $texture_big_url,
 				'extra_price'          => $extra_price,
 				'in_stock'             => $in_stock,
+				'is_active'            => $is_active,
 				'is_custom_per_device' => $is_custom_per_device,
 				'shadow_opacity'       => $shadow_opacity,
 				'highlight_opacity'    => $highlight_opacity,
@@ -801,6 +868,12 @@ class Exacoat_Configurator_Engine {
 				}
 				if ( isset( $item['badge_color'] ) ) {
 					$item['badge_color'] = sanitize_text_field( $item['badge_color'] );
+				}
+				if ( isset( $item['is_active'] ) ) {
+					$item['is_active'] = (bool) $item['is_active'];
+				}
+				if ( isset( $item['order'] ) ) {
+					$item['order'] = (int) $item['order'];
 				}
 			}
 			unset( $item );

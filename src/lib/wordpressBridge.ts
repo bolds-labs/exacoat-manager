@@ -428,6 +428,7 @@ export interface GlobalFinish {
   texture_big_url?: string;
   color_hex?: string;
   in_stock: boolean;
+  is_active?: boolean;
   extra_price: number;
   class_name?: string;
   is_custom_per_device?: boolean;
@@ -2079,6 +2080,50 @@ export async function toggleFinishStockDirect(id: string, inStock: boolean): Pro
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ id, in_stock: inStock }),
+    });
+    const data = await res.json();
+    if (res.ok && !!data?.success && Array.isArray(data?.finishes)) {
+      try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(data.finishes)); } catch {}
+      return {
+        success: true,
+        finishes: data.finishes,
+      };
+    }
+  } catch {}
+
+  return {
+    success: true,
+    finishes: updatedList,
+  };
+}
+
+export async function toggleFinishActiveDirect(id: string, isActive: boolean): Promise<{ success: boolean; finishes?: GlobalFinish[]; error?: string }> {
+  let updatedList: GlobalFinish[] = DEFAULT_GLOBAL_FINISHES;
+  try {
+    const cached = typeof localStorage !== 'undefined' ? localStorage.getItem(FINISHES_STORAGE_KEY) : null;
+    const current = cached ? JSON.parse(cached) : DEFAULT_GLOBAL_FINISHES;
+    updatedList = current.map((f: GlobalFinish) => f.id === id ? { ...f, is_active: isActive } : f);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(updatedList));
+    }
+  } catch {}
+
+  try {
+    await fetch('http://localhost:3020/api/configurator/finishes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, is_active: isActive }),
+    });
+  } catch {}
+
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/finishes/toggle-active`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ id, is_active: isActive }),
     });
     const data = await res.json();
     if (res.ok && !!data?.success && Array.isArray(data?.finishes)) {

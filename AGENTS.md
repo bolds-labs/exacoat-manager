@@ -769,4 +769,39 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - The thumbnail button explicitly uses a pure white background (`bg-white`), ensuring dark transparent shadow and shading PNGs are rendered with crisp contrast and visibility.
   - Clicking the white preview opens the WordPress Media Library directly, with 1-click Clear and Browse actions.
 
+---
+
+## 44. Finish-Level 3D Shading Tone, Master Textures Card Overhaul & White Cutout Buttons
+
+- **Specular Highlight Single-Source Fallback Invariant**:
+  - If a dedicated specular highlight PNG is not uploaded (`view.highlight_png_url`), the storefront rendering engine and add-to-cart composite generator automatically fall back to the primary shading source (`shadowSrc`) with `mix-blend-mode: screen`. This guarantees that specular highlights appear reliably across devices whenever highlight opacity is configured.
+- **Finish-Level Shading & Specular Opacity Invariant**:
+  - Different vinyl materials reflect light differently (e.g. dark textured finishes like Black Camo or Black Matte require stronger highlights, while bright white finishes require deeper multiply shadows).
+  - Finishes support individual `shadow_opacity` and `highlight_opacity` values on `GlobalFinish`, saved to WordPress options via `saveGlobalFinishDirect` / `rest_save_finish`.
+  - Storefront canvas (`stacked-layer-canvas.tsx`), composite generator (`device-skin-configurator.tsx`), and Studio viewport evaluate finish-level opacity before falling back to angle defaults.
+- **Master Textures (v2) Structured Card Architecture**:
+  - Replaced unstructured horizontal form rows with clean, structured cards.
+  - Header: Swatch thumbnail mini, Finish Name, Group dropdown, Slug, Stock toggle, Extra Price input, Delete, and Save button.
+  - Media Grid: 3 dedicated slots for Swatch Thumbnail (150x150), Master Texture URL v2 (1000x1000), and Master Texture Big (2000x2000).
+  - 3D Shading Tone Card: Dedicated Shadow Multiply and Highlight Screen sliders with live percentage indicators.
+- **High-Contrast White Background for All Cutout Buttons**:
+  - Model Cut Perimeter Mask, Logo Cutout Mask, and Stylus Cutout Mask thumbnail preview buttons strictly use a bright white background (`bg-white border-white/20 shadow-sm`) with dark icons, ensuring transparent black cutout paths remain clearly visible to operators.
+
+---
+
+## 45. Finish Texture Reordering within Groups & Global Finish Deactivation
+
+- **Finish Reordering within Groups Invariant**:
+  - Finishes within each group are ordered strictly by an explicit numeric `order` index (`(a.order ?? 0) - (b.order ?? 0)`).
+  - Studio Master Textures modal provides Move Up (`ChevronUp`) and Move Down (`ChevronDown`) controls on each finish card alongside a `#pos` badge.
+  - Moving a finish swaps position with adjacent items in the same group, normalizes group sequence (0, 1, 2, ...), and immediately persists the complete order to WordPress database options via `POST /wp-json/exacoat-core/v1/finishes/save-all`.
+  - Storefront engine (`configurator-loader.ts`) sorts choices by `(a.order ?? 0) - (b.order ?? 0)`, ensuring customer-facing swatches display in the exact custom sequence configured in Studio.
+- **Global Finish Deactivation Invariant (`is_active`)**:
+  - Difference from Stock Status:
+    - "Out of Stock" (`in_stock: false`) keeps the swatch visible to customers with an unavailable state.
+    - "Inactive" (`is_active: false`) completely removes and hides the swatch from the customer configurator across all devices.
+  - Admin Visibility: Deactivated finishes remain visible in Studio Master Textures with a distinct "Inactive: Hidden from Storefront" badge and dimmed card styling (`bg-zinc-950/60 border-dashed border-zinc-700/60`) so operators can re-activate or edit them at any time without data loss.
+  - 1-Click Toggle: Operators can toggle active status with 1 click using the Active / Inactive button in the card header, synchronizing immediately via `POST /wp-json/exacoat-core/v1/finishes/toggle-active`.
+  - Status Filtering: Master Textures modal header includes live filter pills: All, Active, and Inactive with dynamic device counts.
+
 

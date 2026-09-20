@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.89] - 2026-09-21
+
+### Finish Texture Reordering within Groups & Global Finish Deactivation (is_active)
+- **Finish Texture Reordering within Groups**:
+  - Implemented Move Up and Move Down controls on every finish card within the Master Textures modal.
+  - Finishes are ordered strictly by explicit numeric sequence within their respective group, ensuring custom arrangements (such as placing Forged Carbon immediately after Black Camo) persist directly to WordPress database options.
+  - Storefront engine (`configurator-loader.ts`) now sorts swatches inside each group strictly by `(a.order ?? 0) - (b.order ?? 0)`, perfectly mirroring the Studio arrangement on customer-facing configurators.
+- **Global Finish Deactivation (`is_active`)**:
+  - Added global activation toggle (`is_active`) across WordPress backend (`class-configurator-engine.php`), bridge (`wordpressBridge.ts`), and storefront engine (`configurator-loader.ts`).
+  - Added 1-click Active / Inactive status toggle button on each finish card in Master Textures and Materials & Stock.
+  - Deactivated finishes are completely hidden from customer-facing configurators while remaining visible to store admins in Master Textures with a distinct Inactive status pill for immediate re-activation.
+  - Added status filtering tabs (All, Active, Inactive) with live counts to the Master Textures modal header.
+- **REST Endpoints & Database Invariants**:
+  - Registered `POST /wp-json/exacoat-core/v1/finishes/toggle-active` for fast optimistic toggle synchronization.
+  - Updated `rest_save_finish` and `rest_save_all_finishes` to preserve `is_active` and `order` properties without data loss.
+  - Updated `get_finishes()` to guarantee fallback defaults for legacy finishes.
+
 ## [0.0.88] - 2026-09-21
 
 ### Finish-Level 3D Shading Tone, Highlight Single-Source Fallback, Master Textures Row Overhaul & White Cutout Slots

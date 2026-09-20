@@ -5,6 +5,7 @@ import { useToast } from '../context/ToastContext';
 import {
   fetchGlobalFinishesDirect,
   toggleFinishStockDirect,
+  toggleFinishActiveDirect,
   saveGlobalFinishDirect,
   GlobalFinish,
   DEFAULT_GLOBAL_FINISHES,
@@ -99,6 +100,40 @@ export const MaterialsStockPage: React.FC = () => {
     } catch (err: any) {
       setFinishes((prev) =>
         prev.map((f) => (f.id === finish.id ? { ...f, in_stock: finish.in_stock } : f))
+      );
+      showToast('error', 'Store Error', err.message || 'Communication error with store');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleToggleActive = async (finish: GlobalFinish) => {
+    const nextActive = finish.is_active === false ? true : false;
+    setUpdatingId(finish.id);
+
+    // Optimistic update
+    setFinishes((prev) =>
+      prev.map((f) => (f.id === finish.id ? { ...f, is_active: nextActive } : f))
+    );
+
+    try {
+      const res = await toggleFinishActiveDirect(finish.id, nextActive);
+      if (res.success) {
+        showToast(
+          'success',
+          nextActive ? 'Finish Activated' : 'Finish Deactivated',
+          `${finish.name} marked as ${nextActive ? 'Active (Visible on store)' : 'Inactive (Hidden from storefront)'}.`
+        );
+      } else {
+        // Revert on failure
+        setFinishes((prev) =>
+          prev.map((f) => (f.id === finish.id ? { ...f, is_active: finish.is_active } : f))
+        );
+        showToast('error', 'Update Failed', res.error || 'Failed updating active status');
+      }
+    } catch (err: any) {
+      setFinishes((prev) =>
+        prev.map((f) => (f.id === finish.id ? { ...f, is_active: finish.is_active } : f))
       );
       showToast('error', 'Store Error', err.message || 'Communication error with store');
     } finally {
@@ -366,17 +401,24 @@ export const MaterialsStockPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Stock Status Pill */}
-                    <span
-                      className={clsx(
-                        'text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 border',
-                        finish.in_stock
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                          : 'bg-rose-500/15 text-rose-400 border-rose-500/40'
+                    {/* Status Pills */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {finish.is_active === false && (
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border bg-zinc-800 text-zinc-400 border-zinc-700">
+                          Inactive
+                        </span>
                       )}
-                    >
-                      {finish.in_stock ? 'In Stock' : 'Depleted'}
-                    </span>
+                      <span
+                        className={clsx(
+                          'text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border',
+                          finish.in_stock
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                            : 'bg-rose-500/15 text-rose-400 border-rose-500/40'
+                        )}
+                      >
+                        {finish.in_stock ? 'In Stock' : 'Depleted'}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Pricing / Meta info */}
@@ -410,17 +452,34 @@ export const MaterialsStockPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Stock Toggle Action */}
+                {/* Stock & Active Toggle Action */}
                 <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditingFinish({ ...finish })}
-                    className="px-2.5 py-1 text-xs font-sans rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer"
-                    title="Edit material details and v2 master texture"
-                  >
-                    <Edit3 className="w-3 h-3 text-[#f3aa18]" />
-                    <span>Edit</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setEditingFinish({ ...finish })}
+                      className="px-2.5 py-1 text-xs font-sans rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer"
+                      title="Edit material details and v2 master texture"
+                    >
+                      <Edit3 className="w-3 h-3 text-[#f3aa18]" />
+                      <span>Edit</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleToggleActive(finish)}
+                      disabled={isUpdating}
+                      className={clsx(
+                        'px-2 py-1 text-[11px] font-mono rounded-lg border transition-colors cursor-pointer disabled:opacity-50',
+                        finish.is_active !== false
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
+                          : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+                      )}
+                      title={finish.is_active !== false ? 'Active (Visible on store) - Click to deactivate' : 'Inactive (Hidden from store) - Click to activate'}
+                    >
+                      {finish.is_active !== false ? 'Active' : 'Inactive'}
+                    </button>
+                  </div>
 
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] text-zinc-400 font-sans">
