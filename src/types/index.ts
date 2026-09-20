@@ -463,7 +463,7 @@ export interface AdminUser {
 // Composable Product Configurator Types
 // ==========================================
 
-export type DeviceFamily = 'phone' | 'laptop' | 'tablet' | 'foldable' | 'keyboard' | 'console' | 'audio' | 'case' | 'accessory';
+export type DeviceFamily = 'phone' | 'laptop' | 'tablet' | 'foldable' | 'keyboard' | 'console' | 'audio' | 'case' | 'accessory' | 'tablet_laptop';
 
 export type CoverageType = 'none' | 'model_cut_only' | 'model_cut_and_360' | 'model_360_only';
 
@@ -537,6 +537,7 @@ export interface DeviceCoverageAndCutouts {
   logo_cutout_mask_url?: string;
   has_pencil_cutout?: boolean;
   pencil_cutout_mask_url?: string;
+  pencil_cutout_label?: string;
   has_model_cut?: boolean;
   model_cut_mask_url?: string;
   logo_target_layer_id?: string;

@@ -201,9 +201,8 @@ const COMMON_PRESET_LAYERS: SkinPartPreset[] = [
   { name: 'Top Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
   { name: 'Additional Accents', group: 'accent', is_required: false, is_optional: true, extra_price: 30000 },
   { name: 'Additional Camera', group: 'accent', is_required: false, is_optional: true, extra_price: 25000 },
-  { name: 'Additional Camera & Back Glass', group: 'accent', is_required: false, is_optional: true, extra_price: 40000 },
+  { name: 'Additional Camera & Back Glass', group: 'accent', is_required: false, is_optional: true, extra_price: 85000 },
   { name: 'Frame / Sides', group: 'protection', is_required: false, is_optional: true, extra_price: 30000 },
-  { name: 'Top Lid', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
   { name: 'Bottom Base', group: 'primary', is_required: false, is_optional: true, extra_price: 120000 },
   { name: 'Trackpad', group: 'accent', is_required: false, is_optional: true, extra_price: 40000 },
   { name: 'Palm Rest', group: 'accent', is_required: false, is_optional: true, extra_price: 80000 },
@@ -536,6 +535,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [simFinishGroupFilter, setSimFinishGroupFilter] = useState<string>('all');
   const [customPartInputOpen, setCustomPartInputOpen] = useState<boolean>(false);
   const [customPartName, setCustomPartName] = useState<string>('');
+  const [customAngleName, setCustomAngleName] = useState<string>('');
   const [isPresetDropdownOpen, setIsPresetDropdownOpen] = useState<boolean>(false);
   const [selectedSimVariants, setSelectedSimVariants] = useState<Record<string, string>>({});
 
@@ -2299,12 +2299,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
   const handleSetCoverageAndCutouts = (field: keyof DeviceCoverageAndCutouts, value: any) => {
     if (!editingProfile) return;
+    const nextCoverage = {
+      ...(editingProfile.coverage_and_cutouts || {}),
+      [field]: value,
+    };
+    if (field === 'pencil_cutout_mask_url' && value) {
+      nextCoverage.has_pencil_cutout = true;
+    }
     setEditingProfile({
       ...editingProfile,
-      coverage_and_cutouts: {
-        ...(editingProfile.coverage_and_cutouts || {}),
-        [field]: value,
-      },
+      coverage_and_cutouts: nextCoverage,
     });
   };
 
@@ -2359,8 +2363,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
   // View manipulation helpers
   const handleAddView = (viewName: string) => {
     if (!editingProfile || !viewName.trim()) return;
-    const slug = viewName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
-    if (editingProfile.views.some((v) => v.id === slug)) return;
+    let slug = viewName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
+    if (!slug) slug = `angle_${Date.now()}`;
+    if (editingProfile.views.some((v) => v.id === slug)) {
+      slug = `${slug}_${Date.now().toString().slice(-4)}`;
+    }
 
     const newView: ConfiguratorView = {
       id: slug,
@@ -2375,7 +2382,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
       views: [...editingProfile.views, newView],
     });
     setActiveSimView(slug);
-    showToast('info', 'Angle Added', `Added viewing angle: ${viewName}`);
+    showToast('info', 'Angle Added', `Added viewing angle: ${viewName.trim()}`);
   };
 
   const handleRemoveView = (viewId: string) => {
@@ -5313,20 +5320,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </React.Fragment>
                             );
                           })()}
-
-                          {/* Layer 4: Hardware Logo / Accent Overlay (v1 Legacy & Overlay Support) */}
-                          {Boolean(currentView?.logo_url) && selectedLogoCutout && (
-                            <img
-                              key={`logo-overlay-${currentView?.id || 'main'}`}
-                              src={currentView.logo_url}
-                              alt={`${currentView?.name || 'Device'} Logo Overlay`}
-                              style={{ zIndex: 30 }}
-                              className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity"
-                              onError={(e) => {
-                                (e.target as HTMLElement).style.display = 'none';
-                              }}
-                            />
-                          )}
                         </div>
                       </div>
 
@@ -5471,7 +5464,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         {/* Row 3: Configurable Choices (Coverage, Logo Cutout, Chassis Color) */}
                         <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-white/5 text-xs">
                           {/* Logo Cutout Toggle */}
-                          {(editingProfile.coverage_and_cutouts?.has_logo_cutout !== false || Boolean(currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url || currentView?.logo_url)) && (
+                          {(editingProfile.coverage_and_cutouts?.has_logo_cutout !== false || Boolean(currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url)) && (
                             <div className="flex items-center gap-1.5 bg-zinc-900/80 p-1 rounded-xl border border-white/10">
                               <span className="text-[11px] text-zinc-400 font-medium px-2">Logo:</span>
                               <button
@@ -5501,10 +5494,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             </div>
                           )}
 
-                          {/* Pencil Cutout Toggle (Tablets: iPad, Galaxy Tab) */}
+                          {/* Pencil Cutout Toggle (Tablets: iPad, Galaxy Tab, etc.) */}
                           {Boolean(editingProfile.coverage_and_cutouts?.has_pencil_cutout || currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) && (
                             <div className="flex items-center gap-1.5 bg-zinc-900/80 p-1 rounded-xl border border-white/10">
-                              <span className="text-[11px] text-zinc-400 font-medium px-2">Pencil Groove:</span>
+                              <span className="text-[11px] text-zinc-400 font-medium px-2">{editingProfile.coverage_and_cutouts?.pencil_cutout_label || 'Stylus Cutout'}:</span>
                               <button
                                 type="button"
                                 onClick={() => setSelectedPencilCutout(true)}
@@ -5864,67 +5857,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 </div>
                               </div>
 
-                              {/* Quick Add Common Additional Skin Presets */}
-                              <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider pr-0.5">
-                                  Quick Add:
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleAddPresetLayer({ name: 'Additional Accents', group: 'accent', is_required: false, is_optional: true, extra_price: 30000 })}
-                                  className="px-2.5 py-1 text-xs font-sans rounded-xl bg-zinc-900 border border-white/10 hover:border-[#f3aa18]/50 hover:bg-[#f3aa18]/10 text-zinc-300 hover:text-[#f3aa18] cursor-pointer transition-all flex items-center gap-1.5"
-                                >
-                                  <Plus className="w-3 h-3 text-[#f3aa18]" />
-                                  <span>Additional Accents</span>
-                                  <span className="text-[10px] font-mono text-amber-400/80">+30k</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleAddPresetLayer({ name: 'Additional Camera', group: 'accent', is_required: false, is_optional: true, extra_price: 25000 })}
-                                  className="px-2.5 py-1 text-xs font-sans rounded-xl bg-zinc-900 border border-white/10 hover:border-[#f3aa18]/50 hover:bg-[#f3aa18]/10 text-zinc-300 hover:text-[#f3aa18] cursor-pointer transition-all flex items-center gap-1.5"
-                                >
-                                  <Plus className="w-3 h-3 text-[#f3aa18]" />
-                                  <span>Additional Camera</span>
-                                  <span className="text-[10px] font-mono text-amber-400/80">+25k</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleAddPresetLayer({ name: 'Additional Camera & Back Glass', group: 'accent', is_required: false, is_optional: true, extra_price: 40000 })}
-                                  className="px-2.5 py-1 text-xs font-sans rounded-xl bg-zinc-900 border border-white/10 hover:border-[#f3aa18]/50 hover:bg-[#f3aa18]/10 text-zinc-300 hover:text-[#f3aa18] cursor-pointer transition-all flex items-center gap-1.5"
-                                >
-                                  <Plus className="w-3 h-3 text-[#f3aa18]" />
-                                  <span>Additional Camera & Back Glass</span>
-                                  <span className="text-[10px] font-mono text-amber-400/80">+40k</span>
-                                </button>
-                              </div>
-
-                              {/* Compact Preset Packs Pill Row */}
-                              <div className="flex flex-wrap items-center gap-1.5 p-2 px-3 rounded-xl bg-zinc-950/60 border border-white/5 text-[11px] text-zinc-400">
-                                <span className="font-semibold text-zinc-300 flex items-center gap-1 mr-1">
-                                  <Sparkles className="w-3 h-3 text-[#f3aa18]" />
-                                  Quick Preset:
-                                </span>
-                                {Object.entries(DEVICE_FAMILY_PRESET_PACKS).map(([fKey, pack]) => {
-                                  const isActive = editingProfile.family === fKey;
-                                  return (
-                                    <button
-                                      key={fKey}
-                                      type="button"
-                                      onClick={() => handleApplyFamilyPresetPack(fKey)}
-                                      className={clsx(
-                                        'px-2 py-0.5 rounded-lg font-sans transition-all border cursor-pointer',
-                                        isActive
-                                          ? 'bg-[#f3aa18]/20 border-[#f3aa18]/40 text-[#f3aa18] font-bold'
-                                          : 'bg-zinc-900 border-white/5 text-zinc-400 hover:text-white hover:bg-zinc-800'
-                                      )}
-                                      title={`Add parts: ${pack.parts.map((p) => p.name).join(', ')}`}
-                                    >
-                                      +{pack.label}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-
                               {/* Vertical Layer Stack (Front to Back) */}
                               <div className="space-y-1.5">
                                 {(() => {
@@ -5934,7 +5866,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       <div className="p-6 text-center rounded-2xl bg-zinc-900/40 border border-dashed border-white/10 space-y-2">
                                         <Layers className="w-8 h-8 text-zinc-600 mx-auto" />
                                         <p className="text-xs text-zinc-400">No skin parts defined for this device yet.</p>
-                                        <p className="text-[11px] text-zinc-500">Click a Quick Preset above or Add Part to start.</p>
+                                        <p className="text-[11px] text-zinc-500">Click Add Part above to start.</p>
                                       </div>
                                     );
                                   }
@@ -6544,9 +6476,15 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     </div>
                                   )}
 
-                                  <div className="min-w-0">
-                                    <p className="font-bold text-white text-sm">{currentView.name}</p>
-                                    <p className="text-[11px] font-mono text-zinc-400 mt-0.5">Angle ID: {currentView.id}</p>
+                                  <div className="min-w-0 flex-1">
+                                    <input
+                                      type="text"
+                                      value={currentView.name}
+                                      onChange={(e) => handleSetViewField(currentView.id, 'name', e.target.value)}
+                                      className="font-bold text-white text-sm bg-transparent border-b border-transparent hover:border-white/20 focus:border-[#f3aa18] focus:bg-zinc-950/60 px-1 py-0.5 rounded transition-colors focus:outline-none w-full"
+                                      title="Click to rename angle"
+                                    />
+                                    <p className="text-[11px] font-mono text-zinc-400 mt-0.5 px-1">Angle ID: {currentView.id}</p>
                                   </div>
                                 </div>
 
@@ -6754,52 +6692,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   )}
                                 </div>
 
-                                {/* Hardware Accent / Logo Overlay URL (v1 Overlay) */}
-                                <div className="space-y-1.5 bg-black/30 p-3 rounded-xl border border-white/5">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-xs font-bold text-zinc-300">
-                                        Hardware Accent / Logo Overlay (v1 Overlay)
-                                      </span>
-                                      <InfoTooltip content="Rendered directly on top of skin vinyl layers (e.g. metallic Apple logo, camera lens reflections, or brand badge)." />
-                                    </div>
-                                    {currentView.logo_url && (
-                                      <span className="text-emerald-400 text-[10px] font-mono">Configured</span>
-                                    )}
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <input
-                                      type="url"
-                                      placeholder="https://exacoat.com/uploads/device-logo-overlay.png"
-                                      value={currentView.logo_url || ''}
-                                      onChange={(e) => {
-                                        const val = e.target.value.trim();
-                                        handleSetViewField(currentView.id, 'logo_url', val);
-                                      }}
-                                      className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] placeholder:text-zinc-600"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setMediaPickerConfig({
-                                          isOpen: true,
-                                          title: `Select Logo Overlay: ${currentView.name}`,
-                                          recommendedDimensions: '1000x1000 Transparent PNG',
-                                          currentUrl: currentView.logo_url || '',
-                                          onSelect: (url) => {
-                                            handleSetViewField(currentView.id, 'logo_url', url);
-                                          },
-                                        })
-                                      }
-                                      className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
-                                      title="Browse WordPress Media Library"
-                                    >
-                                      <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                      <span>Browse</span>
-                                    </button>
-                                  </div>
-                                </div>
-
                                 {/* 3D Shading & Specular Highlights for this Angle */}
                                 <div className="space-y-3 pt-3 border-t border-white/5">
                                   <div className="flex items-center justify-between">
@@ -6936,29 +6828,69 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             )}
 
                             {/* Add Viewing Angle Helper */}
-                            <div className="pt-3 border-t border-white/5 space-y-2">
+                            <div className="pt-3 border-t border-white/5 space-y-2.5">
                               <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
-                                Quick Add Device Angle
+                                Add Device Angle
                               </label>
-                              <div className="flex flex-wrap items-center gap-2">
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  placeholder="Angle name (e.g. Front View, Closed View, Keyboard View)"
+                                  value={customAngleName}
+                                  onChange={(e) => setCustomAngleName(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      if (customAngleName.trim()) {
+                                        handleAddView(customAngleName.trim());
+                                        setCustomAngleName('');
+                                      }
+                                    }
+                                  }}
+                                  className="flex-1 px-3 py-1.5 text-xs rounded-xl bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (customAngleName.trim()) {
+                                      handleAddView(customAngleName.trim());
+                                      setCustomAngleName('');
+                                    }
+                                  }}
+                                  disabled={!customAngleName.trim()}
+                                  className="px-3 py-1.5 rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] disabled:opacity-40 disabled:hover:bg-[#f3aa18] text-black font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all shrink-0"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  <span>Add Angle</span>
+                                </button>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-[10px] text-zinc-500 font-medium mr-1">Suggestions:</span>
                                 <button
                                   type="button"
                                   onClick={() => handleAddView('Back View')}
-                                  className="px-3 py-1.5 text-xs font-sans rounded-xl bg-zinc-900 border border-white/10 hover:border-white/20 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                                  className="px-2.5 py-1 text-xs font-sans rounded-lg bg-zinc-900 border border-white/10 hover:border-white/20 text-zinc-300 hover:text-white transition-colors cursor-pointer"
                                 >
                                   + Back View
                                 </button>
                                 <button
                                   type="button"
+                                  onClick={() => handleAddView('Front View')}
+                                  className="px-2.5 py-1 text-xs font-sans rounded-lg bg-zinc-900 border border-white/10 hover:border-white/20 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                                >
+                                  + Front View
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => handleAddView('Inner View')}
-                                  className="px-3 py-1.5 text-xs font-sans rounded-xl bg-zinc-900 border border-white/10 hover:border-white/20 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                                  className="px-2.5 py-1 text-xs font-sans rounded-lg bg-zinc-900 border border-white/10 hover:border-white/20 text-zinc-300 hover:text-white transition-colors cursor-pointer"
                                 >
                                   + Inner View
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => handleAddView('Trackpad View')}
-                                  className="px-3 py-1.5 text-xs font-sans rounded-xl bg-zinc-900 border border-white/10 hover:border-white/20 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                                  className="px-2.5 py-1 text-xs font-sans rounded-lg bg-zinc-900 border border-white/10 hover:border-white/20 text-zinc-300 hover:text-white transition-colors cursor-pointer"
                                 >
                                   + Trackpad View
                                 </button>
@@ -7151,12 +7083,19 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </div>
                             </div>
 
-                            {/* SECTION 2: PENCIL GROOVE CUTOUT */}
+                            {/* SECTION 2: CUSTOM / PENCIL GROOVE CUTOUT */}
                             <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3">
                               <div className="flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-xs font-semibold text-white">Stylus / Pencil Cutout</span>
-                                  <InfoTooltip text="Cutout strip for magnetic stylus charging (Apple Pencil or S-Pen on tablets and foldables)." />
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                  <input
+                                    type="text"
+                                    placeholder="Cutout Name (e.g. Stylus Cutout, S-Pen Cutout, Antenna Strip)"
+                                    value={editingProfile.coverage_and_cutouts?.pencil_cutout_label ?? 'Stylus Cutout'}
+                                    onChange={(e) => handleSetCoverageAndCutouts('pencil_cutout_label', e.target.value)}
+                                    className="text-xs font-semibold text-white bg-transparent border-b border-white/10 hover:border-white/30 focus:border-[#f3aa18] focus:bg-zinc-950/60 px-1 py-0.5 rounded transition-colors focus:outline-none w-full max-w-[220px]"
+                                    title="Click to rename cutout option"
+                                  />
+                                  <InfoTooltip text="Custom renamable cutout option for buyers on webstore (e.g. Apple Pencil strip, S-Pen slot, or custom hardware cutout)." />
                                 </div>
                                 <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-lg border border-white/10 text-[11px] shrink-0">
                                   <button
@@ -7197,7 +7136,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   />
                                   <span className="text-zinc-300 font-medium text-xs">Buyer Choice on Webstore</span>
                                 </div>
-                                <InfoTooltip text="Allows tablet buyers to choose 'With Cutout' or 'Solid' for the stylus charging strip." />
+                                <InfoTooltip text="Allows buyers to choose 'With Cutout' or 'Solid' for this hardware cutout on the webstore." />
                               </label>
 
                               {/* Pencil Cutout Mask URL */}
@@ -7221,6 +7160,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       if (currentView?.is_default || currentView?.id === 'main_view' || !editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) {
                                         handleSetCoverageAndCutouts('pencil_cutout_mask_url', val);
                                       }
+                                      if (val) {
+                                        handleSetCoverageAndCutouts('has_pencil_cutout', true);
+                                      }
                                     }}
                                     className="w-full px-2.5 py-1.5 text-xs font-mono rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-emerald-400 placeholder:text-zinc-600"
                                   />
@@ -7229,7 +7171,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     onClick={() =>
                                       setMediaPickerConfig({
                                         isOpen: true,
-                                        title: `Select Pencil Cutout Mask: ${currentView?.name || 'Active Angle'}`,
+                                        title: `Select Cutout Mask: ${editingProfile.coverage_and_cutouts?.pencil_cutout_label || 'Stylus Cutout'}`,
                                         recommendedDimensions: '1000x1000 Transparent PNG',
                                         currentUrl: currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url || '',
                                         onSelect: (url) => {
@@ -7238,6 +7180,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                           }
                                           if (currentView?.is_default || currentView?.id === 'main_view' || !editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) {
                                             handleSetCoverageAndCutouts('pencil_cutout_mask_url', url);
+                                          }
+                                          if (url) {
+                                            handleSetCoverageAndCutouts('has_pencil_cutout', true);
                                           }
                                         },
                                       })
@@ -7294,7 +7239,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     { id: 'none', label: 'None (Flat Cut)' },
                                     { id: 'model_cut_and_360', label: 'Model Cut & 360' },
                                     { id: 'model_cut_only', label: 'Model Cut Only' },
-                                    { id: 'model_360_only', label: '360 Wrap Only' },
+                                    { id: 'model_360_only', label: 'Model 360 Only' },
                                   ].map((mode) => {
                                     const currentCov = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none');
                                     const isSelected = currentCov === mode.id;
@@ -7477,20 +7422,15 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     <InfoTooltip text="Category scale used to automatically calculate premium material surcharges." />
                                   </div>
                                   <select
-                                    value={editingProfile.family}
+                                    value={
+                                      editingProfile.family === 'tablet' || editingProfile.family === 'laptop' || (editingProfile.family as string) === 'tablet_laptop'
+                                        ? 'tablet_laptop'
+                                        : 'phone'
+                                    }
                                     onChange={(e) => {
-                                      const nextFamily = e.target.value as DeviceFamily;
-                                      const familyMultipliers: Record<string, number> = {
-                                        phone: 1.0,
-                                        foldable: 1.3,
-                                        tablet: 1.8,
-                                        keyboard: 2.0,
-                                        laptop: 2.5,
-                                        console: 2.0,
-                                        accessory: 0.8,
-                                        case: 1.0,
-                                      };
-                                      const nextMult = familyMultipliers[nextFamily] ?? 1.0;
+                                      const selected = e.target.value;
+                                      const nextMult = selected === 'tablet_laptop' ? 2.0 : 1.0;
+                                      const nextFamily = (selected === 'tablet_laptop' ? 'tablet_laptop' : 'phone') as DeviceFamily;
                                       setEditingProfile({
                                         ...editingProfile,
                                         family: nextFamily,
@@ -7499,14 +7439,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     }}
                                     className="w-full px-2 py-1.5 text-xs rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
                                   >
-                                    <option value="phone">Phone (1.0x)</option>
-                                    <option value="foldable">Foldable (1.3x)</option>
-                                    <option value="tablet">Tablet (1.8x)</option>
-                                    <option value="keyboard">Keyboard (2.0x)</option>
-                                    <option value="laptop">Laptop (2.5x)</option>
-                                    <option value="console">Console (2.0x)</option>
-                                    <option value="case">Case (1.0x)</option>
-                                    <option value="accessory">Accessory (0.8x)</option>
+                                    <option value="phone">Phone (1.0x - +IDR 30.000)</option>
+                                    <option value="tablet_laptop">Tablet & Laptop (2.0x - +IDR 60.000)</option>
                                   </select>
                                 </div>
                               </div>
