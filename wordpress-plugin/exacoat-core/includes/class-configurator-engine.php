@@ -471,6 +471,13 @@ class Exacoat_Configurator_Engine {
 			'permission_callback' => [ __CLASS__, 'verify_permission' ],
 		] );
 
+		// POST /finishes/rename-group: Rename a finish group and migrate all assigned finishes
+		$register( '/finishes/rename-group', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_rename_finish_group' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+		] );
+
 		// POST /finishes/save-all: Batch save finishes and groups
 		$register( '/finishes/save-all', [
 			'methods'             => 'POST',
@@ -862,6 +869,51 @@ class Exacoat_Configurator_Engine {
 			'success' => true,
 			'message' => 'Finish groups reordered.',
 			'groups'  => self::get_finish_groups(),
+		] );
+	}
+
+	public static function rest_rename_finish_group( WP_REST_Request $request ): WP_REST_Response {
+		$params   = $request->get_json_params() ?: $request->get_params();
+		$old_name = sanitize_text_field( trim( $params['old_name'] ?? '' ) );
+		$new_name = sanitize_text_field( trim( $params['new_name'] ?? '' ) );
+
+		if ( empty( $old_name ) || empty( $new_name ) ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Both old_name and new_name are required.' ], 400 );
+		}
+
+		$groups = self::get_finish_groups();
+		$idx    = array_search( $old_name, $groups, true );
+		if ( false !== $idx ) {
+			$groups[ $idx ] = $new_name;
+		} else {
+			$groups[] = $new_name;
+		}
+		self::save_finish_groups( array_values( array_unique( $groups ) ) );
+
+		$finishes      = self::get_finishes();
+		$updated_count = 0;
+		foreach ( $finishes as &$f ) {
+			if ( ( $f['group'] ?? '' ) === $old_name ) {
+				$f['group'] = $new_name;
+				$updated_count++;
+			}
+		}
+		unset( $f );
+		self::save_finishes( $finishes );
+
+		// Automatically trigger storefront cache revalidation
+		self::trigger_storefront_revalidation( [
+			'tag'       => 'finishes',
+			'path'      => '/api/configurator/finishes',
+			'purge_all' => false,
+		] );
+
+		return rest_ensure_response( [
+			'success'       => true,
+			'message'       => "Renamed group '{$old_name}' to '{$new_name}'.",
+			'updated_count' => $updated_count,
+			'groups'        => self::get_finish_groups(),
+			'finishes'      => self::get_finishes(),
 		] );
 	}
 

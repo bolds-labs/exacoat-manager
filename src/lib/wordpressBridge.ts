@@ -2212,6 +2212,32 @@ export async function reorderFinishGroupsDirect(groups: string[]): Promise<{ suc
   }
 }
 
+export async function renameFinishGroupDirect(oldName: string, newName: string): Promise<{ success: boolean; groups?: string[]; finishes?: GlobalFinish[]; updated_count?: number; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/finishes/rename-group`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ old_name: oldName, new_name: newName }),
+    });
+    const data = await res.json();
+    if (res.ok && !!data?.success && Array.isArray(data?.finishes)) {
+      try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(data.finishes)); } catch {}
+    }
+    return {
+      success: res.ok && !!data?.success,
+      groups: data?.groups,
+      finishes: data?.finishes,
+      updated_count: data?.updated_count,
+      error: data?.error || data?.message,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function saveAllGlobalFinishesDirect(finishes: GlobalFinish[], groups?: string[]): Promise<{ success: boolean; finishes?: GlobalFinish[]; groups?: string[]; error?: string }> {
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/finishes/save-all`;

@@ -20,6 +20,7 @@ import {
   saveGlobalFinishDirect,
   deleteGlobalFinishDirect,
   reorderFinishGroupsDirect,
+  renameFinishGroupDirect,
   saveAllGlobalFinishesDirect,
   toggleFinishActiveDirect,
   extractShadingDirect,
@@ -359,7 +360,7 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
       width={1000}
       height={1000}
       style={{ zIndex }}
-      className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+      className="absolute inset-0 w-full h-full object-contain pointer-events-none filter drop-shadow-[0_0.75px_1.5px_rgba(0,0,0,0.38)]"
       title={layerName}
     />
   );
@@ -505,6 +506,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
   });
   const [storedFinishGroups, setStoredFinishGroups] = useState<string[]>([]);
   const [isManagingGroups, setIsManagingGroups] = useState(false);
+  const [editingGroupName, setEditingGroupName] = useState<{ oldName: string; newName: string } | null>(null);
+  const [isRenamingGroup, setIsRenamingGroup] = useState(false);
   const [newGroupNameInput, setNewGroupNameInput] = useState('');
   const [showAddNewFinishModal, setShowAddNewFinishModal] = useState(false);
   const [isCreatingFinish, setIsCreatingFinish] = useState(false);
@@ -3113,6 +3116,61 @@ export const ConfiguratorStudioPage: React.FC = () => {
     }
   };
 
+  // Rename a finish group and migrate all assigned finishes
+  const handleRenameGroup = async (oldName: string, rawNewName: string) => {
+    const trimmed = rawNewName.trim();
+    if (!trimmed || trimmed === oldName) {
+      setEditingGroupName(null);
+      return;
+    }
+    if (storedFinishGroups.some((g) => g.toLowerCase() === trimmed.toLowerCase() && g !== oldName)) {
+      showToast('error', 'Group Exists', `A group named "${trimmed}" already exists.`);
+      return;
+    }
+
+    try {
+      setIsRenamingGroup(true);
+      const res = await renameFinishGroupDirect(oldName, trimmed);
+      if (res.success) {
+        showToast(
+          'success',
+          'Group Renamed',
+          `Renamed "${oldName}" to "${trimmed}" and updated ${res.updated_count ?? 0} finish(es).`
+        );
+        if (Array.isArray(res.groups)) {
+          setStoredFinishGroups(res.groups);
+        } else {
+          setStoredFinishGroups((prev) => prev.map((g) => (g === oldName ? trimmed : g)));
+        }
+        if (Array.isArray(res.finishes)) {
+          setFinishes(res.finishes);
+        } else {
+          setFinishes((prev) =>
+            prev.map((f) => (f.group === oldName ? { ...f, group: trimmed } : f))
+          );
+        }
+        // Update local editingFinishGroups mapping
+        setEditingFinishGroups((prev) => {
+          const next = { ...prev };
+          Object.keys(next).forEach((k) => {
+            if (next[k] === oldName) next[k] = trimmed;
+          });
+          return next;
+        });
+        if (masterTextureGroupFilter === oldName) {
+          setMasterTextureGroupFilter(trimmed);
+        }
+        setEditingGroupName(null);
+      } else {
+        showToast('error', 'Rename Failed', res.error || 'Could not rename group.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message || 'Error renaming group.');
+    } finally {
+      setIsRenamingGroup(false);
+    }
+  };
+
   // Instantly toggle a finish between Active and Inactive
   const handleToggleFinishActive = async (finish: GlobalFinish) => {
     const currentActive =
@@ -4460,10 +4518,55 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         (f) => (editingFinishGroups[f.id] || f.group) === grp
                       ).length;
 
+                      if (editingGroupName?.oldName === grp) {
+                        return (
+                          <div
+                            key={grp}
+                            className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-zinc-950 border border-amber-400/60 shadow-lg animate-in fade-in zoom-in-95 duration-100"
+                          >
+                            <input
+                              type="text"
+                              value={editingGroupName.newName}
+                              autoFocus
+                              onChange={(e) =>
+                                setEditingGroupName({ ...editingGroupName, newName: e.target.value })
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleRenameGroup(grp, editingGroupName.newName);
+                                if (e.key === 'Escape') setEditingGroupName(null);
+                              }}
+                              className="px-2 py-0.5 text-xs font-semibold rounded-lg bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-amber-400 w-32"
+                              placeholder="Group name..."
+                            />
+                            <button
+                              type="button"
+                              disabled={isRenamingGroup || !editingGroupName.newName.trim()}
+                              onClick={() => handleRenameGroup(grp, editingGroupName.newName)}
+                              className="p-1 rounded-lg bg-amber-400 text-black hover:bg-amber-300 disabled:opacity-40 cursor-pointer transition-colors shadow-xs"
+                              title="Save group name"
+                            >
+                              {isRenamingGroup ? (
+                                <RefreshCw className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Check className="w-3 h-3" />
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingGroupName(null)}
+                              className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
+                              title="Cancel"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        );
+                      }
+
                       return (
                         <div
                           key={grp}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-zinc-900 border border-white/10 text-xs font-sans text-zinc-200 shadow-xs"
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-zinc-900 border border-white/10 text-xs font-sans text-zinc-200 shadow-xs group/grp"
                         >
                           <button
                             type="button"
@@ -4477,8 +4580,19 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           >
                             <ChevronUp className="w-3 h-3 -rotate-90" />
                           </button>
-                          <span className="font-semibold text-white px-1">{grp}</span>
+                          <span className="font-semibold text-white px-0.5">{grp}</span>
                           <span className="text-[10px] text-zinc-500 font-mono pr-0.5">({count})</span>
+
+                          {/* Rename Group Button */}
+                          <button
+                            type="button"
+                            onClick={() => setEditingGroupName({ oldName: grp, newName: grp })}
+                            className="p-0.5 text-zinc-500 hover:text-amber-400 rounded hover:bg-white/10 transition-colors cursor-pointer"
+                            title={`Rename group "${grp}"`}
+                          >
+                            <Edit3 className="w-3 h-3" />
+                          </button>
+
                           <button
                             type="button"
                             disabled={idx === storedFinishGroups.length - 1}
@@ -4757,8 +4871,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         className={clsx(
                           'p-4 rounded-2xl border transition-all space-y-3.5 shadow-sm',
                           !currentActiveInput
-                            ? 'bg-zinc-950/60 border-dashed border-zinc-700/60 opacity-80'
-                            : 'bg-zinc-900/80 border-white/10 hover:border-white/20'
+                            ? 'bg-zinc-950/70 border-dashed border-zinc-800 opacity-75'
+                            : 'bg-zinc-900/90 border-white/10 hover:border-white/20'
                         )}
                       >
                         {/* Header: Identification, Surcharge, Stock, Active & Actions */}
@@ -4766,7 +4880,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           {/* Left: Reorder, Swatch Mini, Name, Group, Slug, Inactive Badge */}
                           <div className="flex flex-wrap items-center gap-2.5">
                             {/* Move Up / Down Buttons within Group */}
-                            <div className="flex items-center gap-0.5 bg-zinc-950 p-0.5 rounded-xl border border-white/10 shrink-0">
+                            <div className="flex items-center gap-0.5 bg-zinc-950/90 p-0.5 rounded-xl border border-white/10 shrink-0 shadow-inner">
                               <button
                                 type="button"
                                 disabled={isFirstInGroup}
@@ -4781,7 +4895,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               >
                                 <ChevronUp className="w-3.5 h-3.5" />
                               </button>
-                              <span className="text-[10px] font-mono px-1 text-zinc-400 select-none font-semibold min-w-5 text-center">
+                              <span className="text-[10px] font-mono px-1 text-zinc-400 select-none font-bold min-w-5 text-center">
                                 #{posInGroup >= 0 ? posInGroup + 1 : 1}
                               </span>
                               <button
@@ -4800,36 +4914,44 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </button>
                             </div>
 
-                            <div className="w-8 h-8 rounded-lg overflow-hidden border border-white/15 bg-zinc-950 shrink-0 flex items-center justify-center">
+                            <div className="w-8 h-8 rounded-xl overflow-hidden border border-white/15 bg-zinc-950 shrink-0 flex items-center justify-center shadow-xs">
                               {currentThumbInput ? (
                                 <img src={currentThumbInput} alt="" className="w-full h-full object-cover" />
                               ) : (
                                 <div className="w-full h-full" style={{ backgroundColor: f.color_hex || '#27272a' }} />
                               )}
                             </div>
+
+                            {/* Finish Name Input */}
                             <input
                               type="text"
                               value={currentNameInput}
                               onChange={(e) =>
                                 setEditingFinishNames((prev) => ({ ...prev, [f.id]: e.target.value }))
                               }
-                              className="text-sm font-bold text-white bg-transparent border-b border-white/10 hover:border-white/30 focus:border-[#f3aa18] focus:outline-none px-1 py-0.5 w-36 sm:w-44 transition-colors"
+                              className="text-xs font-bold text-white bg-zinc-950/80 border border-white/10 hover:border-white/20 focus:border-amber-400 focus:ring-1 focus:ring-amber-400/30 rounded-xl px-3 py-1.5 w-36 sm:w-44 transition-all shadow-inner focus:outline-none placeholder:text-zinc-600"
                               placeholder="Finish Name"
                             />
-                            <select
-                              value={currentGroupInput}
-                              onChange={(e) =>
-                                setEditingFinishGroups((prev) => ({ ...prev, [f.id]: e.target.value }))
-                              }
-                              className="px-2.5 py-1 text-xs rounded-xl bg-zinc-950 border border-white/10 text-zinc-200 focus:outline-none focus:border-[#f3aa18] cursor-pointer"
-                            >
-                              {storedFinishGroups.map((g) => (
-                                <option key={g} value={g}>
-                                  {g}
-                                </option>
-                              ))}
-                            </select>
-                            <span className="text-[10px] font-mono text-zinc-500 bg-white/5 px-2 py-0.5 rounded-lg border border-white/5 hidden sm:inline-block">
+
+                            {/* Finish Group Dropdown */}
+                            <div className="relative inline-flex items-center">
+                              <select
+                                value={currentGroupInput}
+                                onChange={(e) =>
+                                  setEditingFinishGroups((prev) => ({ ...prev, [f.id]: e.target.value }))
+                                }
+                                className="appearance-none pl-3 pr-7 py-1.5 text-xs font-medium rounded-xl bg-zinc-950/80 border border-white/10 hover:border-white/20 text-zinc-200 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/30 cursor-pointer shadow-xs transition-all"
+                              >
+                                {storedFinishGroups.map((g) => (
+                                  <option key={g} value={g} className="bg-zinc-900 text-zinc-200">
+                                    {g}
+                                  </option>
+                                ))}
+                              </select>
+                              <ChevronDown className="w-3.5 h-3.5 text-zinc-400 absolute right-2 pointer-events-none" />
+                            </div>
+
+                            <span className="text-[10px] font-mono text-zinc-400 bg-white/5 px-2 py-1 rounded-lg border border-white/5 hidden sm:inline-block">
                               {f.slug}
                             </span>
                             {!currentActiveInput && (
@@ -4846,18 +4968,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               type="button"
                               onClick={() => handleToggleFinishActive(f)}
                               className={clsx(
-                                'flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono transition-all cursor-pointer select-none',
+                                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-mono transition-all cursor-pointer select-none shadow-xs',
                                 currentActiveInput
                                   ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
-                                  : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700/80 hover:text-zinc-200'
+                                  : 'bg-zinc-800/80 border-zinc-700 text-zinc-400 hover:bg-zinc-700/80 hover:text-zinc-200'
                               )}
                               title={currentActiveInput ? 'Click to Deactivate (Hide from buyer storefront)' : 'Click to Activate (Show on buyer storefront)'}
                             >
-                              {currentActiveInput ? (
-                                <Eye className="w-3 h-3 text-emerald-400" />
-                              ) : (
-                                <EyeOff className="w-3 h-3 text-zinc-400" />
-                              )}
+                              <span className={clsx('w-1.5 h-1.5 rounded-full', currentActiveInput ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500')} />
                               <span className="text-[11px] font-semibold">
                                 {currentActiveInput ? 'Active' : 'Inactive'}
                               </span>
@@ -4873,20 +4991,20 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 }))
                               }
                               className={clsx(
-                                'flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono transition-all cursor-pointer select-none',
+                                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-mono transition-all cursor-pointer select-none shadow-xs',
                                 currentStockInput
                                   ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
                                   : 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
                               )}
                               title={currentStockInput ? 'Click to mark Out of Stock' : 'Click to mark In Stock'}
                             >
-                              <span className={clsx('w-2 h-2 rounded-full', currentStockInput ? 'bg-emerald-400' : 'bg-rose-400')} />
+                              <span className={clsx('w-1.5 h-1.5 rounded-full', currentStockInput ? 'bg-emerald-400' : 'bg-rose-400')} />
                               <span className="text-[11px] font-semibold">{currentStockInput ? 'In Stock' : 'Out of Stock'}</span>
                             </button>
 
                             {/* Extra Price Input */}
-                            <div className="flex items-center gap-1 text-xs">
-                              <span className="text-zinc-500 font-mono text-[11px]">+IDR</span>
+                            <div className="flex items-center gap-1.5 bg-zinc-950/80 border border-white/10 hover:border-white/20 focus-within:border-amber-400/80 focus-within:ring-1 focus-within:ring-amber-400/30 px-2.5 py-1 rounded-xl shadow-inner transition-all">
+                              <span className="text-zinc-500 font-mono text-[10.5px] font-semibold select-none">+IDR</span>
                               <input
                                 type="number"
                                 step="5000"
@@ -4897,7 +5015,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     [f.id]: Number(e.target.value) || 0,
                                   }))
                                 }
-                                className="w-20 px-2 py-1 text-xs font-mono text-right rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                                className="w-16 text-xs font-mono font-bold text-right text-white bg-transparent focus:outline-none"
+                                placeholder="0"
                               />
                             </div>
 
@@ -4917,7 +5036,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               onClick={() => handleSaveMasterFinish(f)}
                               disabled={isSaving || !hasUnsavedChanges}
                               className={clsx(
-                                'px-3.5 py-1.5 text-xs font-sans font-semibold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+                                'px-3.5 py-1.5 text-xs font-sans font-semibold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs',
                                 hasUnsavedChanges
                                   ? 'bg-[#f3aa18] hover:bg-[#ffb72b] text-black shadow-md'
                                   : 'bg-white/5 text-zinc-400 border border-white/10'
@@ -4938,7 +5057,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         {/* Body Grid: Texture Media Slots & 3D Shading Tone */}
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
                           {/* Col 1: 3 Media Texture Slots */}
-                          <div className="lg:col-span-7 p-3 rounded-xl bg-zinc-950/70 border border-white/5 flex flex-wrap items-center justify-between gap-4">
+                          <div className="lg:col-span-7 p-3.5 rounded-2xl bg-zinc-950/80 border border-white/10 shadow-inner flex flex-wrap items-center justify-between gap-4">
                             {/* Swatch Thumbnail */}
                             <div className="flex items-center gap-3">
                               <button
@@ -4952,7 +5071,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     currentUrl: currentThumbInput,
                                   })
                                 }
-                                className="w-12 h-12 rounded-xl bg-zinc-900 border border-white/10 hover:border-amber-400/60 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105"
+                                className="w-12 h-12 rounded-xl bg-zinc-900 border border-white/10 hover:border-amber-400/80 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105 shadow-sm"
                                 title="Click to assign Swatch Thumbnail"
                               >
                                 {currentThumbInput ? (
@@ -4977,9 +5096,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 <span className="text-xs font-semibold text-zinc-200">
                                   Swatch
                                 </span>
-                                <span className="text-[10px] font-mono text-zinc-500">
-                                  {currentThumbInput ? 'Assigned' : 'Not set'}
-                                </span>
+                                <div className="flex items-center gap-1">
+                                  <span className={clsx('w-1.5 h-1.5 rounded-full', currentThumbInput ? 'bg-emerald-400' : 'bg-zinc-600')} />
+                                  <span className="text-[10px] font-mono text-zinc-400">
+                                    {currentThumbInput ? 'Assigned' : 'Not set'}
+                                  </span>
+                                </div>
                               </div>
                             </div>
 
@@ -4998,7 +5120,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     currentUrl: currentTextureInput,
                                   })
                                 }
-                                className="w-12 h-12 rounded-xl bg-zinc-900 border border-white/10 hover:border-amber-400/60 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105"
+                                className="w-12 h-12 rounded-xl bg-zinc-900 border border-white/10 hover:border-amber-400/80 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105 shadow-sm"
                                 title="Click to assign Master Texture (Standard)"
                               >
                                 {currentTextureInput ? (
@@ -5023,9 +5145,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 <span className="text-xs font-semibold text-zinc-200">
                                   Master (v2)
                                 </span>
-                                <span className="text-[10px] font-mono text-zinc-500">
-                                  {currentTextureInput ? 'Assigned' : 'Not set'}
-                                </span>
+                                <div className="flex items-center gap-1">
+                                  <span className={clsx('w-1.5 h-1.5 rounded-full', currentTextureInput ? 'bg-emerald-400' : 'bg-zinc-600')} />
+                                  <span className="text-[10px] font-mono text-zinc-400">
+                                    {currentTextureInput ? 'Assigned' : 'Not set'}
+                                  </span>
+                                </div>
                               </div>
                             </div>
 
@@ -5044,7 +5169,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     currentUrl: currentTextureBigInput,
                                   })
                                 }
-                                className="w-12 h-12 rounded-xl bg-zinc-900 border border-white/10 hover:border-amber-400/60 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105"
+                                className="w-12 h-12 rounded-xl bg-zinc-900 border border-white/10 hover:border-amber-400/80 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105 shadow-sm"
                                 title="Click to assign Master Texture (Big / Laptop & Tablet)"
                               >
                                 {currentTextureBigInput ? (
@@ -5069,15 +5194,18 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 <span className="text-xs font-semibold text-zinc-200">
                                   Big Texture
                                 </span>
-                                <span className="text-[10px] font-mono text-zinc-500">
-                                  {currentTextureBigInput ? 'Assigned' : 'Optional (Auto)'}
-                                </span>
+                                <div className="flex items-center gap-1">
+                                  <span className={clsx('w-1.5 h-1.5 rounded-full', currentTextureBigInput ? 'bg-emerald-400' : 'bg-zinc-600')} />
+                                  <span className="text-[10px] font-mono text-zinc-400">
+                                    {currentTextureBigInput ? 'Assigned' : 'Optional (Auto)'}
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           </div>
 
                           {/* Col 2: 3D Shading & Specular Lighting Tone */}
-                          <div className="lg:col-span-5 p-3 rounded-xl bg-zinc-950/70 border border-white/5 flex flex-col justify-between space-y-2">
+                          <div className="lg:col-span-5 p-3.5 rounded-2xl bg-zinc-950/80 border border-white/10 shadow-inner flex flex-col justify-between space-y-2.5">
                             <div className="flex items-center justify-between text-[11px]">
                               <div className="flex items-center gap-1.5 font-semibold text-zinc-200">
                                 <Sun className="w-3.5 h-3.5 text-amber-400" />
@@ -5088,10 +5216,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                             <div className="grid grid-cols-2 gap-3 pt-0.5">
                               {/* Shadow (Multiply) */}
-                              <div className="space-y-1">
+                              <div className="space-y-1.5">
                                 <div className="flex items-center justify-between text-[10.5px]">
                                   <span className="text-zinc-400 font-medium">Shadow:</span>
-                                  <span className="font-mono font-bold text-amber-400">
+                                  <span className="font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-md text-[10px]">
                                     {Math.round(currentShadowInput * 100)}%
                                   </span>
                                 </div>
@@ -5107,16 +5235,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       [f.id]: parseFloat(e.target.value),
                                     }))
                                   }
-                                  className="w-full h-1.5 bg-zinc-900 rounded-lg appearance-none cursor-pointer accent-[#f3aa18]"
+                                  className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#f3aa18]"
                                   title="Multiply shadow intensity for this finish"
                                 />
                               </div>
 
                               {/* Highlight (Screen) */}
-                              <div className="space-y-1">
+                              <div className="space-y-1.5">
                                 <div className="flex items-center justify-between text-[10.5px]">
                                   <span className="text-zinc-400 font-medium">Highlight:</span>
-                                  <span className="font-mono font-bold text-sky-400">
+                                  <span className="font-mono font-bold text-sky-400 bg-sky-500/10 border border-sky-500/20 px-1.5 py-0.5 rounded-md text-[10px]">
                                     {Math.round(currentHighlightInput * 100)}%
                                   </span>
                                 </div>
@@ -5132,7 +5260,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       [f.id]: parseFloat(e.target.value),
                                     }))
                                   }
-                                  className="w-full h-1.5 bg-zinc-900 rounded-lg appearance-none cursor-pointer accent-sky-400"
+                                  className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-sky-400"
                                   title="Screen specular highlight intensity for this finish"
                                 />
                               </div>
@@ -5143,8 +5271,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         {/* Bottom Row: Badge Pill & Custom per device */}
                         <div className="flex flex-wrap items-center justify-between gap-3 pt-0.5 text-xs text-zinc-400">
                           {/* Notice / Badge Pill Configuration */}
-                          <div className="flex items-center gap-2 bg-zinc-950 px-2.5 py-1 rounded-xl border border-white/10">
-                            <span className="text-[10px] text-zinc-500 font-mono">Storefront Badge:</span>
+                          <div className="flex items-center gap-2 bg-zinc-950/80 px-3 py-1.5 rounded-xl border border-white/10 hover:border-white/20 focus-within:border-amber-400/50 shadow-inner transition-all">
+                            <span className="text-[10.5px] text-zinc-400 font-mono font-medium">Storefront Badge:</span>
                             <input
                               type="text"
                               placeholder="NEW, HOT, etc."
@@ -5156,23 +5284,26 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   [f.id]: e.target.value,
                                 }))
                               }
-                              className="w-24 sm:w-28 text-[11px] font-medium text-white bg-transparent focus:outline-none placeholder:text-zinc-600"
+                              className="w-20 sm:w-24 text-[11px] font-semibold text-white bg-transparent focus:outline-none placeholder:text-zinc-600"
                             />
-                            <input
-                              type="color"
-                              value={currentBadgeColorInput || '#f3aa18'}
-                              onChange={(e) =>
-                                setEditingFinishBadgeColors((prev) => ({
-                                  ...prev,
-                                  [f.id]: e.target.value,
-                                }))
-                              }
-                              className="w-4 h-4 rounded cursor-pointer border-0 bg-transparent p-0"
-                              title="Pick badge color"
-                            />
+                            <div className="relative w-4 h-4 rounded-full overflow-hidden border border-white/20 cursor-pointer shadow-xs shrink-0 flex items-center justify-center">
+                              <input
+                                type="color"
+                                value={currentBadgeColorInput || '#f3aa18'}
+                                onChange={(e) =>
+                                  setEditingFinishBadgeColors((prev) => ({
+                                    ...prev,
+                                    [f.id]: e.target.value,
+                                  }))
+                                }
+                                className="absolute -inset-2 w-8 h-8 opacity-0 cursor-pointer"
+                                title="Pick badge color"
+                              />
+                              <div className="w-full h-full rounded-full" style={{ backgroundColor: currentBadgeColorInput || '#f3aa18' }} />
+                            </div>
                             {currentBadgeTextInput.trim() && (
                               <span
-                                className="px-1.5 py-0.5 rounded text-[8.5px] font-bold uppercase tracking-wider text-black font-mono shadow-xs shrink-0"
+                                className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider text-black font-mono shadow-xs shrink-0 transition-transform"
                                 style={{ backgroundColor: currentBadgeColorInput || '#f3aa18' }}
                               >
                                 {currentBadgeTextInput.trim()}
@@ -5180,20 +5311,33 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             )}
                           </div>
 
-                          {/* Custom per device toggle */}
-                          <label className="flex items-center gap-1.5 text-xs text-zinc-300 cursor-pointer px-2.5 py-1 rounded-xl bg-zinc-950/60 border border-white/10 hover:border-white/20 transition-colors">
-                            <input
-                              type="checkbox"
-                              checked={currentCustomFlag}
-                              onChange={(e) =>
-                                setEditingFinishCustomFlags((prev) => ({
-                                  ...prev,
-                                  [f.id]: e.target.checked,
-                                }))
-                              }
-                              className="w-3.5 h-3.5 rounded text-amber-400 focus:ring-0 accent-amber-500 cursor-pointer"
-                            />
-                            <span className="text-[11px] font-medium">Custom per device</span>
+                          {/* Custom per device toggle switch */}
+                          <label
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setEditingFinishCustomFlags((prev) => ({
+                                ...prev,
+                                [f.id]: !currentCustomFlag,
+                              }));
+                            }}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-950/80 border border-white/10 hover:border-white/20 cursor-pointer select-none transition-all shadow-inner group"
+                          >
+                            <div
+                              className={clsx(
+                                'w-7 h-4 rounded-full transition-colors relative flex items-center p-0.5 shrink-0',
+                                currentCustomFlag ? 'bg-amber-400 shadow-xs shadow-amber-400/40' : 'bg-zinc-800'
+                              )}
+                            >
+                              <div
+                                className={clsx(
+                                  'w-3 h-3 rounded-full bg-zinc-950 transition-transform transform shadow-xs',
+                                  currentCustomFlag ? 'translate-x-3' : 'translate-x-0'
+                                )}
+                              />
+                            </div>
+                            <span className={clsx('text-[11px] font-semibold transition-colors', currentCustomFlag ? 'text-amber-300' : 'text-zinc-400 group-hover:text-zinc-200')}>
+                              Custom per device
+                            </span>
                             <InfoTooltip content="When enabled, this finish only appears on devices where custom artwork is uploaded in the Skins tab." />
                           </label>
                         </div>

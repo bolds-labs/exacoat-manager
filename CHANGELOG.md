@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.94] - 2026-09-21
+
+### Finish Group Renaming, UI Beautification & 0.22mm Physical Skin Micro-Shadow
+- **Finish Group Renaming Architecture**:
+  - Implemented `POST /wp-json/exacoat-core/v1/finishes/rename-group` in `class-configurator-engine.php`.
+  - Atomically renames groups in `_exacoat_finish_groups` while migrating all assigned finishes in `exacoat_global_finishes` from `old_name` to `new_name`.
+  - Automatically dispatches Next.js storefront revalidation (`tag=finishes`).
+  - Added frontend bridge `renameFinishGroupDirect` and interactive inline editing on group chips in Configurator Studio's Group Management Tray.
+- **Master Textures Form Controls & UI Beautification**:
+  - Upgraded all form inputs in Master Textures finish cards to meet Antislop UI standards:
+    - Finish name inputs: styled with dark inner background, refined border, and focus ring.
+    - Group selector: customized container with explicit `ChevronDown` dropdown indicator.
+    - Extra price input: financial input pill with `+IDR` prefix badge.
+    - Active / Inactive and In Stock / Out of Stock toggles: glowing status dots with subtle glassmorphic borders.
+    - "Custom per device": replaced default HTML checkbox with an animated toggle switch.
+    - Storefront Badge: composer pill with circular color swatch picker and uppercase badge preview.
+    - 3D Shading Sliders: percentage indicators and sleek track styling.
+    - Media texture slots: glass border with emerald "Assigned" status dot.
+- **0.22mm Physical Skin Micro-Shadow Invariant**:
+  - Calibrated the physical skin edge drop shadow from `drop-shadow-[0_1px_2.5px_rgba(0,0,0,0.55)]` down to `drop-shadow-[0_0.75px_1.5px_rgba(0,0,0,0.38)]` across both `exacoat-web` storefront canvas and `exacoat-manager` Studio viewport.
+  - Accurately represents real 0.22mm vinyl thickness and eliminates dark halo smudges around light skins and cutout edges.
+
 ## [0.0.93] - 2026-09-21
 
 ### Master Textures Batch Save & Automated Storefront Revalidation

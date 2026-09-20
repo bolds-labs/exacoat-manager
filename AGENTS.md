@@ -887,4 +887,34 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Both `rest_save_finish` and `rest_save_all_finishes` in `class-configurator-engine.php` automatically trigger Next.js On-Demand Incremental Static Regeneration (ISR) and Cloudflare edge purge via `Exacoat_Configurator_Engine::trigger_storefront_revalidation()` with `tag=finishes` and `path=/api/configurator/finishes`.
   - Edge and client caches are purged in real time without manual admin intervention.
 
+---
+
+## 50. Finish Group Renaming Architecture & 0.22mm Physical Skin Micro-Shadow Invariant
+
+- **Finish Group Renaming Architecture & Atomic Migration**:
+  - Store administrators can rename finish groups directly within the Group Management Tray in Configurator Studio's Master Textures modal.
+  - Endpoint `POST /wp-json/exacoat-core/v1/finishes/rename-group` (`rest_rename_finish_group`) in `class-configurator-engine.php` atomically:
+    1. Updates the group name in WordPress database option `_exacoat_finish_groups`, strictly preserving the existing tab sequence.
+    2. Iterates across all finishes stored in `exacoat_global_finishes` and migrates any finish where `group === old_name` to `new_name`.
+    3. Triggers immediate storefront cache revalidation (`tag=finishes`).
+  - Studio provides interactive inline editing: clicking the pencil icon (`Edit3`) or group title switches the chip to an inline input field with save (`Check`) and cancel (`X`) buttons, keyboard shortcuts (`Enter` to save, `Escape` to cancel), and loading spinner.
+
+- **Master Textures Form Controls & Input Beautification (Antislop UI Standards)**:
+  - Upgraded all form inputs, select elements, toggles, checkboxes, sliders, and badge controls across Master Textures finish cards:
+    - **Finish Name**: Dark inner background (`bg-zinc-950/80`), rounded-xl border, and crisp focus ring.
+    - **Group Dropdown**: Custom container with explicit `ChevronDown` dropdown indicator replacing generic browser select styling.
+    - **Extra Price**: Styled financial input pill with `+IDR` prefix badge and tabular numbers.
+    - **Active & Stock Toggles**: Glowing emerald/amber status dots with clear visual states and smooth hover effects.
+    - **Custom per Device**: Replaced standard HTML checkbox with a modern, animated toggle switch.
+    - **Storefront Badge**: Clean composer pill with circular color swatch picker and uppercase badge preview.
+    - **3D Shading Tone Sliders**: Numeric percentage badges and sleek slider track styling.
+    - **Media Texture Slots**: Refined glass borders and emerald "Assigned" status indicators.
+
+- **0.22mm Physical Skin Micro-Shadow Invariant**:
+  - Real vinyl skins have a physical thickness of 0.22mm.
+  - An exaggerated drop-shadow (such as `blur: 2.5px`, `opacity: 0.55`, `y-offset: 1px`) causes an unnatural, heavy dark halo around white skins on light chassis and around Apple logo cutouts, resembling thick plastic/acrylic sheets.
+  - Calibrating canvas filters to `drop-shadow-[0_0.75px_1.5px_rgba(0,0,0,0.38)]` accurately simulates the microscopic physical edge bevel of genuine 0.22mm vinyl skins without unsightly dark smudges.
+  - Synchronized identically across storefront canvas (`c:\AI\exacoat-web\components\configurator\stacked-layer-canvas.tsx`) and Studio viewport (`c:\AI\exacoat-manager\src\pages\ConfiguratorStudioPage.tsx`).
+
+
 
