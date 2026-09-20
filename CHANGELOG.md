@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.0.77] - 2026-09-20
 
+### Configurator Studio: Vertical Layer Stack, Priority Reordering & Accents Visibility Fix
+- **Canvas Z-Index Ascending Render Order**:
+  - Fixed issue where Accents (e.g. Camera Accent on iPhone 18 Pro Max) failed to appear on top of Back Skin.
+  - The rendering loop now strictly sorts skin layers by `z_index` ascending before drawing (`(a.z_index || 1) - (b.z_index || 1)`), ensuring base layers render first and accent layers render on top.
+- **Vertical Layer Hierarchy Stack (Front to Back)**:
+  - Replaced crowded horizontal pill buttons in Tab 1 (Skin Parts) with a clean Photoshop/Figma style vertical layer stack.
+  - Interactive Move Up (`ChevronUp`) and Move Down (`ChevronDown`) controls dynamically swap layer priority and re-index `z_index` from total down to 1.
+  - Highlights `FRONT` (highest z-index) and `BASE` (lowest z-index) positions.
+- **Accents Auto-Activation in Testing Dock**:
+  - Selecting a part tab or clicking any finish swatch in the tester dock now automatically activates that layer in simulation (`selectedSimLayers[partId] = true`).
+  - Added live `Eye` / `EyeOff` toggles on both the tester dock tabs and the vertical layer stack rows.
+- **Direct 1-Click Layer Deletion**:
+  - Added a dedicated `Trash2` deletion icon directly on each row in the vertical layer stack with immediate re-indexing and toast confirmation.
+- **Cognitive Overload Elimination**:
+  - Removed duplicate layer selector strips from the top of the canvas viewport, consolidating all layer management into the structured vertical stack.
+  - Made the Family Preset Pack selector compact and inline.
+
 ### Dual Storefront Revalidation & Admin Draft Preview Architecture
 - **On-Demand Storefront Cache Revalidation**:
   - Implemented `POST /configurator/revalidate-web` in `class-configurator-engine.php` and `revalidateStorefrontWebDirect()` in `wordpressBridge.ts`.

@@ -451,3 +451,25 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Displays a prominent amber sticky notice banner at the top of the product page indicating draft status and offering a direct link to open the device in Configurator Studio.
   - For unauthenticated or public visitors, draft products return a strict 404 Not Found response and are completely excluded from category catalogs.
 
+---
+
+## 32. Configurator Studio: Vertical Layer Hierarchy, Canvas Stacking & Cognitive Overload Reduction
+
+- **Canvas Z-Index Sorting Invariant**:
+  The HTML5 canvas and SVG overlay rendering pipeline must never rely on raw array insertion order. All customizable skin layers are strictly sorted ascending by `z_index` before rendering:
+  `[...skinLayers].sort((a, b) => (a.z_index || 1) - (b.z_index || 1)).map(...)`.
+  Base skin parts (e.g. Back Skin with `z_index = 1`) render first. Higher priority overlays (e.g. Accents, Camera Accents with `z_index = 2` or `3`) render on top.
+- **Figma/Photoshop Style Vertical Layer Stack**:
+  Replaces cramped horizontal pill buttons in Tab 1 (Skin Parts) with an intuitive vertical layer stack ordered Front to Back:
+  - Top row: Front layer (highest z-index, renders on top of everything).
+  - Bottom row: Base layer (lowest z-index, e.g. Back Skin).
+  - Each row provides Bring Forward (`ChevronUp`) and Send Backward (`ChevronDown`) buttons that swap positions and reindex `z_index = total - i`.
+  - Displays live canvas visibility toggle (`Eye` / `EyeOff`), Part Name, Group badge (`primary` vs `accent`), Price badge (`+IDR 35,000` vs `Included`), Mask indicator (`✓ Mask` vs `No Mask`), and a direct `Trash2` deletion button on every row.
+- **Auto-Activation of Simulation Layers**:
+  When operators click a part in the testing dock or select a finish swatch, `selectedSimLayers[partId]` is automatically set to `true`. This prevents optional parts (such as Camera Accents with `default_selected: false`) from remaining invisible on the canvas when the user actively tests finishes.
+- **Direct 1-Click Layer Deletion**:
+  Operators can delete any skin part directly from its row in the vertical stack via `handleRemoveLayer(layerId)`. The handler purges the layer, re-indexes remaining layers from 1 to N, cleans up simulation state, and displays feedback toasts.
+- **Cognitive Overload Elimination**:
+  Removed duplicate horizontal layer selector strips from the top of the canvas stage. The canvas viewport now only hosts the Angle switcher and the floating hardware color pill, keeping the design workspace focused and clutter-free.
+
+
