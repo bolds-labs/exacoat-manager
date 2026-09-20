@@ -711,6 +711,20 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **Removal of Redundant 'Included' Badges**:
   - The redundant label 'Included' is removed across Coverage accordions, Model Cut cards, and Cutout choice pills. If an option carries an up-charge, `+{price}` is displayed; if base, no price badge is shown.
 
+---
 
+## 36. Device-Level Texture Scale, Persistent Chassis, and Cutout Switch Architecture
 
-
+- **Persistent Bare Hardware Chassis Invariant**:
+  - The bare hardware device chassis (Layer 0) must remain completely static and still during all user interactions.
+  - Replaced re-animating motion wrappers on the base chassis with a persistent static `<img>`.
+  - In `V2SkinCanvasLayer`, offscreen canvas pre-compositing and double-buffered ping-pong rendering ensure newly selected textures or toggled cutouts composite in memory before displaying, eliminating any bare chassis flicker or flashing.
+- **Device-Level Texture Scale (`texture_scale`)**:
+  - Texture scale is a device-level property, not configured per individual skin part.
+  - Configured via a dedicated Device Texture Zoom / Scale slider card at the top of the Skins tab in Configurator Studio (50% to 150%, default 75%).
+  - Displayed as a percentage column ("Scale") in the Configurator Studio catalog table (`{Math.round((p.texture_scale ?? 0.75) * 100)}%`).
+  - Persisted in WordPress post meta `_exacoat_configurator_profile` via REST API.
+- **Cutouts & Coverage Switch UI Overhaul**:
+  - **Logo Cutout**: Header preview buttons (`Cutout / Solid`) and bottom checkbox are replaced with an iOS-style toggle switch for "Buyer Choice on Webstore".
+  - **Custom / Stylus Cutout**: Hidden by default for devices without a stylus or custom hardware cutout. Operators click `+ Add Custom Cutout` to reveal the section. When active, it features an iOS-style toggle switch and a delete button to clear and hide it.
+  - **Model Coverage**: Replaced preview buttons with an iOS-style toggle switch for "Buyer Choice on Webstore". Removed `None (Flat Cut)` from coverage mode selection. Toggling off sets `coverage_type = 'none'`.

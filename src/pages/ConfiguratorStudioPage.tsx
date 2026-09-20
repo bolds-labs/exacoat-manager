@@ -568,6 +568,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [selectedCoverage, setSelectedCoverage] = useState<'model_cut' | 'model_360'>('model_cut');
   const [selectedLogoCutout, setSelectedLogoCutout] = useState<boolean>(true);
   const [selectedPencilCutout, setSelectedPencilCutout] = useState<boolean>(true);
+  const [showCustomCutoutSection, setShowCustomCutoutSection] = useState<boolean>(false);
   const [activeSimView, setActiveSimView] = useState<string>('main_view');
   const [selectedSimColor, setSelectedSimColor] = useState<string>('space-gray');
   const [simFinishGroupFilter, setSimFinishGroupFilter] = useState<string>('all');
@@ -734,8 +735,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
         setSelectedLayerFinishes(initialFinishes);
         setActiveSimTestingPartId(cleanedLayers[0]?.id || '');
         setSelectedCoverage('model_cut');
-        setSelectedLogoCutout(true);
-        setSelectedPencilCutout(true);
+        setSelectedLogoCutout(profile.coverage_and_cutouts?.has_logo_cutout !== false);
+        setSelectedPencilCutout(Boolean(profile.coverage_and_cutouts?.has_pencil_cutout));
+        setShowCustomCutoutSection(false);
         const initialVariants: Record<string, string> = {};
         if (profile.variants && profile.variants.length > 0) {
           profile.variants.forEach((v) => {
@@ -772,6 +774,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
             base_price: fallbackSummary.price || 0,
             currency: 'IDR',
             size_multiplier: fallbackSummary.size_multiplier || 1.0,
+            texture_scale: fallbackSummary.texture_scale ?? 0.75,
             is_configurable: true,
             configurator_version: fallbackSummary.configurator_version || 'v1',
             device_colors: [],
@@ -3349,6 +3352,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   <th className="py-3 px-3 text-center">Engine</th>
                   <th className="py-3 px-3 text-center">Configurator</th>
                   <th className="py-3 px-4 text-center">Setup</th>
+                  <th className="py-3 px-3 text-center">Scale</th>
                   <th className="py-3 px-4 text-right">Price</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
@@ -3463,6 +3467,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         <span>{p.views_count}v</span>
                         <span className="mx-1 text-zinc-600">•</span>
                         <span>{p.layers_count}L</span>
+                      </td>
+
+                      {/* Scale */}
+                      <td className="py-3 px-3 text-center font-mono text-[11px] text-zinc-300">
+                        {Math.round(((p.texture_scale !== undefined ? p.texture_scale : 0.75)) * 100)}%
                       </td>
 
                       {/* Price */}
@@ -5603,7 +5612,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   zIndex={(l.z_index || 1) + 5}
                                   layerName={l.name}
                                   textureRotation={l.texture_rotation ?? 0}
-                                  textureScale={l.texture_scale ?? 0.75}
+                                  textureScale={editingProfile.texture_scale ?? l.texture_scale ?? 0.75}
                                 />
                               );
                             }
@@ -6100,6 +6109,55 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         {/* TAB 2: SKIN PARTS & TEXTURES */}
                         {inspectorTab === 'skins' && (
                           <div className="space-y-6">
+                            {/* Device Master Texture Scale Card */}
+                            {editingProfile.configurator_version === 'v2' && (
+                              <div className="p-4 rounded-xl bg-zinc-950/80 border border-sky-500/30 shadow-lg space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="w-7 h-7 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center">
+                                      <Maximize2 className="w-3.5 h-3.5 text-sky-400" />
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        <h4 className="text-xs font-bold text-white">Device Texture Zoom / Scale</h4>
+                                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 font-bold border border-sky-500/30">
+                                          {Math.round(((editingProfile.texture_scale ?? 0.75)) * 100)}%
+                                          {(editingProfile.texture_scale ?? 0.75) === 0.75 ? ' (Default)' : ''}
+                                        </span>
+                                      </div>
+                                      <p className="text-[11px] text-zinc-400">
+                                        Universal texture scale applied across all skin parts on this device.
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingProfile({ ...editingProfile, texture_scale: 0.75 })}
+                                    className="text-[10px] font-mono text-zinc-400 hover:text-white px-2 py-1 rounded bg-white/5 hover:bg-white/10 transition-colors border border-white/10 cursor-pointer"
+                                    title="Reset to 75% default"
+                                  >
+                                    Reset 75%
+                                  </button>
+                                </div>
+                                <div className="flex items-center gap-3 pt-1">
+                                  <span className="text-[10px] font-mono text-zinc-500">50%</span>
+                                  <input
+                                    type="range"
+                                    min="50"
+                                    max="150"
+                                    step="5"
+                                    value={Math.round(((editingProfile.texture_scale ?? 0.75)) * 100)}
+                                    onChange={(e) => {
+                                      const val = Number(e.target.value) / 100;
+                                      setEditingProfile({ ...editingProfile, texture_scale: val });
+                                    }}
+                                    className="w-full accent-sky-400 cursor-pointer h-2 bg-zinc-800 rounded-lg appearance-none"
+                                  />
+                                  <span className="text-[10px] font-mono text-zinc-500">150%</span>
+                                </div>
+                              </div>
+                            )}
+
                             {/* Skin Parts Header & Hierarchy Controls */}
                             <div className="space-y-3">
                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
@@ -6532,45 +6590,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       </div>
                                     </div>
 
-                                    {/* Per-Part Texture Controls: Zoom / Scale, Rotation, Resolution */}
-                                    <div className="pt-3 border-t border-sky-500/20 space-y-3">
-                                      {/* Row 1: Texture Zoom / Scale */}
-                                      <div>
-                                        <div className="flex items-center justify-between text-xs mb-1">
-                                          <span className="text-zinc-300 font-medium flex items-center gap-1">
-                                            <Maximize2 className="w-3 h-3 text-sky-400" />
-                                            <span>Texture Zoom / Scale</span>
-                                          </span>
-                                          <span className="font-mono text-[11px] text-sky-400 font-bold">
-                                            {Math.round(((currentActiveLayer.texture_scale ?? 0.75)) * 100)}%
-                                            {(currentActiveLayer.texture_scale ?? 0.75) === 0.75 && ' (Default)'}
-                                          </span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <input
-                                            type="range"
-                                            min="50"
-                                            max="150"
-                                            step="5"
-                                            value={Math.round(((currentActiveLayer.texture_scale ?? 0.75)) * 100)}
-                                            onChange={(e) => {
-                                              const val = Number(e.target.value) / 100;
-                                              handleUpdateLayer(currentActiveLayer.id, { texture_scale: val });
-                                            }}
-                                            className="w-full accent-sky-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg appearance-none"
-                                          />
-                                          <button
-                                            type="button"
-                                            onClick={() => handleUpdateLayer(currentActiveLayer.id, { texture_scale: 0.75 })}
-                                            className="text-[10px] font-mono text-zinc-500 hover:text-zinc-300 px-1.5 py-0.5 rounded bg-white/5 cursor-pointer shrink-0"
-                                            title="Reset to 75% default"
-                                          >
-                                            Reset
-                                          </button>
-                                        </div>
-                                      </div>
-
-                                      {/* Row 2: Texture Rotation & Resolution */}
+                                    {/* Per-Part Texture Controls: Rotation & Resolution */}
+                                    <div className="pt-3 border-t border-sky-500/20">
                                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                                         {/* Texture Rotation */}
                                         <div className="p-2 rounded-lg bg-zinc-950/60 border border-white/5 space-y-1.5">
@@ -7577,47 +7598,30 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   <span className="text-xs font-semibold text-white">Logo Cutout</span>
                                   <InfoTooltip text="Erases a silhouette hole in the skin to reveal the metallic brand logo from the hardware chassis underneath." />
                                 </div>
-                                <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-lg border border-white/10 text-[11px] shrink-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11px] text-zinc-400">Buyer Choice on Webstore</span>
                                   <button
                                     type="button"
-                                    onClick={() => setSelectedLogoCutout(true)}
+                                    onClick={() => {
+                                      const nextVal = !(editingProfile.coverage_and_cutouts?.has_logo_cutout !== false);
+                                      handleSetCoverageAndCutouts('has_logo_cutout', nextVal);
+                                      setSelectedLogoCutout(nextVal);
+                                    }}
                                     className={clsx(
-                                      'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
-                                      selectedLogoCutout
-                                        ? 'bg-[#f3aa18] text-black font-semibold'
-                                        : 'text-zinc-400 hover:text-white'
+                                      'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                                      editingProfile.coverage_and_cutouts?.has_logo_cutout !== false ? 'bg-emerald-500' : 'bg-zinc-700'
                                     )}
+                                    title={editingProfile.coverage_and_cutouts?.has_logo_cutout !== false ? 'Enabled on webstore' : 'Disabled'}
                                   >
-                                    Cutout
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedLogoCutout(false)}
-                                    className={clsx(
-                                      'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
-                                      !selectedLogoCutout
-                                        ? 'bg-[#f3aa18] text-black font-semibold'
-                                        : 'text-zinc-400 hover:text-white'
-                                    )}
-                                  >
-                                    Solid
+                                    <span
+                                      className={clsx(
+                                        'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out',
+                                        editingProfile.coverage_and_cutouts?.has_logo_cutout !== false ? 'translate-x-4' : 'translate-x-0'
+                                      )}
+                                    />
                                   </button>
                                 </div>
                               </div>
-
-                              {/* Storefront Buyer Option */}
-                              <label className="flex items-center justify-between p-2 rounded-lg bg-zinc-950/60 border border-white/5 text-xs cursor-pointer hover:border-white/10 transition-colors">
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={editingProfile.coverage_and_cutouts?.has_logo_cutout !== false}
-                                    onChange={(e) => handleSetCoverageAndCutouts('has_logo_cutout', e.target.checked)}
-                                    className="w-3.5 h-3.5 rounded text-[#f3aa18] focus:ring-0 accent-[#f3aa18] cursor-pointer"
-                                  />
-                                  <span className="text-zinc-300 font-medium text-xs">Buyer Choice on Webstore</span>
-                                </div>
-                                <InfoTooltip text="Allows the customer on the webstore to toggle between 'With Cutout' or 'Solid (No Logo)'." />
-                              </label>
 
                               {/* Logo Cutout Mask Slot */}
                               <div className="space-y-2 pt-1 border-t border-white/5">
@@ -7728,203 +7732,221 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             </div>
 
                             {/* SECTION 2: CUSTOM / PENCIL GROOVE CUTOUT */}
-                            <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                  <input
-                                    type="text"
-                                    placeholder="Cutout Name (e.g. Stylus Cutout, S-Pen Cutout, Antenna Strip)"
-                                    value={editingProfile.coverage_and_cutouts?.pencil_cutout_label ?? 'Stylus Cutout'}
-                                    onChange={(e) => handleSetCoverageAndCutouts('pencil_cutout_label', e.target.value)}
-                                    className="text-xs font-semibold text-white bg-transparent border-b border-white/10 hover:border-white/30 focus:border-[#f3aa18] focus:bg-zinc-950/60 px-1 py-0.5 rounded transition-colors focus:outline-none w-full max-w-[220px]"
-                                    title="Click to rename cutout option"
-                                  />
-                                  <InfoTooltip text="Custom renamable cutout option for buyers on webstore (e.g. Apple Pencil strip, S-Pen slot, or custom hardware cutout)." />
-                                </div>
-                                <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-lg border border-white/10 text-[11px] shrink-0">
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedPencilCutout(true)}
-                                    className={clsx(
-                                      'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
-                                      selectedPencilCutout
-                                        ? 'bg-[#f3aa18] text-black font-semibold'
-                                        : 'text-zinc-400 hover:text-white'
-                                    )}
-                                  >
-                                    Cutout
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedPencilCutout(false)}
-                                    className={clsx(
-                                      'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
-                                      !selectedPencilCutout
-                                        ? 'bg-[#f3aa18] text-black font-semibold'
-                                        : 'text-zinc-400 hover:text-white'
-                                    )}
-                                  >
-                                    Solid
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* Storefront Buyer Option */}
-                              <label className="flex items-center justify-between p-2 rounded-lg bg-zinc-950/60 border border-white/5 text-xs cursor-pointer hover:border-white/10 transition-colors">
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={Boolean(editingProfile.coverage_and_cutouts?.has_pencil_cutout)}
-                                    onChange={(e) => handleSetCoverageAndCutouts('has_pencil_cutout', e.target.checked)}
-                                    className="w-3.5 h-3.5 rounded text-[#f3aa18] focus:ring-0 accent-[#f3aa18] cursor-pointer"
-                                  />
-                                  <span className="text-zinc-300 font-medium text-xs">Buyer Choice on Webstore</span>
-                                </div>
-                                <InfoTooltip text="Allows buyers to choose 'With Cutout' or 'Solid' for this hardware cutout on the webstore." />
-                              </label>
-
-                              {/* Custom Cutout Pill Badge & Tooltip Description */}
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                <div className="space-y-1">
-                                  <div className="flex items-center justify-between text-[11px]">
-                                    <span className="text-zinc-400 font-medium">Pill Badge (Storefront)</span>
+                            {Boolean(
+                              showCustomCutoutSection ||
+                              editingProfile.coverage_and_cutouts?.has_pencil_cutout ||
+                              editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url ||
+                              currentView?.pencil_cutout_mask_url
+                            ) ? (
+                              <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3 relative">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    <input
+                                      type="text"
+                                      placeholder="Cutout Name (e.g. Stylus Cutout, S-Pen Cutout, Antenna Strip)"
+                                      value={editingProfile.coverage_and_cutouts?.pencil_cutout_label ?? 'Stylus Cutout'}
+                                      onChange={(e) => handleSetCoverageAndCutouts('pencil_cutout_label', e.target.value)}
+                                      className="text-xs font-semibold text-white bg-transparent border-b border-white/10 hover:border-white/30 focus:border-[#f3aa18] focus:bg-zinc-950/60 px-1 py-0.5 rounded transition-colors focus:outline-none w-full max-w-[220px]"
+                                      title="Click to rename cutout option"
+                                    />
+                                    <InfoTooltip text="Custom renamable cutout option for buyers on webstore (e.g. Apple Pencil strip, S-Pen slot, or custom hardware cutout)." />
                                   </div>
-                                  <input
-                                    type="text"
-                                    placeholder="e.g. RECOMMENDED, NEW"
-                                    value={editingProfile.coverage_and_cutouts?.pencil_cutout_pill || ''}
-                                    onChange={(e) => handleSetCoverageAndCutouts('pencil_cutout_pill', e.target.value)}
-                                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] placeholder:text-zinc-600"
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <div className="flex items-center justify-between text-[11px]">
-                                    <span className="text-zinc-400 font-medium">Tooltip Description</span>
-                                  </div>
-                                  <input
-                                    type="text"
-                                    placeholder="Storefront tooltip description..."
-                                    value={editingProfile.coverage_and_cutouts?.pencil_cutout_description || ''}
-                                    onChange={(e) => handleSetCoverageAndCutouts('pencil_cutout_description', e.target.value)}
-                                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] placeholder:text-zinc-600"
-                                  />
-                                </div>
-                              </div>
-
-                              {/* Pencil Cutout Mask URL */}
-                              {/* Stylus Cutout Mask Slot */}
-                              <div className="space-y-2 pt-1 border-t border-white/5">
-                                <div className="flex items-center justify-between text-[11px]">
-                                  <span className="text-zinc-400 font-medium">Cutout Mask (1000x1000 PNG)</span>
-                                  {(currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) ? (
-                                    <span className="text-emerald-400 font-mono text-[10px] font-semibold">Configured</span>
-                                  ) : (
-                                    <span className="text-zinc-500 font-mono text-[10px]">Not set</span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setMediaPickerConfig({
-                                        isOpen: true,
-                                        title: `Select Cutout Mask: ${editingProfile.coverage_and_cutouts?.pencil_cutout_label || 'Stylus Cutout'}`,
-                                        recommendedDimensions: '1000x1000 Transparent PNG',
-                                        currentUrl: currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url || '',
-                                        onSelect: (url) => {
-                                          if (currentView) {
-                                            handleSetViewField(currentView.id, 'pencil_cutout_mask_url', url);
-                                          }
-                                          if (currentView?.is_default || currentView?.id === 'main_view' || !editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) {
-                                            handleSetCoverageAndCutouts('pencil_cutout_mask_url', url);
-                                          }
-                                          if (url) {
-                                            handleSetCoverageAndCutouts('has_pencil_cutout', true);
-                                          }
-                                        },
-                                      })
-                                    }
-                                    className="w-14 h-14 rounded-xl bg-zinc-950 border border-white/10 hover:border-amber-400/60 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105"
-                                    title="Click to select Cutout Mask from Media Library"
-                                  >
-                                    {(currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) ? (
-                                      <img
-                                        src={currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url}
-                                        alt="Cutout Mask"
-                                        className="w-full h-full object-contain p-1"
-                                        onError={(e) => {
-                                          (e.target as HTMLElement).style.display = 'none';
-                                        }}
-                                      />
-                                    ) : (
-                                      <div className="text-zinc-600 group-hover:text-amber-400 transition-colors flex flex-col items-center justify-center gap-0.5">
-                                        <Plus className="w-4 h-4" />
-                                        <span className="text-[9px] font-semibold">Mask</span>
-                                      </div>
-                                    )}
-                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                                      <Edit3 className="w-3.5 h-3.5 text-amber-400" />
-                                    </div>
-                                  </button>
-
-                                  <div className="flex-1 min-w-0">
-                                    <p
-                                      className="text-[11px] font-mono text-zinc-300 truncate"
-                                      title={currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url || ''}
-                                    >
-                                      {(currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url)
-                                        ? (currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url)?.split('/').pop()
-                                        : 'Click square thumbnail to browse media library'}
-                                    </p>
-                                    <div className="flex items-center gap-2 mt-1.5">
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setMediaPickerConfig({
-                                            isOpen: true,
-                                            title: `Select Cutout Mask: ${editingProfile.coverage_and_cutouts?.pencil_cutout_label || 'Stylus Cutout'}`,
-                                            recommendedDimensions: '1000x1000 Transparent PNG',
-                                            currentUrl: currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url || '',
-                                            onSelect: (url) => {
-                                              if (currentView) {
-                                                handleSetViewField(currentView.id, 'pencil_cutout_mask_url', url);
-                                              }
-                                              if (currentView?.is_default || currentView?.id === 'main_view' || !editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) {
-                                                handleSetCoverageAndCutouts('pencil_cutout_mask_url', url);
-                                              }
-                                              if (url) {
-                                                handleSetCoverageAndCutouts('has_pencil_cutout', true);
-                                              }
-                                            },
-                                          })
-                                        }
-                                        className="text-[11px] text-amber-400 hover:text-amber-300 font-medium flex items-center gap-1 cursor-pointer transition-colors"
-                                      >
-                                        <FolderOpen className="w-3 h-3 text-[#f3aa18]" />
-                                        <span>Browse Media</span>
-                                      </button>
-                                      {(currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) && (
-                                        <>
-                                          <span className="text-zinc-700">|</span>
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              if (currentView) {
-                                                handleSetViewField(currentView.id, 'pencil_cutout_mask_url', '');
-                                              }
-                                              handleSetCoverageAndCutouts('pencil_cutout_mask_url', '');
-                                            }}
-                                            className="text-[11px] text-zinc-500 hover:text-rose-400 font-medium cursor-pointer transition-colors"
-                                          >
-                                            Clear
-                                          </button>
-                                        </>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[11px] text-zinc-400">Buyer Choice on Webstore</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const nextVal = !Boolean(editingProfile.coverage_and_cutouts?.has_pencil_cutout);
+                                        handleSetCoverageAndCutouts('has_pencil_cutout', nextVal);
+                                        setSelectedPencilCutout(nextVal);
+                                      }}
+                                      className={clsx(
+                                        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                                        Boolean(editingProfile.coverage_and_cutouts?.has_pencil_cutout) ? 'bg-emerald-500' : 'bg-zinc-700'
                                       )}
+                                      title={Boolean(editingProfile.coverage_and_cutouts?.has_pencil_cutout) ? 'Enabled on webstore' : 'Disabled'}
+                                    >
+                                      <span
+                                        className={clsx(
+                                          'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out',
+                                          Boolean(editingProfile.coverage_and_cutouts?.has_pencil_cutout) ? 'translate-x-4' : 'translate-x-0'
+                                        )}
+                                      />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (currentView) {
+                                          handleSetViewField(currentView.id, 'pencil_cutout_mask_url', '');
+                                        }
+                                        handleSetCoverageAndCutouts('pencil_cutout_mask_url', '');
+                                        handleSetCoverageAndCutouts('has_pencil_cutout', false);
+                                        setShowCustomCutoutSection(false);
+                                        setSelectedPencilCutout(false);
+                                      }}
+                                      className="p-1 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer ml-1"
+                                      title="Remove Custom Cutout"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Custom Cutout Pill Badge & Tooltip Description */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  <div className="space-y-1">
+                                    <div className="flex items-center justify-between text-[11px]">
+                                      <span className="text-zinc-400 font-medium">Pill Badge (Storefront)</span>
+                                    </div>
+                                    <input
+                                      type="text"
+                                      placeholder="e.g. RECOMMENDED, NEW"
+                                      value={editingProfile.coverage_and_cutouts?.pencil_cutout_pill || ''}
+                                      onChange={(e) => handleSetCoverageAndCutouts('pencil_cutout_pill', e.target.value)}
+                                      className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] placeholder:text-zinc-600"
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <div className="flex items-center justify-between text-[11px]">
+                                      <span className="text-zinc-400 font-medium">Tooltip Description</span>
+                                    </div>
+                                    <input
+                                      type="text"
+                                      placeholder="Storefront tooltip description..."
+                                      value={editingProfile.coverage_and_cutouts?.pencil_cutout_description || ''}
+                                      onChange={(e) => handleSetCoverageAndCutouts('pencil_cutout_description', e.target.value)}
+                                      className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] placeholder:text-zinc-600"
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Stylus Cutout Mask Slot */}
+                                <div className="space-y-2 pt-1 border-t border-white/5">
+                                  <div className="flex items-center justify-between text-[11px]">
+                                    <span className="text-zinc-400 font-medium">Cutout Mask (1000x1000 PNG)</span>
+                                    {(currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) ? (
+                                      <span className="text-emerald-400 font-mono text-[10px] font-semibold">Configured</span>
+                                    ) : (
+                                      <span className="text-zinc-500 font-mono text-[10px]">Not set</span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setMediaPickerConfig({
+                                          isOpen: true,
+                                          title: `Select Cutout Mask: ${editingProfile.coverage_and_cutouts?.pencil_cutout_label || 'Stylus Cutout'}`,
+                                          recommendedDimensions: '1000x1000 Transparent PNG',
+                                          currentUrl: currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url || '',
+                                          onSelect: (url) => {
+                                            if (currentView) {
+                                              handleSetViewField(currentView.id, 'pencil_cutout_mask_url', url);
+                                            }
+                                            if (currentView?.is_default || currentView?.id === 'main_view' || !editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) {
+                                              handleSetCoverageAndCutouts('pencil_cutout_mask_url', url);
+                                            }
+                                            if (url) {
+                                              handleSetCoverageAndCutouts('has_pencil_cutout', true);
+                                            }
+                                          },
+                                        })
+                                      }
+                                      className="w-14 h-14 rounded-xl bg-zinc-950 border border-white/10 hover:border-amber-400/60 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105"
+                                      title="Click to select Cutout Mask from Media Library"
+                                    >
+                                      {(currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) ? (
+                                        <img
+                                          src={currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url}
+                                          alt="Cutout Mask"
+                                          className="w-full h-full object-contain p-1"
+                                          onError={(e) => {
+                                            (e.target as HTMLElement).style.display = 'none';
+                                          }}
+                                        />
+                                      ) : (
+                                        <div className="text-zinc-600 group-hover:text-amber-400 transition-colors flex flex-col items-center justify-center gap-0.5">
+                                          <Plus className="w-4 h-4" />
+                                          <span className="text-[9px] font-semibold">Mask</span>
+                                        </div>
+                                      )}
+                                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                        <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                                      </div>
+                                    </button>
+
+                                    <div className="flex-1 min-w-0">
+                                      <p
+                                        className="text-[11px] font-mono text-zinc-300 truncate"
+                                        title={currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url || ''}
+                                      >
+                                        {(currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url)
+                                          ? (currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url)?.split('/').pop()
+                                          : 'Click square thumbnail to browse media library'}
+                                      </p>
+                                      <div className="flex items-center gap-2 mt-1.5">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setMediaPickerConfig({
+                                              isOpen: true,
+                                              title: `Select Cutout Mask: ${editingProfile.coverage_and_cutouts?.pencil_cutout_label || 'Stylus Cutout'}`,
+                                              recommendedDimensions: '1000x1000 Transparent PNG',
+                                              currentUrl: currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url || '',
+                                              onSelect: (url) => {
+                                                if (currentView) {
+                                                  handleSetViewField(currentView.id, 'pencil_cutout_mask_url', url);
+                                                }
+                                                if (currentView?.is_default || currentView?.id === 'main_view' || !editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) {
+                                                  handleSetCoverageAndCutouts('pencil_cutout_mask_url', url);
+                                                }
+                                                if (url) {
+                                                  handleSetCoverageAndCutouts('has_pencil_cutout', true);
+                                                }
+                                              },
+                                            })
+                                          }
+                                          className="text-[11px] text-amber-400 hover:text-amber-300 font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                                        >
+                                          <FolderOpen className="w-3 h-3 text-[#f3aa18]" />
+                                          <span>Browse Media</span>
+                                        </button>
+                                        {(currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) && (
+                                          <>
+                                            <span className="text-zinc-700">|</span>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                if (currentView) {
+                                                  handleSetViewField(currentView.id, 'pencil_cutout_mask_url', '');
+                                                }
+                                                handleSetCoverageAndCutouts('pencil_cutout_mask_url', '');
+                                              }}
+                                              className="text-[11px] text-zinc-500 hover:text-rose-400 font-medium cursor-pointer transition-colors"
+                                            >
+                                              Clear
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
                               </div>
-                            </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowCustomCutoutSection(true);
+                                  handleSetCoverageAndCutouts('has_pencil_cutout', true);
+                                  setSelectedPencilCutout(true);
+                                }}
+                                className="w-full py-2.5 px-3 rounded-xl border border-dashed border-white/15 hover:border-[#f3aa18]/50 bg-white/[0.02] hover:bg-[#f3aa18]/[0.04] text-zinc-400 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                              >
+                                <Plus className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                <span>Add Custom Cutout (e.g. Stylus / S-Pen / Apple Pencil)</span>
+                              </button>
+                            )}
 
                             {/* SECTION 3: MODEL CUT & 360 COVERAGE */}
                             <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3">
@@ -7933,64 +7955,76 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   <span className="text-xs font-semibold text-white">Model Coverage</span>
                                   <InfoTooltip text="Configures whether buyers can choose between Model Cut (Back Only) and Full Frame 360 wrap." />
                                 </div>
-                                <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-lg border border-white/10 text-[11px] shrink-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11px] text-zinc-400">Buyer Choice on Webstore</span>
                                   <button
                                     type="button"
-                                    onClick={() => setSelectedCoverage('model_cut')}
+                                    onClick={() => {
+                                      const currentCov = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none');
+                                      const isEnabled = currentCov !== 'none';
+                                      if (isEnabled) {
+                                        handleSetCoverageAndCutouts('coverage_type', 'none');
+                                        handleSetCoverageAndCutouts('has_model_cut', false);
+                                      } else {
+                                        handleSetCoverageAndCutouts('coverage_type', 'model_cut_and_360');
+                                        handleSetCoverageAndCutouts('has_model_cut', true);
+                                      }
+                                    }}
                                     className={clsx(
-                                      'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
-                                      selectedCoverage === 'model_cut'
-                                        ? 'bg-[#f3aa18] text-black font-semibold'
-                                        : 'text-zinc-400 hover:text-white'
+                                      'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                                      (editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none')) !== 'none'
+                                        ? 'bg-emerald-500'
+                                        : 'bg-zinc-700'
                                     )}
+                                    title={(editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none')) !== 'none' ? 'Enabled on webstore' : 'Disabled'}
                                   >
-                                    Model Cut
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedCoverage('model_360')}
-                                    className={clsx(
-                                      'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
-                                      selectedCoverage === 'model_360'
-                                        ? 'bg-[#f3aa18] text-black font-semibold'
-                                        : 'text-zinc-400 hover:text-white'
-                                    )}
-                                  >
-                                    360 Wrap
+                                    <span
+                                      className={clsx(
+                                        'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out',
+                                        (editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none')) !== 'none'
+                                          ? 'translate-x-4'
+                                          : 'translate-x-0'
+                                      )}
+                                    />
                                   </button>
                                 </div>
                               </div>
 
                               {/* Coverage Mode Selection */}
-                              <div className="space-y-1.5">
-                                <span className="text-[11px] text-zinc-400 font-medium">Coverage Mode</span>
-                                <div className="grid grid-cols-2 gap-1.5">
-                                  {[
-                                    { id: 'none', label: 'None (Flat Cut)' },
-                                    { id: 'model_cut_and_360', label: 'Model Cut & 360' },
-                                    { id: 'model_cut_only', label: 'Model Cut Only' },
-                                    { id: 'model_360_only', label: 'Model 360 Only' },
-                                  ].map((mode) => {
-                                    const currentCov = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none');
-                                    const isSelected = currentCov === mode.id;
-                                    return (
-                                      <button
-                                        key={mode.id}
-                                        type="button"
-                                        onClick={() => handleSetCoverageAndCutouts('coverage_type', mode.id)}
-                                        className={clsx(
-                                          'px-2.5 py-1.5 rounded-lg border text-left transition-all cursor-pointer text-xs',
-                                          isSelected
-                                            ? 'bg-[#f3aa18]/15 border-[#f3aa18] text-white font-semibold'
-                                            : 'bg-zinc-950/60 border-white/5 text-zinc-400 hover:text-white hover:bg-zinc-900'
-                                        )}
-                                      >
-                                        {mode.label}
-                                      </button>
-                                    );
-                                  })}
+                              {((editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none')) !== 'none') ? (
+                                <div className="space-y-1.5">
+                                  <span className="text-[11px] text-zinc-400 font-medium">Coverage Mode</span>
+                                  <div className="grid grid-cols-3 gap-1.5">
+                                    {[
+                                      { id: 'model_cut_and_360', label: 'Model Cut & 360' },
+                                      { id: 'model_cut_only', label: 'Model Cut Only' },
+                                      { id: 'model_360_only', label: 'Model 360 Only' },
+                                    ].map((mode) => {
+                                      const currentCov = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none');
+                                      const isSelected = currentCov === mode.id;
+                                      return (
+                                        <button
+                                          key={mode.id}
+                                          type="button"
+                                          onClick={() => handleSetCoverageAndCutouts('coverage_type', mode.id)}
+                                          className={clsx(
+                                            'px-2 py-1.5 rounded-lg border text-center transition-all cursor-pointer text-xs',
+                                            isSelected
+                                              ? 'bg-[#f3aa18]/15 border-[#f3aa18] text-white font-semibold'
+                                              : 'bg-zinc-950/60 border-white/5 text-zinc-400 hover:text-white hover:bg-zinc-900'
+                                          )}
+                                        >
+                                          {mode.label}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
-                              </div>
+                              ) : (
+                                <p className="text-[11px] text-zinc-500 italic p-2 rounded-lg bg-zinc-950/40 border border-white/5">
+                                  Coverage choice disabled on webstore (Single cut only).
+                                </p>
+                              )}
 
                                 {/* Upcharge for Model 360 */}
                                 {(editingProfile.coverage_and_cutouts?.coverage_type === 'model_cut_and_360' ||

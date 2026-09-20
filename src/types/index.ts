@@ -564,6 +564,7 @@ export interface DeviceConfiguratorProfile {
   base_price: number;
   currency: string;
   size_multiplier: number;
+  texture_scale?: number;
   is_configurable: boolean;
   configurator_version?: 'v1' | 'v2';
   device_colors?: { id: string; name: string; hex: string; body_image_url?: string; body_images_by_view?: Record<string, string> }[];
@@ -590,6 +591,7 @@ export interface ConfiguratorProfileSummary {
   views_count: number;
   family: DeviceFamily;
   size_multiplier: number;
+  texture_scale?: number;
   last_audited_at?: string | null;
   audit_status?: 'clean' | 'issues' | 'unaudited';
   audit_issues?: number;

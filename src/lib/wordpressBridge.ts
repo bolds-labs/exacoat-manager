@@ -2537,7 +2537,8 @@ export async function fetchConfiguratorProfilesDirect(params?: {
           layers_count: modern?.layers?.length || layers.length || 0,
           views_count: modern?.views?.length || angles.length || 1,
           family,
-          size_multiplier
+          size_multiplier,
+          texture_scale: modern?.texture_scale ?? 0.75,
         };
       });
 
@@ -3032,6 +3033,7 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
           base_price: Number(p.price) || 0,
           currency: 'IDR',
           size_multiplier,
+          texture_scale: 0.75,
           is_configurable: true,
           configurator_version: 'v1',
           device_colors: [],

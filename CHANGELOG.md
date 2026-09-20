@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.85] - 2026-09-21
+
+### Device-Level Texture Scale, Persistent Hardware Chassis & Cutouts Switch UI Overhaul
+- **Persistent Hardware Chassis**:
+  - Eliminated all blinking and flickering on bare device when switching skins, changing coverage, or toggling cutouts.
+  - Layer 0 uses a persistent static chassis image without unmounting or re-animating opacity.
+  - Canvas skin layers pre-composite offscreen and blit atomically without dropping opacity.
+- **Device-Level Texture Scale**:
+  - Moved texture scale to device level (`texture_scale`) in Configurator Studio Skins tab (50% to 150%, default 75%).
+  - Added "Scale" percentage column to the Configurator Studio catalog table.
+  - Removed redundant per-layer texture zoom slider from inside the Skin Part inspector card.
+- **Cutouts & Coverage Switch UI Overhaul**:
+  - Replaced `Cutout / Solid` preview buttons in Logo Cutout with an iOS-style toggle switch for "Buyer Choice on Webstore", removing the redundant bottom checkbox row.
+  - Hidden Stylus/Custom Cutout section by default; added `+ Add Custom Cutout` button with iOS switch and delete button.
+  - Replaced Model Coverage preview buttons with an iOS-style toggle switch and removed `None (Flat Cut)` from coverage mode buttons.
+
 ## [0.0.84] - 2026-09-21
 
 ### Double-Buffered Canvas Crossfade, Dual Resolution Master Textures, Media Slot Previews & Part Texture Controls
