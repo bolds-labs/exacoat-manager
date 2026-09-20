@@ -1741,6 +1741,18 @@ class Exacoat_Configurator_Engine {
 			'updated_at'           => current_time( 'mysql' ),
 		];
 
+		// For v2 profiles, prune legacy per-layer shading/shadow properties so universal view-level shading takes precedence
+		if ( $profile['configurator_version'] === 'v2' && ! empty( $profile['layers'] ) ) {
+			foreach ( $profile['layers'] as &$layer ) {
+				if ( ! empty( $layer['assets_by_view'] ) && is_array( $layer['assets_by_view'] ) ) {
+					foreach ( $layer['assets_by_view'] as &$view_asset ) {
+						unset( $view_asset['shadow_png_url'], $view_asset['highlight_png_url'], $view_asset['shading_image_url'] );
+					}
+				}
+			}
+			unset( $layer );
+		}
+
 		// Use wp_slash so WordPress update_metadata does not strip quotes or slashes from JSON
 		update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile ) ) );
 		update_post_meta( $product_id, self::CONFIGURATOR_FLAG_META_KEY, 'yes' );

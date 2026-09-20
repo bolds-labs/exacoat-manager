@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.87] - 2026-09-21
+
+### Universal View-Level 3D Shading, White Preview Thumbnail Slot & Layer Shading Pruning
+- **Universal View-Level 3D Shading & Storefront Precedence**:
+  - Unified 3D shading and highlights to the view/angle level (`currentView.shadow_png_url` and `currentView.shading_image_url`).
+  - Resolved frontend update issue: storefront canvas and add-to-cart composite generator now prioritize universal view-level shading over stale legacy per-layer assets.
+  - Automatically prune obsolete per-layer shading from layers in state and in `rest_save_product_configurator` on save.
+- **White Background Clickable Shading Thumbnail Slot in Studio**:
+  - Removed "Extract from Render" and "Use Base" buttons and raw URL text inputs.
+  - Added a clickable 56x56 square media slot with a pure white background (`bg-white`) so that dark transparent shadow PNGs display with crisp contrast.
+  - Added direct WordPress Media Library browsing, filename display, and 1-click Clear action.
+
 ## [0.0.86] - 2026-09-21
 
 ### v2 Configured Composite Generation, Permanent WordPress Upload, View-Level Texture Scale & Order Meta Standardization

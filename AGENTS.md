@@ -751,3 +751,20 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Logo Cutout metadata is cleanly formatted as `"With Logo Cutout"` or `"No Logo Cutout"`.
   - Order details, mini bag, and invoices render the true configured skin composite instead of falling back to the bare device.
 
+---
+
+## 43. Universal View-Level 3D Shading, White Preview Thumbnail Slot & Layer Shading Pruning
+
+- **Universal View-Level 3D Shading Invariant**:
+  - Photorealistic ambient occlusion and drop shadow maps are universal to the device and viewing angle, not configured per individual skin part.
+  - View-level shading maps (`view.shadow_png_url` and `view.shading_image_url`) strictly take precedence over any legacy per-layer asset overrides across all storefront canvas layers, Studio viewport rendering, and add-to-cart composite generators.
+  - `highlight_png_url` is strictly optional and only evaluated if explicitly specified on the view; it does not fall back to old extracted layer highlights when a view shadow is present.
+- **Automatic Per-Layer Shading Pruning Invariant**:
+  - Legacy extraction tools stored `shadow_png_url` and `highlight_png_url` inside `layer.assets_by_view[view_id]`.
+  - When updating shading in Studio or saving profiles via `POST /configurator/save` (`rest_save_product_configurator`), all legacy per-layer shading entries are automatically pruned from `layers[].assets_by_view`, preventing stale shadows from overriding updated device shading.
+- **Studio White Background Preview Thumbnail Slot**:
+  - Replaced legacy "Extract from Render" and "Use Base" buttons with a clean 56x56 square thumbnail slot.
+  - The thumbnail button explicitly uses a pure white background (`bg-white`), ensuring dark transparent shadow and shading PNGs are rendered with crisp contrast and visibility.
+  - Clicking the white preview opens the WordPress Media Library directly, with 1-click Clear and Browse actions.
+
+

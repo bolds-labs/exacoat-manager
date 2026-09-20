@@ -5657,10 +5657,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           {/* Layer 3: Realistic 3D Shading & Specular Highlights (Single Source) */}
                           {editingProfile.configurator_version === 'v2' && currentView && (() => {
                             const shadingSrc =
-                              currentView.shading_image_url ||
                               currentView.shadow_png_url ||
-                              currentView.highlight_png_url ||
-                              skinLayers.find((l) => l.assets_by_view?.[currentView.id]?.shading_image_url || l.assets_by_view?.[currentView.id]?.shadow_png_url)?.assets_by_view?.[currentView.id]?.shading_image_url;
+                              currentView.shading_image_url ||
+                              currentView.highlight_png_url;
 
                             if (!shadingSrc) return null;
 
@@ -7255,57 +7254,20 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 <div className="space-y-3 pt-3 border-t border-white/5">
                                   <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-1.5">
-                                      <Wand2 className="w-3.5 h-3.5 text-amber-400" />
+                                      <Layers className="w-3.5 h-3.5 text-amber-400" />
                                       <span className="text-xs font-bold text-white">Angle 3D Shading & Highlights</span>
-                                      <InfoTooltip content="Single neutral CAD render or AO map. Dark tones multiply to cast shadows, and bright specular tones screen to add surface shine." />
+                                      <InfoTooltip content="Universal 1000x1000 transparent PNG shading map for this angle. Applied with multiply blend mode across all skin finishes." />
                                     </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setShadingSourceUrl(currentView.shading_image_url || currentView.shadow_png_url || currentView.background_url || '');
-                                        setShowShadingExtractorModal(true);
-                                      }}
-                                      className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 text-xs font-medium flex items-center gap-1.5 cursor-pointer transition-colors shrink-0"
-                                    >
-                                      <Wand2 className="w-3 h-3 text-amber-400" />
-                                      <span>Extract from Render</span>
-                                    </button>
+                                    {(currentView.shadow_png_url || currentView.shading_image_url) ? (
+                                      <span className="text-emerald-400 text-[10px] font-mono font-semibold">Configured</span>
+                                    ) : (
+                                      <span className="text-zinc-500 text-[10px] font-mono">Not set</span>
+                                    )}
                                   </div>
 
-                                  {/* Single Shading Image Map Card */}
-                                  <div className="space-y-3 bg-black/30 p-3.5 rounded-xl border border-white/5">
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-xs font-bold text-zinc-200">Shading & Highlight Map</span>
-                                      {(currentView.shading_image_url || currentView.shadow_png_url) && (
-                                        <span className="text-emerald-400 text-[10px] font-mono">Active</span>
-                                      )}
-                                    </div>
-
-                                    <div className="flex gap-2">
-                                      <input
-                                        type="url"
-                                        placeholder="https://exacoat.com/wp-content/uploads/iPhone-Shading.png"
-                                        value={currentView.shading_image_url || currentView.shadow_png_url || ''}
-                                        onChange={(e) => {
-                                          const val = e.target.value.trim();
-                                          handleSetViewField(currentView.id, 'shading_image_url', val);
-                                          handleSetViewField(currentView.id, 'shadow_png_url', val);
-                                        }}
-                                        className="w-full px-3 py-1.5 text-xs font-mono rounded-xl bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-amber-400 placeholder:text-zinc-600"
-                                      />
-                                      {currentView.background_url && (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            handleSetViewField(currentView.id, 'shading_image_url', currentView.background_url);
-                                            handleSetViewField(currentView.id, 'shadow_png_url', currentView.background_url);
-                                          }}
-                                          className="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-[11px] font-sans font-medium shrink-0 cursor-pointer transition-colors"
-                                          title="Use hardware base render as shading source"
-                                        >
-                                          Use Base
-                                        </button>
-                                      )}
+                                  {/* Single Shading Image Map Card with White Preview Thumbnail */}
+                                  <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3">
+                                    <div className="flex items-center gap-3">
                                       <button
                                         type="button"
                                         onClick={() =>
@@ -7313,19 +7275,120 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                             isOpen: true,
                                             title: `Select 3D Shading Map: ${currentView.name}`,
                                             recommendedDimensions: '1000x1000 Transparent PNG',
-                                            currentUrl: currentView.shading_image_url || currentView.shadow_png_url || '',
+                                            currentUrl: currentView.shadow_png_url || currentView.shading_image_url || '',
                                             onSelect: (url) => {
-                                              handleSetViewField(currentView.id, 'shading_image_url', url);
                                               handleSetViewField(currentView.id, 'shadow_png_url', url);
+                                              handleSetViewField(currentView.id, 'shading_image_url', url);
+                                              if (editingProfile?.layers) {
+                                                const cleanedLayers = editingProfile.layers.map((layer) => {
+                                                  if (!layer.assets_by_view?.[currentView.id]) return layer;
+                                                  const nextAssets = { ...layer.assets_by_view };
+                                                  const vAsset = { ...nextAssets[currentView.id] };
+                                                  delete vAsset.shadow_png_url;
+                                                  delete vAsset.highlight_png_url;
+                                                  delete vAsset.shading_image_url;
+                                                  nextAssets[currentView.id] = vAsset;
+                                                  return { ...layer, assets_by_view: nextAssets };
+                                                });
+                                                setEditingProfile((prev) => prev ? { ...prev, layers: cleanedLayers } : prev);
+                                              }
                                             },
                                           })
                                         }
-                                        className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-xs font-sans font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
-                                        title="Browse WordPress Media Library"
+                                        className="w-14 h-14 rounded-xl bg-white border border-white/20 hover:border-amber-400/60 overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105 shadow-sm"
+                                        title="Click to select 3D Shading PNG from Media Library"
                                       >
-                                        <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                        <span>Browse</span>
+                                        {(currentView.shadow_png_url || currentView.shading_image_url) ? (
+                                          <img
+                                            src={currentView.shadow_png_url || currentView.shading_image_url}
+                                            alt="3D Shading Map"
+                                            className="w-full h-full object-contain p-1"
+                                            onError={(e) => {
+                                              (e.target as HTMLElement).style.display = 'none';
+                                            }}
+                                          />
+                                        ) : (
+                                          <div className="text-zinc-400 group-hover:text-amber-500 transition-colors flex flex-col items-center justify-center gap-0.5">
+                                            <Layers className="w-4 h-4" />
+                                            <span className="text-[9px] font-semibold">Shading</span>
+                                          </div>
+                                        )}
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                          <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                                        </div>
                                       </button>
+
+                                      <div className="flex-1 min-w-0">
+                                        <p
+                                          className="text-[11px] font-mono text-zinc-300 truncate"
+                                          title={currentView.shadow_png_url || currentView.shading_image_url || ''}
+                                        >
+                                          {(currentView.shadow_png_url || currentView.shading_image_url)
+                                            ? (currentView.shadow_png_url || currentView.shading_image_url)?.split('/').pop()
+                                            : 'Click white square to browse media library'}
+                                        </p>
+                                        <div className="flex items-center gap-2 mt-1.5">
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setMediaPickerConfig({
+                                                isOpen: true,
+                                                title: `Select 3D Shading Map: ${currentView.name}`,
+                                                recommendedDimensions: '1000x1000 Transparent PNG',
+                                                currentUrl: currentView.shadow_png_url || currentView.shading_image_url || '',
+                                                onSelect: (url) => {
+                                                  handleSetViewField(currentView.id, 'shadow_png_url', url);
+                                                  handleSetViewField(currentView.id, 'shading_image_url', url);
+                                                  if (editingProfile?.layers) {
+                                                    const cleanedLayers = editingProfile.layers.map((layer) => {
+                                                      if (!layer.assets_by_view?.[currentView.id]) return layer;
+                                                      const nextAssets = { ...layer.assets_by_view };
+                                                      const vAsset = { ...nextAssets[currentView.id] };
+                                                      delete vAsset.shadow_png_url;
+                                                      delete vAsset.highlight_png_url;
+                                                      delete vAsset.shading_image_url;
+                                                      nextAssets[currentView.id] = vAsset;
+                                                      return { ...layer, assets_by_view: nextAssets };
+                                                    });
+                                                    setEditingProfile((prev) => prev ? { ...prev, layers: cleanedLayers } : prev);
+                                                  }
+                                                },
+                                              })
+                                            }
+                                            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-[11px] font-medium flex items-center gap-1 cursor-pointer transition-colors shrink-0"
+                                            title="Browse WordPress Media Library"
+                                          >
+                                            <FolderOpen className="w-3 h-3 text-[#f3aa18]" />
+                                            <span>Browse</span>
+                                          </button>
+                                          {(currentView.shadow_png_url || currentView.shading_image_url) && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                handleSetViewField(currentView.id, 'shadow_png_url', '');
+                                                handleSetViewField(currentView.id, 'shading_image_url', '');
+                                                if (editingProfile?.layers) {
+                                                  const cleanedLayers = editingProfile.layers.map((layer) => {
+                                                    if (!layer.assets_by_view?.[currentView.id]) return layer;
+                                                    const nextAssets = { ...layer.assets_by_view };
+                                                    const vAsset = { ...nextAssets[currentView.id] };
+                                                    delete vAsset.shadow_png_url;
+                                                    delete vAsset.highlight_png_url;
+                                                    delete vAsset.shading_image_url;
+                                                    nextAssets[currentView.id] = vAsset;
+                                                    return { ...layer, assets_by_view: nextAssets };
+                                                  });
+                                                  setEditingProfile((prev) => prev ? { ...prev, layers: cleanedLayers } : prev);
+                                                }
+                                              }}
+                                              className="p-1 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                                              title="Clear Shading Map"
+                                            >
+                                              <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
                                     </div>
 
                                     {/* Live Tuning Sliders */}
