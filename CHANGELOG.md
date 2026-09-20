@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.91] - 2026-09-21
+
+### Strict Separation of Production Variants from Logo Cutouts & Coverage Options
+- **Strict Separation Invariant**:
+  - Production variants (`variants`) are strictly reserved for physical hardware models requiring distinct vinyl cut templates (e.g. Wi-Fi vs Cellular, or Surface Pro models).
+  - Logo Cutouts and Coverage Styles (Model Cut vs Model 360) are managed exclusively by `coverage_and_cutouts`, eliminating duplicate +IDR 0 variant rows in Studio Settings and Pricing.
+- **Backend Sanitization (`sanitize_variants`)**:
+  - Added `Exacoat_Configurator_Engine::sanitize_variants()` in `class-configurator-engine.php` to filter out any variant whose ID or name matches `logo`, `cutout`, `coverage`, or `model cut`.
+  - Applied `sanitize_variants` across legacy MKL conversion (`convert_mkl_to_profile`), profile fetch (`rest_get_product_configurator`), and profile persistence (`rest_save_product_configurator`).
+- **Bridge & Studio Alignment**:
+  - Removed legacy hardcoded pushing of `logo_cutout` and `coverage` into `convertedVariants` in `wordpressBridge.ts`.
+  - Added frontend variant sanitization across `fetchProductConfiguratorProfileDirect`, `saveProductConfiguratorProfileDirect`, and Studio profile lifecycle (`handleOpenDevice`, `handleConvertToV2`, `handleSaveProfile`).
+  - Added filter guard in Studio Pricing Settings tab and simulator dock so legacy cache artifacts never render "Logo Cutout" as production variant rows or price differentials.
+
 ## [0.0.90] - 2026-09-21
 
 ### Legacy v1 Read-Only Protection, Convert to v2 Engine, Standardized 2.0x Multiplier & Production Variants UI

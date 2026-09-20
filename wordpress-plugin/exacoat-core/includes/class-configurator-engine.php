@@ -1536,6 +1536,7 @@ class Exacoat_Configurator_Engine {
 				$is_optional = ( ( $l['can_deselect'] ?? '' ) === '1' || strpos( (string) ( $l['class_name'] ?? '' ), 'optional' ) !== false );
 				$is_selector = strpos( (string) ( $l['class_name'] ?? '' ), 'none-hover' ) !== false || in_array( $layer_name_lower, [ 'model', 'series', 'iphone model', 'ipad series', 'ipad version', 'device model', 'connectivity' ] );
 				$is_logo = ( strpos( $layer_name_lower, 'logo' ) !== false || strpos( $layer_name_lower, 'cutout' ) !== false );
+				$is_coverage = ( strpos( $layer_name_lower, 'coverage' ) !== false || strpos( $layer_name_lower, 'model cut' ) !== false || strpos( $layer_name_lower, 'model 360' ) !== false );
 
 				$raw_choices = $content_by_layer[ $layer_id_num ] ?? [];
 
@@ -1567,6 +1568,13 @@ class Exacoat_Configurator_Engine {
 							}
 						}
 					}
+					// Logo Cutout is managed by coverage_and_cutouts, strictly not a production variant
+					continue;
+				}
+
+				if ( $is_coverage ) {
+					// Coverage is managed by coverage_and_cutouts, strictly not a production variant
+					continue;
 				}
 
 				if ( $is_selector ) {
@@ -1712,10 +1720,30 @@ class Exacoat_Configurator_Engine {
 			'device_colors'        => [],
 			'views'                => $views,
 			'layers'               => $normalized_layers,
-			'variants'             => $variants,
+			'variants'             => self::sanitize_variants( $variants ),
 			'coverage_and_cutouts' => $coverage_and_cutouts,
 			'updated_at'           => current_time( 'mysql' ),
 		];
+	}
+
+	/**
+	 * Sanitize production variants array: strip out logo cutout and coverage options
+	 */
+	public static function sanitize_variants( $variants ): array {
+		if ( ! is_array( $variants ) ) {
+			return [];
+		}
+		$clean = [];
+		foreach ( $variants as $v ) {
+			if ( ! is_array( $v ) ) continue;
+			$v_id = strtolower( (string) ( $v['id'] ?? '' ) );
+			$v_name = strtolower( (string) ( $v['name'] ?? '' ) );
+			if ( strpos( $v_id, 'logo' ) !== false || strpos( $v_name, 'logo' ) !== false || strpos( $v_id, 'cutout' ) !== false || strpos( $v_id, 'coverage' ) !== false || strpos( $v_name, 'coverage' ) !== false || strpos( $v_name, 'model cut' ) !== false ) {
+				continue;
+			}
+			$clean[] = $v;
+		}
+		return array_values( $clean );
 	}
 
 	/**
@@ -1854,8 +1882,11 @@ class Exacoat_Configurator_Engine {
 		}
 
 		$product = wc_get_product( $product_id );
-		if ( $profile && is_array( $profile ) && $product ) {
-			$profile['status'] = $product->get_status();
+		if ( $profile && is_array( $profile ) ) {
+			if ( $product ) {
+				$profile['status'] = $product->get_status();
+			}
+			$profile['variants'] = self::sanitize_variants( $profile['variants'] ?? [] );
 		}
 
 		return rest_ensure_response( [
@@ -1890,7 +1921,7 @@ class Exacoat_Configurator_Engine {
 			'device_colors'        => is_array( $params['device_colors'] ?? null ) ? $params['device_colors'] : [],
 			'views'                => is_array( $params['views'] ?? null ) ? $params['views'] : [],
 			'layers'               => is_array( $params['layers'] ?? null ) ? $params['layers'] : [],
-			'variants'             => is_array( $params['variants'] ?? null ) ? $params['variants'] : [],
+			'variants'             => self::sanitize_variants( $params['variants'] ?? [] ),
 			'coverage_and_cutouts' => is_array( $params['coverage_and_cutouts'] ?? null ) ? $params['coverage_and_cutouts'] : null,
 			'updated_at'           => current_time( 'mysql' ),
 		];

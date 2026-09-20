@@ -837,4 +837,20 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **Views Tab v1 Hygiene**:
   - Controls for "Angle 3D Shading & Highlights" and "Angle Texture Zoom / Scale" are strictly hidden when inspecting v1 devices (`configurator_version !== 'v2'`), eliminating confusion from irrelevant controls.
 
+---
+
+## 47. Strict Separation of Production Variants from Logo Cutouts & Coverage Styles
+
+- **The Separation Invariant**:
+  - `variants` are strictly reserved for physical hardware models requiring distinct vinyl cut templates (e.g. Wi-Fi vs Cellular, Surface Pro kickstand editions, or distinct hardware chassis revisions).
+  - Logo Cutouts and Coverage Styles (Model Cut vs Model 360) are managed exclusively by `coverage_and_cutouts`.
+  - Mixing them previously caused "Logo Cutout" to appear as a production variant group with duplicate options ("With Logo Cutout (+IDR 0)" and "Without Logo Cutout (+IDR 0)") in Studio Pricing and Settings.
+- **Backend Sanitization (`sanitize_variants`)**:
+  - `Exacoat_Configurator_Engine::sanitize_variants( $variants )` filters out any variant whose ID or name matches `logo`, `cutout`, `coverage`, or `model cut`.
+  - Applied across `convert_mkl_to_profile`, `rest_get_product_configurator`, and `rest_save_product_configurator` to ensure backend never persists or returns logo/coverage options as production variants.
+- **Frontend & Bridge Defenses**:
+  - Removed legacy hardcoded injection of `logo_cutout` and `coverage` into `convertedVariants` in `wordpressBridge.ts`.
+  - Studio filters variants during profile loading (`handleOpenDevice`), modern conversion (`handleConvertToV2`), and saving (`handleSaveProfile`).
+  - Pricing Settings tab and simulator dock filter variants so legacy cached payloads never render duplicate logo cutout pills or zero-dollar production price rows.
+
 

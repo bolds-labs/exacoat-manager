@@ -2843,12 +2843,18 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
         const lName = (l.name || '').toLowerCase();
         return lName !== 'device' && !lName.includes('device-body');
       });
+      const cleanVariants = (data.profile.variants || []).filter((v: any) => {
+        const vId = (v.id || '').toLowerCase();
+        const vName = (v.name || '').toLowerCase();
+        return !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage');
+      });
 
       return {
         success: true,
         profile: {
           ...data.profile,
           layers: cleanLayers,
+          variants: cleanVariants,
           configurator_version: data.profile.configurator_version || 'v1',
         },
         finishes: data.finishes || [],
@@ -2871,12 +2877,18 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
             const lName = (l.name || '').toLowerCase();
             return lName !== 'device' && !lName.includes('device-body');
           });
+          const cleanVariants = (parsedModern.variants || []).filter((v: any) => {
+            const vId = (v.id || '').toLowerCase();
+            const vName = (v.name || '').toLowerCase();
+            return !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage');
+          });
           const finishesRes = await fetchGlobalFinishesDirect();
           return {
             success: true,
             profile: {
               ...parsedModern,
               layers: cleanLayers,
+              variants: cleanVariants,
               configurator_version: parsedModern.configurator_version || 'v1',
             },
             finishes: finishesRes.finishes || []
@@ -2980,34 +2992,9 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
         });
       }
 
-      // Detect Coverage and Logo Cutout options from layers
-      const hasCoverageFromLayers = layers.some((l: any) => {
-        const n = (l.name || '').toLowerCase();
-        return n.includes('model') || n.includes('coverage') || n.includes('360');
-      });
-      const hasLogoFromLayers = Boolean(logoLayer);
-
+      // Production variants are strictly reserved for physical hardware models (e.g. Wi-Fi vs Cellular).
+      // Coverage and Logo Cutout are strictly handled by coverage_and_cutouts.
       const convertedVariants: any[] = [];
-      if (hasCoverageFromLayers || family === 'phone') {
-        convertedVariants.push({
-          id: 'coverage',
-          name: 'Coverage',
-          options: [
-            { id: 'model_cut', name: 'Model Cut', price_diff: 0 },
-            { id: 'model_360', name: 'Model 360°', price_diff: 40000 },
-          ],
-        });
-      }
-      if (hasLogoFromLayers || family === 'laptop' || (p.name || '').toLowerCase().includes('iphone') || (p.name || '').toLowerCase().includes('ipad')) {
-        convertedVariants.push({
-          id: 'logo_cutout',
-          name: 'Logo Cutout',
-          options: [
-            { id: 'with_logo', name: 'With Logo Cutout', price_diff: 0, image_url: logoOverlayUrl || undefined },
-            { id: 'without_logo', name: 'Without Logo Cutout', price_diff: 0 },
-          ],
-        });
-      }
 
       let convertedLayers = layers
         .filter((l: any) => {
@@ -3125,7 +3112,7 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
           layers: convertedLayers,
           variants: convertedVariants,
           coverage_and_cutouts: {
-            has_logo_cutout: Boolean(logoOverlayUrl || hasLogoFromLayers || family === 'laptop'),
+            has_logo_cutout: Boolean(logoOverlayUrl || logoLayer || family === 'laptop'),
             logo_cutout_mask_url: logoOverlayUrl,
             has_pencil_cutout: false,
             has_model_cut: false,
@@ -3153,10 +3140,18 @@ export async function saveProductConfiguratorProfileDirect(profile: Partial<Devi
   const url = `${base}/wp-json/exacoat-core/v1/configurator/save`;
 
   try {
+    const cleanVariants = profile.variants ? profile.variants.filter((v: any) => {
+      const vId = (v.id || '').toLowerCase();
+      const vName = (v.name || '').toLowerCase();
+      return !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage');
+    }) : undefined;
+
+    const payload = cleanVariants !== undefined ? { ...profile, variants: cleanVariants } : profile;
+
     const res = await authenticatedFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify(profile),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     return {

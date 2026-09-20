@@ -713,11 +713,18 @@ export const ConfiguratorStudioPage: React.FC = () => {
           ? 2.0
           : (res.profile.size_multiplier || 1.0);
 
+        const cleanVariants = (res.profile.variants || []).filter((v) => {
+          const vId = (v.id || '').toLowerCase();
+          const vName = (v.name || '').toLowerCase();
+          return !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage');
+        });
+
         const profile: DeviceConfiguratorProfile = {
           ...res.profile,
           size_multiplier: normalizedMultiplier,
           views: viewsWithBody,
           layers: cleanedLayers,
+          variants: cleanVariants,
         };
 
         setEditingProfile(profile);
@@ -872,12 +879,19 @@ export const ConfiguratorStudioPage: React.FC = () => {
       model_360_extra_price: existingCoverage?.model_360_extra_price ?? 40000,
     };
 
+    const cleanVariants = (editingProfile.variants || []).filter((v) => {
+      const vId = (v.id || '').toLowerCase();
+      const vName = (v.name || '').toLowerCase();
+      return !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage');
+    });
+
     setEditingProfile({
       ...editingProfile,
       configurator_version: 'v2',
       size_multiplier: normalizedMultiplier,
       views: upgradedViews,
       layers: upgradedLayers,
+      variants: cleanVariants,
       coverage_and_cutouts: upgradedCoverage,
     });
 
@@ -896,7 +910,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
     }
     setIsSavingProfile(true);
     try {
-      const res = await saveProductConfiguratorProfileDirect(editingProfile);
+      const cleanVariants = (editingProfile.variants || []).filter((v) => {
+        const vId = (v.id || '').toLowerCase();
+        const vName = (v.name || '').toLowerCase();
+        return !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage');
+      });
+      const profileToSave = {
+        ...editingProfile,
+        variants: cleanVariants,
+      };
+      const res = await saveProductConfiguratorProfileDirect(profileToSave);
       if (res.success) {
         showToast(
           'success',
@@ -907,6 +930,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
           setEditingProfile({
             ...editingProfile,
             ...res.profile,
+            variants: cleanVariants,
           });
         }
         loadData(false);
@@ -3045,6 +3069,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
     // Production variant option price differences (e.g. Wi-Fi + Cellular upcharge)
     if (editingProfile.variants && editingProfile.variants.length > 0) {
       editingProfile.variants.forEach((v) => {
+        const vId = (v.id || '').toLowerCase();
+        const vName = (v.name || '').toLowerCase();
+        if (vId.includes('logo') || vName.includes('logo') || vId.includes('cutout') || vId.includes('coverage') || vName.includes('coverage')) {
+          return;
+        }
         const selectedOptId = selectedSimVariants[v.id] || v.options[0]?.id;
         const opt = v.options.find((o) => o.id === selectedOptId);
         if (opt && opt.price_diff) {
@@ -6500,9 +6529,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           {editingProfile.variants && editingProfile.variants.length > 0 &&
                             editingProfile.variants
                               .filter((v) => {
-                                const isLogoVar = v.id.toLowerCase().includes('logo') || v.name.toLowerCase().includes('logo');
-                                const hasDedicatedLogoToggle = editingProfile.coverage_and_cutouts?.has_logo_cutout !== false || Boolean(currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url);
-                                return !(isLogoVar && hasDedicatedLogoToggle);
+                                const vId = (v.id || '').toLowerCase();
+                                const vName = (v.name || '').toLowerCase();
+                                return !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage');
                               })
                               .map((v) => {
                                 const activeOptId = selectedSimVariants[v.id] || v.options[0]?.id;
@@ -8853,175 +8882,185 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             </div>
 
                             {/* Device Production Variants */}
-                            <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3.5">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 rounded-lg bg-[#f3aa18]/10 border border-[#f3aa18]/20 flex items-center justify-center shrink-0">
-                                    <Cpu className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                  </div>
-                                  <div>
+                            {(() => {
+                              const cleanProductionVariants = (editingProfile.variants || []).filter((v) => {
+                                const vId = (v.id || '').toLowerCase();
+                                const vName = (v.name || '').toLowerCase();
+                                return !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage');
+                              });
+
+                              return (
+                                <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3.5">
+                                  <div className="flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-xs font-bold text-white">Production Variants</span>
-                                      {editingProfile.variants && editingProfile.variants.length > 0 && (
-                                        <span className="px-1.5 py-0.2 rounded-full bg-white/10 text-[10px] font-mono font-semibold text-zinc-300">
-                                          {editingProfile.variants.length}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <p className="text-[11px] text-zinc-400 mt-0.5">
-                                      Hardware models (e.g. Wi-Fi vs Cellular) requiring distinct vinyl cut templates.
-                                    </p>
-                                  </div>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const nextIdx = (editingProfile.variants?.length || 0) + 1;
-                                    const newVariant: ConfiguratorVariant = {
-                                      id: `variant_${Date.now()}`,
-                                      name: `Variant ${nextIdx}`,
-                                      options: [
-                                        { id: `opt_${Date.now()}_1`, name: 'Standard', price_diff: 0 },
-                                      ],
-                                    };
-                                    handleSetVariants([...(editingProfile.variants || []), newVariant]);
-                                  }}
-                                  className="px-3 py-1.5 rounded-lg bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 border border-[#f3aa18]/30 text-[#f3aa18] hover:text-amber-300 text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 shrink-0 shadow-xs"
-                                >
-                                  <Plus className="w-3.5 h-3.5" />
-                                  <span>Add Group</span>
-                                </button>
-                              </div>
-
-                              {(!editingProfile.variants || editingProfile.variants.length === 0) ? (
-                                <div className="p-4 rounded-xl bg-zinc-950/60 border border-dashed border-white/10 text-center space-y-1">
-                                  <p className="text-xs font-medium text-zinc-400">No physical cut variants configured</p>
-                                  <p className="text-[11px] text-zinc-500">
-                                    Standard single template cut will be used for production across all orders.
-                                  </p>
-                                </div>
-                              ) : (
-                                <div className="space-y-3">
-                                  {editingProfile.variants.map((v, vIdx) => (
-                                    <div
-                                      key={v.id || vIdx}
-                                      className="p-3 rounded-xl bg-zinc-950/80 border border-white/10 hover:border-white/15 transition-all space-y-3 shadow-xs"
-                                    >
-                                      {/* Variant Card Header */}
-                                      <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 rounded-md bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/25 text-[10px] font-mono font-bold shrink-0">
-                                          #{vIdx + 1}
-                                        </span>
-                                        <input
-                                          type="text"
-                                          value={v.name}
-                                          onChange={(e) => {
-                                            const next = [...(editingProfile.variants || [])];
-                                            next[vIdx] = { ...next[vIdx], name: e.target.value };
-                                            handleSetVariants(next);
-                                          }}
-                                          placeholder="Variant Group Name (e.g. Connectivity or Model Edition)"
-                                          className="flex-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18] transition-colors"
-                                        />
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const next = (editingProfile.variants || []).filter((_, idx) => idx !== vIdx);
-                                            handleSetVariants(next);
-                                          }}
-                                          className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer shrink-0"
-                                          title="Remove Variant Group"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
+                                      <div className="w-6 h-6 rounded-lg bg-[#f3aa18]/10 border border-[#f3aa18]/20 flex items-center justify-center shrink-0">
+                                        <Cpu className="w-3.5 h-3.5 text-[#f3aa18]" />
                                       </div>
-
-                                      {/* Options List */}
-                                      <div className="space-y-1.5 pt-1 border-t border-white/5">
-                                        <div className="flex items-center justify-between text-[10px] font-mono text-zinc-500 uppercase tracking-wider px-1">
-                                          <span>Option Name</span>
-                                          <span>Price Extra (+IDR)</span>
+                                      <div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs font-bold text-white">Production Variants</span>
+                                          {cleanProductionVariants.length > 0 && (
+                                            <span className="px-1.5 py-0.2 rounded-full bg-white/10 text-[10px] font-mono font-semibold text-zinc-300">
+                                              {cleanProductionVariants.length}
+                                            </span>
+                                          )}
                                         </div>
-                                        {v.options.map((opt, oIdx) => (
-                                          <div
-                                            key={opt.id || oIdx}
-                                            className="flex items-center gap-2 p-1.5 rounded-lg bg-zinc-900/60 border border-white/5 hover:border-white/10 transition-colors"
-                                          >
-                                            <span className="w-5 h-5 rounded-md bg-zinc-800 text-zinc-400 text-[10px] font-mono flex items-center justify-center shrink-0">
-                                              {oIdx + 1}
+                                        <p className="text-[11px] text-zinc-400 mt-0.5">
+                                          Hardware models (e.g. Wi-Fi vs Cellular) requiring distinct vinyl cut templates.
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const nextIdx = cleanProductionVariants.length + 1;
+                                        const newVariant: ConfiguratorVariant = {
+                                          id: `variant_${Date.now()}`,
+                                          name: `Variant ${nextIdx}`,
+                                          options: [
+                                            { id: `opt_${Date.now()}_1`, name: 'Standard', price_diff: 0 },
+                                          ],
+                                        };
+                                        handleSetVariants([...cleanProductionVariants, newVariant]);
+                                      }}
+                                      className="px-3 py-1.5 rounded-lg bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 border border-[#f3aa18]/30 text-[#f3aa18] hover:text-amber-300 text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 shrink-0 shadow-xs"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                      <span>Add Group</span>
+                                    </button>
+                                  </div>
+
+                                  {cleanProductionVariants.length === 0 ? (
+                                    <div className="p-4 rounded-xl bg-zinc-950/60 border border-dashed border-white/10 text-center space-y-1">
+                                      <p className="text-xs font-medium text-zinc-400">No physical cut variants configured</p>
+                                      <p className="text-[11px] text-zinc-500">
+                                        Standard single template cut will be used for production across all orders.
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-3">
+                                      {cleanProductionVariants.map((v, vIdx) => (
+                                        <div
+                                          key={v.id || vIdx}
+                                          className="p-3 rounded-xl bg-zinc-950/80 border border-white/10 hover:border-white/15 transition-all space-y-3 shadow-xs"
+                                        >
+                                          {/* Variant Card Header */}
+                                          <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 rounded-md bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/25 text-[10px] font-mono font-bold shrink-0">
+                                              #{vIdx + 1}
                                             </span>
                                             <input
                                               type="text"
-                                              value={opt.name}
+                                              value={v.name}
                                               onChange={(e) => {
-                                                const next = [...(editingProfile.variants || [])];
-                                                const opts = [...next[vIdx].options];
-                                                opts[oIdx] = { ...opts[oIdx], name: e.target.value };
-                                                next[vIdx] = { ...next[vIdx], options: opts };
+                                                const next = [...cleanProductionVariants];
+                                                next[vIdx] = { ...next[vIdx], name: e.target.value };
                                                 handleSetVariants(next);
                                               }}
-                                              placeholder="Option name (e.g. Wi-Fi Only)"
-                                              className="flex-1 px-2.5 py-1 text-xs rounded-lg bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18] transition-colors"
+                                              placeholder="Variant Group Name (e.g. Connectivity or Model Edition)"
+                                              className="flex-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18] transition-colors"
                                             />
-                                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-zinc-950 border border-white/10 shrink-0">
-                                              <span className="text-[10px] text-zinc-500 font-mono font-semibold">+IDR</span>
-                                              <input
-                                                type="number"
-                                                step="5000"
-                                                value={opt.price_diff || 0}
-                                                onChange={(e) => {
-                                                  const next = [...(editingProfile.variants || [])];
-                                                  const opts = [...next[vIdx].options];
-                                                  opts[oIdx] = { ...opts[oIdx], price_diff: Number(e.target.value) || 0 };
-                                                  next[vIdx] = { ...next[vIdx], options: opts };
-                                                  handleSetVariants(next);
-                                                }}
-                                                className="w-20 text-xs font-mono text-right bg-transparent text-white focus:outline-none"
-                                              />
-                                            </div>
-                                            {v.options.length > 1 && (
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  const next = [...(editingProfile.variants || [])];
-                                                  const opts = next[vIdx].options.filter((_, idx) => idx !== oIdx);
-                                                  next[vIdx] = { ...next[vIdx], options: opts };
-                                                  handleSetVariants(next);
-                                                }}
-                                                className="p-1 rounded-md text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer transition-colors shrink-0"
-                                                title="Remove Option"
-                                              >
-                                                <X className="w-3.5 h-3.5" />
-                                              </button>
-                                            )}
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const next = cleanProductionVariants.filter((_, idx) => idx !== vIdx);
+                                                handleSetVariants(next);
+                                              }}
+                                              className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer shrink-0"
+                                              title="Remove Variant Group"
+                                            >
+                                              <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
                                           </div>
-                                        ))}
 
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const next = [...(editingProfile.variants || [])];
-                                            const optIdx = next[vIdx].options.length + 1;
-                                            next[vIdx] = {
-                                              ...next[vIdx],
-                                              options: [
-                                                ...next[vIdx].options,
-                                                { id: `opt_${Date.now()}`, name: `Option ${optIdx}`, price_diff: 0 },
-                                              ],
-                                            };
-                                            handleSetVariants(next);
-                                          }}
-                                          className="w-full py-1.5 px-3 rounded-lg border border-dashed border-white/15 hover:border-[#f3aa18]/40 hover:bg-[#f3aa18]/5 text-[11px] font-medium text-zinc-400 hover:text-[#f3aa18] transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-1"
-                                        >
-                                          <Plus className="w-3 h-3" />
-                                          <span>Add Cut Option</span>
-                                        </button>
-                                      </div>
+                                          {/* Options List */}
+                                          <div className="space-y-1.5 pt-1 border-t border-white/5">
+                                            <div className="flex items-center justify-between text-[10px] font-mono text-zinc-500 uppercase tracking-wider px-1">
+                                              <span>Option Name</span>
+                                              <span>Price Extra (+IDR)</span>
+                                            </div>
+                                            {v.options.map((opt, oIdx) => (
+                                              <div
+                                                key={opt.id || oIdx}
+                                                className="flex items-center gap-2 p-1.5 rounded-lg bg-zinc-900/60 border border-white/5 hover:border-white/10 transition-colors"
+                                              >
+                                                <span className="w-5 h-5 rounded-md bg-zinc-800 text-zinc-400 text-[10px] font-mono flex items-center justify-center shrink-0">
+                                                  {oIdx + 1}
+                                                </span>
+                                                <input
+                                                  type="text"
+                                                  value={opt.name}
+                                                  onChange={(e) => {
+                                                    const next = [...cleanProductionVariants];
+                                                    const opts = [...next[vIdx].options];
+                                                    opts[oIdx] = { ...opts[oIdx], name: e.target.value };
+                                                    next[vIdx] = { ...next[vIdx], options: opts };
+                                                    handleSetVariants(next);
+                                                  }}
+                                                  placeholder="Option name (e.g. Wi-Fi Only)"
+                                                  className="flex-1 px-2.5 py-1 text-xs rounded-lg bg-zinc-950 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18] transition-colors"
+                                                />
+                                                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-zinc-950 border border-white/10 shrink-0">
+                                                  <span className="text-[10px] text-zinc-500 font-mono font-semibold">+IDR</span>
+                                                  <input
+                                                    type="number"
+                                                    step="5000"
+                                                    value={opt.price_diff || 0}
+                                                    onChange={(e) => {
+                                                      const next = [...cleanProductionVariants];
+                                                      const opts = [...next[vIdx].options];
+                                                      opts[oIdx] = { ...opts[oIdx], price_diff: Number(e.target.value) || 0 };
+                                                      next[vIdx] = { ...next[vIdx], options: opts };
+                                                      handleSetVariants(next);
+                                                    }}
+                                                    className="w-20 text-xs font-mono text-right bg-transparent text-white focus:outline-none"
+                                                  />
+                                                </div>
+                                                {v.options.length > 1 && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      const next = [...cleanProductionVariants];
+                                                      const opts = next[vIdx].options.filter((_, idx) => idx !== oIdx);
+                                                      next[vIdx] = { ...next[vIdx], options: opts };
+                                                      handleSetVariants(next);
+                                                    }}
+                                                    className="p-1 rounded-md text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer transition-colors shrink-0"
+                                                    title="Remove Option"
+                                                  >
+                                                    <X className="w-3.5 h-3.5" />
+                                                  </button>
+                                                )}
+                                              </div>
+                                            ))}
+
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const next = [...cleanProductionVariants];
+                                                const optIdx = next[vIdx].options.length + 1;
+                                                next[vIdx] = {
+                                                  ...next[vIdx],
+                                                  options: [
+                                                    ...next[vIdx].options,
+                                                    { id: `opt_${Date.now()}`, name: `Option ${optIdx}`, price_diff: 0 },
+                                                  ],
+                                                };
+                                                handleSetVariants(next);
+                                              }}
+                                              className="w-full py-1.5 px-3 rounded-lg border border-dashed border-white/15 hover:border-[#f3aa18]/40 hover:bg-[#f3aa18]/5 text-[11px] font-medium text-zinc-400 hover:text-[#f3aa18] transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-1"
+                                            >
+                                              <Plus className="w-3 h-3" />
+                                              <span>Add Cut Option</span>
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ))}
                                     </div>
-                                  ))}
+                                  )}
                                 </div>
-                              )}
-                            </div>
+                              );
+                            })()}
 
                             {/* Engine Architecture & Find-Replace Action */}
                             <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5 space-y-2">
