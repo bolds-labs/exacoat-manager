@@ -540,6 +540,7 @@ export interface ConfiguratorProfileSummary {
   is_migrated: boolean;
   configurator_version?: 'v1' | 'v2';
   is_configurable: boolean;
+  is_configurator?: boolean;
   layers_count: number;
   views_count: number;
   family: DeviceFamily;

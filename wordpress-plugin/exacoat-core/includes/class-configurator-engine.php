@@ -20,6 +20,7 @@ class Exacoat_Configurator_Engine {
 	const OPTION_KEY = 'exacoat_global_finishes';
 	const LEGACY_OPTION_KEY = 'artmatter_global_finishes';
 	const PROFILE_META_KEY = '_exacoat_configurator_profile';
+	const CONFIGURATOR_FLAG_META_KEY = '_is_configurator';
 
 	private static $cached_finishes = null;
 
@@ -28,6 +29,10 @@ class Exacoat_Configurator_Engine {
 
 		// Hook into WooCommerce product REST response and data loading
 		add_filter( 'woocommerce_rest_prepare_product_object', [ __CLASS__, 'enrich_wc_product_configurator_meta' ], 10, 3 );
+
+		// Hook into WooCommerce product editor: Device Configurator checkbox
+		add_action( 'woocommerce_product_options_general_product_data', [ __CLASS__, 'add_configurator_product_checkbox' ] );
+		add_action( 'woocommerce_process_product_meta', [ __CLASS__, 'save_configurator_product_checkbox' ] );
 
 		// Hook into WooCommerce cart and order items for headless addons
 		add_filter( 'woocommerce_add_cart_item_data', [ __CLASS__, 'add_addon_data_to_cart_item' ], 10, 3 );
@@ -425,6 +430,13 @@ class Exacoat_Configurator_Engine {
 			'callback'            => [ __CLASS__, 'rest_save_addon_schemas' ],
 			'permission_callback' => [ __CLASS__, 'verify_permission' ],
 		] );
+
+		// 12. POST /configurator/toggle-configurator: Enable or disable configurator for a product
+		$register( '/configurator/toggle-configurator', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_toggle_configurator' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+		] );
 	}
 
 
@@ -544,6 +556,93 @@ class Exacoat_Configurator_Engine {
 				'in_stock'    => $in_stock,
 			],
 			'finishes' => $finishes,
+		] );
+	}
+
+	/**
+	 * Render device configurator checkbox in WooCommerce product edit screen (General tab)
+	 */
+	public static function add_configurator_product_checkbox() {
+		global $post;
+		if ( ! $post || ! $post->ID ) return;
+		$val = get_post_meta( $post->ID, self::CONFIGURATOR_FLAG_META_KEY, true );
+		if ( '' === $val ) {
+			$val = self::is_product_configurator( $post->ID ) ? 'yes' : 'no';
+		}
+		echo '<div class="options_group show_if_simple show_if_variable">';
+		woocommerce_wp_checkbox( [
+			'id'            => self::CONFIGURATOR_FLAG_META_KEY,
+			'label'         => __( 'Device Configurator', 'exacoat-core' ),
+			'description'   => __( 'Check this if this product is an interactive 2D device skin configurator (uncheck for merchandise, limited drops, standalone kits, cases).', 'exacoat-core' ),
+			'value'         => $val,
+			'desc_tip'      => true,
+		] );
+		echo '</div>';
+	}
+
+	/**
+	 * Save device configurator checkbox on WooCommerce product save
+	 */
+	public static function save_configurator_product_checkbox( $post_id ) {
+		$is_configurator = isset( $_POST[ self::CONFIGURATOR_FLAG_META_KEY ] ) ? 'yes' : 'no';
+		update_post_meta( $post_id, self::CONFIGURATOR_FLAG_META_KEY, $is_configurator );
+	}
+
+	/**
+	 * Determine if a product is an active device configurator
+	 */
+	public static function is_product_configurator( int $pid, ?array $profile_data = null ): bool {
+		$flag = get_post_meta( $pid, self::CONFIGURATOR_FLAG_META_KEY, true );
+		if ( 'yes' === $flag ) {
+			return true;
+		}
+		if ( 'no' === $flag ) {
+			return false;
+		}
+
+		// When flag is not explicitly saved yet, evaluate intelligently based on configurator layers
+		if ( $profile_data !== null && isset( $profile_data['layers'] ) ) {
+			return ! empty( $profile_data['layers'] );
+		}
+
+		$modern_profile = get_post_meta( $pid, self::PROFILE_META_KEY, true );
+		if ( ! empty( $modern_profile ) ) {
+			$decoded = is_array( $modern_profile ) ? $modern_profile : json_decode( $modern_profile, true );
+			if ( ! empty( $decoded['layers'] ) ) {
+				return true;
+			}
+		}
+
+		$layers_meta = get_post_meta( $pid, '_layers', true );
+		if ( ! empty( $layers_meta ) ) {
+			$parsed = self::parse_meta_json( $layers_meta );
+			if ( ! empty( $parsed ) && is_array( $parsed ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * REST Endpoint: Toggle configurator status for a product directly from Exacoat Manager
+	 */
+	public static function rest_toggle_configurator( WP_REST_Request $request ): WP_REST_Response {
+		$params = $request->get_json_params() ?: $request->get_params();
+		$pid = (int) ( $params['product_id'] ?? 0 );
+		$is_cfg = ! empty( $params['is_configurator'] );
+
+		if ( ! $pid || ! get_post( $pid ) ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Invalid product ID' ], 400 );
+		}
+
+		update_post_meta( $pid, self::CONFIGURATOR_FLAG_META_KEY, $is_cfg ? 'yes' : 'no' );
+
+		return rest_ensure_response( [
+			'success'         => true,
+			'product_id'      => $pid,
+			'is_configurator' => $is_cfg,
+			'message'         => $is_cfg ? 'Product enabled as configurator device.' : 'Product excluded from configurator devices.',
 		] );
 	}
 
@@ -850,9 +949,16 @@ class Exacoat_Configurator_Engine {
 	 */
 	public static function rest_get_configurator_profiles( WP_REST_Request $request ): WP_REST_Response {
 		$page = max( 1, (int) $request->get_param( 'page' ) ?: 1 );
-		$per_page = max( 10, min( 200, (int) $request->get_param( 'per_page' ) ?: 50 ) );
+		$per_page_param = $request->get_param( 'per_page' );
+		if ( $per_page_param === '-1' || (int) $per_page_param === -1 ) {
+			$per_page = 500;
+		} else {
+			$per_page = max( 10, min( 500, (int) $per_page_param ?: 100 ) );
+		}
 		$search = sanitize_text_field( $request->get_param( 'search' ) ?: '' );
 		$category = sanitize_text_field( $request->get_param( 'category' ) ?: '' );
+		$only_configurable = $request->get_param( 'only_configurable' );
+		$filter_configurable = ( $only_configurable === null || $only_configurable === 'true' || $only_configurable === '1' || $only_configurable === true );
 
 		$args = [
 			'post_type'      => 'product',
@@ -893,6 +999,13 @@ class Exacoat_Configurator_Engine {
 				$profile_data = self::convert_mkl_to_profile( $pid );
 			}
 
+			$is_cfg = self::is_product_configurator( $pid, $profile_data );
+
+			// If only_configurable is requested, exclude non-configurator items (merch, cases, drops)
+			if ( $filter_configurable && ! $is_cfg ) {
+				continue;
+			}
+
 			$product = wc_get_product( $pid );
 			$cats = wp_get_post_terms( $pid, 'product_cat', [ 'fields' => 'names' ] );
 
@@ -905,6 +1018,7 @@ class Exacoat_Configurator_Engine {
 				'is_migrated'          => $is_migrated,
 				'configurator_version' => $profile_data['configurator_version'] ?? 'v1',
 				'is_configurable'      => ! empty( $profile_data['layers'] ),
+				'is_configurator'      => $is_cfg,
 				'layers_count'         => count( $profile_data['layers'] ?? [] ),
 				'views_count'          => count( $profile_data['views'] ?? [] ),
 				'family'               => $profile_data['family'] ?? 'phone',
@@ -915,7 +1029,7 @@ class Exacoat_Configurator_Engine {
 		return rest_ensure_response( [
 			'success'     => true,
 			'profiles'    => $profiles,
-			'total'       => (int) $query->found_posts,
+			'total'       => count( $profiles ),
 			'total_pages' => (int) $query->max_num_pages,
 			'page'        => $page,
 		] );

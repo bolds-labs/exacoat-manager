@@ -2386,6 +2386,7 @@ export async function fetchConfiguratorProfilesDirect(params?: {
   category?: string;
   page?: number;
   per_page?: number;
+  only_configurable?: boolean;
 }): Promise<{
   success: boolean;
   profiles: ConfiguratorProfileSummary[];
@@ -2398,7 +2399,12 @@ export async function fetchConfiguratorProfilesDirect(params?: {
   if (params?.search) url.searchParams.set('search', params.search);
   if (params?.category) url.searchParams.set('category', params.category);
   if (params?.page) url.searchParams.set('page', String(params.page));
-  url.searchParams.set('per_page', String(params?.per_page || 100));
+  if (params?.only_configurable !== undefined) {
+    url.searchParams.set('only_configurable', params.only_configurable ? 'true' : 'false');
+  } else {
+    url.searchParams.set('only_configurable', 'true');
+  }
+  url.searchParams.set('per_page', String(params?.per_page || 500));
   url.searchParams.set('_t', String(Date.now()));
 
   try {
@@ -2462,6 +2468,53 @@ export async function fetchConfiguratorProfilesDirect(params?: {
   }
 
   return { success: false, profiles: [], total: 0, total_pages: 1, error: 'Failed to fetch configurator profiles' };
+}
+
+export async function toggleProductConfiguratorDirect(
+  productId: number,
+  isConfigurator: boolean
+): Promise<{
+  success: boolean;
+  product_id?: number;
+  is_configurator?: boolean;
+  message?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/configurator/toggle-configurator`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        product_id: productId,
+        is_configurator: isConfigurator,
+      }),
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        product_id: data.product_id,
+        is_configurator: data.is_configurator,
+        message: data.message,
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || 'Failed updating configurator status',
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err.message || 'Network error updating configurator status',
+    };
+  }
 }
 
 export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | string): Promise<{

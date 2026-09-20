@@ -11,6 +11,7 @@ import {
   runBatchConfiguratorMigrationDirect,
   setProductPriceDirect,
   duplicateProductDirect,
+  toggleProductConfiguratorDirect,
   GlobalFinish,
   fetchGlobalFinishesDirect,
 } from '../lib/wordpressBridge';
@@ -145,6 +146,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [filterConfigured, setFilterConfigured] = useState<'all' | 'configured' | 'pending'>('all');
   const [filterVersion, setFilterVersion] = useState<'all' | 'v1' | 'v2'>('all');
+  const [showAllProducts, setShowAllProducts] = useState(false);
+  const [togglingConfiguratorId, setTogglingConfiguratorId] = useState<number | null>(null);
 
   // Batch migration state
   const [isMigrating, setIsMigrating] = useState(false);
@@ -235,13 +238,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [activeSimView, setActiveSimView] = useState<string>('main_view');
   const [selectedSimColor, setSelectedSimColor] = useState<string>('space-gray');
 
-  const loadData = async (quiet = false) => {
+  const loadData = async (quiet = false, allProducts = showAllProducts) => {
     try {
       if (!quiet) setIsLoading(true);
       else setIsRefreshing(true);
 
       const [profilesRes, finishesRes] = await Promise.all([
-        fetchConfiguratorProfilesDirect({ per_page: 100 }),
+        fetchConfiguratorProfilesDirect({
+          per_page: 500,
+          only_configurable: !allProducts,
+        }),
         fetchGlobalFinishesDirect(),
       ]);
 
@@ -574,6 +580,42 @@ export const ConfiguratorStudioPage: React.FC = () => {
       showToast('error', 'Duplication Error', err.message);
     } finally {
       setIsDuplicating(false);
+    }
+  };
+
+  // Toggle between configurators only and all store products
+  const handleToggleShowAllProducts = (all: boolean) => {
+    setShowAllProducts(all);
+    loadData(false, all);
+  };
+
+  // Toggle whether an individual product is an active device configurator
+  const handleToggleConfiguratorStatus = async (productId: number, currentStatus: boolean) => {
+    const nextStatus = !currentStatus;
+    try {
+      setTogglingConfiguratorId(productId);
+      const res = await toggleProductConfiguratorDirect(productId, nextStatus);
+      if (res.success) {
+        showToast(
+          'success',
+          nextStatus ? 'Configurator Enabled' : 'Configurator Excluded',
+          nextStatus
+            ? 'Product enabled as interactive device configurator.'
+            : 'Product excluded from configurator studio.'
+        );
+        // Optimistically update the product in local profiles state
+        setProfiles((prev) =>
+          prev.map((p) =>
+            p.product_id === productId ? { ...p, is_configurator: nextStatus } : p
+          )
+        );
+      } else {
+        showToast('error', 'Update Failed', res.message || 'Failed updating configurator status');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message || 'Network error updating configurator status');
+    } finally {
+      setTogglingConfiguratorId(null);
     }
   };
 
@@ -1696,10 +1738,13 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
   // Filtered profiles for catalog grid
   const filteredProfiles = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
     return profiles.filter((p) => {
       const matchesSearch =
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.slug.toLowerCase().includes(searchQuery.toLowerCase());
+        !q ||
+        p.name.toLowerCase().includes(q) ||
+        p.slug.toLowerCase().includes(q) ||
+        String(p.product_id).includes(q);
 
       const matchesCat = selectedCategory === 'all' || p.categories.includes(selectedCategory);
 
@@ -1707,8 +1752,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
         filterConfigured === 'all'
           ? true
           : filterConfigured === 'configured'
-          ? p.is_configurable
-          : !p.is_configurable;
+          ? p.is_configurable && p.is_configurator !== false
+          : !p.is_configurable || p.is_configurator === false;
 
       const matchesVersion =
         filterVersion === 'all' ? true : (p.configurator_version || 'v1') === filterVersion;
@@ -1865,7 +1910,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
           <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search device name, model, or category..."
+            placeholder="Search device name, model, SKU, or category..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 text-xs rounded-xl bg-zinc-900/60 border border-white/10 text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/50 font-sans"
@@ -1873,6 +1918,37 @@ export const ConfiguratorStudioPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
+          {/* Scope Selector: Configurators Only vs All Store Products */}
+          <div className="flex items-center gap-1 bg-zinc-900/60 p-1 rounded-xl border border-white/10 shrink-0">
+            <button
+              type="button"
+              onClick={() => handleToggleShowAllProducts(false)}
+              className={clsx(
+                'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer flex items-center gap-1.5',
+                !showAllProducts
+                  ? 'bg-[#f3aa18]/20 text-[#f3aa18] font-bold border border-[#f3aa18]/30'
+                  : 'text-zinc-400 hover:text-white'
+              )}
+              title="Display only products configured as interactive device skins"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Configurators</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleToggleShowAllProducts(true)}
+              className={clsx(
+                'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer flex items-center gap-1.5',
+                showAllProducts
+                  ? 'bg-white/15 text-white font-bold'
+                  : 'text-zinc-400 hover:text-white'
+              )}
+              title="Display all store products including merchandise, drops, and kits"
+            >
+              <span>All Products</span>
+            </button>
+          </div>
+
           <div className="flex items-center gap-1 bg-zinc-900/60 p-1 rounded-xl border border-white/10 shrink-0">
             <button
               onClick={() => setFilterConfigured('all')}
@@ -1981,6 +2057,35 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      disabled={togglingConfiguratorId === p.product_id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleConfiguratorStatus(p.product_id, p.is_configurator !== false);
+                      }}
+                      className={clsx(
+                        'text-[10px] font-sans px-2 py-0.5 rounded-full border font-semibold flex items-center gap-1 transition-all cursor-pointer',
+                        p.is_configurator !== false
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                          : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:bg-zinc-700 hover:text-white'
+                      )}
+                      title={
+                        p.is_configurator !== false
+                          ? 'Active Configurator. Click to exclude from configurators.'
+                          : 'Excluded from configurators. Click to enable as device configurator.'
+                      }
+                    >
+                      {togglingConfiguratorId === p.product_id ? (
+                        <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                      ) : p.is_configurator !== false ? (
+                        <CheckCircle2 className="w-2.5 h-2.5" />
+                      ) : (
+                        <AlertCircle className="w-2.5 h-2.5 text-zinc-500" />
+                      )}
+                      <span>{p.is_configurator !== false ? 'Configurator' : 'Excluded'}</span>
+                    </button>
+
                     <span
                       className={clsx(
                         'text-[10px] font-sans px-2 py-0.5 rounded-full border uppercase tracking-wider font-semibold',
@@ -2615,20 +2720,51 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Center: Engine Version Indicator */}
+              {/* Center: Engine Version Indicator & Configurator Status */}
               {editingProfile && (
-                <div className="hidden lg:flex items-center gap-1.5 bg-zinc-900/90 px-3 py-1 rounded-full border border-white/10 text-xs">
-                  <span className="text-zinc-400 font-medium">Engine:</span>
-                  <span
+                <div className="hidden lg:flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 bg-zinc-900/90 px-3 py-1 rounded-full border border-white/10 text-xs">
+                    <span className="text-zinc-400 font-medium">Engine:</span>
+                    <span
+                      className={clsx(
+                        'font-bold px-2 py-0.5 rounded text-[11px]',
+                        editingProfile.configurator_version === 'v2'
+                          ? 'bg-sky-500/15 text-sky-400'
+                          : 'bg-amber-500/15 text-amber-400'
+                      )}
+                    >
+                      {editingProfile.configurator_version === 'v2' ? 'v2 Modern Canvas' : 'v1 Dual-Layer Production'}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={togglingConfiguratorId === selectedProductId}
+                    onClick={() => {
+                      const currentIsCfg = profiles.find((p) => p.product_id === selectedProductId)?.is_configurator !== false;
+                      handleToggleConfiguratorStatus(selectedProductId, currentIsCfg);
+                    }}
                     className={clsx(
-                      'font-bold px-2 py-0.5 rounded text-[11px]',
-                      editingProfile.configurator_version === 'v2'
-                        ? 'bg-sky-500/15 text-sky-400'
-                        : 'bg-amber-500/15 text-amber-400'
+                      'flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-sans transition-all cursor-pointer',
+                      (profiles.find((p) => p.product_id === selectedProductId)?.is_configurator !== false)
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                        : 'bg-zinc-900 text-zinc-400 border-zinc-700 hover:bg-zinc-800 hover:text-white'
                     )}
+                    title="Toggle whether this product is marked as a Device Configurator"
                   >
-                    {editingProfile.configurator_version === 'v2' ? 'v2 Modern Canvas' : 'v1 Dual-Layer Production'}
-                  </span>
+                    {togglingConfiguratorId === selectedProductId ? (
+                      <RefreshCw className="w-3 h-3 animate-spin" />
+                    ) : (profiles.find((p) => p.product_id === selectedProductId)?.is_configurator !== false) ? (
+                      <CheckCircle2 className="w-3 h-3" />
+                    ) : (
+                      <AlertCircle className="w-3 h-3 text-zinc-500" />
+                    )}
+                    <span>
+                      {(profiles.find((p) => p.product_id === selectedProductId)?.is_configurator !== false)
+                        ? 'Configurator: Active'
+                        : 'Configurator: Excluded'}
+                    </span>
+                  </button>
                 </div>
               )}
 

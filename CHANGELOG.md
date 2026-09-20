@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.67] - 2026-09-20
+
+### Device Configurator Checkbox, Catalog Scope & 500-Product Retrieval
+- **Full 500-Product Catalog Retrieval**:
+  - Increased `rest_get_configurator_profiles` cap from 100 to 500 items, allowing all 297 store products to load completely.
+  - Solved missing Samsung Galaxy A54 (`#474343`) and other devices that were previously pushed outside the 100-item cutoff by newer merchandise drops.
+  - Enhanced search bar to match product names, slugs, and numeric SKUs (e.g. searching `474343` or `A54`).
+- **Product Configurator Post Meta Flag (`_is_configurator`)**:
+  - Added dedicated **Device Configurator** checkbox to the WooCommerce product edit screen (General tab).
+  - Implemented intelligent fallback evaluator (`is_product_configurator`): products with composable skin layers default to configurators, while drops with 0 layers (such as Heritage `#541934`, Sienna `#534063`, G.64 `#519190`, and Titanium+ Back Glass Kit `#537903`) are automatically excluded from the configurator catalog without manual database migration.
+- **REST Endpoint & 1-Click Toggle Controls**:
+  - Added REST endpoint `POST /configurator/toggle-configurator` for instantaneous toggling directly from Exacoat Manager.
+  - Added interactive status pills (`Configurator` vs `Excluded`) on product cards in the catalog grid and in the Fullscreen Studio top navigation bar.
+  - Added catalog scope toggle in Studio filter bar (`Configurators` vs `All Products`) to easily manage non-configurator store items.
+
 ## [0.0.64] - 2026-09-20
 
 ### Multi-Zone Free Shipping Threshold Persistence & 3-Zone Architecture Consolidation

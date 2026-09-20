@@ -208,3 +208,26 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Provides 1-click pruning of empty texture entries (`""`) from the option cache.
 - **Storefront Addon Synchronization**:
   Tablets with flat back skin cuts only (such as Xiaomi Pad models) must never offer "Add Side Frame Skin" in `addon-evaluator.ts`. Side wrap skins are reserved strictly for tablets and foldables with physical flat-edge vinyl cuts (such as iPad Pro models and Galaxy Tab S series).
+
+---
+
+## 14. Device Configurator Product Flag & Catalog Scope (`_is_configurator`)
+
+- **Non-Configurator Exclusion Invariant**:
+  Non-configurator catalog items (such as limited edition drops, merchandise, cases, standalone camera or back glass kits) must not pollute the Configurator Studio catalog or be scanned by asset integrity audits.
+- **Post Meta Storage**:
+  Configurator status is explicitly tracked in WooCommerce product post meta via `_is_configurator` (`'yes'` or `'no'`).
+- **WooCommerce Admin Integration**:
+  A dedicated checkbox labeled **Device Configurator** is added to the General tab in the WooCommerce product edit screen, allowing admins to toggle configurator status directly in WordPress.
+- **Intelligent Fallback Evaluator**:
+  When `_is_configurator` has not yet been explicitly saved on a legacy product:
+  - If the product contains composable skin layers (`layers_count > 0`), it defaults to active configurator (`true`).
+  - If the product contains 0 layers (such as Heritage, Sienna, G.64, and Back Glass Kits), it defaults to non-configurator (`false`).
+  This ensures real devices (e.g. Galaxy A54 `#474343`) are immediately discovered without requiring manual database migration.
+- **REST Toggling & Studio Controls**:
+  - Endpoint `POST /configurator/toggle-configurator` provides 1-click toggling from Exacoat Manager.
+  - Catalog cards and the Studio top bar display interactive status badges (`Configurator` vs `Excluded`).
+  - The catalog header provides a scope selector (`Configurators` vs `All Products`) and searches across names, slugs, and numeric SKUs (e.g. searching `474343` or `A54`).
+- **Catalog Pagination**:
+  `rest_get_configurator_profiles` accepts `per_page` up to `500` (or `per_page: -1`) to load the entire store catalog in a single request, eliminating the previous 100-item cutoff.
+
