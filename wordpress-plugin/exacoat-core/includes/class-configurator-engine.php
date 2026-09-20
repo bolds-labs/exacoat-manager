@@ -554,6 +554,13 @@ class Exacoat_Configurator_Engine {
 			'callback'            => [ __CLASS__, 'rest_revalidate_web' ],
 			'permission_callback' => [ __CLASS__, 'verify_permission' ],
 		] );
+
+		// 19. POST /configurator/composite/upload: Store rendered composite preview permanently in WordPress uploads
+		$register( '/configurator/composite/upload', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_upload_composite' ],
+			'permission_callback' => '__return_true',
+		] );
 	}
 
 
@@ -1219,6 +1226,73 @@ class Exacoat_Configurator_Engine {
 	}
 
 	/**
+	 * Permanently persist rendered configurator composite preview image into WordPress uploads/composites.
+	 */
+	public static function rest_upload_composite( WP_REST_Request $request ): WP_REST_Response {
+		$params = $request->get_json_params() ?: $request->get_params();
+		$raw_key = sanitize_text_field( $params['key'] ?? '' );
+		$data_url = $params['dataUrl'] ?? ( $params['data_url'] ?? '' );
+
+		if ( empty( $raw_key ) || empty( $data_url ) || ! is_string( $data_url ) ) {
+			return new WP_REST_Response( [
+				'success' => false,
+				'message' => 'Missing required key or dataUrl parameters.',
+			], 400 );
+		}
+
+		$clean_key = preg_replace( '/[^a-zA-Z0-9_-]/', '_', $raw_key );
+		$clean_key = substr( $clean_key, 0, 120 );
+
+		if ( ! preg_match( '/^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/', $data_url, $matches ) ) {
+			return new WP_REST_Response( [
+				'success' => false,
+				'message' => 'Invalid image data URL format.',
+			], 400 );
+		}
+
+		$ext = $matches[1] === 'jpeg' ? 'jpg' : $matches[1];
+		$image_binary = base64_decode( $matches[2] );
+		if ( ! $image_binary ) {
+			return new WP_REST_Response( [
+				'success' => false,
+				'message' => 'Failed to decode base64 image data.',
+			], 400 );
+		}
+
+		$upload_dir = wp_upload_dir();
+		$composites_dir = trailingslashit( $upload_dir['basedir'] ) . 'composites';
+		$composites_url = trailingslashit( $upload_dir['baseurl'] ) . 'composites';
+
+		if ( ! file_exists( $composites_dir ) ) {
+			wp_mkdir_p( $composites_dir );
+		}
+
+		$filename = $clean_key . '.' . $ext;
+		$filepath = trailingslashit( $composites_dir ) . $filename;
+		$file_saved = @file_put_contents( $filepath, $image_binary );
+
+		if ( false === $file_saved ) {
+			return new WP_REST_Response( [
+				'success' => false,
+				'message' => 'Could not write composite image file to disk.',
+			], 500 );
+		}
+
+		$public_url = trailingslashit( $composites_url ) . $filename;
+
+		$response = new WP_REST_Response( [
+			'success' => true,
+			'key'     => $clean_key,
+			'url'     => $public_url,
+		], 200 );
+
+		$response->header( 'Access-Control-Allow-Origin', '*' );
+		$response->header( 'Access-Control-Allow-Methods', 'POST, GET, OPTIONS' );
+
+		return $response;
+	}
+
+	/**
 	 * Convert legacy MKL product meta into modern Composable Device Profile
 	 */
 	public static function convert_mkl_to_profile( int $product_id ): array {
@@ -1277,6 +1351,7 @@ class Exacoat_Configurator_Engine {
 					'aspect_ratio'      => '1:1',
 					'canvas_dimensions' => [ 'width' => 1000, 'height' => 1000 ],
 					'background_url'    => '',
+					'texture_scale'     => 0.75,
 				];
 				$order_idx++;
 			}
@@ -1290,6 +1365,7 @@ class Exacoat_Configurator_Engine {
 				'aspect_ratio'      => '1:1',
 				'canvas_dimensions' => [ 'width' => 1000, 'height' => 1000 ],
 				'background_url'    => '',
+				'texture_scale'     => 0.75,
 			];
 		}
 
@@ -1477,7 +1553,7 @@ class Exacoat_Configurator_Engine {
 			'base_price'           => $base_price,
 			'currency'             => get_woocommerce_currency(),
 			'size_multiplier'      => $size_multiplier,
-			'texture_scale'        => 0.75,
+			'texture_scale'        => isset( $views[0]['texture_scale'] ) ? (float) $views[0]['texture_scale'] : 0.75,
 			'is_configurable'      => ! empty( $normalized_layers ),
 			'configurator_version' => 'v1',
 			'device_colors'        => [],
@@ -1572,7 +1648,7 @@ class Exacoat_Configurator_Engine {
 				'views_count'          => count( $profile_data['views'] ?? [] ),
 				'family'               => $profile_data['family'] ?? 'phone',
 				'size_multiplier'      => $profile_data['size_multiplier'] ?? 1.0,
-				'texture_scale'        => isset( $profile_data['texture_scale'] ) ? (float) $profile_data['texture_scale'] : 0.75,
+				'texture_scale'        => isset( $profile_data['views'][0]['texture_scale'] ) ? (float) $profile_data['views'][0]['texture_scale'] : ( isset( $profile_data['texture_scale'] ) ? (float) $profile_data['texture_scale'] : 0.75 ),
 				'last_audited_at'      => ! empty( $last_audited ) ? $last_audited : null,
 				'audit_status'         => ! empty( $audit_status ) ? $audit_status : 'unaudited',
 				'audit_issues'         => $audit_issues,
@@ -2075,6 +2151,9 @@ class Exacoat_Configurator_Engine {
 				$cart_item_data['exacoat_custom_price'] = $custom_price;
 			}
 		}
+		if ( ! empty( $_POST['exacoat_custom_image'] ) ) {
+			$cart_item_data['exacoat_custom_image'] = esc_url_raw( wp_unslash( $_POST['exacoat_custom_image'] ) );
+		}
 		return $cart_item_data;
 	}
 
@@ -2110,6 +2189,13 @@ class Exacoat_Configurator_Engine {
 					$item->add_meta_data( sanitize_text_field( $addon['label'] ), sanitize_text_field( $addon['value'] ), true );
 				}
 			}
+		}
+		if ( ! empty( $values['exacoat_custom_image'] ) ) {
+			$img_url = esc_url_raw( $values['exacoat_custom_image'] );
+			$item->add_meta_data( '_configured_image_url', $img_url, true );
+			$item->add_meta_data( '_configurator_image', $img_url, true );
+			$item->add_meta_data( '_thumbnail_url', $img_url, true );
+			$item->add_meta_data( 'image_url', $img_url, true );
 		}
 	}
 

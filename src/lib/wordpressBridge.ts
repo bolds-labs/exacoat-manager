@@ -2538,7 +2538,7 @@ export async function fetchConfiguratorProfilesDirect(params?: {
           views_count: modern?.views?.length || angles.length || 1,
           family,
           size_multiplier,
-          texture_scale: modern?.texture_scale ?? 0.75,
+          texture_scale: modern?.views?.[0]?.texture_scale ?? modern?.texture_scale ?? 0.75,
         };
       });
 

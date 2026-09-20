@@ -3471,7 +3471,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                       {/* Scale */}
                       <td className="py-3 px-3 text-center font-mono text-[11px] text-zinc-300">
-                        {Math.round(((p.texture_scale !== undefined ? p.texture_scale : 0.75)) * 100)}%
+                        {Math.round((((p as any).views?.[0]?.texture_scale ?? p.texture_scale ?? 0.75)) * 100)}%
                       </td>
 
                       {/* Price */}
@@ -5612,7 +5612,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   zIndex={(l.z_index || 1) + 5}
                                   layerName={l.name}
                                   textureRotation={l.texture_rotation ?? 0}
-                                  textureScale={editingProfile.texture_scale ?? l.texture_scale ?? 0.75}
+                                  textureScale={currentView?.texture_scale ?? editingProfile.texture_scale ?? l.texture_scale ?? 0.75}
                                 />
                               );
                             }
@@ -6109,55 +6109,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         {/* TAB 2: SKIN PARTS & TEXTURES */}
                         {inspectorTab === 'skins' && (
                           <div className="space-y-6">
-                            {/* Device Master Texture Scale Card */}
-                            {editingProfile.configurator_version === 'v2' && (
-                              <div className="p-4 rounded-xl bg-zinc-950/80 border border-sky-500/30 shadow-lg space-y-3">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2.5">
-                                    <div className="w-7 h-7 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center">
-                                      <Maximize2 className="w-3.5 h-3.5 text-sky-400" />
-                                    </div>
-                                    <div>
-                                      <div className="flex items-center gap-2">
-                                        <h4 className="text-xs font-bold text-white">Device Texture Zoom / Scale</h4>
-                                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 font-bold border border-sky-500/30">
-                                          {Math.round(((editingProfile.texture_scale ?? 0.75)) * 100)}%
-                                          {(editingProfile.texture_scale ?? 0.75) === 0.75 ? ' (Default)' : ''}
-                                        </span>
-                                      </div>
-                                      <p className="text-[11px] text-zinc-400">
-                                        Universal texture scale applied across all skin parts on this device.
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => setEditingProfile({ ...editingProfile, texture_scale: 0.75 })}
-                                    className="text-[10px] font-mono text-zinc-400 hover:text-white px-2 py-1 rounded bg-white/5 hover:bg-white/10 transition-colors border border-white/10 cursor-pointer"
-                                    title="Reset to 75% default"
-                                  >
-                                    Reset 75%
-                                  </button>
-                                </div>
-                                <div className="flex items-center gap-3 pt-1">
-                                  <span className="text-[10px] font-mono text-zinc-500">50%</span>
-                                  <input
-                                    type="range"
-                                    min="50"
-                                    max="150"
-                                    step="5"
-                                    value={Math.round(((editingProfile.texture_scale ?? 0.75)) * 100)}
-                                    onChange={(e) => {
-                                      const val = Number(e.target.value) / 100;
-                                      setEditingProfile({ ...editingProfile, texture_scale: val });
-                                    }}
-                                    className="w-full accent-sky-400 cursor-pointer h-2 bg-zinc-800 rounded-lg appearance-none"
-                                  />
-                                  <span className="text-[10px] font-mono text-zinc-500">150%</span>
-                                </div>
-                              </div>
-                            )}
-
                             {/* Skin Parts Header & Hierarchy Controls */}
                             <div className="space-y-3">
                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
@@ -7416,6 +7367,46 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                           className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-sky-400"
                                         />
                                       </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Angle Texture Zoom / Scale Card */}
+                                  <div className="space-y-3 bg-black/30 p-3.5 rounded-xl border border-white/5">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs font-bold text-zinc-200">Angle Texture Zoom / Scale</span>
+                                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 font-bold border border-sky-500/30">
+                                          {Math.round(((currentView.texture_scale ?? 0.75)) * 100)}%
+                                          {(currentView.texture_scale ?? 0.75) === 0.75 ? ' (Default)' : ''}
+                                        </span>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSetViewField(currentView.id, 'texture_scale', 0.75)}
+                                        className="text-[10px] font-mono text-zinc-400 hover:text-white px-2 py-1 rounded bg-white/5 hover:bg-white/10 transition-colors border border-white/10 cursor-pointer"
+                                        title="Reset to 75% default"
+                                      >
+                                        Reset 75%
+                                      </button>
+                                    </div>
+                                    <p className="text-[11px] text-zinc-400">
+                                      Custom texture pattern scale for this viewing angle (accounts for different zoom/POV).
+                                    </p>
+                                    <div className="flex items-center gap-3 pt-1">
+                                      <span className="text-[10px] font-mono text-zinc-500">50%</span>
+                                      <input
+                                        type="range"
+                                        min="50"
+                                        max="150"
+                                        step="5"
+                                        value={Math.round(((currentView.texture_scale ?? 0.75)) * 100)}
+                                        onChange={(e) => {
+                                          const val = Number(e.target.value) / 100;
+                                          handleSetViewField(currentView.id, 'texture_scale', val);
+                                        }}
+                                        className="w-full accent-sky-400 cursor-pointer h-2 bg-zinc-800 rounded-lg appearance-none"
+                                      />
+                                      <span className="text-[10px] font-mono text-zinc-500">150%</span>
                                     </div>
                                   </div>
                                 </div>

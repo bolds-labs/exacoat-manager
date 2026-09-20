@@ -484,6 +484,7 @@ export interface ConfiguratorView {
   shadow_opacity?: number;
   highlight_opacity?: number;
   legacy_id?: number;
+  texture_scale?: number;
 }
 
 export interface ConfiguratorLayer {

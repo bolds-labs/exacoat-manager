@@ -728,3 +728,26 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - **Logo Cutout**: Header preview buttons (`Cutout / Solid`) and bottom checkbox are replaced with an iOS-style toggle switch for "Buyer Choice on Webstore".
   - **Custom / Stylus Cutout**: Hidden by default for devices without a stylus or custom hardware cutout. Operators click `+ Add Custom Cutout` to reveal the section. When active, it features an iOS-style toggle switch and a delete button to clear and hide it.
   - **Model Coverage**: Replaced preview buttons with an iOS-style toggle switch for "Buyer Choice on Webstore". Removed `None (Flat Cut)` from coverage mode selection. Toggling off sets `coverage_type = 'none'`.
+
+---
+
+## 42. v2 Configured Composite Generation, Permanent WordPress Upload, View Texture Scale & Meta Standardization
+
+- **v2 Client-Side Composite Image Generation Invariant**:
+  - In v2, the configurator renders composite canvas images on-the-fly during "Add to Cart" or configuration completion.
+  - Draws the hardware base chassis (Layer 0), then for each active skin layer: rotates and scales master textures according to the view's framing, applies alpha masks with `ctx.globalCompositeOperation = 'destination-in'`, punches logo/stylus/model cutouts using `ctx.globalCompositeOperation = 'destination-out'`, and layers raytraced shading (`multiply` shadows and `screen` highlights).
+  - Exported as a high-quality PNG data URL (`canvas.toDataURL('image/png', 0.92)`).
+- **Permanent Composite Upload Invariant (`/composite/upload`)**:
+  - Passing relative URLs (such as `/api/configurator/composite?key=...`) breaks external consumers including transactional emails, invoices, and Exacoat Manager order views running on separate origins (`manager.exacoat.com`), and breaks on serverless container restarts.
+  - The storefront uploads the composite directly to WordPress via `POST /wp-json/exacoat-core/v1/composite/upload`. The WordPress backend writes the PNG to `wp-content/uploads/composites/{key}.png` via `wp_upload_dir()` and returns a permanent, immutable absolute URL (`https://staging.exacoat.com/wp-content/uploads/composites/...`).
+  - Saved to WooCommerce cart and order line items as `_configured_image_url`, `_configurator_image`, `_thumbnail_url`, and `image_url` on both `/?wc-ajax=add_to_cart` and post-checkout `PUT /orders/{id}` updates.
+- **View-Level Texture Scaling (`view.texture_scale`)**:
+  - Different viewing angles (such as Back, Front, Side, Folded) have different framing, camera distances, and POV.
+  - Moved `texture_scale` from the device level to the `ConfiguratorView` level (`view.texture_scale ?? 0.75`).
+  - Studio provides a Texture Zoom / Scale slider on each view card in the Views / Angles tab.
+  - Studio catalog table displays the primary view scale percentage (`(p.views?.[0]?.texture_scale ?? p.texture_scale ?? 0.75) * 100%`).
+- **Standardized Cart & Order Line-Item Meta Formatting**:
+  - Model Cut metadata is strictly formatted as `"Model Cut"` (all trailing explanations like `(Back only)` are stripped).
+  - Logo Cutout metadata is cleanly formatted as `"With Logo Cutout"` or `"No Logo Cutout"`.
+  - Order details, mini bag, and invoices render the true configured skin composite instead of falling back to the bare device.
+

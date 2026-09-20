@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.86] - 2026-09-21
+
+### v2 Configured Composite Generation, Permanent WordPress Upload, View-Level Texture Scale & Order Meta Standardization
+- **v2 Configured Skins Composite Image Generation**:
+  - Rendered complete photorealistic v2 composite images on client canvas during add-to-cart, combining hardware chassis, master textures, alpha masks, cutout punching, and raytraced shading.
+  - Persisted configured composite images across mini bag, checkout review, transactional emails, and Exacoat Manager order details, preventing bare device fallbacks.
+- **Permanent WordPress Composite Upload Endpoint**:
+  - Added `POST /wp-json/exacoat-core/v1/composite/upload` endpoint in `class-configurator-engine.php` to persist composite PNGs to `wp-content/uploads/composites/`.
+  - Replaced transient relative URLs with permanent, immutable CDN-backed absolute URLs with CORS headers.
+- **View-Level Texture Scale**:
+  - Relocated texture scale to the view/angle level (`view.texture_scale`) to account for differing POV, camera framing, and zoom across device angles.
+  - Added dedicated Texture Zoom / Scale slider to each view card in the Views / Angles tab.
+  - Updated catalog table to display primary view scale percentage.
+- **Order Line-Item Meta Standardization**:
+  - Cleaned Model Cut choice name to strictly `"Model Cut"` (stripping `(Back only)` explanations).
+  - Standardized Logo Cutout to `"With Logo Cutout"` or `"No Logo Cutout"`.
+
 ## [0.0.85] - 2026-09-21
 
 ### Device-Level Texture Scale, Persistent Hardware Chassis & Cutouts Switch UI Overhaul
