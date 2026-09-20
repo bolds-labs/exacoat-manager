@@ -645,9 +645,37 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - In `device-skin-configurator.tsx`, `hasLogoCutoutOption` must check `data.v2Profile.coverage_and_cutouts.logo_cutout_mask_url`, `currentView.logo_cutout_mask_url`, and `layer.assets_by_view.*.logo_cutout_url`.
   - Checking only `has_logo_cutout` on legacy profiles causes false negatives when the flag is undefined even though cutout mask assets exist.
 
-- **Configurator Sidebar Hierarchy (Skins First, Coverage & Cutouts at Bottom)**:
-  - The customer workflow in `device-skin-configurator.tsx` renders skin selection accordions (`interactiveLayers.map(...)` for Back Skin, Additional Camera & Back Glass, etc.) first.
-  - Hardware coverage (Model Cut vs Model 360) and cutout toggles (Logo Cutout, Pencil Cutout, Custom Hardware Cutouts) are positioned at the bottom of the sidebar beneath all skin part accordions.
+
+---
+
+## 40. 3D Canvas Shading Stacking Context, Collapsed Accordions, and Responsive Cutout Cards
+
+- **CSS Stacking Context Isolation in 3D Canvas Shading**:
+  - Never wrap elements using `mix-blend-mode: multiply` inside a `<div>` with `opacity` or `transition: opacity`.
+  - In CSS specifications, any element with `opacity` or CSS opacity transition creates an isolated stacking context. When a child `<img>` applies `mix-blend-mode: multiply`, it blends only within its local stacking context against a transparent background, causing the browser to render `iPhone-17-Pro-Skins-Matte-White.png` as a solid opaque image covering the entire phone.
+  - Render shading `<img>` elements directly as children in the composite canvas container using `<Fragment>`, identical to `ConfiguratorStudioPage.tsx`.
+  - Opacity and bare device transitions must be applied directly to the `<img>` element style (`opacity: isPeekingBareDevice ? 0 : shadowOpacity`).
+  - Strictly check `typeof currentView.highlight_opacity === "number"` so that `highlight_opacity = 0` is strictly honored and the highlight image is omitted.
+
+- **Collapsed Accordion Architecture for Coverage and Cutouts (v1 Parity)**:
+  - Model Coverage, Logo Cutout, and Stylus Cutout are collapsible accordions using virtual IDs (`COVERAGE_ACCORDION_ID = 999900`, `LOGO_ACCORDION_ID = 999901`, `PENCIL_ACCORDION_ID = 999902`).
+  - Default state initializes to `interactiveLayers[0]?.id` (Back Skin), ensuring Coverage and Cutouts start cleanly collapsed matching v1 storefront behavior.
+  - Clicking any header toggles smooth height and opacity transitions matching primary skin layer accordions.
+
+- **Responsive Card Layout and Direct Desktop Descriptions**:
+  - Radio cards inside Coverage and Cutouts have comfortable height and breathing room (`p-3.5 sm:p-4 rounded-xl`).
+  - Desktop view (`sm:`): Display description text directly beneath the title (`hidden sm:block text-[11px] text-neutral-400 pl-6`). No `(i)` tooltip button is shown on desktop.
+  - Mobile view: Compact card with `(i)` button (`sm:hidden`) that toggles an animated drawer, preserving compact mobile scrolling.
+  - Choice titles use `whitespace-nowrap` instead of `truncate` to prevent awkward truncation such as `Model...`.
+
+- **Monochrome Neutral Badges**:
+  - Feature badges (`Case-Friendly`, `Full Protection`, `Logo Exposed`, `Full Coverage`) use neutral monochrome styling (`border-white/10 bg-white/[0.05] text-neutral-400 font-mono text-[8px] sm:text-[8.5px]`), eliminating distracting amber/primary colors.
+
+- **Unclipped Thumbnail Custom Tag ('NEW')**:
+  - Rendered on the outer capsule container rather than inside the `overflow-hidden` rounded div, preventing the capsule border from clipping custom badges.
+  - Positioned top center (`-top-1.5 left-1/2 -translate-x-1/2 z-20`) with slightly larger sizing (`text-[7.5px] sm:text-[8px] px-2 py-[1.5px] font-bold font-mono`).
+  - Swatch containers provide `pt-2` headroom so badges never clip against carousel edges or category headers.
+
 
 
 
