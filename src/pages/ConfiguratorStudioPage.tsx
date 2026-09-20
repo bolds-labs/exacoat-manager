@@ -2757,6 +2757,15 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     >
                       {(p.configurator_version || 'v1') === 'v2' ? 'v2 Modern' : 'v1 Legacy'}
                     </span>
+
+                    {p.status === 'draft' && (
+                      <span
+                        className="text-[10px] font-sans px-2 py-0.5 rounded-full border uppercase tracking-wider font-bold bg-amber-500/15 text-amber-300 border-amber-500/40"
+                        title="Product is currently in Draft status (unpublished on webstore)"
+                      >
+                        Draft
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -3592,6 +3601,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     </span>
                   </div>
                 </label>
+
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-2.5">
+                  <span className="text-[11px] font-sans text-amber-200 leading-relaxed">
+                    <strong className="text-amber-300 font-semibold">Status: Draft</strong>. Duplicated product will be created in Draft status. Featured image, gallery, descriptions, menu order, categories, and tags are preserved.
+                  </span>
+                </div>
               </div>
 
               <div className="pt-3 border-t border-white/10 flex items-center justify-end gap-3">
@@ -5572,6 +5587,56 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                             {/* Base Price & Scale */}
                             <div className="p-4 rounded-2xl bg-zinc-900/70 border border-white/10 space-y-4">
+                              {/* Product Publication Status */}
+                              <div>
+                                <label className="block text-xs font-bold text-zinc-300 mb-1.5">
+                                  Storefront Publication Status
+                                </label>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setEditingProfile({
+                                        ...editingProfile,
+                                        status: 'draft',
+                                      })
+                                    }
+                                    className={clsx(
+                                      'px-3 py-2 text-xs font-sans font-medium rounded-xl border flex items-center justify-center gap-2 transition-all cursor-pointer',
+                                      (editingProfile.status || 'publish') === 'draft'
+                                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm'
+                                        : 'bg-zinc-950/60 text-zinc-400 border-white/10 hover:text-white hover:bg-zinc-900'
+                                    )}
+                                  >
+                                    <span className="w-2 h-2 rounded-full bg-amber-400" />
+                                    <span>Draft (Unpublished)</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setEditingProfile({
+                                        ...editingProfile,
+                                        status: 'publish',
+                                      })
+                                    }
+                                    className={clsx(
+                                      'px-3 py-2 text-xs font-sans font-medium rounded-xl border flex items-center justify-center gap-2 transition-all cursor-pointer',
+                                      (editingProfile.status || 'publish') === 'publish'
+                                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
+                                        : 'bg-zinc-950/60 text-zinc-400 border-white/10 hover:text-white hover:bg-zinc-900'
+                                    )}
+                                  >
+                                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                                    <span>Published (Live)</span>
+                                  </button>
+                                </div>
+                                <p className="text-[11px] text-zinc-500 mt-1">
+                                  {(editingProfile.status || 'publish') === 'draft'
+                                    ? 'Hidden from live webstore. Editable here in Studio until published.'
+                                    : 'Live and discoverable on web.exacoat.com for customer checkout.'}
+                                </p>
+                              </div>
+
                               <div>
                                 <label className="block text-xs font-bold text-zinc-300 mb-1.5">Base Price (IDR)</label>
                                 <input

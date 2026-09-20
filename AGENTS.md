@@ -345,3 +345,28 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **Multi-Part Independent Testing Invariant**:
   Configurator Studio provides an interactive live simulator dock below the viewport. Operators can test combinations of different finishes simultaneously across separate skin parts (e.g. Swarm back, Matte Black camera, Emerald Green accents), toggle Logo Cutouts and Coverage choices, and verify calculated prices with size multipliers in real time.
 
+---
+
+## 23. Configurator Product Duplication & Storefront Discovery Architecture
+
+- **Duplication Draft Status Invariant**:
+  When duplicating a device configurator in Studio (`rest_duplicate_product`), the new duplicate product MUST strictly be created in `'draft'` status (`$new_product->set_status( 'draft' )` and `wp_update_post( [ 'ID' => $new_pid, 'post_status' => 'draft' ] )`). Duplicated products must never be automatically published to prevent unfinished configurations from leaking into the live webstore.
+- **Complete Asset & Metadata Fidelity**:
+  Duplication must faithfully preserve:
+  1. Featured Image (`_thumbnail_id` via `$source_product->get_image_id()`)
+  2. Product Gallery (`_product_image_gallery` via `$source_product->get_gallery_image_ids()`)
+  3. Short Description (`post_excerpt`) and Full Description (`post_content`)
+  4. Menu Order (`menu_order`)
+  5. Product Categories (`product_cat`) and Product Tags (`product_tag`)
+  6. Configurator Meta (`_is_configurator`, `_device_family`, `_size_multiplier`, `_configurator_version`)
+  7. Composable JSON Profile (`_exacoat_configurator_profile` with `wp_slash( wp_json_encode( $profile ) )`)
+- **Fresh Audit Stamp Reset**:
+  Duplicate products must have legacy audit timestamps cleared (`delete_post_meta` for `_configurator_last_audited`, `_configurator_audit_status`, `_configurator_audit_issues`) so new duplicates start clean in `unaudited` status.
+- **Studio Draft Visibility & Inspector Status Control**:
+  - `rest_get_configurator_profiles` queries `'post_status' => [ 'publish', 'draft' ]` and returns `status` in the profile summary.
+  - Studio catalog displays an amber `[Draft]` badge on draft product cards.
+  - Studio Inspector Settings tab provides a 1-click **Storefront Publication Status** toggle (`Draft` vs `Published`). Saving the profile persists the status directly to WooCommerce.
+- **Next.js Storefront ISR & Cache Architecture (`web.exacoat.com`)**:
+  - Storefront fetches use `next: { revalidate: 3600 }` (1-hour cache). Products published in WordPress will not appear on the storefront until the cache expires or on-demand revalidation (`/api/revalidate`) is triggered.
+  - Storefront queries products by explicit numeric category IDs (`CATEGORY_CONFIG`). Products must have the matching category ID assigned and `catalog_visibility` set to `'visible'` or `'catalog'`.
+

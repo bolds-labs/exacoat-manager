@@ -2446,6 +2446,7 @@ export async function fetchConfiguratorProfilesDirect(params?: {
           product_id: p.id,
           name: p.name,
           slug: p.slug,
+          status: p.status || 'publish',
           price: Number(p.price) || 0,
           categories: (p.categories || []).map((c: any) => c.name),
           is_migrated: Boolean(modernRaw),

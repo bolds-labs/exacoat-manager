@@ -553,6 +553,7 @@ export interface DeviceConfiguratorProfile {
   layers: ConfiguratorLayer[];
   variants?: ConfiguratorVariant[];
   coverage_and_cutouts?: DeviceCoverageAndCutouts;
+  status?: 'publish' | 'draft' | string;
   updated_at?: string;
 }
 
@@ -560,6 +561,7 @@ export interface ConfiguratorProfileSummary {
   product_id: number;
   name: string;
   slug: string;
+  status?: 'publish' | 'draft' | string;
   price: number;
   categories: string[];
   is_migrated: boolean;

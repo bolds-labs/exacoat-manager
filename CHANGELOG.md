@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.73] - 2026-09-20
+
+### Configurator Duplication Draft Invariant, Full Asset Preservation & Storefront Status Control
+- **Duplication Draft Status Invariant**:
+  - Duplicated configurator products (`rest_duplicate_product`) are now strictly created in `draft` status (both via WooCommerce product status and `wp_posts.post_status`).
+  - Duplicated devices are never published automatically, preventing unfinished configurations from leaking into the live webstore.
+- **Complete Asset & Metadata Fidelity**:
+  - Featured Image (`_thumbnail_id`) and Product Gallery (`_product_image_gallery`) are faithfully duplicated from the source product.
+  - Short Description (`post_excerpt`), Full Description (`post_content`), and Menu Order (`menu_order`) are fully copied.
+  - Product Categories (`product_cat`) and Tags (`product_tag`) are assigned to the new product.
+  - Configurator flags (`_is_configurator`, `_device_family`, `_size_multiplier`, `_configurator_version`) and full composable JSON profile (`_exacoat_configurator_profile`) are preserved using `wp_slash(wp_json_encode())`.
+  - Audit timestamps on duplicate products are cleared to start fresh in `unaudited` status.
+- **Studio Draft Visibility & Inspector Status Control**:
+  - `rest_get_configurator_profiles` now queries both `publish` and `draft` post statuses so operators can immediately view and edit draft products in Configurator Studio.
+  - Product cards display an amber `[Draft]` badge when in draft status.
+  - Added a 1-click Storefront Publication Status selector (`Draft` vs `Published`) in the Studio Inspector Settings tab, allowing operators to publish directly to WooCommerce when editing is complete.
+  - Duplicate modal features an informative note confirming draft status and asset preservation.
+
 ## [0.0.72] - 2026-09-20
 
 ### Decoupled View Shading, Dynamic Coverage & Multi-Part Live Studio Configurator Simulator

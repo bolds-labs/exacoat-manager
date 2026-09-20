@@ -1326,7 +1326,7 @@ class Exacoat_Configurator_Engine {
 
 		$args = [
 			'post_type'      => 'product',
-			'post_status'    => 'publish',
+			'post_status'    => [ 'publish', 'draft' ],
 			'posts_per_page' => $per_page,
 			'paged'          => $page,
 			'orderby'        => 'ID',
@@ -1381,6 +1381,7 @@ class Exacoat_Configurator_Engine {
 				'product_id'           => $pid,
 				'name'                 => $product ? $product->get_name() : $p->post_title,
 				'slug'                 => $product ? $product->get_slug() : $p->post_name,
+				'status'               => $product ? $product->get_status() : $p->post_status,
 				'price'                => $product ? (float) $product->get_price() : 0,
 				'categories'           => $cats,
 				'is_migrated'          => $is_migrated,
@@ -1441,6 +1442,11 @@ class Exacoat_Configurator_Engine {
 			$profile = self::convert_mkl_to_profile( $product_id );
 		}
 
+		$product = wc_get_product( $product_id );
+		if ( $profile && is_array( $profile ) && $product ) {
+			$profile['status'] = $product->get_status();
+		}
+
 		return rest_ensure_response( [
 			'success'  => true,
 			'profile'  => $profile,
@@ -1491,6 +1497,20 @@ class Exacoat_Configurator_Engine {
 				update_post_meta( $product_id, '_regular_price', $new_price );
 				update_post_meta( $product_id, '_price', $new_price );
 			}
+		}
+
+		// Sync product status (publish / draft) if provided
+		if ( ! empty( $params['status'] ) && in_array( $params['status'], [ 'publish', 'draft' ], true ) ) {
+			$product = wc_get_product( $product_id );
+			if ( $product ) {
+				$product->set_status( $params['status'] );
+				$product->save();
+			}
+			wp_update_post( [
+				'ID'          => $product_id,
+				'post_status' => $params['status'],
+			] );
+			$profile['status'] = $params['status'];
 		}
 
 		if ( class_exists( 'Exacoat_Logger' ) ) {
@@ -1620,6 +1640,10 @@ class Exacoat_Configurator_Engine {
 			$new_slug = sanitize_title( $new_name );
 		}
 
+		$short_desc = $source_product->get_short_description();
+		$long_desc  = $source_product->get_description();
+		$menu_order = (int) $source_product->get_menu_order();
+
 		$new_product = null;
 		if ( function_exists( 'wc_duplicate_product' ) ) {
 			$new_product = wc_duplicate_product( $source_product );
@@ -1631,8 +1655,10 @@ class Exacoat_Configurator_Engine {
 				'post_title'   => $new_name,
 				'post_name'    => $new_slug,
 				'post_type'    => 'product',
-				'post_status'  => 'publish',
-				'post_content' => $source_product->get_description(),
+				'post_status'  => 'draft',
+				'post_content' => $long_desc,
+				'post_excerpt' => $short_desc,
+				'menu_order'   => $menu_order,
 			] );
 
 			if ( is_wp_error( $new_pid ) ) {
@@ -1649,14 +1675,52 @@ class Exacoat_Configurator_Engine {
 		$new_pid = $new_product->get_id();
 		$new_product->set_name( $new_name );
 		$new_product->set_slug( $new_slug );
-		$new_product->set_status( 'publish' );
+		// Status must strictly be draft
+		$new_product->set_status( 'draft' );
 
+		// Set descriptions and menu order
+		if ( ! empty( $short_desc ) ) {
+			$new_product->set_short_description( $short_desc );
+		}
+		if ( ! empty( $long_desc ) ) {
+			$new_product->set_description( $long_desc );
+		}
+		$new_product->set_menu_order( $menu_order );
+
+		// Duplicate Featured Image (_thumbnail_id)
+		$source_thumb_id = (int) $source_product->get_image_id();
+		if ( $source_thumb_id > 0 ) {
+			$new_product->set_image_id( $source_thumb_id );
+			update_post_meta( $new_pid, '_thumbnail_id', $source_thumb_id );
+		}
+
+		// Duplicate Product Gallery (_product_image_gallery)
+		$source_gallery = $source_product->get_gallery_image_ids();
+		if ( ! empty( $source_gallery ) ) {
+			$new_product->set_gallery_image_ids( $source_gallery );
+			update_post_meta( $new_pid, '_product_image_gallery', implode( ',', $source_gallery ) );
+		}
+
+		// Set price
 		$price_to_set = ( $new_price !== null && $new_price > 0 ) ? $new_price : (float) $source_product->get_price();
 		if ( $price_to_set > 0 ) {
 			$new_product->set_regular_price( $price_to_set );
 			$new_product->set_price( $price_to_set );
 		}
+
+		// Set catalog visibility
+		$new_product->set_catalog_visibility( $source_product->get_catalog_visibility() );
+
 		$new_product->save();
+
+		// Explicitly ensure post status is draft in wp_posts
+		wp_update_post( [
+			'ID'           => $new_pid,
+			'post_status'  => 'draft',
+			'post_excerpt' => $short_desc,
+			'post_content' => $long_desc,
+			'menu_order'   => $menu_order,
+		] );
 
 		update_post_meta( $new_pid, '_regular_price', $price_to_set );
 		update_post_meta( $new_pid, '_price', $price_to_set );
@@ -1666,6 +1730,34 @@ class Exacoat_Configurator_Engine {
 		if ( ! empty( $source_cats ) && ! is_wp_error( $source_cats ) ) {
 			wp_set_post_terms( $new_pid, $source_cats, 'product_cat' );
 		}
+
+		// Copy Tags
+		$source_tags = wp_get_post_terms( $source_id, 'product_tag', [ 'fields' => 'ids' ] );
+		if ( ! empty( $source_tags ) && ! is_wp_error( $source_tags ) ) {
+			wp_set_post_terms( $new_pid, $source_tags, 'product_tag' );
+		}
+
+		// Copy Configurator Post Meta Flags & Family
+		$is_cfg = get_post_meta( $source_id, self::CONFIGURATOR_FLAG_META_KEY, true );
+		update_post_meta( $new_pid, self::CONFIGURATOR_FLAG_META_KEY, ! empty( $is_cfg ) ? $is_cfg : 'yes' );
+
+		$family = get_post_meta( $source_id, '_device_family', true );
+		if ( $family ) {
+			update_post_meta( $new_pid, '_device_family', $family );
+		}
+		$size_mult = get_post_meta( $source_id, '_size_multiplier', true );
+		if ( $size_mult ) {
+			update_post_meta( $new_pid, '_size_multiplier', $size_mult );
+		}
+		$cfg_ver = get_post_meta( $source_id, '_configurator_version', true );
+		if ( $cfg_ver ) {
+			update_post_meta( $new_pid, '_configurator_version', $cfg_ver );
+		}
+
+		// Clean audit stamps so duplicate product starts fresh as unaudited
+		delete_post_meta( $new_pid, self::AUDIT_TIME_META_KEY );
+		delete_post_meta( $new_pid, self::AUDIT_STATUS_META_KEY );
+		delete_post_meta( $new_pid, self::AUDIT_ISSUES_META_KEY );
 
 		// Copy Configurator Profile if requested
 		if ( $copy_configurator ) {
@@ -1680,10 +1772,12 @@ class Exacoat_Configurator_Engine {
 				$profile['product_id'] = $new_pid;
 				$profile['device_name'] = $new_name;
 				$profile['device_slug'] = $new_slug;
+				$profile['status'] = 'draft';
 				if ( $price_to_set > 0 ) {
 					$profile['base_price'] = $price_to_set;
 				}
-				update_post_meta( $new_pid, self::PROFILE_META_KEY, wp_json_encode( $profile ) );
+				// Note: Always use wp_slash(wp_json_encode()) to prevent unslashing corruption
+				update_post_meta( $new_pid, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile ) ) );
 			}
 
 			// Copy legacy MKL metadata for backward compatibility
@@ -1696,7 +1790,7 @@ class Exacoat_Configurator_Engine {
 		}
 
 		if ( class_exists( 'Exacoat_Logger' ) ) {
-			Exacoat_Logger::log( 'info', 'configurator', "Product duplicated: #{$source_id} to #{$new_pid} ({$new_name})" );
+			Exacoat_Logger::log( 'info', 'configurator', "Product duplicated: #{$source_id} to #{$new_pid} ({$new_name}) in draft status" );
 		}
 
 		return rest_ensure_response( [
@@ -1705,7 +1799,8 @@ class Exacoat_Configurator_Engine {
 			'name'       => $new_name,
 			'slug'       => $new_slug,
 			'price'      => $price_to_set,
-			'message'    => "Product duplicated successfully as #{$new_pid} ({$new_name})",
+			'status'     => 'draft',
+			'message'    => "Product duplicated successfully as draft #{$new_pid} ({$new_name})",
 		] );
 	}
 
