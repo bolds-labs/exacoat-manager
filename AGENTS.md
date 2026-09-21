@@ -1070,10 +1070,16 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Presets Modal (`presets-modal.tsx`) features a dedicated subtitle under "Shop the Look" explaining its purpose ("Curated finish combinations designed for this device").
   - Device render containers use a clean, transparent canvas without heavy dark gradient background boxes or borders, letting the device and its drop shadow float naturally on the card surface.
   - Distracting yellow block badges are replaced with an understated frosted glass capsule featuring a glowing micro dot indicator (amber for POPULAR, emerald for STAFF PICK) and normal-weight Chakra Petch micro typography.
+  - Badges and Specs triggers are pinned directly to the outer card corners (`absolute top-2.5 left-2.5 right-2.5 z-20 flex items-center justify-between pointer-events-none`) with top padding on the image container so they never overlay or obscure the device CAD render.
 
-- **Interactive Configuration Tooltip Architecture**:
-  - Each preset card provides an interactive configuration popover / tooltip accessible via hover and tap.
-  - Transparently breaks down every customized layer and finish name, coverage wrap style (`360° Wrap` vs `Precision Cut`), and logo cutout state (`Apple Cutout` vs `Covered`).
+- **Interactive Configuration Specs Popover Architecture (Click-Only & True Data)**:
+  - **Click-Only Invariant**: Specs popovers are strictly click-only and never trigger on hover (`activeTooltipPresetId === preset.id`). Operators can toggle via the Specs button, dismiss via the dedicated close `(X)` button, or tap the card canvas.
+  - **Dynamic True Data Brand Invariant**: Logo cutout text is never hardcoded. Device brand is dynamically evaluated from product name and profile (e.g. `Apple`, `Samsung`, `Google`, `Xiaomi`).
+  - **Capability Guard Invariant**:
+    - If the device lacks logo cutout support (`!hasLogoCutoutOption`), the logo row is completely omitted.
+    - If supported: displays `preset.logo_cutout ? (brand ? "${brand} Cutout" : "With Cutout") : "Covered"`.
+    - If the device lacks coverage choices (`!hasModelCoverageOption`), the coverage badge is omitted.
+
 
 
 
