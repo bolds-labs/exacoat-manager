@@ -25,6 +25,11 @@ import {
   toggleFinishActiveDirect,
   extractShadingDirect,
   revalidateStorefrontWebDirect,
+  FinishGroupSetting,
+  ConfiguratorPreset,
+  saveFinishGroupSettingsDirect,
+  fetchConfiguratorPresetsDirect,
+  saveConfiguratorPresetsDirect,
 } from '../lib/wordpressBridge';
 import {
   DeviceConfiguratorProfile,
@@ -42,7 +47,8 @@ import {
   AlertTriangle,
   Plus,
   RefreshCw,
-  Sparkles,
+  Compass,
+  SlidersHorizontal,
   Smartphone,
   Laptop,
   Tablet,
@@ -505,6 +511,13 @@ export const ConfiguratorStudioPage: React.FC = () => {
     currentUrl: '',
   });
   const [storedFinishGroups, setStoredFinishGroups] = useState<string[]>([]);
+  const [finishGroupSettings, setFinishGroupSettings] = useState<Record<string, FinishGroupSetting>>({});
+  const [configuratorPresets, setConfiguratorPresets] = useState<ConfiguratorPreset[]>([]);
+  const [editingGroupSetting, setEditingGroupSetting] = useState<{ groupName: string; setting: FinishGroupSetting } | null>(null);
+  const [isSavingGroupSettings, setIsSavingGroupSettings] = useState(false);
+  const [showPresetsManagerModal, setShowPresetsManagerModal] = useState(false);
+  const [editingPreset, setEditingPreset] = useState<ConfiguratorPreset | null>(null);
+  const [isSavingPresets, setIsSavingPresets] = useState(false);
   const [isManagingGroups, setIsManagingGroups] = useState(false);
   const [editingGroupName, setEditingGroupName] = useState<{ oldName: string; newName: string } | null>(null);
   const [isRenamingGroup, setIsRenamingGroup] = useState(false);
@@ -611,6 +624,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
         } else {
           const derived = Array.from(new Set(finishesRes.finishes.map((f) => f.group).filter(Boolean) as string[]));
           setStoredFinishGroups(derived);
+        }
+        if (finishesRes.group_settings) {
+          setFinishGroupSettings(finishesRes.group_settings);
+        }
+        if (Array.isArray(finishesRes.presets)) {
+          setConfiguratorPresets(finishesRes.presets);
         }
       }
     } catch (err: any) {
@@ -3171,6 +3190,85 @@ export const ConfiguratorStudioPage: React.FC = () => {
     }
   };
 
+  // Save group presentation settings (Tactile Cards vs Compact Dots, expansion, limit)
+  const handleSaveGroupSetting = async (groupName: string, setting: FinishGroupSetting) => {
+    const updated = {
+      ...finishGroupSettings,
+      [groupName]: setting,
+    };
+    setFinishGroupSettings(updated);
+    try {
+      setIsSavingGroupSettings(true);
+      const res = await saveFinishGroupSettingsDirect(updated);
+      if (res.success) {
+        showToast('success', 'Group Settings Saved', `Display settings for "${groupName}" updated.`);
+        if (res.group_settings) {
+          setFinishGroupSettings(res.group_settings);
+        }
+        setEditingGroupSetting(null);
+      } else {
+        showToast('error', 'Save Failed', res.error || 'Failed to save group settings.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message || 'Error saving group settings.');
+    } finally {
+      setIsSavingGroupSettings(false);
+    }
+  };
+
+  // Save or create a bespoke configurator preset
+  const handleSavePreset = async (preset: ConfiguratorPreset) => {
+    const cleanId = preset.id || preset.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const presetWithId = { ...preset, id: cleanId };
+    const existingIndex = configuratorPresets.findIndex((p) => p.id === cleanId);
+    let updated: ConfiguratorPreset[];
+    if (existingIndex >= 0) {
+      updated = configuratorPresets.map((p, idx) => (idx === existingIndex ? presetWithId : p));
+    } else {
+      updated = [...configuratorPresets, presetWithId];
+    }
+    setConfiguratorPresets(updated);
+    try {
+      setIsSavingPresets(true);
+      const res = await saveConfiguratorPresetsDirect(updated);
+      if (res.success) {
+        showToast('success', 'Preset Saved', `Preset "${preset.title}" saved successfully.`);
+        if (Array.isArray(res.presets)) {
+          setConfiguratorPresets(res.presets);
+        }
+        setEditingPreset(null);
+      } else {
+        showToast('error', 'Save Failed', res.error || 'Failed to save preset.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message || 'Error saving preset.');
+    } finally {
+      setIsSavingPresets(false);
+    }
+  };
+
+  // Delete a bespoke preset
+  const handleDeletePreset = async (presetId: string) => {
+    const updated = configuratorPresets.filter((p) => p.id !== presetId);
+    setConfiguratorPresets(updated);
+    try {
+      setIsSavingPresets(true);
+      const res = await saveConfiguratorPresetsDirect(updated);
+      if (res.success) {
+        showToast('success', 'Preset Removed', 'Bespoke preset removed.');
+        if (Array.isArray(res.presets)) {
+          setConfiguratorPresets(res.presets);
+        }
+      } else {
+        showToast('error', 'Delete Failed', res.error || 'Failed to delete preset.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message || 'Error deleting preset.');
+    } finally {
+      setIsSavingPresets(false);
+    }
+  };
+
   // Instantly toggle a finish between Active and Inactive
   const handleToggleFinishActive = async (finish: GlobalFinish) => {
     const currentActive =
@@ -3429,11 +3527,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
               Refresh Catalog
             </button>
             <button
+              type="button"
               onClick={() => setShowMasterTexturesModal(true)}
               className="px-4 py-2 text-xs font-sans font-medium rounded-xl border border-sky-500/30 hover:bg-sky-500/10 text-sky-300 transition-colors flex items-center gap-2 cursor-pointer"
               title="Manage global master finish textures used by all v2 Modern configurators"
             >
-              <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+              <Palette className="w-3.5 h-3.5 text-sky-400" />
               <span>Master Textures (v2)</span>
             </button>
             <button
@@ -4428,7 +4527,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
               <div className="p-5 border-b border-white/10 flex items-start justify-between gap-4 bg-zinc-900/50">
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-xl bg-[#f3aa18]/15 border border-[#f3aa18]/30 flex items-center justify-center text-[#f3aa18] shrink-0">
-                    <Sparkles className="w-5 h-5" />
+                    <Palette className="w-5 h-5" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
@@ -4444,6 +4543,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowPresetsManagerModal(true)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-sans font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Manage curated multi-layer bespoke presets"
+                  >
+                    <Compass className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Bespoke Presets ({configuratorPresets.length})</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setIsManagingGroups(!isManagingGroups)}
@@ -4518,16 +4627,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         (f) => (editingFinishGroups[f.id] || f.group) === grp
                       ).length;
 
-                      if (editingGroupName?.oldName === grp) {
+                      if (editingGroupName && editingGroupName.oldName === grp) {
                         return (
                           <div
                             key={grp}
-                            className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-zinc-950 border border-amber-400/60 shadow-lg animate-in fade-in zoom-in-95 duration-100"
+                            className="flex items-center gap-1 p-1 rounded-xl bg-amber-500/10 border border-amber-500/40 animate-in fade-in zoom-in-95"
                           >
                             <input
                               type="text"
-                              value={editingGroupName.newName}
                               autoFocus
+                              value={editingGroupName.newName}
                               onChange={(e) =>
                                 setEditingGroupName({ ...editingGroupName, newName: e.target.value })
                               }
@@ -4582,6 +4691,57 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           </button>
                           <span className="font-semibold text-white px-0.5">{grp}</span>
                           <span className="text-[10px] text-zinc-500 font-mono pr-0.5">({count})</span>
+
+                          {/* Group display style indicator pill */}
+                          {(() => {
+                            const setting = finishGroupSettings[grp];
+                            const isDots = setting?.display_style === 'compact_dots';
+                            const isCollapsible = setting?.collapsed_by_default;
+                            return (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEditingGroupSetting({
+                                    groupName: grp,
+                                    setting: setting || {
+                                      display_style: 'cards',
+                                      collapsed_by_default: false,
+                                      show_more_limit: 0,
+                                    },
+                                  })
+                                }
+                                className={clsx(
+                                  'px-1.5 py-0.5 rounded text-[9px] font-mono flex items-center gap-1 cursor-pointer transition-colors',
+                                  isDots
+                                    ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/25'
+                                    : 'bg-zinc-800 text-zinc-400 border border-white/5 hover:bg-zinc-700'
+                                )}
+                                title="Configure group display style (Cards vs Compact Dots, expansion, limit)"
+                              >
+                                <span>{isDots ? '● Dots' : '▣ Cards'}</span>
+                                {isCollapsible && <span className="text-amber-400">▾</span>}
+                              </button>
+                            );
+                          })()}
+
+                          {/* Configure Group Settings Button */}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditingGroupSetting({
+                                groupName: grp,
+                                setting: finishGroupSettings[grp] || {
+                                  display_style: 'cards',
+                                  collapsed_by_default: false,
+                                  show_more_limit: 0,
+                                },
+                              })
+                            }
+                            className="p-0.5 text-zinc-400 hover:text-cyan-400 rounded hover:bg-white/10 transition-colors cursor-pointer"
+                            title={`Configure display settings for "${grp}"`}
+                          >
+                            <SlidersHorizontal className="w-3 h-3" />
+                          </button>
 
                           {/* Rename Group Button */}
                           <button
@@ -5451,7 +5611,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       }}
                     />
                   ) : (
-                    <Sparkles className="w-5 h-5 text-zinc-600" />
+                    <ImageIcon className="w-5 h-5 text-zinc-600" />
                   )}
                 </div>
                 <div className="text-xs text-zinc-400 space-y-1">
@@ -6158,7 +6318,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     className="px-5 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-gradient-to-b from-amber-400 to-[#f3aa18] hover:brightness-105 active:scale-[0.985] text-black transition-all flex items-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer"
                     title="Upgrade this legacy device to the v2 modern engine to customize layers, masks, and shading"
                   >
-                    <Sparkles className="w-4 h-4 text-black" />
+                    <Wand2 className="w-4 h-4 text-black" />
                     <span>Convert to v2 Modern Engine</span>
                   </button>
                 ) : (
@@ -6329,7 +6489,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             onClick={handleConvertToV2}
                             className="px-3 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-black font-bold text-xs cursor-pointer transition-colors shadow-sm flex items-center gap-1.5 shrink-0"
                           >
-                            <Sparkles className="w-3.5 h-3.5" />
+                            <Wand2 className="w-3.5 h-3.5" />
                             <span>Convert to v2 Modern Engine</span>
                           </button>
                         </div>
@@ -6695,7 +6855,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div className="flex items-center gap-2 overflow-x-auto py-0.5">
                             <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 shrink-0 pr-1">
-                              <Sparkles className="w-3.5 h-3.5 text-[#f3aa18]" />
+                              <Layers className="w-3.5 h-3.5 text-[#f3aa18]" />
                               Part:
                             </span>
                             {skinLayers.map((l) => {
@@ -7158,7 +7318,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         <div className="absolute right-0 mt-1.5 w-64 max-h-80 overflow-y-auto bg-zinc-950/95 backdrop-blur-xl border border-white/15 rounded-2xl shadow-2xl z-50 p-1.5 space-y-1">
                                           <div className="px-2.5 py-1.5 text-[10px] uppercase font-bold text-zinc-400 tracking-wider border-b border-white/5 flex items-center justify-between">
                                             <span>Standard Skin Parts</span>
-                                            <Sparkles className="w-3 h-3 text-[#f3aa18]" />
+                                            <Layers className="w-3 h-3 text-[#f3aa18]" />
                                           </div>
                                           {COMMON_PRESET_LAYERS.map((preset) => {
                                             const isPrimaryAndAdded = preset.group === 'primary' && skinLayers.some((l) => l.name.toLowerCase() === preset.name.toLowerCase());
@@ -7735,7 +7895,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   <div className="p-3.5 rounded-2xl bg-purple-950/20 border border-purple-500/25 space-y-3">
                                     <div className="flex items-center justify-between">
                                       <div className="flex items-center gap-2">
-                                        <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                                        <Palette className="w-3.5 h-3.5 text-purple-400" />
                                         <span className="text-xs font-bold text-white uppercase tracking-wider">
                                           Custom Device Finishes ({finishes.filter((f) => f.is_custom_per_device).length})
                                         </span>
@@ -7783,7 +7943,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                       }}
                                                     />
                                                   ) : (
-                                                    <Sparkles className="w-4 h-4 text-purple-400/50" />
+                                                    <ImageIcon className="w-4 h-4 text-purple-400/50" />
                                                   )}
                                                 </div>
                                                 <div className="min-w-0">
@@ -9745,7 +9905,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               className="w-full h-full object-cover opacity-60"
                             />
                           ) : (
-                            <Sparkles className="w-5 h-5 text-[#f3aa18]" />
+                            <ImageIcon className="w-5 h-5 text-[#f3aa18]" />
                           )}
                         </div>
                         <div className="min-w-0">
@@ -10230,7 +10390,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 {/* Guidance Banner */}
                 <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-zinc-300 leading-relaxed space-y-1">
                   <span className="font-semibold text-amber-300 block flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5" />
+                    <Wand2 className="w-3.5 h-3.5" />
                     Optimal Source: Neutral Matte White 3D Render
                   </span>
                   <p className="text-[11px] text-zinc-400">
@@ -10341,6 +10501,566 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     </>
                   )}
                 </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* Group Display Settings Modal */}
+      {editingGroupSetting &&
+        createPortal(
+          <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <div className="w-full max-w-lg rounded-3xl bg-[#121215] border border-white/15 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+              {/* Header */}
+              <div className="p-5 border-b border-white/10 flex items-center justify-between bg-zinc-900/60">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+                    <SlidersHorizontal className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span>Group Display: {editingGroupSetting.groupName}</span>
+                    </h3>
+                    <p className="text-[11px] text-zinc-400">
+                      Configure how this finish category displays in the storefront configurator.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingGroupSetting(null)}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-5 space-y-4 text-xs">
+                {/* Display Style */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-semibold text-zinc-300 uppercase tracking-wider block">
+                    Swatch Display Format
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditingGroupSetting({
+                          ...editingGroupSetting,
+                          setting: { ...editingGroupSetting.setting, display_style: 'cards' },
+                        })
+                      }
+                      className={clsx(
+                        'p-3 rounded-xl border text-left flex flex-col gap-1 cursor-pointer transition-all',
+                        editingGroupSetting.setting.display_style !== 'compact_dots'
+                          ? 'border-amber-400 bg-amber-400/10 text-white shadow-xs'
+                          : 'border-white/10 bg-zinc-900/60 text-zinc-400 hover:border-white/20'
+                      )}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-xs text-white">Tactile Cards</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/10">1.85:1</span>
+                      </div>
+                      <span className="text-[11px] text-zinc-400 leading-snug">
+                        Wide capsules with texture preview. Best for textured finishes like Carbon, Swarm, Leather.
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditingGroupSetting({
+                          ...editingGroupSetting,
+                          setting: { ...editingGroupSetting.setting, display_style: 'compact_dots' },
+                        })
+                      }
+                      className={clsx(
+                        'p-3 rounded-xl border text-left flex flex-col gap-1 cursor-pointer transition-all',
+                        editingGroupSetting.setting.display_style === 'compact_dots'
+                          ? 'border-cyan-400 bg-cyan-400/10 text-white shadow-xs'
+                          : 'border-white/10 bg-zinc-900/60 text-zinc-400 hover:border-white/20'
+                      )}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-xs text-white">Compact Dots</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/10">36px</span>
+                      </div>
+                      <span className="text-[11px] text-zinc-400 leading-snug">
+                        High-density color circles with dynamic header label. Best for Colors and Pastels.
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Collapsible / Drawer Accordion */}
+                <div className="p-3.5 rounded-2xl bg-black/40 border border-white/5 flex items-center justify-between gap-3">
+                  <div>
+                    <span className="font-medium text-white block">Collapsible Drawer</span>
+                    <span className="text-[11px] text-zinc-400 block">
+                      Start collapsed with selected finish summary pill; customer taps to expand.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEditingGroupSetting({
+                        ...editingGroupSetting,
+                        setting: {
+                          ...editingGroupSetting.setting,
+                          collapsed_by_default: !editingGroupSetting.setting.collapsed_by_default,
+                        },
+                      })
+                    }
+                    className={clsx(
+                      'w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0',
+                      editingGroupSetting.setting.collapsed_by_default ? 'bg-amber-400' : 'bg-zinc-800'
+                    )}
+                  >
+                    <div
+                      className={clsx(
+                        'w-4 h-4 rounded-full bg-black absolute top-1 transition-transform',
+                        editingGroupSetting.setting.collapsed_by_default ? 'left-6' : 'left-1'
+                      )}
+                    />
+                  </button>
+                </div>
+
+                {/* Inline Show More Limit */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-semibold text-zinc-300 uppercase tracking-wider block">
+                    Visible Items Limit
+                  </label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { value: 0, label: 'All' },
+                      { value: 4, label: 'First 4' },
+                      { value: 6, label: 'First 6' },
+                      { value: 8, label: 'First 8' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() =>
+                          setEditingGroupSetting({
+                            ...editingGroupSetting,
+                            setting: { ...editingGroupSetting.setting, show_more_limit: opt.value },
+                          })
+                        }
+                        className={clsx(
+                          'py-2 rounded-xl text-xs font-semibold border cursor-pointer transition-all text-center',
+                          (editingGroupSetting.setting.show_more_limit || 0) === opt.value
+                            ? 'border-[#f3aa18] bg-[#f3aa18]/15 text-[#f3aa18]'
+                            : 'border-white/10 bg-zinc-900 text-zinc-400 hover:text-white'
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-[10px] text-zinc-500 block">
+                    Excess swatches are hidden behind an inline "+X more" expander button.
+                  </span>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-white/10 flex items-center justify-between bg-zinc-900/50">
+                <button
+                  type="button"
+                  onClick={() => setEditingGroupSetting(null)}
+                  disabled={isSavingGroupSettings}
+                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-medium cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isSavingGroupSettings}
+                  onClick={() =>
+                    handleSaveGroupSetting(editingGroupSetting.groupName, editingGroupSetting.setting)
+                  }
+                  className="px-5 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md transition-all disabled:opacity-50"
+                >
+                  {isSavingGroupSettings ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Save Group Settings</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* Bespoke Presets Manager Modal */}
+      {showPresetsManagerModal &&
+        createPortal(
+          <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+            <div className="w-full max-w-3xl max-h-[90vh] rounded-3xl bg-[#121215] border border-white/15 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+              {/* Header */}
+              <div className="p-5 border-b border-white/10 flex items-center justify-between bg-zinc-900/60">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                    <Compass className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span>Bespoke Presets (Shop the Look)</span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/5 text-zinc-300 border border-white/10">
+                        {configuratorPresets.length} Active
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-zinc-400">
+                      Curate multi-layer signature looks and contextual pairing assists for customers.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {!editingPreset && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditingPreset({
+                          id: '',
+                          title: '',
+                          tagline: '',
+                          badge: 'POPULAR',
+                          coverage: 'model_360',
+                          logo_cutout: false,
+                          layers: {
+                            back: finishes[0]?.slug || 'titanium-plus',
+                            camera: finishes[1]?.slug || 'matte-black',
+                          },
+                          triggers: [finishes[0]?.slug || 'titanium-plus'],
+                        })
+                      }
+                      className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#f3aa18] hover:bg-[#ffb72b] text-black flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>New Preset</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingPreset(null);
+                      setShowPresetsManagerModal(false);
+                    }}
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div className="p-5 overflow-y-auto max-h-[70vh] space-y-4 text-xs">
+                {editingPreset ? (
+                  /* Edit / Add Preset Form */
+                  <div className="space-y-4 p-4 rounded-2xl bg-zinc-950 border border-white/10">
+                    <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                      <span className="font-bold text-white text-xs uppercase tracking-wider">
+                        {editingPreset.id ? 'Edit Preset' : 'Create New Preset'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setEditingPreset(null)}
+                        className="text-zinc-400 hover:text-white text-xs cursor-pointer"
+                      >
+                        Back to Presets List
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[11px] font-medium text-zinc-300 block mb-1">Preset Title</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. The Stealth Bespoke"
+                          value={editingPreset.title}
+                          onChange={(e) => setEditingPreset({ ...editingPreset, title: e.target.value })}
+                          className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-amber-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-medium text-zinc-300 block mb-1">Badge Tag</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. POPULAR, BESPOKE, STAFF PICK"
+                          value={editingPreset.badge || ''}
+                          onChange={(e) => setEditingPreset({ ...editingPreset, badge: e.target.value })}
+                          className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-amber-400"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-medium text-zinc-300 block mb-1">Tagline / Subtitle</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Titanium+ with Matte Black Camera Plateau"
+                        value={editingPreset.tagline || ''}
+                        onChange={(e) => setEditingPreset({ ...editingPreset, tagline: e.target.value })}
+                        className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-amber-400"
+                      />
+                    </div>
+
+                    {/* Coverage & Cutout Options */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[11px] font-medium text-zinc-300 block mb-1">Coverage</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditingPreset({ ...editingPreset, coverage: 'model_360' })}
+                            className={clsx(
+                              'py-2 rounded-xl text-xs font-semibold border cursor-pointer transition-colors',
+                              editingPreset.coverage === 'model_360'
+                                ? 'bg-amber-400/20 border-amber-400 text-amber-300'
+                                : 'bg-zinc-900 border-white/10 text-zinc-400 hover:text-white'
+                            )}
+                          >
+                            Model 360°
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingPreset({ ...editingPreset, coverage: 'model_cut' })}
+                            className={clsx(
+                              'py-2 rounded-xl text-xs font-semibold border cursor-pointer transition-colors',
+                              editingPreset.coverage === 'model_cut'
+                                ? 'bg-amber-400/20 border-amber-400 text-amber-300'
+                                : 'bg-zinc-900 border-white/10 text-zinc-400 hover:text-white'
+                            )}
+                          >
+                            Model Cut
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-medium text-zinc-300 block mb-1">Logo Cutout</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditingPreset({ ...editingPreset, logo_cutout: true })}
+                            className={clsx(
+                              'py-2 rounded-xl text-xs font-semibold border cursor-pointer transition-colors',
+                              editingPreset.logo_cutout
+                                ? 'bg-amber-400/20 border-amber-400 text-amber-300'
+                                : 'bg-zinc-900 border-white/10 text-zinc-400 hover:text-white'
+                            )}
+                          >
+                            Exposed Logo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingPreset({ ...editingPreset, logo_cutout: false })}
+                            className={clsx(
+                              'py-2 rounded-xl text-xs font-semibold border cursor-pointer transition-colors',
+                              !editingPreset.logo_cutout
+                                ? 'bg-amber-400/20 border-amber-400 text-amber-300'
+                                : 'bg-zinc-900 border-white/10 text-zinc-400 hover:text-white'
+                            )}
+                          >
+                            Full Coverage
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Layer Finishes Configuration */}
+                    <div className="space-y-2 pt-2 border-t border-white/5">
+                      <span className="text-[11px] font-semibold text-zinc-300 uppercase tracking-wider block">
+                        Assigned Layer Finishes
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {['back', 'camera', 'frame'].map((layerKey) => (
+                          <div key={layerKey} className="space-y-1">
+                            <label className="text-[10px] font-mono text-zinc-400 uppercase block">
+                              {layerKey} Skin
+                            </label>
+                            <select
+                              value={editingPreset.layers[layerKey] || ''}
+                              onChange={(e) =>
+                                setEditingPreset({
+                                  ...editingPreset,
+                                  layers: { ...editingPreset.layers, [layerKey]: e.target.value },
+                                })
+                              }
+                              className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-amber-400"
+                            >
+                              <option value="">None (Skip)</option>
+                              {finishes.map((f) => (
+                                <option key={f.id} value={f.slug || f.id}>
+                                  {f.name} ({f.group})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Contextual Pairing Triggers */}
+                    <div className="space-y-1.5 pt-2 border-t border-white/5">
+                      <label className="text-[11px] font-semibold text-zinc-300 uppercase tracking-wider block">
+                        Contextual Pairing Triggers
+                      </label>
+                      <span className="text-[10px] text-zinc-500 block">
+                        When customer picks one of these finishes on their Back Skin, this preset will appear as an in-flow match suggestion.
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 pt-1 max-h-32 overflow-y-auto">
+                        {finishes.map((f) => {
+                          const slug = f.slug || f.id;
+                          const isTrigger = (editingPreset.triggers || []).includes(slug);
+                          return (
+                            <button
+                              key={slug}
+                              type="button"
+                              onClick={() => {
+                                const current = editingPreset.triggers || [];
+                                const next = isTrigger ? current.filter((s) => s !== slug) : [...current, slug];
+                                setEditingPreset({ ...editingPreset, triggers: next });
+                              }}
+                              className={clsx(
+                                'px-2 py-1 rounded-lg text-[10px] font-medium border cursor-pointer transition-colors',
+                                isTrigger
+                                  ? 'bg-amber-400/20 border-amber-400 text-amber-300'
+                                  : 'bg-zinc-900 border-white/10 text-zinc-400 hover:text-white'
+                              )}
+                            >
+                              {f.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Save Preset Button */}
+                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+                      <button
+                        type="button"
+                        onClick={() => setEditingPreset(null)}
+                        className="px-3 py-1.5 rounded-xl bg-zinc-800 text-zinc-300 hover:text-white text-xs cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSavingPresets || !editingPreset.title.trim()}
+                        onClick={() => handleSavePreset(editingPreset)}
+                        className="px-4 py-1.5 rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black text-xs font-bold cursor-pointer disabled:opacity-40"
+                      >
+                        {isSavingPresets ? 'Saving...' : 'Save Preset'}
+                      </button>
+                    </div>
+                  </div>
+                ) : configuratorPresets.length === 0 ? (
+                  <div className="p-8 text-center rounded-2xl bg-zinc-950/60 border border-white/5 space-y-2">
+                    <Compass className="w-8 h-8 text-zinc-600 mx-auto" />
+                    <p className="text-zinc-400 text-xs">No bespoke presets created yet.</p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditingPreset({
+                          id: 'stealth-bespoke',
+                          title: 'The Stealth Bespoke',
+                          tagline: 'Titanium+ with Matte Black Camera Plateau',
+                          badge: 'POPULAR',
+                          coverage: 'model_360',
+                          logo_cutout: false,
+                          layers: {
+                            back: finishes[0]?.slug || 'titanium-plus',
+                            camera: finishes[1]?.slug || 'matte-black',
+                          },
+                          triggers: [finishes[0]?.slug || 'titanium-plus'],
+                        })
+                      }
+                      className="px-4 py-2 rounded-xl bg-[#f3aa18] text-black font-semibold text-xs cursor-pointer inline-flex items-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Create First Preset</span>
+                    </button>
+                  </div>
+                ) : (
+                  /* Presets List */
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {configuratorPresets.map((preset) => (
+                      <div
+                        key={preset.id}
+                        className="p-4 rounded-2xl bg-zinc-950 border border-white/10 hover:border-white/20 transition-all flex flex-col justify-between gap-3 shadow-md"
+                      >
+                        <div className="space-y-1.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              {preset.badge && (
+                                <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-400 text-black uppercase tracking-wider mb-1">
+                                  {preset.badge}
+                                </span>
+                              )}
+                              <h4 className="text-xs font-bold text-white">{preset.title}</h4>
+                            </div>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/5 text-zinc-400 border border-white/5">
+                              {preset.coverage === 'model_360' ? '360°' : 'Cut'}
+                            </span>
+                          </div>
+                          {preset.tagline && (
+                            <p className="text-[11px] text-zinc-400 leading-snug">{preset.tagline}</p>
+                          )}
+                        </div>
+
+                        {/* Layer Recipe Chips */}
+                        <div className="flex flex-wrap gap-1.5 pt-1 border-t border-white/5">
+                          {Object.entries(preset.layers || {}).map(([layer, finishSlug]) => (
+                            <span
+                              key={layer}
+                              className="px-2 py-0.5 rounded-md bg-zinc-900 text-zinc-300 text-[10px] border border-white/5"
+                            >
+                              <strong className="capitalize text-zinc-400">{layer}:</strong> {finishSlug}
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* Contextual Triggers */}
+                        {preset.triggers && preset.triggers.length > 0 && (
+                          <div className="text-[10px] text-zinc-500 font-mono">
+                            Triggers on: {preset.triggers.join(', ')}
+                          </div>
+                        )}
+
+                        {/* Card Actions */}
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/5">
+                          <button
+                            type="button"
+                            onClick={() => setEditingPreset(preset)}
+                            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                            title="Edit preset"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePreset(preset.id)}
+                            className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                            title="Delete preset"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>,

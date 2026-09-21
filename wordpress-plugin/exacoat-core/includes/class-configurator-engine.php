@@ -20,6 +20,8 @@ class Exacoat_Configurator_Engine {
 	const OPTION_KEY = 'exacoat_global_finishes';
 	const LEGACY_OPTION_KEY = 'artmatter_global_finishes';
 	const GROUPS_OPTION_KEY = 'exacoat_global_finish_groups';
+	const GROUP_SETTINGS_OPTION_KEY = 'exacoat_finish_group_settings';
+	const PRESETS_OPTION_KEY = 'exacoat_configurator_presets';
 	const PROFILE_META_KEY = '_exacoat_configurator_profile';
 	const CONFIGURATOR_FLAG_META_KEY = '_is_configurator';
 	const AUDIT_TIME_META_KEY = '_configurator_last_audited';
@@ -67,6 +69,109 @@ class Exacoat_Configurator_Engine {
 	public static function save_finish_groups( array $groups ): bool {
 		$sanitized = array_values( array_unique( array_filter( array_map( 'sanitize_text_field', $groups ) ) ) );
 		update_option( self::GROUPS_OPTION_KEY, $sanitized );
+		return true;
+	}
+
+	public static function get_finish_group_settings(): array {
+		$settings = get_option( self::GROUP_SETTINGS_OPTION_KEY, null );
+		if ( ! is_array( $settings ) ) {
+			// Sensible initial defaults: Colors as compact dots
+			$settings = [
+				'Colors' => [
+					'display_style'        => 'compact_dots',
+					'collapsed_by_default' => false,
+					'show_more_limit'      => 0,
+				],
+			];
+		}
+		return $settings;
+	}
+
+	public static function save_finish_group_settings( array $settings ): bool {
+		$sanitized = [];
+		foreach ( $settings as $grp => $cfg ) {
+			$clean_grp = sanitize_text_field( $grp );
+			if ( empty( $clean_grp ) || ! is_array( $cfg ) ) {
+				continue;
+			}
+			$sanitized[ $clean_grp ] = [
+				'display_style'        => in_array( $cfg['display_style'] ?? '', [ 'cards', 'compact_dots' ], true ) ? $cfg['display_style'] : 'cards',
+				'collapsed_by_default' => ! empty( $cfg['collapsed_by_default'] ),
+				'show_more_limit'      => max( 0, (int) ( $cfg['show_more_limit'] ?? 0 ) ),
+			];
+		}
+		update_option( self::GROUP_SETTINGS_OPTION_KEY, $sanitized );
+		return true;
+	}
+
+	public static function get_configurator_presets(): array {
+		$presets = get_option( self::PRESETS_OPTION_KEY, null );
+		if ( ! is_array( $presets ) || empty( $presets ) ) {
+			$presets = [
+				[
+					'id'          => 'stealth-bespoke',
+					'title'       => 'The Stealth Bespoke',
+					'tagline'     => 'Titanium+ with Matte Black Camera Plateau',
+					'badge'       => 'POPULAR',
+					'coverage'    => 'model_360',
+					'logo_cutout' => false,
+					'layers'      => [
+						'back'   => 'titanium-plus',
+						'camera' => 'matte-black',
+						'frame'  => 'titanium-plus',
+					],
+					'triggers'    => [ 'titanium-plus', 'titanium' ],
+				],
+				[
+					'id'          => 'shadow-hex',
+					'title'       => 'Shadow Hex',
+					'tagline'     => 'Swarm Hexagonal Back with Matte Black Accents',
+					'badge'       => 'STAFF PICK',
+					'coverage'    => 'model_360',
+					'logo_cutout' => true,
+					'layers'      => [
+						'back'   => 'swarm',
+						'camera' => 'matte-black',
+					],
+					'triggers'    => [ 'swarm' ],
+				],
+			];
+		}
+		return $presets;
+	}
+
+	public static function save_configurator_presets( array $presets ): bool {
+		$sanitized = [];
+		foreach ( $presets as $p ) {
+			if ( ! is_array( $p ) ) {
+				continue;
+			}
+			$id = sanitize_title( $p['id'] ?? $p['title'] ?? '' );
+			if ( empty( $id ) ) {
+				continue;
+			}
+			$clean_layers = [];
+			if ( isset( $p['layers'] ) && is_array( $p['layers'] ) ) {
+				foreach ( $p['layers'] as $k => $v ) {
+					$clean_layers[ sanitize_key( $k ) ] = sanitize_title( (string) $v );
+				}
+			}
+			$clean_triggers = [];
+			if ( isset( $p['triggers'] ) && is_array( $p['triggers'] ) ) {
+				$clean_triggers = array_values( array_filter( array_map( 'sanitize_title', $p['triggers'] ) ) );
+			}
+			$sanitized[] = [
+				'id'          => $id,
+				'title'       => sanitize_text_field( $p['title'] ?? '' ),
+				'tagline'     => sanitize_text_field( $p['tagline'] ?? '' ),
+				'badge'       => sanitize_text_field( $p['badge'] ?? '' ),
+				'coverage'    => in_array( $p['coverage'] ?? '', [ 'model_360', 'model_cut' ], true ) ? $p['coverage'] : 'model_360',
+				'logo_cutout' => ! empty( $p['logo_cutout'] ),
+				'layers'      => $clean_layers,
+				'triggers'    => $clean_triggers,
+			];
+		}
+		update_option( self::PRESETS_OPTION_KEY, $sanitized );
 		return true;
 	}
 
@@ -485,6 +590,27 @@ class Exacoat_Configurator_Engine {
 			'permission_callback' => [ __CLASS__, 'verify_permission' ],
 		] );
 
+		// POST /finishes/group-settings: Save finish group presentation settings
+		$register( '/finishes/group-settings', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_save_finish_group_settings' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+		] );
+
+		// GET /configurator/presets: Fetch bespoke configurator presets
+		$register( '/configurator/presets', [
+			'methods'             => 'GET',
+			'callback'            => [ __CLASS__, 'rest_get_configurator_presets' ],
+			'permission_callback' => '__return_true',
+		] );
+
+		// POST /configurator/presets: Save bespoke configurator presets
+		$register( '/configurator/presets', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_save_configurator_presets' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+		] );
+
 		// 4. GET /configurator/profiles: List all products and their configurator profiles
 		$register( '/configurator/profiles', [
 			'methods'             => 'GET',
@@ -612,13 +738,17 @@ class Exacoat_Configurator_Engine {
 	}
 
 	public static function rest_get_finishes( WP_REST_Request $request ): WP_REST_Response {
-		$finishes = self::get_finishes();
-		$groups   = self::get_finish_groups();
+		$finishes       = self::get_finishes();
+		$groups         = self::get_finish_groups();
+		$group_settings = self::get_finish_group_settings();
+		$presets        = self::get_configurator_presets();
 		$response = rest_ensure_response( [
-			'success'  => true,
-			'finishes' => $finishes,
-			'groups'   => $groups,
-			'total'    => count( $finishes ),
+			'success'        => true,
+			'finishes'       => $finishes,
+			'groups'         => $groups,
+			'group_settings' => $group_settings,
+			'presets'        => $presets,
+			'total'          => count( $finishes ),
 		] );
 		$response->header( 'Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=300' );
 		return $response;
@@ -926,9 +1056,13 @@ class Exacoat_Configurator_Engine {
 		$params = $request->get_json_params() ?: $request->get_params();
 		$finishes = $params['finishes'] ?? null;
 		$groups = $params['groups'] ?? null;
+		$group_settings = $params['group_settings'] ?? null;
 
 		if ( is_array( $groups ) ) {
 			self::save_finish_groups( $groups );
+		}
+		if ( is_array( $group_settings ) ) {
+			self::save_finish_group_settings( $group_settings );
 		}
 		if ( is_array( $finishes ) ) {
 			foreach ( $finishes as &$item ) {
@@ -950,10 +1084,11 @@ class Exacoat_Configurator_Engine {
 		}
 
 		$response = rest_ensure_response( [
-			'success'  => true,
-			'message'  => 'All finishes and groups updated.',
-			'finishes' => self::get_finishes(),
-			'groups'   => self::get_finish_groups(),
+			'success'        => true,
+			'message'        => 'All finishes and groups updated.',
+			'finishes'       => self::get_finishes(),
+			'groups'         => self::get_finish_groups(),
+			'group_settings' => self::get_finish_group_settings(),
 		] );
 
 		// Automatically trigger storefront cache revalidation
@@ -964,6 +1099,63 @@ class Exacoat_Configurator_Engine {
 		] );
 
 		return $response;
+	}
+
+	public static function rest_save_finish_group_settings( WP_REST_Request $request ): WP_REST_Response {
+		$params   = $request->get_json_params() ?: $request->get_params();
+		$settings = $params['settings'] ?? $params['group_settings'] ?? $params;
+
+		if ( ! is_array( $settings ) ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Group settings must be an object.' ], 400 );
+		}
+
+		self::save_finish_group_settings( $settings );
+
+		// Automatically trigger storefront cache revalidation
+		self::trigger_storefront_revalidation( [
+			'tag'       => 'finishes',
+			'path'      => '/api/configurator/finishes',
+			'purge_all' => false,
+		] );
+
+		return rest_ensure_response( [
+			'success'        => true,
+			'message'        => 'Group settings saved.',
+			'group_settings' => self::get_finish_group_settings(),
+		] );
+	}
+
+	public static function rest_get_configurator_presets( WP_REST_Request $request ): WP_REST_Response {
+		$presets = self::get_configurator_presets();
+		return rest_ensure_response( [
+			'success' => true,
+			'presets' => $presets,
+			'total'   => count( $presets ),
+		] );
+	}
+
+	public static function rest_save_configurator_presets( WP_REST_Request $request ): WP_REST_Response {
+		$params  = $request->get_json_params() ?: $request->get_params();
+		$presets = $params['presets'] ?? $params;
+
+		if ( ! is_array( $presets ) ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Presets must be an array.' ], 400 );
+		}
+
+		self::save_configurator_presets( $presets );
+
+		// Automatically trigger storefront cache revalidation
+		self::trigger_storefront_revalidation( [
+			'tag'       => 'configurator',
+			'path'      => '/api/configurator/finishes',
+			'purge_all' => false,
+		] );
+
+		return rest_ensure_response( [
+			'success' => true,
+			'message' => 'Configurator presets saved.',
+			'presets' => self::get_configurator_presets(),
+		] );
 	}
 
 	/**
@@ -1968,9 +2160,12 @@ class Exacoat_Configurator_Engine {
 		}
 
 		return rest_ensure_response( [
-			'success'  => true,
-			'profile'  => $profile,
-			'finishes' => self::get_finishes(),
+			'success'        => true,
+			'profile'        => $profile,
+			'finishes'       => self::get_finishes(),
+			'groups'         => self::get_finish_groups(),
+			'group_settings' => self::get_finish_group_settings(),
+			'presets'        => self::get_configurator_presets(),
 		] );
 	}
 

@@ -2022,7 +2022,31 @@ export async function updateReviewRewardSettingsDirect(settings: ReviewRewardSet
 
 const FINISHES_STORAGE_KEY = 'exacoat_finishes_inventory_cache';
 
-export async function fetchGlobalFinishesDirect(): Promise<{ success: boolean; finishes: GlobalFinish[]; groups?: string[]; error?: string }> {
+export interface FinishGroupSetting {
+  display_style?: 'cards' | 'compact_dots';
+  collapsed_by_default?: boolean;
+  show_more_limit?: number;
+}
+
+export interface ConfiguratorPreset {
+  id: string;
+  title: string;
+  tagline?: string;
+  badge?: string;
+  coverage?: 'model_360' | 'model_cut';
+  logo_cutout?: boolean;
+  layers: Record<string, string>;
+  triggers?: string[];
+}
+
+export async function fetchGlobalFinishesDirect(): Promise<{
+  success: boolean;
+  finishes: GlobalFinish[];
+  groups?: string[];
+  group_settings?: Record<string, FinishGroupSetting>;
+  presets?: ConfiguratorPreset[];
+  error?: string;
+}> {
   let localFinishes: GlobalFinish[] = DEFAULT_GLOBAL_FINISHES;
   try {
     const cached = typeof localStorage !== 'undefined' ? localStorage.getItem(FINISHES_STORAGE_KEY) : null;
@@ -2046,6 +2070,8 @@ export async function fetchGlobalFinishesDirect(): Promise<{ success: boolean; f
         success: true,
         finishes: data.finishes,
         groups: Array.isArray(data?.groups) ? data.groups : undefined,
+        group_settings: data?.group_settings,
+        presets: Array.isArray(data?.presets) ? data.presets : undefined,
       };
     }
   } catch {}
@@ -2060,6 +2086,8 @@ export async function fetchGlobalFinishesDirect(): Promise<{ success: boolean; f
           success: true,
           finishes: nextData.finishes,
           groups: Array.isArray(nextData?.groups) ? nextData.groups : undefined,
+          group_settings: nextData?.group_settings,
+          presets: Array.isArray(nextData?.presets) ? nextData.presets : undefined,
         };
       }
     }
@@ -2256,7 +2284,11 @@ export async function renameFinishGroupDirect(oldName: string, newName: string):
   }
 }
 
-export async function saveAllGlobalFinishesDirect(finishes: GlobalFinish[], groups?: string[]): Promise<{ success: boolean; finishes?: GlobalFinish[]; groups?: string[]; error?: string }> {
+export async function saveAllGlobalFinishesDirect(
+  finishes: GlobalFinish[],
+  groups?: string[],
+  group_settings?: Record<string, FinishGroupSetting>
+): Promise<{ success: boolean; finishes?: GlobalFinish[]; groups?: string[]; group_settings?: Record<string, FinishGroupSetting>; error?: string }> {
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/finishes/save-all`;
 
@@ -2264,7 +2296,7 @@ export async function saveAllGlobalFinishesDirect(finishes: GlobalFinish[], grou
     const res = await authenticatedFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ finishes, groups }),
+      body: JSON.stringify({ finishes, groups, group_settings }),
     });
     const data = await res.json();
     if (res.ok && !!data?.success && Array.isArray(data?.finishes)) {
@@ -2274,6 +2306,81 @@ export async function saveAllGlobalFinishesDirect(finishes: GlobalFinish[], grou
       success: res.ok && !!data?.success,
       finishes: data?.finishes,
       groups: data?.groups,
+      group_settings: data?.group_settings,
+      error: data?.error || data?.message,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function saveFinishGroupSettingsDirect(settings: Record<string, FinishGroupSetting>): Promise<{
+  success: boolean;
+  group_settings?: Record<string, FinishGroupSetting>;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/finishes/group-settings`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ settings }),
+    });
+    const data = await res.json();
+    return {
+      success: res.ok && !!data?.success,
+      group_settings: data?.group_settings,
+      error: data?.error || data?.message,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchConfiguratorPresetsDirect(): Promise<{
+  success: boolean;
+  presets?: ConfiguratorPreset[];
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/configurator/presets?_t=${Date.now()}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    return {
+      success: res.ok && !!data?.success,
+      presets: Array.isArray(data?.presets) ? data.presets : [],
+      error: data?.error || data?.message,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function saveConfiguratorPresetsDirect(presets: ConfiguratorPreset[]): Promise<{
+  success: boolean;
+  presets?: ConfiguratorPreset[];
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/configurator/presets`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ presets }),
+    });
+    const data = await res.json();
+    return {
+      success: res.ok && !!data?.success,
+      presets: Array.isArray(data?.presets) ? data.presets : [],
       error: data?.error || data?.message,
     };
   } catch (err: any) {

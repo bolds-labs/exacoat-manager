@@ -951,6 +951,41 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   2. **Group Changes**: Changing a finish's group (e.g. moving from "Signature skins" to "Special editions") alters catalog categorization only. The visual texture and composite fingerprint remain completely unchanged.
   3. **Texture File Updates**: When an administrator uploads a new or higher-resolution texture file for an existing finish, the texture URL changes, causing `texHash` to change automatically (e.g. `_8f3a` to `_9k1c`). A brand new composite file is generated and uploaded to WordPress, bypassing stale browser and CDN edge caches without breaking historical order composite images.
 
+---
+
+## 53. Dynamic Finish Group Presentation & Shop the Look Presets Architecture
+
+- **Zero Hardcoded Settings Invariant**:
+  - Group presentation styles and curated formulas are 100% data-driven and configurable by store operators in Exacoat Manager ERP.
+  - Group settings are stored in WordPress database option `exacoat_finish_group_settings` (`FinishGroupSetting`):
+    - `display_style`: `'cards'` (standard tactile capsule cards with texture preview and title) vs `'compact_dots'` (sleek circular finish swatches).
+    - `collapsed_by_default`: Boolean flag to render large groups inside an accordion drawer that users can expand when desired.
+    - `show_more_limit`: Number of initial swatches shown before collapsing into an inline `+{count} more` expander chip.
+  - Presets are stored in WordPress database option `exacoat_configurator_presets` (`ConfiguratorPreset`):
+    - `id`: Unique slug identifier.
+    - `title`: Curated look title (e.g. "Titanium Stealth Bespoke").
+    - `tagline`: Clear aesthetic formula summary.
+    - `badge`: Optional status pill (e.g. "POPULAR", "STAFF PICK").
+    - `coverage`: Optional coverage lock (`model_360` vs `model_cut`).
+    - `logo_cutout`: Optional logo cutout lock (`true` for exposed logo, `false` for full coverage).
+    - `layers`: Map of layer keys to target finish slugs (e.g. `{"back": "titanium-plus", "camera": "matte-black", "back-glass": "matte-black"}`).
+    - `triggers`: Optional finish slugs that trigger non-intrusive contextual pairing chips (e.g. `["titanium-plus"]`).
+
+- **Compact Dots & Dynamic Header Labeling (Apple Style)**:
+  - When a group is configured as `compact_dots` (e.g. "Colors & Pastels"), individual labels underneath each dot are omitted, reducing vertical space usage by ~80% (from ~280px to ~44px).
+  - Hovering or selecting any dot dynamically updates the category section header in real time:
+    `COLORS & PASTELS: PETAL PINK` with extra price tags if applicable.
+  - Mobile & Accessibility Compliance: Each compact dot is housed within a minimum 44px by 44px interactive tap hitbox to prevent accidental mis-taps on mobile devices. Active selections use high-contrast amber gold focus rings (`ring-2 ring-[#f3aa18] ring-offset-2 ring-offset-black`).
+
+- **Shop the Look & Contextual Pairing Assist**:
+  - Eliminates buyer confusion regarding how to configure multi-part bespoke formulas (e.g. Titanium+ back with Matte Black camera and back glass).
+  - Non-Intrusive Floating Trigger: A clean `[ Compass: Shop the Look ({count}) ]` pill is positioned on the visualizer canvas and in the customizer eyebrow bar. It never interrupts the start of user customization.
+  - Contextual In-Flow Pairing: When a customer selects a trigger finish (e.g. Titanium+), an inline suggestion card appears below the Back Skin layer: `Popular Mix: Titanium Stealth Bespoke [Apply Combo]`. Clicking instantly applies the complementary accent layers.
+
+- **Zero Sparkle Policy Across UI & Codebase**:
+  - Sparkle icons (`✨` / `Sparkles`) are strictly prohibited across all storefront and manager UI components.
+  - Purposeful craft icons (`Compass`, `Palette`, `Layers`, `SlidersHorizontal`, `Wand2`) are used exclusively.
+
 
 
 
