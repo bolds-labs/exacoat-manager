@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.01] - 2026-09-21
+
+### Batch v2 Modern Engine Migration: 3D Shadows, Alpha Masks & Accents Rotation
+- **Batch v2 Configurator Upgrade**:
+  - Migrated 73 device product models catalog-wide on `https://staging.exacoat.com` to the modern v2 compositing engine (`configurator_version: 'v2'`).
+- **View-Level 3D Raytraced Shadows**:
+  - Configured each device view with its uploaded 3D shadow render URL (`https://staging.exacoat.com/wp-content/uploads/<filename>`) across `shadow_png_url` and `shading_image_url`.
+  - Set default realistic shadow multiply opacity (0.85) and screen highlight opacity (0.35).
+  - Multi-view devices (MacBook Pro 14" M1, MacBook Pro 16" M1, Xiaomi Pad 8) mapped with view-specific precision (`bottom_view`, `main_view`).
+- **Alpha Mask Inheritance from Matte Black**:
+  - Replaced legacy per-finish bitmap dictionaries with clean alpha masks (`mask_svg_url`) derived from each layer's `matte-black` PNG asset.
+  - Cleared legacy `render_texture_map` so all standard and premium finishes dynamically inherit high-resolution master textures clipped via canvas `destination-in`.
+- **Accent Layer 90-Degree Texture Rotation**:
+  - Automatically applied `texture_rotation: 90` to all `accents` layers to create visual directional contrast against the primary back skin.
+  - Preserved camera plate covers (`additional-camera`, `camera-panel`), back skins, and laptop chassis layers at 0 degrees.
+
 ## [0.0.98] - 2026-09-21
 
 ### Per-Device Presets ("Shop the Look") Architecture & Visual Cards Redesign

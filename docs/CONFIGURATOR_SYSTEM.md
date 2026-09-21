@@ -45,8 +45,11 @@ The configurator architecture supports two distinct rendering pipelines, selecta
 ### V2 Modern Engine (Dynamic Compositing Preview)
 * **How It Works**:
   * **Layer 1 (Chassis & Color)**: Neutral device body image tinted dynamically using device color hex codes (`space-gray`, `silver`, `midnight`, `starlight`).
-  * **Layer 2 (Vector Mask & Texture)**: An SVG path or Alpha PNG mask (`mask_svg_url`) clipped dynamically to tile a global texture pattern.
-  * **Layer 3 (Photoshop Multiply Shadow)**: A transparent PNG containing realistic ambient occlusion, drop shadows, and bevel highlights (`shadow_png_url`) rendered with `mix-blend-mode: multiply`.
+  * **Layer 2 (Vector Mask & Texture)**: An SVG path or Alpha PNG mask (`mask_svg_url`) clipped dynamically via HTML5 Canvas `destination-in` to tile a global master texture pattern. During migration, each layer's original `matte-black` PNG is adopted as its alpha mask (`mask_svg_url`), and the legacy `render_texture_map` is cleared so all standard finishes inherit master textures.
+  * **Layer 3 (Photoshop Multiply Shadow)**: A transparent PNG containing realistic ambient occlusion, drop shadows, and bevel highlights (`shadow_png_url` and `shading_image_url`) rendered with `mix-blend-mode: multiply` at opacity 0.85 (and screen highlights at 0.35).
+* **Accent Layer Texture Rotation Rule**:
+  * Skin textures on `accents` layers (e.g. camera lens surrounds, accent rings, visor cutouts) are rotated by 90 degrees (`texture_rotation: 90`) to provide distinctive directional contrast against the main back body skin.
+  * Camera plate covers (`additional-camera`, `camera-panel`), back skins, and laptop chassis layers remain unrotated (0 degrees).
 * **Advantages**: Eliminates exporting 24+ individual PNGs per angle for new devices; a single mask and shadow overlay can render any global texture swatch.
 
 ---
