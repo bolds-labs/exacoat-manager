@@ -329,7 +329,7 @@ export const TeamRolesManager: React.FC<TeamRolesManagerProps> = () => {
 
                       {isSuperAdmin && (
                         <td className="py-3 px-4 text-right">
-                          {isCurrent || u.email === 'admin@exacoat.com' || u.email === 'shandy@exacoat.com' || u.email === 'admin@artmatter.co' || u.email === 'shandy@artmatter.co' ? (
+                          {isCurrent || u.email === 'admin@exacoat.com' || u.email === 'shandy@exacoat.com' ? (
                             <span className="text-[11px] text-zinc-500 font-mono">
                               Protected
                             </span>

@@ -31,6 +31,8 @@ class Exacoat_Checkout_Engine {
 		}
 
 		// 4. AJAX Coupon Code Apply Handler
+		add_action( 'wp_ajax_exacoat_checkout_apply_coupon', [ __CLASS__, 'ajax_apply_coupon' ] );
+		add_action( 'wp_ajax_nopriv_exacoat_checkout_apply_coupon', [ __CLASS__, 'ajax_apply_coupon' ] );
 		add_action( 'wp_ajax_artmatter_checkout_apply_coupon', [ __CLASS__, 'ajax_apply_coupon' ] );
 		add_action( 'wp_ajax_nopriv_artmatter_checkout_apply_coupon', [ __CLASS__, 'ajax_apply_coupon' ] );
 
@@ -43,7 +45,9 @@ class Exacoat_Checkout_Engine {
 		add_filter( 'woocommerce_checkout_fields', [ __CLASS__, 'customize_checkout_fields' ], 99 );
 
 		// 8. Auto-detect Existing User & Quick Login AJAX Handlers
+		add_action( 'wp_ajax_nopriv_exacoat_check_user_exists', [ __CLASS__, 'ajax_check_user_exists' ] );
 		add_action( 'wp_ajax_nopriv_artmatter_check_user_exists', [ __CLASS__, 'ajax_check_user_exists' ] );
+		add_action( 'wp_ajax_nopriv_exacoat_checkout_quick_login', [ __CLASS__, 'ajax_quick_login' ] );
 		add_action( 'wp_ajax_nopriv_artmatter_checkout_quick_login', [ __CLASS__, 'ajax_quick_login' ] );
 
 		// Whitelist storefront domain for WordPress safe redirects
@@ -192,7 +196,7 @@ class Exacoat_Checkout_Engine {
 			return new WP_Error( 'not_found', 'Order not found', [ 'status' => 404 ] );
 		}
 		if ( $order->has_status( [ 'pending', 'on-hold', 'failed' ] ) ) {
-			$order->update_status( 'cancelled', __( 'Customer cancelled payment.', 'artmatter-core' ) );
+			$order->update_status( 'cancelled', __( 'Customer cancelled payment.', 'exacoat-core' ) );
 			return rest_ensure_response( [ 'success' => true, 'order_id' => $order_id, 'status' => 'cancelled' ] );
 		}
 		return rest_ensure_response( [ 'success' => true, 'order_id' => $order_id, 'status' => $order->get_status() ] );

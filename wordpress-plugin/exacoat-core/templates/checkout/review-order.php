@@ -1,7 +1,7 @@
 <?php
 /**
- * Artmatter Luxury Checkout - Order Review Totals Template
- * Version: 7.3.1
+ * Exacoat Checkout - Order Review Totals Template
+ * Version: 7.3.2
  * Overrides default WooCommerce review-order.php table with sleek dark totals breakdown.
  */
 
@@ -38,10 +38,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 				$rates = ( ! empty( $packages ) && isset( $packages[0]['rates'] ) ) ? $packages[0]['rates'] : [];
 				if ( ! empty( $chosen_method ) && isset( $rates[ $chosen_method ] ) ) {
 					$cost = $rates[ $chosen_method ]->get_cost();
-					$curr = class_exists( 'Artmatter_Checkout_Engine' ) ? Artmatter_Checkout_Engine::get_active_currency() : ( function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'IDR' );
-					echo ( $cost == 0 ) ? esc_html__( 'Free', 'artmatter-core' ) : wc_price( $cost, [ 'currency' => $curr ] );
+					$checkout_engine = class_exists( 'Exacoat_Checkout_Engine' ) ? 'Exacoat_Checkout_Engine' : ( class_exists( 'Artmatter_Checkout_Engine' ) ? 'Artmatter_Checkout_Engine' : false );
+					$curr = $checkout_engine ? $checkout_engine::get_active_currency() : ( function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'IDR' );
+					echo ( $cost == 0 ) ? esc_html__( 'Free', 'exacoat-core' ) : wc_price( $cost, [ 'currency' => $curr ] );
 				} else {
-					echo '<span class="shipping-calculated-note" style="font-size:12px;color:var(--am-co-text-muted,#a1a1aa);font-weight:400;">' . esc_html__( 'Calculated at next step', 'artmatter-core' ) . '</span>';
+					echo '<span class="shipping-calculated-note" style="font-size:12px;color:var(--am-co-text-muted,#a1a1aa);font-weight:400;">' . esc_html__( 'Calculated at next step', 'exacoat-core' ) . '</span>';
 				}
 				?>
 			</span>

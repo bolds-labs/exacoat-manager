@@ -29,6 +29,12 @@ This document is the authoritative operational guideline, system boundaries, and
 - **Active WordPress Environment**: Always use `https://staging.exacoat.com` as the active WordPress backend environment. `exacoat.com` does not have `exacoat-core` installed.
 - **Language Boundary**: Do not use Indonesian for internal Exacoat systems or UI components. Use English ("Claim Warranty", "Redeem Gift", "Export Shipments"), reserving Indonesian terms only for customer-facing channel contexts (e.g. Shopee marketplace tabs) when necessary.
 - **Antislop Rule**: Never use em dashes (`—`) anywhere in UI copy, code comments, commit messages, or markdown documentation. Use hyphens (`-`), colons (`:`), commas, or parentheses instead.
+- **Brand Isolation & Decoupling Invariants**:
+  - **Reviews Database Table**: The central customer reviews table is `wp_exacoat_reviews`. `check_table_schema()` in `class-review-manager.php` automatically runs an `ALTER TABLE wp_artmatter_reviews RENAME TO wp_exacoat_reviews` query if the legacy table is detected, guaranteeing zero data loss.
+  - **Review Invitations Queue**: Invitations are enqueued under Action Scheduler queue `exacoat-reviews` with hook `exacoat_send_review_invitation_job`. A legacy listener for `artmatter_send_review_invitation_job` is retained for in-flight tasks.
+  - **Review Metadata Keys**: Writes strictly persist to `_exacoat_review_invited_at`, `_exacoat_review_invite_scheduled_at`, `_exacoat_has_review`, `_exacoat_review_id`, and `_exacoat_review_reward`. Readers inspect `_exacoat_*` first with fallback to legacy keys to ensure existing order records remain intact.
+  - **Primary Subsystem Classes**: All subsystem classes must prioritize `Exacoat_*` (`Exacoat_Diagnostics`, `Exacoat_Email_Engine`, `Exacoat_Logger`, `Exacoat_Checkout_Engine`, `Exacoat_Store_Enhancements`).
+  - **Shortcodes & AJAX Actions**: Shortcodes must use `[exacoat_order_tracking]` and `[exacoat_track_order]`. AJAX actions use `exacoat_*` prefixes with legacy aliases preserved for backwards compatibility.
 
 ---
 

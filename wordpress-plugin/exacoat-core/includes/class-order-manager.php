@@ -660,7 +660,7 @@ class Exacoat_Order_Manager {
 			add_filter( 'woocommerce_email_enabled_customer_invoice', '__return_false', 99 );
 		}
 
-		$order->update_status( $clean_status, 'Status updated via Artmatter Manager ERP' );
+		$order->update_status( $clean_status, 'Status updated via Exacoat Manager' );
 
 		if ( class_exists( 'Artmatter_Logger' ) ) {
 			Artmatter_Logger::info( 'orders', "Status for Order #{$order_id} updated to '{$clean_status}' via Manager ERP", [
@@ -748,6 +748,9 @@ class Exacoat_Order_Manager {
 		// Save to WooCommerce Order object metadata (HPOS compatible)
 		$order->update_meta_data( 'tracking_number', $tracking_number );
 		$order->update_meta_data( 'carrier_id', $carrier_id );
+		$order->update_meta_data( '_exacoat_tracking_info', $tracking_info );
+		$order->update_meta_data( '_exacoat_courier', $carrier_display );
+		$order->update_meta_data( '_exacoat_tracking_number', $tracking_number );
 		$order->update_meta_data( '_artmatter_tracking_info', $tracking_info );
 		$order->update_meta_data( '_artmatter_courier', $carrier_display );
 		$order->update_meta_data( '_artmatter_tracking_number', $tracking_number );
@@ -758,6 +761,9 @@ class Exacoat_Order_Manager {
 		// Save to traditional postmeta and ACF fields
 		update_post_meta( $order_id, 'tracking_number', $tracking_number );
 		update_post_meta( $order_id, 'carrier_id', $carrier_id );
+		update_post_meta( $order_id, '_exacoat_tracking_info', $tracking_info );
+		update_post_meta( $order_id, '_exacoat_courier', $carrier_display );
+		update_post_meta( $order_id, '_exacoat_tracking_number', $tracking_number );
 		update_post_meta( $order_id, '_artmatter_tracking_info', $tracking_info );
 		update_post_meta( $order_id, '_artmatter_courier', $carrier_display );
 		update_post_meta( $order_id, '_artmatter_tracking_number', $tracking_number );

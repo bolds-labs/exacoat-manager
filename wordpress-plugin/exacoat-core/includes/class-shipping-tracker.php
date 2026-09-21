@@ -36,16 +36,24 @@ class Exacoat_Shipping_Tracker {
 		// 5. Register Tracking Webhook REST Routes (TrackingMore + 17TRACK alias)
 		add_action( 'rest_api_init', [ __CLASS__, 'register_rest_routes' ] );
 
-		// 6. Public Tracking Shortcodes: [artmatter_order_tracking], [artmatter_track_order]
+		// 6. Public Tracking Shortcodes: [exacoat_order_tracking], [exacoat_track_order], [artmatter_order_tracking]
+		add_shortcode( 'exacoat_order_tracking', [ __CLASS__, 'render_tracking_shortcode' ] );
+		add_shortcode( 'exacoat_track_order', [ __CLASS__, 'render_tracking_shortcode' ] );
 		add_shortcode( 'artmatter_order_tracking', [ __CLASS__, 'render_tracking_shortcode' ] );
 		add_shortcode( 'artmatter_track_order', [ __CLASS__, 'render_tracking_shortcode' ] );
 
 		// 7. AJAX Handlers for TrackingMore Admin Diagnostics, Admin Sync, & Live Customer Refresh
+		add_action( 'wp_ajax_exacoat_test_trackingmore_connection', [ __CLASS__, 'ajax_test_trackingmore_connection' ] );
 		add_action( 'wp_ajax_artmatter_test_trackingmore_connection', [ __CLASS__, 'ajax_test_trackingmore_connection' ] );
+		add_action( 'wp_ajax_exacoat_test_17track_connection', [ __CLASS__, 'ajax_test_trackingmore_connection' ] );
 		add_action( 'wp_ajax_artmatter_test_17track_connection', [ __CLASS__, 'ajax_test_trackingmore_connection' ] );
+		add_action( 'wp_ajax_exacoat_admin_sync_trackingmore', [ __CLASS__, 'ajax_admin_sync_trackingmore' ] );
 		add_action( 'wp_ajax_artmatter_admin_sync_trackingmore', [ __CLASS__, 'ajax_admin_sync_trackingmore' ] );
+		add_action( 'wp_ajax_exacoat_admin_sync_17track', [ __CLASS__, 'ajax_admin_sync_trackingmore' ] );
 		add_action( 'wp_ajax_artmatter_admin_sync_17track', [ __CLASS__, 'ajax_admin_sync_trackingmore' ] );
+		add_action( 'wp_ajax_exacoat_refresh_order_tracking', [ __CLASS__, 'ajax_refresh_order_tracking' ] );
 		add_action( 'wp_ajax_artmatter_refresh_order_tracking', [ __CLASS__, 'ajax_refresh_order_tracking' ] );
+		add_action( 'wp_ajax_nopriv_exacoat_refresh_order_tracking', [ __CLASS__, 'ajax_refresh_order_tracking' ] );
 		add_action( 'wp_ajax_nopriv_artmatter_refresh_order_tracking', [ __CLASS__, 'ajax_refresh_order_tracking' ] );
 
 		// 8. Automated Shipping Sync Cron for Active Domestic & International Orders (Every 6 Hours to conserve Biteship tokens)
@@ -188,6 +196,8 @@ class Exacoat_Shipping_Tracker {
 			$tracking_number = sanitize_text_field( wp_unslash( $_POST['tracking_number'] ) );
 		} elseif ( isset( $_POST['_tracking_number'] ) && is_string( $_POST['_tracking_number'] ) ) {
 			$tracking_number = sanitize_text_field( wp_unslash( $_POST['_tracking_number'] ) );
+		} elseif ( isset( $_POST['_exacoat_tracking_number'] ) && is_string( $_POST['_exacoat_tracking_number'] ) ) {
+			$tracking_number = sanitize_text_field( wp_unslash( $_POST['_exacoat_tracking_number'] ) );
 		} elseif ( isset( $_POST['_artmatter_tracking_number'] ) && is_string( $_POST['_artmatter_tracking_number'] ) ) {
 			$tracking_number = sanitize_text_field( wp_unslash( $_POST['_artmatter_tracking_number'] ) );
 		}
@@ -195,14 +205,16 @@ class Exacoat_Shipping_Tracker {
 		if ( empty( $tracking_number ) ) {
 			$tracking_number = (string) ( $order->get_meta( 'tracking_number' ) 
 				?: ( $order->get_meta( '_tracking_number' ) 
+				?: ( $order->get_meta( '_exacoat_tracking_number' ) 
 				?: ( $order->get_meta( '_artmatter_tracking_number' ) 
 				?: ( get_post_meta( $order_id, 'tracking_number', true ) 
 				?: ( get_post_meta( $order_id, '_tracking_number', true ) 
-				?: ( function_exists( 'get_field' ) ? (string) get_field( 'tracking_number', $order_id ) : '' ) ) ) ) ) );
+				?: ( get_post_meta( $order_id, '_exacoat_tracking_number', true ) 
+				?: ( function_exists( 'get_field' ) ? (string) get_field( 'tracking_number', $order_id ) : '' ) ) ) ) ) ) ) );
 		}
 
 		if ( empty( $tracking_number ) ) {
-			$t_info = $order->get_meta( '_artmatter_tracking_info' ) ?: get_post_meta( $order_id, '_artmatter_tracking_info', true );
+			$t_info = $order->get_meta( '_exacoat_tracking_info' ) ?: ( $order->get_meta( '_artmatter_tracking_info' ) ?: ( get_post_meta( $order_id, '_exacoat_tracking_info', true ) ?: get_post_meta( $order_id, '_artmatter_tracking_info', true ) ) );
 			if ( is_array( $t_info ) && ! empty( $t_info['tracking_number'] ) ) {
 				$tracking_number = (string) $t_info['tracking_number'];
 			}
@@ -232,15 +244,18 @@ class Exacoat_Shipping_Tracker {
 		$carrier = trim( strtolower( $carrier ) );
 
 		// 3. Compare with previously registered tracking number
-		$prev_registered = (string) ( $order->get_meta( '_artmatter_trackingmore_registered_number' ) 
+		$prev_registered = (string) ( $order->get_meta( '_exacoat_trackingmore_registered_number' ) 
+			?: ( $order->get_meta( '_artmatter_trackingmore_registered_number' ) 
 			?: ( $order->get_meta( '_artmatter_17track_registered_number' ) 
+			?: ( get_post_meta( $order_id, '_exacoat_trackingmore_registered_number', true ) 
 			?: ( get_post_meta( $order_id, '_artmatter_trackingmore_registered_number', true ) 
-			?: ( get_post_meta( $order_id, '_artmatter_17track_registered_number', true ) ?: '' ) ) ) );
+			?: ( get_post_meta( $order_id, '_artmatter_17track_registered_number', true ) ?: '' ) ) ) ) ) );
 
 		if ( ! empty( $tracking_number ) ) {
 			// Ensure consistent metadata across HPOS and postmeta
 			$order->update_meta_data( 'tracking_number', $tracking_number );
 			$order->update_meta_data( '_tracking_number', $tracking_number );
+			$order->update_meta_data( '_exacoat_tracking_number', $tracking_number );
 			$order->update_meta_data( '_artmatter_tracking_number', $tracking_number );
 			if ( ! empty( $carrier ) ) {
 				$order->update_meta_data( 'carrier_id', $carrier );
@@ -250,6 +265,7 @@ class Exacoat_Shipping_Tracker {
 
 			update_post_meta( $order_id, 'tracking_number', $tracking_number );
 			update_post_meta( $order_id, '_tracking_number', $tracking_number );
+			update_post_meta( $order_id, '_exacoat_tracking_number', $tracking_number );
 			update_post_meta( $order_id, '_artmatter_tracking_number', $tracking_number );
 			if ( ! empty( $carrier ) ) {
 				update_post_meta( $order_id, 'carrier_id', $carrier );

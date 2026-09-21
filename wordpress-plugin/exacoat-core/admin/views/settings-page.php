@@ -2087,7 +2087,7 @@ function initSettingsDashboard() {
 		btn.style.pointerEvents = 'none';
 
 		const fd = new FormData();
-		fd.append('action', 'artmatter_flush_permalinks');
+		fd.append('action', 'exacoat_flush_permalinks');
 
 		fetch(ajaxurl, { method: 'POST', body: fd })
 			.then(r => r.json())
@@ -2446,7 +2446,7 @@ function initSettingsDashboard() {
 			diagBtn.style.pointerEvents = 'none';
 
 			const fd = new FormData();
-			fd.append('action', 'artmatter_run_health_test');
+			fd.append('action', 'exacoat_run_health_test');
 
 			fetch(ajaxurl, { method: 'POST', body: fd })
 				.then(r => r.json())
@@ -2477,7 +2477,7 @@ function initSettingsDashboard() {
 		if (!container) return;
 
 		const fd = new FormData();
-		fd.append('action', 'artmatter_get_logs');
+		fd.append('action', 'exacoat_get_logs');
 
 		fetch(ajaxurl, { method: 'POST', body: fd })
 			.then(r => r.json())
@@ -2503,7 +2503,7 @@ function initSettingsDashboard() {
 		clearLogsBtn.addEventListener('click', function() {
 			if (!confirm('Clear all telemetry logs?')) return;
 			const fd = new FormData();
-			fd.append('action', 'artmatter_clear_logs');
+			fd.append('action', 'exacoat_clear_logs');
 			fetch(ajaxurl, { method: 'POST', body: fd })
 				.then(() => fetchLogs());
 		});

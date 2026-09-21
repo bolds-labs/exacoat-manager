@@ -56,13 +56,18 @@ class Exacoat_Performance_Auditor {
 	 * Register REST routes for Manager ERP
 	 */
 	public static function register_rest_routes() {
-		register_rest_route( 'artmatter/v1', '/performance/health', [
-			'methods'             => 'GET',
-			'callback'            => [ __CLASS__, 'rest_get_health' ],
-			'permission_callback' => function () {
-				return current_user_can( 'manage_options' ) || ( class_exists( 'Artmatter_Bricks_Bridge' ) && Artmatter_Bricks_Bridge::verify_manager_request() );
-			},
-		] );
+		$namespaces = [ 'exacoat-core/v1', 'exacoat/v1', 'artmatter/v1' ];
+		foreach ( $namespaces as $ns ) {
+			register_rest_route( $ns, '/performance/health', [
+				'methods'             => 'GET',
+				'callback'            => [ __CLASS__, 'rest_get_health' ],
+				'permission_callback' => function () {
+					return current_user_can( 'manage_options' ) ||
+						( class_exists( 'Exacoat_Core' ) && Exacoat_Core::verify_bridge_permission() ) ||
+						( class_exists( 'Artmatter_Bricks_Bridge' ) && Artmatter_Bricks_Bridge::verify_manager_request() );
+				},
+			] );
+		}
 	}
 
 	public static function rest_get_health( WP_REST_Request $request ) {

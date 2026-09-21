@@ -512,10 +512,9 @@ export async function authenticatedFetch(input: RequestInfo | URL, init: Request
       headers.set('Authorization', auth.Authorization);
     }
 
-    // Attach WooCommerce credentials to /wp-json/wc/, /wp-json/exacoat-core/, and /wp-json/artmatter-core/ requests if not using JWT Bearer
+    // Attach WooCommerce credentials to /wp-json/wc/ and /wp-json/exacoat-core/ requests if not using JWT Bearer
     const isWcOrPluginRoute = targetUrlObj.pathname.includes('/wp-json/wc/') ||
-      targetUrlObj.pathname.includes('/wp-json/exacoat-core/') ||
-      targetUrlObj.pathname.includes('/wp-json/artmatter-core/');
+      targetUrlObj.pathname.includes('/wp-json/exacoat-core/');
 
     if (isWcOrPluginRoute && !auth.Authorization?.startsWith('Bearer')) {
       const { key, secret } = getWcCredentials();
@@ -592,10 +591,10 @@ function parseConfiguratorFromItem(item: any): any[] {
 
 function enrichOrder(order: any): Order {
   const metaList = order.meta_data || [];
-  const trackingMeta = metaList.find((m: any) => m.key === 'tracking_number' || m.key === '_tracking_number' || m.key === '_artmatter_tracking_number');
+  const trackingMeta = metaList.find((m: any) => m.key === 'tracking_number' || m.key === '_tracking_number' || m.key === '_exacoat_tracking_number' || m.key === '_artmatter_tracking_number');
   const carrierMeta = metaList.find((m: any) => m.key === '_shipping_carrier' || m.key === 'carrier_id' || m.key === '_carrier_id');
-  const checkpointsMeta = metaList.find((m: any) => m.key === '_artmatter_tracking_checkpoints');
-  const latestStatusMeta = metaList.find((m: any) => m.key === '_biteship_latest_status' || m.key === '_artmatter_trackingmore_latest_status' || m.key === '_artmatter_17track_latest_status');
+  const checkpointsMeta = metaList.find((m: any) => m.key === '_exacoat_tracking_checkpoints' || m.key === '_artmatter_tracking_checkpoints');
+  const latestStatusMeta = metaList.find((m: any) => m.key === '_biteship_latest_status' || m.key === '_exacoat_trackingmore_latest_status' || m.key === '_exacoat_17track_latest_status' || m.key === '_artmatter_trackingmore_latest_status' || m.key === '_artmatter_17track_latest_status');
   const districtMeta = metaList.find((m: any) => m.key === '_shipping_district');
   const subdistrictMeta = metaList.find((m: any) => m.key === '_shipping_subdistrict');
   const phoneMeta = metaList.find((m: any) => m.key === '_shipping_phone_formatted' || m.key === '_billing_phone');

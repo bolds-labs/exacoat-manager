@@ -122,7 +122,7 @@ class Exacoat_Logger {
 		// Mirror to WooCommerce Logger if available
 		if ( function_exists( 'wc_get_logger' ) ) {
 			$wc_logger  = wc_get_logger();
-			$wc_context = [ 'source' => 'artmatter-' . $channel ];
+			$wc_context = [ 'source' => 'exacoat-' . $channel ];
 			if ( $level === 'error' ) {
 				$wc_logger->error( $message, $wc_context );
 			} elseif ( $level === 'warning' ) {

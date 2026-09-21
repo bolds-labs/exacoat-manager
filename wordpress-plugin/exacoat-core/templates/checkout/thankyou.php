@@ -1,7 +1,7 @@
 <?php
 /**
- * Artmatter Luxury Checkout - Thank You / Order Received Template
- * Version: 7.5.1
+ * Exacoat Checkout - Thank You / Order Received Template
+ * Version: 7.5.2
  * Overrides default WooCommerce thankyou.php with real production status and delivery address.
  */
 

@@ -1,9 +1,9 @@
 services:
-  artmatter-manager:
+  exacoat-manager:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: artmatter-manager
+    container_name: exacoat-manager
     restart: unless-stopped
     expose:
       - "80"

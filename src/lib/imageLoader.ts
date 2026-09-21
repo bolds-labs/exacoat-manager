@@ -41,10 +41,6 @@ export async function loadCorsSafeImageBlobUrl(
     let proxyEndpoint = `${wpBaseUrl}/wp-json/exacoat-core/v1/image-proxy?${proxyParams}`;
     
     let res = await fetch(proxyEndpoint);
-    if (!res.ok) {
-      // Fallback to legacy namespace if old plugin active
-      res = await fetch(`${wpBaseUrl}/wp-json/artmatter-core/v1/image-proxy?${proxyParams}`);
-    }
     if (res.ok) {
       const blob = await res.blob();
       if (blob && blob.size > 0) {
@@ -62,9 +58,6 @@ export async function loadCorsSafeImageBlobUrl(
     if (url) tactileParams.set('url', url);
     let tactileEndpoint = `${wpBaseUrl}/wp-json/exacoat-core/v1/tactile/source-image?${tactileParams}`;
     let res = await fetch(tactileEndpoint);
-    if (!res.ok) {
-      res = await fetch(`${wpBaseUrl}/wp-json/artmatter-core/v1/tactile/source-image?${tactileParams}`);
-    }
     if (res.ok) {
       const blob = await res.blob();
       if (blob && blob.size > 0) {

@@ -14,7 +14,7 @@ const THEME_STORAGE_KEY = 'exacoat_theme';
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<Theme>(() => {
-    const saved = localStorage.getItem(THEME_STORAGE_KEY) || localStorage.getItem('artmatter_theme');
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
     return (saved === 'light' || saved === 'dark') ? saved : 'dark';
   });
 

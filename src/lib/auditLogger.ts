@@ -35,7 +35,7 @@ class ManagerAuditLogger {
   private loadFromStorage() {
     try {
       if (typeof window !== 'undefined') {
-        const raw = sessionStorage.getItem(this.storageKey) || sessionStorage.getItem('artmatter_manager_audit_logs');
+        const raw = sessionStorage.getItem(this.storageKey);
         if (raw) {
           this.logs = JSON.parse(raw);
         }

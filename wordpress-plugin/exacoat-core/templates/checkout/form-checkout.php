@@ -1,7 +1,7 @@
 <?php
 /**
- * Artmatter Luxury Checkout Main Template
- * Version: 7.10.27
+ * Exacoat Checkout Main Template
+ * Version: 7.10.28
  * In-box stacked labels, Biteship automated address integration, and promo toggle drawer.
  */
 

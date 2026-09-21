@@ -175,8 +175,8 @@ class Exacoat_Pushover_Service {
 		$msg = "<b>Error:</b> " . esc_html( $title ) . "\n";
 		$msg .= "<code>" . esc_html( wp_trim_words( $details, 40 ) ) . "</code>";
 
-		self::send( 'Artmatter Core Error', $msg, [
-			'url'       => admin_url( 'admin.php?page=artmatter-core' ),
+		self::send( 'Exacoat Core Error', $msg, [
+			'url'       => admin_url( 'admin.php?page=exacoat-core' ),
 			'url_title' => 'Inspect Diagnostics & Logs',
 			'priority'  => 1,
 		] );

@@ -404,14 +404,15 @@ class Exacoat_Customer_Auth {
 				];
 			}
 			$view_url        = $order->get_checkout_order_received_url() ?: $order->get_view_order_url();
-			$tracking_number = (string) ( $order->get_meta( 'tracking_number' ) ?: $order->get_meta( '_tracking_number' ) ?: $order->get_meta( '_artmatter_tracking_number' ) );
+			$tracking_number = (string) ( $order->get_meta( 'tracking_number' ) ?: $order->get_meta( '_tracking_number' ) ?: $order->get_meta( '_exacoat_tracking_number' ) ?: $order->get_meta( '_artmatter_tracking_number' ) );
 			$carrier_raw     = (string) ( $order->get_meta( 'carrier_id' ) ?: $order->get_meta( '_carrier_id' ) );
 			$carrier_key     = strtolower( trim( $carrier_raw ) );
 			$carrier_name    = $carriers[ $carrier_key ]['name'] ?? ( $carrier_key ? ucfirst( $carrier_key ) : '' );
-			$tracking_url    = ( $tracking_number && class_exists( 'Artmatter_Shipping_Tracker' ) )
-				? Artmatter_Shipping_Tracker::get_carrier_tracking_url( $carrier_key, $tracking_number )
+			$tracker_class   = class_exists( 'Exacoat_Shipping_Tracker' ) ? 'Exacoat_Shipping_Tracker' : ( class_exists( 'Artmatter_Shipping_Tracker' ) ? 'Artmatter_Shipping_Tracker' : null );
+			$tracking_url    = ( $tracking_number && $tracker_class )
+				? $tracker_class::get_carrier_tracking_url( $carrier_key, $tracking_number )
 				: '';
-			$checkpoints     = $order->get_meta( '_artmatter_tracking_checkpoints' ) ?: get_post_meta( $order->get_id(), '_artmatter_tracking_checkpoints', true );
+			$checkpoints     = $order->get_meta( '_exacoat_tracking_checkpoints' ) ?: ( $order->get_meta( '_artmatter_tracking_checkpoints' ) ?: ( get_post_meta( $order->get_id(), '_exacoat_tracking_checkpoints', true ) ?: get_post_meta( $order->get_id(), '_artmatter_tracking_checkpoints', true ) ) );
 
 			$orders[] = [
 				'id'              => $order->get_id(),
@@ -493,18 +494,19 @@ class Exacoat_Customer_Auth {
 
 		$shipping_address = $order->get_formatted_shipping_address() ?: $order->get_formatted_billing_address();
 		$shipping_address = preg_replace( '/<br\s*\/?>/i', "\n", $shipping_address );
-		$tracking_number  = (string) ( $order->get_meta( 'tracking_number' ) ?: $order->get_meta( '_tracking_number' ) ?: $order->get_meta( '_artmatter_tracking_number' ) );
+		$tracking_number  = (string) ( $order->get_meta( 'tracking_number' ) ?: $order->get_meta( '_tracking_number' ) ?: $order->get_meta( '_exacoat_tracking_number' ) ?: $order->get_meta( '_artmatter_tracking_number' ) );
 		$tracking_carrier = (string) ( $order->get_meta( 'carrier_id' ) ?: $order->get_meta( '_carrier_id' ) );
 		$carrier_key      = strtolower( trim( $tracking_carrier ) );
 		$carrier_name     = $carriers[ $carrier_key ]['name'] ?? ( $carrier_key ? ucfirst( $carrier_key ) : '' );
-		$tracking_url     = ( $tracking_number && class_exists( 'Artmatter_Shipping_Tracker' ) )
-			? Artmatter_Shipping_Tracker::get_carrier_tracking_url( $carrier_key, $tracking_number )
+		$tracker_class    = class_exists( 'Exacoat_Shipping_Tracker' ) ? 'Exacoat_Shipping_Tracker' : ( class_exists( 'Artmatter_Shipping_Tracker' ) ? 'Artmatter_Shipping_Tracker' : null );
+		$tracking_url     = ( $tracking_number && $tracker_class )
+			? $tracker_class::get_carrier_tracking_url( $carrier_key, $tracking_number )
 			: '';
 
-		$checkpoints = $order->get_meta( '_artmatter_tracking_checkpoints' ) ?: get_post_meta( $order->get_id(), '_artmatter_tracking_checkpoints', true );
-		if ( empty( $checkpoints ) && $tracking_number && class_exists( 'Artmatter_Shipping_Tracker' ) ) {
-			Artmatter_Shipping_Tracker::sync_order_tracking( $order->get_id() );
-			$checkpoints = $order->get_meta( '_artmatter_tracking_checkpoints' ) ?: get_post_meta( $order->get_id(), '_artmatter_tracking_checkpoints', true );
+		$checkpoints = $order->get_meta( '_exacoat_tracking_checkpoints' ) ?: ( $order->get_meta( '_artmatter_tracking_checkpoints' ) ?: ( get_post_meta( $order->get_id(), '_exacoat_tracking_checkpoints', true ) ?: get_post_meta( $order->get_id(), '_artmatter_tracking_checkpoints', true ) ) );
+		if ( empty( $checkpoints ) && $tracking_number && $tracker_class ) {
+			$tracker_class::sync_order_tracking( $order->get_id() );
+			$checkpoints = $order->get_meta( '_exacoat_tracking_checkpoints' ) ?: ( $order->get_meta( '_artmatter_tracking_checkpoints' ) ?: ( get_post_meta( $order->get_id(), '_exacoat_tracking_checkpoints', true ) ?: get_post_meta( $order->get_id(), '_artmatter_tracking_checkpoints', true ) ) );
 		}
 
 		return self::response( [

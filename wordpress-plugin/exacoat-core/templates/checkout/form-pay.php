@@ -1,7 +1,7 @@
 <?php
 /**
- * Artmatter Luxury Checkout - Order Repayment Form Template
- * Version: 7.3.1
+ * Exacoat Checkout - Order Repayment Form Template
+ * Version: 7.3.2
  * Overrides default WooCommerce form-pay.php with dark luxury payment form.
  */
 

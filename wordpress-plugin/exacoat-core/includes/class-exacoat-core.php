@@ -628,8 +628,6 @@ class Exacoat_Core {
 					'https://manager.exacoat.com/exacoat-core.zip',
 					'https://manager.exacoat.com/index.html',
 					'https://manager.exacoat.com/env-config.js',
-					'https://manager.artmatter.co/',
-					'https://manager.artmatter.co/version.json',
 				],
 			];
 			$success_message = 'Manager workstation cache purged (manager.exacoat.com).';
@@ -872,14 +870,18 @@ class Exacoat_Core {
 		// Diagnostics Endpoints
 		$register( '/diagnostics/run', [
 			'methods'             => 'GET',
-			'callback'            => fn() => rest_ensure_response( class_exists( 'Artmatter_Diagnostics' ) ? Artmatter_Diagnostics::run_full_api_health_check() : [ 'success' => true ] ),
+			'callback'            => function() {
+				$diag = class_exists( 'Exacoat_Diagnostics' ) ? 'Exacoat_Diagnostics' : ( class_exists( 'Artmatter_Diagnostics' ) ? 'Artmatter_Diagnostics' : false );
+				return rest_ensure_response( $diag ? $diag::run_full_api_health_check() : [ 'success' => true ] );
+			},
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 
 		$register( '/diagnostics/catalog-reconciliation', [
 			'methods'             => 'GET',
 			'callback'            => function( WP_REST_Request $request ) {
-				return rest_ensure_response( class_exists( 'Artmatter_Diagnostics' ) ? Artmatter_Diagnostics::reconcile_catalog(
+				$diag = class_exists( 'Exacoat_Diagnostics' ) ? 'Exacoat_Diagnostics' : ( class_exists( 'Artmatter_Diagnostics' ) ? 'Artmatter_Diagnostics' : false );
+				return rest_ensure_response( $diag ? $diag::reconcile_catalog(
 					max( 1, absint( $request->get_param( 'page' ) ) ),
 					min( 250, max( 1, absint( $request->get_param( 'per_page' ) ) ) )
 				) : [ 'success' => true ] );
@@ -894,10 +896,11 @@ class Exacoat_Core {
 		$register( '/diagnostics/test-email', [
 			'methods'             => 'POST',
 			'callback'            => function( WP_REST_Request $request ) {
-				$params = $request->get_json_params() ?: $request->get_params();
+				$params    = $request->get_json_params() ?: $request->get_params();
 				$event     = sanitize_key( $params['event'] ?? 'test_ping' );
 				$recipient = sanitize_email( $params['recipient_email'] ?? '' );
-				return rest_ensure_response( class_exists( 'Artmatter_Diagnostics' ) ? Artmatter_Diagnostics::test_email_webhook( $event, $recipient, $params ) : [ 'success' => true ] );
+				$diag      = class_exists( 'Exacoat_Diagnostics' ) ? 'Exacoat_Diagnostics' : ( class_exists( 'Artmatter_Diagnostics' ) ? 'Artmatter_Diagnostics' : false );
+				return rest_ensure_response( $diag ? $diag::test_email_webhook( $event, $recipient, $params ) : [ 'success' => true ] );
 			},
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
@@ -912,14 +915,18 @@ class Exacoat_Core {
 				$message   = sanitize_text_field( $params['message'] ?? '' );
 				$url       = esc_url_raw( $params['url'] ?? '' );
 				$priority  = isset( $params['priority'] ) ? intval( $params['priority'] ) : 0;
-				return rest_ensure_response( class_exists( 'Artmatter_Diagnostics' ) ? Artmatter_Diagnostics::test_pushover( $app_token, $user_key, $title, $message, $url, $priority ) : [ 'success' => true ] );
+				$diag      = class_exists( 'Exacoat_Diagnostics' ) ? 'Exacoat_Diagnostics' : ( class_exists( 'Artmatter_Diagnostics' ) ? 'Artmatter_Diagnostics' : false );
+				return rest_ensure_response( $diag ? $diag::test_pushover( $app_token, $user_key, $title, $message, $url, $priority ) : [ 'success' => true ] );
 			},
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 
 		$register( '/diagnostics/test-r2', [
 			'methods'             => [ 'GET', 'POST' ],
-			'callback'            => fn() => rest_ensure_response( class_exists( 'Artmatter_Diagnostics' ) ? Artmatter_Diagnostics::test_r2() : [ 'success' => true ] ),
+			'callback'            => function() {
+				$diag = class_exists( 'Exacoat_Diagnostics' ) ? 'Exacoat_Diagnostics' : ( class_exists( 'Artmatter_Diagnostics' ) ? 'Artmatter_Diagnostics' : false );
+				return rest_ensure_response( $diag ? $diag::test_r2() : [ 'success' => true ] );
+			},
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 
@@ -928,7 +935,8 @@ class Exacoat_Core {
 			'callback'            => function( WP_REST_Request $request ) {
 				try {
 					$params = $request->get_json_params() ?: $request->get_params();
-					return rest_ensure_response( class_exists( 'Artmatter_Diagnostics' ) ? Artmatter_Diagnostics::test_drime( $params ) : [ 'success' => true ] );
+					$diag   = class_exists( 'Exacoat_Diagnostics' ) ? 'Exacoat_Diagnostics' : ( class_exists( 'Artmatter_Diagnostics' ) ? 'Artmatter_Diagnostics' : false );
+					return rest_ensure_response( $diag ? $diag::test_drime( $params ) : [ 'success' => true ] );
 				} catch ( Throwable $e ) {
 					return rest_ensure_response( [
 						'success' => false,
@@ -942,10 +950,11 @@ class Exacoat_Core {
 		$register( '/diagnostics/test-cloudflare', [
 			'methods'             => [ 'GET', 'POST' ],
 			'callback'            => function( WP_REST_Request $request ) {
-				$params = $request->get_json_params() ?: $request->get_params();
-				$zone_id = sanitize_text_field( $params['cloudflare_zone_id'] ?? '' );
+				$params    = $request->get_json_params() ?: $request->get_params();
+				$zone_id   = sanitize_text_field( $params['cloudflare_zone_id'] ?? '' );
 				$api_token = sanitize_text_field( $params['cloudflare_api_token'] ?? '' );
-				return rest_ensure_response( class_exists( 'Artmatter_Diagnostics' ) ? Artmatter_Diagnostics::test_cloudflare_cache( $zone_id, $api_token ) : [ 'success' => true ] );
+				$diag      = class_exists( 'Exacoat_Diagnostics' ) ? 'Exacoat_Diagnostics' : ( class_exists( 'Artmatter_Diagnostics' ) ? 'Artmatter_Diagnostics' : false );
+				return rest_ensure_response( $diag ? $diag::test_cloudflare_cache( $zone_id, $api_token ) : [ 'success' => true ] );
 			},
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
@@ -1087,7 +1096,7 @@ class Exacoat_Core {
 			$url        = (string) $request->get_param( 'url' );
 			if ( ! empty( $url ) && filter_var( $url, FILTER_VALIDATE_URL ) ) {
 				$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
-				$allowed_hosts = [ 'exacoat.com', 'www.exacoat.com', 'cms.exacoat.com', 'media.exacoat.com', 'artmatter.co', 'www.artmatter.co', 'cms.artmatter.co', 'media.artmatter.co' ];
+				$allowed_hosts = [ 'exacoat.com', 'www.exacoat.com', 'cms.exacoat.com', 'media.exacoat.com', 'staging.exacoat.com' ];
 				if ( ! in_array( $host, $allowed_hosts, true ) ) {
 					return new WP_REST_Response( [ 'success' => false, 'error' => 'Image host is not allowed.' ], 400 );
 				}
@@ -1377,8 +1386,9 @@ class Exacoat_Core {
 					return new WP_Error( 'missing_params', 'template_slug/template_key and recipient_email are required', [ 'status' => 400 ] );
 				}
 
-				if ( class_exists( 'Artmatter_Email_Engine' ) ) {
-					$result = Artmatter_Email_Engine::send_email( $slug, $recipient, $name, $vars );
+				$email_class = class_exists( 'Exacoat_Email_Engine' ) ? 'Exacoat_Email_Engine' : ( class_exists( 'Artmatter_Email_Engine' ) ? 'Artmatter_Email_Engine' : false );
+				if ( $email_class ) {
+					$result = $email_class::send_email( $slug, $recipient, $name, $vars );
 					return rest_ensure_response( $result );
 				}
 				return rest_ensure_response( [ 'success' => false, 'message' => 'Email engine not available' ] );
@@ -1393,8 +1403,9 @@ class Exacoat_Core {
 				$slug   = sanitize_key( $params['template_key'] ?? $params['template_slug'] ?? $params['slug'] ?? $params['event'] ?? '' );
 				$vars   = is_array( $params['variables'] ?? null ) ? $params['variables'] : ( is_array( $params['vars'] ?? null ) ? $params['vars'] : [] );
 
-				if ( class_exists( 'Artmatter_Email_Engine' ) ) {
-					$rendered = Artmatter_Email_Engine::render_html( $slug, $vars );
+				$email_class = class_exists( 'Exacoat_Email_Engine' ) ? 'Exacoat_Email_Engine' : ( class_exists( 'Artmatter_Email_Engine' ) ? 'Artmatter_Email_Engine' : false );
+				if ( $email_class ) {
+					$rendered = $email_class::render_html( $slug, $vars );
 					if ( $request->get_param( 'raw' ) ) {
 						header( 'Content-Type: text/html; charset=UTF-8' );
 						echo $rendered['html'] ?? '';
@@ -1436,8 +1447,9 @@ class Exacoat_Core {
 		$register( '/system/logs', [
 			'methods'             => 'GET',
 			'callback'            => function( WP_REST_Request $request ) {
-				$params = $request->get_params();
-				return rest_ensure_response( class_exists( 'Artmatter_Logger' ) ? Artmatter_Logger::get_logs( $params ) : [] );
+				$params       = $request->get_params();
+				$logger_class = class_exists( 'Exacoat_Logger' ) ? 'Exacoat_Logger' : ( class_exists( 'Artmatter_Logger' ) ? 'Artmatter_Logger' : false );
+				return rest_ensure_response( $logger_class ? $logger_class::get_logs( $params ) : [] );
 			},
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
@@ -1445,8 +1457,9 @@ class Exacoat_Core {
 		$register( '/system/clear-logs', [
 			'methods'             => 'POST',
 			'callback'            => function() {
-				if ( class_exists( 'Artmatter_Logger' ) ) {
-					Artmatter_Logger::clear_logs();
+				$logger_class = class_exists( 'Exacoat_Logger' ) ? 'Exacoat_Logger' : ( class_exists( 'Artmatter_Logger' ) ? 'Artmatter_Logger' : false );
+				if ( $logger_class ) {
+					$logger_class::clear_logs();
 				}
 				return rest_ensure_response( [ 'success' => true, 'message' => 'All system event logs cleared.' ] );
 			},
@@ -1456,9 +1469,10 @@ class Exacoat_Core {
 		$register( '/system/purge-logs', [
 			'methods'             => 'POST',
 			'callback'            => function( WP_REST_Request $request ) {
-				$params = $request->get_json_params() ?: $request->get_params();
-				$days   = intval( $params['days'] ?? 7 );
-				$purged = class_exists( 'Artmatter_Logger' ) ? Artmatter_Logger::purge_old_logs( $days ) : 0;
+				$params       = $request->get_json_params() ?: $request->get_params();
+				$days         = intval( $params['days'] ?? 7 );
+				$logger_class = class_exists( 'Exacoat_Logger' ) ? 'Exacoat_Logger' : ( class_exists( 'Artmatter_Logger' ) ? 'Artmatter_Logger' : false );
+				$purged       = $logger_class ? $logger_class::purge_old_logs( $days ) : 0;
 				return rest_ensure_response( [ 'success' => true, 'message' => "Purged {$purged} old event logs." ] );
 			},
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
@@ -1637,7 +1651,8 @@ class Exacoat_Core {
 			. '<div style="border-top:1px solid rgba(255,255,255,0.12);padding-top:24px;white-space:pre-wrap;">' . nl2br( esc_html( $message ) ) . '</div>'
 			. '</div></div>';
 
-		$result = class_exists( 'Artmatter_Email_Engine' ) ? Artmatter_Email_Engine::send_email( 'website_contact', 'support@exacoat.com', 'Exacoat Support', [
+		$email_class = class_exists( 'Exacoat_Email_Engine' ) ? 'Exacoat_Email_Engine' : ( class_exists( 'Artmatter_Email_Engine' ) ? 'Artmatter_Email_Engine' : false );
+		$result = $email_class ? $email_class::send_email( 'website_contact', 'support@exacoat.com', 'Exacoat Support', [
 			'subject'    => $email_title,
 			'htmlbody'   => $html,
 			'reply_to'   => $email,
@@ -2090,7 +2105,9 @@ class Exacoat_Core {
 	}
 
 	public static function log( $message, $level = 'info', $channel = 'general', $context = [] ) {
-		if ( class_exists( 'Artmatter_Logger' ) ) {
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log( $level, $channel, $message, $context );
+		} elseif ( class_exists( 'Artmatter_Logger' ) ) {
 			Artmatter_Logger::log( $level, $channel, $message, $context );
 		} elseif ( function_exists( 'wc_get_logger' ) ) {
 			$logger  = wc_get_logger();

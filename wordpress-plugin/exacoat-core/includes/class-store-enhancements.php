@@ -1,7 +1,7 @@
 <?php
 /**
- * Artmatter Store & Frontend Enhancements Module
- * Consolidates Snippets: #1867, #2491, #3452, #5059, #9115, #10117, #10301, #10380, #11889, #12109, #12532, #12727, #12819, #12853, #13840, #14576, #14577, #14819, #15133, #16143
+ * Exacoat Store & Frontend Enhancements Module
+ * Consolidates store-wide UX, currency handling, and checkout enhancements.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -13,11 +13,11 @@ if ( ! class_exists( 'Exacoat_Store_Enhancements' ) ) {
 class Exacoat_Store_Enhancements {
 
 	public static function init() {
-		// 1. Store Tweaks & Cleanups (#2491)
+		// 1. Store Tweaks & Cleanups
 		add_filter( 'woocommerce_countries_ex_tax_or_vat', '__return_empty_string' );
 		add_filter( 'woocommerce_bacs_process_payment_order_status', fn() => 'pending', 10, 2 );
 		add_filter( 'big_image_size_threshold', '__return_false' );
-		add_filter( 'cfw_promo_code_toggle_link_text', fn() => __( 'Have a promo code?', 'artmatter-core' ) );
+		add_filter( 'cfw_promo_code_toggle_link_text', fn() => __( 'Have a promo code?', 'exacoat-core' ) );
 		add_filter( 'cfw_disable_email_domain_validation', '__return_true' );
 
 		// Cart to checkout redirect, disabled by default to preserve standard WooCommerce cart behavior
@@ -611,8 +611,10 @@ class Exacoat_Store_Enhancements {
 		// Exit bypass mode
 		if ( isset( $_GET['exit_preview'] ) || ( isset( $_GET['preview'] ) && ( $_GET['preview'] === '0' || $_GET['preview'] === 'false' ) ) || ( isset( $_GET['bypass'] ) && $_GET['bypass'] === '0' ) ) {
 			if ( ! headers_sent() ) {
+				setcookie( 'exacoat_preview_bypass', '', time() - 3600, '/' );
 				setcookie( 'artmatter_preview_bypass', '', time() - 3600, '/' );
 			}
+			unset( $_COOKIE['exacoat_preview_bypass'] );
 			unset( $_COOKIE['artmatter_preview_bypass'] );
 			if ( ! is_admin() && ! ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
 				wp_safe_redirect( home_url( '/template/coming-soon' ), 302 );
@@ -623,33 +625,36 @@ class Exacoat_Store_Enhancements {
 
 		// Activate bypass mode
 		$has_bypass_param = false;
-		if ( isset( $_GET['bypass'] ) && ( $_GET['bypass'] === 'artmatter' || $_GET['bypass'] === 'true' || $_GET['bypass'] === '1' ) ) {
+		if ( isset( $_GET['bypass'] ) && ( $_GET['bypass'] === 'exacoat' || $_GET['bypass'] === 'artmatter' || $_GET['bypass'] === 'true' || $_GET['bypass'] === '1' ) ) {
 			$has_bypass_param = true;
 		} elseif ( isset( $_GET['preview'] ) && ( $_GET['preview'] === '1' || $_GET['preview'] === 'true' ) ) {
 			$has_bypass_param = true;
-		} elseif ( isset( $_GET['artmatter_preview'] ) || isset( $_GET['preview_mode'] ) || isset( $_GET['preview_auth'] ) ) {
+		} elseif ( isset( $_GET['exacoat_preview'] ) || isset( $_GET['artmatter_preview'] ) || isset( $_GET['preview_mode'] ) || isset( $_GET['preview_auth'] ) ) {
 			$has_bypass_param = true;
 		}
 
 		if ( $has_bypass_param ) {
 			if ( ! headers_sent() ) {
+				setcookie( 'exacoat_preview_bypass', '1', time() + ( 86400 * 7 ), '/' );
 				setcookie( 'artmatter_preview_bypass', '1', time() + ( 86400 * 7 ), '/' );
 			}
+			$_COOKIE['exacoat_preview_bypass']   = '1';
 			$_COOKIE['artmatter_preview_bypass'] = '1';
 		}
 	}
 
 	public static function is_preview_bypass_active(): bool {
-		if ( ! empty( $_COOKIE['artmatter_preview_bypass'] ) && $_COOKIE['artmatter_preview_bypass'] === '1' ) {
+		if ( ( ! empty( $_COOKIE['exacoat_preview_bypass'] ) && $_COOKIE['exacoat_preview_bypass'] === '1' ) ||
+		     ( ! empty( $_COOKIE['artmatter_preview_bypass'] ) && $_COOKIE['artmatter_preview_bypass'] === '1' ) ) {
 			return true;
 		}
-		if ( isset( $_GET['bypass'] ) && ( $_GET['bypass'] === 'artmatter' || $_GET['bypass'] === 'true' || $_GET['bypass'] === '1' ) ) {
+		if ( isset( $_GET['bypass'] ) && ( $_GET['bypass'] === 'exacoat' || $_GET['bypass'] === 'artmatter' || $_GET['bypass'] === 'true' || $_GET['bypass'] === '1' ) ) {
 			return true;
 		}
 		if ( isset( $_GET['preview'] ) && ( $_GET['preview'] === '1' || $_GET['preview'] === 'true' ) ) {
 			return true;
 		}
-		if ( isset( $_GET['artmatter_preview'] ) || isset( $_GET['preview_mode'] ) || isset( $_GET['preview_auth'] ) ) {
+		if ( isset( $_GET['exacoat_preview'] ) || isset( $_GET['artmatter_preview'] ) || isset( $_GET['preview_mode'] ) || isset( $_GET['preview_auth'] ) ) {
 			return true;
 		}
 		return false;

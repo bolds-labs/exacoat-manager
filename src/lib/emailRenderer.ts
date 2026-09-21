@@ -351,7 +351,7 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
     showShipment = Boolean(merged.tracking_number);
   }
 
-  // Modern, Beautiful Shipment Card (Artmatter standard)
+  // Modern, Beautiful Shipment Card (Exacoat standard)
   let shipmentHtml = '';
   if (showShipment && merged.tracking_number) {
     const courier = escapeHtml(merged.courier || 'JNE Express');

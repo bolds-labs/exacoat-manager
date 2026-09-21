@@ -19,8 +19,8 @@ if ( ! class_exists( 'WC_Biteship_Shipping_Method' ) && class_exists( 'WC_Shippi
 		public function __construct( $instance_id = 0 ) {
 			$this->id                 = 'biteship_shipping';
 			$this->instance_id        = absint( $instance_id );
-			$this->method_title       = __( 'Biteship Shipping', 'artmatter-core' );
-			$this->method_description = __( 'Dynamically calculate shipping rates using the Biteship API.', 'artmatter-core' );
+			$this->method_title       = __( 'Biteship Shipping', 'exacoat-core' );
+			$this->method_description = __( 'Dynamically calculate shipping rates using the Biteship API.', 'exacoat-core' );
 			$this->supports           = [ 'shipping-zones', 'instance-settings', 'instance-settings-modal' ];
 			$this->init();
 		}
@@ -28,7 +28,7 @@ if ( ! class_exists( 'WC_Biteship_Shipping_Method' ) && class_exists( 'WC_Shippi
 		public function init() {
 			$this->init_form_fields();
 			$this->init_settings();
-			$this->title      = $this->get_option( 'title', __( 'Biteship Shipping', 'artmatter-core' ) );
+			$this->title      = $this->get_option( 'title', __( 'Biteship Shipping', 'exacoat-core' ) );
 			$this->enabled    = $this->get_option( 'enabled' );
 			$this->api_key    = $this->get_option( 'api_key' );
 			$this->origin_zip = $this->get_option( 'origin_zip', '17142' );
@@ -39,28 +39,28 @@ if ( ! class_exists( 'WC_Biteship_Shipping_Method' ) && class_exists( 'WC_Shippi
 		public function init_form_fields() {
 			$this->instance_form_fields = [
 				'title'      => [
-					'title'       => __( 'Title', 'artmatter-core' ),
+					'title'       => __( 'Title', 'exacoat-core' ),
 					'type'        => 'text',
-					'description' => __( 'Title shown to customer during checkout.', 'artmatter-core' ),
-					'default'     => __( 'Biteship Shipping', 'artmatter-core' ),
+					'description' => __( 'Title shown to customer during checkout.', 'exacoat-core' ),
+					'default'     => __( 'Biteship Shipping', 'exacoat-core' ),
 					'desc_tip'    => true,
 				],
 				'api_key'    => [
-					'title'       => __( 'Biteship API Key', 'artmatter-core' ),
+					'title'       => __( 'Biteship API Key', 'exacoat-core' ),
 					'type'        => 'text',
-					'description' => __( 'Enter your Biteship Live API Key.', 'artmatter-core' ),
+					'description' => __( 'Enter your Biteship Live API Key.', 'exacoat-core' ),
 					'default'     => '',
 				],
 				'origin_zip' => [
-					'title'       => __( 'Origin Postal Code', 'artmatter-core' ),
+					'title'       => __( 'Origin Postal Code', 'exacoat-core' ),
 					'type'        => 'text',
-					'description' => __( 'The postal code of your warehouse or shipping origin.', 'artmatter-core' ),
+					'description' => __( 'The postal code of your warehouse or shipping origin.', 'exacoat-core' ),
 					'default'     => '17142',
 				],
 				'couriers'   => [
-					'title'       => __( 'Enabled Couriers', 'artmatter-core' ),
+					'title'       => __( 'Enabled Couriers', 'exacoat-core' ),
 					'type'        => 'text',
-					'description' => __( 'Comma-separated list of courier codes (e.g. jne,sicepat,jnt).', 'artmatter-core' ),
+					'description' => __( 'Comma-separated list of courier codes (e.g. jne,sicepat,jnt).', 'exacoat-core' ),
 					'default'     => 'jne,sicepat',
 				],
 			];
@@ -203,8 +203,9 @@ if ( ! class_exists( 'WC_Biteship_Shipping_Method' ) && class_exists( 'WC_Shippi
 						$cost_in_base = $biteship_idr_price;
 						if ( 'IDR' !== $shop_base_currency && $biteship_idr_price > 0 ) {
 							$cost_in_base = apply_filters( 'wc_aelia_cs_convert', $biteship_idr_price, 'IDR', $shop_base_currency );
-							if ( $cost_in_base === $biteship_idr_price && class_exists( 'Artmatter_Store_Enhancements' ) ) {
-								$currencies = Artmatter_Store_Enhancements::get_currency_rates();
+							$enhancements_class = class_exists( 'Exacoat_Store_Enhancements' ) ? 'Exacoat_Store_Enhancements' : ( class_exists( 'Artmatter_Store_Enhancements' ) ? 'Artmatter_Store_Enhancements' : false );
+							if ( $cost_in_base === $biteship_idr_price && $enhancements_class ) {
+								$currencies = $enhancements_class::get_currency_rates();
 								$rate_val   = floatval( $currencies[ $shop_base_currency ]['rate'] ?? 0 );
 								if ( $rate_val > 0 ) {
 									$cost_in_base = round( $biteship_idr_price * $rate_val, 2 );

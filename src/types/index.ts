@@ -55,7 +55,6 @@ export type CommissionStatus =
 export type PayoutStatus = 'payout_pending' | 'payout_processing' | 'payout_sent' | 'payout_rejected' | 'payout_cancelled';
 
 export type ExacoatRole = 'super_admin' | 'manager' | 'shop_manager';
-export type ArtmatterRole = ExacoatRole;
 
 export interface UserSession {
   id: string;

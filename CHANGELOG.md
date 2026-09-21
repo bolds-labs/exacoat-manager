@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.11] - 2026-09-21
+
+### Brand Isolation & Complete Legacy Reference Decoupling
+- **Customer Reviews Engine Migration (`class-review-manager.php`)**:
+  - Migrated central reviews database table from `wp_artmatter_reviews` to `wp_exacoat_reviews` with automatic table rename migration in `check_table_schema()`, ensuring zero data loss for existing review submissions.
+  - Upgraded schema version key to `exacoat_reviews_schema_version` with fallback to `artmatter_reviews_schema_version`.
+  - Updated review uploads storage folder to `wp-content/uploads/exacoat-reviews/`.
+  - Migrated review invitation Action Scheduler jobs to `exacoat_send_review_invitation_job` under queue `exacoat-reviews`, retaining backward-compatible event listener for in-flight tasks.
+  - Migrated order review metadata to `_exacoat_review_invited_at`, `_exacoat_review_invite_scheduled_at`, `_exacoat_has_review`, `_exacoat_review_id`, and `_exacoat_review_reward`, maintaining backward-compatible fallback readers for legacy order records.
+  - Registered primary review REST routes under `exacoat-core/v1/reviews/*` and reward settings under `exacoat_review_reward_settings`.
+- **Core Subsystem Class Prioritization (`class-exacoat-core.php`, `class-wc-biteship-shipping-method.php`)**:
+  - Prioritized `Exacoat_*` subsystem classes (`Exacoat_Diagnostics`, `Exacoat_Email_Engine`, `Exacoat_Logger`, `Exacoat_Checkout_Engine`, `Exacoat_Store_Enhancements`) across plugin bootstrap, REST endpoints, and Biteship shipping calculations.
+  - Cleaned image proxy allowed hosts to Exacoat domains (`exacoat.com`, `www.exacoat.com`, `cms.exacoat.com`, `media.exacoat.com`, `staging.exacoat.com`).
+  - Updated textdomain from `artmatter-core` to `exacoat-core` in `class-wc-biteship-shipping-method.php`.
+- **Checkout Templates & Shortcodes Modernization**:
+  - Updated checkout templates (`form-checkout.php`, `form-pay.php`, `review-order.php`, `thankyou.php`) header comments, textdomains, and engine references to Exacoat standards.
+  - Registered `[exacoat_order_tracking]` and `[exacoat_track_order]` shortcodes, and updated admin AJAX actions in `settings-page.php` to `exacoat_*`.
+- **Frontend Hygiene & Asset Cleanup**:
+  - Purged obsolete legacy Artmatter exports in `brandAssets.ts` and `logo.ts`.
+  - Cleaned `imageLoader.ts` to request `exacoat-core/v1` proxy endpoints.
+  - Updated storage keys in `auditLogger.ts` and `ThemeContext.tsx`, and removed unused CSS classes in `index.css`.
+  - Updated `docker-compose.yml` service and container name to `exacoat-manager`.
+  - Purged obsolete external reference documentation and n8n files.
+
 ## [0.1.10] - 2026-09-21
 
 ### Fulfillment & Multi-Zone Shipping Region Persistence Fix
