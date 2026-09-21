@@ -1966,11 +1966,12 @@ class Exacoat_Configurator_Engine {
 
 		$primary_logo_url = reset( $logo_cutout_by_view ) ?: '';
 		$coverage_and_cutouts = [
-			'has_logo_cutout'      => $has_logo_layer || ! empty( $primary_logo_url ) || ( $family === 'laptop' ) || strpos( $cat_lower, 'macbook' ) !== false || strpos( $cat_lower, 'iphone' ) !== false,
-			'logo_cutout_mask_url' => $primary_logo_url,
-			'has_pencil_cutout'    => false,
-			'has_model_cut'        => false,
-			'coverage_type'        => 'none',
+			'has_logo_cutout'       => $has_logo_layer || ! empty( $primary_logo_url ) || ( $family === 'laptop' ) || strpos( $cat_lower, 'macbook' ) !== false || strpos( $cat_lower, 'iphone' ) !== false,
+			'logo_cutout_mask_url'  => $primary_logo_url,
+			'has_pencil_cutout'     => false,
+			'has_model_cut'         => false,
+			'coverage_type'         => 'none',
+			'model_360_extra_price' => 40000,
 		];
 
 		$base_price = (float) ( $product->get_price() ?: $product->get_regular_price() ?: 0 );
@@ -2157,6 +2158,11 @@ class Exacoat_Configurator_Engine {
 				$profile['status'] = $product->get_status();
 			}
 			$profile['variants'] = self::sanitize_variants( $profile['variants'] ?? [] );
+			if ( ! empty( $profile['coverage_and_cutouts'] ) && is_array( $profile['coverage_and_cutouts'] ) ) {
+				if ( ! isset( $profile['coverage_and_cutouts']['model_360_extra_price'] ) || ! is_numeric( $profile['coverage_and_cutouts']['model_360_extra_price'] ) ) {
+					$profile['coverage_and_cutouts']['model_360_extra_price'] = 40000;
+				}
+			}
 		}
 
 		return rest_ensure_response( [
@@ -2180,6 +2186,15 @@ class Exacoat_Configurator_Engine {
 			return new WP_REST_Response( [ 'success' => false, 'message' => 'Valid product_id is required' ], 400 );
 		}
 
+		$raw_coverage = is_array( $params['coverage_and_cutouts'] ?? null ) ? $params['coverage_and_cutouts'] : null;
+		if ( is_array( $raw_coverage ) ) {
+			if ( ! isset( $raw_coverage['model_360_extra_price'] ) || ! is_numeric( $raw_coverage['model_360_extra_price'] ) ) {
+				$raw_coverage['model_360_extra_price'] = 40000;
+			} else {
+				$raw_coverage['model_360_extra_price'] = (float) $raw_coverage['model_360_extra_price'];
+			}
+		}
+
 		$profile = [
 			'product_id'           => $product_id,
 			'device_slug'          => sanitize_title( $params['device_slug'] ?? '' ),
@@ -2195,7 +2210,7 @@ class Exacoat_Configurator_Engine {
 			'views'                => is_array( $params['views'] ?? null ) ? $params['views'] : [],
 			'layers'               => is_array( $params['layers'] ?? null ) ? $params['layers'] : [],
 			'variants'             => self::sanitize_variants( $params['variants'] ?? [] ),
-			'coverage_and_cutouts' => is_array( $params['coverage_and_cutouts'] ?? null ) ? $params['coverage_and_cutouts'] : null,
+			'coverage_and_cutouts' => $raw_coverage,
 			'updated_at'           => current_time( 'mysql' ),
 		];
 

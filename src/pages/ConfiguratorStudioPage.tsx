@@ -741,12 +741,21 @@ export const ConfiguratorStudioPage: React.FC = () => {
           return !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage');
         });
 
+        const rawCoverage = res.profile.coverage_and_cutouts;
+        const normalizedCoverage = rawCoverage ? {
+          ...rawCoverage,
+          model_360_extra_price: typeof rawCoverage.model_360_extra_price === 'number'
+            ? rawCoverage.model_360_extra_price
+            : 40000,
+        } : undefined;
+
         const profile: DeviceConfiguratorProfile = {
           ...res.profile,
           size_multiplier: normalizedMultiplier,
           views: viewsWithBody,
           layers: cleanedLayers,
           variants: cleanVariants,
+          ...(normalizedCoverage ? { coverage_and_cutouts: normalizedCoverage } : {}),
         };
 
         setEditingProfile(profile);
@@ -937,9 +946,18 @@ export const ConfiguratorStudioPage: React.FC = () => {
         const vName = (v.name || '').toLowerCase();
         return !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage');
       });
+      const existingCoverage = editingProfile.coverage_and_cutouts;
+      const coverageToSave = existingCoverage ? {
+        ...existingCoverage,
+        model_360_extra_price: typeof existingCoverage.model_360_extra_price === 'number'
+          ? existingCoverage.model_360_extra_price
+          : 40000,
+      } : undefined;
+
       const profileToSave = {
         ...editingProfile,
         variants: cleanVariants,
+        ...(coverageToSave ? { coverage_and_cutouts: coverageToSave } : {}),
       };
       const res = await saveProductConfiguratorProfileDirect(profileToSave);
       if (res.success) {
@@ -2449,8 +2467,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
   const handleSetCoverageAndCutouts = (field: keyof DeviceCoverageAndCutouts, value: any) => {
     if (!editingProfile) return;
+    const currentCoverage = editingProfile.coverage_and_cutouts || {};
     const nextCoverage = {
-      ...(editingProfile.coverage_and_cutouts || {}),
+      model_360_extra_price: 40000,
+      ...currentCoverage,
       [field]: value,
     };
     if (field === 'pencil_cutout_mask_url' && value) {

@@ -986,6 +986,22 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Sparkle icons (`✨` / `Sparkles`) are strictly prohibited across all storefront and manager UI components.
   - Purposeful craft icons (`Compass`, `Palette`, `Layers`, `SlidersHorizontal`, `Wand2`) are used exclusively.
 
+---
+
+## 33. Compact Swatch Sizing, Mobile Alignment & Model 360 Price Resolution
+
+- **Compact Dot Sizing (40x40px) & Expander Height**:
+  - Compact finish dots are sized to exactly `40x40px` (`w-[40px] h-[40px]`), enclosed within a minimum 44px by 44px tap hitbox (`min-w-[44px] min-h-[44px] p-0.5`) to satisfy mobile touch accessibility standards.
+  - The inline `+x more` / `Less` expander button uses the exact same `40px` height (`h-10` / `h-[40px]`), ensuring visual uniformity with adjacent circular swatches.
+  - In mobile carousel card view (`lg:hidden`), the `+x more` button container matches the height of the swatch capsule image (`h-[50px] sm:h-[54px] flex items-center justify-center`), vertically centering the expander pill with the swatches image of the card.
+
+- **Model 360 Upcharge Resolution & Persistence Invariant**:
+  - When a device enables Model 360 frame wrap (`coverage_type === 'model_cut_and_360'`), the upcharge is configured in `model_360_extra_price` (standard IDR 40,000).
+  - Studio Persistence: In `ConfiguratorStudioPage.tsx`, both `handleSaveProfile` and `handleSetCoverageAndCutouts` ensure `model_360_extra_price` is explicitly stored as a numeric value in post meta rather than remaining undefined.
+  - Backend Defaulting: In WordPress plugin `class-configurator-engine.php`, both `rest_get_product_configurator` and `rest_save_product_configurator` validate and default `model_360_extra_price` to 40000 when missing or non-numeric.
+  - Storefront Resolution: In `device-skin-configurator.tsx`, `model360ExtraPrice` resolves via `typeof raw360 === "number" ? raw360 : 40000`. Authentic CMS prices (including explicit 0 for free wrap) are respected, while legacy unpersisted profiles default safely to standard 40,000 IDR.
+
+
 
 
 
