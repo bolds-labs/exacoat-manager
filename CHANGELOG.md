@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.09] - 2026-09-21
+
+### Critical Syntax Fix in Configurator Engine
+- **Resolved Fatal PHP Parse Error on Line 2404 (`class-configurator-engine.php`)**:
+  - Restored missing closing brace for `if ($product)` block within `rest_get_product_configurator`, which had caused an unexpected token error on the subsequent `public static function rest_save_product_configurator` declaration.
+  - Eliminated the 500 critical error on staging WordPress environment (`https://staging.exacoat.com`).
+
 ## [0.1.08] - 2026-09-21
 
 ### Login Page Revamp, Official Exacoat Brand Logo & Phone Model Variant Elimination

@@ -2371,14 +2371,15 @@ class Exacoat_Configurator_Engine {
 					update_post_meta( $product_id, '_device_family', $fam );
 					update_post_meta( $product_id, '_size_multiplier', $mult );
 				}
-			$cleaned_variants = self::sanitize_variants( $profile['variants'] ?? [], $fam, $p_name ?? '', $p_slug ?? '' );
-			if ( count( $profile['variants'] ?? [] ) !== count( $cleaned_variants ) ) {
-				$profile['variants'] = $cleaned_variants;
-				if ( ! empty( $modern_profile ) ) {
-					update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
+				$cleaned_variants = self::sanitize_variants( $profile['variants'] ?? [], $fam, $p_name ?? '', $p_slug ?? '' );
+				if ( count( $profile['variants'] ?? [] ) !== count( $cleaned_variants ) ) {
+					$profile['variants'] = $cleaned_variants;
+					if ( ! empty( $modern_profile ) ) {
+						update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
+					}
+				} else {
+					$profile['variants'] = $cleaned_variants;
 				}
-			} else {
-				$profile['variants'] = $cleaned_variants;
 			}
 			$profile['presets']  = isset( $profile['presets'] ) && is_array( $profile['presets'] ) ? $profile['presets'] : [];
 			if ( ! empty( $profile['coverage_and_cutouts'] ) && is_array( $profile['coverage_and_cutouts'] ) ) {
