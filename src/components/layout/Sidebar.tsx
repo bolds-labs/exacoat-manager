@@ -26,6 +26,7 @@ import { useAuth } from '../../context/AuthContext';
 import { clsx } from 'clsx';
 import { APP_VERSION } from '../../config/version';
 import { lockBodyScroll } from '../../lib/bodyScrollLock';
+import { ExacoatLogo } from '../ui/ExacoatLogo';
 
 export type NavItemKey = 
   | 'dashboard'
@@ -192,20 +193,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Brand Header */}
       <div className="p-4 sm:p-5 border-b border-zinc-200 dark:border-white/[0.06] shrink-0">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-zinc-950 border border-white/10 flex items-center justify-center text-sm font-black text-[#f3aa18] shadow-sm shrink-0 font-mono tracking-tighter">
-              EX
-            </div>
+          <div className="flex items-center gap-3 min-w-0">
             <div className="h-9 flex flex-col justify-center min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="font-extrabold text-sm tracking-wide text-zinc-900 dark:text-white uppercase font-sans">
-                  Exacoat
-                </span>
-                <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-white/[0.06] text-[#f3aa18] border border-white/10">
+              <div className="flex items-center gap-2">
+                <ExacoatLogo
+                  variant="current"
+                  width={112}
+                  height={20}
+                  className="h-4 w-auto text-zinc-900 dark:text-white shrink-0"
+                />
+                <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-zinc-100 dark:bg-white/[0.06] text-[#f3aa18] border border-zinc-200 dark:border-white/10 shrink-0">
                   ERP
                 </span>
               </div>
-              <span className="text-[10px] font-mono text-zinc-500 block leading-none mt-1 truncate">
+              <span className="text-[10px] font-mono text-zinc-500 block leading-none mt-1.5 truncate">
                 Manager v{APP_VERSION}
               </span>
             </div>

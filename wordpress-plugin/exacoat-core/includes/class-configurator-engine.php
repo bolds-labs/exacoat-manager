@@ -1852,7 +1852,16 @@ class Exacoat_Configurator_Engine {
 				$layer_slug = sanitize_title( $layer_name );
 				$is_required = ( ( $l['required'] ?? '' ) === '1' || ( $l['required'] ?? false ) === true );
 				$is_optional = ( ( $l['can_deselect'] ?? '' ) === '1' || strpos( (string) ( $l['class_name'] ?? '' ), 'optional' ) !== false );
-				$is_selector = strpos( (string) ( $l['class_name'] ?? '' ), 'none-hover' ) !== false || in_array( $layer_name_lower, [ 'model', 'series', 'iphone model', 'ipad series', 'ipad version', 'device model', 'connectivity' ] );
+				
+				// Exacoat catalog rule: iPhones and smartphones are strictly separate standalone products (never combined with model variants)
+				$is_phone_device = ( $family === 'phone' || preg_match( '/\b(iphone|galaxy|pixel|xiaomi|redmi|poco|oppo|vivo|realme|infinix|oneplus|phone)\b/i', "{$product->get_name()} {$product->get_slug()}" ) );
+				if ( $is_phone_device && ( in_array( $layer_name_lower, [ 'model', 'series', 'iphone model', 'phone model', 'device model', 'connectivity' ], true ) || strpos( $layer_name_lower, 'iphone' ) !== false || strpos( $layer_name_lower, 'model' ) !== false ) ) {
+					// Discard legacy model selector layers on phones
+					continue;
+				}
+
+				// Only tablets (e.g. iPad Wi-Fi vs Cellular, iPad versions) or explicit hardware where physical templates differ may have selector variants
+				$is_selector = strpos( (string) ( $l['class_name'] ?? '' ), 'none-hover' ) !== false || in_array( $layer_name_lower, [ 'ipad series', 'ipad version', 'connectivity' ], true );
 				$is_logo = ( strpos( $layer_name_lower, 'logo' ) !== false || strpos( $layer_name_lower, 'cutout' ) !== false );
 				$is_coverage = ( strpos( $layer_name_lower, 'coverage' ) !== false || strpos( $layer_name_lower, 'model cut' ) !== false || strpos( $layer_name_lower, 'model 360' ) !== false );
 
@@ -2039,7 +2048,7 @@ class Exacoat_Configurator_Engine {
 			'device_colors'        => [],
 			'views'                => $views,
 			'layers'               => $normalized_layers,
-			'variants'             => self::sanitize_variants( $variants ),
+			'variants'             => self::sanitize_variants( $variants, $family, $product->get_name(), $product->get_slug() ),
 			'coverage_and_cutouts' => $coverage_and_cutouts,
 			'presets'              => [],
 			'updated_at'           => current_time( 'mysql' ),
@@ -2047,12 +2056,15 @@ class Exacoat_Configurator_Engine {
 	}
 
 	/**
-	 * Sanitize production variants array: strip out logo cutout and coverage options
+	 * Sanitize production variants array: strip out logo cutout, coverage, and invalid phone model selectors
 	 */
-	public static function sanitize_variants( $variants ): array {
+	public static function sanitize_variants( $variants, $family = '', $device_name = '', $device_slug = '' ): array {
 		if ( ! is_array( $variants ) ) {
 			return [];
 		}
+
+		$is_phone = ( $family === 'phone' || preg_match( '/\b(iphone|galaxy|pixel|xiaomi|redmi|poco|oppo|vivo|realme|infinix|oneplus|phone)\b/i', "{$device_name} {$device_slug}" ) );
+
 		$clean = [];
 		foreach ( $variants as $v ) {
 			if ( ! is_array( $v ) ) continue;
@@ -2061,6 +2073,7 @@ class Exacoat_Configurator_Engine {
 
 			// Check if this variant represents coverage / model selection
 			$has_coverage_options = false;
+			$has_phone_model_options = false;
 			if ( ! empty( $v['options'] ) && is_array( $v['options'] ) ) {
 				foreach ( $v['options'] as &$opt ) {
 					if ( ! is_array( $opt ) ) continue;
@@ -2069,6 +2082,10 @@ class Exacoat_Configurator_Engine {
 					if ( strpos( $opt_id, '360' ) !== false || strpos( $opt_name, '360' ) !== false || strpos( $opt_id, 'model-cut' ) !== false || strpos( $opt_name, 'model cut' ) !== false ) {
 						$has_coverage_options = true;
 					}
+					// Detect phone model options (e.g. 17 Pro, 17 Pro Max, iPhone 17, Pro Max, Plus, Ultra)
+					if ( preg_match( '/\b(iphone|17 pro|pro max|promax|16 pro|15 pro|14 pro|ultra|plus|mini)\b/i', "{$opt_name} {$opt_id}" ) ) {
+						$has_phone_model_options = true;
+					}
 					if ( isset( $opt['name'] ) && is_string( $opt['name'] ) ) {
 						$opt['name'] = str_replace( [ '360u00b0', '360\\u00b0', 'u00b0' ], '360°', $opt['name'] );
 					}
@@ -2076,9 +2093,16 @@ class Exacoat_Configurator_Engine {
 				unset( $opt );
 			}
 
-			if ( $has_coverage_options || $v_id === 'model' || $v_name === 'model' || strpos( $v_id, 'logo' ) !== false || strpos( $v_name, 'logo' ) !== false || strpos( $v_id, 'cutout' ) !== false || strpos( $v_id, 'coverage' ) !== false || strpos( $v_name, 'coverage' ) !== false || strpos( $v_name, 'model cut' ) !== false || strpos( $v_id, '360' ) !== false || strpos( $v_name, '360' ) !== false ) {
+			// Reject coverage, logo, cutout
+			if ( $has_coverage_options || strpos( $v_id, 'logo' ) !== false || strpos( $v_name, 'logo' ) !== false || strpos( $v_id, 'cutout' ) !== false || strpos( $v_id, 'coverage' ) !== false || strpos( $v_name, 'coverage' ) !== false || strpos( $v_name, 'model cut' ) !== false || strpos( $v_id, '360' ) !== false || strpos( $v_name, '360' ) !== false ) {
 				continue;
 			}
+
+			// Reject any phone model variant (iPhones & phones are always separated individual products)
+			if ( $has_phone_model_options || strpos( $v_id, 'iphone' ) !== false || strpos( $v_name, 'iphone' ) !== false || ( $is_phone && ( $v_id === 'model' || $v_name === 'model' || strpos( $v_id, 'model' ) !== false || strpos( $v_name, 'model' ) !== false || strpos( $v_id, 'series' ) !== false || strpos( $v_name, 'series' ) !== false || strpos( $v_id, 'device' ) !== false || strpos( $v_name, 'device' ) !== false ) ) ) {
+				continue;
+			}
+
 			$clean[] = $v;
 		}
 		return array_values( $clean );
@@ -2347,8 +2371,15 @@ class Exacoat_Configurator_Engine {
 					update_post_meta( $product_id, '_device_family', $fam );
 					update_post_meta( $product_id, '_size_multiplier', $mult );
 				}
+			$cleaned_variants = self::sanitize_variants( $profile['variants'] ?? [], $fam, $p_name ?? '', $p_slug ?? '' );
+			if ( count( $profile['variants'] ?? [] ) !== count( $cleaned_variants ) ) {
+				$profile['variants'] = $cleaned_variants;
+				if ( ! empty( $modern_profile ) ) {
+					update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
+				}
+			} else {
+				$profile['variants'] = $cleaned_variants;
 			}
-			$profile['variants'] = self::sanitize_variants( $profile['variants'] ?? [] );
 			$profile['presets']  = isset( $profile['presets'] ) && is_array( $profile['presets'] ) ? $profile['presets'] : [];
 			if ( ! empty( $profile['coverage_and_cutouts'] ) && is_array( $profile['coverage_and_cutouts'] ) ) {
 				if ( ! isset( $profile['coverage_and_cutouts']['model_360_extra_price'] ) || ! is_numeric( $profile['coverage_and_cutouts']['model_360_extra_price'] ) ) {
@@ -2401,7 +2432,7 @@ class Exacoat_Configurator_Engine {
 			'device_colors'        => is_array( $params['device_colors'] ?? null ) ? $params['device_colors'] : [],
 			'views'                => is_array( $params['views'] ?? null ) ? $params['views'] : [],
 			'layers'               => is_array( $params['layers'] ?? null ) ? $params['layers'] : [],
-			'variants'             => self::sanitize_variants( $params['variants'] ?? [] ),
+			'variants'             => self::sanitize_variants( $params['variants'] ?? [], $params['family'] ?? 'phone', $params['device_name'] ?? '', $params['device_slug'] ?? '' ),
 			'coverage_and_cutouts' => $raw_coverage,
 			'presets'              => is_array( $params['presets'] ?? null ) ? self::sanitize_presets( $params['presets'] ) : [],
 			'updated_at'           => current_time( 'mysql' ),
@@ -2581,6 +2612,14 @@ class Exacoat_Configurator_Engine {
 				$needs_save = true;
 			} elseif ( $current_fam === 'foldable' && $current_mult <= 1.0 ) {
 				$next_mult = 1.3;
+				$needs_save = true;
+			}
+
+			// Prune invalid phone model variants catalog-wide
+			$existing_variants = $profile_data['variants'] ?? [];
+			$cleaned_variants = self::sanitize_variants( $existing_variants, $next_fam, $p_name, $p_slug );
+			if ( count( $existing_variants ) !== count( $cleaned_variants ) ) {
+				$profile_data['variants'] = $cleaned_variants;
 				$needs_save = true;
 			}
 

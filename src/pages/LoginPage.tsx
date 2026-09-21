@@ -6,8 +6,14 @@ import {
   Key, 
   ArrowRight, 
   AlertCircle, 
-  Loader2
+  Loader2, 
+  Eye, 
+  EyeOff, 
+  CheckCircle2 
 } from 'lucide-react';
+import { ExacoatLogo } from '../components/ui/ExacoatLogo';
+import { SectionPill } from '../components/ui/SectionPill';
+import { APP_VERSION } from '../config/version';
 
 interface LoginPageProps {
   onGoToRegister?: () => void;
@@ -19,6 +25,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
@@ -38,7 +45,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
         showToast('success', 'Signed In', 'Welcome to Exacoat Manager.');
       }
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Authentication error');
+      setErrorMsg(err?.message || 'Authentication error occurred.');
     } finally {
       setIsSubmitting(false);
     }
@@ -58,50 +65,67 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
       setResetSent(true);
       showToast('success', 'Recovery Dispatched', `If an account exists for ${email}, a reset link has been sent.`);
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Failed to request reset link.');
+      setErrorMsg(err?.message || 'Failed to dispatch recovery instructions.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#080808] flex items-center justify-center p-4 sm:p-6 md:p-10 relative overflow-hidden select-none font-sans">
-      {/* Subtle ambient luxury studio glow */}
-      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[720px] h-[520px] bg-gradient-to-b from-white/[0.025] via-[#f3aa18]/[0.015] to-transparent rounded-full blur-[140px] pointer-events-none -z-10" />
+    <div className="min-h-screen bg-[#060608] flex items-center justify-center p-4 sm:p-6 md:p-10 relative overflow-hidden select-none font-sans text-white">
+      {/* Ambient luxury lighting */}
+      <div 
+        aria-hidden="true" 
+        className="pointer-events-none fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-[900px] h-[480px] bg-[radial-gradient(circle_at_50%_0%,rgba(243,170,24,0.08)_0%,transparent_70%)] blur-[90px] -z-10" 
+      />
+      <div 
+        aria-hidden="true" 
+        className="pointer-events-none fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[360px] bg-[#f3aa18]/[0.025] rounded-full blur-[140px] -z-10" 
+      />
 
-      {/* Main Studio Card (440-450px wide) */}
-      <div className="w-full max-w-[440px] p-8 sm:p-10 rounded-3xl space-y-6 shadow-[0_32px_80px_-16px_rgba(0,0,0,0.95),0_0_0_1px_rgba(255,255,255,0.08)] bg-[#0e0e10]/95 border border-white/[0.1] relative overflow-hidden backdrop-blur-2xl">
+      {/* Main Card */}
+      <div className="w-full max-w-[420px] p-7 sm:p-9 rounded-3xl space-y-6 shadow-[0_32px_80px_-16px_rgba(0,0,0,0.95),0_0_0_1px_rgba(255,255,255,0.08)] bg-[#0c0c0e]/95 border border-white/[0.09] relative overflow-hidden backdrop-blur-2xl">
+        
         {/* Header Branding */}
-        <div className="text-center space-y-3">
-          <div className="flex items-center justify-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-zinc-950 border border-white/10 flex items-center justify-center text-base font-black text-[#f3aa18] shadow-sm font-mono tracking-tighter">
-              EX
-            </div>
-            <div className="flex flex-col text-left">
-              <span className="font-extrabold text-lg tracking-wide text-white uppercase font-sans leading-tight">
-                Exacoat
-              </span>
-              <span className="text-[10px] font-mono text-zinc-500 tracking-wider">
-                OPERATIONS ERP
-              </span>
-            </div>
+        <div className="text-center space-y-3 pt-1">
+          <div className="flex justify-center">
+            <ExacoatLogo
+              variant="white"
+              width={160}
+              height={28}
+              className="h-6 sm:h-7 w-auto opacity-95 transition-opacity hover:opacity-100 drop-shadow-[0_2px_16px_rgba(243,170,24,0.18)]"
+            />
           </div>
 
-          <div className="flex items-center justify-center">
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/20 tracking-wider">
-              ADMIN WORKSPACE
-            </span>
+          <div className="flex items-center justify-center pt-1">
+            <SectionPill dot dotColor="bg-[#f3aa18]" surface="dark">
+              OPERATIONS ERP
+            </SectionPill>
+          </div>
+
+          <div className="pt-1">
+            <h1 className="text-xl sm:text-2xl font-bold font-['Chakra_Petch'] text-white tracking-tight">
+              {isForgotPassword ? 'Reset Password' : 'Admin Sign In'}
+            </h1>
+            <p className="text-[12px] text-zinc-400 mt-1">
+              {isForgotPassword
+                ? 'Enter your registered administrator email to receive a password reset link.'
+                : 'Sign in to access fulfillment, orders, and production workstation.'}
+            </p>
           </div>
         </div>
 
-        {/* Error Notice Banner */}
+        {/* Error Notice */}
         {errorMsg && (
-          <div className="p-3.5 bg-zinc-900/90 border border-rose-500/30 rounded-2xl text-xs space-y-1 animate-fade-in font-sans shadow-lg">
+          <div 
+            role="alert" 
+            className="p-3.5 bg-rose-500/[0.08] border border-rose-500/25 rounded-2xl text-xs space-y-1 font-sans animate-fade-in shadow-xs"
+          >
             <div className="flex items-start gap-2.5">
-              <div className="w-5 h-5 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0 mt-0.5">
+              <div className="w-5 h-5 rounded-lg bg-rose-500/15 border border-rose-500/25 flex items-center justify-center shrink-0 mt-0.5">
                 <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
               </div>
-              <p className="font-semibold text-rose-300 text-xs">{errorMsg}</p>
+              <p className="font-medium text-rose-200 text-xs leading-relaxed">{errorMsg}</p>
             </div>
           </div>
         )}
@@ -109,7 +133,10 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
         {isForgotPassword ? (
           <form onSubmit={handleResetPassword} className="space-y-4">
             <div className="space-y-1.5">
-              <label htmlFor="reset-email" className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 block">
+              <label 
+                htmlFor="reset-email" 
+                className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 block"
+              >
                 Account Email
               </label>
               <div className="relative">
@@ -123,20 +150,21 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                   autoComplete="email"
                   required
                   value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 sm:py-3.5 bg-zinc-900/80 border border-white/[0.08] focus:border-[#f3aa18] rounded-2xl text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none transition-all font-sans"
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin@exacoat.com"
+                  className="h-11 w-full pl-10 pr-4 rounded-xl border border-white/[0.09] bg-white/[0.035] font-sans text-xs sm:text-sm text-white placeholder-zinc-500 outline-none transition-all hover:border-white/[0.16] focus:border-[#f3aa18]/70 focus:bg-white/[0.05] focus:ring-4 focus:ring-[#f3aa18]/[0.08]"
                 />
               </div>
-              <p className="text-[11px] text-zinc-500 font-mono mt-1">
-                Enter your registered administrator or manager email to receive password reset instructions.
-              </p>
             </div>
 
             {resetSent && (
-              <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs space-y-1 text-center font-sans">
-                <p className="font-bold text-amber-300">Recovery Instructions Dispatched</p>
-                <p className="text-zinc-400 text-[11px]">
-                  If that account is registered in Exacoat, a secure reset link has been sent.
+              <div className="p-3.5 bg-[#f3aa18]/[0.08] border border-[#f3aa18]/25 rounded-2xl text-xs space-y-1 font-sans">
+                <div className="flex items-center gap-2 text-amber-300 font-bold">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>Recovery Link Dispatched</span>
+                </div>
+                <p className="text-zinc-400 text-[11px] leading-relaxed pl-6">
+                  If that email exists in the Exacoat database, instructions have been sent.
                 </p>
               </div>
             )}
@@ -144,7 +172,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-3.5 px-5 rounded-2xl bg-[#f3aa18] hover:bg-[#f5b838] text-zinc-950 font-bold text-xs sm:text-sm shadow-xl transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer mt-3 font-sans"
+              className="h-11 w-full rounded-xl bg-[#f3aa18] hover:bg-[#ffbe3b] text-zinc-950 font-['Chakra_Petch'] text-xs sm:text-sm font-bold uppercase tracking-wider shadow-[0_0_24px_rgba(243,170,24,0.18)] transition-all hover:shadow-[0_0_30px_rgba(243,170,24,0.28)] active:scale-[0.99] disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer mt-3"
             >
               {isSubmitting ? (
                 <>
@@ -152,7 +180,10 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                   <span>Dispatching Link...</span>
                 </>
               ) : (
-                <span>Send Password Reset Link</span>
+                <>
+                  <span>Send Reset Link</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
               )}
             </button>
 
@@ -174,7 +205,10 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Email Input */}
             <div className="space-y-1.5">
-              <label htmlFor="login-email" className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 block">
+              <label 
+                htmlFor="login-email" 
+                className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 block"
+              >
                 Account Email
               </label>
               <div className="relative">
@@ -188,8 +222,9 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                   autoComplete="email"
                   required
                   value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 sm:py-3.5 bg-zinc-900/80 border border-white/[0.08] focus:border-[#f3aa18] rounded-2xl text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none transition-all font-sans"
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin@exacoat.com"
+                  className="h-11 w-full pl-10 pr-4 rounded-xl border border-white/[0.09] bg-white/[0.035] font-sans text-xs sm:text-sm text-white placeholder-zinc-500 outline-none transition-all hover:border-white/[0.16] focus:border-[#f3aa18]/70 focus:bg-white/[0.05] focus:ring-4 focus:ring-[#f3aa18]/[0.08]"
                 />
               </div>
             </div>
@@ -197,7 +232,10 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
             {/* Password Input */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label htmlFor="password-field" className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 block">
+                <label 
+                  htmlFor="password-field" 
+                  className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 block"
+                >
                   Password
                 </label>
                 <button
@@ -216,15 +254,28 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                   <Key className="w-4 h-4" />
                 </div>
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   id="password-field"
                   name="password"
                   autoComplete="current-password"
                   required
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 sm:py-3.5 bg-zinc-900/80 border border-white/[0.08] focus:border-[#f3aa18] rounded-2xl text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none transition-all font-sans"
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  className="h-11 w-full pl-10 pr-11 rounded-xl border border-white/[0.09] bg-white/[0.035] font-sans text-xs sm:text-sm text-white placeholder-zinc-500 outline-none transition-all hover:border-white/[0.16] focus:border-[#f3aa18]/70 focus:bg-white/[0.05] focus:ring-4 focus:ring-[#f3aa18]/[0.08]"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-zinc-500 hover:text-zinc-200 transition-colors cursor-pointer"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
               </div>
             </div>
 
@@ -232,7 +283,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-3.5 px-5 rounded-2xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs sm:text-sm shadow-xl transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer mt-3 font-sans"
+              className="h-11 w-full rounded-xl bg-[#f3aa18] hover:bg-[#ffbe3b] text-zinc-950 font-['Chakra_Petch'] text-xs sm:text-sm font-bold uppercase tracking-wider shadow-[0_0_24px_rgba(243,170,24,0.18)] transition-all hover:shadow-[0_0_30px_rgba(243,170,24,0.28)] active:scale-[0.99] disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer mt-3"
             >
               {isSubmitting ? (
                 <>
@@ -241,7 +292,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                 </>
               ) : (
                 <>
-                  <span>Sign In to Exacoat</span>
+                  <span>Sign In to Workstation</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
@@ -249,12 +300,15 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
           </form>
         )}
 
+        {/* Footer */}
         <div className="pt-3 border-t border-white/[0.06] text-center">
           <p className="text-[10px] sm:text-[11px] text-zinc-500 font-mono">
-            Exacoat Operations Platform
+            Exacoat Operations Platform v{APP_VERSION}
           </p>
         </div>
       </div>
     </div>
   );
 };
+
+export default LoginPage;

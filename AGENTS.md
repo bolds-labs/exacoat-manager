@@ -498,6 +498,26 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 
 ---
 
+## 35. Official Exacoat Brand Logo Architecture & Strict Phone Model Separation
+
+- **Official Exacoat Brand Logo Invariant**:
+  - Exacoat Manager uses the authoritative vector Exacoat logo SVG identical to `exacoat-web`:
+    - Reusable React component: `src/components/ui/ExacoatLogo.tsx` supporting variants `amber` (`#F3AA18`), `white` (`#FFFFFF`), and `current` (`currentColor`).
+    - Registered trademark circle-R SVG glyph is included within the vector paths with exact geometric curves (`viewBox="-10000 -10000 1388000 261000"`).
+    - Standalone SVG asset is stored at `public/assets/brand/exacoat-logo.svg`.
+    - Never use generic placeholder boxes (e.g. `EX` square) for Exacoat branding in active runtime code.
+
+- **Strict Phone Model Separation Invariant (Zero Phone Variants)**:
+  - In Exacoat's catalog architecture, all iPhones and smartphones are strictly individual, standalone products in WooCommerce (e.g. `iPhone 17 Pro Skins` and `iPhone 17 Pro Max Skins` are completely separate products with their own URLs, SKUs, and assets).
+  - Phone products must NEVER contain model production variants (e.g. combining iPhone 17 Pro and 17 Pro Max under one product via a variant dropdown).
+  - Physical cut variants in `profile.variants` are reserved strictly for tablets (such as iPad Wi-Fi vs Cellular antenna cutouts, or iPad generational differences where physical vinyl cutting paths differ).
+  - **Automated Sanitation & Healing**:
+    - `convert_mkl_to_profile` discards legacy model selector layers on phone devices, preventing them from becoming variants.
+    - `sanitize_variants` evaluates device context (`family`, `device_name`, `device_slug`) and strips any variant containing phone model options (`iPhone`, `17 Pro`, `Pro Max`, `Plus`, `Ultra`, etc.) or generic model selectors on phones.
+    - Both `rest_get_product_configurator` and `rest_sync_device_families` automatically heal and strip phone model variants catalog-wide, ensuring clean separation across the entire store.
+
+---
+
 ## 34. Studio v2 Redesign into 4 Focused Stages & Storefront Duplication Resolution
 
 - **Storefront Duplication Resolution & v2 Priority**:

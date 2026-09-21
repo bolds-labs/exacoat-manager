@@ -900,6 +900,52 @@ export const ConfiguratorStudioPage: React.FC = () => {
     };
   }, [isDragging]);
 
+  const sanitizeDeviceVariants = (
+    variants: ConfiguratorVariant[] | undefined,
+    family?: string,
+    deviceName?: string,
+    deviceSlug?: string
+  ): ConfiguratorVariant[] => {
+    if (!variants || !Array.isArray(variants)) return [];
+    const isPhone =
+      family === 'phone' ||
+      !family ||
+      /\b(iphone|galaxy|pixel|xiaomi|redmi|poco|oppo|vivo|realme|infinix|oneplus|phone)\b/i.test(
+        `${deviceName || ''} ${deviceSlug || ''}`
+      );
+
+    return variants.filter((v) => {
+      const vId = (v.id || '').toLowerCase();
+      const vName = (v.name || '').toLowerCase();
+      const hasPhoneOpts = (v.options || []).some((opt) =>
+        /\b(iphone|17 pro|pro max|promax|16 pro|15 pro|14 pro|ultra|plus|mini)\b/i.test(
+          `${opt.name || ''} ${opt.id || ''}`
+        )
+      );
+      if (
+        hasPhoneOpts ||
+        vId.includes('iphone') ||
+        vName.includes('iphone') ||
+        (isPhone &&
+          (vId.includes('model') ||
+            vName.includes('model') ||
+            vId.includes('series') ||
+            vName.includes('series') ||
+            vId.includes('device') ||
+            vName.includes('device')))
+      ) {
+        return false;
+      }
+      return (
+        !vId.includes('logo') &&
+        !vName.includes('logo') &&
+        !vId.includes('cutout') &&
+        !vId.includes('coverage') &&
+        !vName.includes('coverage')
+      );
+    });
+  };
+
   const handleOpenEditor = async (productId: number) => {
     setSelectedProductId(productId);
     setIsLoadingProfile(true);
@@ -926,11 +972,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
           ? 2.0
           : (devFamily === 'foldable' ? 1.3 : (res.profile.size_multiplier || 1.0));
 
-        const cleanVariants = (res.profile.variants || []).filter((v) => {
-          const vId = (v.id || '').toLowerCase();
-          const vName = (v.name || '').toLowerCase();
-          return !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage');
-        });
+        const cleanVariants = sanitizeDeviceVariants(
+          res.profile.variants,
+          devFamily,
+          res.profile.device_name,
+          res.profile.device_slug
+        );
 
         const rawCoverage = res.profile.coverage_and_cutouts;
         const normalizedCoverage = rawCoverage ? {
@@ -1101,11 +1148,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
       model_360_extra_price: existingCoverage?.model_360_extra_price ?? 40000,
     };
 
-    const cleanVariants = (editingProfile.variants || []).filter((v) => {
-      const vId = (v.id || '').toLowerCase();
-      const vName = (v.name || '').toLowerCase();
-      return !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage');
-    });
+    const cleanVariants = sanitizeDeviceVariants(
+      editingProfile.variants,
+      editingProfile.family,
+      editingProfile.device_name,
+      editingProfile.device_slug
+    );
 
     setEditingProfile({
       ...editingProfile,
@@ -1132,11 +1180,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
     }
     setIsSavingProfile(true);
     try {
-      const cleanVariants = (editingProfile.variants || []).filter((v) => {
-        const vId = (v.id || '').toLowerCase();
-        const vName = (v.name || '').toLowerCase();
-        return !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage');
-      });
+      const cleanVariants = sanitizeDeviceVariants(
+        editingProfile.variants,
+        editingProfile.family,
+        editingProfile.device_name,
+        editingProfile.device_slug
+      );
       const existingCoverage = editingProfile.coverage_and_cutouts;
       const coverageToSave = existingCoverage ? {
         ...existingCoverage,
@@ -10621,11 +10670,18 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                             {/* Device Production Variants */}
                             {(() => {
-                              const cleanProductionVariants = (editingProfile.variants || []).filter((v) => {
-                                const vId = (v.id || '').toLowerCase();
-                                const vName = (v.name || '').toLowerCase();
-                                return !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage');
-                              });
+                              const isPhone =
+                                editingProfile.family === 'phone' ||
+                                !editingProfile.family ||
+                                /\b(iphone|galaxy|pixel|xiaomi|redmi|poco|oppo|vivo|realme|infinix|oneplus|phone)\b/i.test(
+                                  `${editingProfile.device_name || ''} ${editingProfile.device_slug || ''}`
+                                );
+                              const cleanProductionVariants = sanitizeDeviceVariants(
+                                editingProfile.variants,
+                                editingProfile.family,
+                                editingProfile.device_name,
+                                editingProfile.device_slug
+                              );
 
                               return (
                                 <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3.5">
@@ -10644,7 +10700,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                           )}
                                         </div>
                                         <p className="text-[11px] text-zinc-400 mt-0.5">
-                                          Hardware models (e.g. Wi-Fi vs Cellular) requiring distinct vinyl cut templates.
+                                          Hardware models (e.g. Wi-Fi vs Cellular on iPads) requiring distinct physical cut templates. Note: iPhone and phone models are always separate products.
                                         </p>
                                       </div>
                                     </div>
@@ -10670,9 +10726,15 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                                   {cleanProductionVariants.length === 0 ? (
                                     <div className="p-4 rounded-xl bg-zinc-950/60 border border-dashed border-white/10 text-center space-y-1">
-                                      <p className="text-xs font-medium text-zinc-400">No physical cut variants configured</p>
+                                      <p className="text-xs font-medium text-zinc-400">
+                                        {isPhone
+                                          ? 'Standard single cut (Phone models are individual products)'
+                                          : 'No physical cut variants configured'}
+                                      </p>
                                       <p className="text-[11px] text-zinc-500">
-                                        Standard single template cut will be used for production across all orders.
+                                        {isPhone
+                                          ? 'iPhone and smartphone models are cataloged as separate standalone products. Physical variants (e.g. Wi-Fi vs Cellular) are reserved for iPads and tablets.'
+                                          : 'Standard single template cut will be used for production across all orders.'}
                                       </p>
                                     </div>
                                   ) : (

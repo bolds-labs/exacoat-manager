@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.08] - 2026-09-21
+
+### Login Page Revamp, Official Exacoat Brand Logo & Phone Model Variant Elimination
+- **Login Page Revamp & Official Exacoat Logo Adoption**:
+  - Replaced legacy generic `EX` square text box with the official Exacoat vector logo component (`ExacoatLogo.tsx`) identical to `exacoat-web`, featuring authentic wordmark typography and registered trademark circle-R glyph.
+  - Copied standalone vector asset to `public/assets/brand/exacoat-logo.svg` for static asset referencing.
+  - Updated `Sidebar.tsx` brand header to display the official Exacoat logo alongside the ERP version badge.
+  - Revamped `LoginPage.tsx` with luxury dark obsidian workstation aesthetic (`#060608`), ambient gold illumination, `SectionPill` status badge, password visibility eye toggle, Chakra Petch typography, and high-contrast amber action buttons with loading indicators.
+- **Elimination of Phone Model Production Variants (Strict Device Separation)**:
+  - Enforced domain invariant: iPhones and smartphones are always cataloged as separate individual products in WooCommerce (e.g. iPhone 17 Pro Skins and iPhone 17 Pro Max Skins are separate items), and must never have model production variants combining two different phones.
+  - **Configurator Engine Updates (`class-configurator-engine.php`)**:
+    - Updated `convert_mkl_to_profile` to discard legacy model selector layers on phone devices, preventing them from being converted into variants.
+    - Upgraded `sanitize_variants` with device family and context parameters to automatically detect and prune any phone model variants or options (`17 Pro`, `Pro Max`, `iPhone`, etc.).
+    - Updated `rest_get_product_configurator`, `rest_save_product_configurator`, and `rest_sync_device_families` to auto-heal and strip phone model variants catalog-wide.
+  - **Configurator Studio Updates (`ConfiguratorStudioPage.tsx`)**:
+    - Added `sanitizeDeviceVariants` helper across profile loading, v2 conversion, save, and the Settings tab.
+    - Added operator guidance in the Production Variants card clarifying that phones are separate products and physical cut variants are reserved for tablets (e.g. iPad Wi-Fi vs Cellular).
+
 ## [0.1.07] - 2026-09-21
 
 ### Full Catalog Synchronization & MacBook/iPad Discovery (249 Configurators)
