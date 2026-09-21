@@ -252,6 +252,7 @@ interface V2SkinCanvasLayerProps {
   zIndex: number;
   layerName: string;
   layerGroup?: 'primary' | 'accent' | 'protection' | 'addon';
+  isRequired?: boolean;
   textureRotation?: number;
   textureScale?: number;
   hasViewShadow?: boolean;
@@ -368,6 +369,7 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
   zIndex,
   layerName,
   layerGroup,
+  isRequired,
   textureRotation = 0,
   textureScale = 1.0,
   hasViewShadow = false,
@@ -491,10 +493,14 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
         ctx.drawImage(modelCutoutImg, 0, 0, 1000, 1000);
       }
 
-      // 6. Directional Bevel & Inner Shading (only when explicitly enabled, or on primary skin without 3D shadow map)
-      const isPrimaryLayer = !layerGroup || layerGroup === 'primary' || layerName.toLowerCase().includes('back');
+      // 6. Directional Bevel & Inner Shading (strictly on back or required skins without 3D shadow map, never on additionals/accents)
+      const isBackOrRequired = Boolean(
+        isRequired ||
+        layerGroup === 'primary' ||
+        (/\b(back|top|body|device)\b/i.test(layerName) && !/\b(accent|camera|frame|side|logo|additional|addon)\b/i.test(layerName))
+      );
       const shouldApplyGeneratedShadow =
-        isPrimaryLayer &&
+        isBackOrRequired &&
         (generatedShadowConfig?.enabled ?? (!hasViewShadow && Boolean(maskImg)));
 
       if (shouldApplyGeneratedShadow && maskImg) {
@@ -508,7 +514,7 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
     return () => {
       isCancelled = true;
     };
-  }, [maskUrl, textureUrl, fallbackColor, logoCutoutUrl, pencilCutoutUrl, modelCutoutUrl, textureRotation, textureScale, hasViewShadow, generatedShadowConfig, layerGroup, layerName]);
+  }, [maskUrl, textureUrl, fallbackColor, logoCutoutUrl, pencilCutoutUrl, modelCutoutUrl, textureRotation, textureScale, hasViewShadow, generatedShadowConfig, layerGroup, layerName, isRequired]);
 
   return (
     <canvas
@@ -7380,6 +7386,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   zIndex={(l.z_index || 1) + 5}
                                   layerName={l.name}
                                   layerGroup={l.group}
+                                  isRequired={l.is_required}
                                   textureRotation={l.texture_rotation ?? 0}
                                   textureScale={currentView?.texture_scale ?? editingProfile.texture_scale ?? l.texture_scale ?? 1.0}
                                   hasViewShadow={hasViewShadow}
