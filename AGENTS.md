@@ -219,11 +219,13 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   Configurator status is explicitly tracked in WooCommerce product post meta via `_is_configurator` (`'yes'` or `'no'`).
 - **WooCommerce Admin Integration**:
   A dedicated checkbox labeled **Device Configurator** is added to the General tab in the WooCommerce product edit screen, allowing admins to toggle configurator status directly in WordPress.
-- **Intelligent Fallback Evaluator**:
+- **Intelligent Fallback Evaluator & Stub Profile Healing**:
   When `_is_configurator` has not yet been explicitly saved on a legacy product:
   - If the product contains composable skin layers (`layers_count > 0`), it defaults to active configurator (`true`).
+  - If the profile in `_exacoat_configurator_profile` is empty or a stub lacking layers (`empty($profile['layers'])`), `rest_get_configurator_profiles` and `rest_get_product_configurator` automatically convert legacy MKL layers from `_mkl_product_configurator_layers` and heal the post meta directly.
+  - A product is evaluated as a configurator if `_mkl_pc__is_configurable === 'yes'` or if `_mkl_product_configurator_layers` contains non-device skin layers.
   - If the product contains 0 layers (such as Heritage, Sienna, G.64, and Back Glass Kits), it defaults to non-configurator (`false`).
-  This ensures real devices (e.g. Galaxy A54 `#474343`) are immediately discovered without requiring manual database migration.
+  This ensures real devices (e.g. MacBooks, iPads, Galaxy A54) are discovered and preserved without requiring manual database migration.
 - **REST Toggling & Studio Controls**:
   - Endpoint `POST /configurator/toggle-configurator` provides 1-click toggling from Exacoat Manager.
   - Catalog cards and the Studio top bar display interactive status badges (`Configurator` vs `Excluded`).

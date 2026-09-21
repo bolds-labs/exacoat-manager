@@ -1219,11 +1219,23 @@ class Exacoat_Configurator_Engine {
 			}
 		}
 
-		$layers_meta = get_post_meta( $pid, '_layers', true );
+		// Check MKL configurable flag
+		$mkl_configurable = get_post_meta( $pid, '_mkl_pc__is_configurable', true );
+		if ( 'yes' === $mkl_configurable ) {
+			return true;
+		}
+
+		// Check MKL layers post meta
+		$layers_meta = get_post_meta( $pid, '_mkl_product_configurator_layers', true );
 		if ( ! empty( $layers_meta ) ) {
 			$parsed = self::parse_meta_json( $layers_meta );
 			if ( ! empty( $parsed ) && is_array( $parsed ) ) {
-				return true;
+				foreach ( $parsed as $l ) {
+					$l_name = strtolower( trim( $l['name'] ?? '' ) );
+					if ( ! empty( $l_name ) && $l_name !== 'device' ) {
+						return true;
+					}
+				}
 			}
 		}
 
@@ -1576,17 +1588,16 @@ class Exacoat_Configurator_Engine {
 		if ( is_array( $raw ) ) return $raw;
 		if ( is_string( $raw ) ) {
 			$cur = trim( $raw );
-			for ( $i = 0; $i < 3; $i++ ) {
+			for ( $i = 0; $i < 4; $i++ ) {
 				$decoded = json_decode( $cur, true );
 				if ( is_array( $decoded ) ) return $decoded;
 				if ( is_string( $decoded ) ) {
-					$cur = $decoded;
+					$cur = trim( $decoded );
 					continue;
 				}
-				$unescaped = stripslashes( $cur );
-				$decoded2 = json_decode( $unescaped, true );
+				$cur = stripslashes( $cur );
+				$decoded2 = json_decode( $cur, true );
 				if ( is_array( $decoded2 ) ) return $decoded2;
-				break;
 			}
 		}
 		return [];
@@ -2159,16 +2170,29 @@ class Exacoat_Configurator_Engine {
 		foreach ( $query->posts as $p ) {
 			$pid = $p->ID;
 			$modern_profile = get_post_meta( $pid, self::PROFILE_META_KEY, true );
-			$is_migrated = ! empty( $modern_profile );
 
 			if ( ! empty( $modern_profile ) && is_string( $modern_profile ) ) {
 				$profile_data = json_decode( $modern_profile, true );
 			} elseif ( is_array( $modern_profile ) ) {
 				$profile_data = $modern_profile;
 			} else {
-				$profile_data = self::convert_mkl_to_profile( $pid );
+				$profile_data = null;
 			}
 
+			// If profile is missing or is a stub without layers, auto-convert from MKL
+			if ( empty( $profile_data ) || ! is_array( $profile_data ) || empty( $profile_data['layers'] ) ) {
+				$mkl_profile = self::convert_mkl_to_profile( $pid );
+				if ( ! empty( $mkl_profile['layers'] ) ) {
+					if ( is_array( $profile_data ) ) {
+						if ( ! empty( $profile_data['family'] ) ) $mkl_profile['family'] = $profile_data['family'];
+						if ( ! empty( $profile_data['size_multiplier'] ) ) $mkl_profile['size_multiplier'] = $profile_data['size_multiplier'];
+					}
+					$profile_data = $mkl_profile;
+					update_post_meta( $pid, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile_data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
+				}
+			}
+
+			$is_migrated = ! empty( $profile_data['layers'] );
 			$is_cfg = self::is_product_configurator( $pid, $profile_data );
 
 			// If only_configurable is requested, exclude non-configurator items (merch, cases, drops)
@@ -2276,9 +2300,17 @@ class Exacoat_Configurator_Engine {
 			}
 		}
 		
-		if ( empty( $profile ) || ! is_array( $profile ) ) {
-			// Auto-convert legacy MKL on-the-fly
-			$profile = self::convert_mkl_to_profile( $product_id );
+		if ( empty( $profile ) || ! is_array( $profile ) || empty( $profile['layers'] ) ) {
+			// Auto-convert legacy MKL on-the-fly if empty or stub profile without layers
+			$mkl_profile = self::convert_mkl_to_profile( $product_id );
+			if ( ! empty( $mkl_profile['layers'] ) ) {
+				if ( is_array( $profile ) ) {
+					if ( ! empty( $profile['family'] ) ) $mkl_profile['family'] = $profile['family'];
+					if ( ! empty( $profile['size_multiplier'] ) ) $mkl_profile['size_multiplier'] = $profile['size_multiplier'];
+				}
+				$profile = $mkl_profile;
+				update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
+			}
 		}
 
 		$product = wc_get_product( $product_id );

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.07] - 2026-09-21
+
+### Full Catalog Synchronization & MacBook/iPad Discovery (249 Configurators)
+- **Resolved Missing MacBooks, iPads, and Keyboards**:
+  - Expanded active device configurators from 215 to 249 across the entire store catalog.
+  - Discovered and fully restored all 26 MacBooks (Macbook Air 11", 13" M1-M5, 2012-2020, and Macbook Pro 13", 14", 15", 16" M1-M5), 15 iPads (iPad Pro M1-M5, iPad Air M2-M4, iPad Mini), and Magic Keyboards in Configurator Studio.
+- **Root Cause Resolution in Configurator Engine (`class-configurator-engine.php`)**:
+  - **MKL Layers Evaluation**: Updated `is_product_configurator` to check `_mkl_product_configurator_layers` and `_mkl_pc__is_configurable` instead of legacy non-existent `_layers` key.
+  - **Stub Profile Auto-Healing**: Enhanced `rest_get_configurator_profiles` and `rest_get_product_configurator` to detect stub profiles that lack customizable layers (`empty($profile['layers'])`), automatically converting full views, layers, and cutouts from legacy MKL definitions and persisting healed profiles to WordPress post meta.
+  - **Multi-Pass JSON Unescaping (`parse_meta_json`)**: Enhanced parser with multi-pass stripslashes loop to safely decode double-escaped quotes (`\"`) and slashes from WordPress post meta without premature break.
+- **Catalog-Wide Batch Migration & Clean Non-Configurator Scoping**:
+  - Migrated and healed all 33 previously unmigrated devices with 100% active layers, appropriate device families (`laptop`, `tablet`, `keyboard`), and standard `2.0x` size multipliers.
+  - Confirmed 0 configurators have 0 layers across the entire 249-device catalog.
+  - Cleanly flagged 35 genuine non-configurators (Heritage Skins, Titanium+ Kits, Sienna, G.64, Limited Drops, Screen Protectors, Standalone Accessories) with `_is_configurator: 'no'`, preventing catalog pollution.
+
 ## [0.1.06] - 2026-09-21
 
 ### Multi-Attribute Device Family Inference & Universal Size Pricing Multipliers
