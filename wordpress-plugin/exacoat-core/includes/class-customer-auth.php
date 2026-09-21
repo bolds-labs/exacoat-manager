@@ -716,8 +716,6 @@ class Exacoat_Customer_Auth {
 			$is_cashback = (
 				false !== strpos( $discount_type, 'cashback' )
 				|| 'yes' === get_post_meta( $id, '_is_coupon_cashback', true )
-				|| metadata_exists( 'post', $id, '_acfw_cashback_waiting_period' )
-				|| false !== stripos( $code, 'cashback' )
 			);
 			$formatted_discount = '';
 

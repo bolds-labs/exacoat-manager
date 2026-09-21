@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.14] - 2026-09-21
+
+### Advanced Coupons Cashback & Store Credit Display Invariants
+- **Store Credit Raw HTML Display Resolution (`account-dashboard.tsx`)**:
+  - Identified and resolved raw HTML string output (`<span class="woocommerce-Price-amount amount">...`) on the Store Credit account page.
+  - Advanced Coupons Store API `balance_text` is formatted via WooCommerce `wc_price()`, returning escaped HTML tags.
+  - Switched customer account dashboard to strictly render numeric `credit.balance` formatted via `formatOrderMoney(credit.balance, currency)`, achieving full parity with Artmatter.
+- **Cashback Discount Type Alignment (`class-customer-auth.php`, `class-checkout-engine.php`)**:
+  - Discovered root cause of cashback coupons decreasing price totals: coupons configured as `'percent'` discount type trigger WooCommerce core percentage deductions.
+  - In Advanced Coupons, true cashback coupons must be configured with `discount_type = 'acfw_percentage_cashback'`, which applies 0 discount to the cart total and credits store credit upon order delivery.
+  - Updated staging coupon `cashback10` to `acfw_percentage_cashback`.
+  - Aligned `is_cashback` evaluation in `class-customer-auth.php` and `class-checkout-engine.php` to strictly inspect `false !== strpos( $discount_type, 'cashback' ) || 'yes' === get_post_meta( $id, '_is_coupon_cashback', true )`.
+  - Refined headless checkout coupon filtering and calculation (`checkout-review.tsx`) to prioritize server-evaluated `exacoatCoupon.is_cashback`.
+
 ## [0.1.13] - 2026-09-21
 
 ### Custom Device Finishes 100% Texture Scale Invariant

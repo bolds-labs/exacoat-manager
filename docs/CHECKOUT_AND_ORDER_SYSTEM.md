@@ -210,18 +210,27 @@ Exacoat Core registers Store API callbacks to support headless cart operations:
   - Callback: `Exacoat_Checkout_Engine::get_store_api_coupons_data()`
   - Enriches applied coupons in Store API cart with metadata: `is_cashback`, `cashback_percent`, `cashback_waiting_period`, and calculated `cashback_amount`.
 
-### Robust Cashback Detection Invariant
-In Advanced Coupons for WooCommerce (ACFW), cashback coupons frequently declare standard WooCommerce discount types (such as `'percent'` or `'fixed_cart'`) rather than dedicated `'acfw_percentage_cashback'` strings:
-- Both `class-checkout-engine.php` and `class-customer-auth.php` evaluate cashback status comprehensively:
-  ```php
-  $is_cashback = (
-      false !== strpos( $discount_type, 'cashback' )
-      || 'yes' === get_post_meta( $id, '_is_coupon_cashback', true )
-      || metadata_exists( 'post', $id, '_acfw_cashback_waiting_period' )
-      || false !== stripos( $code, 'cashback' )
-  );
-  ```
-- Cashback calculations support percent-based formulas for `'percent'` discount types (`$cart_subtotal * ($amount / 100.0)`) and respect optional maximum caps configured in `_acfw_percentage_discount_cap`.
+### Cashback Discount Type & Price Reduction Invariant
+- **Discount Type Separation**:
+  - In Advanced Coupons for WooCommerce (ACFW), pure cashback coupons must use the custom discount type `acfw_percentage_cashback` (or `acfw_fixed_cashback`).
+  - When `discount_type === 'acfw_percentage_cashback'`, WooCommerce core applies **0 discount to the cart total** (`total_discount = '0'`). The customer pays full price, and the cashback amount is recorded to be credited to their store credit account once the order reaches Delivered/Completed status.
+  - If a coupon is mistakenly configured as standard `'percent'` (Percentage discount), WooCommerce treats it as an immediate price reduction and deducts it from the order total.
+- **Accurate Backend Evaluation (`class-checkout-engine.php`, `class-customer-auth.php`)**:
+  - `is_cashback` is strictly evaluated against dedicated discount types and explicit post meta:
+    ```php
+    $is_cashback = (
+        false !== strpos( $discount_type, 'cashback' )
+        || 'yes' === get_post_meta( $id, '_is_coupon_cashback', true )
+    );
+    ```
+  - Loose substring checks on coupon code names or unrelated metadata are excluded to prevent standard percentage discount coupons from being mislabeled as cashback.
+- **Customer Registration Requirement**:
+  - Advanced Coupons enforces that cashback coupons can only be redeemed by registered (logged-in) customers. Guest attempts to apply cashback coupons return HTTP 400 with message `"Cashback coupons are only for registered customers. Login"`.
+
+### Store Credit Balance Text Invariant (`account-dashboard.tsx`)
+- In WooCommerce Advanced Coupons Store API (`cart.extensions.acfwf_block.store_credits`), `balance_text` is generated server-side using `wc_price()`, which contains raw HTML markup (`<span class="woocommerce-Price-amount amount"><bdi>...`).
+- Frontend components must **never render `balance_text` directly**.
+- Always format the raw numeric `credit.balance` on the client using `formatOrderMoney(credit.balance, currency)`.
 
 ### Virtual Store Credit Stacking Exemption
 WooCommerce injects virtual coupons (`'store credit'`, `'store-credit'`, `'store_credit'`) into the cart to represent applied store credit deductions:
