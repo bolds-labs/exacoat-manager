@@ -280,6 +280,19 @@ class Exacoat_Core {
 		} catch ( \Throwable $e ) {
 			error_log( 'Exacoat Configurator Engine init error: ' . $e->getMessage() );
 		}
+
+		try {
+			// 9. Review & Customer Feedback Manager
+			if ( self::get_setting( 'enable_review_manager', 1 ) ) {
+				if ( class_exists( 'Exacoat_Review_Manager' ) ) {
+					Exacoat_Review_Manager::init();
+				} elseif ( class_exists( 'Artmatter_Review_Manager' ) ) {
+					Artmatter_Review_Manager::init();
+				}
+			}
+		} catch ( \Throwable $e ) {
+			error_log( 'Exacoat Review Manager init error: ' . $e->getMessage() );
+		}
 	}
 
 	/**

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.13] - 2026-09-21
+
+### Custom Device Finishes 100% Texture Scale Invariant
+- **Locked 100% Scale for Custom Device Finishes (`ConfiguratorStudioPage.tsx`)**:
+  - Custom device finishes (uploaded per device template, such as Everything Skins or custom limited edition artwork) are now strictly locked to 100% texture scale (`textureScale = 1.0`).
+  - Angle Texture Zoom / Scale (e.g. 75% for repeating patterns) continues to scale pattern materials (leather, matte, carbon, camo) without shrinking or tiling custom device-aligned artwork.
+  - Added dedicated `100% Scale` badge and interactive click-to-preview capability in the "Custom Device Finishes" sidebar panel.
+  - Updated helper description under the "Angle Texture Zoom / Scale" slider to clarify that custom device finishes always render at 100% scale regardless of the viewing angle slider.
+- **Headless Storefront & Composite Image Parity (`exacoat-web`)**:
+  - Added `isCustomPerDevice` flag propagation in `configurator-loader.ts` and `configurator-types.ts`.
+  - Upgraded `stacked-layer-canvas.tsx` to automatically render custom device finishes at 100% scale.
+  - Upgraded cart/order composite image generator (`device-skin-configurator.tsx`) to lock custom device finishes to 100% scale with 1.0 fallback zoom.
+
 ## [0.1.12] - 2026-09-21
 
 ### Advanced Coupons, Store Credits & Cashback Engine Parity

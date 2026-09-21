@@ -7363,20 +7363,19 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             // v2 Engine: Dynamic Canvas Compositing with Alpha Mask & Buyer Cutouts
                             if (editingProfile.configurator_version === 'v2') {
                               const isCustomPerDevice = Boolean(activeFinish?.is_custom_per_device);
-                              const customTex = isCustomPerDevice
-                                ? (assets.render_texture_map?.[layerFinishSlug] ||
-                                   assets.render_texture_map?.[activeFinish?.slug || ''] ||
-                                   assets.render_texture_map?.[activeFinish?.id || ''])
-                                : '';
-
                               const textureMap = assets.render_texture_map || {};
                               const simNorm = layerFinishSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
-                              const matchedKey = isCustomPerDevice
-                                ? Object.keys(textureMap).find(
-                                    (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === simNorm
-                                  )
-                                : undefined;
+                              const matchedKey = Object.keys(textureMap).find(
+                                (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === simNorm
+                              );
                               const mappedTex = matchedKey ? textureMap[matchedKey] || '' : '';
+                              const customTex =
+                                assets.render_texture_map?.[layerFinishSlug] ||
+                                assets.render_texture_map?.[activeFinish?.slug || ''] ||
+                                assets.render_texture_map?.[activeFinish?.id || ''] ||
+                                mappedTex;
+
+                              const isCustomDeviceFinish = isCustomPerDevice || Boolean(customTex);
 
                               const isBigDevice = editingProfile.family === 'laptop' || editingProfile.family === 'tablet' || (editingProfile.family as string) === 'tablet_laptop' || editingProfile.family === 'keyboard';
                               const useBigTexture = l.texture_size === 'big' || (l.texture_size !== 'small' && isBigDevice);
@@ -7384,7 +7383,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 ? activeFinish.texture_big_url
                                 : activeFinish?.texture_url || '';
 
-                              const textureToTile = customTex || mappedTex || activeTextureUrl;
+                              const textureToTile = customTex || activeTextureUrl;
                               const fallbackColor = activeFinish?.color_hex || '#18181b';
 
                               // Do not render non-visual kit layers or layers without an alpha mask for this view
@@ -7423,6 +7422,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 currentView?.highlight_png_url
                               );
 
+                              // Custom device finishes (uploaded per device template) are locked to 100% scale (1.0).
+                              // Repeating pattern materials follow the angle texture zoom/scale (e.g. 75%).
+                              const effectiveTextureScale = isCustomDeviceFinish
+                                ? 1.0
+                                : (currentView?.texture_scale ?? editingProfile.texture_scale ?? l.texture_scale ?? 1.0);
+
                               return (
                                 <V2SkinCanvasLayer
                                   key={`v2-layer-${l.id}-${currentView?.id || 'main'}`}
@@ -7437,7 +7442,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   layerGroup={l.group}
                                   isRequired={l.is_required}
                                   textureRotation={l.texture_rotation ?? 0}
-                                  textureScale={currentView?.texture_scale ?? editingProfile.texture_scale ?? l.texture_scale ?? 1.0}
+                                  textureScale={effectiveTextureScale}
                                   hasViewShadow={hasViewShadow}
                                   generatedShadowConfig={currentView?.generated_shadow}
                                 />
@@ -8724,14 +8729,36 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                           );
                                           const currentUrl = matchedKey ? currentMap[matchedKey] : '';
                                           const isConfigured = Boolean(currentUrl);
+                                          const isCurrentlySimulated =
+                                            (selectedLayerFinishes[currentActiveLayer.id] || selectedSimFinish) === finishSlug;
 
                                           return (
                                             <div
                                               key={`custom-finish-${f.id}`}
-                                              className="p-2.5 rounded-xl bg-zinc-900/90 border border-white/5 flex items-center justify-between gap-3"
+                                              className={clsx(
+                                                'p-2.5 rounded-xl border flex items-center justify-between gap-3 transition-colors',
+                                                isCurrentlySimulated
+                                                  ? 'bg-purple-950/40 border-purple-500/40 ring-1 ring-purple-500/30'
+                                                  : 'bg-zinc-900/90 border-white/5'
+                                              )}
                                             >
-                                              <div className="flex items-center gap-2.5 min-w-0">
-                                                <div className="w-10 h-10 rounded-xl bg-zinc-950 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center">
+                                              <div
+                                                onClick={() => {
+                                                  if (isConfigured) {
+                                                    setSelectedLayerFinishes((prev) => ({ ...prev, [currentActiveLayer.id]: finishSlug }));
+                                                    setSelectedSimFinish(finishSlug);
+                                                  }
+                                                }}
+                                                className={clsx(
+                                                  'flex items-center gap-2.5 min-w-0',
+                                                  isConfigured && 'cursor-pointer group'
+                                                )}
+                                                title={isConfigured ? `Click to preview ${f.name} on ${currentActiveLayer.name}` : undefined}
+                                              >
+                                                <div className={clsx(
+                                                  'w-10 h-10 rounded-xl bg-zinc-950 border overflow-hidden shrink-0 flex items-center justify-center transition-colors',
+                                                  isCurrentlySimulated ? 'border-purple-400' : 'border-white/10 group-hover:border-white/30'
+                                                )}>
                                                   {currentUrl ? (
                                                     <img
                                                       src={currentUrl}
@@ -8755,8 +8782,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                   )}
                                                 </div>
                                                 <div className="min-w-0">
-                                                  <div className="flex items-center gap-1.5">
-                                                    <span className="text-xs font-bold text-white truncate">
+                                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <span className={clsx('text-xs font-bold truncate', isCurrentlySimulated ? 'text-purple-200' : 'text-white group-hover:text-purple-300')}>
                                                       {f.name}
                                                     </span>
                                                     <span
@@ -8769,6 +8796,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                     >
                                                       {isConfigured ? 'Active on device' : 'Hidden on device'}
                                                     </span>
+                                                    {isConfigured && (
+                                                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded-full font-semibold border bg-sky-500/10 text-sky-400 border-sky-500/30">
+                                                        100% Scale
+                                                      </span>
+                                                    )}
                                                   </div>
                                                   <span className="text-[10px] text-zinc-400 font-mono block truncate">
                                                     {f.group} : {finishSlug}
@@ -9599,7 +9631,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         </button>
                                       </div>
                                       <p className="text-[11px] text-zinc-400">
-                                        Custom texture pattern scale for this viewing angle (accounts for different zoom/POV).
+                                        Custom pattern scale for this viewing angle (accounts for different zoom/POV). Applies to repeating patterns: custom device finishes always render at 100% scale.
                                       </p>
                                       <div className="flex items-center gap-3 pt-1">
                                         <span className="text-[10px] font-mono text-zinc-500">50%</span>

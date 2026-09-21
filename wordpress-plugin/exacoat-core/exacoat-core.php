@@ -3,7 +3,7 @@
  * Plugin Name:       Exacoat Core Platform
  * Plugin URI:        https://exacoat.com
  * Description:       Proprietary e-commerce core engine, configurator manager, and ERP workstation integration for Exacoat.
- * Version:           0.1.12
+ * Version:           0.1.13
  * Author:            Exacoat
  * Author URI:        https://exacoat.com
  * License:           Proprietary
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'EXACOAT_CORE_VERSION' ) ) {
-	define( 'EXACOAT_CORE_VERSION', '0.1.12' );
+	define( 'EXACOAT_CORE_VERSION', '0.1.13' );
 }
 if ( ! defined( 'EXACOAT_CORE_FILE' ) ) {
 	define( 'EXACOAT_CORE_FILE', __FILE__ );
@@ -377,6 +377,11 @@ if ( class_exists( 'Exacoat_Shopee_Client' ) ) {
 // Initialize TikTok Shop Open Platform Engine
 if ( class_exists( 'Exacoat_TikTok_Client' ) ) {
 	Exacoat_TikTok_Client::init();
+}
+
+// Initialize Review & Customer Feedback Manager
+if ( class_exists( 'Exacoat_Review_Manager' ) ) {
+	Exacoat_Review_Manager::init();
 }
 
 // Safe version tracking on admin_init

@@ -1258,4 +1258,30 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Applied coupons display interactive `+{cashbackPercent}% Cashback` badge and popover terms tooltip.
   - Price calculations breakdown displays "Cashback earned: +{amount}" line item with order delivery maturation terms.
 
+---
+
+## 43. Custom Device Finishes 100% Texture Scale Invariant
+
+- **Template-Aligned Artwork vs Repeating Pattern Scale Invariant**:
+  - Global finish materials (such as Matte Black, Swarm, Carbon Fiber, Leather, Honeycomb) use repeating seamless pattern textures that can be scaled down or up (e.g. 75% or `texture_scale: 0.75`) via the "Angle Texture Zoom / Scale" slider to achieve the desired visual grain density for specific device form factors and viewing angles.
+  - In contrast, **Custom Device Finishes** (such as Everything Skins, teardown skins, or special edition artwork uploaded per device template) are created at exact 1:1 scale (1000x1000) specifically matching the device's physical shape, camera cutouts, and contours.
+  - **The Invariant**: Custom device finishes (evaluated via `isCustomPerDevice || Boolean(customTex)`) must **ALWAYS be rendered at 100% texture scale (`textureScale = 1.0`)**, strictly overriding any view-level or device-level `texture_scale`.
+  - Applying fractional scales (such as 75%) to custom device artwork causes the canvas pattern to shrink and repeat, causing camera cutouts, circuitry lines, and brand markings to repeat unnaturally across the device.
+- **Evaluation & Studio Implementation (`ConfiguratorStudioPage.tsx`)**:
+  - In `ConfiguratorStudioPage.tsx`, v2 dynamic canvas compositing determines:
+    ```typescript
+    const isCustomDeviceFinish = isCustomPerDevice || Boolean(customTex);
+    const effectiveTextureScale = isCustomDeviceFinish
+      ? 1.0
+      : (currentView?.texture_scale ?? editingProfile.texture_scale ?? l.texture_scale ?? 1.0);
+    ```
+  - In the "Custom Device Finishes" sidebar panel:
+    - Added a persistent `100% Scale` badge alongside `Active on device` to clearly indicate locked scale.
+    - Added click-to-preview capability with active highlight when simulating that custom finish.
+    - Updated the helper description under the "Angle Texture Zoom / Scale" slider to explicitly state that the slider applies to repeating pattern materials while custom device finishes remain locked to 100%.
+- **Storefront & Composite Parity (`exacoat-web`)**:
+  - `configurator-loader.ts` and `configurator-types.ts` propagate `isCustomPerDevice` and angle-specific artwork maps to `choice` objects.
+  - `stacked-layer-canvas.tsx` and `device-skin-configurator.tsx` evaluate `isCustomFinish` and lock `textureScale` to `1.0` during both live viewport rendering and cart thumbnail composite generation.
+
+
 
