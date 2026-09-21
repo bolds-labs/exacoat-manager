@@ -1424,7 +1424,7 @@ class Exacoat_Email_Engine {
 		$art_title     = esc_html( $data['product_title'] ?? ( $data['artwork_title'] ?? 'Precision Device Skin' ) );
 		$art_img       = esc_url( $data['artwork_image'] ?? 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg' );
 		$artist_name   = esc_html( $data['artist_name'] ?? 'Exacoat' );
-		$review_url    = esc_url( $data['review_url'] ?? ( home_url( '/review?order_id=' . $order_num ) ) );
+		$review_url    = esc_url( $data['review_url'] ?? ( function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'review?order_id=' . $order_num ) : home_url( '/review?order_id=' . $order_num ) ) );
 
 		$has_reward   = ! empty( $data['has_reward'] ) || ! empty( $data['discount_percent'] );
 		$discount_pct = max( 0, (int) ( $data['discount_percent'] ?? 0 ) );

@@ -214,11 +214,12 @@ class Exacoat_Review_Manager {
 	 * Get direct review link for an order
 	 */
 	public static function get_review_url( $order ): string {
+		$base_url = function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'review' ) : home_url( '/review' );
 		if ( is_numeric( $order ) ) {
 			$order = wc_get_order( $order );
 		}
 		if ( ! $order ) {
-			return home_url( '/review' );
+			return $base_url;
 		}
 
 		$order_id      = $order->get_id();
@@ -231,7 +232,7 @@ class Exacoat_Review_Manager {
 			'order_email' => rawurlencode( $billing_email ),
 			'key'         => $order_key,
 			'token'       => $token,
-		], home_url( '/review' ) );
+		], $base_url );
 	}
 
 	/**
