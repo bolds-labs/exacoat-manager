@@ -11,6 +11,7 @@ export interface PageHeroHeaderProps {
   };
   actions?: React.ReactNode;
   className?: string;
+  titleClassName?: string;
 }
 
 export const PageHeroHeader: React.FC<PageHeroHeaderProps> = ({
@@ -20,6 +21,7 @@ export const PageHeroHeader: React.FC<PageHeroHeaderProps> = ({
   badge,
   actions,
   className,
+  titleClassName,
 }) => {
   const getBadgeStyle = (variant: string = 'default') => {
     switch (variant) {
@@ -40,7 +42,10 @@ export const PageHeroHeader: React.FC<PageHeroHeaderProps> = ({
     <section className={clsx("flex flex-col sm:flex-row sm:items-end justify-between gap-4 py-1", className)}>
       <div className="min-w-0">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl sm:text-2xl font-semibold text-zinc-950 dark:text-white tracking-tight font-sans flex flex-wrap items-center gap-2.5 leading-tight">
+          <h1 className={clsx(
+            "text-xl sm:text-2xl font-semibold text-zinc-950 dark:text-white tracking-tight font-sans flex flex-wrap items-center gap-2.5 leading-tight",
+            titleClassName
+          )}>
             {title}
             {badge && (
               <span className={clsx(

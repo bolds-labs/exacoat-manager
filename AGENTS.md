@@ -1054,6 +1054,28 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Default `texture_scale` and `textureScale` across Studio, WordPress plugin, and Storefront is standardized to `1.0` (100%), replacing the legacy `0.75` (75%) fallback.
   - 1000x1000 square textures pass through at 1:1 (`1000 * zoom = 1000px`), eliminating unskinned margin boxes on wide devices like laptops.
 
+---
+
+## 36. Primary Brand Typography (Chakra Petch), Non-Distracting Preset Badges & Configuration Tooltips
+
+- **Primary Brand Typography Hierarchy Invariant (`Chakra Petch`)**:
+  - The primary brand typography for Exacoat is `Chakra Petch`.
+  - In Storefront (`exacoat-web`):
+    - Product title in configurator (`{cleanProductName} SKINS`), floating "Shop the Look" button on canvas, eyebrow triggers, modal titles, and each layer accordion title (`{layer.name}`) strictly utilize `Chakra Petch` in normal weight (`font-['Chakra_Petch'] font-normal`, not bold).
+  - In Manager Studio (`exacoat-manager`):
+    - Imported via Google Fonts in `index.html` and configured as `font-heading` / `font-chakra` in `tailwind.config.js`.
+    - Page titles (`PageHeroHeader`), catalog device names, fullscreen editor top bar titles, inspector stage tabs, and modal titles strictly use `font-heading font-normal` (not bold).
+
+- **Shop the Look Modal Design & Clean Image Canvas**:
+  - Presets Modal (`presets-modal.tsx`) features a dedicated subtitle under "Shop the Look" explaining its purpose ("Curated finish combinations designed for this device").
+  - Device render containers use a clean, transparent canvas without heavy dark gradient background boxes or borders, letting the device and its drop shadow float naturally on the card surface.
+  - Distracting yellow block badges are replaced with an understated frosted glass capsule featuring a glowing micro dot indicator (amber for POPULAR, emerald for STAFF PICK) and normal-weight Chakra Petch micro typography.
+
+- **Interactive Configuration Tooltip Architecture**:
+  - Each preset card provides an interactive configuration popover / tooltip accessible via hover and tap.
+  - Transparently breaks down every customized layer and finish name, coverage wrap style (`360° Wrap` vs `Precision Cut`), and logo cutout state (`Apple Cutout` vs `Covered`).
+
+
 
 
 

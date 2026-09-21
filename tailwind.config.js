@@ -28,6 +28,8 @@ export default {
         },
       },
       fontFamily: {
+        heading: ['"Chakra Petch"', 'sans-serif'],
+        chakra: ['"Chakra Petch"', 'sans-serif'],
         montserrat: ['Montserrat', 'sans-serif'],
         bebas: ['"Bebas Neue"', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'monospace'],

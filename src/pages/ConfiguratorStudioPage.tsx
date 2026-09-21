@@ -3720,6 +3720,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
       {/* Top Banner */}
       <PageHeroHeader
         title="Product Configurator Studio"
+        titleClassName="font-heading font-normal tracking-wide text-2xl sm:text-3xl"
         subtitle="Manage device viewing angles, customizable skin parts, and transparent Photoshop texture maps."
         actions={
           <div className="flex items-center gap-2.5">
@@ -4228,7 +4229,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       {/* Device Name & SKU */}
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-white group-hover:text-[#f3aa18] transition-colors">
+                          <span className="font-heading font-normal tracking-wide text-white group-hover:text-[#f3aa18] transition-colors">
                             {p.name}
                           </span>
                           <span className="text-[10px] font-mono text-zinc-500 bg-white/5 px-1.5 py-0.5 rounded">
@@ -4378,7 +4379,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-white">Catalog-Wide Asset Integrity Audit</h3>
+                      <h3 className="text-sm font-heading font-normal tracking-wider uppercase text-white">Catalog-Wide Asset Integrity Audit</h3>
                       <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-zinc-300 font-mono">
                         {profiles.length} Catalog Devices
                       </span>
@@ -4627,7 +4628,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <h4 className="text-sm font-bold text-white">{d.deviceName}</h4>
+                              <h4 className="text-sm font-heading font-normal tracking-wide text-white">{d.deviceName}</h4>
                               <span className="text-[11px] font-mono text-zinc-500">#{d.productId}</span>
                               <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-zinc-400 border border-white/10 capitalize">
                                 {d.category}
@@ -4751,7 +4752,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-white">Global Master Finish Textures (v2 Engine)</h3>
+                      <h3 className="text-sm font-heading font-normal tracking-wider uppercase text-white">Global Master Finish Textures (v2 Engine)</h3>
                       <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 text-zinc-300 border border-white/10 font-mono">
                         {finishes.length} Finishes
                       </span>
@@ -6287,7 +6288,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     <Copy className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-white">Duplicate Product & Configurator</h3>
+                    <h3 className="text-sm font-heading font-normal tracking-wider uppercase text-white">Duplicate Product & Configurator</h3>
                     <p className="text-xs text-zinc-400 mt-0.5 truncate max-w-xs">Source: {duplicateModal.name}</p>
                   </div>
                 </div>
@@ -6417,7 +6418,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                 <div className="min-w-0">
                   <div className="flex items-center gap-2.5">
-                    <h2 className="text-sm md:text-base font-bold text-white truncate max-w-xs md:max-w-md">
+                    <h2 className="text-sm md:text-base font-heading font-normal tracking-wide text-white truncate max-w-xs md:max-w-md">
                       {editingProfile?.device_name || 'Loading Studio Workspace...'}
                     </h2>
                     {editingProfile && (
@@ -7451,7 +7452,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             type="button"
                             onClick={() => setInspectorTab('device')}
                             className={clsx(
-                              'px-3 py-1.5 rounded-xl text-xs font-sans font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shrink-0',
+                              'px-3 py-1.5 rounded-xl text-xs font-heading font-normal uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shrink-0',
                               inspectorTab === 'device'
                                 ? 'bg-white/10 text-white shadow-sm'
                                 : 'text-zinc-400 hover:text-white hover:bg-white/5'
@@ -7465,7 +7466,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             type="button"
                             onClick={() => setInspectorTab('skins')}
                             className={clsx(
-                              'px-3 py-1.5 rounded-xl text-xs font-sans font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shrink-0',
+                              'px-3 py-1.5 rounded-xl text-xs font-heading font-normal uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shrink-0',
                               inspectorTab === 'skins'
                                 ? 'bg-white/10 text-white shadow-sm'
                                 : 'text-zinc-400 hover:text-white hover:bg-white/5'
@@ -7482,7 +7483,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             type="button"
                             onClick={() => setInspectorTab('cutouts')}
                             className={clsx(
-                              'px-3 py-1.5 rounded-xl text-xs font-sans font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shrink-0',
+                              'px-3 py-1.5 rounded-xl text-xs font-heading font-normal uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shrink-0',
                               inspectorTab === 'cutouts'
                                 ? 'bg-white/10 text-white shadow-sm'
                                 : 'text-zinc-400 hover:text-white hover:bg-white/5'
@@ -7496,7 +7497,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             type="button"
                             onClick={() => setInspectorTab('presets')}
                             className={clsx(
-                              'px-3 py-1.5 rounded-xl text-xs font-sans font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shrink-0',
+                              'px-3 py-1.5 rounded-xl text-xs font-heading font-normal uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shrink-0',
                               inspectorTab === 'presets'
                                 ? 'bg-white/10 text-white shadow-sm'
                                 : 'text-zinc-400 hover:text-white hover:bg-white/5'
@@ -7513,7 +7514,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             type="button"
                             onClick={() => setInspectorTab('pricing')}
                             className={clsx(
-                              'px-3 py-1.5 rounded-xl text-xs font-sans font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shrink-0',
+                              'px-3 py-1.5 rounded-xl text-xs font-heading font-normal uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shrink-0',
                               inspectorTab === 'pricing'
                                 ? 'bg-white/10 text-white shadow-sm'
                                 : 'text-zinc-400 hover:text-white hover:bg-white/5'
@@ -9690,7 +9691,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             <div className="flex items-center justify-between pb-2 border-b border-white/5">
                               <div className="flex items-center gap-2">
                                 <Compass className="w-4 h-4 text-purple-400" />
-                                <h4 className="text-xs font-semibold text-white">Curated Looks & Presets</h4>
+                                <h4 className="text-xs font-heading font-normal tracking-wide text-white">Curated Looks & Presets</h4>
                                 <InfoTooltip text="Presets shown in 'Shop the Look' modal for this device. Customers can apply combinations in 1 click." />
                               </div>
                               <button
@@ -9746,7 +9747,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                               STAFF PICK
                                             </span>
                                           )}
-                                          <span className="text-xs font-bold text-white">
+                                          <span className="text-xs font-heading font-normal tracking-wide text-white">
                                             {preset.title}
                                           </span>
                                         </div>
@@ -10499,7 +10500,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <h3 className="text-sm font-bold text-white">Asset Integrity & Health Audit</h3>
+                            <h3 className="text-sm font-heading font-normal tracking-wider uppercase text-white">Asset Integrity & Health Audit</h3>
                             {editingProfile && (
                               <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-zinc-300 font-mono">
                                 {editingProfile.device_name}
@@ -11282,7 +11283,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     <Compass className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <h3 className="text-sm font-heading font-normal tracking-wide text-white flex items-center gap-2">
                       <span>Bespoke Presets (Shop the Look)</span>
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/5 text-zinc-300 border border-white/10">
                         {configuratorPresets.length} Active
@@ -11645,7 +11646,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
               <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between shrink-0 bg-zinc-900/60">
                 <div className="flex items-center gap-2">
                   <Compass className="w-4 h-4 text-purple-400" />
-                  <h3 className="text-sm font-bold text-white">
+                  <h3 className="text-sm font-heading font-normal tracking-wider uppercase text-white">
                     {editingDevicePreset.isNew ? 'Add Curated Look' : 'Edit Curated Look'}
                   </h3>
                 </div>
