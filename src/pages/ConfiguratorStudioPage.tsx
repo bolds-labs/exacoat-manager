@@ -90,6 +90,11 @@ import {
   Sun,
   Lock,
   Package,
+  ArrowLeftRight,
+  Download,
+  Upload,
+  FileJson,
+  FileText,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { MediaLibraryModal } from '../components/modals/MediaLibraryModal';
@@ -587,6 +592,25 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [shadingHlContrast, setShadingHlContrast] = useState(1.0);
   const [isExtractingShading, setIsExtractingShading] = useState(false);
 
+  // Transfer Setup & Portable JSON Modal state
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferTab, setTransferTab] = useState<'copy_to' | 'copy_from' | 'export_json' | 'import_json'>('copy_to');
+  const [targetCopyProductId, setTargetCopyProductId] = useState<number | null>(null);
+  const [targetSearchQuery, setTargetSearchQuery] = useState('');
+  const [sourceCopyProductId, setSourceCopyProductId] = useState<number | null>(null);
+  const [sourceSearchQuery, setSourceSearchQuery] = useState('');
+  const [isTransferringSetup, setIsTransferringSetup] = useState(false);
+  const [importJsonText, setImportJsonText] = useState('');
+  const [importPreserveTargetMeta, setImportPreserveTargetMeta] = useState(true);
+  const [transferCopiedStatus, setTransferCopiedStatus] = useState(false);
+  const [copyOptions, setCopyOptions] = useState({
+    copyViews: true,
+    copyLayers: true,
+    copyPresets: true,
+    copyFamilySettings: true,
+    copyVariants: true,
+  });
+
   // Close category dropdown on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -671,6 +695,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
           setShowMasterTexturesModal(false);
         } else if (showGlobalAuditModal) {
           setShowGlobalAuditModal(false);
+        } else if (showTransferModal) {
+          setShowTransferModal(false);
         } else if (showAssetAuditModal) {
           setShowAssetAuditModal(false);
         } else if (showFindReplaceModal) {
@@ -690,7 +716,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [categoryDropdownOpen, mediaPickerConfig.isOpen, showMasterTexturesModal, showGlobalAuditModal, showAssetAuditModal, showFindReplaceModal, editingTextureModal, duplicateModal, priceEditModal, selectedProductId]);
+  }, [categoryDropdownOpen, mediaPickerConfig.isOpen, showMasterTexturesModal, showGlobalAuditModal, showTransferModal, showAssetAuditModal, showFindReplaceModal, editingTextureModal, duplicateModal, priceEditModal, selectedProductId]);
 
   useEffect(() => {
     if (selectedProductId !== null) {
@@ -1338,6 +1364,213 @@ export const ConfiguratorStudioPage: React.FC = () => {
       showToast('error', 'Duplication Error', err.message);
     } finally {
       setIsDuplicating(false);
+    }
+  };
+
+  // Transfer Setup & Portable JSON Handlers
+  const handleExecuteCopyTo = async () => {
+    if (!editingProfile || !targetCopyProductId) return;
+    const targetSummary = profiles.find((p) => p.product_id === targetCopyProductId);
+    if (!targetSummary) return;
+
+    setIsTransferringSetup(true);
+    try {
+      const res = await fetchProductConfiguratorProfileDirect(targetCopyProductId);
+      const targetProfile: Partial<DeviceConfiguratorProfile> = res.profile || {};
+
+      const clonedViews = copyOptions.copyViews
+        ? JSON.parse(JSON.stringify(editingProfile.views || []))
+        : targetProfile.views || [];
+      const clonedLayers = copyOptions.copyLayers
+        ? JSON.parse(JSON.stringify(editingProfile.layers || []))
+        : targetProfile.layers || [];
+      const clonedPresets = copyOptions.copyPresets
+        ? JSON.parse(JSON.stringify(editingProfile.presets || []))
+        : targetProfile.presets || [];
+      const clonedVariants = copyOptions.copyVariants
+        ? JSON.parse(JSON.stringify(editingProfile.variants || []))
+        : targetProfile.variants || [];
+      const clonedCoverage = copyOptions.copyViews
+        ? JSON.parse(JSON.stringify(editingProfile.coverage_and_cutouts || null))
+        : targetProfile.coverage_and_cutouts;
+
+      const payload: DeviceConfiguratorProfile = {
+        ...targetProfile,
+        product_id: targetCopyProductId,
+        device_slug: targetProfile.device_slug || targetSummary.slug,
+        device_name: targetProfile.device_name || targetSummary.name,
+        category: targetProfile.category || (targetSummary.categories?.[0] || 'General'),
+        family: copyOptions.copyFamilySettings ? editingProfile.family : (targetProfile.family || 'phone'),
+        base_price: targetProfile.base_price ?? targetSummary.price,
+        currency: targetProfile.currency || 'IDR',
+        size_multiplier: copyOptions.copyFamilySettings ? editingProfile.size_multiplier : (targetProfile.size_multiplier || 1.0),
+        texture_scale: editingProfile.texture_scale ?? 1.0,
+        is_configurable: clonedLayers.length > 0,
+        configurator_version: editingProfile.configurator_version || 'v2',
+        device_colors: editingProfile.device_colors ? JSON.parse(JSON.stringify(editingProfile.device_colors)) : [],
+        views: clonedViews,
+        layers: clonedLayers,
+        variants: clonedVariants,
+        coverage_and_cutouts: clonedCoverage,
+        presets: clonedPresets,
+      };
+
+      const saveRes = await saveProductConfiguratorProfileDirect(payload);
+      if (saveRes.success) {
+        showToast(
+          'success',
+          'Setup Transferred',
+          `Successfully copied configurator setup to "${targetSummary.name}".`
+        );
+        setProfiles((prev) =>
+          prev.map((p) =>
+            p.product_id === targetCopyProductId
+              ? {
+                  ...p,
+                  is_migrated: true,
+                  is_configurable: (payload.layers || []).length > 0,
+                  is_configurator: true,
+                  layers_count: (payload.layers || []).length,
+                  views_count: (payload.views || []).length,
+                  presets_count: (payload.presets || []).length,
+                  configurator_version: payload.configurator_version,
+                  family: payload.family,
+                  size_multiplier: payload.size_multiplier,
+                }
+              : p
+          )
+        );
+        setShowTransferModal(false);
+      } else {
+        showToast('error', 'Transfer Failed', saveRes.message || 'Failed saving setup to target device');
+      }
+    } catch (err: any) {
+      showToast('error', 'Transfer Error', err.message || 'Failed transferring setup');
+    } finally {
+      setIsTransferringSetup(false);
+    }
+  };
+
+  const handleExecuteCopyFrom = async () => {
+    if (!editingProfile || !sourceCopyProductId) return;
+    const sourceSummary = profiles.find((p) => p.product_id === sourceCopyProductId);
+    if (!sourceSummary) return;
+
+    setIsTransferringSetup(true);
+    try {
+      const res = await fetchProductConfiguratorProfileDirect(sourceCopyProductId);
+      const sourceProfile = res.profile;
+      if (!sourceProfile) {
+        showToast('error', 'Load Failed', 'Source profile could not be retrieved.');
+        return;
+      }
+
+      const updated: DeviceConfiguratorProfile = {
+        ...editingProfile,
+        configurator_version: sourceProfile.configurator_version || 'v2',
+        family: copyOptions.copyFamilySettings ? sourceProfile.family : editingProfile.family,
+        size_multiplier: copyOptions.copyFamilySettings ? sourceProfile.size_multiplier : editingProfile.size_multiplier,
+        texture_scale: sourceProfile.texture_scale ?? editingProfile.texture_scale,
+        views: copyOptions.copyViews ? JSON.parse(JSON.stringify(sourceProfile.views || [])) : editingProfile.views,
+        layers: copyOptions.copyLayers ? JSON.parse(JSON.stringify(sourceProfile.layers || [])) : editingProfile.layers,
+        presets: copyOptions.copyPresets ? JSON.parse(JSON.stringify(sourceProfile.presets || [])) : editingProfile.presets,
+        variants: copyOptions.copyVariants ? JSON.parse(JSON.stringify(sourceProfile.variants || [])) : editingProfile.variants,
+        coverage_and_cutouts: copyOptions.copyViews
+          ? JSON.parse(JSON.stringify(sourceProfile.coverage_and_cutouts || null))
+          : editingProfile.coverage_and_cutouts,
+        device_colors: sourceProfile.device_colors
+          ? JSON.parse(JSON.stringify(sourceProfile.device_colors))
+          : editingProfile.device_colors,
+      };
+
+      setEditingProfile(updated);
+      setSelectedLayerId(updated.layers?.[0]?.id || '');
+      showToast(
+        'success',
+        'Template Setup Loaded',
+        `Adopted setup from "${sourceSummary.name}". Click Save Configurator when ready to persist.`
+      );
+      setShowTransferModal(false);
+    } catch (err: any) {
+      showToast('error', 'Template Error', err.message || 'Failed loading source template');
+    } finally {
+      setIsTransferringSetup(false);
+    }
+  };
+
+  const handleExportJsonDownload = () => {
+    if (!editingProfile) return;
+    const cleanProfile = {
+      ...editingProfile,
+      exported_at: new Date().toISOString(),
+      generator: 'Exacoat Manager Configurator Studio',
+    };
+    const jsonStr = JSON.stringify(cleanProfile, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${editingProfile.device_slug || 'device'}-profile.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('success', 'Profile Exported', 'Downloaded configurator profile JSON.');
+  };
+
+  const handleExportJsonClipboard = () => {
+    if (!editingProfile) return;
+    const jsonStr = JSON.stringify(editingProfile, null, 2);
+    navigator.clipboard.writeText(jsonStr);
+    setTransferCopiedStatus(true);
+    setTimeout(() => setTransferCopiedStatus(false), 2000);
+    showToast('success', 'Copied to Clipboard', 'Profile JSON copied to clipboard.');
+  };
+
+  const handleExecuteImportJson = (rawJson: string) => {
+    if (!editingProfile || !rawJson.trim()) return;
+    try {
+      const parsed = JSON.parse(rawJson);
+      if (!parsed || typeof parsed !== 'object') {
+        showToast('error', 'Invalid JSON', 'Supplied text is not a valid JSON object.');
+        return;
+      }
+      if (!Array.isArray(parsed.layers) && !Array.isArray(parsed.views)) {
+        showToast('error', 'Invalid Profile Format', 'JSON profile must contain a views or layers array.');
+        return;
+      }
+
+      const merged: DeviceConfiguratorProfile = {
+        ...(importPreserveTargetMeta ? editingProfile : parsed),
+        product_id: editingProfile.product_id,
+        device_slug: editingProfile.device_slug,
+        device_name: editingProfile.device_name,
+        base_price: editingProfile.base_price,
+        currency: editingProfile.currency,
+        category: editingProfile.category,
+        views: parsed.views || editingProfile.views || [],
+        layers: parsed.layers || editingProfile.layers || [],
+        presets: parsed.presets || editingProfile.presets || [],
+        variants: parsed.variants || editingProfile.variants || [],
+        coverage_and_cutouts: parsed.coverage_and_cutouts || editingProfile.coverage_and_cutouts,
+        family: parsed.family || editingProfile.family,
+        size_multiplier: parsed.size_multiplier || editingProfile.size_multiplier,
+        texture_scale: parsed.texture_scale ?? editingProfile.texture_scale ?? 1.0,
+        is_configurable: (parsed.layers || editingProfile.layers || []).length > 0,
+        configurator_version: parsed.configurator_version || editingProfile.configurator_version || 'v2',
+      };
+
+      setEditingProfile(merged);
+      setSelectedLayerId(merged.layers?.[0]?.id || '');
+      showToast(
+        'success',
+        'Profile Imported',
+        'Profile loaded into editor! Click Save Configurator when ready to persist.'
+      );
+      setShowTransferModal(false);
+      setImportJsonText('');
+    } catch (err: any) {
+      showToast('error', 'Import Failed', `JSON parsing failed: ${err.message}`);
     }
   };
 
@@ -6517,6 +6750,23 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 >
                   <Wand2 className="w-3.5 h-3.5 text-[#f3aa18]" />
                   <span>Find & Replace in URLs</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTargetCopyProductId(null);
+                    setSourceCopyProductId(null);
+                    setTransferTab('copy_to');
+                    setTransferCopiedStatus(false);
+                    setShowTransferModal(true);
+                  }}
+                  disabled={!editingProfile}
+                  className="px-3.5 py-2 text-xs font-sans font-semibold rounded-xl border border-cyan-500/30 hover:bg-cyan-500/10 text-cyan-300 hover:text-cyan-200 transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  title="Copy setup to/from another existing device or import/export JSON"
+                >
+                  <ArrowLeftRight className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Transfer Setup / JSON</span>
                 </button>
 
                 <button
@@ -11850,6 +12100,588 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 >
                   Save Look
                 </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* Transfer Setup & Portable JSON Modal */}
+      {showTransferModal && editingProfile &&
+        createPortal(
+          <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <div className="w-full max-w-3xl rounded-2xl bg-zinc-950 border border-white/15 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+              {/* Modal Header */}
+              <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between shrink-0 bg-zinc-900/60">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+                    <ArrowLeftRight className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-['Chakra_Petch'] font-semibold tracking-wide text-white flex items-center gap-2">
+                      Transfer Setup & JSON
+                      <span className="text-[11px] font-sans font-normal text-zinc-300 bg-white/5 border border-white/10 px-2 py-0.5 rounded-md">
+                        {editingProfile.device_name}
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      Share visual setups between device models or import and export portable JSON profiles.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowTransferModal(false)}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Tab Switcher */}
+              <div className="flex border-b border-white/10 bg-zinc-900/40 px-6 pt-2 gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setTransferTab('copy_to')}
+                  className={clsx(
+                    "px-3.5 py-2 text-xs font-['Chakra_Petch'] font-medium rounded-t-lg transition-colors flex items-center gap-1.5 border-b-2 cursor-pointer",
+                    transferTab === 'copy_to'
+                      ? 'border-cyan-400 text-cyan-300 bg-cyan-500/10'
+                      : 'border-transparent text-zinc-400 hover:text-white hover:bg-white/5'
+                  )}
+                >
+                  <ArrowRight className="w-3.5 h-3.5" />
+                  <span>Copy To Device</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTransferTab('copy_from')}
+                  className={clsx(
+                    "px-3.5 py-2 text-xs font-['Chakra_Petch'] font-medium rounded-t-lg transition-colors flex items-center gap-1.5 border-b-2 cursor-pointer",
+                    transferTab === 'copy_from'
+                      ? 'border-cyan-400 text-cyan-300 bg-cyan-500/10'
+                      : 'border-transparent text-zinc-400 hover:text-white hover:bg-white/5'
+                  )}
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Copy From Device</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTransferTab('export_json')}
+                  className={clsx(
+                    "px-3.5 py-2 text-xs font-['Chakra_Petch'] font-medium rounded-t-lg transition-colors flex items-center gap-1.5 border-b-2 cursor-pointer",
+                    transferTab === 'export_json'
+                      ? 'border-cyan-400 text-cyan-300 bg-cyan-500/10'
+                      : 'border-transparent text-zinc-400 hover:text-white hover:bg-white/5'
+                  )}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Export JSON</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTransferTab('import_json')}
+                  className={clsx(
+                    "px-3.5 py-2 text-xs font-['Chakra_Petch'] font-medium rounded-t-lg transition-colors flex items-center gap-1.5 border-b-2 cursor-pointer",
+                    transferTab === 'import_json'
+                      ? 'border-cyan-400 text-cyan-300 bg-cyan-500/10'
+                      : 'border-transparent text-zinc-400 hover:text-white hover:bg-white/5'
+                  )}
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Import JSON</span>
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+                {/* TAB 1: COPY TO ANOTHER DEVICE */}
+                {transferTab === 'copy_to' && (
+                  <div className="space-y-4">
+                    <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 space-y-1">
+                      <div className="font-semibold flex items-center gap-1.5">
+                        <ArrowRight className="w-3.5 h-3.5" />
+                        <span>Source: {editingProfile.device_name} (#{editingProfile.product_id})</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-300">
+                        Select a target device to receive this configurator setup ({editingProfile.views?.length || 0} views, {editingProfile.layers?.length || 0} layers, {editingProfile.presets?.length || 0} looks). The target device's unique Product ID, Name, Slug, Base Price, Currency, and Categories are strictly preserved.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-medium text-zinc-300 flex items-center justify-between">
+                        <span>Select Target Device:</span>
+                        <span className="text-zinc-500">
+                          {profiles.filter((p) => p.product_id !== editingProfile.product_id && (!targetSearchQuery.trim() || p.name.toLowerCase().includes(targetSearchQuery.toLowerCase()) || p.slug.toLowerCase().includes(targetSearchQuery.toLowerCase()) || String(p.product_id).includes(targetSearchQuery))).length} devices available
+                        </span>
+                      </label>
+
+                      {/* Search Bar */}
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="text"
+                          value={targetSearchQuery}
+                          onChange={(e) => setTargetSearchQuery(e.target.value)}
+                          placeholder="Search target device by name, slug, or ID (e.g. Galaxy S26+)..."
+                          className="w-full pl-9 pr-8 py-2 rounded-xl bg-zinc-900 border border-white/10 text-white text-xs focus:border-cyan-400 outline-none"
+                        />
+                        {targetSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setTargetSearchQuery('')}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 p-0.5"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Selectable Target Products List */}
+                      <div className="p-1 rounded-xl bg-zinc-900/80 border border-white/10 max-h-56 overflow-y-auto space-y-1">
+                        {profiles
+                          .filter((p) => {
+                            if (p.product_id === editingProfile.product_id) return false;
+                            if (!targetSearchQuery.trim()) return true;
+                            const q = targetSearchQuery.toLowerCase();
+                            return (
+                              p.name.toLowerCase().includes(q) ||
+                              p.slug.toLowerCase().includes(q) ||
+                              String(p.product_id).includes(q) ||
+                              p.categories?.some((c) => c.toLowerCase().includes(q))
+                            );
+                          })
+                          .slice(0, 100)
+                          .map((p) => {
+                            const isSelected = targetCopyProductId === p.product_id;
+                            return (
+                              <button
+                                key={p.product_id}
+                                type="button"
+                                onClick={() => setTargetCopyProductId(p.product_id)}
+                                className={clsx(
+                                  'w-full px-3 py-2 rounded-lg text-left transition-all flex items-center justify-between gap-3 cursor-pointer',
+                                  isSelected
+                                    ? 'bg-cyan-500/20 border border-cyan-400/60 text-white shadow-xs'
+                                    : 'hover:bg-white/5 border border-transparent text-zinc-300'
+                                )}
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className={clsx('font-medium text-xs truncate', isSelected ? 'text-cyan-200' : 'text-zinc-200')}>
+                                      {p.name}
+                                    </span>
+                                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-white/10 text-zinc-400 shrink-0 font-mono">
+                                      #{p.product_id}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-3 text-[10px] text-zinc-400 mt-0.5">
+                                    <span>{p.categories?.[0] || 'Uncategorized'}</span>
+                                    <span>•</span>
+                                    <span>{p.layers_count || 0} layers</span>
+                                    <span>•</span>
+                                    <span>{p.views_count || 0} views</span>
+                                    {p.is_configurator && (
+                                      <>
+                                        <span>•</span>
+                                        <span className="text-emerald-400">Configurator</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="shrink-0">
+                                  <div className={clsx(
+                                    'w-4 h-4 rounded-full border flex items-center justify-center transition-colors',
+                                    isSelected ? 'border-cyan-400 bg-cyan-500 text-black' : 'border-zinc-600'
+                                  )}>
+                                    {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                      </div>
+                    </div>
+
+                    {/* Scope Options */}
+                    <div className="p-3 rounded-xl bg-zinc-900/50 border border-white/10 space-y-2.5">
+                      <span className="text-[11px] font-semibold text-zinc-300">Elements to Copy:</span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                        <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={copyOptions.copyViews}
+                            onChange={(e) => setCopyOptions({ ...copyOptions, copyViews: e.target.checked })}
+                            className="rounded border-zinc-700 text-cyan-500 focus:ring-0"
+                          />
+                          <span>Views, 3D Shadows & Lighting</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={copyOptions.copyLayers}
+                            onChange={(e) => setCopyOptions({ ...copyOptions, copyLayers: e.target.checked })}
+                            className="rounded border-zinc-700 text-cyan-500 focus:ring-0"
+                          />
+                          <span>Skin Layers & Cutout Options</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={copyOptions.copyPresets}
+                            onChange={(e) => setCopyOptions({ ...copyOptions, copyPresets: e.target.checked })}
+                            className="rounded border-zinc-700 text-cyan-500 focus:ring-0"
+                          />
+                          <span>Curated Looks ("Shop the Look")</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={copyOptions.copyFamilySettings}
+                            onChange={(e) => setCopyOptions({ ...copyOptions, copyFamilySettings: e.target.checked })}
+                            className="rounded border-zinc-700 text-cyan-500 focus:ring-0"
+                          />
+                          <span>Family & Multiplier ({editingProfile.family}, {editingProfile.size_multiplier}x)</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 2: COPY FROM TEMPLATE DEVICE */}
+                {transferTab === 'copy_from' && (
+                  <div className="space-y-4">
+                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 space-y-1">
+                      <div className="font-semibold flex items-center gap-1.5">
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Active Editor: {editingProfile.device_name} (#{editingProfile.product_id})</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-300">
+                        Adopt an existing device's configurator views, layers, and presets into this editor session. The current device identity (ID, Name, Slug, Price) will not change. You can preview immediately and click "Save Configurator" when ready.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-medium text-zinc-300 flex items-center justify-between">
+                        <span>Select Source Template Device:</span>
+                        <span className="text-zinc-500">
+                          {profiles.filter((p) => p.product_id !== editingProfile.product_id && (p.layers_count > 0 || p.views_count > 0) && (!sourceSearchQuery.trim() || p.name.toLowerCase().includes(sourceSearchQuery.toLowerCase()) || p.slug.toLowerCase().includes(sourceSearchQuery.toLowerCase()) || String(p.product_id).includes(sourceSearchQuery))).length} configured devices
+                        </span>
+                      </label>
+
+                      {/* Search Bar */}
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="text"
+                          value={sourceSearchQuery}
+                          onChange={(e) => setSourceSearchQuery(e.target.value)}
+                          placeholder="Search source template device (e.g. Galaxy S26)..."
+                          className="w-full pl-9 pr-8 py-2 rounded-xl bg-zinc-900 border border-white/10 text-white text-xs focus:border-amber-400 outline-none"
+                        />
+                        {sourceSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setSourceSearchQuery('')}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 p-0.5"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Selectable Source Products List */}
+                      <div className="p-1 rounded-xl bg-zinc-900/80 border border-white/10 max-h-56 overflow-y-auto space-y-1">
+                        {profiles
+                          .filter((p) => {
+                            if (p.product_id === editingProfile.product_id) return false;
+                            if (!sourceSearchQuery.trim()) return true;
+                            const q = sourceSearchQuery.toLowerCase();
+                            return (
+                              p.name.toLowerCase().includes(q) ||
+                              p.slug.toLowerCase().includes(q) ||
+                              String(p.product_id).includes(q) ||
+                              p.categories?.some((c) => c.toLowerCase().includes(q))
+                            );
+                          })
+                          .sort((a, b) => (b.layers_count || 0) - (a.layers_count || 0))
+                          .slice(0, 100)
+                          .map((p) => {
+                            const isSelected = sourceCopyProductId === p.product_id;
+                            return (
+                              <button
+                                key={p.product_id}
+                                type="button"
+                                onClick={() => setSourceCopyProductId(p.product_id)}
+                                className={clsx(
+                                  'w-full px-3 py-2 rounded-lg text-left transition-all flex items-center justify-between gap-3 cursor-pointer',
+                                  isSelected
+                                    ? 'bg-amber-500/20 border border-amber-400/60 text-white shadow-xs'
+                                    : 'hover:bg-white/5 border border-transparent text-zinc-300'
+                                )}
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className={clsx('font-medium text-xs truncate', isSelected ? 'text-amber-200' : 'text-zinc-200')}>
+                                      {p.name}
+                                    </span>
+                                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-white/10 text-zinc-400 shrink-0 font-mono">
+                                      #{p.product_id}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-3 text-[10px] text-zinc-400 mt-0.5">
+                                    <span>{p.categories?.[0] || 'Uncategorized'}</span>
+                                    <span>•</span>
+                                    <span className="text-amber-300 font-medium">{p.layers_count || 0} layers</span>
+                                    <span>•</span>
+                                    <span className="text-amber-300 font-medium">{p.views_count || 0} views</span>
+                                  </div>
+                                </div>
+                                <div className="shrink-0">
+                                  <div className={clsx(
+                                    'w-4 h-4 rounded-full border flex items-center justify-center transition-colors',
+                                    isSelected ? 'border-amber-400 bg-amber-500 text-black' : 'border-zinc-600'
+                                  )}>
+                                    {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                      </div>
+                    </div>
+
+                    {/* Scope Options */}
+                    <div className="p-3 rounded-xl bg-zinc-900/50 border border-white/10 space-y-2.5">
+                      <span className="text-[11px] font-semibold text-zinc-300">Elements to Adopt:</span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                        <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={copyOptions.copyViews}
+                            onChange={(e) => setCopyOptions({ ...copyOptions, copyViews: e.target.checked })}
+                            className="rounded border-zinc-700 text-amber-500 focus:ring-0"
+                          />
+                          <span>Views, 3D Shadows & Lighting</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={copyOptions.copyLayers}
+                            onChange={(e) => setCopyOptions({ ...copyOptions, copyLayers: e.target.checked })}
+                            className="rounded border-zinc-700 text-amber-500 focus:ring-0"
+                          />
+                          <span>Skin Layers & Cutout Options</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={copyOptions.copyPresets}
+                            onChange={(e) => setCopyOptions({ ...copyOptions, copyPresets: e.target.checked })}
+                            className="rounded border-zinc-700 text-amber-500 focus:ring-0"
+                          />
+                          <span>Curated Looks ("Shop the Look")</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={copyOptions.copyFamilySettings}
+                            onChange={(e) => setCopyOptions({ ...copyOptions, copyFamilySettings: e.target.checked })}
+                            className="rounded border-zinc-700 text-amber-500 focus:ring-0"
+                          />
+                          <span>Family & Multiplier</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 3: EXPORT JSON */}
+                {transferTab === 'export_json' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] text-zinc-400">
+                        Export the complete profile JSON for <strong className="text-white">{editingProfile.device_name}</strong>. Portable across staging, production, or local backups.
+                      </p>
+                      <span className="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-md shrink-0">
+                        {editingProfile.views?.length || 0} views • {editingProfile.layers?.length || 0} layers
+                      </span>
+                    </div>
+
+                    <textarea
+                      readOnly
+                      value={JSON.stringify(editingProfile, null, 2)}
+                      rows={12}
+                      className="w-full font-mono text-[11px] p-3 rounded-xl bg-zinc-900 border border-white/10 text-zinc-300 outline-none select-all focus:border-cyan-400/50"
+                    />
+
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleExportJsonClipboard}
+                        className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        {transferCopiedStatus ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            <span className="text-emerald-300">Copied to Clipboard</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copy to Clipboard</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleExportJsonDownload}
+                        className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm active:scale-95"
+                      >
+                        <Download className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <span>Download JSON File</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 4: IMPORT JSON */}
+                {transferTab === 'import_json' && (
+                  <div className="space-y-3">
+                    <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/10 text-zinc-300 space-y-1">
+                      <p className="text-[11px]">
+                        Upload a <code className="text-cyan-300">.json</code> profile file or paste JSON below to load it directly into this studio session.
+                      </p>
+                    </div>
+
+                    {/* File Upload Input */}
+                    <div className="flex items-center gap-3">
+                      <label className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-white text-xs font-medium flex items-center gap-2 cursor-pointer transition-colors">
+                        <Upload className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>Choose JSON File</span>
+                        <input
+                          type="file"
+                          accept=".json,application/json"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (ev) => {
+                                const content = ev.target?.result as string;
+                                if (content) {
+                                  setImportJsonText(content);
+                                  showToast('info', 'File Loaded', `Loaded ${file.name} (${Math.round(content.length / 1024)} KB)`);
+                                }
+                              };
+                              reader.readAsText(file);
+                            }
+                          }}
+                        />
+                      </label>
+                      <span className="text-[11px] text-zinc-500">or paste JSON directly below:</span>
+                    </div>
+
+                    <textarea
+                      value={importJsonText}
+                      onChange={(e) => setImportJsonText(e.target.value)}
+                      placeholder="Paste device configurator profile JSON here..."
+                      rows={10}
+                      className="w-full font-mono text-[11px] p-3 rounded-xl bg-zinc-900 border border-white/10 text-zinc-300 outline-none focus:border-cyan-400/50"
+                    />
+
+                    {/* Metadata Preservation Toggle */}
+                    <label className="flex items-center gap-2 text-zinc-300 cursor-pointer pt-1">
+                      <input
+                        type="checkbox"
+                        checked={importPreserveTargetMeta}
+                        onChange={(e) => setImportPreserveTargetMeta(e.target.checked)}
+                        className="rounded border-zinc-700 text-cyan-500 focus:ring-0"
+                      />
+                      <span className="text-[11px]">
+                        Preserve current device identity (Keep Product ID #{editingProfile.product_id}, Name "{editingProfile.device_name}", Slug, Base Price, and Categories)
+                      </span>
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-6 py-3 border-t border-white/10 flex items-center justify-between gap-3 bg-zinc-900/60 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowTransferModal(false)}
+                  className="px-4 py-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/10 text-xs font-medium transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+
+                <div>
+                  {transferTab === 'copy_to' && (
+                    <button
+                      type="button"
+                      onClick={handleExecuteCopyTo}
+                      disabled={!targetCopyProductId || isTransferringSetup}
+                      className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs transition-all cursor-pointer shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                    >
+                      {isTransferringSetup ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Saving to Target Device...</span>
+                        </>
+                      ) : (
+                        <>
+                          <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <span>Apply & Save to Target Device</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {transferTab === 'copy_from' && (
+                    <button
+                      type="button"
+                      onClick={handleExecuteCopyFrom}
+                      disabled={!sourceCopyProductId || isTransferringSetup}
+                      className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs transition-all cursor-pointer shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                    >
+                      {isTransferringSetup ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Loading Template...</span>
+                        </>
+                      ) : (
+                        <>
+                          <ArrowLeft className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <span>Load Template into Editor</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {transferTab === 'import_json' && (
+                    <button
+                      type="button"
+                      onClick={() => handleExecuteImportJson(importJsonText)}
+                      disabled={!importJsonText.trim()}
+                      className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs transition-all cursor-pointer shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                    >
+                      <Upload className="w-3.5 h-3.5 stroke-[2.5]" />
+                      <span>Apply JSON to Editor</span>
+                    </button>
+                  )}
+
+                  {transferTab === 'export_json' && (
+                    <button
+                      type="button"
+                      onClick={() => setShowTransferModal(false)}
+                      className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-medium text-xs transition-colors cursor-pointer"
+                    >
+                      Close
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>,

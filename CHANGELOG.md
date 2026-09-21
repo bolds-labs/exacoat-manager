@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.02] - 2026-09-21
+
+### Configurator Studio Setup Transfer, Portable JSON Profiles & Storefront Catalog Hygiene
+- **Configurator Studio Setup Transfer Engine**:
+  - Added dedicated **Transfer Setup / JSON** modal in Configurator Studio top bar.
+  - **Copy To Device**: Seamlessly clone the active device visual configuration (views, 3D raytraced lighting, alpha masks, skin layers, texture rotation, and curated looks) into any other existing device in the WooCommerce catalog (e.g. Galaxy S26 to Galaxy S26+), strictly preserving the target product's unique Product ID, Name, Slug, Base Price, Currency, and Categories.
+  - **Copy From Device**: Load and adopt any existing device setup as a template directly into the active studio workspace for real-time visual preview before saving.
+  - **Selective Element Cloning**: Checkbox toggles for Views & 3D Lighting, Skin Layers & Cutouts, Curated Looks / Presets, Device Family & Multiplier, and Color Variants.
+  - **Export Profile JSON**: 1-click formatted JSON profile export (`{device_slug}-profile.json`) and instant clipboard copying with visual confirmation.
+  - **Import Profile JSON**: Drag-and-drop or paste raw JSON profiles into the editor with optional identity protection toggle (`importPreserveTargetMeta`).
+- **Storefront Catalog & Search Hygiene (iPhone 18 Pro Purge)**:
+  - Discovered and eliminated hardcoded phantom devices (`iphone-18-pro-max-skins`, `iphone-18-pro-skins`, `iphone-18-skins`) from `category-fallbacks.json` and `search-catalog.ts` in `exacoat-web`.
+  - Purged dummy product `#542251` (iPhone 18 Pro Max Skins) from WooCommerce staging database.
+  - Deployed verified typechecked fix to `exacoat-web` main branch.
+
 ## [0.1.01] - 2026-09-21
 
 ### Batch v2 Modern Engine Migration: 3D Shadows, Alpha Masks & Accents Rotation

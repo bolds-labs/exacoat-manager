@@ -1080,11 +1080,26 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
     - If supported: displays `preset.logo_cutout ? (brand ? "${brand} Cutout" : "With Cutout") : "Covered"`.
     - If the device lacks coverage choices (`!hasModelCoverageOption`), the coverage badge is omitted.
 
+---
 
+## 37. Configurator Setup Transfer Engine, Portable JSON Profiles & Storefront Fallback Hygiene
 
+- **Configurator Setup Transfer Architecture (`TransferSetupModal`)**:
+  - In `ConfiguratorStudioPage.tsx`, operators can transfer full visual configurator setups between device models via the **Transfer Setup / JSON** action modal in the top bar.
+  - **Copy To Device Invariant**:
+    - When transferring setup from an active device (e.g. Galaxy S26) to another device (e.g. Galaxy S26+), the target product's unique identity is strictly preserved: `product_id`, `device_slug`, `device_name`, `category`, `base_price`, and `currency`.
+    - Clones visual structure: `views`, 3D raytraced lighting, alpha masks, `layers`, per-layer texture transforms (scale and 90 degree rotation), curated looks (`presets`), `family`, and `size_multiplier`.
+    - Saves directly to WordPress post meta via `saveProductConfiguratorProfileDirect(payload)` and updates the in-memory catalog summary state.
+  - **Copy From Device (Template Adoption)**:
+    - Adopts an existing configured product template directly into the active editor session for immediate visual preview and interactive adjustment.
+    - Requires operator to click "Save Configurator" when satisfied before persisting to the database.
+  - **Selective Transfer Toggles**:
+    - Supports granular checkboxes: Views & 3D Lighting, Skin Layers & Cutouts, Curated Looks / Presets, Device Family & Multiplier, and Color Variants.
+  - **Portable Profile JSON (Export & Import)**:
+    - **Export Profile JSON**: Downloads `{device_slug}-profile.json` or copies JSON directly to clipboard with visual confirmation.
+    - **Import Profile JSON**: Accepts uploaded `.json` files or raw pasted JSON text, validating schema structure and offering an identity protection toggle (`importPreserveTargetMeta`) before applying to the active editor session.
 
-
-
-
-
-
+- **Storefront Fallback Fixtures & Phantom Products Invariant**:
+  - In `exacoat-web`, `configurator-loader.ts` falls back to `category-fallbacks.json` if a product is not found in WooCommerce.
+  - **Zero Phantom Products Invariant**: Hardcoding speculative or unannounced products (e.g. iPhone 18 Pro) in `category-fallbacks.json` or `POPULAR_ITEMS` in `search-catalog.ts` will cause the storefront to synthesize live HTTP 200 product pages and search suggestions for non-existent items.
+  - Fallback fixtures must strictly contain existing, authentic production devices only.
