@@ -1,10 +1,10 @@
 <?php
 /**
- * Artmatter Core Review & Collector Feedback Manager
+ * Exacoat Core Review & Customer Feedback Manager
  * 
  * Handles customer reviews, photo/video uploads, client/server compression,
- * Cloudflare R2 mirroring, Action Scheduler post-delivery invitations,
- * WooCommerce product rating synchronization, and front-end museum widgets.
+ * Action Scheduler post-delivery invitations, WooCommerce product rating
+ * synchronization, and front-end review widgets.
  *
  * @package Exacoat_Core
  * @version 7.10.0
@@ -23,7 +23,7 @@ class Exacoat_Review_Manager {
 	 */
 	public static function get_table_name(): string {
 		global $wpdb;
-		return $wpdb->prefix . 'artmatter_reviews';
+		return $wpdb->prefix . 'exacoat_reviews';
 	}
 
 	/**
@@ -34,6 +34,7 @@ class Exacoat_Review_Manager {
 		add_action( 'admin_init', [ __CLASS__, 'check_table_schema' ] );
 
 		// 2. Action Scheduler worker for post-delivery review invitation
+		add_action( 'exacoat_send_review_invitation_job', [ __CLASS__, 'process_review_invitation_job' ], 10, 1 );
 		add_action( 'artmatter_send_review_invitation_job', [ __CLASS__, 'process_review_invitation_job' ], 10, 1 );
 
 		// 3. Register REST API routes
@@ -106,9 +107,20 @@ class Exacoat_Review_Manager {
 	 */
 	public static function check_table_schema() {
 		global $wpdb;
-		$table_name = self::get_table_name();
-		$schema_ver = get_option( 'artmatter_reviews_schema_version', '0' );
-		if ( version_compare( $schema_ver, '1.2.0', '<' ) ) {
+		$table_name   = self::get_table_name();
+		$legacy_table = $wpdb->prefix . 'artmatter_reviews';
+
+		// Auto-migrate table name if legacy table exists and new table doesn't
+		if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $legacy_table ) ) === $legacy_table &&
+		     $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) ) !== $table_name ) {
+			$wpdb->query( "ALTER TABLE `{$legacy_table}` RENAME TO `{$table_name}`" );
+		}
+
+		$schema_ver = get_option( 'exacoat_reviews_schema_version', '' );
+		if ( empty( $schema_ver ) ) {
+			$schema_ver = get_option( 'artmatter_reviews_schema_version', '0' );
+		}
+		if ( version_compare( $schema_ver, '1.3.0', '<' ) ) {
 			self::create_tables();
 
 			// Ensure is_anonymous column exists for existing installations
@@ -123,7 +135,7 @@ class Exacoat_Review_Manager {
 				$wpdb->query( "ALTER TABLE {$table_name} MODIFY COLUMN rating decimal(3,1) NOT NULL DEFAULT 5.0" );
 			}
 
-			update_option( 'artmatter_reviews_schema_version', '1.2.0' );
+			update_option( 'exacoat_reviews_schema_version', '1.3.0' );
 		}
 	}
 
@@ -132,7 +144,7 @@ class Exacoat_Review_Manager {
 	 */
 	public static function ensure_reviews_dir(): string {
 		$upload_dir = wp_upload_dir();
-		$base_dir   = trailingslashit( $upload_dir['basedir'] ) . 'artmatter-reviews';
+		$base_dir   = trailingslashit( $upload_dir['basedir'] ) . 'exacoat-reviews';
 
 		if ( ! file_exists( $base_dir ) ) {
 			wp_mkdir_p( $base_dir );
@@ -154,7 +166,7 @@ class Exacoat_Review_Manager {
 	 */
 	public static function get_reviews_upload_url( string $subpath = '' ): string {
 		$upload_dir = wp_upload_dir();
-		$base_url   = trailingslashit( $upload_dir['baseurl'] ) . 'artmatter-reviews';
+		$base_url   = trailingslashit( $upload_dir['baseurl'] ) . 'exacoat-reviews';
 		return trailingslashit( $base_url ) . ltrim( $subpath, '/' );
 	}
 
@@ -232,7 +244,9 @@ class Exacoat_Review_Manager {
 		}
 
 		// Don't schedule if already invited, already reviewed, or cancelled
-		if ( $order->get_meta( '_artmatter_review_invited_at' ) || $order->get_meta( '_artmatter_has_review' ) ) {
+		$already_invited = $order->get_meta( '_exacoat_review_invited_at' ) ?: $order->get_meta( '_artmatter_review_invited_at' );
+		$has_review      = $order->get_meta( '_exacoat_has_review' ) ?: $order->get_meta( '_artmatter_has_review' );
+		if ( $already_invited || $has_review ) {
 			return;
 		}
 
@@ -248,24 +262,26 @@ class Exacoat_Review_Manager {
 		if ( function_exists( 'as_schedule_single_action' ) ) {
 			// Unschedule any previous pending invitation for this order to prevent duplicates
 			if ( function_exists( 'as_unschedule_action' ) ) {
+				as_unschedule_action( 'exacoat_send_review_invitation_job', [ 'order_id' => (int) $order_id ], 'exacoat-reviews' );
 				as_unschedule_action( 'artmatter_send_review_invitation_job', [ 'order_id' => (int) $order_id ], 'artmatter-reviews' );
 			}
 			as_schedule_single_action(
 				$scheduled_time,
-				'artmatter_send_review_invitation_job',
+				'exacoat_send_review_invitation_job',
 				[ 'order_id' => (int) $order_id ],
-				'artmatter-reviews'
+				'exacoat-reviews'
 			);
 		} else {
 			wp_schedule_single_event(
 				$scheduled_time,
-				'artmatter_send_review_invitation_job',
+				'exacoat_send_review_invitation_job',
 				[ (int) $order_id ]
 			);
 		}
 
 		$scheduled_iso = gmdate( 'Y-m-d H:i:s', $scheduled_time );
-		$order->update_meta_data( '_artmatter_review_invite_scheduled_at', $scheduled_iso );
+		$order->update_meta_data( '_exacoat_review_invite_scheduled_at', $scheduled_iso );
+		$order->delete_meta_data( '_artmatter_review_invite_scheduled_at' );
 		$order->save();
 	}
 
@@ -274,10 +290,12 @@ class Exacoat_Review_Manager {
 	 */
 	public static function cancel_scheduled_invitation( $order_id ) {
 		if ( function_exists( 'as_unschedule_action' ) ) {
+			as_unschedule_action( 'exacoat_send_review_invitation_job', [ 'order_id' => (int) $order_id ], 'exacoat-reviews' );
 			as_unschedule_action( 'artmatter_send_review_invitation_job', [ 'order_id' => (int) $order_id ], 'artmatter-reviews' );
 		}
 		$order = wc_get_order( $order_id );
 		if ( $order ) {
+			$order->delete_meta_data( '_exacoat_review_invite_scheduled_at' );
 			$order->delete_meta_data( '_artmatter_review_invite_scheduled_at' );
 			$order->save();
 		}
@@ -299,7 +317,9 @@ class Exacoat_Review_Manager {
 		}
 
 		// Don't re-invite if already sent or already reviewed
-		if ( $order->get_meta( '_artmatter_review_invited_at' ) || $order->get_meta( '_artmatter_has_review' ) ) {
+		$already_invited = $order->get_meta( '_exacoat_review_invited_at' ) ?: $order->get_meta( '_artmatter_review_invited_at' );
+		$has_review      = $order->get_meta( '_exacoat_has_review' ) ?: $order->get_meta( '_artmatter_has_review' );
+		if ( $already_invited || $has_review ) {
 			return;
 		}
 
@@ -312,43 +332,40 @@ class Exacoat_Review_Manager {
 		$review_url = self::get_review_url( $order );
 
 		// Extract first product thumbnail & title
-		$art_title = 'Precision Device Skin';
-		$art_image = 'https://media.artmatter.co/assets/sample-art.jpg';
-		$artist = 'Exacoat';
+		$item_title = 'Precision Device Skin';
+		$item_image = '';
+		$brand      = 'Exacoat';
 
 		foreach ( $order->get_items() as $item ) {
 			$prod = $item->get_product();
 			if ( $prod ) {
-				$art_title = $item->get_name();
-				$img_id    = $prod->get_image_id();
+				$item_title = $item->get_name();
+				$img_id     = $prod->get_image_id();
 				if ( $img_id ) {
-					$art_image = wp_get_attachment_image_url( $img_id, 'medium' ) ?: $art_image;
-				}
-				$artist_meta = 'Exacoat';
-				if ( $artist_meta ) {
-					$artist = (string) $artist_meta;
+					$item_image = wp_get_attachment_image_url( $img_id, 'medium' ) ?: $item_image;
 				}
 				break;
 			}
 		}
 
-		// Dispatch via Artmatter Email Engine
-		if ( class_exists( 'Artmatter_Email_Engine' ) ) {
+		// Dispatch via Email Engine
+		$email_class = class_exists( 'Exacoat_Email_Engine' ) ? 'Exacoat_Email_Engine' : ( class_exists( 'Artmatter_Email_Engine' ) ? 'Artmatter_Email_Engine' : null );
+		if ( $email_class ) {
 			$reward_settings = self::get_reward_settings();
 			$discount_pct    = ! empty( $reward_settings['enabled'] ) ? (int) ( $reward_settings['discount_percent'] ?? 20 ) : 0;
 
 			$payload = [
 				'order_number'        => $order->get_order_number(),
-				'customer_first_name' => $order->get_billing_first_name() ?: 'Collector',
-				'artwork_title'       => $art_title,
-				'artwork_image'       => $art_image,
-				'artist_name'         => $artist,
+				'customer_first_name' => $order->get_billing_first_name() ?: 'Customer',
+				'artwork_title'       => $item_title,
+				'artwork_image'       => $item_image,
+				'artist_name'         => $brand,
 				'review_url'          => $review_url,
 				'discount_percent'    => $discount_pct,
 				'has_reward'          => $discount_pct > 0 ? 1 : 0,
 			];
 
-			Artmatter_Email_Engine::send_email(
+			$email_class::send_email(
 				'customer_order_review_invitation',
 				$customer_email,
 				$customer_name,
@@ -356,7 +373,8 @@ class Exacoat_Review_Manager {
 			);
 
 			$sent_iso = current_time( 'mysql' );
-			$order->update_meta_data( '_artmatter_review_invited_at', $sent_iso );
+			$order->update_meta_data( '_exacoat_review_invited_at', $sent_iso );
+			$order->delete_meta_data( '_exacoat_review_invite_scheduled_at' );
 			$order->delete_meta_data( '_artmatter_review_invite_scheduled_at' );
 			$order->save();
 		}
@@ -626,7 +644,7 @@ class Exacoat_Review_Manager {
 			'url'        => $local_url,
 			'r2_key'     => $remote_r2_key,
 			'r2_synced'  => $r2_synced ? 1 : 0,
-			'poster_url' => $poster_url ?: 'https://media.artmatter.co/assets/sample-art.jpg',
+			'poster_url' => $poster_url ?: '',
 			'width'      => 1920,
 			'height'     => 1080,
 		];
@@ -636,91 +654,93 @@ class Exacoat_Review_Manager {
 	 * Register REST Routes
 	 */
 	public static function register_rest_routes() {
-		$namespace = 'artmatter-core/v1';
+		$namespaces = [ 'exacoat-core/v1', 'artmatter-core/v1' ];
 
-		// 1. List reviews (for Manager & Storefront)
-		register_rest_route( $namespace, '/reviews', [
-			'methods'             => [ 'GET' ],
-			'callback'            => [ __CLASS__, 'api_get_reviews' ],
-			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
-		] );
+		foreach ( $namespaces as $namespace ) {
+			// 1. List reviews (for Manager & Storefront)
+			register_rest_route( $namespace, '/reviews', [
+				'methods'             => [ 'GET' ],
+				'callback'            => [ __CLASS__, 'api_get_reviews' ],
+				'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
+			] );
 
-		// 2. Get reviews for a single order
-		register_rest_route( $namespace, '/reviews/order/(?P<id>\d+)', [
-			'methods'             => [ 'GET' ],
-			'callback'            => [ __CLASS__, 'api_get_order_review' ],
-			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
-		] );
+			// 2. Get reviews for a single order
+			register_rest_route( $namespace, '/reviews/order/(?P<id>\d+)', [
+				'methods'             => [ 'GET' ],
+				'callback'            => [ __CLASS__, 'api_get_order_review' ],
+				'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
+			] );
 
-		// 3. Update review status (approve, feature, reject)
-		register_rest_route( $namespace, '/reviews/(?P<id>\d+)/status', [
-			'methods'             => [ 'POST' ],
-			'callback'            => [ __CLASS__, 'api_update_review_status' ],
-			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
-		] );
+			// 3. Update review status (approve, feature, reject)
+			register_rest_route( $namespace, '/reviews/(?P<id>\d+)/status', [
+				'methods'             => [ 'POST' ],
+				'callback'            => [ __CLASS__, 'api_update_review_status' ],
+				'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
+			] );
 
-		// 4. Edit review content / rating
-		register_rest_route( $namespace, '/reviews/(?P<id>\d+)/edit', [
-			'methods'             => [ 'POST' ],
-			'callback'            => [ __CLASS__, 'api_edit_review' ],
-			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
-		] );
+			// 4. Edit review content / rating
+			register_rest_route( $namespace, '/reviews/(?P<id>\d+)/edit', [
+				'methods'             => [ 'POST' ],
+				'callback'            => [ __CLASS__, 'api_edit_review' ],
+				'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
+			] );
 
-		// 5. Delete review
-		register_rest_route( $namespace, '/reviews/(?P<id>\d+)/delete', [
-			'methods'             => [ 'POST' ],
-			'callback'            => [ __CLASS__, 'api_delete_review' ],
-			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
-		] );
+			// 5. Delete review
+			register_rest_route( $namespace, '/reviews/(?P<id>\d+)/delete', [
+				'methods'             => [ 'POST' ],
+				'callback'            => [ __CLASS__, 'api_delete_review' ],
+				'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
+			] );
 
-		// 6. Public signed review submission
-		register_rest_route( $namespace, '/reviews/submit', [
-			'methods'             => [ 'POST' ],
-			'callback'            => [ __CLASS__, 'api_submit_review' ],
-			'permission_callback' => '__return_true',
-		] );
+			// 6. Public signed review submission
+			register_rest_route( $namespace, '/reviews/submit', [
+				'methods'             => [ 'POST' ],
+				'callback'            => [ __CLASS__, 'api_submit_review' ],
+				'permission_callback' => '__return_true',
+			] );
 
-		// 7. Manual review invite dispatch
-		register_rest_route( $namespace, '/reviews/invite', [
-			'methods'             => [ 'POST' ],
-			'callback'            => [ __CLASS__, 'api_manual_invite' ],
-			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
-		] );
+			// 7. Manual review invite dispatch
+			register_rest_route( $namespace, '/reviews/invite', [
+				'methods'             => [ 'POST' ],
+				'callback'            => [ __CLASS__, 'api_manual_invite' ],
+				'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
+			] );
 
-		// 8. Admin manual review creation
-		register_rest_route( $namespace, '/reviews/create', [
-			'methods'             => [ 'POST' ],
-			'callback'            => [ __CLASS__, 'api_create_review' ],
-			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
-		] );
+			// 8. Admin manual review creation
+			register_rest_route( $namespace, '/reviews/create', [
+				'methods'             => [ 'POST' ],
+				'callback'            => [ __CLASS__, 'api_create_review' ],
+				'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
+			] );
 
-		// 9. Get review coupon reward settings
-		register_rest_route( $namespace, '/reviews/reward-settings', [
-			'methods'             => [ 'GET' ],
-			'callback'            => [ __CLASS__, 'api_get_reward_settings' ],
-			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
-		] );
+			// 9. Get review coupon reward settings
+			register_rest_route( $namespace, '/reviews/reward-settings', [
+				'methods'             => [ 'GET' ],
+				'callback'            => [ __CLASS__, 'api_get_reward_settings' ],
+				'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
+			] );
 
-		// 10. Update review coupon reward settings
-		register_rest_route( $namespace, '/reviews/reward-settings', [
-			'methods'             => [ 'POST' ],
-			'callback'            => [ __CLASS__, 'api_update_reward_settings' ],
-			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
-		] );
+			// 10. Update review coupon reward settings
+			register_rest_route( $namespace, '/reviews/reward-settings', [
+				'methods'             => [ 'POST' ],
+				'callback'            => [ __CLASS__, 'api_update_reward_settings' ],
+				'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
+			] );
 
-		// 11. Direct media upload for customer reviews (photos & videos)
-		register_rest_route( $namespace, '/reviews/upload-media', [
-			'methods'             => [ 'POST' ],
-			'callback'            => [ __CLASS__, 'api_upload_media' ],
-			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
-		] );
+			// 11. Direct media upload for customer reviews (photos & videos)
+			register_rest_route( $namespace, '/reviews/upload-media', [
+				'methods'             => [ 'POST' ],
+				'callback'            => [ __CLASS__, 'api_upload_media' ],
+				'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
+			] );
 
-		// 12. Public order verification for headless /review page
-		register_rest_route( $namespace, '/reviews/verify-order', [
-			'methods'             => [ 'GET', 'POST' ],
-			'callback'            => [ __CLASS__, 'api_verify_order_for_review' ],
-			'permission_callback' => '__return_true',
-		] );
+			// 12. Public order verification for headless /review page
+			register_rest_route( $namespace, '/reviews/verify-order', [
+				'methods'             => [ 'GET', 'POST' ],
+				'callback'            => [ __CLASS__, 'api_verify_order_for_review' ],
+				'permission_callback' => '__return_true',
+			] );
+		}
 	}
 
 	/**
@@ -936,7 +956,10 @@ class Exacoat_Review_Manager {
 		// Clear order meta flag
 		$order = wc_get_order( (int) $row['order_id'] );
 		if ( $order ) {
+			$order->delete_meta_data( '_exacoat_has_review' );
 			$order->delete_meta_data( '_artmatter_has_review' );
+			$order->delete_meta_data( '_exacoat_review_id' );
+			$order->delete_meta_data( '_artmatter_review_id' );
 			$order->save();
 		}
 
@@ -983,11 +1006,11 @@ class Exacoat_Review_Manager {
 		}
 
 		// Enforce delivered order status check
-		$allowed_statuses = apply_filters( 'artmatter_review_allowed_order_statuses', [ 'completed', 'delivered' ] );
+		$allowed_statuses = apply_filters( 'exacoat_review_allowed_order_statuses', apply_filters( 'artmatter_review_allowed_order_statuses', [ 'completed', 'delivered' ] ) );
 		if ( ! in_array( $order->get_status(), $allowed_statuses, true ) ) {
 			return new WP_REST_Response( [
 				'success' => false,
-				'message' => __( 'Reviews can only be submitted after your order has been delivered.', 'artmatter-core' ),
+				'message' => __( 'Reviews can only be submitted after your order has been delivered.', 'exacoat-core' ),
 			], 403 );
 		}
 
@@ -1178,16 +1201,19 @@ class Exacoat_Review_Manager {
 		}
 
 		// Mark order meta
-		$order->update_meta_data( '_artmatter_has_review', 1 );
-		$order->update_meta_data( '_artmatter_review_id', $first_review_id );
+		$order->update_meta_data( '_exacoat_has_review', 1 );
+		$order->update_meta_data( '_exacoat_review_id', $first_review_id );
+		$order->delete_meta_data( '_artmatter_has_review' );
+		$order->delete_meta_data( '_artmatter_review_id' );
 		$order->save();
 
 		// Issue reward coupon only if review includes customer photo or video
 		$reward_coupon = null;
 		if ( ! empty( $media_list ) ) {
 			$reward_coupon = self::issue_reward_coupon( $order->get_id(), $order_email );
-			if ( $reward_coupon && ! empty( $order_email ) && class_exists( 'Artmatter_Email_Engine' ) ) {
-				Artmatter_Email_Engine::send_email(
+			$email_class   = class_exists( 'Exacoat_Email_Engine' ) ? 'Exacoat_Email_Engine' : ( class_exists( 'Artmatter_Email_Engine' ) ? 'Artmatter_Email_Engine' : null );
+			if ( $reward_coupon && ! empty( $order_email ) && $email_class ) {
+				$email_class::send_email(
 					'customer_order_review_reward',
 					$order_email,
 					$cust_name,
@@ -1223,10 +1249,11 @@ class Exacoat_Review_Manager {
 		}
 
 		// Notify via Pushover if active
-		if ( class_exists( 'Artmatter_Pushover_Service' ) ) {
+		$pushover_class = class_exists( 'Exacoat_Pushover_Service' ) ? 'Exacoat_Pushover_Service' : ( class_exists( 'Artmatter_Pushover_Service' ) ? 'Artmatter_Pushover_Service' : null );
+		if ( $pushover_class ) {
 			$media_count = count( $media_list );
 			$media_txt   = $media_count > 0 ? " ({$media_count} photo/video)" : '';
-			Artmatter_Pushover_Service::send(
+			$pushover_class::send(
 				"⭐ New Customer Review: {$cust_name} ({$rating}/5★){$media_txt}\nOrder #{$order->get_order_number()} for \"{$selected_item['artwork_title']}\".",
 				'New Customer Review'
 			);
@@ -1293,7 +1320,7 @@ class Exacoat_Review_Manager {
 		}
 
 		$status           = $order->get_status();
-		$allowed_statuses = apply_filters( 'artmatter_review_allowed_order_statuses', [ 'completed', 'delivered' ] );
+		$allowed_statuses = apply_filters( 'exacoat_review_allowed_order_statuses', apply_filters( 'artmatter_review_allowed_order_statuses', [ 'completed', 'delivered' ] ) );
 		if ( ! in_array( $status, $allowed_statuses, true ) ) {
 			return new WP_REST_Response( [
 				'success'     => false,
@@ -1529,6 +1556,7 @@ class Exacoat_Review_Manager {
 		}
 
 		// Reset invited timestamp so email will dispatch
+		$order->delete_meta_data( '_exacoat_review_invited_at' );
 		$order->delete_meta_data( '_artmatter_review_invited_at' );
 		$order->save();
 
@@ -1620,7 +1648,10 @@ class Exacoat_Review_Manager {
 			'coupon_prefix'    => 'EXACOAT',
 			'expiry_days'      => 30,
 		];
-		$stored = get_option( 'artmatter_review_reward_settings', [] );
+		$stored = get_option( 'exacoat_review_reward_settings', null );
+		if ( null === $stored ) {
+			$stored = get_option( 'artmatter_review_reward_settings', [] );
+		}
 		if ( ! is_array( $stored ) ) {
 			$stored = [];
 		}
@@ -1664,8 +1695,8 @@ class Exacoat_Review_Manager {
 				if ( $coupon_id ) {
 					update_post_meta( $coupon_id, '_acfw_show_on_my_coupons_page', 'yes' );
 					update_post_meta( $coupon_id, '_acfw_coupon_label', "Customer Review Reward ({$percent}% OFF)" );
-					update_post_meta( $coupon_id, '_artmatter_review_reward', 1 );
-					update_post_meta( $coupon_id, '_artmatter_order_id', $order_id );
+					update_post_meta( $coupon_id, '_exacoat_review_reward', 1 );
+					update_post_meta( $coupon_id, '_exacoat_order_id', $order_id );
 				}
 
 				return [
@@ -1698,21 +1729,37 @@ class Exacoat_Review_Manager {
 	 * @throws Exception
 	 */
 	public static function prevent_coupon_stacking( $is_valid, $coupon, $discounts = null ) {
-		if ( ! $is_valid || ! is_a( $coupon, 'WC_Coupon' ) ) {
+		if ( ! $is_valid || ! $coupon ) {
 			return $is_valid;
 		}
 
-		$coupon_code         = strtoupper( $coupon->get_code() );
-		$is_collector_coupon = ( 0 === strpos( $coupon_code, 'EXACOAT' ) ) || $coupon->get_individual_use();
+		$coupon_code = strtoupper( $coupon->get_code() );
 
-		if ( function_exists( 'WC' ) && WC()->cart ) {
+		// Check if the coupon being applied has the Exacoat review reward flag or prefix
+		$coupon_id           = $coupon->get_id();
+		$is_collector_coupon = false;
+
+		if ( $coupon_id ) {
+			$is_collector_coupon = (bool) ( get_post_meta( $coupon_id, '_exacoat_review_reward', true ) ?: get_post_meta( $coupon_id, '_artmatter_review_reward', true ) );
+		}
+
+		if ( ! $is_collector_coupon ) {
+			$settings = self::get_reward_settings();
+			$prefix   = strtoupper( $settings['coupon_prefix'] ?? 'EXACOAT' );
+			if ( ! empty( $prefix ) && 0 === strpos( $coupon_code, $prefix ) ) {
+				$is_collector_coupon = true;
+			}
+		}
+
+		if ( WC()->cart ) {
 			$applied_coupons = WC()->cart->get_applied_coupons();
+
 			if ( ! empty( $applied_coupons ) ) {
-				// 1. If applying a collector promo code while other coupons exist in the cart
+				// 1. If applying an Exacoat Perks promo code while other coupons exist
 				if ( $is_collector_coupon ) {
 					foreach ( $applied_coupons as $code ) {
 						if ( strtoupper( $code ) !== $coupon_code ) {
-							throw new Exception( __( 'Exacoat Perks promo codes cannot be combined with any other coupon or promotional discount.', 'artmatter-core' ), 109 );
+							throw new Exception( __( 'Exacoat Perks promo codes cannot be combined with any other coupon or promotional discount.', 'exacoat-core' ), 109 );
 						}
 					}
 				}
@@ -1721,7 +1768,7 @@ class Exacoat_Review_Manager {
 				foreach ( $applied_coupons as $code ) {
 					$applied_upper = strtoupper( $code );
 					if ( ( 0 === strpos( $applied_upper, 'EXACOAT' ) ) && $applied_upper !== $coupon_code ) {
-						throw new Exception( __( 'A Exacoat Perks promo code is already active on this order. It cannot be combined with other coupons.', 'artmatter-core' ), 109 );
+						throw new Exception( __( 'A Exacoat Perks promo code is already active on this order. It cannot be combined with other coupons.', 'exacoat-core' ), 109 );
 					}
 				}
 			}
@@ -1757,7 +1804,7 @@ class Exacoat_Review_Manager {
 			'expiry_days'      => $expiry_days,
 		];
 
-		update_option( 'artmatter_review_reward_settings', $data );
+		update_option( 'exacoat_review_reward_settings', $data );
 
 		return new WP_REST_Response( [
 			'success'  => true,
@@ -2156,8 +2203,8 @@ class Exacoat_Review_Manager {
 	 * Restricted exclusively to verified owners with order verification.
 	 */
 	public static function render_review_submission_shortcode(): string {
-		wp_enqueue_style( 'artmatter-reviews' );
-		wp_enqueue_script( 'artmatter-reviews' );
+		wp_enqueue_style( 'exacoat-reviews' );
+		wp_enqueue_script( 'exacoat-reviews' );
 
 		global $wpdb;
 		$table = self::get_table_name();
@@ -2196,9 +2243,9 @@ class Exacoat_Review_Manager {
 
 			if ( $email_match || $token_match || $key_match || $is_order_user ) {
 				$status           = $order->get_status();
-				$allowed_statuses = apply_filters( 'artmatter_review_allowed_order_statuses', [ 'completed', 'delivered' ] );
+				$allowed_statuses = apply_filters( 'exacoat_review_allowed_order_statuses', apply_filters( 'artmatter_review_allowed_order_statuses', [ 'completed', 'delivered' ] ) );
 				if ( ! in_array( $status, $allowed_statuses, true ) ) {
-					$verification_error = __( 'Reviews can only be submitted after your order has been delivered.', 'artmatter-core' );
+					$verification_error = __( 'Reviews can only be submitted after your order has been delivered.', 'exacoat-core' );
 				} else {
 					$is_verified = true;
 					if ( empty( $token_param ) ) {
@@ -2212,10 +2259,10 @@ class Exacoat_Review_Manager {
 					}
 				}
 			} else {
-				$verification_error = __( 'The provided email or credentials do not match this order.', 'artmatter-core' );
+				$verification_error = __( 'The provided email or credentials do not match this order.', 'exacoat-core' );
 			}
 		} elseif ( ! empty( $order_id_param ) ) {
-			$verification_error = __( 'Order reference not found. Please check your order number.', 'artmatter-core' );
+			$verification_error = __( 'Order reference not found. Please check your order number.', 'exacoat-core' );
 		}
 
 		// Check if this verified order already submitted a review

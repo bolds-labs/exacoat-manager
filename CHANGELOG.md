@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.10] - 2026-09-21
+
+### Fulfillment & Multi-Zone Shipping Region Persistence Fix
+- **Eliminated Premature Form Closure in Admin Settings (`settings-page.php`)**:
+  - Replaced nested `<form id="form-whatsapp-settings">` inside the outer `<form id="exacoatSettingsForm">` with a `<div id="form-whatsapp-settings">`.
+  - Resolved browser HTML parser issue where the inner form closing tag prematurely terminated `exacoatSettingsForm` at line 1145, leaving the entire Fulfillment & Shipping pane orphaned outside any form element.
+  - Refactored WhatsApp AJAX settings save handler to construct `FormData` directly from the div container elements.
+- **Explicit HTML5 Form Ownership on All Shipping Inputs**:
+  - Attached explicit `form="exacoatSettingsForm"` to all shipping method and shipping zone table inputs (both PHP rendered and dynamically created JavaScript rows in `window.addShippingZoneRow`).
+  - Added hidden `shipping_zones_present` sentinel so region modifications and total region deletions are saved reliably in `sanitize_settings()`.
+- **Unconditional Click Handlers on Action Buttons**:
+  - Bound direct inline `onclick="window.addShippingZoneRow()"` to `+ Add Shipping Region` and `onclick="window.addCurrencyRow()"` to `+ Add Custom Currency` to safeguard against deferred `DOMContentLoaded` script timing.
+  - Added dynamic counter badge recalculation (`#shipping-zones-count-badge`) upon adding or deleting shipping region rows.
+  - Implemented robust `document.readyState` check on script initialization.
+
 ## [0.1.09] - 2026-09-21
 
 ### Critical Syntax Fix in Configurator Engine

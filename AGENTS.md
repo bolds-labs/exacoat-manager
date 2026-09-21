@@ -164,6 +164,8 @@ export function cleanItemTitle(name?: string): string {
 - **Decoupled from WooCommerce Zones**: Free shipping discount calculations in `Exacoat_Store_Enhancements::apply_zone_tiered_shipping_discount()` evaluate the destination country (`$package['destination']['country']`) directly. Adding a country region (e.g. `SG` with `SGD 30`) immediately applies to checkout without creating a WooCommerce shipping zone.
 - **Bi-directional Synchronization**: Changes to `exacoat_core_settings` are synchronized with `artmatter_core_settings` using recursive loop guards (`$is_syncing`) across both `add_option_*` and `update_option_*` hooks.
 - **Tab State & Form Non-Blocking**: The settings page stores the active tab in `sessionStorage` and URL hash (`#shipping`), and defers submit button disabling via `setTimeout` to prevent browser cancellation of the HTTP POST request.
+- **Single Form Hierarchy & Input Form Ownership Invariant**: In `settings-page.php`, all settings panes are submitted via the master `<form id="exacoatSettingsForm">`. Nested `<form>` tags are strictly forbidden as browser HTML parsers drop nested form start tags and close the outer master form on the inner form's closing `</form>` tag. All shipping inputs (both PHP-rendered and dynamically created JavaScript rows) must explicitly declare `form="exacoatSettingsForm"`.
+- **Shipping Zone Deletion Sentinel**: A hidden input `shipping_zones_present` must be submitted with the form so `sanitize_settings()` can distinguish between an omitted field and an explicit deletion of all zones.
 
 ---
 

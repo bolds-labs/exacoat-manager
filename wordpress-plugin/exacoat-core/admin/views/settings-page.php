@@ -1034,7 +1034,7 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 					</div>
 
 					<div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px;">
-						<button type="button" class="ex-btn-add" id="btn-add-currency">
+						<button type="button" class="ex-btn-add" id="btn-add-currency" onclick="window.addCurrencyRow()">
 							+ Add Custom Currency
 						</button>
 						<button type="submit" form="exacoatSettingsForm" class="ex-btn ex-btn-primary" style="padding: 8px 16px;">
@@ -1060,7 +1060,7 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 						</span>
 					</div>
 
-					<form id="form-whatsapp-settings" style="display: flex; flex-direction: column; gap: 16px; margin-top: 8px;">
+					<div id="form-whatsapp-settings" style="display: flex; flex-direction: column; gap: 16px; margin-top: 8px;">
 						<div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px;">
 							<input type="checkbox" id="wa-enabled" name="enabled" value="1" <?php checked( ! empty( $wa_settings['enabled'] ) ); ?> style="width: 16px; height: 16px; cursor: pointer;">
 							<label for="wa-enabled" style="font-size: 13px; font-weight: 600; color: #ffffff; cursor: pointer;">
@@ -1142,7 +1142,7 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 							</button>
 							<span id="wa-save-status" style="font-size: 12px; color: #34d399;"></span>
 						</div>
-					</form>
+					</div>
 
 					<!-- Live Test Dispatcher -->
 					<div style="margin-top: 20px; padding: 16px; background: #090a0d; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px;">
@@ -1356,7 +1356,7 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 							</p>
 						</div>
 						<div style="display: flex; align-items: center; gap: 8px;">
-							<span class="ex-badge ex-badge-emerald"><?php echo count( $shipping_zones ); ?> Active Regions</span>
+							<span class="ex-badge ex-badge-emerald" id="shipping-zones-count-badge"><?php echo count( $shipping_zones ); ?> Active Regions</span>
 							<button type="submit" form="exacoatSettingsForm" class="ex-btn ex-btn-primary" style="padding: 5px 12px; font-size: 11px;">
 								💾 Save Changes
 							</button>
@@ -1366,7 +1366,8 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 					<div style="background: #0d0e12; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 16px 20px; margin-top: 14px;">
 						<label class="ex-sim-label">Target Shipping Method IDs (Comma-Separated)</label>
 						<div style="margin-top: 6px;">
-							<input type="text" name="exacoat_core_settings[shipping_target_method_ids]" value="<?php echo esc_attr( $target_methods ); ?>" class="ex-input mono" style="width: 100%; max-width: 520px;" placeholder="flat_rate, biteship_shipping">
+							<input type="hidden" form="exacoatSettingsForm" name="exacoat_core_settings[shipping_zones_present]" value="1">
+							<input type="text" form="exacoatSettingsForm" name="exacoat_core_settings[shipping_target_method_ids]" value="<?php echo esc_attr( $target_methods ); ?>" class="ex-input mono" style="width: 100%; max-width: 520px;" placeholder="flat_rate, biteship_shipping">
 							<p style="margin: 6px 0 0 0; font-size: 11px; color: #71717a;">Eligible method IDs discounted to 0.00 when the cart subtotal qualifies against the region's threshold.</p>
 						</div>
 					</div>
@@ -1403,23 +1404,23 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 								?>
 								<tr data-key="<?php echo esc_attr( $key ); ?>">
 									<td>
-										<input type="text" name="exacoat_core_settings[shipping_zones][<?php echo esc_attr( $key ); ?>][name]" value="<?php echo esc_attr( $zone['name'] ?? ucfirst( $key ) ); ?>" class="ex-input" style="width: 100%; font-weight: 600;">
+										<input type="text" form="exacoatSettingsForm" name="exacoat_core_settings[shipping_zones][<?php echo esc_attr( $key ); ?>][name]" value="<?php echo esc_attr( $zone['name'] ?? ucfirst( $key ) ); ?>" class="ex-input" style="width: 100%; font-weight: 600;">
 									</td>
 									<td>
-										<input type="text" name="exacoat_core_settings[shipping_zones][<?php echo esc_attr( $key ); ?>][countries]" value="<?php echo esc_attr( $zone['countries'] ?? '' ); ?>" class="ex-input mono" style="width: 100%;" placeholder="e.g. US, CA or * for fallback">
+										<input type="text" form="exacoatSettingsForm" name="exacoat_core_settings[shipping_zones][<?php echo esc_attr( $key ); ?>][countries]" value="<?php echo esc_attr( $zone['countries'] ?? '' ); ?>" class="ex-input mono" style="width: 100%;" placeholder="e.g. US, CA or * for fallback">
 									</td>
 									<td>
-										<select name="exacoat_core_settings[shipping_zones][<?php echo esc_attr( $key ); ?>][currency]" class="ex-select mono" style="width: 100%;">
+										<select form="exacoatSettingsForm" name="exacoat_core_settings[shipping_zones][<?php echo esc_attr( $key ); ?>][currency]" class="ex-select mono" style="width: 100%;">
 											<?php foreach ( $supported_currencies as $sc ) : ?>
 												<option value="<?php echo esc_attr( $sc ); ?>" <?php selected( $zone_curr, $sc ); ?>><?php echo esc_html( $sc ); ?></option>
 											<?php endforeach; ?>
 										</select>
 									</td>
 									<td>
-										<input type="number" step="any" name="exacoat_core_settings[shipping_zones][<?php echo esc_attr( $key ); ?>][free]" value="<?php echo esc_attr( $free_val ); ?>" class="ex-input mono" style="width: 100%; color: #34d399; font-weight: 700;">
+										<input type="number" step="any" form="exacoatSettingsForm" name="exacoat_core_settings[shipping_zones][<?php echo esc_attr( $key ); ?>][free]" value="<?php echo esc_attr( $free_val ); ?>" class="ex-input mono" style="width: 100%; color: #34d399; font-weight: 700;">
 									</td>
 									<td>
-										<input type="text" name="exacoat_core_settings[shipping_zones][<?php echo esc_attr( $key ); ?>][filter_text]" value="<?php echo esc_attr( $zone['filter_text'] ?? '' ); ?>" class="ex-input mono" style="width: 100%;" placeholder="e.g. biteship">
+										<input type="text" form="exacoatSettingsForm" name="exacoat_core_settings[shipping_zones][<?php echo esc_attr( $key ); ?>][filter_text]" value="<?php echo esc_attr( $zone['filter_text'] ?? '' ); ?>" class="ex-input mono" style="width: 100%;" placeholder="e.g. biteship">
 									</td>
 									<td style="text-align: center;">
 										<button type="button" class="ex-btn-delete" onclick="removeTableRow(this)">Delete</button>
@@ -1431,7 +1432,7 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 					</div>
 
 					<div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px;">
-						<button type="button" class="ex-btn-add" id="btn-add-shipping-zone">
+						<button type="button" class="ex-btn-add" id="btn-add-shipping-zone" onclick="window.addShippingZoneRow()">
 							+ Add Shipping Region
 						</button>
 						<button type="submit" form="exacoatSettingsForm" class="ex-btn ex-btn-primary" style="padding: 8px 16px;">
@@ -1651,7 +1652,14 @@ window.setSimPrice = function(val) {
 window.removeTableRow = function(btn) {
 	const row = btn.closest('tr');
 	if (row) {
+		const tbody = row.closest('tbody');
 		row.remove();
+		if (tbody && tbody.id === 'shipping-zones-tbody') {
+			const badge = document.getElementById('shipping-zones-count-badge');
+			if (badge) {
+				badge.textContent = `${tbody.querySelectorAll('tr').length} Active Regions`;
+			}
+		}
 	}
 };
 
@@ -1786,13 +1794,13 @@ window.addShippingZoneRow = function() {
 	tr.setAttribute('data-key', newKey);
 	tr.innerHTML = `
 		<td>
-			<input type="text" name="exacoat_core_settings[shipping_zones][${newKey}][name]" value="New Region" class="ex-input" style="width: 100%; font-weight: 600;">
+			<input type="text" form="exacoatSettingsForm" name="exacoat_core_settings[shipping_zones][${newKey}][name]" value="New Region" class="ex-input" style="width: 100%; font-weight: 600;">
 		</td>
 		<td>
-			<input type="text" name="exacoat_core_settings[shipping_zones][${newKey}][countries]" value="" class="ex-input mono" style="width: 100%;" placeholder="e.g. SG, MY or *">
+			<input type="text" form="exacoatSettingsForm" name="exacoat_core_settings[shipping_zones][${newKey}][countries]" value="" class="ex-input mono" style="width: 100%;" placeholder="e.g. SG, MY or *">
 		</td>
 		<td>
-			<select name="exacoat_core_settings[shipping_zones][${newKey}][currency]" class="ex-select mono" style="width: 100%;">
+			<select form="exacoatSettingsForm" name="exacoat_core_settings[shipping_zones][${newKey}][currency]" class="ex-select mono" style="width: 100%;">
 				<option value="USD" selected>USD</option>
 				<option value="AUD">AUD</option>
 				<option value="EUR">EUR</option>
@@ -1810,19 +1818,24 @@ window.addShippingZoneRow = function() {
 			</select>
 		</td>
 		<td>
-			<input type="number" step="any" name="exacoat_core_settings[shipping_zones][${newKey}][free]" value="100" class="ex-input mono" style="width: 100%; color: #34d399; font-weight: 700;">
+			<input type="number" step="any" form="exacoatSettingsForm" name="exacoat_core_settings[shipping_zones][${newKey}][free]" value="100" class="ex-input mono" style="width: 100%; color: #34d399; font-weight: 700;">
 		</td>
 		<td>
-			<input type="text" name="exacoat_core_settings[shipping_zones][${newKey}][filter_text]" value="" class="ex-input mono" style="width: 100%;" placeholder="e.g. biteship">
+			<input type="text" form="exacoatSettingsForm" name="exacoat_core_settings[shipping_zones][${newKey}][filter_text]" value="" class="ex-input mono" style="width: 100%;" placeholder="e.g. biteship">
 		</td>
 		<td style="text-align: center;">
 			<button type="button" class="ex-btn-delete" onclick="removeTableRow(this)">Delete</button>
 		</td>
 	`;
 	tbody.appendChild(tr);
+
+	const badge = document.getElementById('shipping-zones-count-badge');
+	if (badge) {
+		badge.textContent = `${tbody.querySelectorAll('tr').length} Active Regions`;
+	}
 };
 
-document.addEventListener('DOMContentLoaded', function() {
+function initSettingsDashboard() {
 	// Tab Switching
 	const navItems = document.querySelectorAll('.ex-nav-item');
 	const panes = document.querySelectorAll('.ex-pane');
@@ -1873,7 +1886,18 @@ document.addEventListener('DOMContentLoaded', function() {
 			btnSaveWa.disabled = true;
 			if (waSaveStatus) waSaveStatus.innerText = '';
 
-			const fd = new FormData(document.getElementById('form-whatsapp-settings'));
+			const container = document.getElementById('form-whatsapp-settings');
+			const fd = new FormData();
+			if (container) {
+				container.querySelectorAll('input, select, textarea').forEach(el => {
+					if (!el.name) return;
+					if (el.type === 'checkbox' || el.type === 'radio') {
+						if (el.checked) fd.append(el.name, el.value);
+					} else {
+						fd.append(el.name, el.value);
+					}
+				});
+			}
 			fd.append('action', 'exacoat_save_whatsapp_settings');
 
 			fetch(ajaxurl, { method: 'POST', body: fd })
@@ -2484,5 +2508,11 @@ document.addEventListener('DOMContentLoaded', function() {
 				.then(() => fetchLogs());
 		});
 	}
-});
+}
+
+if (document.readyState === 'loading') {
+	document.addEventListener('DOMContentLoaded', initSettingsDashboard);
+} else {
+	initSettingsDashboard();
+}
 </script>

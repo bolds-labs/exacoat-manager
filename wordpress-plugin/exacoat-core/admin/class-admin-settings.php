@@ -125,39 +125,41 @@ class Exacoat_Admin_Settings {
 		}
 
 		// Multi-Zone Free Shipping Thresholds
-		if ( isset( $input['shipping_zones'] ) && is_array( $input['shipping_zones'] ) ) {
+		if ( isset( $input['shipping_zones_present'] ) || isset( $input['shipping_zones'] ) ) {
 			$sanitized_zones = [];
-			foreach ( $input['shipping_zones'] as $z_key => $zone ) {
-				if ( ! is_array( $zone ) ) {
-					continue;
-				}
-				$key = sanitize_key( (string) $z_key );
-				if ( empty( $key ) ) {
-					continue;
-				}
-
-				$c_raw = sanitize_text_field( $zone['countries'] ?? '' );
-				$curr  = strtoupper( sanitize_text_field( $zone['currency'] ?? '' ) );
-				if ( empty( $curr ) ) {
-					$c_upper = strtoupper( $c_raw );
-					if ( strpos( $c_upper, 'US' ) !== false ) {
-						$curr = 'USD';
-					} elseif ( strpos( $c_upper, 'ID' ) !== false ) {
-						$curr = 'IDR';
-					} elseif ( strpos( $c_upper, 'SG' ) !== false ) {
-						$curr = 'SGD';
-					} else {
-						$curr = 'USD';
+			if ( isset( $input['shipping_zones'] ) && is_array( $input['shipping_zones'] ) ) {
+				foreach ( $input['shipping_zones'] as $z_key => $zone ) {
+					if ( ! is_array( $zone ) ) {
+						continue;
 					}
-				}
+					$key = sanitize_key( (string) $z_key );
+					if ( empty( $key ) ) {
+						continue;
+					}
 
-				$sanitized_zones[ $key ] = [
-					'name'        => sanitize_text_field( $zone['name'] ?? ucfirst( $key ) ),
-					'countries'   => $c_raw,
-					'currency'    => $curr,
-					'free'        => floatval( $zone['free'] ?? 0 ),
-					'filter_text' => sanitize_text_field( $zone['filter_text'] ?? '' ),
-				];
+					$c_raw = sanitize_text_field( $zone['countries'] ?? '' );
+					$curr  = strtoupper( sanitize_text_field( $zone['currency'] ?? '' ) );
+					if ( empty( $curr ) ) {
+						$c_upper = strtoupper( $c_raw );
+						if ( strpos( $c_upper, 'US' ) !== false ) {
+							$curr = 'USD';
+						} elseif ( strpos( $c_upper, 'ID' ) !== false ) {
+							$curr = 'IDR';
+						} elseif ( strpos( $c_upper, 'SG' ) !== false ) {
+							$curr = 'SGD';
+						} else {
+							$curr = 'USD';
+						}
+					}
+
+					$sanitized_zones[ $key ] = [
+						'name'        => sanitize_text_field( $zone['name'] ?? ucfirst( $key ) ),
+						'countries'   => $c_raw,
+						'currency'    => $curr,
+						'free'        => floatval( $zone['free'] ?? 0 ),
+						'filter_text' => sanitize_text_field( $zone['filter_text'] ?? '' ),
+					];
+				}
 			}
 			$settings['shipping_zones'] = $sanitized_zones;
 		}
