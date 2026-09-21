@@ -1030,6 +1030,31 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **Configurator Catalog Table Presets Column**:
   - Catalog table in Studio features a dedicated **Presets** column displaying the number of active looks on each device (e.g. `2 Looks` or `0`).
 
+---
+
+## 35. Non-Visual Kit Layers, Global Master Texture Priority & 1:1 Canvas Scaling Architecture
+
+- **Non-Visual Kit Layers Invariant (`is_non_visual`)**:
+  - Many device models (e.g. laptops like MacBook Neo, keyboards, consoles) offer physical cut parts (such as Bottom Base, Trackpad, Palm Rest, Charger wrap) that lack CAD renders or dedicated 3D viewing angles.
+  - Forcing operators to invent dummy viewing angles or upload missing masks creates broken canvas rendering and audit errors.
+  - Marking a layer as `is_non_visual: true` classifies it as a physical kit part:
+    - **Configurator Studio**: Layer Inspector provides a clean toggle: `Layer Display Mode`: `3D Canvas` vs `Kit Part (No 3D View)`. Kit layers display a `Kit Part` badge, are omitted from 3D viewport draws, and are excluded from asset integrity audits.
+    - **Storefront Accordion**: Kit layers display in the options accordion with full swatch choices, accurate pricing (with size multipliers applied), and a subtle `[Kit Part]` badge. Customers can configure and order these parts seamlessly without rendering issues on the 3D canvas.
+    - **Composite Canvas**: `stacked-layer-canvas.tsx` skips rendering layers when `layer.isNonVisual || v2Layer?.is_non_visual || !vAsset?.mask_svg_url`.
+
+- **Global Master Texture Priority over Legacy Slices**:
+  - In v2 Modern Engine, finishes inherit global master textures (`texture_url` and `texture_big_url`).
+  - Layer-level `render_texture_map` slices inherited from duplicated legacy templates must NEVER shadow global master textures.
+  - Both Studio and Storefront evaluate textures with strict priority:
+    - If `activeFinish.is_custom_per_device === true`: Lookup artwork in `render_texture_map`.
+    - Otherwise: Strictly use the global finish master texture (`useBigTexture ? texture_big_url : texture_url`).
+  - Configurator Studio Asset Audit provides a 1-click prune tool to strip legacy finish slices from v2 products.
+
+- **1:1 Canvas Texture Scale Invariant**:
+  - Default `texture_scale` and `textureScale` across Studio, WordPress plugin, and Storefront is standardized to `1.0` (100%), replacing the legacy `0.75` (75%) fallback.
+  - 1000x1000 square textures pass through at 1:1 (`1000 * zoom = 1000px`), eliminating unskinned margin boxes on wide devices like laptops.
+
+
 
 
 

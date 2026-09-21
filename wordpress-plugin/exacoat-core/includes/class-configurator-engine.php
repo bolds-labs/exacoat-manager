@@ -2248,7 +2248,7 @@ class Exacoat_Configurator_Engine {
 			'base_price'           => (float) ( $params['base_price'] ?? 0 ),
 			'currency'             => sanitize_text_field( $params['currency'] ?? 'IDR' ),
 			'size_multiplier'      => (float) ( $params['size_multiplier'] ?? 1.0 ),
-			'texture_scale'        => isset( $params['texture_scale'] ) ? (float) $params['texture_scale'] : 0.75,
+			'texture_scale'        => isset( $params['texture_scale'] ) ? (float) $params['texture_scale'] : 1.0,
 			'configurator_version' => in_array( $params['configurator_version'] ?? '', [ 'v1', 'v2' ], true ) ? $params['configurator_version'] : 'v2',
 			'device_colors'        => is_array( $params['device_colors'] ?? null ) ? $params['device_colors'] : [],
 			'views'                => is_array( $params['views'] ?? null ) ? $params['views'] : [],

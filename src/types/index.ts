@@ -521,6 +521,7 @@ export interface ConfiguratorLayer {
   texture_rotation?: number;
   texture_scale?: number;
   texture_size?: 'auto' | 'small' | 'big';
+  is_non_visual?: boolean;
 }
 
 export interface ConfiguratorVariantOption {

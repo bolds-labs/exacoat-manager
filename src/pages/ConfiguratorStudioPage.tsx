@@ -89,6 +89,7 @@ import {
   Maximize2,
   Sun,
   Lock,
+  Package,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { MediaLibraryModal } from '../components/modals/MediaLibraryModal';
@@ -256,7 +257,7 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
   zIndex,
   layerName,
   textureRotation = 0,
-  textureScale = 0.75,
+  textureScale = 1.0,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -304,17 +305,18 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
           const isRotated90 = rot === 90 || rot === 270;
           const effectiveTexW = isRotated90 ? texImg.height : texImg.width;
           const effectiveTexH = isRotated90 ? texImg.width : texImg.height;
+          const isFullSquare = !isRotated90 && texImg.width === 1000 && texImg.height === 1000;
           const baseScale = Math.max(1000 / effectiveTexW, 1000 / effectiveTexH);
-          const zoom = typeof textureScale === 'number' && textureScale > 0 ? textureScale : 0.75;
-          const effectiveScale = baseScale * zoom;
+          const zoom = typeof textureScale === 'number' && textureScale > 0 ? textureScale : 1.0;
+          const effectiveScale = isFullSquare ? zoom : baseScale * zoom;
 
           ctx.save();
           ctx.translate(500, 500);
           if (rot !== 0) {
             ctx.rotate((rot * Math.PI) / 180);
           }
-          const drawW = texImg.width * effectiveScale;
-          const drawH = texImg.height * effectiveScale;
+          const drawW = isFullSquare ? 1000 * zoom : texImg.width * effectiveScale;
+          const drawH = isFullSquare ? 1000 * zoom : texImg.height * effectiveScale;
           ctx.drawImage(texImg, -drawW / 2, -drawH / 2, drawW, drawH);
           ctx.restore();
         } else {
@@ -839,7 +841,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
             base_price: fallbackSummary.price || 0,
             currency: 'IDR',
             size_multiplier: (fallbackSummary.family === 'laptop' || fallbackSummary.family === 'tablet') ? 2.0 : (fallbackSummary.size_multiplier || 1.0),
-            texture_scale: fallbackSummary.texture_scale ?? 0.75,
+            texture_scale: fallbackSummary.texture_scale ?? 1.0,
             is_configurable: true,
             configurator_version: fallbackSummary.configurator_version || 'v1',
             device_colors: [],
@@ -901,7 +903,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
     const upgradedViews = (editingProfile.views || []).map((v) => ({
       ...v,
-      texture_scale: v.texture_scale ?? editingProfile.texture_scale ?? 0.75,
+      texture_scale: v.texture_scale ?? editingProfile.texture_scale ?? 1.0,
       shadow_png_url: v.shadow_png_url || '',
       shading_image_url: v.shading_image_url || '',
     }));
@@ -1627,6 +1629,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
     // 2. Composable Layer textures and overlays
     (editingProfile.layers || []).forEach((layer) => {
+      if (layer.is_non_visual) return;
       (editingProfile.views || []).forEach((v) => {
         const viewAsset =
           layer.assets_by_view?.[v.id] ||
@@ -1904,6 +1907,49 @@ export const ConfiguratorStudioPage: React.FC = () => {
     );
   };
 
+  const handlePruneLegacyFinishSlices = () => {
+    if (!editingProfile) return;
+    let prunedCount = 0;
+
+    const customSlugs = new Set(
+      finishes.filter((f) => f.is_custom_per_device).map((f) => (f.slug || f.id).toLowerCase())
+    );
+
+    const cleanedLayers = (editingProfile.layers || []).map((layer) => {
+      const newAssetsByView: Record<string, any> = {};
+      Object.entries(layer.assets_by_view || {}).forEach(([vId, vAsset]: [string, any]) => {
+        const cleanTextureMap: Record<string, string> = {};
+        Object.entries(vAsset.render_texture_map || {}).forEach(([slug, urlVal]) => {
+          if (customSlugs.has(slug.toLowerCase())) {
+            cleanTextureMap[slug] = typeof urlVal === 'string' ? urlVal : String(urlVal || '');
+          } else {
+            prunedCount++;
+          }
+        });
+        newAssetsByView[vId] = {
+          ...vAsset,
+          render_texture_map: cleanTextureMap,
+        };
+      });
+
+      return {
+        ...layer,
+        assets_by_view: newAssetsByView,
+      };
+    });
+
+    setEditingProfile({
+      ...editingProfile,
+      layers: cleanedLayers,
+    });
+
+    showToast(
+      'success',
+      'Legacy Slices Pruned',
+      `Pruned ${prunedCount} legacy slice mappings. Layers will now use pure global master textures. Click Save Configurator to persist.`
+    );
+  };
+
   const handleClearBrokenTexture = (item: AssetAuditItem) => {
     if (!editingProfile || !item.layerId || !item.finishSlug) return;
 
@@ -2031,6 +2077,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
         });
 
         (profile.layers || []).forEach((layer) => {
+          if (layer.is_non_visual) return;
           (profile.views || []).forEach((v) => {
             const viewAsset =
               layer.assets_by_view?.[v.id] ||
@@ -6834,15 +6881,20 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                             // v2 Engine: Dynamic Canvas Compositing with Alpha Mask & Buyer Cutouts
                             if (editingProfile.configurator_version === 'v2') {
-                              const customTex = assets.render_texture_map?.[layerFinishSlug] ||
-                                assets.render_texture_map?.[activeFinish?.slug || ''] ||
-                                assets.render_texture_map?.[activeFinish?.id || ''];
+                              const isCustomPerDevice = Boolean(activeFinish?.is_custom_per_device);
+                              const customTex = isCustomPerDevice
+                                ? (assets.render_texture_map?.[layerFinishSlug] ||
+                                   assets.render_texture_map?.[activeFinish?.slug || ''] ||
+                                   assets.render_texture_map?.[activeFinish?.id || ''])
+                                : '';
 
                               const textureMap = assets.render_texture_map || {};
                               const simNorm = layerFinishSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
-                              const matchedKey = Object.keys(textureMap).find(
-                                (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === simNorm
-                              );
+                              const matchedKey = isCustomPerDevice
+                                ? Object.keys(textureMap).find(
+                                    (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === simNorm
+                                  )
+                                : undefined;
                               const mappedTex = matchedKey ? textureMap[matchedKey] || '' : '';
 
                               const isBigDevice = editingProfile.family === 'laptop' || editingProfile.family === 'tablet';
@@ -6854,7 +6906,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               const textureToTile = customTex || mappedTex || activeTextureUrl;
                               const fallbackColor = activeFinish?.color_hex || '#18181b';
 
-                              if (!assets.mask_svg_url && !textureToTile) {
+                              // Do not render non-visual kit layers or layers without an alpha mask for this view
+                              if (l.is_non_visual || !assets.mask_svg_url) {
                                 return null;
                               }
 
@@ -6885,7 +6938,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                               return (
                                 <V2SkinCanvasLayer
-                                  key={`v2-canvas-${l.id}-${layerFinishSlug}-${selectedLogoCutout ? 'logo' : 'nologo'}-${selectedPencilCutout ? 'pencil' : 'nopencil'}-${selectedCoverage}`}
+                                  key={`v2-layer-${l.id}-${currentView?.id || 'main'}`}
                                   maskUrl={assets.mask_svg_url}
                                   textureUrl={textureToTile}
                                   fallbackColor={fallbackColor}
@@ -6895,7 +6948,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   zIndex={(l.z_index || 1) + 5}
                                   layerName={l.name}
                                   textureRotation={l.texture_rotation ?? 0}
-                                  textureScale={currentView?.texture_scale ?? editingProfile.texture_scale ?? l.texture_scale ?? 0.75}
+                                  textureScale={currentView?.texture_scale ?? editingProfile.texture_scale ?? l.texture_scale ?? 1.0}
                                 />
                               );
                             }
@@ -7691,14 +7744,21 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                           </button>
 
                                           {/* Layer Name */}
-                                          <span
-                                            className={clsx(
-                                              'text-xs font-semibold truncate',
-                                              isSelected ? 'text-white font-bold' : 'text-zinc-200 group-hover:text-white'
+                                          <div className="flex items-center gap-1.5 min-w-0">
+                                            <span
+                                              className={clsx(
+                                                'text-xs font-semibold truncate',
+                                                isSelected ? 'text-white font-bold' : 'text-zinc-200 group-hover:text-white'
+                                              )}
+                                            >
+                                              {layer.name}
+                                            </span>
+                                            {layer.is_non_visual && (
+                                              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 font-semibold border border-blue-500/30 shrink-0">
+                                                Kit Part
+                                              </span>
                                             )}
-                                          >
-                                            {layer.name}
-                                          </span>
+                                          </div>
                                         </div>
 
                                         {/* Right: Price indicator & Delete button */}
@@ -7813,8 +7873,72 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   </div>
                                 </div>
 
+                                {/* Layer Display Mode: 3D Viewport vs Non-Visual Kit Part */}
+                                <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5 space-y-2.5">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-1.5">
+                                      <Eye className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                      <span className="text-xs font-bold text-white uppercase tracking-wider">
+                                        Layer Display Mode
+                                      </span>
+                                      <InfoTooltip content="Choose whether this part renders on the 3D canvas viewport or operates as an unvisualized kit part (e.g. Bottom Base, Trackpad when no 3D angle exists)." />
+                                    </div>
+                                    <span
+                                      className={clsx(
+                                        'text-[10px] font-mono px-2 py-0.5 rounded-full font-semibold border',
+                                        currentActiveLayer.is_non_visual
+                                          ? 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+                                          : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                      )}
+                                    >
+                                      {currentActiveLayer.is_non_visual ? 'Kit Part (No 3D View)' : '3D Viewport Render'}
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateLayer(currentActiveLayer.id, { is_non_visual: false })}
+                                      className={clsx(
+                                        'py-1.5 px-2.5 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center justify-center gap-1.5 border',
+                                        !currentActiveLayer.is_non_visual
+                                          ? 'bg-white/15 text-white font-bold border-white/20 shadow-sm'
+                                          : 'bg-white/5 text-zinc-400 hover:text-white border-transparent'
+                                      )}
+                                    >
+                                      <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                                      <span>3D Canvas</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateLayer(currentActiveLayer.id, { is_non_visual: true })}
+                                      className={clsx(
+                                        'py-1.5 px-2.5 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center justify-center gap-1.5 border',
+                                        currentActiveLayer.is_non_visual
+                                          ? 'bg-blue-500/20 text-blue-300 font-bold border-blue-500/40 shadow-sm'
+                                          : 'bg-white/5 text-zinc-400 hover:text-white border-transparent'
+                                      )}
+                                    >
+                                      <Package className="w-3.5 h-3.5 text-blue-400" />
+                                      <span>Kit Part (No 3D)</span>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Non-Visual Layer Notice */}
+                                {currentActiveLayer.is_non_visual && (
+                                  <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-200 space-y-1.5">
+                                    <div className="font-semibold text-xs flex items-center gap-1.5 text-blue-300">
+                                      <Package className="w-4 h-4" />
+                                      <span>Unvisualized Kit Part</span>
+                                    </div>
+                                    <p className="text-[11px] text-blue-200/80 leading-relaxed">
+                                      This part is physically produced and packed for the customer, but does not render on the 3D viewport canvas. Customers select their finish in the storefront accordion, prices are added, and the selection is passed to checkout.
+                                    </p>
+                                  </div>
+                                )}
+
                                 {/* v2 Modern Engine Alpha Mask */}
-                                {editingProfile.configurator_version === 'v2' && (
+                                {editingProfile.configurator_version === 'v2' && !currentActiveLayer.is_non_visual && (
                                   <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3.5">
                                     <div className="flex items-center justify-between">
                                       <div className="flex items-center gap-1.5">
@@ -8782,17 +8906,17 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         <div className="flex items-center gap-2">
                                           <span className="text-xs font-bold text-zinc-200">Angle Texture Zoom / Scale</span>
                                           <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 font-bold border border-sky-500/30">
-                                            {Math.round(((currentView.texture_scale ?? 0.75)) * 100)}%
-                                            {(currentView.texture_scale ?? 0.75) === 0.75 ? ' (Default)' : ''}
+                                            {Math.round(((currentView.texture_scale ?? 1.0)) * 100)}%
+                                            {(currentView.texture_scale ?? 1.0) === 1.0 ? ' (Default)' : ''}
                                           </span>
                                         </div>
                                         <button
                                           type="button"
-                                          onClick={() => handleSetViewField(currentView.id, 'texture_scale', 0.75)}
+                                          onClick={() => handleSetViewField(currentView.id, 'texture_scale', 1.0)}
                                           className="text-[10px] font-mono text-zinc-400 hover:text-white px-2 py-1 rounded bg-white/5 hover:bg-white/10 transition-colors border border-white/10 cursor-pointer"
-                                          title="Reset to 75% default"
+                                          title="Reset to 100% default"
                                         >
-                                          Reset 75%
+                                          Reset 100%
                                         </button>
                                       </div>
                                       <p className="text-[11px] text-zinc-400">
@@ -8805,7 +8929,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                           min="50"
                                           max="150"
                                           step="5"
-                                          value={Math.round(((currentView.texture_scale ?? 0.75)) * 100)}
+                                          value={Math.round(((currentView.texture_scale ?? 1.0)) * 100)}
                                           onChange={(e) => {
                                             const val = Number(e.target.value) / 100;
                                             handleSetViewField(currentView.id, 'texture_scale', val);
@@ -10545,6 +10669,46 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           </button>
                         </div>
                       )}
+
+                      {/* Legacy Slices Prune Callout for v2 Products */}
+                      {editingProfile?.configurator_version === 'v2' && (() => {
+                        const customSlugs = new Set(
+                          finishes.filter((f) => f.is_custom_per_device).map((f) => (f.slug || f.id).toLowerCase())
+                        );
+                        let legacySliceCount = 0;
+                        (editingProfile?.layers || []).forEach((l) => {
+                          Object.values(l.assets_by_view || {}).forEach((vAsset: any) => {
+                            Object.keys(vAsset.render_texture_map || {}).forEach((slug) => {
+                              if (!customSlugs.has(slug.toLowerCase())) {
+                                legacySliceCount++;
+                              }
+                            });
+                          });
+                        });
+                        if (legacySliceCount === 0) return null;
+                        return (
+                          <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 flex flex-wrap items-center justify-between gap-3 text-xs">
+                            <div className="flex items-center gap-2.5">
+                              <Wand2 className="w-4 h-4 text-purple-400 shrink-0" />
+                              <div>
+                                <span className="text-purple-200 font-semibold block">
+                                  {legacySliceCount} legacy slice mappings found
+                                </span>
+                                <span className="text-purple-300/80 text-[11px] block mt-0.5">
+                                  In v2, standard finishes inherit global master textures. Pruning restores pure master texture inheritance.
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handlePruneLegacyFinishSlices}
+                              className="px-3 py-1.5 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 hover:text-white border border-purple-500/40 text-xs font-semibold cursor-pointer transition-colors"
+                            >
+                              Prune Legacy Slices
+                            </button>
+                          </div>
+                        );
+                      })()}
 
                       {/* Filter Tabs */}
                       {auditReport && (
