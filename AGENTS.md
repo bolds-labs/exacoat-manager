@@ -1231,3 +1231,31 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Added fallback `inferWebDeviceFamily` in `lib/server/configurator-loader.ts` to ensure tablets, foldables, and laptops always receive correct pricing size multipliers even before background database sync.
   - Updated `isLargeDevice` in `device-skin-configurator.tsx` and `stacked-layer-canvas.tsx` to include `tablet_laptop`, `keyboard`, `console`, and any device with `size_multiplier >= 1.5`, ensuring proper high-res texture sizing across all large form factors.
 
+---
+
+## 42. Advanced Coupons, Store Credits & Cashback Engine Parity
+
+- **Robust Cashback Recognition Invariant**:
+  - Advanced Coupons for WooCommerce (ACFW) frequently configures cashback offers using standard WooCommerce discount types (`'percent'` or `'fixed_cart'`) rather than explicit `'acfw_percentage_cashback'` strings.
+  - In `Exacoat_Checkout_Engine::get_store_api_coupons_data()` and `Exacoat_Customer_Auth::rest_coupons()`, cashback coupons are evaluated comprehensively:
+    ```php
+    $is_cashback = (
+        false !== strpos( $discount_type, 'cashback' )
+        || 'yes' === get_post_meta( $id, '_is_coupon_cashback', true )
+        || metadata_exists( 'post', $id, '_acfw_cashback_waiting_period' )
+        || false !== stripos( $code, 'cashback' )
+    );
+    ```
+  - Cashback calculations support percent-based formulas for `'percent'` discount types (`$cart_subtotal * ($amount / 100.0)`) and respect optional maximum caps configured in `_acfw_percentage_discount_cap`.
+- **Store Credit Stacking Lockout Exemption**:
+  - WooCommerce injects virtual coupons (`'store credit'`, `'store-credit'`, `'store_credit'`) into the cart when store credit is applied.
+  - In `Exacoat_Review_Manager::prevent_coupon_stacking()`, virtual store credit is explicitly exempted at the start of the filter and inside coupon comparison loops so customers can freely combine earned store credit with promotional codes (including single-use Exacoat Perks review codes) without triggering Exception 109.
+- **Decoupled Store API Callbacks & Session Synchronization**:
+  - Replaced legacy `artmatter_store_credit_*` error codes with `exacoat_store_credit_*` and updated localization text domain to `'exacoat-core'`.
+  - In `handle_store_credit_update()`, when an authenticated user has an active Bearer token and `WC()->customer->get_id()` is `0`, `$user_id` is automatically synchronized to `WC()->customer` to prevent false customer session mismatch errors.
+- **Headless Storefront UI Presentation (`checkout-review.tsx`)**:
+  - One-Click Apply promotional banner parses `acfwp_block.one_click_apply.notices` into actionable cards.
+  - Applied coupons display interactive `+{cashbackPercent}% Cashback` badge and popover terms tooltip.
+  - Price calculations breakdown displays "Cashback earned: +{amount}" line item with order delivery maturation terms.
+
+

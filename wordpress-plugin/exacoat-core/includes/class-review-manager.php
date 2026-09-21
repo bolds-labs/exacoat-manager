@@ -1735,6 +1735,11 @@ class Exacoat_Review_Manager {
 
 		$coupon_code = strtoupper( $coupon->get_code() );
 
+		// Never block virtual store credit coupons from applying
+		if ( in_array( strtolower( $coupon_code ), [ 'store credit', 'store-credit', 'store_credit' ], true ) ) {
+			return $is_valid;
+		}
+
 		// Check if the coupon being applied has the Exacoat review reward flag or prefix
 		$coupon_id           = $coupon->get_id();
 		$is_collector_coupon = false;
@@ -1758,17 +1763,23 @@ class Exacoat_Review_Manager {
 				// 1. If applying an Exacoat Perks promo code while other coupons exist
 				if ( $is_collector_coupon ) {
 					foreach ( $applied_coupons as $code ) {
+						if ( in_array( strtolower( $code ), [ 'store credit', 'store-credit', 'store_credit' ], true ) ) {
+							continue;
+						}
 						if ( strtoupper( $code ) !== $coupon_code ) {
 							throw new Exception( __( 'Exacoat Perks promo codes cannot be combined with any other coupon or promotional discount.', 'exacoat-core' ), 109 );
 						}
 					}
 				}
 
-				// 2. If another coupon is applied while a collector promo code is already in the cart
+				// 2. If another coupon is applied while an Exacoat promo code is already in the cart
 				foreach ( $applied_coupons as $code ) {
+					if ( in_array( strtolower( $code ), [ 'store credit', 'store-credit', 'store_credit' ], true ) ) {
+						continue;
+					}
 					$applied_upper = strtoupper( $code );
 					if ( ( 0 === strpos( $applied_upper, 'EXACOAT' ) ) && $applied_upper !== $coupon_code ) {
-						throw new Exception( __( 'A Exacoat Perks promo code is already active on this order. It cannot be combined with other coupons.', 'exacoat-core' ), 109 );
+						throw new Exception( __( 'An Exacoat Perks promo code is already active on this order. It cannot be combined with other coupons.', 'exacoat-core' ), 109 );
 					}
 				}
 			}

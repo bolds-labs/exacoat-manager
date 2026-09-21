@@ -194,3 +194,45 @@ git add .
 git commit -m "feat(checkout): description (vX.Y.Z)"
 git push origin main
 ```
+
+---
+
+## 8. Store Credits, Advanced Coupons & Cashback Integration
+
+### Store API Extension Endpoints & Namespaces
+Exacoat Core registers Store API callbacks to support headless cart operations:
+- **`exacoat-store-credit`** (and legacy alias `artmatter-store-credit`):
+  - Callback: `Exacoat_Checkout_Engine::handle_store_credit_update(array $data)`
+  - Accepts `{ amount: number }`. When amount is `0`, clears store credit session and removes virtual `'store credit'` coupon.
+  - Verifies user authentication and automatically synchronizes `$user_id` to `WC()->customer` if the Store API cart was initialized prior to authentication headers.
+  - Validates requested amount against available customer balance retrieved from Advanced Coupons (`ACFWF()->Store_Credits_Calculate->get_customer_balance()` or user meta `acfw_store_credit_balance`).
+- **`exacoat_coupons`** (and legacy alias `artmatter_coupons`):
+  - Callback: `Exacoat_Checkout_Engine::get_store_api_coupons_data()`
+  - Enriches applied coupons in Store API cart with metadata: `is_cashback`, `cashback_percent`, `cashback_waiting_period`, and calculated `cashback_amount`.
+
+### Robust Cashback Detection Invariant
+In Advanced Coupons for WooCommerce (ACFW), cashback coupons frequently declare standard WooCommerce discount types (such as `'percent'` or `'fixed_cart'`) rather than dedicated `'acfw_percentage_cashback'` strings:
+- Both `class-checkout-engine.php` and `class-customer-auth.php` evaluate cashback status comprehensively:
+  ```php
+  $is_cashback = (
+      false !== strpos( $discount_type, 'cashback' )
+      || 'yes' === get_post_meta( $id, '_is_coupon_cashback', true )
+      || metadata_exists( 'post', $id, '_acfw_cashback_waiting_period' )
+      || false !== stripos( $code, 'cashback' )
+  );
+  ```
+- Cashback calculations support percent-based formulas for `'percent'` discount types (`$cart_subtotal * ($amount / 100.0)`) and respect optional maximum caps configured in `_acfw_percentage_discount_cap`.
+
+### Virtual Store Credit Stacking Exemption
+WooCommerce injects virtual coupons (`'store credit'`, `'store-credit'`, `'store_credit'`) into the cart to represent applied store credit deductions:
+- In `Exacoat_Review_Manager::prevent_coupon_stacking()`, virtual store credit is explicitly exempted at the start of the filter and inside coupon comparison loops.
+- This ensures customers can freely combine earned store credit with promotional codes (including single-use Exacoat Perks review codes) without triggering coupon lockout exceptions (Exception 109).
+
+### Headless Webstore Presentation (`checkout-review.tsx`)
+1. **One-Click Apply Notices**:
+   - Parses `acfwp_block.one_click_apply.notices` HTML button payloads via `parseOneClickNotice()`.
+   - Filters out already applied codes and displays featured and collapsible promotional cards with direct 1-click apply action.
+2. **Applied Coupons with Cashback Badges**:
+   - Displays `+{cashbackPercent}% Cashback` badge and interactive popover terms tooltip showing calculated store credit reward and delivery waiting periods.
+3. **Cashback Summary Row**:
+   - When cashback is active on an order, renders a dedicated `Cashback earned: +{amount}` line item in the totals recap with full terms tooltip.

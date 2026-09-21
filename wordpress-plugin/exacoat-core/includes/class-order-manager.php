@@ -897,8 +897,8 @@ class Exacoat_Order_Manager {
 		$refund = wc_create_refund( $refund_args );
 
 		if ( is_wp_error( $refund ) ) {
-			if ( class_exists( 'Artmatter_Logger' ) ) {
-				Artmatter_Logger::error( 'refunds', "Failed creating refund for Order #{$order_id}: " . $refund->get_error_message(), [
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::error( 'refunds', "Failed creating refund for Order #{$order_id}: " . $refund->get_error_message(), [
 					'order_id' => $order_id,
 					'amount'   => $refund_amount,
 					'reason'   => $reason,
@@ -915,8 +915,8 @@ class Exacoat_Order_Manager {
 			$updated_order->update_status( 'refunded', "Order fully refunded ({$refund_amount}) via Studio Manager" );
 		}
 
-		if ( class_exists( 'Artmatter_Logger' ) ) {
-			Artmatter_Logger::info( 'refunds', "Refund #{$refund->get_id()} of " . number_format( $refund_amount, 2 ) . " processed for Order #{$order_id}", [
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::info( 'refunds', "Refund #{$refund->get_id()} of " . number_format( $refund_amount, 2 ) . " processed for Order #{$order_id}", [
 				'order_id'               => $order_id,
 				'refund_id'              => $refund->get_id(),
 				'refund_amount'          => $refund_amount,
@@ -1864,12 +1864,16 @@ class Exacoat_Order_Manager {
 				}
 			}
 
-			// Automatically schedule post-delivery Collector Review Invitation (default: 36h)
-			if ( class_exists( 'Artmatter_Review_Manager' ) ) {
+			// Automatically schedule post-delivery Review Invitation (default: 36h)
+			if ( class_exists( 'Exacoat_Review_Manager' ) ) {
+				Exacoat_Review_Manager::schedule_review_invitation( $order_id );
+			} elseif ( class_exists( 'Artmatter_Review_Manager' ) ) {
 				Artmatter_Review_Manager::schedule_review_invitation( $order_id );
 			}
 		} elseif ( 'refunded' === $clean_to ) {
-			if ( class_exists( 'Artmatter_Review_Manager' ) ) {
+			if ( class_exists( 'Exacoat_Review_Manager' ) ) {
+				Exacoat_Review_Manager::cancel_scheduled_invitation( $order_id );
+			} elseif ( class_exists( 'Artmatter_Review_Manager' ) ) {
 				Artmatter_Review_Manager::cancel_scheduled_invitation( $order_id );
 			}
 			$ref_amt = wc_price( $order->get_total_refunded() ?: $order->get_total(), [ 'currency' => $order->get_currency() ] );

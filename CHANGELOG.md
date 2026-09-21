@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.12] - 2026-09-21
+
+### Advanced Coupons, Store Credits & Cashback Engine Parity
+- **Robust Cashback Coupon Recognition (`class-checkout-engine.php`, `class-customer-auth.php`)**:
+  - Upgraded cashback coupon evaluation across Store API cart extensions (`exacoat_coupons` / `artmatter_coupons`) and `/auth/coupons` endpoint.
+  - Detects Advanced Coupons cashback offers configured with standard `'percent'` or `'fixed_cart'` discount types by inspecting `_is_coupon_cashback`, `_acfw_cashback_waiting_period`, and code nomenclature.
+  - Implemented percentage-based calculation (`$cart_subtotal * ($amount / 100.0)`) and maximum discount cap enforcement (`_acfw_percentage_discount_cap`) for accurate rewards calculations.
+- **Store Credit Stacking Lockout Exemption (`class-review-manager.php`)**:
+  - Exempted virtual store credit coupons (`'store credit'`, `'store-credit'`, `'store_credit'`) from `prevent_coupon_stacking()`.
+  - Customers can now seamlessly apply store credit alongside promotional discounts and single-use Exacoat Perks review coupons without triggering Exception 109.
+- **Decoupled Store API Callbacks & Session Sync (`class-checkout-engine.php`)**:
+  - Replaced legacy `artmatter_store_credit_*` error codes with `exacoat_store_credit_*` and updated localization text domain to `exacoat-core`.
+  - Automatically synchronizes authenticated customer ID to `WC()->customer` during Store API extension updates when cart sessions start anonymously.
+- **Headless Storefront UI Parity (`exacoat-web/components/checkout/checkout-review.tsx`)**:
+  - Added One-Click Apply promotional cards parsed from `acfwp_block.one_click_apply.notices` with direct 1-click application.
+  - Added interactive `+{cashbackPercent}% Cashback` badge and popover terms tooltip to applied coupon items.
+  - Added "Cashback earned" summary line item in the price calculations breakdown with delivery maturation terms.
+  - Strongly typed `AdvancedCouponExtensions` and cleaned `any` casts on `StoreCart`.
+
 ## [0.1.11] - 2026-09-21
 
 ### Brand Isolation & Complete Legacy Reference Decoupling

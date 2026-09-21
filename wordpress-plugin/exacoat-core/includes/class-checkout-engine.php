@@ -1049,6 +1049,9 @@ class Exacoat_Checkout_Engine {
 		$list = [];
 
 		foreach ( $applied as $code ) {
+			if ( in_array( strtolower( $code ), [ 'store credit', 'store-credit', 'store_credit' ], true ) ) {
+				continue;
+			}
 			$coupon = new WC_Coupon( $code );
 			$id = $coupon->get_id();
 			if ( ! $id ) {
@@ -1057,12 +1060,17 @@ class Exacoat_Checkout_Engine {
 			$discount_type = (string) $coupon->get_discount_type();
 			$amount        = (float) $coupon->get_amount();
 			$label         = (string) get_post_meta( $id, '_acfw_coupon_label', true ) ?: '';
-			$is_cashback   = ( false !== strpos( $discount_type, 'cashback' ) );
+			$is_cashback   = (
+				false !== strpos( $discount_type, 'cashback' )
+				|| 'yes' === get_post_meta( $id, '_is_coupon_cashback', true )
+				|| metadata_exists( 'post', $id, '_acfw_cashback_waiting_period' )
+				|| false !== stripos( $code, 'cashback' )
+			);
 			$waiting_days  = (int) get_post_meta( $id, '_acfw_cashback_waiting_period', true );
 
 			$cashback_amount = 0.0;
 			if ( $is_cashback ) {
-				if ( 'acfw_percentage_cashback' === $discount_type || false !== strpos( $discount_type, 'percentage' ) ) {
+				if ( 'acfw_percentage_cashback' === $discount_type || false !== strpos( $discount_type, 'percentage' ) || 'percent' === $discount_type ) {
 					$cashback_amount = $cart_subtotal * ( $amount / 100.0 );
 					$cap = (float) get_post_meta( $id, '_acfw_percentage_discount_cap', true );
 					if ( $cap > 0 && $cashback_amount > $cap ) {
@@ -1109,13 +1117,16 @@ class Exacoat_Checkout_Engine {
 	public static function handle_store_credit_update( array $data ): array {
 		$user_id = get_current_user_id();
 		if ( ! $user_id ) {
-			self::throw_store_api_error( 'artmatter_store_credit_unauthorized', __( 'You must be signed in to use store credit.', 'artmatter-core' ), 401 );
+			self::throw_store_api_error( 'exacoat_store_credit_unauthorized', __( 'You must be signed in to use store credit.', 'exacoat-core' ), 401 );
 		}
 
 		if ( function_exists( 'WC' ) && WC()->customer ) {
 			$cart_customer_id = (int) WC()->customer->get_id();
 			if ( $cart_customer_id && $cart_customer_id !== $user_id ) {
-				self::throw_store_api_error( 'artmatter_store_credit_mismatch', __( 'Customer session mismatch.', 'artmatter-core' ), 403 );
+				self::throw_store_api_error( 'exacoat_store_credit_mismatch', __( 'Customer session mismatch.', 'exacoat-core' ), 403 );
+			} elseif ( ! $cart_customer_id ) {
+				WC()->customer->set_id( $user_id );
+				WC()->customer->save();
 			}
 		}
 
@@ -1179,7 +1190,7 @@ class Exacoat_Checkout_Engine {
 		$balance = (float) apply_filters( 'acfw_filter_amount', $balance );
 
 		if ( $amount > $balance ) {
-			self::throw_store_api_error( 'artmatter_store_credits_insufficient', __( 'The requested amount exceeds your available store credit balance.', 'artmatter-core' ), 400 );
+			self::throw_store_api_error( 'exacoat_store_credits_insufficient', __( 'The requested amount exceeds your available store credit balance.', 'exacoat-core' ), 400 );
 		}
 
 		// Delegate to Advanced Coupons if checkout model is available

@@ -703,8 +703,8 @@ class Exacoat_Customer_Auth {
 
 			// Extract friendly display fields
 			$label = get_post_meta( $id, '_acfw_coupon_label', true ) ?: '';
-			if ( empty( $label ) && 0 === strpos( $code, 'COLLECTOR' ) ) {
-				$label = 'Collector Review Privilege';
+			if ( empty( $label ) && ( 0 === strpos( $code, 'EXACOAT' ) || 0 === strpos( $code, 'COLLECTOR' ) || 0 === strpos( $code, 'REVIEW' ) ) ) {
+				$label = 'Customer Review Privilege';
 			} elseif ( empty( $label ) && 0 === strpos( $code, 'WELCOME' ) ) {
 				$label = 'Welcome Privilege: 20% Off';
 			}
@@ -713,9 +713,17 @@ class Exacoat_Customer_Auth {
 			// For BOGO deals or special types, extract deal details if description is blank
 			$discount_type = $coupon->get_discount_type();
 			$amount = (float) $coupon->get_amount();
+			$is_cashback = (
+				false !== strpos( $discount_type, 'cashback' )
+				|| 'yes' === get_post_meta( $id, '_is_coupon_cashback', true )
+				|| metadata_exists( 'post', $id, '_acfw_cashback_waiting_period' )
+				|| false !== stripos( $code, 'cashback' )
+			);
 			$formatted_discount = '';
 
-			if ( 'percent' === $discount_type ) {
+			if ( $is_cashback ) {
+				$formatted_discount = $amount . '% CASHBACK';
+			} elseif ( 'percent' === $discount_type ) {
 				$formatted_discount = $amount . '% OFF';
 			} elseif ( 'fixed_cart' === $discount_type || 'fixed_product' === $discount_type ) {
 				$formatted_discount = function_exists( 'wc_price' ) ? html_entity_decode( wp_strip_all_tags( wc_price( $amount ) ) ) : (string) $amount;
@@ -734,8 +742,6 @@ class Exacoat_Customer_Auth {
 				if ( empty( $formatted_discount ) ) {
 					$formatted_discount = 'BUNDLE OFFER';
 				}
-			} elseif ( strpos( $discount_type, 'cashback' ) !== false ) {
-				$formatted_discount = $amount . '% CASHBACK';
 			} else {
 				$formatted_discount = $amount > 0 ? ( $amount . '% OFF' ) : 'PRIVILEGE OFFER';
 			}
@@ -761,7 +767,7 @@ class Exacoat_Customer_Auth {
 				'maximum_amount'          => $max_spend > 0 ? $max_spend : null,
 				'individual_use'          => (bool) $coupon->get_individual_use(),
 				'free_shipping'           => (bool) $coupon->get_free_shipping(),
-				'is_cashback'             => ( false !== strpos( $discount_type, 'cashback' ) ),
+				'is_cashback'             => $is_cashback,
 				'cashback_waiting_period' => (int) get_post_meta( $id, '_acfw_cashback_waiting_period', true ),
 			];
 		}
