@@ -2032,11 +2032,12 @@ export interface ConfiguratorPreset {
   id: string;
   title: string;
   tagline?: string;
-  badge?: string;
+  badge?: 'POPULAR' | 'STAFF PICK' | string;
   coverage?: 'model_360' | 'model_cut';
   logo_cutout?: boolean;
   layers: Record<string, string>;
   triggers?: string[];
+  image_url?: string;
 }
 
 export async function fetchGlobalFinishesDirect(): Promise<{

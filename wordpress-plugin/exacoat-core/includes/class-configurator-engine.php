@@ -1993,6 +1993,7 @@ class Exacoat_Configurator_Engine {
 			'layers'               => $normalized_layers,
 			'variants'             => self::sanitize_variants( $variants ),
 			'coverage_and_cutouts' => $coverage_and_cutouts,
+			'presets'              => [],
 			'updated_at'           => current_time( 'mysql' ),
 		];
 	}
@@ -2015,6 +2016,47 @@ class Exacoat_Configurator_Engine {
 			$clean[] = $v;
 		}
 		return array_values( $clean );
+	}
+
+	/**
+	 * Sanitize presets array for a device configurator profile
+	 */
+	public static function sanitize_presets( $presets ): array {
+		if ( ! is_array( $presets ) ) {
+			return [];
+		}
+		$clean = [];
+		foreach ( $presets as $p ) {
+			if ( ! is_array( $p ) ) continue;
+			$id = sanitize_title( $p['id'] ?? $p['title'] ?? '' );
+			if ( empty( $id ) ) continue;
+			$clean_layers = [];
+			if ( isset( $p['layers'] ) && is_array( $p['layers'] ) ) {
+				foreach ( $p['layers'] as $k => $v ) {
+					$clean_layers[ sanitize_key( $k ) ] = sanitize_title( (string) $v );
+				}
+			}
+			$clean_triggers = [];
+			if ( isset( $p['triggers'] ) && is_array( $p['triggers'] ) ) {
+				$clean_triggers = array_values( array_filter( array_map( 'sanitize_title', $p['triggers'] ) ) );
+			}
+			$badge = sanitize_text_field( $p['badge'] ?? '' );
+			if ( ! in_array( $badge, [ 'POPULAR', 'STAFF PICK' ], true ) ) {
+				$badge = '';
+			}
+			$clean[] = [
+				'id'          => $id,
+				'title'       => sanitize_text_field( $p['title'] ?? '' ),
+				'tagline'     => sanitize_text_field( $p['tagline'] ?? '' ),
+				'badge'       => $badge,
+				'coverage'    => in_array( $p['coverage'] ?? '', [ 'model_360', 'model_cut' ], true ) ? $p['coverage'] : 'model_360',
+				'logo_cutout' => ! empty( $p['logo_cutout'] ),
+				'layers'      => $clean_layers,
+				'triggers'    => $clean_triggers,
+				'image_url'   => esc_url_raw( $p['image_url'] ?? '' ),
+			];
+		}
+		return $clean;
 	}
 
 	/**
@@ -2099,6 +2141,7 @@ class Exacoat_Configurator_Engine {
 				'is_configurator'      => $is_cfg,
 				'layers_count'         => count( $profile_data['layers'] ?? [] ),
 				'views_count'          => count( $profile_data['views'] ?? [] ),
+				'presets_count'        => count( $profile_data['presets'] ?? [] ),
 				'family'               => $profile_data['family'] ?? 'phone',
 				'size_multiplier'      => ( in_array( $profile_data['family'] ?? '', [ 'laptop', 'tablet' ], true ) && in_array( (float) ( $profile_data['size_multiplier'] ?? 1.0 ), [ 2.5, 1.8, 1.0 ], true ) ) ? 2.0 : ( $profile_data['size_multiplier'] ?? 1.0 ),
 				'texture_scale'        => isset( $profile_data['views'][0]['texture_scale'] ) ? (float) $profile_data['views'][0]['texture_scale'] : ( isset( $profile_data['texture_scale'] ) ? (float) $profile_data['texture_scale'] : 0.75 ),
@@ -2158,6 +2201,7 @@ class Exacoat_Configurator_Engine {
 				$profile['status'] = $product->get_status();
 			}
 			$profile['variants'] = self::sanitize_variants( $profile['variants'] ?? [] );
+			$profile['presets']  = isset( $profile['presets'] ) && is_array( $profile['presets'] ) ? $profile['presets'] : [];
 			if ( ! empty( $profile['coverage_and_cutouts'] ) && is_array( $profile['coverage_and_cutouts'] ) ) {
 				if ( ! isset( $profile['coverage_and_cutouts']['model_360_extra_price'] ) || ! is_numeric( $profile['coverage_and_cutouts']['model_360_extra_price'] ) ) {
 					$profile['coverage_and_cutouts']['model_360_extra_price'] = 40000;
@@ -2211,6 +2255,7 @@ class Exacoat_Configurator_Engine {
 			'layers'               => is_array( $params['layers'] ?? null ) ? $params['layers'] : [],
 			'variants'             => self::sanitize_variants( $params['variants'] ?? [] ),
 			'coverage_and_cutouts' => $raw_coverage,
+			'presets'              => is_array( $params['presets'] ?? null ) ? self::sanitize_presets( $params['presets'] ) : [],
 			'updated_at'           => current_time( 'mysql' ),
 		];
 

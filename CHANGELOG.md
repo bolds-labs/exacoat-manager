@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.98] - 2026-09-21
+
+### Per-Device Presets ("Shop the Look") Architecture & Visual Cards Redesign
+- **Strict v1 Configurator Isolation**:
+  - Global finish presentation settings (`group_settings`: compact dots, collapsible drawers, custom visible limits) strictly shielded to `isV2 === true`.
+  - Legacy v1 configurators continue rendering standard tactile swatch cards without modification.
+- **Presets Modal Visual Image Cards Redesign**:
+  - Removed all recipe text clutter (titles, descriptions, coverage tags, recipe text chips) from modal.
+  - Visual grid of device image cards dressed in exact skin combinations via `<StackedLayerCanvas compactPreview={true}>` or custom preview renders.
+  - Added high-contrast badge pills (`POPULAR`, `STAFF PICK`) on top-left of image cards.
+  - Replaced primary yellow button with a clean secondary button underneath each card labeled `"Apply Look"` / `"✓ Applied"`.
+- **Deterministic Layer Matching**:
+  - Replaced substring fuzzy matching with exact key matching first (`normKey === layerId || normKey === layerClass || normKey === layerSlug || normKey === layerNameLower`), eliminating duplicate label collisions (e.g. "Additional Camera & Back Glass" colliding with "Camera").
+- **Per-Device Presets Authoring in Configurator Studio**:
+  - Dedicated **Presets** tab in Configurator Studio Inspector panel.
+  - Add / edit modal supporting Title, Badge dropdown (`None`, `POPULAR`, `STAFF PICK`), Coverage, Logo Cutout, per-layer finish selectors, and optional preview image URL.
+  - 1-click **"Use Canvas Look"** button to capture current live simulator selections into a preset.
+  - 1-click **"Test"** button to preview presets on the live simulator canvas immediately.
+  - Persisted per-device into WordPress post meta `_exacoat_configurator_profile`.
+- **Configurator Catalog Table Presets Column**:
+  - Added **Presets** column to the Configurator catalog table displaying the number of active looks on each device (`{n} Looks` or `0`).
+
 ## [0.0.97] - 2026-09-21
 
 ### Swatch Sizing (40x40px), Mobile Alignment & Model 360 Extra Price Resolution

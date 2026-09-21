@@ -432,10 +432,23 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [inspectorWidth, setInspectorWidth] = useState<number>(540);
   const [isDragging, setIsDragging] = useState<boolean>(false);
 
-  // Inspector layout tab state: 'device' | 'skins' | 'cutouts' | 'pricing'
-  const [inspectorTab, setInspectorTab] = useState<'device' | 'skins' | 'cutouts' | 'pricing'>('skins');
+  // Inspector layout tab state: 'device' | 'skins' | 'cutouts' | 'presets' | 'pricing'
+  const [inspectorTab, setInspectorTab] = useState<'device' | 'skins' | 'cutouts' | 'presets' | 'pricing'>('skins');
   const [selectedLayerId, setSelectedLayerId] = useState<string>('');
   const [finishCategoryFilter, setFinishCategoryFilter] = useState<string>('all');
+
+  // Per-Device Presets Editor Modal state
+  const [editingDevicePreset, setEditingDevicePreset] = useState<{
+    id: string;
+    title: string;
+    tagline?: string;
+    badge: 'POPULAR' | 'STAFF PICK' | '';
+    coverage: 'model_360' | 'model_cut';
+    logo_cutout: boolean;
+    layers: Record<string, string>;
+    image_url?: string;
+    isNew?: boolean;
+  } | null>(null);
 
   // Find & Replace in URLs Modal state
   const [showFindReplaceModal, setShowFindReplaceModal] = useState(false);
@@ -1029,6 +1042,131 @@ export const ConfiguratorStudioPage: React.FC = () => {
       (l) => (l.name || '').toLowerCase() !== 'device' && (l.id || '').toLowerCase() !== 'device'
     );
   }, [editingProfile]);
+
+  // Per-Device Presets Handlers
+  const handleOpenAddDevicePreset = () => {
+    if (!editingProfile) return;
+    const initialLayers: Record<string, string> = {};
+    activeSkinLayers.forEach((l) => {
+      initialLayers[l.id] = selectedLayerFinishes[l.id] || selectedSimFinish || 'swarm';
+    });
+
+    setEditingDevicePreset({
+      id: `look-${Date.now()}`,
+      title: '',
+      tagline: '',
+      badge: '',
+      coverage: selectedCoverage || 'model_360',
+      logo_cutout: selectedLogoCutout ?? true,
+      layers: initialLayers,
+      image_url: '',
+      isNew: true,
+    });
+  };
+
+  const handleOpenEditDevicePreset = (preset: ConfiguratorPreset) => {
+    setEditingDevicePreset({
+      id: preset.id,
+      title: preset.title,
+      tagline: preset.tagline || '',
+      badge: (preset.badge === 'POPULAR' || preset.badge === 'STAFF PICK') ? preset.badge : '',
+      coverage: preset.coverage || 'model_360',
+      logo_cutout: preset.logo_cutout !== false,
+      layers: { ...(preset.layers || {}) },
+      image_url: preset.image_url || '',
+      isNew: false,
+    });
+  };
+
+  const handleSaveDevicePreset = () => {
+    if (!editingProfile || !editingDevicePreset) return;
+    if (!editingDevicePreset.title.trim()) {
+      showToast('error', 'Title Required', 'Please enter a title for this preset.');
+      return;
+    }
+
+    const currentPresets = editingProfile.presets || [];
+    let updatedPresets: ConfiguratorPreset[];
+
+    const presetData: ConfiguratorPreset = {
+      id: editingDevicePreset.id || `look-${Date.now()}`,
+      title: editingDevicePreset.title.trim(),
+      tagline: editingDevicePreset.tagline?.trim() || undefined,
+      badge: editingDevicePreset.badge || undefined,
+      coverage: editingDevicePreset.coverage,
+      logo_cutout: editingDevicePreset.logo_cutout,
+      layers: editingDevicePreset.layers,
+      image_url: editingDevicePreset.image_url?.trim() || undefined,
+    };
+
+    if (editingDevicePreset.isNew) {
+      updatedPresets = [...currentPresets, presetData];
+    } else {
+      updatedPresets = currentPresets.map((p) =>
+        p.id === editingDevicePreset.id ? presetData : p
+      );
+    }
+
+    setEditingProfile({
+      ...editingProfile,
+      presets: updatedPresets,
+    });
+
+    setEditingDevicePreset(null);
+    showToast('success', 'Look Saved', `Preset "${presetData.title}" saved. Remember to click "Save Configuration".`);
+  };
+
+  const handleDeleteDevicePreset = (presetId: string) => {
+    if (!editingProfile) return;
+    const updated = (editingProfile.presets || []).filter((p) => p.id !== presetId);
+    setEditingProfile({
+      ...editingProfile,
+      presets: updated,
+    });
+    showToast('info', 'Preset Removed', 'Preset removed from this device.');
+  };
+
+  const handleCaptureFromSimulator = () => {
+    if (!editingProfile || !editingDevicePreset) return;
+    const captured: Record<string, string> = {};
+    activeSkinLayers.forEach((l) => {
+      captured[l.id] = selectedLayerFinishes[l.id] || selectedSimFinish || 'swarm';
+    });
+    setEditingDevicePreset({
+      ...editingDevicePreset,
+      coverage: selectedCoverage || 'model_360',
+      logo_cutout: selectedLogoCutout ?? true,
+      layers: captured,
+    });
+    showToast('success', 'Selections Captured', 'Current simulator finishes and cutouts copied.');
+  };
+
+  const handleTestPresetInSimulator = (preset: ConfiguratorPreset) => {
+    if (!editingProfile) return;
+    if (preset.coverage) {
+      setSelectedCoverage(preset.coverage);
+    }
+    if (preset.logo_cutout !== undefined) {
+      setSelectedLogoCutout(preset.logo_cutout);
+    }
+    if (preset.layers && typeof preset.layers === 'object') {
+      const nextFinishes: Record<string, string> = { ...selectedLayerFinishes };
+      for (const [key, slug] of Object.entries(preset.layers)) {
+        const matching = editingProfile.layers.find(
+          (l) =>
+            l.id === key ||
+            l.id.toLowerCase() === key.toLowerCase() ||
+            l.name.toLowerCase() === key.toLowerCase() ||
+            l.name.toLowerCase().replace(/\s+/g, '-') === key.toLowerCase()
+        );
+        if (matching) {
+          nextFinishes[matching.id] = slug;
+        }
+      }
+      setSelectedLayerFinishes(nextFinishes);
+    }
+    showToast('success', 'Look Applied', `Look "${preset.title}" applied to live canvas preview.`);
+  };
 
   const activeTargetLayer = useMemo(() => {
     return activeSkinLayers.find((l) => l.id === selectedLayerId) || activeSkinLayers[0];
@@ -3998,6 +4136,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   <th className="py-3 px-3 text-center">Configurator</th>
                   <th className="py-3 px-4 text-center">Setup</th>
                   <th className="py-3 px-3 text-center">Scale</th>
+                  <th className="py-3 px-3 text-center">Presets</th>
                   <th className="py-3 px-4 text-right">Price</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
@@ -4117,6 +4256,20 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       {/* Scale */}
                       <td className="py-3 px-3 text-center font-mono text-[11px] text-zinc-300">
                         {Math.round((((p as any).views?.[0]?.texture_scale ?? p.texture_scale ?? 0.75)) * 100)}%
+                      </td>
+
+                      {/* Presets Count */}
+                      <td className="py-3 px-3 text-center">
+                        <span
+                          className={clsx(
+                            'text-[10px] font-mono px-2 py-0.5 rounded-md border font-medium',
+                            (p.presets_count || 0) > 0
+                              ? 'bg-[#f3aa18]/15 text-[#f3aa18] border-[#f3aa18]/30 font-semibold'
+                              : 'bg-zinc-900/80 text-zinc-500 border-white/5'
+                          )}
+                        >
+                          {(p.presets_count || 0) > 0 ? `${p.presets_count} Looks` : '0'}
+                        </span>
                       </td>
 
                       {/* Price */}
@@ -7288,6 +7441,23 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                           <button
                             type="button"
+                            onClick={() => setInspectorTab('presets')}
+                            className={clsx(
+                              'px-3 py-1.5 rounded-xl text-xs font-sans font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shrink-0',
+                              inspectorTab === 'presets'
+                                ? 'bg-white/10 text-white shadow-sm'
+                                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                            )}
+                          >
+                            <Compass className="w-3.5 h-3.5 text-purple-400" />
+                            <span>Presets</span>
+                            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-white/10 text-zinc-300">
+                              {(editingProfile.presets || []).length}
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
                             onClick={() => setInspectorTab('pricing')}
                             className={clsx(
                               'px-3 py-1.5 rounded-xl text-xs font-sans font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shrink-0',
@@ -9390,6 +9560,170 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           </div>
                         )}
 
+                        {/* TAB: PRESETS & CURATED LOOKS */}
+                        {inspectorTab === 'presets' && (
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                              <div className="flex items-center gap-2">
+                                <Compass className="w-4 h-4 text-purple-400" />
+                                <h4 className="text-xs font-semibold text-white">Curated Looks & Presets</h4>
+                                <InfoTooltip text="Presets shown in 'Shop the Look' modal for this device. Customers can apply combinations in 1 click." />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={handleOpenAddDevicePreset}
+                                className="px-2.5 py-1 rounded-lg bg-[#f3aa18] hover:bg-[#e09b15] text-black font-semibold text-[11px] flex items-center gap-1 transition-all cursor-pointer shadow-sm active:scale-95"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Add Look</span>
+                              </button>
+                            </div>
+
+                            {/* Presets List */}
+                            {(!editingProfile.presets || editingProfile.presets.length === 0) ? (
+                              <div className="p-8 text-center rounded-2xl bg-zinc-900/40 border border-dashed border-white/10 space-y-3">
+                                <div className="w-10 h-10 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 mx-auto flex items-center justify-center">
+                                  <Compass className="w-5 h-5" />
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="text-xs font-medium text-white">No Presets for this Device</p>
+                                  <p className="text-[11px] text-zinc-400 max-w-xs mx-auto">
+                                    Curate styling recipes (e.g. Swarm + Matte Black camera) to showcase in "Shop the Look".
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={handleOpenAddDevicePreset}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-medium transition-all cursor-pointer"
+                                >
+                                  <Plus className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                  <span>Create First Look</span>
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                {editingProfile.presets.map((preset, idx) => {
+                                  const layerCount = Object.keys(preset.layers || {}).length;
+                                  return (
+                                    <div
+                                      key={preset.id || idx}
+                                      className="p-3.5 rounded-xl bg-zinc-900/70 border border-white/10 hover:border-white/20 transition-all space-y-2.5 group"
+                                    >
+                                      {/* Header row */}
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          {preset.badge === 'POPULAR' && (
+                                            <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold tracking-wider bg-[#f3aa18]/20 text-[#f3aa18] border border-[#f3aa18]/40">
+                                              POPULAR
+                                            </span>
+                                          )}
+                                          {preset.badge === 'STAFF PICK' && (
+                                            <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                                              STAFF PICK
+                                            </span>
+                                          )}
+                                          <span className="text-xs font-bold text-white">
+                                            {preset.title}
+                                          </span>
+                                        </div>
+
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          <button
+                                            type="button"
+                                            onClick={() => handleTestPresetInSimulator(preset)}
+                                            className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/15 text-zinc-300 hover:text-white text-[10px] font-medium flex items-center gap-1 transition-all cursor-pointer"
+                                            title="Apply preset to simulator canvas"
+                                          >
+                                            <Eye className="w-3 h-3 text-[#f3aa18]" />
+                                            <span>Test</span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleOpenEditDevicePreset(preset)}
+                                            className="p-1 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                            title="Edit look preset"
+                                          >
+                                            <Edit3 className="w-3.5 h-3.5" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteDevicePreset(preset.id)}
+                                            className="p-1 rounded-lg hover:bg-rose-500/20 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer"
+                                            title="Delete preset"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      {/* Tags row */}
+                                      <div className="flex items-center gap-2 flex-wrap text-[10.5px]">
+                                        {preset.coverage && (
+                                          <span className="px-2 py-0.5 rounded-md bg-white/5 text-zinc-300 border border-white/5 font-mono">
+                                            {preset.coverage === 'model_360' ? 'Model 360°' : 'Model Cut'}
+                                          </span>
+                                        )}
+                                        {preset.logo_cutout !== undefined && (
+                                          <span className="px-2 py-0.5 rounded-md bg-white/5 text-zinc-300 border border-white/5 font-mono">
+                                            {preset.logo_cutout ? 'With Logo' : 'No Logo'}
+                                          </span>
+                                        )}
+                                        <span className="px-2 py-0.5 rounded-md bg-white/5 text-zinc-400 border border-white/5 font-mono">
+                                          {layerCount} {layerCount === 1 ? 'part' : 'parts'}
+                                        </span>
+                                      </div>
+
+                                      {/* Layer finish pills */}
+                                      {preset.layers && typeof preset.layers === 'object' && (
+                                        <div className="pt-1 flex flex-wrap gap-1.5">
+                                          {Object.entries(preset.layers).map(([layerKey, finishSlug]) => {
+                                            const matchingLayer = editingProfile.layers.find(
+                                              (l) =>
+                                                l.id === layerKey ||
+                                                l.id.toLowerCase() === layerKey.toLowerCase() ||
+                                                l.name.toLowerCase() === layerKey.toLowerCase()
+                                            );
+                                            const finishObj = finishes.find(
+                                              (f) => f.slug === finishSlug || f.id === finishSlug
+                                            );
+                                            return (
+                                              <span
+                                                key={layerKey}
+                                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-800/90 text-zinc-300 text-[10.5px] border border-white/5"
+                                              >
+                                                <span className="text-zinc-500 font-medium">
+                                                  {matchingLayer?.name || layerKey}:
+                                                </span>
+                                                <span className="text-[#f3aa18] font-semibold">
+                                                  {String(finishObj?.name || finishSlug)}
+                                                </span>
+                                              </span>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+
+                                      {/* Custom preview image indicator if set */}
+                                      {preset.image_url && (
+                                        <div className="pt-1 flex items-center gap-2 text-[10px] text-zinc-400">
+                                          <img
+                                            src={preset.image_url}
+                                            alt={preset.title}
+                                            className="w-7 h-7 rounded object-cover border border-white/10 shrink-0"
+                                          />
+                                          <span className="truncate max-w-[200px] font-mono text-[9.5px]">
+                                            {preset.image_url}
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {/* TAB 4: PRICING, SIZING & PRODUCTION SETTINGS */}
                         {inspectorTab === 'pricing' && (
                           <div className="space-y-4">
@@ -11132,6 +11466,225 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     ))}
                   </div>
                 )}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* Per-Device Preset Add/Edit Modal */}
+      {editingDevicePreset && editingProfile &&
+        createPortal(
+          <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <div className="w-full max-w-lg rounded-2xl bg-zinc-950 border border-white/15 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              {/* Modal Header */}
+              <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between shrink-0 bg-zinc-900/60">
+                <div className="flex items-center gap-2">
+                  <Compass className="w-4 h-4 text-purple-400" />
+                  <h3 className="text-sm font-bold text-white">
+                    {editingDevicePreset.isNew ? 'Add Curated Look' : 'Edit Curated Look'}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingDevicePreset(null)}
+                  className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
+                {/* Quick capture button */}
+                <div className="flex items-center justify-between p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                  <span className="text-[11px] text-purple-300">
+                    Quick fill from current visual simulator:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCaptureFromSimulator}
+                    className="px-2.5 py-1 rounded-lg bg-purple-500 hover:bg-purple-600 text-white font-semibold text-[11px] flex items-center gap-1 transition-all cursor-pointer shadow-xs active:scale-95"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Use Canvas Look</span>
+                  </button>
+                </div>
+
+                {/* Title & Badge */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-zinc-300">Look Title *</label>
+                    <input
+                      type="text"
+                      value={editingDevicePreset.title}
+                      onChange={(e) =>
+                        setEditingDevicePreset({ ...editingDevicePreset, title: e.target.value })
+                      }
+                      placeholder="e.g. Shadow Hex"
+                      className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-white/10 text-white text-xs focus:border-[#f3aa18] outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-zinc-300">Badge</label>
+                    <select
+                      value={editingDevicePreset.badge}
+                      onChange={(e) =>
+                        setEditingDevicePreset({
+                          ...editingDevicePreset,
+                          badge: e.target.value as 'POPULAR' | 'STAFF PICK' | '',
+                        })
+                      }
+                      className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-white/10 text-white text-xs focus:border-[#f3aa18] outline-none"
+                    >
+                      <option value="">None</option>
+                      <option value="POPULAR">POPULAR</option>
+                      <option value="STAFF PICK">STAFF PICK</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Coverage & Logo Cutout */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-zinc-300">Coverage</label>
+                    <select
+                      value={editingDevicePreset.coverage}
+                      onChange={(e) =>
+                        setEditingDevicePreset({
+                          ...editingDevicePreset,
+                          coverage: e.target.value as 'model_360' | 'model_cut',
+                        })
+                      }
+                      className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-white/10 text-white text-xs focus:border-[#f3aa18] outline-none"
+                    >
+                      <option value="model_360">Model 360°</option>
+                      <option value="model_cut">Model Cut</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-zinc-300">Logo Cutout</label>
+                    <select
+                      value={editingDevicePreset.logo_cutout ? 'yes' : 'no'}
+                      onChange={(e) =>
+                        setEditingDevicePreset({
+                          ...editingDevicePreset,
+                          logo_cutout: e.target.value === 'yes',
+                        })
+                      }
+                      className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-white/10 text-white text-xs focus:border-[#f3aa18] outline-none"
+                    >
+                      <option value="yes">With Logo Cutout</option>
+                      <option value="no">No Logo Cutout</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Per-Layer Finishes */}
+                <div className="space-y-2">
+                  <label className="text-[11px] font-medium text-zinc-300">
+                    Layer Finishes for this Look
+                  </label>
+                  <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/10 space-y-2.5 max-h-52 overflow-y-auto">
+                    {activeSkinLayers.map((layer) => {
+                      const currentSlug = editingDevicePreset.layers[layer.id] || '';
+                      return (
+                        <div
+                          key={layer.id}
+                          className="flex items-center justify-between gap-3 text-xs"
+                        >
+                          <span className="font-medium text-zinc-300 truncate max-w-[140px]">
+                            {layer.name}
+                          </span>
+                          <select
+                            value={currentSlug}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setEditingDevicePreset({
+                                ...editingDevicePreset,
+                                layers: {
+                                  ...editingDevicePreset.layers,
+                                  [layer.id]: val,
+                                },
+                              });
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-zinc-800 border border-white/10 text-white text-[11px] focus:border-[#f3aa18] outline-none max-w-[200px]"
+                          >
+                            <option value="">(None / unassigned)</option>
+                            {finishes.map((f) => (
+                              <option key={f.id} value={f.slug || f.id}>
+                                {f.name} ({f.group})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Custom Preview Image URL */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-medium text-zinc-300">
+                    Custom Preview Image URL (Optional)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={editingDevicePreset.image_url || ''}
+                      onChange={(e) =>
+                        setEditingDevicePreset({
+                          ...editingDevicePreset,
+                          image_url: e.target.value,
+                        })
+                      }
+                      placeholder="https://exacoat.com/.../look-preview.png"
+                      className="flex-1 px-3 py-2 rounded-xl bg-zinc-900 border border-white/10 text-white text-xs focus:border-[#f3aa18] outline-none font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMediaPickerConfig({
+                          isOpen: true,
+                          title: 'Select Look Preview Image',
+                          recommendedDimensions: '1000x1000 PNG / WebP',
+                          currentUrl: editingDevicePreset.image_url || '',
+                          onSelect: (url) => {
+                            setEditingDevicePreset((prev) =>
+                              prev ? { ...prev, image_url: url } : null
+                            );
+                          },
+                        });
+                      }}
+                      className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-medium transition-colors cursor-pointer shrink-0"
+                    >
+                      Browse
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-zinc-500">
+                    If omitted, storefront renders live canvas visual preview card automatically.
+                  </p>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-5 py-3 border-t border-white/10 flex items-center justify-end gap-2 bg-zinc-900/60 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setEditingDevicePreset(null)}
+                  className="px-4 py-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/10 text-xs font-medium transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveDevicePreset}
+                  className="px-4 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-black font-bold text-xs transition-all cursor-pointer shadow-sm active:scale-95"
+                >
+                  Save Look
+                </button>
               </div>
             </div>
           </div>,

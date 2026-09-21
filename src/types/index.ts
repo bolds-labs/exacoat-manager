@@ -558,6 +558,8 @@ export interface DeviceCoverageAndCutouts {
   }>;
 }
 
+import type { ConfiguratorPreset } from '../lib/wordpressBridge';
+
 export interface DeviceConfiguratorProfile {
   product_id: number;
   device_slug: string;
@@ -575,9 +577,12 @@ export interface DeviceConfiguratorProfile {
   layers: ConfiguratorLayer[];
   variants?: ConfiguratorVariant[];
   coverage_and_cutouts?: DeviceCoverageAndCutouts;
+  presets?: ConfiguratorPreset[];
   status?: 'publish' | 'draft' | string;
   updated_at?: string;
 }
+
+export type { ConfiguratorPreset };
 
 export interface ConfiguratorProfileSummary {
   product_id: number;
@@ -592,6 +597,7 @@ export interface ConfiguratorProfileSummary {
   is_configurator?: boolean;
   layers_count: number;
   views_count: number;
+  presets_count?: number;
   family: DeviceFamily;
   size_multiplier: number;
   texture_scale?: number;

@@ -1001,6 +1001,35 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Backend Defaulting: In WordPress plugin `class-configurator-engine.php`, both `rest_get_product_configurator` and `rest_save_product_configurator` validate and default `model_360_extra_price` to 40000 when missing or non-numeric.
   - Storefront Resolution: In `device-skin-configurator.tsx`, `model360ExtraPrice` resolves via `typeof raw360 === "number" ? raw360 : 40000`. Authentic CMS prices (including explicit 0 for free wrap) are respected, while legacy unpersisted profiles default safely to standard 40,000 IDR.
 
+---
+
+## 34. Per-Device Presets ("Shop the Look") Architecture & Visual Cards Redesign
+
+- **Strict v1 Configurator Isolation Invariant**:
+  - Global finish presentation settings (`group_settings`: compact circular dots, collapsible drawers, custom visible limits) must NEVER apply to legacy v1 configurators.
+  - In `swatch-selector.tsx`, `getGroupSetting` strictly checks `if (!isV2 || !groupSettings) return {};`. Legacy v1 devices always render tactile swatch cards.
+
+- **Presets Modal Visual Image Cards Redesign**:
+  - All recipe text clutter (titles, descriptions, coverage tags, recipe text chips) is removed from the modal.
+  - Displays a clean visual grid of device image cards showing the device dressed in its exact skin combination:
+    - If `preset.image_url` is provided, renders the custom render directly.
+    - Otherwise, renders a live visual device canvas using `<StackedLayerCanvas compactPreview={true}>`.
+  - Badges: Supported high-contrast badges (`POPULAR`, `STAFF PICK`) rendered as clean pill badges on the top-left of the image cards.
+  - Action Button: Each card features a secondary button underneath labeled `"Apply Look"` (or `"✓ Applied"`). Not a primary yellow button.
+
+- **Deterministic Layer Matching (No Substring Fuzzy Collisions)**:
+  - Presets resolve layer keys using exact matching first (`normKey === layerId || normKey === layerClass || normKey === layerSlug || normKey === layerNameLower`), eliminating duplicate label collisions (such as "Additional Camera & Back Glass" colliding with "Camera").
+
+- **Per-Device Presets Authoring in Configurator Studio**:
+  - Operators author looks per device directly in Configurator Studio (`ConfiguratorStudioPage.tsx`) under the dedicated **Presets** inspector tab.
+  - Includes Title, Badge selector (`None`, `POPULAR`, `STAFF PICK`), Coverage, Logo Cutout, Per-layer Finish Selectors, and optional Preview Image URL (with WordPress Media Library browser).
+  - Features a 1-click **"Use Canvas Look"** button to capture current visual simulator selections into a new preset.
+  - Features a **"Test"** button on each preset card to preview that look on the live simulator canvas immediately.
+  - Presets are permanently persisted into WooCommerce post meta `_exacoat_configurator_profile` via `rest_save_product_configurator`.
+
+- **Configurator Catalog Table Presets Column**:
+  - Catalog table in Studio features a dedicated **Presets** column displaying the number of active looks on each device (e.g. `2 Looks` or `0`).
+
 
 
 
