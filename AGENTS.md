@@ -1103,3 +1103,29 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - In `exacoat-web`, `configurator-loader.ts` falls back to `category-fallbacks.json` if a product is not found in WooCommerce.
   - **Zero Phantom Products Invariant**: Hardcoding speculative or unannounced products (e.g. iPhone 18 Pro) in `category-fallbacks.json` or `POPULAR_ITEMS` in `search-catalog.ts` will cause the storefront to synthesize live HTTP 200 product pages and search suggestions for non-existent items.
   - Fallback fixtures must strictly contain existing, authentic production devices only.
+
+---
+
+## 38. Model 360° Unicode Invariant, Coverage Redundancy Elimination & Sibling Asset Inheritance
+
+- **Degree Symbol Unicode & WordPress Serialization Invariant (`Model 360°`)**:
+  - PHP's default `wp_json_encode()` serializes the degree symbol (`°`, U+00B0) as the escape sequence `\u00b0`.
+  - In WordPress core, `update_metadata()` runs `$meta_value = wp_unslash( $meta_value )`, which strips the backslash, mutating `\u00b0` into the literal corrupted string `u00b0` (e.g. `Model 360u00b0`).
+  - **The Invariant**: All JSON profile serialization in `class-configurator-engine.php` must explicitly pass `JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES` wrapped in `wp_slash()`. This ensures the authentic character `°` is stored verbatim in the database post meta without escaping.
+  - Additionally, recursive string sanitization (`str_replace(['360u00b0', '360\\u00b0', 'u00b0'], '°', $val)`) must run on both profile fetch and save.
+
+- **Coverage Variant Redundancy Elimination**:
+  - Legacy MKL configurator products previously tracked coverage choices ("Model Cut", "Model 360°") as options within a variant group (`id: 'model'`).
+  - In the modern v2 configurator engine, coverage is handled first-class via `coverage_and_cutouts` (`coverage_type`, `model_cutout_url`, `model_360_extra_price`).
+  - Retaining legacy `model` variants causes duplicate option rows, pricing conflicts, and displays corrupted `Model 360u00b0` text.
+  - `sanitize_variants()` in `class-configurator-engine.php` and `wordpressBridge.ts` strictly filters out any variant representing model coverage (`v.id === 'model'`, `v.name === 'model'`, or variants containing `model-cut` or `360` options).
+
+- **Sibling Device Visual Setup & Asset Inheritance**:
+  - Sibling devices that share physical CAD dimensions and viewport geometry (e.g. Galaxy S26+ with Galaxy S26, iPhone 16 Plus with iPhone 16, iPhone 16 Pro Max with iPhone 16 Pro, iPhone 17e with iPhone 16e):
+    - Must inherit the base device's authentic CAD renders (`views[0].background_url`), 3D raytraced shadow maps (`shadow_png_url`), and alpha masks (`mask_svg_url`) directly to modern v2 engine.
+    - Sibling devices must never fall back to older device generations (such as iPhone 16 Pro falling back to iPhone 15 Pro assets).
+
+- **Storefront Curated Presets Isolation ("Shop the Look")**:
+  - On `web.exacoat.com` (`device-skin-configurator.tsx`), `effectivePresets` strictly checks `data.v2Profile?.presets`.
+  - Fallback to global mock presets (`data.presets`) is strictly eliminated. If a device has 0 configured presets in its profile, the "Shop the Look" floating action button, eyebrow triggers, and presets modal are completely hidden from the viewport.
+

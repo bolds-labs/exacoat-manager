@@ -7571,7 +7571,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 <div className="flex items-center gap-1.5 bg-zinc-900/80 px-2.5 py-1 rounded-xl border border-white/10 text-xs">
                                   <span className="text-[11px] text-zinc-400 font-medium">Coverage:</span>
                                   <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 text-[11px]">
-                                    Model 360 Full Wrap
+                                    Model 360° Full Wrap
                                   </span>
                                 </div>
                               );
@@ -7603,7 +7603,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       : 'text-zinc-400 hover:text-white'
                                   )}
                                 >
-                                  <span>Model 360</span>
+                                  <span>Model 360°</span>
                                   {extra360 > 0 && (
                                     <span
                                       className={clsx(
@@ -9769,9 +9769,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   <span className="text-[11px] text-zinc-400 font-medium">Coverage Mode</span>
                                   <div className="grid grid-cols-3 gap-1.5">
                                     {[
-                                      { id: 'model_cut_and_360', label: 'Model Cut & 360' },
+                                      { id: 'model_cut_and_360', label: 'Model Cut & 360°' },
                                       { id: 'model_cut_only', label: 'Model Cut Only' },
-                                      { id: 'model_360_only', label: 'Model 360 Only' },
+                                      { id: 'model_360_only', label: 'Model 360° Only' },
                                     ].map((mode) => {
                                       const currentCov = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none');
                                       const isSelected = currentCov === mode.id;

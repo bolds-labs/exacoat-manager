@@ -2010,7 +2010,25 @@ class Exacoat_Configurator_Engine {
 			if ( ! is_array( $v ) ) continue;
 			$v_id = strtolower( (string) ( $v['id'] ?? '' ) );
 			$v_name = strtolower( (string) ( $v['name'] ?? '' ) );
-			if ( strpos( $v_id, 'logo' ) !== false || strpos( $v_name, 'logo' ) !== false || strpos( $v_id, 'cutout' ) !== false || strpos( $v_id, 'coverage' ) !== false || strpos( $v_name, 'coverage' ) !== false || strpos( $v_name, 'model cut' ) !== false ) {
+
+			// Check if this variant represents coverage / model selection
+			$has_coverage_options = false;
+			if ( ! empty( $v['options'] ) && is_array( $v['options'] ) ) {
+				foreach ( $v['options'] as &$opt ) {
+					if ( ! is_array( $opt ) ) continue;
+					$opt_id = strtolower( (string) ( $opt['id'] ?? '' ) );
+					$opt_name = strtolower( (string) ( $opt['name'] ?? '' ) );
+					if ( strpos( $opt_id, '360' ) !== false || strpos( $opt_name, '360' ) !== false || strpos( $opt_id, 'model-cut' ) !== false || strpos( $opt_name, 'model cut' ) !== false ) {
+						$has_coverage_options = true;
+					}
+					if ( isset( $opt['name'] ) && is_string( $opt['name'] ) ) {
+						$opt['name'] = str_replace( [ '360u00b0', '360\\u00b0', 'u00b0' ], '360°', $opt['name'] );
+					}
+				}
+				unset( $opt );
+			}
+
+			if ( $has_coverage_options || $v_id === 'model' || $v_name === 'model' || strpos( $v_id, 'logo' ) !== false || strpos( $v_name, 'logo' ) !== false || strpos( $v_id, 'cutout' ) !== false || strpos( $v_id, 'coverage' ) !== false || strpos( $v_name, 'coverage' ) !== false || strpos( $v_name, 'model cut' ) !== false || strpos( $v_id, '360' ) !== false || strpos( $v_name, '360' ) !== false ) {
 				continue;
 			}
 			$clean[] = $v;
@@ -2271,8 +2289,16 @@ class Exacoat_Configurator_Engine {
 			unset( $layer );
 		}
 
-		// Use wp_slash so WordPress update_metadata does not strip quotes or slashes from JSON
-		update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile ) ) );
+		// Recursively sanitize corrupted unicode degree sequences (e.g. 360u00b0 -> 360°)
+		array_walk_recursive( $profile, function( &$val ) {
+			if ( is_string( $val ) ) {
+				$val = str_replace( [ '360u00b0', '360\\u00b0' ], '360°', $val );
+			}
+		} );
+
+		// Use wp_slash and JSON_UNESCAPED_UNICODE so WordPress update_metadata does not strip quotes or slashes, and degree signs (°) are preserved directly
+		$json_str = wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+		update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( $json_str ) );
 		update_post_meta( $product_id, self::CONFIGURATOR_FLAG_META_KEY, 'yes' );
 		update_post_meta( $product_id, '_configurator_version', $profile['configurator_version'] );
 		update_post_meta( $product_id, '_device_family', $profile['family'] );
@@ -2352,7 +2378,7 @@ class Exacoat_Configurator_Engine {
 			if ( $is_mkl || ! empty( $layers_raw ) ) {
 				$profile = self::convert_mkl_to_profile( $pid );
 				if ( ! empty( $profile['layers'] ) ) {
-					update_post_meta( $pid, self::PROFILE_META_KEY, wp_json_encode( $profile ) );
+					update_post_meta( $pid, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
 					$migrated_count++;
 					continue;
 				}
@@ -2402,7 +2428,7 @@ class Exacoat_Configurator_Engine {
 			$profile = is_string( $meta ) ? json_decode( $meta, true ) : $meta;
 			if ( is_array( $profile ) ) {
 				$profile['base_price'] = $price;
-				update_post_meta( $product_id, self::PROFILE_META_KEY, wp_json_encode( $profile ) );
+				update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
 			}
 		}
 
@@ -2589,7 +2615,7 @@ class Exacoat_Configurator_Engine {
 					$profile['base_price'] = $price_to_set;
 				}
 				// Note: Always use wp_slash(wp_json_encode()) to prevent unslashing corruption
-				update_post_meta( $new_pid, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile ) ) );
+				update_post_meta( $new_pid, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
 			}
 
 			// Copy legacy MKL metadata for backward compatibility

@@ -2998,8 +2998,22 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
       const cleanVariants = (data.profile.variants || []).filter((v: any) => {
         const vId = (v.id || '').toLowerCase();
         const vName = (v.name || '').toLowerCase();
-        return !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage');
+        const hasCoverageOptions = Array.isArray(v.options) && v.options.some((opt: any) => {
+          const optId = (opt.id || '').toLowerCase();
+          const optName = (opt.name || '').toLowerCase();
+          return optId.includes('360') || optName.includes('360') || optId.includes('model-cut') || optName.includes('model cut');
+        });
+        return !hasCoverageOptions && vId !== 'model' && vName !== 'model' && !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage') && !vId.includes('360') && !vName.includes('360');
       });
+
+      // Sanitize corrupted unicode degree representations in presets or strings
+      const sanitizedPresets = Array.isArray(data.profile.presets)
+        ? data.profile.presets.map((p: any) => ({
+            ...p,
+            title: typeof p.title === 'string' ? p.title.replace(/360u00b0/gi, '360°').replace(/360\\u00b0/gi, '360°') : p.title,
+            tagline: typeof p.tagline === 'string' ? p.tagline.replace(/360u00b0/gi, '360°').replace(/360\\u00b0/gi, '360°') : p.tagline,
+          }))
+        : [];
 
       return {
         success: true,
@@ -3007,6 +3021,7 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
           ...data.profile,
           layers: cleanLayers,
           variants: cleanVariants,
+          presets: sanitizedPresets,
           configurator_version: data.profile.configurator_version || 'v1',
         },
         finishes: data.finishes || [],
@@ -3295,10 +3310,25 @@ export async function saveProductConfiguratorProfileDirect(profile: Partial<Devi
     const cleanVariants = profile.variants ? profile.variants.filter((v: any) => {
       const vId = (v.id || '').toLowerCase();
       const vName = (v.name || '').toLowerCase();
-      return !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage');
+      const hasCoverageOptions = Array.isArray(v.options) && v.options.some((opt: any) => {
+        const optId = (opt.id || '').toLowerCase();
+        const optName = (opt.name || '').toLowerCase();
+        return optId.includes('360') || optName.includes('360') || optId.includes('model-cut') || optName.includes('model cut');
+      });
+      return !hasCoverageOptions && vId !== 'model' && vName !== 'model' && !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage') && !vId.includes('360') && !vName.includes('360');
     }) : undefined;
 
-    const payload = cleanVariants !== undefined ? { ...profile, variants: cleanVariants } : profile;
+    const cleanPresets = Array.isArray(profile.presets) ? profile.presets.map((p: any) => ({
+      ...p,
+      title: typeof p.title === 'string' ? p.title.replace(/360u00b0/gi, '360°').replace(/360\\u00b0/gi, '360°') : p.title,
+      tagline: typeof p.tagline === 'string' ? p.tagline.replace(/360u00b0/gi, '360°').replace(/360\\u00b0/gi, '360°') : p.tagline,
+    })) : profile.presets;
+
+    const payload = {
+      ...profile,
+      ...(cleanVariants !== undefined ? { variants: cleanVariants } : {}),
+      ...(cleanPresets !== undefined ? { presets: cleanPresets } : {}),
+    };
 
     const res = await authenticatedFetch(url, {
       method: 'POST',

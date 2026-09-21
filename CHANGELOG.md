@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.03] - 2026-09-21
+
+### Configurator Asset Discrepancy Repair, Sibling Inheritance, and Model 360° Unicode Sanitization
+- **Authentic Asset Resolution for iPhone 16 Pro & iPhone 16 Pro Max**:
+  - Replaced legacy iPhone 15 Pro visual fallback assets with verified authentic iPhone 16 Pro renders and masks across Product `#521962` (iPhone 16 Pro) and Product `#522046` (iPhone 16 Pro Max).
+  - Configured authentic View Background (`iPhone-16-Pro-Body.png`), 3D Shadows (`iPhone-16-Pro-Shadows.png`), Logo Cutout (`iPhone-16-Pro-Logo.png`), and Model Cutout Frame (`iPhone-16-Pro-Frame.png`).
+  - Mapped authentic alpha masks: Back (`iPhone-16-Pro-Skins-Matte-Black.png`), Accents (`iPhone-16-Pro-Accents-Matte-Black.png` with 90-degree rotation), and Additional Camera (`iPhone-16-Pro-Camera-Matte-Black.png`).
+- **Sibling Device Visual Setup Inheritance**:
+  - Synchronized sibling models that share identical physical CAD/device dimensions directly to modern v2 engine:
+    - Galaxy S26+ (`#540514`) inherited Galaxy S26 (`#540510`) visual setup.
+    - iPhone 16 Plus (`#524074`) inherited iPhone 16 (`#524020`) visual setup.
+    - iPhone 17e (`#541338`) inherited iPhone 16e (`#529006`) visual setup.
+    - iPhone 15 Pro Max (`#486198`) and iPhone 15 Plus (`#486197`) inherited iPhone 15 Pro / iPhone 15 visual setups.
+    - iPhone 14 Pro Max (`#439872`) and iPhone 13 Pro Max (`#361888`) inherited iPhone 14 Pro / iPhone 13 Pro visual setups.
+- **Model 360° Unicode Sanitization & Legacy Variant Elimination**:
+  - Identified root cause of `Model 360u00b0`: legacy MKL `model` variants containing unescaped `\u00b0` unicode sequences that were stripped by WordPress `wp_unslash()`.
+  - Updated `sanitize_variants()` in `class-configurator-engine.php` and `wordpressBridge.ts` to automatically strip redundant `model` variants (since coverage is handled first-class via `coverage_and_cutouts`) and sanitize any remaining `u00b0` sequences to `°`.
+  - Used `JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES` wrapped in `wp_slash()` during JSON serialization in WordPress master plugin to permanently preserve degree symbols.
+  - Executed catalog-wide database migration repairing 152 products; verified 0 corrupted degree occurrences remaining catalog-wide.
+- **Storefront Curated Presets ("Shop the Look") Hygiene**:
+  - Updated `effectivePresets` evaluation in `exacoat-web` (`device-skin-configurator.tsx`) to strictly return device-specific presets (`data.v2Profile?.presets`).
+  - Completely eliminated fallback to global mock presets, ensuring the "Shop the Look" floating action button and modal are cleanly hidden on devices with 0 configured presets.
+  - Purged Cloudflare cache and revalidated Next.js cache for `/product/iphone-16-pro-skins`.
+
 ## [0.1.02] - 2026-09-21
 
 ### Configurator Studio Setup Transfer, Portable JSON Profiles & Storefront Catalog Hygiene
