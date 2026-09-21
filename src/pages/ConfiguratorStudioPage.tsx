@@ -4720,6 +4720,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               >
                                 <span>{isDots ? '● Dots' : '▣ Cards'}</span>
                                 {isCollapsible && <span className="text-amber-400">▾</span>}
+                                {(setting?.show_more_limit || 0) > 0 && (
+                                  <span className="text-amber-400 font-bold">[{setting?.show_more_limit}]</span>
+                                )}
                               </button>
                             );
                           })()}
@@ -10628,16 +10631,26 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 </div>
 
                 {/* Inline Show More Limit */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-zinc-300 uppercase tracking-wider block">
-                    Visible Items Limit
-                  </label>
-                  <div className="grid grid-cols-4 gap-2">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-zinc-300 uppercase tracking-wider block">
+                      Visible Items Limit
+                    </label>
+                    <span className="text-[10px] font-mono text-[#f3aa18]">
+                      {(editingGroupSetting.setting.show_more_limit || 0) === 0
+                        ? 'Showing All'
+                        : `Showing First ${editingGroupSetting.setting.show_more_limit}`}
+                    </span>
+                  </div>
+
+                  {/* Preset Buttons */}
+                  <div className="grid grid-cols-5 gap-1.5">
                     {[
                       { value: 0, label: 'All' },
-                      { value: 4, label: 'First 4' },
-                      { value: 6, label: 'First 6' },
-                      { value: 8, label: 'First 8' },
+                      { value: 3, label: '3' },
+                      { value: 4, label: '4' },
+                      { value: 6, label: '6' },
+                      { value: 8, label: '8' },
                     ].map((opt) => (
                       <button
                         key={opt.value}
@@ -10652,15 +10665,53 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           'py-2 rounded-xl text-xs font-semibold border cursor-pointer transition-all text-center',
                           (editingGroupSetting.setting.show_more_limit || 0) === opt.value
                             ? 'border-[#f3aa18] bg-[#f3aa18]/15 text-[#f3aa18]'
-                            : 'border-white/10 bg-zinc-900 text-zinc-400 hover:text-white'
+                            : 'border-white/10 bg-zinc-900 text-zinc-400 hover:text-white hover:border-white/20'
                         )}
                       >
                         {opt.label}
                       </button>
                     ))}
                   </div>
-                  <span className="text-[10px] text-zinc-500 block">
-                    Excess swatches are hidden behind an inline "+X more" expander button.
+
+                  {/* Custom Number Input */}
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <span className="text-[11px] text-zinc-400 shrink-0 font-medium">Custom Limit:</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      placeholder="e.g. 3, 5, 10..."
+                      value={editingGroupSetting.setting.show_more_limit || ''}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        setEditingGroupSetting({
+                          ...editingGroupSetting,
+                          setting: {
+                            ...editingGroupSetting.setting,
+                            show_more_limit: isNaN(val) || val <= 0 ? 0 : val,
+                          },
+                        });
+                      }}
+                      className="flex-1 bg-zinc-900 border border-white/10 focus:border-[#f3aa18] rounded-xl px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none transition-colors font-mono"
+                    />
+                    {(editingGroupSetting.setting.show_more_limit || 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditingGroupSetting({
+                            ...editingGroupSetting,
+                            setting: { ...editingGroupSetting.setting, show_more_limit: 0 },
+                          })
+                        }
+                        className="text-[11px] text-zinc-500 hover:text-zinc-300 underline cursor-pointer shrink-0"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+
+                  <span className="text-[10px] text-zinc-500 block leading-relaxed">
+                    Excess swatches are hidden behind an inline "+X more" expander button on the storefront. Enter any custom number or click a preset.
                   </span>
                 </div>
               </div>
