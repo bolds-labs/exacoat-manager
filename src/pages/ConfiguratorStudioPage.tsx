@@ -30,6 +30,7 @@ import {
   saveFinishGroupSettingsDirect,
   fetchConfiguratorPresetsDirect,
   saveConfiguratorPresetsDirect,
+  syncDeviceFamiliesDirect,
 } from '../lib/wordpressBridge';
 import {
   DeviceConfiguratorProfile,
@@ -545,6 +546,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     skipped_count?: number;
     total_scanned?: number;
   } | null>(null);
+  const [isSyncingFamilies, setIsSyncingFamilies] = useState(false);
 
   // Quick Price Edit Dialog state (Catalog)
   const [priceEditModal, setPriceEditModal] = useState<{
@@ -913,10 +915,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
         });
 
         const devFamily = res.profile.family || 'phone';
-        const isBigFamily = devFamily === 'laptop' || devFamily === 'tablet';
+        const isBigFamily = devFamily === 'laptop' || devFamily === 'tablet' || (devFamily as string) === 'tablet_laptop' || devFamily === 'keyboard';
         const normalizedMultiplier = isBigFamily
           ? 2.0
-          : (res.profile.size_multiplier || 1.0);
+          : (devFamily === 'foldable' ? 1.3 : (res.profile.size_multiplier || 1.0));
 
         const cleanVariants = (res.profile.variants || []).filter((v) => {
           const vId = (v.id || '').toLowerCase();
@@ -1066,8 +1068,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
   const handleConvertToV2 = () => {
     if (!editingProfile) return;
-    const isBig = editingProfile.family === 'laptop' || editingProfile.family === 'tablet';
-    const normalizedMultiplier = isBig ? 2.0 : (editingProfile.size_multiplier || 1.0);
+    const isBig = editingProfile.family === 'laptop' || editingProfile.family === 'tablet' || (editingProfile.family as string) === 'tablet_laptop' || editingProfile.family === 'keyboard';
+    const normalizedMultiplier = isBig ? 2.0 : (editingProfile.family === 'foldable' ? 1.3 : (editingProfile.size_multiplier || 1.0));
 
     const upgradedViews = (editingProfile.views || []).map((v) => ({
       ...v,
@@ -1427,6 +1429,27 @@ export const ConfiguratorStudioPage: React.FC = () => {
       showToast('error', 'Migration Error', err.message);
     } finally {
       setIsMigrating(false);
+    }
+  };
+
+  const handleSyncFamilies = async () => {
+    setIsSyncingFamilies(true);
+    try {
+      const res = await syncDeviceFamiliesDirect();
+      if (res.success) {
+        showToast(
+          'success',
+          'Device Families Synced',
+          `${res.updated_count} devices updated to correct family and size multiplier.`
+        );
+        loadData(true);
+      } else {
+        showToast('error', 'Sync Failed', res.error || 'Failed syncing device families');
+      }
+    } catch (err: any) {
+      showToast('error', 'Sync Error', err.message);
+    } finally {
+      setIsSyncingFamilies(false);
     }
   };
 
@@ -4171,6 +4194,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   <span>Audit All ({stats.total})</span>
                 </>
               )}
+            </button>
+            <button
+              type="button"
+              onClick={handleSyncFamilies}
+              disabled={isSyncingFamilies}
+              className="px-4 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl border border-white/10 hover:bg-white/[0.06] text-zinc-300 transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
+              title="Auto-detect tablets, laptops, foldables, and keyboards to set correct device family and size pricing multiplier"
+            >
+              <RefreshCw className={clsx('w-3.5 h-3.5 text-[#f3aa18]', isSyncingFamilies && 'animate-spin')} />
+              <span>{isSyncingFamilies ? 'Syncing Families...' : 'Sync Families'}</span>
             </button>
             <button
               onClick={handleBatchMigrate}
@@ -7290,7 +7323,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 : undefined;
                               const mappedTex = matchedKey ? textureMap[matchedKey] || '' : '';
 
-                              const isBigDevice = editingProfile.family === 'laptop' || editingProfile.family === 'tablet';
+                              const isBigDevice = editingProfile.family === 'laptop' || editingProfile.family === 'tablet' || (editingProfile.family as string) === 'tablet_laptop' || editingProfile.family === 'keyboard';
                               const useBigTexture = l.texture_size === 'big' || (l.texture_size !== 'small' && isBigDevice);
                               const activeTextureUrl = (useBigTexture && activeFinish?.texture_big_url)
                                 ? activeFinish.texture_big_url
@@ -10520,24 +10553,35 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   </div>
                                   <select
                                     value={
-                                      editingProfile.family === 'tablet' || editingProfile.family === 'laptop' || (editingProfile.family as string) === 'tablet_laptop'
-                                        ? 'tablet_laptop'
-                                        : 'phone'
+                                      editingProfile.family === 'tablet_laptop'
+                                        ? 'tablet'
+                                        : (editingProfile.family || 'phone')
                                     }
                                     onChange={(e) => {
-                                      const selected = e.target.value;
-                                      const nextMult = selected === 'tablet_laptop' ? 2.0 : 1.0;
-                                      const nextFamily = (selected === 'tablet_laptop' ? 'tablet_laptop' : 'phone') as DeviceFamily;
+                                      const selected = e.target.value as DeviceFamily;
+                                      let nextMult = 1.0;
+                                      if (selected === 'tablet' || selected === 'laptop' || selected === 'keyboard' || selected === 'console' || (selected as string) === 'tablet_laptop') {
+                                        nextMult = 2.0;
+                                      } else if (selected === 'foldable') {
+                                        nextMult = 1.3;
+                                      } else if (selected === 'accessory') {
+                                        nextMult = 0.8;
+                                      }
                                       setEditingProfile({
                                         ...editingProfile,
-                                        family: nextFamily,
+                                        family: selected,
                                         size_multiplier: nextMult,
                                       });
                                     }}
                                     className="w-full px-2 py-1.5 text-xs rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
                                   >
                                     <option value="phone">Phone (1.0x - +IDR 30.000)</option>
-                                    <option value="tablet_laptop">Tablet & Laptop (2.0x - +IDR 60.000)</option>
+                                    <option value="tablet">Tablet (2.0x - +IDR 60.000)</option>
+                                    <option value="laptop">Laptop (2.0x - +IDR 60.000)</option>
+                                    <option value="foldable">Foldable (1.3x - +IDR 39.000)</option>
+                                    <option value="keyboard">Keyboard / Folio (2.0x - +IDR 60.000)</option>
+                                    <option value="console">Gaming Console (2.0x - +IDR 60.000)</option>
+                                    <option value="accessory">Accessory (0.8x - +IDR 24.000)</option>
                                   </select>
                                 </div>
                               </div>

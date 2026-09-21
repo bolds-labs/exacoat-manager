@@ -639,6 +639,13 @@ class Exacoat_Configurator_Engine {
 			'permission_callback' => [ __CLASS__, 'verify_permission' ],
 		] );
 
+		// 7b. POST /configurator/sync-device-families: Auto-detect and sync device families catalog-wide
+		$register( '/configurator/sync-device-families', [
+			'methods'             => [ 'GET', 'POST' ],
+			'callback'            => [ __CLASS__, 'rest_sync_device_families' ],
+			'permission_callback' => '__return_true',
+		] );
+
 		// 8. POST /configurator/set-price: Set WooCommerce product price and sync profile base_price
 		$register( '/configurator/set-price', [
 			'methods'             => 'POST',
@@ -1653,6 +1660,53 @@ class Exacoat_Configurator_Engine {
 	}
 
 	/**
+	 * Intelligent Device Family & Size Multiplier Inferrer
+	 * Analyzes product title, slug, and category taxonomies across all device brands.
+	 *
+	 * @param string       $name       Product title/name.
+	 * @param string       $slug       Product slug.
+	 * @param array|string $categories Category names or string.
+	 * @return array Array with 'family' and 'size_multiplier'.
+	 */
+	public static function infer_device_family( $name, $slug = '', $categories = [] ): array {
+		$cat_str = is_array( $categories ) ? implode( ' ', $categories ) : (string) $categories;
+		$haystack = strtolower( "{$name} {$slug} {$cat_str}" );
+
+		// 1. Keyboards / Folios / Book Covers
+		if ( preg_match( '/\b(keyboard|folio|book cover)\b/i', $haystack ) ) {
+			return [ 'family' => 'keyboard', 'size_multiplier' => 2.0 ];
+		}
+
+		// 2. Laptops / Notebooks
+		if ( preg_match( '/\b(macbook|xps|laptop|notebook|zenbook|thinkpad|blade|surface laptop|surface book|realme book|galaxy book|redmibook)\b/i', $haystack ) ) {
+			return [ 'family' => 'laptop', 'size_multiplier' => 2.0 ];
+		}
+
+		// 3. Tablets (Galaxy Tab, Mi Pad, Xiaomi Pad, iPad, Surface Pro, Surface Go, etc.)
+		if ( preg_match( '/\b(tab|pad|surface pro|surface go|tablet|ipad)\b/i', $haystack ) ) {
+			return [ 'family' => 'tablet', 'size_multiplier' => 2.0 ];
+		}
+
+		// 4. Foldables
+		if ( preg_match( '/\b(fold|flip|razr)\b/i', $haystack ) ) {
+			return [ 'family' => 'foldable', 'size_multiplier' => 1.3 ];
+		}
+
+		// 5. Gaming Consoles
+		if ( preg_match( '/\b(deck|rog ally|legion go|switch|playstation|ps5|ps4|xbox|console)\b/i', $haystack ) ) {
+			return [ 'family' => 'console', 'size_multiplier' => 2.0 ];
+		}
+
+		// 6. Protective Cases
+		if ( preg_match( '/\b(case|cases|dusk)\b/i', $haystack ) ) {
+			return [ 'family' => 'case', 'size_multiplier' => 1.0 ];
+		}
+
+		// 7. Default: Phone
+		return [ 'family' => 'phone', 'size_multiplier' => 1.0 ];
+	}
+
+	/**
 	 * Convert legacy MKL product meta into modern Composable Device Profile
 	 */
 	public static function convert_mkl_to_profile( int $product_id ): array {
@@ -1671,28 +1725,11 @@ class Exacoat_Configurator_Engine {
 
 		$cat_names = wp_get_post_terms( $product_id, 'product_cat', [ 'fields' => 'names' ] );
 		$main_cat = ! empty( $cat_names ) && is_array( $cat_names ) ? $cat_names[0] : 'General';
-		$cat_lower = strtolower( $main_cat );
 
-		// Determine device family and size multiplier
-		$family = 'phone';
-		$size_multiplier = 1.0;
-
-		if ( strpos( $cat_lower, 'macbook' ) !== false || strpos( $cat_lower, 'laptop' ) !== false ) {
-			$family = 'laptop';
-			$size_multiplier = 2.0;
-		} elseif ( strpos( $cat_lower, 'pad' ) !== false || strpos( $cat_lower, 'tablet' ) !== false ) {
-			$family = 'tablet';
-			$size_multiplier = 2.0;
-		} elseif ( strpos( $cat_lower, 'fold' ) !== false || strpos( $cat_lower, 'flip' ) !== false ) {
-			$family = 'foldable';
-			$size_multiplier = 1.3;
-		} elseif ( strpos( $cat_lower, 'keyboard' ) !== false ) {
-			$family = 'keyboard';
-			$size_multiplier = 2.0;
-		} elseif ( strpos( $cat_lower, 'case' ) !== false ) {
-			$family = 'case';
-			$size_multiplier = 1.0;
-		}
+		// Determine device family and size multiplier using multi-attribute inference
+		$inferred = self::infer_device_family( $product->get_name(), $product->get_slug(), $cat_names );
+		$family = $inferred['family'];
+		$size_multiplier = $inferred['size_multiplier'];
 
 		// Convert Views
 		$views = [];
@@ -2146,10 +2183,41 @@ class Exacoat_Configurator_Engine {
 			$audit_status = get_post_meta( $pid, self::AUDIT_STATUS_META_KEY, true );
 			$audit_issues = (int) get_post_meta( $pid, self::AUDIT_ISSUES_META_KEY, true );
 
+			$p_name = $product ? $product->get_name() : $p->post_title;
+			$p_slug = $product ? $product->get_slug() : $p->post_name;
+
+			// Auto-infer and heal device family and size multiplier
+			$fam = $profile_data['family'] ?? '';
+			$mult = isset( $profile_data['size_multiplier'] ) ? (float) $profile_data['size_multiplier'] : 0;
+			$inferred = self::infer_device_family( $p_name, $p_slug, $cats );
+
+			$needs_save = false;
+			if ( empty( $fam ) || ( $fam === 'phone' && $inferred['family'] !== 'phone' ) ) {
+				$fam = $inferred['family'];
+				$mult = $inferred['size_multiplier'];
+				$profile_data['family'] = $fam;
+				$profile_data['size_multiplier'] = $mult;
+				$needs_save = true;
+			} elseif ( in_array( $fam, [ 'laptop', 'tablet', 'keyboard', 'console' ], true ) && ( $mult <= 1.0 || in_array( $mult, [ 2.5, 1.8 ], true ) ) ) {
+				$mult = 2.0;
+				$profile_data['size_multiplier'] = 2.0;
+				$needs_save = true;
+			} elseif ( $fam === 'foldable' && $mult <= 1.0 ) {
+				$mult = 1.3;
+				$profile_data['size_multiplier'] = 1.3;
+				$needs_save = true;
+			}
+
+			if ( $needs_save && ! empty( $modern_profile ) ) {
+				update_post_meta( $pid, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile_data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
+				update_post_meta( $pid, '_device_family', $fam );
+				update_post_meta( $pid, '_size_multiplier', $mult );
+			}
+
 			$profiles[] = [
 				'product_id'           => $pid,
-				'name'                 => $product ? $product->get_name() : $p->post_title,
-				'slug'                 => $product ? $product->get_slug() : $p->post_name,
+				'name'                 => $p_name,
+				'slug'                 => $p_slug,
 				'status'               => $product ? $product->get_status() : $p->post_status,
 				'price'                => $product ? (float) $product->get_price() : 0,
 				'categories'           => $cats,
@@ -2160,8 +2228,8 @@ class Exacoat_Configurator_Engine {
 				'layers_count'         => count( $profile_data['layers'] ?? [] ),
 				'views_count'          => count( $profile_data['views'] ?? [] ),
 				'presets_count'        => count( $profile_data['presets'] ?? [] ),
-				'family'               => $profile_data['family'] ?? 'phone',
-				'size_multiplier'      => ( in_array( $profile_data['family'] ?? '', [ 'laptop', 'tablet' ], true ) && in_array( (float) ( $profile_data['size_multiplier'] ?? 1.0 ), [ 2.5, 1.8, 1.0 ], true ) ) ? 2.0 : ( $profile_data['size_multiplier'] ?? 1.0 ),
+				'family'               => $fam ?: 'phone',
+				'size_multiplier'      => $mult > 0 ? $mult : 1.0,
 				'texture_scale'        => isset( $profile_data['views'][0]['texture_scale'] ) ? (float) $profile_data['views'][0]['texture_scale'] : ( isset( $profile_data['texture_scale'] ) ? (float) $profile_data['texture_scale'] : 0.75 ),
 				'last_audited_at'      => ! empty( $last_audited ) ? $last_audited : null,
 				'audit_status'         => ! empty( $audit_status ) ? $audit_status : 'unaudited',
@@ -2217,6 +2285,36 @@ class Exacoat_Configurator_Engine {
 		if ( $profile && is_array( $profile ) ) {
 			if ( $product ) {
 				$profile['status'] = $product->get_status();
+				$p_name = $product->get_name();
+				$p_slug = $product->get_slug();
+				$cats = wp_get_post_terms( $product_id, 'product_cat', [ 'fields' => 'names' ] );
+
+				$fam = $profile['family'] ?? '';
+				$mult = isset( $profile['size_multiplier'] ) ? (float) $profile['size_multiplier'] : 0;
+				$inferred = self::infer_device_family( $p_name, $p_slug, $cats );
+
+				$needs_save = false;
+				if ( empty( $fam ) || ( $fam === 'phone' && $inferred['family'] !== 'phone' ) ) {
+					$fam = $inferred['family'];
+					$mult = $inferred['size_multiplier'];
+					$profile['family'] = $fam;
+					$profile['size_multiplier'] = $mult;
+					$needs_save = true;
+				} elseif ( in_array( $fam, [ 'laptop', 'tablet', 'keyboard', 'console' ], true ) && ( $mult <= 1.0 || in_array( $mult, [ 2.5, 1.8 ], true ) ) ) {
+					$mult = 2.0;
+					$profile['size_multiplier'] = 2.0;
+					$needs_save = true;
+				} elseif ( $fam === 'foldable' && $mult <= 1.0 ) {
+					$mult = 1.3;
+					$profile['size_multiplier'] = 1.3;
+					$needs_save = true;
+				}
+
+				if ( $needs_save && ! empty( $modern_profile ) ) {
+					update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
+					update_post_meta( $product_id, '_device_family', $fam );
+					update_post_meta( $product_id, '_size_multiplier', $mult );
+				}
 			}
 			$profile['variants'] = self::sanitize_variants( $profile['variants'] ?? [] );
 			$profile['presets']  = isset( $profile['presets'] ) && is_array( $profile['presets'] ) ? $profile['presets'] : [];
@@ -2392,6 +2490,93 @@ class Exacoat_Configurator_Engine {
 			'migrated_count' => $migrated_count,
 			'skipped_count'  => $skipped_count,
 			'total_scanned'  => count( $product_ids ),
+		] );
+	}
+
+	/**
+	 * REST Endpoint: Auto-detect and sync device families and size multipliers catalog-wide
+	 */
+	public static function rest_sync_device_families( WP_REST_Request $request ): WP_REST_Response {
+		$args = [
+			'post_type'      => 'product',
+			'post_status'    => [ 'publish', 'draft' ],
+			'posts_per_page' => -1,
+			'fields'         => 'ids',
+		];
+
+		$product_ids = get_posts( $args );
+		$updated_devices = [];
+		$total_scanned = 0;
+
+		foreach ( $product_ids as $pid ) {
+			$product = wc_get_product( $pid );
+			if ( ! $product ) {
+				continue;
+			}
+
+			$p_name = $product->get_name();
+			$p_slug = $product->get_slug();
+			$cats = wp_get_post_terms( $pid, 'product_cat', [ 'fields' => 'names' ] );
+
+			$modern_profile = get_post_meta( $pid, self::PROFILE_META_KEY, true );
+			if ( empty( $modern_profile ) ) {
+				continue;
+			}
+
+			$total_scanned++;
+			$profile_data = is_array( $modern_profile ) ? $modern_profile : json_decode( $modern_profile, true );
+			if ( ! is_array( $profile_data ) ) {
+				$profile_data = json_decode( wp_unslash( $modern_profile ), true );
+			}
+			if ( ! is_array( $profile_data ) ) {
+				continue;
+			}
+
+			$current_fam = $profile_data['family'] ?? '';
+			$current_mult = isset( $profile_data['size_multiplier'] ) ? (float) $profile_data['size_multiplier'] : 0;
+			$inferred = self::infer_device_family( $p_name, $p_slug, $cats );
+
+			$needs_save = false;
+			$next_fam = $current_fam;
+			$next_mult = $current_mult;
+
+			if ( empty( $current_fam ) || ( $current_fam === 'phone' && $inferred['family'] !== 'phone' ) ) {
+				$next_fam = $inferred['family'];
+				$next_mult = $inferred['size_multiplier'];
+				$needs_save = true;
+			} elseif ( in_array( $current_fam, [ 'laptop', 'tablet', 'keyboard', 'console' ], true ) && ( $current_mult <= 1.0 || in_array( $current_mult, [ 2.5, 1.8 ], true ) ) ) {
+				$next_mult = 2.0;
+				$needs_save = true;
+			} elseif ( $current_fam === 'foldable' && $current_mult <= 1.0 ) {
+				$next_mult = 1.3;
+				$needs_save = true;
+			}
+
+			if ( $needs_save ) {
+				$profile_data['family'] = $next_fam;
+				$profile_data['size_multiplier'] = $next_mult;
+				$json_str = wp_json_encode( $profile_data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+				update_post_meta( $pid, self::PROFILE_META_KEY, wp_slash( $json_str ) );
+				update_post_meta( $pid, '_device_family', $next_fam );
+				update_post_meta( $pid, '_size_multiplier', $next_mult );
+
+				$updated_devices[] = [
+					'product_id'   => $pid,
+					'name'         => $p_name,
+					'old_family'   => $current_fam ?: 'phone',
+					'new_family'   => $next_fam,
+					'old_mult'     => $current_mult ?: 1.0,
+					'new_mult'     => $next_mult,
+				];
+			}
+		}
+
+		return rest_ensure_response( [
+			'success'         => true,
+			'total_scanned'   => $total_scanned,
+			'updated_count'   => count( $updated_devices ),
+			'updated_devices' => $updated_devices,
+			'message'         => 'Device families and size multipliers successfully synchronized catalog-wide.',
 		] );
 	}
 

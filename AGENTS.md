@@ -1177,3 +1177,27 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Canvas element drop shadow is standardized to `filter drop-shadow-[0_0_1.5px_rgba(0,0,0,0.28)]` with 0 offset.
   - Directional inner shading applies strictly to primary body skins (`l.group === 'primary'`), never to secondary accent or camera trim strips. This ensures accent strips maintain subtle, uniform vinyl bevels on all sides.
 
+---
+
+## 41. Device Family Multi-Attribute Heuristic Inference & Universal Pricing Multipliers
+
+- **The Problem & Root Cause**:
+  - Legacy MKL products imported into the configurator previously defaulted `family` to `'phone'` with `size_multiplier: 1.0` because inference evaluated only the primary brand category (e.g. "Samsung", "Xiaomi", "Microsoft") rather than the product title or slug.
+  - As a result, large devices like Galaxy Tab (S10 Ultra, S9+, S8, etc.), Xiaomi Pad, and Microsoft Surface were charged the standard phone rate for signature finishes (+IDR 30,000) instead of the proper large-format tablet rate (+IDR 60,000).
+- **Multi-Attribute Heuristic Regex Invariant (`infer_device_family`)**:
+  - The inference engine evaluates product title, slug, and category taxonomy with word boundary regexes:
+    - **Tablets** (`/\b(tab|pad|surface pro|surface go|tablet|ipad)\b/i`): family `'tablet'`, multiplier `2.0`.
+    - **Laptops** (`/\b(macbook|xps|laptop|notebook|zenbook|thinkpad|blade|surface laptop|surface book|realme book|galaxy book|redmibook)\b/i`): family `'laptop'`, multiplier `2.0`.
+    - **Foldables** (`/\b(fold|flip|razr)\b/i`): family `'foldable'`, multiplier `1.3`.
+    - **Keyboards** (`/\b(keyboard|folio|book cover)\b/i`): family `'keyboard'`, multiplier `2.0`.
+    - **Consoles** (`/\b(deck|rog ally|legion go|switch|playstation|ps5|ps4|xbox|console)\b/i`): family `'console'`, multiplier `2.0`.
+    - **Accessories** (`/\b(pencil|airpods|buds|watch)\b/i`): family `'accessory'`, multiplier `0.8`.
+    - **Default**: family `'phone'`, multiplier `1.0`.
+- **Auto-Healing & Central Database Sync (`sync-device-families`)**:
+  - Auto-heals in `rest_get_configurator_profiles` and `rest_get_product_configurator` on query.
+  - Dedicated endpoint `POST /wp-json/exacoat-core/v1/configurator/sync-device-families` synchronizes all catalog products across WordPress post meta in a single atomic pass.
+  - Studio top bar provides a "Sync Families" quick-action button with real-time feedback toast.
+- **Storefront Fallback & High-Resolution Asset Scaling (`exacoat-web`)**:
+  - Added fallback `inferWebDeviceFamily` in `lib/server/configurator-loader.ts` to ensure tablets, foldables, and laptops always receive correct pricing size multipliers even before background database sync.
+  - Updated `isLargeDevice` in `device-skin-configurator.tsx` and `stacked-layer-canvas.tsx` to include `tablet_laptop`, `keyboard`, `console`, and any device with `size_multiplier >= 1.5`, ensuring proper high-res texture sizing across all large form factors.
+

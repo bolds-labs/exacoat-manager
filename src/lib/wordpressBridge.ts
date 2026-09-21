@@ -3518,6 +3518,45 @@ export async function revalidateStorefrontWebDirect(params?: {
   }
 }
 
+export interface DeviceFamilySyncResponse {
+  success: boolean;
+  total_scanned?: number;
+  updated_count?: number;
+  updated_devices?: Array<{
+    product_id: number;
+    name: string;
+    old_family: string;
+    new_family: string;
+    old_mult: number;
+    new_mult: number;
+  }>;
+  message?: string;
+  error?: string;
+}
+
+export async function syncDeviceFamiliesDirect(): Promise<DeviceFamilySyncResponse> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/configurator/sync-device-families`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    });
+    const data = await res.json();
+    return {
+      success: res.ok && !!data?.success,
+      total_scanned: data?.total_scanned,
+      updated_count: data?.updated_count,
+      updated_devices: data?.updated_devices,
+      message: data?.message,
+      error: data?.error || data?.message,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 // ==========================================
 // Tracking Number Pool & Auto-Resi Engine
 // ==========================================

@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.06] - 2026-09-21
+
+### Multi-Attribute Device Family Inference & Universal Size Pricing Multipliers
+- **Multi-Attribute Device Family Inference Engine (`infer_device_family`)**:
+  - Implemented multi-attribute heuristic regex engine analyzing product name, slug, and category taxonomy hierarchy to classify device families and assign correct pricing size multipliers:
+    - **Tablets** (`/\b(tab|pad|surface pro|surface go|tablet|ipad)\b/i`): family `'tablet'`, multiplier `2.0x`. Corrects Galaxy Tab (S10 Ultra, S9+, S8, etc.), Xiaomi Pad, and Microsoft Surface devices previously misclassified as phones.
+    - **Laptops** (`/\b(macbook|xps|laptop|notebook|zenbook|thinkpad|blade|surface laptop|surface book|realme book|galaxy book|redmibook)\b/i`): family `'laptop'`, multiplier `2.0x`.
+    - **Foldables** (`/\b(fold|flip|razr)\b/i`): family `'foldable'`, multiplier `1.3x`. Corrects Galaxy Z Fold and Flip devices.
+    - **Keyboards** (`/\b(keyboard|folio|book cover)\b/i`): family `'keyboard'`, multiplier `2.0x`. Corrects Magic Keyboard and Book Cover accessories.
+    - **Consoles** (`/\b(deck|rog ally|legion go|switch|playstation|ps5|ps4|xbox|console)\b/i`): family `'console'`, multiplier `2.0x`.
+    - **Smartphones**: family `'phone'`, multiplier `1.0x`.
+  - Audited all 215 catalog products: accurately classified 18 tablets, 5 laptops, 9 keyboards, and 12 foldables with zero false positives.
+- **REST Auto-Healing & Central Database Sync**:
+  - Auto-heals legacy profiles on demand in `rest_get_configurator_profiles` and `rest_get_product_configurator`, persisting corrected family and size multiplier to WordPress post meta (`_is_configurator_profile`).
+  - Added dedicated endpoint `POST /wp-json/exacoat-core/v1/configurator/sync-device-families` to perform catalog-wide family and size multiplier updates in a single atomic operation.
+- **Configurator Studio Sync & Selection Controls**:
+  - Added "Sync Families" quick-action button in the Configurator Studio catalog toolbar with real-time feedback toast.
+  - Expanded Device Family dropdown in Studio Settings to support all 7 families (`phone` 1.0x, `tablet` 2.0x, `laptop` 2.0x, `foldable` 1.3x, `keyboard` 2.0x, `console` 2.0x, `accessory` 0.8x).
+- **Storefront Fallback & High-Resolution Asset Scaling (`exacoat-web`)**:
+  - Added client-side and server-side fallback `inferWebDeviceFamily` in `lib/server/configurator-loader.ts` to ensure tablets, foldables, and laptops always receive correct pricing size multipliers even before background database sync.
+  - Updated `isLargeDevice` in `device-skin-configurator.tsx` and `stacked-layer-canvas.tsx` to include `tablet_laptop`, `keyboard`, `console`, and any device with `size_multiplier >= 1.5`, ensuring proper high-res texture sizing across all large form factors.
+
 ## [0.1.05] - 2026-09-21
 
 ### Seamless Master Texture Tiling, Configurable Generated Shading & Soft Ambient Drop Shadows
