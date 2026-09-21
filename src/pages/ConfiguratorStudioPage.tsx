@@ -39,6 +39,7 @@ import {
   DeviceFamily,
   DeviceCoverageAndCutouts,
   ConfiguratorVariant,
+  GeneratedShadowConfig,
 } from '../types';
 import {
   Layers,
@@ -88,6 +89,7 @@ import {
   RotateCw,
   Maximize2,
   Sun,
+  Sparkles,
   Lock,
   Package,
   ArrowLeftRight,
@@ -248,64 +250,111 @@ interface V2SkinCanvasLayerProps {
   modelCutoutUrl?: string;
   zIndex: number;
   layerName: string;
+  layerGroup?: 'primary' | 'accent' | 'protection' | 'addon';
   textureRotation?: number;
   textureScale?: number;
   hasViewShadow?: boolean;
+  generatedShadowConfig?: GeneratedShadowConfig;
 }
 
 /**
  * Directional edge bevel and inner shading simulation.
- * Active when a device model does not have pre-baked 3D raytraced shadow maps.
- * Simulates top-left incident lighting:
- * - Top & Left edges catch subtle specular rim highlight (screen blend)
- * - Bottom & Right edges cast inner drop shadow (multiply blend)
+ * Simulates directional incident lighting with smooth Gaussian blur falloff:
+ * - Shadow cast towards bottom-right (or inverted towards top-left)
+ * - Specular rim highlight caught on top-left (or bottom-right)
  */
 function applySyntheticDirectionalShading(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  options?: { shadowOpacity?: number; highlightOpacity?: number }
+  options?: GeneratedShadowConfig
 ) {
-  const shadowAlpha = options?.shadowOpacity ?? 0.55;
-  const highlightAlpha = options?.highlightOpacity ?? 0.35;
+  if (options?.enabled === false) return;
 
-  const tempCanvas = document.createElement('canvas');
-  tempCanvas.width = width;
-  tempCanvas.height = height;
-  const tempCtx = tempCanvas.getContext('2d');
-  if (!tempCtx) return;
+  const softness = typeof options?.softness === 'number' ? options.softness : 6;
+  const distance = typeof options?.distance === 'number' ? options.distance : 3;
+  const shadowAlpha = typeof options?.shadow_opacity === 'number' ? options.shadow_opacity : 0.40;
+  const highlightAlpha = typeof options?.highlight_opacity === 'number' ? options.highlight_opacity : 0.25;
+  const isBottomRight = (options?.direction ?? 'bottom_right') === 'bottom_right';
 
-  // 1. Right & Bottom inner shadow (light from top-left, shadow cast towards bottom-right)
-  tempCtx.clearRect(0, 0, width, height);
-  tempCtx.drawImage(ctx.canvas, 0, 0);
-  tempCtx.globalCompositeOperation = 'source-in';
-  tempCtx.fillStyle = '#000000';
-  tempCtx.fillRect(0, 0, width, height);
-  // Subtract shape shifted up-left (-2px, -2px) so only bottom & right rim remains
-  tempCtx.globalCompositeOperation = 'destination-out';
-  tempCtx.drawImage(ctx.canvas, -2, -2);
-  // Apply inner shadow with multiply
-  ctx.save();
-  ctx.globalCompositeOperation = 'multiply';
-  ctx.globalAlpha = shadowAlpha;
-  ctx.drawImage(tempCanvas, 0, 0);
-  ctx.restore();
+  // Shadow offset (cast towards bottom-right by default: +X, +Y)
+  const shadowDx = isBottomRight ? distance : -distance;
+  const shadowDy = isBottomRight ? distance : -distance;
 
-  // 2. Top & Left specular highlight (light from top-left, highlight caught on top-left edge)
-  tempCtx.clearRect(0, 0, width, height);
-  tempCtx.drawImage(ctx.canvas, 0, 0);
-  tempCtx.globalCompositeOperation = 'source-in';
-  tempCtx.fillStyle = '#ffffff';
-  tempCtx.fillRect(0, 0, width, height);
-  // Subtract shape shifted down-right (+1.5px, +1.5px) so only top & left rim remains
-  tempCtx.globalCompositeOperation = 'destination-out';
-  tempCtx.drawImage(ctx.canvas, 1.5, 1.5);
-  // Apply highlight with screen
-  ctx.save();
-  ctx.globalCompositeOperation = 'screen';
-  ctx.globalAlpha = highlightAlpha;
-  ctx.drawImage(tempCanvas, 0, 0);
-  ctx.restore();
+  // Highlight offset (caught on top-left by default: -X, -Y)
+  const hlDx = -shadowDx;
+  const hlDy = -shadowDy;
+
+  // 1. Offscreen buffer for inverted silhouette (surrounding area & holes)
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = width;
+  maskCanvas.height = height;
+  const maskCtx = maskCanvas.getContext('2d');
+  if (!maskCtx) return;
+
+  maskCtx.drawImage(ctx.canvas, 0, 0);
+  maskCtx.globalCompositeOperation = 'source-in';
+  maskCtx.fillStyle = '#000000';
+  maskCtx.fillRect(0, 0, width, height);
+
+  const invertCanvas = document.createElement('canvas');
+  invertCanvas.width = width;
+  invertCanvas.height = height;
+  const invCtx = invertCanvas.getContext('2d');
+  if (!invCtx) return;
+
+  invCtx.fillStyle = '#000000';
+  invCtx.fillRect(0, 0, width, height);
+  invCtx.globalCompositeOperation = 'destination-out';
+  invCtx.drawImage(maskCanvas, 0, 0);
+
+  // 2. Render Soft Inner Shadow cast towards bottom-right
+  if (shadowAlpha > 0) {
+    const shadowCanvas = document.createElement('canvas');
+    shadowCanvas.width = width;
+    shadowCanvas.height = height;
+    const sCtx = shadowCanvas.getContext('2d');
+    if (sCtx) {
+      sCtx.filter = `blur(${softness}px)`;
+      sCtx.drawImage(invertCanvas, shadowDx, shadowDy);
+
+      sCtx.filter = 'none';
+      sCtx.globalCompositeOperation = 'destination-in';
+      sCtx.drawImage(maskCanvas, 0, 0);
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.globalAlpha = shadowAlpha;
+      ctx.drawImage(shadowCanvas, 0, 0);
+      ctx.restore();
+    }
+  }
+
+  // 3. Render Soft Rim Highlight caught on top-left
+  if (highlightAlpha > 0) {
+    const hlCanvas = document.createElement('canvas');
+    hlCanvas.width = width;
+    hlCanvas.height = height;
+    const hCtx = hlCanvas.getContext('2d');
+    if (hCtx) {
+      hCtx.filter = `blur(${Math.max(1, softness * 0.6)}px)`;
+      hCtx.drawImage(invertCanvas, hlDx, hlDy);
+
+      hCtx.filter = 'none';
+      hCtx.globalCompositeOperation = 'destination-in';
+      hCtx.drawImage(maskCanvas, 0, 0);
+
+      hCtx.globalCompositeOperation = 'source-in';
+      hCtx.fillStyle = '#ffffff';
+      hCtx.fillRect(0, 0, width, height);
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = highlightAlpha;
+      ctx.drawImage(hlCanvas, 0, 0);
+      ctx.restore();
+    }
+  }
 }
 
 const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
@@ -317,9 +366,11 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
   modelCutoutUrl,
   zIndex,
   layerName,
+  layerGroup,
   textureRotation = 0,
   textureScale = 1.0,
   hasViewShadow = false,
+  generatedShadowConfig,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -360,27 +411,51 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
       ctx.clearRect(0, 0, 1000, 1000);
       if (!maskImg && !texImg) return;
 
-      // 1. Draw master texture with native aspect-ratio cover scaling, rotation, and zoom
+      // 1. Draw master texture with seamless pattern tiling, rotation, and scale
       if (texImg && texImg.width > 0 && texImg.height > 0) {
         if (maskImg) {
           const rot = (textureRotation || 0) % 360;
-          const isRotated90 = rot === 90 || rot === 270;
-          const effectiveTexW = isRotated90 ? texImg.height : texImg.width;
-          const effectiveTexH = isRotated90 ? texImg.width : texImg.height;
-          const isFullSquare = !isRotated90 && texImg.width === 1000 && texImg.height === 1000;
-          const baseScale = Math.max(1000 / effectiveTexW, 1000 / effectiveTexH);
           const zoom = typeof textureScale === 'number' && textureScale > 0 ? textureScale : 1.0;
-          const effectiveScale = isFullSquare ? zoom : baseScale * zoom;
+          const baseScale = Math.max(1000 / texImg.width, 1000 / texImg.height);
+          const scale = baseScale * zoom;
 
-          ctx.save();
-          ctx.translate(500, 500);
-          if (rot !== 0) {
-            ctx.rotate((rot * Math.PI) / 180);
+          let patternPainted = false;
+          try {
+            const pattern = ctx.createPattern(texImg, 'repeat');
+            if (pattern) {
+              const matrix = new DOMMatrix();
+              matrix.translateSelf(500, 500);
+              if (rot !== 0) {
+                matrix.rotateSelf(rot);
+              }
+              matrix.scaleSelf(scale, scale);
+              matrix.translateSelf(-texImg.width / 2, -texImg.height / 2);
+              pattern.setTransform(matrix);
+              ctx.fillStyle = pattern;
+              ctx.fillRect(0, 0, 1000, 1000);
+              patternPainted = true;
+            }
+          } catch {
+            patternPainted = false;
           }
-          const drawW = isFullSquare ? 1000 * zoom : texImg.width * effectiveScale;
-          const drawH = isFullSquare ? 1000 * zoom : texImg.height * effectiveScale;
-          ctx.drawImage(texImg, -drawW / 2, -drawH / 2, drawW, drawH);
-          ctx.restore();
+
+          if (!patternPainted) {
+            // Fallback: scale drawImage sufficiently so rotation and zoom never leave empty borders
+            const rotRad = (rot * Math.PI) / 180;
+            const cos = Math.abs(Math.cos(rotRad));
+            const sin = Math.abs(Math.sin(rotRad));
+            const neededW = 1000 * cos + 1000 * sin;
+            const neededH = 1000 * sin + 1000 * cos;
+            const coverScale = Math.max(neededW / texImg.width, neededH / texImg.height, 1.0);
+            const drawW = texImg.width * coverScale;
+            const drawH = texImg.height * coverScale;
+
+            ctx.save();
+            ctx.translate(500, 500);
+            if (rot !== 0) ctx.rotate(rotRad);
+            ctx.drawImage(texImg, -drawW / 2, -drawH / 2, drawW, drawH);
+            ctx.restore();
+          }
         } else {
           // Pre-cut texture overlay drawn directly on 1000x1000 canvas
           ctx.drawImage(texImg, 0, 0, 1000, 1000);
@@ -415,9 +490,14 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
         ctx.drawImage(modelCutoutImg, 0, 0, 1000, 1000);
       }
 
-      // 6. Synthetic Directional Bevel & Inner Shading (when view has no 3D raytraced shadow map)
-      if (!hasViewShadow && maskImg) {
-        applySyntheticDirectionalShading(ctx, 1000, 1000);
+      // 6. Directional Bevel & Inner Shading (only when explicitly enabled, or on primary skin without 3D shadow map)
+      const isPrimaryLayer = !layerGroup || layerGroup === 'primary' || layerName.toLowerCase().includes('back');
+      const shouldApplyGeneratedShadow =
+        isPrimaryLayer &&
+        (generatedShadowConfig?.enabled ?? (!hasViewShadow && Boolean(maskImg)));
+
+      if (shouldApplyGeneratedShadow && maskImg) {
+        applySyntheticDirectionalShading(ctx, 1000, 1000, generatedShadowConfig);
       }
 
       // Reset composite operation to normal
@@ -427,7 +507,7 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
     return () => {
       isCancelled = true;
     };
-  }, [maskUrl, textureUrl, fallbackColor, logoCutoutUrl, pencilCutoutUrl, modelCutoutUrl, textureRotation, textureScale, hasViewShadow]);
+  }, [maskUrl, textureUrl, fallbackColor, logoCutoutUrl, pencilCutoutUrl, modelCutoutUrl, textureRotation, textureScale, hasViewShadow, generatedShadowConfig, layerGroup, layerName]);
 
   return (
     <canvas
@@ -435,7 +515,7 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
       width={1000}
       height={1000}
       style={{ zIndex }}
-      className="absolute inset-0 w-full h-full object-contain pointer-events-none filter drop-shadow-[0_0.75px_1.5px_rgba(0,0,0,0.38)]"
+      className="absolute inset-0 w-full h-full object-contain pointer-events-none filter drop-shadow-[0_0_1.5px_rgba(0,0,0,0.28)]"
       title={layerName}
     />
   );
@@ -7266,9 +7346,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   modelCutoutUrl={effectiveModelCutout}
                                   zIndex={(l.z_index || 1) + 5}
                                   layerName={l.name}
+                                  layerGroup={l.group}
                                   textureRotation={l.texture_rotation ?? 0}
                                   textureScale={currentView?.texture_scale ?? editingProfile.texture_scale ?? l.texture_scale ?? 1.0}
                                   hasViewShadow={hasViewShadow}
+                                  generatedShadowConfig={currentView?.generated_shadow}
                                 />
                               );
                             }
@@ -9219,6 +9301,194 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         </button>
                                       </div>
                                     </div>
+
+                                    {/* Generated 3D Shading & Specular Bevel Card */}
+                                    {(() => {
+                                      const genShadow = currentView.generated_shadow || {};
+                                      const hasViewShadow = Boolean(currentView.shadow_png_url || currentView.shading_image_url || currentView.highlight_png_url);
+                                      const isGenEnabled = genShadow.enabled ?? (!hasViewShadow);
+                                      const softness = genShadow.softness ?? 6;
+                                      const distance = genShadow.distance ?? 3;
+                                      const shadowOpacity = Math.round((genShadow.shadow_opacity ?? 0.40) * 100);
+                                      const highlightOpacity = Math.round((genShadow.highlight_opacity ?? 0.25) * 100);
+                                      const direction = genShadow.direction ?? 'bottom_right';
+
+                                      const updateGenShadow = (patch: Partial<GeneratedShadowConfig>) => {
+                                        const current = currentView.generated_shadow || {};
+                                        handleSetViewField(currentView.id, 'generated_shadow', {
+                                          ...current,
+                                          ...patch,
+                                        });
+                                      };
+
+                                      return (
+                                        <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3">
+                                          <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-1.5">
+                                              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                                              <span className="text-xs font-bold text-white">Generated 3D Directional Shading</span>
+                                              <InfoTooltip content="Generates soft incident directional lighting, inner bevel, and edge highlights directly from the vinyl alpha mask. Ideal when 3D raytraced shadow PNG maps are unavailable." />
+                                            </div>
+                                            <button
+                                              type="button"
+                                              onClick={() => updateGenShadow({ enabled: !isGenEnabled })}
+                                              className={clsx(
+                                                'px-2.5 py-0.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer border',
+                                                isGenEnabled
+                                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                                                  : 'bg-zinc-800 text-zinc-400 border-white/10 hover:text-zinc-200'
+                                              )}
+                                            >
+                                              {isGenEnabled ? 'Enabled' : 'Disabled'}
+                                            </button>
+                                          </div>
+
+                                          <p className="text-[11px] text-zinc-400">
+                                            Simulates directional light falloff with Gaussian blur, casting shadow towards the {direction === 'bottom_right' ? 'bottom-right' : 'top-left'} of cutouts and edges.
+                                          </p>
+
+                                          {isGenEnabled && (
+                                            <div className="space-y-3 pt-2 border-t border-white/5">
+                                              {/* Direction Toggle */}
+                                              <div className="flex items-center justify-between">
+                                                <span className="text-[11px] text-zinc-300">Light Direction:</span>
+                                                <div className="inline-flex rounded-lg bg-zinc-800 p-0.5 border border-white/10 text-[10px]">
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => updateGenShadow({ direction: 'bottom_right' })}
+                                                    className={clsx(
+                                                      'px-2 py-0.5 rounded-md font-medium transition-colors cursor-pointer',
+                                                      direction === 'bottom_right'
+                                                        ? 'bg-amber-400/20 text-amber-300 font-semibold shadow-sm'
+                                                        : 'text-zinc-400 hover:text-zinc-200'
+                                                    )}
+                                                  >
+                                                    Bottom-Right (Standard)
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => updateGenShadow({ direction: 'top_left' })}
+                                                    className={clsx(
+                                                      'px-2 py-0.5 rounded-md font-medium transition-colors cursor-pointer',
+                                                      direction === 'top_left'
+                                                        ? 'bg-amber-400/20 text-amber-300 font-semibold shadow-sm'
+                                                        : 'text-zinc-400 hover:text-zinc-200'
+                                                    )}
+                                                  >
+                                                    Top-Left (Inverted)
+                                                  </button>
+                                                </div>
+                                              </div>
+
+                                              {/* Softness (Blur) */}
+                                              <div className="space-y-1">
+                                                <div className="flex items-center justify-between text-[11px]">
+                                                  <span className="text-zinc-300">Shadow Softness (Blur):</span>
+                                                  <span className="font-mono text-amber-300 text-[10px]">{softness}px</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-[9px] font-mono text-zinc-500">1px</span>
+                                                  <input
+                                                    type="range"
+                                                    min="1"
+                                                    max="16"
+                                                    step="1"
+                                                    value={softness}
+                                                    onChange={(e) => updateGenShadow({ softness: Number(e.target.value) })}
+                                                    className="w-full accent-amber-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg appearance-none"
+                                                  />
+                                                  <span className="text-[9px] font-mono text-zinc-500">16px</span>
+                                                </div>
+                                              </div>
+
+                                              {/* Distance (Offset) */}
+                                              <div className="space-y-1">
+                                                <div className="flex items-center justify-between text-[11px]">
+                                                  <span className="text-zinc-300">Shadow Distance:</span>
+                                                  <span className="font-mono text-amber-300 text-[10px]">{distance}px</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-[9px] font-mono text-zinc-500">1px</span>
+                                                  <input
+                                                    type="range"
+                                                    min="1"
+                                                    max="10"
+                                                    step="1"
+                                                    value={distance}
+                                                    onChange={(e) => updateGenShadow({ distance: Number(e.target.value) })}
+                                                    className="w-full accent-amber-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg appearance-none"
+                                                  />
+                                                  <span className="text-[9px] font-mono text-zinc-500">10px</span>
+                                                </div>
+                                              </div>
+
+                                              {/* Shadow Opacity */}
+                                              <div className="space-y-1">
+                                                <div className="flex items-center justify-between text-[11px]">
+                                                  <span className="text-zinc-300">Shadow Opacity:</span>
+                                                  <span className="font-mono text-amber-300 text-[10px]">{shadowOpacity}%</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-[9px] font-mono text-zinc-500">0%</span>
+                                                  <input
+                                                    type="range"
+                                                    min="0"
+                                                    max="100"
+                                                    step="5"
+                                                    value={shadowOpacity}
+                                                    onChange={(e) => updateGenShadow({ shadow_opacity: Number(e.target.value) / 100 })}
+                                                    className="w-full accent-amber-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg appearance-none"
+                                                  />
+                                                  <span className="text-[9px] font-mono text-zinc-500">100%</span>
+                                                </div>
+                                              </div>
+
+                                              {/* Highlight Opacity */}
+                                              <div className="space-y-1">
+                                                <div className="flex items-center justify-between text-[11px]">
+                                                  <span className="text-zinc-300">Specular Highlight Opacity:</span>
+                                                  <span className="font-mono text-amber-300 text-[10px]">{highlightOpacity}%</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-[9px] font-mono text-zinc-500">0%</span>
+                                                  <input
+                                                    type="range"
+                                                    min="0"
+                                                    max="100"
+                                                    step="5"
+                                                    value={highlightOpacity}
+                                                    onChange={(e) => updateGenShadow({ highlight_opacity: Number(e.target.value) / 100 })}
+                                                    className="w-full accent-amber-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg appearance-none"
+                                                  />
+                                                  <span className="text-[9px] font-mono text-zinc-500">100%</span>
+                                                </div>
+                                              </div>
+
+                                              {/* Reset Button */}
+                                              <div className="pt-1 flex justify-end">
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    updateGenShadow({
+                                                      enabled: true,
+                                                      softness: 6,
+                                                      distance: 3,
+                                                      shadow_opacity: 0.40,
+                                                      highlight_opacity: 0.25,
+                                                      direction: 'bottom_right',
+                                                    })
+                                                  }
+                                                  className="text-[10px] font-mono text-zinc-400 hover:text-white px-2 py-1 rounded bg-white/5 hover:bg-white/10 transition-colors border border-white/10 cursor-pointer"
+                                                  title="Reset to default shading values"
+                                                >
+                                                  Reset Shading Defaults
+                                                </button>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
 
                                     {/* Angle Texture Zoom / Scale Card */}
                                     <div className="space-y-3 bg-black/30 p-3.5 rounded-xl border border-white/5">

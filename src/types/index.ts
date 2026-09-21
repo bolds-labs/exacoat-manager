@@ -467,6 +467,15 @@ export type DeviceFamily = 'phone' | 'laptop' | 'tablet' | 'foldable' | 'keyboar
 
 export type CoverageType = 'none' | 'model_cut_only' | 'model_cut_and_360' | 'model_360_only';
 
+export interface GeneratedShadowConfig {
+  enabled?: boolean;
+  softness?: number;
+  distance?: number;
+  shadow_opacity?: number;
+  highlight_opacity?: number;
+  direction?: 'bottom_right' | 'top_left';
+}
+
 export interface ConfiguratorView {
   id: string;
   name: string;
@@ -486,6 +495,7 @@ export interface ConfiguratorView {
   highlight_opacity?: number;
   legacy_id?: number;
   texture_scale?: number;
+  generated_shadow?: GeneratedShadowConfig;
 }
 
 export interface ConfiguratorLayer {

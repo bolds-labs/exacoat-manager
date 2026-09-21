@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.05] - 2026-09-21
+
+### Seamless Master Texture Tiling, Configurable Generated Shading & Soft Ambient Drop Shadows
+- **Seamless Master Texture Tiling (`createPattern`)**:
+  - Replaced single `drawImage` with `ctx.createPattern(texImg, 'repeat')` and `DOMMatrix` rotation and scaling across both `exacoat-manager` and `exacoat-web`.
+  - Ensures master finishes seamlessly tile to fill the entire 1000x1000 canvas area prior to `destination-in` alpha mask clipping, permanently resolving horizontal and vertical clipping on accent strips and edge wraps (e.g. Galaxy S25 / S24 accents spanning Y=8 to Y=991).
+  - Includes robust geometric bounding box fallback if pattern creation fails.
+- **Configurable Generated 3D Directional Shading**:
+  - Inverted default directional shadow vector from top-left to bottom-right (+distance, +distance) so inner bevels and cutout holes (such as camera rings and ports) naturally cast shadows downwards and rightwards.
+  - Replaced binary pixel offset subtraction with smooth Gaussian blur (`filter: blur(...)`), producing soft, photorealistic ambient contact bevels.
+  - Added interactive **Generated 3D Directional Shading** settings card under "Angle 3D Shading & Highlights" in Configurator Studio with live on/off toggle and custom sliders:
+    - Shadow Softness (1px to 16px, default 6px).
+    - Shadow Distance (1px to 10px, default 3px).
+    - Shadow Opacity (0% to 100%, default 40%).
+    - Specular Highlight Opacity (0% to 100%, default 25%).
+    - Direction toggle (Bottom-Right standard vs Top-Left inverted).
+    - One-click reset to recommended defaults.
+- **Soft Omnidirectional Ambient Drop Shadow**:
+  - Softened canvas drop shadow for all skin layers to `filter drop-shadow-[0_0_1.5px_rgba(0,0,0,0.28)]` with zero offset.
+  - Directional inner shading is strictly scoped to primary body skin layers, preventing secondary accent and camera trim strips from receiving harsh directional shading.
+
 ## [0.1.04] - 2026-09-21
 
 ### Universal v2 Migration, Synthetic Directional Shading & Catalog Case Isolation

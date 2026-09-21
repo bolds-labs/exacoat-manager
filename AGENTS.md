@@ -1150,3 +1150,30 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Non-customizable protective accessories (such as Dusk Hybrid Cases) must be explicitly flagged with `_is_configurator: 'no'` via `POST /configurator/toggle-configurator`.
   - This ensures non-skin merchandise does not pollute Configurator Studio listings or trigger false positives during asset integrity audits.
 
+---
+
+## 40. Seamless Master Texture Tiling & Configurable Generated 3D Shading
+
+- **Seamless Master Texture Tiling Invariant (`createPattern` with `DOMMatrix`)**:
+  - In modern v2 rendering, skin textures must cover the entire 1000x1000 viewport before being clipped by the layer alpha mask (`destination-in`).
+  - Drawing a single rotated texture with `drawImage` shrinks its bounding box on rotated aspects (e.g. 90-degree rotated texture with 0.75 zoom creates a 750px box on a 1000px canvas), causing vertical accent strips (such as Galaxy S25 / S24 accents spanning Y=8 to Y=991) to get clipped at the top and bottom.
+  - **The Invariant**: Always draw textures using `ctx.createPattern(texImg, 'repeat')` with a `DOMMatrix` applying center translation, rotation, and scaling. This ensures infinite seamless tiling across the entire canvas area prior to mask clipping.
+  - A fallback `drawImage` bounding box calculation (`1000 * cos + 1000 * sin`) must also be maintained in case pattern initialization fails.
+
+- **Configurable Generated 3D Directional Shading Architecture**:
+  - Directional shadow vector is cast towards **bottom-right** (+distance, +distance) by default, ensuring internal cutouts (such as camera rings, holes, and ports) receive realistic shadows on their lower and right borders.
+  - Specular rim highlights are caught on **top-left** (-distance, -distance).
+  - Hard binary pixel subtraction is strictly replaced with smooth Gaussian blur (`filter: blur(${softness}px)`), creating soft photorealistic bevels without harsh edges.
+  - Settings are persisted in view metadata via `currentView.generated_shadow` (`GeneratedShadowConfig`):
+    - `enabled`: boolean toggle.
+    - `softness`: 1px to 16px (default 6px).
+    - `distance`: 1px to 10px (default 3px).
+    - `shadow_opacity`: 0% to 100% (default 40%).
+    - `highlight_opacity`: 0% to 100% (default 25%).
+    - `direction`: 'bottom_right' or 'top_left'.
+  - Studio provides interactive sliders and live toggles under "Angle 3D Shading & Highlights".
+
+- **Ambient Omnidirectional Drop Shadow on Secondary Layers**:
+  - Canvas element drop shadow is standardized to `filter drop-shadow-[0_0_1.5px_rgba(0,0,0,0.28)]` with 0 offset.
+  - Directional inner shading applies strictly to primary body skins (`l.group === 'primary'`), never to secondary accent or camera trim strips. This ensures accent strips maintain subtle, uniform vinyl bevels on all sides.
+
