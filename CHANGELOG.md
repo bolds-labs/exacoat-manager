@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.04] - 2026-09-21
+
+### Universal v2 Migration, Synthetic Directional Shading & Catalog Case Isolation
+- **Universal Catalog v2 Migration (100% v2 Modern Engine)**:
+  - Migrated Galaxy S25+ (`#523445`) to modern v2 with authentic `Galaxy-S25-Shadows.png`, `Galaxy-S25-Skins-Matte-Black.png`, rotated accents (90 deg), and `Galaxy-S25-Camera-Matte-Black.png`.
+  - Migrated Galaxy S24+ (`#508106`) with authentic `Galaxy-S24-Shadows.png` and masks inherited from Galaxy S24 (`#508107`).
+  - Migrated all 126 remaining legacy v1 device skins across the entire WooCommerce catalog to modern v2, extracting layer alpha masks directly from `matte-black` skin assets and pruning redundant legacy slice texture maps.
+  - Verified catalog status: 215 active configurators on v2 (100% of device catalog, 0 remaining on v1).
+- **Synthetic Directional Edge Shading Engine**:
+  - Implemented real-time dynamic canvas shading (`applySyntheticDirectionalShading`) across both `exacoat-web` (`stacked-layer-canvas.tsx`) and `exacoat-manager` (`ConfiguratorStudioPage.tsx`).
+  - For devices without pre-baked 3D raytraced shadow maps (`!hasViewShadow`), automatically simulates top-left incident studio lighting:
+    - Specular rim highlight on top and left edges (`screen` blend mode, opacity 0.35).
+    - Inner drop shadow on bottom and right edges (`multiply` blend mode, opacity 0.55).
+  - Eliminates flat appearances on legacy devices while preserving baked 3D raytraced shadows for models with dedicated shadow PNGs.
+- **Catalog Scope & Dusk Hybrid Case Isolation**:
+  - Excluded 19 Dusk Hybrid Case items from active configurators (`_is_configurator: 'no'`), keeping Configurator Studio focused strictly on customizable skin devices.
+- **Storefront Edge Cache Revalidation**:
+  - Dispatched full catalog revalidation across Next.js and Cloudflare edge networks via `/wp-json/exacoat-core/v1/configurator/revalidate-web`.
+
 ## [0.1.03] - 2026-09-21
 
 ### Configurator Asset Discrepancy Repair, Sibling Inheritance, and Model 360° Unicode Sanitization

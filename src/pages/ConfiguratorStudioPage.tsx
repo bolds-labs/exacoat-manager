@@ -250,6 +250,62 @@ interface V2SkinCanvasLayerProps {
   layerName: string;
   textureRotation?: number;
   textureScale?: number;
+  hasViewShadow?: boolean;
+}
+
+/**
+ * Directional edge bevel and inner shading simulation.
+ * Active when a device model does not have pre-baked 3D raytraced shadow maps.
+ * Simulates top-left incident lighting:
+ * - Top & Left edges catch subtle specular rim highlight (screen blend)
+ * - Bottom & Right edges cast inner drop shadow (multiply blend)
+ */
+function applySyntheticDirectionalShading(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  options?: { shadowOpacity?: number; highlightOpacity?: number }
+) {
+  const shadowAlpha = options?.shadowOpacity ?? 0.55;
+  const highlightAlpha = options?.highlightOpacity ?? 0.35;
+
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = width;
+  tempCanvas.height = height;
+  const tempCtx = tempCanvas.getContext('2d');
+  if (!tempCtx) return;
+
+  // 1. Right & Bottom inner shadow (light from top-left, shadow cast towards bottom-right)
+  tempCtx.clearRect(0, 0, width, height);
+  tempCtx.drawImage(ctx.canvas, 0, 0);
+  tempCtx.globalCompositeOperation = 'source-in';
+  tempCtx.fillStyle = '#000000';
+  tempCtx.fillRect(0, 0, width, height);
+  // Subtract shape shifted up-left (-2px, -2px) so only bottom & right rim remains
+  tempCtx.globalCompositeOperation = 'destination-out';
+  tempCtx.drawImage(ctx.canvas, -2, -2);
+  // Apply inner shadow with multiply
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.globalAlpha = shadowAlpha;
+  ctx.drawImage(tempCanvas, 0, 0);
+  ctx.restore();
+
+  // 2. Top & Left specular highlight (light from top-left, highlight caught on top-left edge)
+  tempCtx.clearRect(0, 0, width, height);
+  tempCtx.drawImage(ctx.canvas, 0, 0);
+  tempCtx.globalCompositeOperation = 'source-in';
+  tempCtx.fillStyle = '#ffffff';
+  tempCtx.fillRect(0, 0, width, height);
+  // Subtract shape shifted down-right (+1.5px, +1.5px) so only top & left rim remains
+  tempCtx.globalCompositeOperation = 'destination-out';
+  tempCtx.drawImage(ctx.canvas, 1.5, 1.5);
+  // Apply highlight with screen
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = highlightAlpha;
+  ctx.drawImage(tempCanvas, 0, 0);
+  ctx.restore();
 }
 
 const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
@@ -263,6 +319,7 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
   layerName,
   textureRotation = 0,
   textureScale = 1.0,
+  hasViewShadow = false,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -358,6 +415,11 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
         ctx.drawImage(modelCutoutImg, 0, 0, 1000, 1000);
       }
 
+      // 6. Synthetic Directional Bevel & Inner Shading (when view has no 3D raytraced shadow map)
+      if (!hasViewShadow && maskImg) {
+        applySyntheticDirectionalShading(ctx, 1000, 1000);
+      }
+
       // Reset composite operation to normal
       ctx.globalCompositeOperation = 'source-over';
     });
@@ -365,7 +427,7 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
     return () => {
       isCancelled = true;
     };
-  }, [maskUrl, textureUrl, fallbackColor, logoCutoutUrl, pencilCutoutUrl, modelCutoutUrl, textureRotation, textureScale]);
+  }, [maskUrl, textureUrl, fallbackColor, logoCutoutUrl, pencilCutoutUrl, modelCutoutUrl, textureRotation, textureScale, hasViewShadow]);
 
   return (
     <canvas
@@ -7187,6 +7249,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               const effectivePencilCutout = shouldApplyPencilCutout ? pencilMaskUrl : undefined;
                               const effectiveModelCutout = shouldApplyModelCut ? modelCutMaskUrl : undefined;
 
+                              const hasViewShadow = Boolean(
+                                currentView?.shadow_png_url ||
+                                currentView?.shading_image_url ||
+                                currentView?.highlight_png_url
+                              );
+
                               return (
                                 <V2SkinCanvasLayer
                                   key={`v2-layer-${l.id}-${currentView?.id || 'main'}`}
@@ -7200,6 +7268,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   layerName={l.name}
                                   textureRotation={l.texture_rotation ?? 0}
                                   textureScale={currentView?.texture_scale ?? editingProfile.texture_scale ?? l.texture_scale ?? 1.0}
+                                  hasViewShadow={hasViewShadow}
                                 />
                               );
                             }

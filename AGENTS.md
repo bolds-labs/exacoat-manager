@@ -1129,3 +1129,24 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - On `web.exacoat.com` (`device-skin-configurator.tsx`), `effectivePresets` strictly checks `data.v2Profile?.presets`.
   - Fallback to global mock presets (`data.presets`) is strictly eliminated. If a device has 0 configured presets in its profile, the "Shop the Look" floating action button, eyebrow triggers, and presets modal are completely hidden from the viewport.
 
+---
+
+## 39. Universal Catalog v2 Migration & Synthetic Directional Edge Shading
+
+- **Universal Catalog v2 Modern Engine Invariant**:
+  - All customizable device skin products across the WooCommerce catalog run on the modern v2 engine (`configurator_version: 'v2'`).
+  - Layer alpha masks are extracted directly from authentic `matte-black` skin assets and persisted in `mask_svg_url` and `assets_by_view[viewId].mask_svg_url`.
+  - Redundant legacy finish slices (`render_texture_map`) are pruned from database storage, drastically reducing post meta size and eliminating legacy MKL rendering bottlenecks.
+  - Sibling models that share CAD dimensions (such as Galaxy S25+ from Galaxy S25, Galaxy S24+ from Galaxy S24) inherit authentic 3D raytraced shadow maps (`shadow_png_url`) and alpha masks.
+
+- **Synthetic Directional Edge Shading Invariant (`applySyntheticDirectionalShading`)**:
+  - When a device model does not have a pre-baked 3D raytraced shadow PNG (`!hasViewShadow`), the viewport must not look flat.
+  - Dynamic canvas shader simulates top-left incident studio lighting directly on the composited vinyl skin layer:
+    - **Top & Left Specular Highlight**: Renders rim highlight using `screen` blend mode (opacity 0.35, offset +1.5px, +1.5px with `destination-out` alpha subtraction).
+    - **Bottom & Right Inner Shadow**: Renders inner drop shadow using `multiply` blend mode (opacity 0.55, offset -2px, -2px with `destination-out` alpha subtraction).
+  - Active identically across both storefront (`exacoat-web/components/configurator/stacked-layer-canvas.tsx`) and back-office studio (`exacoat-manager/src/pages/ConfiguratorStudioPage.tsx`).
+
+- **Non-Configurator Case Isolation Invariant**:
+  - Non-customizable protective accessories (such as Dusk Hybrid Cases) must be explicitly flagged with `_is_configurator: 'no'` via `POST /configurator/toggle-configurator`.
+  - This ensures non-skin merchandise does not pollute Configurator Studio listings or trigger false positives during asset integrity audits.
+
