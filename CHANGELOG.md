@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.1.21] - 2026-09-23
+## [0.1.22] - 2026-09-23
+
+### Streamlined Asset Integrity Audit for v2 Modern Engine
+- **v2 Asset Pipeline Probing (`ConfiguratorStudioPage.tsx`)**:
+  - Streamlined both single-device and catalog-wide Asset Integrity Audits to probe the true v2 rendering pipeline: hardware chassis renders (`background_url`), body color variants (`device_colors`), skin layer alpha cut masks (`mask_svg_url`), cutout masks (`logo_cutout_mask_url`, `pencil_cutout_mask_url`, `model_cut_mask_url`), and overlays (`shadow_png_url`, `highlight_png_url`).
+  - Standard finishes inherit from global master textures in v2; eliminated probing obsolete finish slices, reducing probe volume by ~85% (~6-10 assets per device down from 60+) and preventing false-positive empty texture warnings.
+  - Dedicated custom finishes (`is_custom_per_device`) and legacy v1 finish slices continue to be audited thoroughly.
+- **Accurate Ghost Angle Detection**:
+  - Enhanced ghost angle evaluator: a viewing angle is classified as a ghost angle only if its chassis render is missing or broken (404) AND it contains 0 active skin alpha cut masks or custom textures.
+  - If an angle has active skin alpha masks but a broken chassis image, it is treated as a broken asset needing URL correction rather than a ghost angle, preventing accidental deletion of valid viewing angles.
+- **Enhanced Audit UI & Color-Coded Badges**:
+  - Upgraded audit modal UI with distinct, color-coded badges for each asset type: Chassis Render, Body Color, Skin Cut Mask, Cutout Mask, Overlay, Custom Artwork, and Legacy Texture.
+  - Updated empty counter label from "Empty Mappings" to "Empty Assets".
 
 ### Model Coverage Disabling & Clearing Architecture
 - **Model Coverage Disabling Resolution (`ConfiguratorStudioPage.tsx`, `class-configurator-engine.php`)**:

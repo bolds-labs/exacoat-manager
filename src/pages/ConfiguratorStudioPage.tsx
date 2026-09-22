@@ -111,7 +111,7 @@ import { WpMediaItem } from '../lib/wordpressBridge';
 
 export interface AssetAuditItem {
   id: string;
-  type: 'chassis' | 'texture' | 'overlay';
+  type: 'chassis' | 'color' | 'mask' | 'cutout' | 'overlay' | 'custom_texture' | 'texture';
   viewId: string;
   viewName: string;
   layerId?: string;
@@ -129,6 +129,7 @@ export interface GhostAngleReport {
   chassisStatus: 'healthy' | 'broken' | 'missing';
   chassisUrl: string;
   mappedTexturesCount: number;
+  hasSkinMasks?: boolean;
 }
 
 export interface AssetAuditReport {
@@ -2066,14 +2067,23 @@ export const ConfiguratorStudioPage: React.FC = () => {
     });
   };
 
-  const handleStartAssetAudit = async () => {
-    if (!editingProfile) return;
-    setIsAuditingAssets(true);
-    setShowAssetAuditModal(true);
-
-    const itemsToProbe: Array<{
+  const collectDeviceAuditItems = (
+    profile: DeviceConfiguratorProfile,
+    finishesList: GlobalFinish[]
+  ): Array<{
+    id: string;
+    type: 'chassis' | 'color' | 'mask' | 'cutout' | 'overlay' | 'custom_texture' | 'texture';
+    viewId: string;
+    viewName: string;
+    layerId?: string;
+    layerName?: string;
+    finishSlug?: string;
+    finishName?: string;
+    url: string;
+  }> => {
+    const items: Array<{
       id: string;
-      type: 'chassis' | 'texture' | 'overlay';
+      type: 'chassis' | 'color' | 'mask' | 'cutout' | 'overlay' | 'custom_texture' | 'texture';
       viewId: string;
       viewName: string;
       layerId?: string;
@@ -2083,33 +2093,222 @@ export const ConfiguratorStudioPage: React.FC = () => {
       url: string;
     }> = [];
 
-    // 1. Hardware chassis background URLs
-    (editingProfile.views || []).forEach((v) => {
-      itemsToProbe.push({
+    const isV2 = profile.configurator_version === 'v2';
+    const customFinishSlugs = new Set(
+      finishesList.filter((f) => f.is_custom_per_device).map((f) => (f.slug || f.id).toLowerCase())
+    );
+
+    // 1. Hardware chassis renders and body color variants per view
+    (profile.views || []).forEach((v) => {
+      items.push({
         id: `chassis-${v.id}`,
         type: 'chassis',
         viewId: v.id,
         viewName: v.name,
+        finishName: 'Chassis Render',
         url: (v.background_url || '').trim(),
+      });
+
+      // View-level cutout masks
+      if (v.logo_cutout_mask_url && v.logo_cutout_mask_url.trim()) {
+        items.push({
+          id: `cutout-logo-${v.id}`,
+          type: 'cutout',
+          viewId: v.id,
+          viewName: v.name,
+          finishName: 'Logo Cutout Mask',
+          url: v.logo_cutout_mask_url.trim(),
+        });
+      }
+      if (v.pencil_cutout_mask_url && v.pencil_cutout_mask_url.trim()) {
+        items.push({
+          id: `cutout-pencil-${v.id}`,
+          type: 'cutout',
+          viewId: v.id,
+          viewName: v.name,
+          finishName: 'Pencil Cutout Mask',
+          url: v.pencil_cutout_mask_url.trim(),
+        });
+      }
+      if (v.model_cut_mask_url && v.model_cut_mask_url.trim()) {
+        items.push({
+          id: `cutout-model-${v.id}`,
+          type: 'cutout',
+          viewId: v.id,
+          viewName: v.name,
+          finishName: 'Model Cut Mask',
+          url: v.model_cut_mask_url.trim(),
+        });
+      }
+
+      // Hardware body color variants for this view
+      (profile.device_colors || []).forEach((c) => {
+        const viewColorUrl = ((c as any)?.body_images_by_view?.[v.id] || c.body_image_url || '').trim();
+        if (viewColorUrl && viewColorUrl !== (v.background_url || '').trim()) {
+          items.push({
+            id: `color-${c.id}-${v.id}`,
+            type: 'color',
+            viewId: v.id,
+            viewName: v.name,
+            finishName: `${c.name} Chassis`,
+            url: viewColorUrl,
+          });
+        }
       });
     });
 
-    // 2. Composable Layer textures and overlays
-    (editingProfile.layers || []).forEach((layer) => {
+    // 2. Profile-level coverage and cutout masks
+    const primaryView = (profile.views || [])[0];
+    const primaryViewId = primaryView?.id || 'main_view';
+    const primaryViewName = primaryView?.name || 'Main View';
+
+    const covModelMask = (
+      profile.coverage_and_cutouts?.model_cut_mask_url ||
+      profile.coverage_and_cutouts?.model_cutout_url ||
+      ''
+    ).trim();
+    if (covModelMask && !items.some((it) => it.url === covModelMask)) {
+      items.push({
+        id: 'cutout-coverage-model',
+        type: 'cutout',
+        viewId: primaryViewId,
+        viewName: primaryViewName,
+        finishName: 'Model Coverage Cutout Mask',
+        url: covModelMask,
+      });
+    }
+
+    (profile.coverage_and_cutouts?.available_coverages || []).forEach((cov) => {
+      const covMask = (cov.model_cut_mask_url || '').trim();
+      if (covMask && !items.some((it) => it.url === covMask)) {
+        items.push({
+          id: `cutout-cov-${cov.id}`,
+          type: 'cutout',
+          viewId: primaryViewId,
+          viewName: primaryViewName,
+          finishName: `${cov.label} Cut Mask`,
+          url: covMask,
+        });
+      }
+    });
+
+    // 3. Composable Skin Layer assets
+    (profile.layers || []).forEach((layer) => {
       if (layer.is_non_visual) return;
-      (editingProfile.views || []).forEach((v) => {
+
+      (profile.views || []).forEach((v) => {
         const viewAsset =
           layer.assets_by_view?.[v.id] ||
           layer.assets_by_view?.['main_view'] ||
           Object.values(layer.assets_by_view || {})[0];
 
-        if (viewAsset) {
-          // Texture maps
-          Object.entries(viewAsset.render_texture_map || {}).forEach(([slug, urlVal]) => {
-            const finishObj = finishes.find((f) => (f.slug || f.id) === slug);
-            itemsToProbe.push({
+        if (!viewAsset) return;
+
+        // Skin Alpha Mask (SVG / PNG)
+        if (viewAsset.mask_svg_url && viewAsset.mask_svg_url.trim()) {
+          items.push({
+            id: `mask-${layer.id}-${v.id}`,
+            type: 'mask',
+            viewId: v.id,
+            viewName: v.name,
+            layerId: layer.id,
+            layerName: layer.name,
+            finishName: `${layer.name} Alpha Mask`,
+            url: viewAsset.mask_svg_url.trim(),
+          });
+        } else if (isV2) {
+          // In v2, a visual skin layer should have an alpha cut mask for every viewing angle
+          items.push({
+            id: `mask-${layer.id}-${v.id}`,
+            type: 'mask',
+            viewId: v.id,
+            viewName: v.name,
+            layerId: layer.id,
+            layerName: layer.name,
+            finishName: `${layer.name} Alpha Mask`,
+            url: '',
+          });
+        }
+
+        // Overlays (Shadow and Highlight)
+        if (viewAsset.shadow_png_url && viewAsset.shadow_png_url.trim()) {
+          items.push({
+            id: `overlay-shadow-${layer.id}-${v.id}`,
+            type: 'overlay',
+            viewId: v.id,
+            viewName: v.name,
+            layerId: layer.id,
+            layerName: layer.name,
+            finishName: `${layer.name} Shadow Overlay`,
+            url: viewAsset.shadow_png_url.trim(),
+          });
+        }
+        if (viewAsset.highlight_png_url && viewAsset.highlight_png_url.trim()) {
+          items.push({
+            id: `overlay-highlight-${layer.id}-${v.id}`,
+            type: 'overlay',
+            viewId: v.id,
+            viewName: v.name,
+            layerId: layer.id,
+            layerName: layer.name,
+            finishName: `${layer.name} Highlight Overlay`,
+            url: viewAsset.highlight_png_url.trim(),
+          });
+        }
+
+        // Layer-level cutout masks
+        if (viewAsset.logo_cutout_url && viewAsset.logo_cutout_url.trim()) {
+          items.push({
+            id: `cutout-layer-logo-${layer.id}-${v.id}`,
+            type: 'cutout',
+            viewId: v.id,
+            viewName: v.name,
+            layerId: layer.id,
+            layerName: layer.name,
+            finishName: `${layer.name} Logo Cutout`,
+            url: viewAsset.logo_cutout_url.trim(),
+          });
+        }
+        if (viewAsset.pencil_cutout_url && viewAsset.pencil_cutout_url.trim()) {
+          items.push({
+            id: `cutout-layer-pencil-${layer.id}-${v.id}`,
+            type: 'cutout',
+            viewId: v.id,
+            viewName: v.name,
+            layerId: layer.id,
+            layerName: layer.name,
+            finishName: `${layer.name} Pencil Cutout`,
+            url: viewAsset.pencil_cutout_url.trim(),
+          });
+        }
+        if (viewAsset.model_cutout_url && viewAsset.model_cutout_url.trim()) {
+          items.push({
+            id: `cutout-layer-model-${layer.id}-${v.id}`,
+            type: 'cutout',
+            viewId: v.id,
+            viewName: v.name,
+            layerId: layer.id,
+            layerName: layer.name,
+            finishName: `${layer.name} Model Cutout`,
+            url: viewAsset.model_cutout_url.trim(),
+          });
+        }
+
+        // Finishes & Textures:
+        // In v2: only probe custom per-device finishes. Standard finishes inherit global master textures.
+        // In legacy v1: probe all mapped slice textures.
+        if (viewAsset.render_texture_map) {
+          Object.entries(viewAsset.render_texture_map).forEach(([slug, urlVal]) => {
+            const isCustom = customFinishSlugs.has(slug.toLowerCase());
+            if (isV2 && !isCustom) return;
+
+            const finishObj = finishesList.find(
+              (f) => (f.slug || f.id).toLowerCase() === slug.toLowerCase()
+            );
+
+            items.push({
               id: `texture-${layer.id}-${v.id}-${slug}`,
-              type: 'texture',
+              type: isCustom ? 'custom_texture' : 'texture',
               viewId: v.id,
               viewName: v.name,
               layerId: layer.id,
@@ -2119,45 +2318,75 @@ export const ConfiguratorStudioPage: React.FC = () => {
               url: typeof urlVal === 'string' ? urlVal.trim() : '',
             });
           });
-
-          // Modern v2 Overlays
-          if (viewAsset.mask_svg_url) {
-            itemsToProbe.push({
-              id: `overlay-mask-${layer.id}-${v.id}`,
-              type: 'overlay',
-              viewId: v.id,
-              viewName: v.name,
-              layerId: layer.id,
-              layerName: `${layer.name} (Mask SVG)`,
-              url: viewAsset.mask_svg_url.trim(),
-            });
-          }
-          if (viewAsset.shadow_png_url) {
-            itemsToProbe.push({
-              id: `overlay-shadow-${layer.id}-${v.id}`,
-              type: 'overlay',
-              viewId: v.id,
-              viewName: v.name,
-              layerId: layer.id,
-              layerName: `${layer.name} (Shadow PNG)`,
-              url: viewAsset.shadow_png_url.trim(),
-            });
-          }
-          if (viewAsset.highlight_png_url) {
-            itemsToProbe.push({
-              id: `overlay-highlight-${layer.id}-${v.id}`,
-              type: 'overlay',
-              viewId: v.id,
-              viewName: v.name,
-              layerId: layer.id,
-              layerName: `${layer.name} (Highlight PNG)`,
-              url: viewAsset.highlight_png_url.trim(),
-            });
-          }
         }
       });
     });
 
+    return items;
+  };
+
+  const evaluateDeviceGhostAngles = (
+    profile: DeviceConfiguratorProfile,
+    auditedItems: AssetAuditItem[]
+  ): GhostAngleReport[] => {
+    const ghostAngles: GhostAngleReport[] = [];
+    const isV2 = profile.configurator_version === 'v2';
+
+    (profile.views || []).forEach((v) => {
+      const chassisItem = auditedItems.find((it) => it.type === 'chassis' && it.viewId === v.id);
+      const chassisStatus: 'healthy' | 'broken' | 'missing' = !v.background_url?.trim()
+        ? 'missing'
+        : chassisItem?.status === 'broken'
+        ? 'broken'
+        : 'healthy';
+
+      let mappedTexturesCount = 0;
+      let hasSkinMasks = false;
+
+      (profile.layers || []).forEach((layer) => {
+        if (layer.is_non_visual) return;
+        const viewAsset = layer.assets_by_view?.[v.id];
+        if (viewAsset) {
+          if (viewAsset.mask_svg_url && viewAsset.mask_svg_url.trim().length > 0) {
+            hasSkinMasks = true;
+          }
+          if (viewAsset.render_texture_map) {
+            Object.values(viewAsset.render_texture_map).forEach((u) => {
+              if (typeof u === 'string' && u.trim().length > 0) {
+                mappedTexturesCount++;
+              }
+            });
+          }
+        }
+      });
+
+      // In v2: Ghost angle if chassis is not healthy AND there are NO active skin masks and 0 custom textures
+      // In v1: Ghost angle if chassis is not healthy AND there are 0 mapped textures
+      const isGhost = isV2
+        ? chassisStatus !== 'healthy' && !hasSkinMasks && mappedTexturesCount === 0
+        : chassisStatus !== 'healthy' && mappedTexturesCount === 0;
+
+      if (isGhost) {
+        ghostAngles.push({
+          viewId: v.id,
+          viewName: v.name,
+          chassisStatus,
+          chassisUrl: v.background_url || '',
+          mappedTexturesCount,
+          hasSkinMasks,
+        });
+      }
+    });
+
+    return ghostAngles;
+  };
+
+  const handleStartAssetAudit = async () => {
+    if (!editingProfile) return;
+    setIsAuditingAssets(true);
+    setShowAssetAuditModal(true);
+
+    const itemsToProbe = collectDeviceAuditItems(editingProfile, finishes);
     setAuditProgress({ completed: 0, total: itemsToProbe.length });
 
     // Concurrent probe worker pool (concurrency: 6)
@@ -2194,39 +2423,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
     const workers = Array.from({ length: Math.min(concurrency, itemsToProbe.length) }, () => worker());
     await Promise.all(workers);
 
-    // Ghost Angle Detection: 0 active mapped finish textures AND broken/missing chassis render
-    const ghostAngles: GhostAngleReport[] = [];
-    (editingProfile.views || []).forEach((v) => {
-      const chassisItem = auditedItems.find((it) => it.type === 'chassis' && it.viewId === v.id);
-      const chassisStatus = !v.background_url?.trim()
-        ? 'missing'
-        : chassisItem?.status === 'broken'
-        ? 'broken'
-        : 'healthy';
-
-      // Count non-empty mapped textures for this specific angle
-      let mappedTexturesCount = 0;
-      (editingProfile.layers || []).forEach((layer) => {
-        const viewAsset = layer.assets_by_view?.[v.id];
-        if (viewAsset && viewAsset.render_texture_map) {
-          Object.values(viewAsset.render_texture_map).forEach((u) => {
-            if (typeof u === 'string' && u.trim().length > 0) {
-              mappedTexturesCount++;
-            }
-          });
-        }
-      });
-
-      if (mappedTexturesCount === 0 && chassisStatus !== 'healthy') {
-        ghostAngles.push({
-          viewId: v.id,
-          viewName: v.name,
-          chassisStatus,
-          chassisUrl: v.background_url || '',
-          mappedTexturesCount,
-        });
-      }
-    });
+    // Ghost Angle Detection
+    const ghostAngles = evaluateDeviceGhostAngles(editingProfile, auditedItems);
 
     const healthyCount = auditedItems.filter((i) => i.status === 'healthy').length;
     const brokenCount = auditedItems.filter((i) => i.status === 'broken').length;
@@ -2521,89 +2719,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
         if (!res.success || !res.profile) continue;
         const profile = res.profile;
 
-        const itemsToProbe: Array<{
-          id: string;
-          type: 'chassis' | 'texture' | 'overlay';
-          viewId: string;
-          viewName: string;
-          layerId?: string;
-          layerName?: string;
-          finishSlug?: string;
-          finishName?: string;
-          url: string;
-        }> = [];
-
-        (profile.views || []).forEach((v) => {
-          itemsToProbe.push({
-            id: `chassis-${v.id}`,
-            type: 'chassis',
-            viewId: v.id,
-            viewName: v.name,
-            url: (v.background_url || '').trim(),
-          });
-        });
-
-        (profile.layers || []).forEach((layer) => {
-          if (layer.is_non_visual) return;
-          (profile.views || []).forEach((v) => {
-            const viewAsset =
-              layer.assets_by_view?.[v.id] ||
-              layer.assets_by_view?.['main_view'] ||
-              Object.values(layer.assets_by_view || {})[0];
-
-            if (viewAsset) {
-              Object.entries(viewAsset.render_texture_map || {}).forEach(([slug, urlVal]) => {
-                const finishObj = finishes.find((f) => (f.slug || f.id) === slug);
-                itemsToProbe.push({
-                  id: `texture-${layer.id}-${v.id}-${slug}`,
-                  type: 'texture',
-                  viewId: v.id,
-                  viewName: v.name,
-                  layerId: layer.id,
-                  layerName: layer.name,
-                  finishSlug: slug,
-                  finishName: finishObj?.name || slug,
-                  url: typeof urlVal === 'string' ? urlVal.trim() : '',
-                });
-              });
-
-              if (viewAsset.mask_svg_url) {
-                itemsToProbe.push({
-                  id: `overlay-mask-${layer.id}-${v.id}`,
-                  type: 'overlay',
-                  viewId: v.id,
-                  viewName: v.name,
-                  layerId: layer.id,
-                  layerName: `${layer.name} (Mask SVG)`,
-                  url: viewAsset.mask_svg_url.trim(),
-                });
-              }
-              if (viewAsset.shadow_png_url) {
-                itemsToProbe.push({
-                  id: `overlay-shadow-${layer.id}-${v.id}`,
-                  type: 'overlay',
-                  viewId: v.id,
-                  viewName: v.name,
-                  layerId: layer.id,
-                  layerName: `${layer.name} (Shadow PNG)`,
-                  url: viewAsset.shadow_png_url.trim(),
-                });
-              }
-              if (viewAsset.highlight_png_url) {
-                itemsToProbe.push({
-                  id: `overlay-highlight-${layer.id}-${v.id}`,
-                  type: 'overlay',
-                  viewId: v.id,
-                  viewName: v.name,
-                  layerId: layer.id,
-                  layerName: `${layer.name} (Highlight PNG)`,
-                  url: viewAsset.highlight_png_url.trim(),
-                });
-              }
-            }
-          });
-        });
-
+        const itemsToProbe = collectDeviceAuditItems(profile, finishes);
         const auditedItems: AssetAuditItem[] = [];
         const concurrency = 6;
         let itemIndex = 0;
@@ -2632,37 +2748,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
         const workers = Array.from({ length: Math.min(concurrency, itemsToProbe.length) }, () => worker());
         await Promise.all(workers);
 
-        const ghostAngles: GhostAngleReport[] = [];
-        (profile.views || []).forEach((v) => {
-          const chassisItem = auditedItems.find((it) => it.type === 'chassis' && it.viewId === v.id);
-          const chassisStatus = !v.background_url?.trim()
-            ? 'missing'
-            : chassisItem?.status === 'broken'
-            ? 'broken'
-            : 'healthy';
-
-          let mappedTexturesCount = 0;
-          (profile.layers || []).forEach((layer) => {
-            const viewAsset = layer.assets_by_view?.[v.id];
-            if (viewAsset && viewAsset.render_texture_map) {
-              Object.values(viewAsset.render_texture_map).forEach((u) => {
-                if (typeof u === 'string' && u.trim().length > 0) {
-                  mappedTexturesCount++;
-                }
-              });
-            }
-          });
-
-          if (mappedTexturesCount === 0 && chassisStatus !== 'healthy') {
-            ghostAngles.push({
-              viewId: v.id,
-              viewName: v.name,
-              chassisStatus,
-              chassisUrl: v.background_url || '',
-              mappedTexturesCount,
-            });
-          }
-        });
+        const ghostAngles = evaluateDeviceGhostAngles(profile, auditedItems);
 
         const healthyCount = auditedItems.filter((it) => it.status === 'healthy').length;
         const brokenCount = auditedItems.filter((it) => it.status === 'broken').length;
@@ -4949,7 +5035,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       </span>
                     </div>
                     <p className="text-xs text-zinc-400 mt-0.5">
-                      Batch auditing all products for 404 broken textures, missing chassis renders, and ghost viewing angles.
+                      Batch auditing catalog devices for 404 broken assets, missing chassis renders, and ghost viewing angles.
                     </p>
                   </div>
                 </div>
@@ -5095,7 +5181,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           {globalAuditReport.totalGhostAngles} Ghost Viewing Angles Detected
                         </h4>
                         <p className="text-xs text-zinc-300 mt-0.5 leading-relaxed">
-                          These angles have 0 mapped textures and broken or missing hardware chassis images (such as Xiaomi Pad devices cloned from iPad Pro templates).
+                          These angles have 0 skin cut masks or textures and broken or missing hardware chassis images (such as Xiaomi Pad devices cloned from iPad Pro templates).
                         </p>
                       </div>
                     </div>
@@ -5246,7 +5332,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             {d.ghostAngles.map((g) => (
                               <div key={g.viewId} className="flex items-center justify-between text-[11px] text-zinc-300">
                                 <span>
-                                  • {g.viewName} (ID: {g.viewId}) - Chassis: {g.chassisStatus}, Textures: {g.mappedTexturesCount}
+                                  • {g.viewName} (ID: {g.viewId}) - Chassis: {g.chassisStatus}, Skin Masks: {g.hasSkinMasks ? 'Present' : 'None'}, Textures: {g.mappedTexturesCount}
                                 </span>
                               </div>
                             ))}
@@ -11447,7 +11533,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             )}
                           </div>
                           <p className="text-xs text-zinc-400 mt-0.5">
-                            Probing viewing angles, hardware chassis renders, and finish textures for 200 OK responses.
+                            Probing hardware chassis renders, color variants, skin alpha cut masks, cutouts, and custom finishes for 200 OK responses.
                           </p>
                         </div>
                       </div>
@@ -11529,7 +11615,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             </span>
                           </div>
                           <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5">
-                            <span className="text-[11px] text-zinc-400 block font-medium">Empty Mappings</span>
+                            <span className="text-[11px] text-zinc-400 block font-medium">Empty Assets</span>
                             <span className="text-xl font-bold font-mono text-zinc-400 mt-1 block">
                               {auditReport.emptyCount}
                             </span>
@@ -11714,9 +11800,33 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     {item.status === 'healthy' ? '200 OK' : item.status === 'broken' ? 'Broken' : 'Empty'}
                                   </span>
 
-                                  <span className="text-[10px] px-2 py-0.5 rounded bg-white/5 text-zinc-300 border border-white/10 capitalize">
-                                    {item.type}
-                                  </span>
+                                  {(() => {
+                                    const badgeConfig = (() => {
+                                      switch (item.type) {
+                                        case 'chassis':
+                                          return { label: 'Chassis', color: 'bg-sky-500/15 text-sky-400 border-sky-500/30' };
+                                        case 'color':
+                                          return { label: 'Body Color', color: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30' };
+                                        case 'mask':
+                                          return { label: 'Skin Cut Mask', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' };
+                                        case 'cutout':
+                                          return { label: 'Cutout Mask', color: 'bg-amber-500/15 text-amber-400 border-amber-500/30' };
+                                        case 'overlay':
+                                          return { label: 'Overlay', color: 'bg-zinc-800 text-zinc-300 border-zinc-700' };
+                                        case 'custom_texture':
+                                          return { label: 'Custom Artwork', color: 'bg-violet-500/15 text-violet-400 border-violet-500/30' };
+                                        case 'texture':
+                                          return { label: 'Legacy Texture', color: 'bg-fuchsia-500/15 text-fuchsia-400 border-fuchsia-500/30' };
+                                        default:
+                                          return { label: item.type, color: 'bg-white/5 text-zinc-300 border-white/10' };
+                                      }
+                                    })();
+                                    return (
+                                      <span className={clsx('text-[10px] px-2 py-0.5 rounded font-medium border capitalize', badgeConfig.color)}>
+                                        {badgeConfig.label}
+                                      </span>
+                                    );
+                                  })()}
 
                                   <span className="text-white font-medium">
                                     {item.layerName ? `${item.layerName} • ` : ''}
@@ -11757,7 +11867,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                               {/* Actions */}
                               <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                                {item.type === 'texture' && item.layerId && item.finishSlug && (
+                                {(item.type === 'texture' || item.type === 'custom_texture') && item.layerId && item.finishSlug && (
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -11776,7 +11886,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   </button>
                                 )}
 
-                                {item.type === 'texture' && item.status === 'broken' && (
+                                {(item.type === 'texture' || item.type === 'custom_texture') && item.status === 'broken' && (
                                   <button
                                     type="button"
                                     onClick={() => handleClearBrokenTexture(item)}
