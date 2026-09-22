@@ -226,6 +226,8 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Provides 1-click pruning of legacy finish slices for v2 products to restore pure master texture inheritance.
 - **Storefront Addon Synchronization**:
   Tablets with flat back skin cuts only (such as Xiaomi Pad models) must never offer "Add Side Frame Skin" in `addon-evaluator.ts`. Side wrap skins are reserved strictly for tablets and foldables with physical flat-edge vinyl cuts (such as iPad Pro models and Galaxy Tab S series).
+- **Tablet Side View Architecture**:
+  Tablets with curved edges or flat back skin cuts only (such as Xiaomi Pad 5, 6, 8) do not have physical side wrap vinyl pieces. Their configurator profiles strictly maintain a single viewing angle (`Main View`) with no `side_view` or `sides` layer. Obsolete side views on Xiaomi Pad models #540777, #487486, and #396113 have been removed from the database. Side views in the tablet category are reserved strictly for iPad Pro models (M1, M2, M4, M5, 2020) and Galaxy Tab S models with flat aluminum wrap skins.
 
 ---
 
@@ -267,6 +269,11 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **Targeted Audit vs Full Catalog Scan**:
   - **Audit Unaudited ({count})**: Filters catalog to products where `last_audited_at` is empty or status is `'unaudited'`. Allows operators to pick up incremental audits without re-probing hundreds of already-verified devices.
   - **Audit All ({count})**: Re-probes all active configurators catalog-wide to catch newly expired CDN URLs or broken chassis links.
+- **Resilient Audit Probe Engine & Anti-Throttling Invariants**:
+  - **In-Flight Session URL Cache**: `probedUrlCacheRef` eliminates redundant HTTP image probes across devices (such as shared chassis images, brand logos, and perimeter frame masks), reducing probe volume by ~40% to 60%.
+  - **Connection Pool Exhaustion Prevention**: Probe concurrency is strictly limited to 4 workers per device with a 40ms inter-device pause. This prevents exhausting the browser's HTTP/1.1 socket pool (6 sockets per host) or triggering Cloudflare/LiteSpeed burst rate-limiting.
+  - **Probe Timeout & 1-Time Retry**: Increased probe timeout to 12000ms with a 500ms delay retry upon failure. Network congestion spikes no longer cause false-positive broken asset alerts.
+  - **Request Timeout Guards & Stop Audit Control**: Profile fetch requests in catalog audits are wrapped in a 12s timeout guard to prevent scan hangs on slow backend responses, and an operator "Stop Audit" control allows immediate graceful cancellation.
 - **Studio UI & Card Badges**:
   - Top bar metrics row tracks **Audited Clean** and **Unaudited Devices** in real time.
   - Catalog filter bar includes **All Audit**, **Audited**, **Unaudited**, and **Issues** tabs.

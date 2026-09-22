@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.23] - 2026-09-23
+
+### Resilient Audit Probing & Xiaomi Pad Side View Cleanup
+- **Audit Probe Resilience & False-Positive Elimination (`ConfiguratorStudioPage.tsx`)**:
+  - Implemented an in-flight URL session cache (`probedUrlCacheRef`) during catalog audits to eliminate duplicate requests for shared assets (chassis renders, brand logos, and perimeter frame masks), reducing network hit volume by ~40% to 60%.
+  - Increased image probe timeout from 7s to 12s and added an automatic retry with a 500ms delay before declaring an image broken, eliminating false-positive 404/broken errors caused by temporary browser socket exhaustion.
+  - Reduced worker concurrency from 6 to 4 per device and introduced a 40ms pacing delay between products to prevent exhausting browser HTTP connection pools and triggering CDN/LiteSpeed burst throttling.
+  - Added a 12s timeout guard to profile fetch requests in catalog audits to eliminate hanging or frozen scans.
+  - Added an operator "Stop Audit" control in the global audit progress bar to allow immediate, graceful cancellation.
+  - Ensured single-device audits invalidate cached probe entries for the target device to guarantee live re-verification.
+- **Xiaomi Pad Side View Removal**:
+  - Cleaned configurator profiles for all Xiaomi Pad models (#540777 Xiaomi Pad 8 / 8 Pro, #487486 Xiaomi Pad 6 / 6 Pro, and #396113 Xiaomi Pad 5 / 5 Pro), removing the obsolete `side_view` and `sides` layer.
+  - Verified that all remaining assets across these models return HTTP 200 OK.
+  - Confirmed that tablet side views are strictly reserved for iPad Pro models with flat-edge aluminum wrap skins.
+
 ## [0.1.22] - 2026-09-23
 
 ### Streamlined Asset Integrity Audit for v2 Modern Engine

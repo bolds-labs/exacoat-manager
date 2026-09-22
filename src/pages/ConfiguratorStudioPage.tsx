@@ -2028,13 +2028,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
     return clean;
   };
 
-  const probeImageUrl = (rawUrl: string, timeoutMs = 7000): Promise<{ ok: boolean; error?: string }> => {
+  const probedUrlCacheRef = useRef<Map<string, Promise<{ ok: boolean; error?: string }>>>(new Map());
+  const abortAuditRef = useRef<boolean>(false);
+
+  const singleImageProbe = (cleanUrl: string, timeoutMs: number): Promise<{ ok: boolean; error?: string }> => {
     return new Promise((resolve) => {
-      if (!rawUrl || typeof rawUrl !== 'string' || !rawUrl.trim()) {
-        resolve({ ok: false, error: 'Empty URL' });
-        return;
-      }
-      const cleanUrl = normalizeAssetUrl(rawUrl);
       const img = new Image();
       let timer: any = null;
 
@@ -2065,6 +2063,35 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
       img.src = cleanUrl;
     });
+  };
+
+  const probeImageUrl = (
+    rawUrl: string,
+    timeoutMs = 12000,
+    bypassCache = false
+  ): Promise<{ ok: boolean; error?: string }> => {
+    if (!rawUrl || typeof rawUrl !== 'string' || !rawUrl.trim()) {
+      return Promise.resolve({ ok: false, error: 'Empty URL' });
+    }
+    const cleanUrl = normalizeAssetUrl(rawUrl);
+
+    if (!bypassCache && probedUrlCacheRef.current.has(cleanUrl)) {
+      return probedUrlCacheRef.current.get(cleanUrl)!;
+    }
+
+    const probePromise = (async () => {
+      const firstTry = await singleImageProbe(cleanUrl, timeoutMs);
+      if (firstTry.ok) return firstTry;
+
+      // Retry once after a brief 500ms breather to prevent false positives from connection spikes
+      await new Promise((r) => setTimeout(r, 500));
+      return singleImageProbe(cleanUrl, timeoutMs);
+    })();
+
+    if (!bypassCache) {
+      probedUrlCacheRef.current.set(cleanUrl, probePromise);
+    }
+    return probePromise;
   };
 
   const collectDeviceAuditItems = (
@@ -2387,11 +2414,17 @@ export const ConfiguratorStudioPage: React.FC = () => {
     setShowAssetAuditModal(true);
 
     const itemsToProbe = collectDeviceAuditItems(editingProfile, finishes);
+    // Invalidate cached probe entries for this device's items to guarantee live re-verification
+    itemsToProbe.forEach((it) => {
+      if (it.url) {
+        probedUrlCacheRef.current.delete(normalizeAssetUrl(it.url));
+      }
+    });
     setAuditProgress({ completed: 0, total: itemsToProbe.length });
 
-    // Concurrent probe worker pool (concurrency: 6)
+    // Concurrent probe worker pool (concurrency: 4)
     const auditedItems: AssetAuditItem[] = [];
-    const concurrency = 6;
+    const concurrency = 4;
     let index = 0;
     let completedCount = 0;
 
@@ -2691,6 +2724,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
       return;
     }
 
+    abortAuditRef.current = false;
+    probedUrlCacheRef.current.clear();
     setIsAuditingGlobal(true);
     setShowGlobalAuditModal(true);
     setGlobalAuditProgress({
@@ -2707,6 +2742,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
     let devicesWithIssues = 0;
 
     for (let i = 0; i < targetProfiles.length; i++) {
+      if (abortAuditRef.current) {
+        showToast('info', 'Audit Stopped', 'Global catalog audit was stopped by operator.');
+        break;
+      }
+
       const p = targetProfiles[i];
       setGlobalAuditProgress({
         scannedDevices: i,
@@ -2715,17 +2755,22 @@ export const ConfiguratorStudioPage: React.FC = () => {
       });
 
       try {
-        const res = await fetchProductConfiguratorProfileDirect(p.product_id);
+        const profileFetchPromise = fetchProductConfiguratorProfileDirect(p.product_id);
+        const timeoutPromise = new Promise<{ success: false; profile?: undefined; error: string }>((resolve) =>
+          setTimeout(() => resolve({ success: false, error: 'Request timed out' }), 12000)
+        );
+        const res = await Promise.race([profileFetchPromise, timeoutPromise]);
         if (!res.success || !res.profile) continue;
         const profile = res.profile;
 
         const itemsToProbe = collectDeviceAuditItems(profile, finishes);
         const auditedItems: AssetAuditItem[] = [];
-        const concurrency = 6;
+        const concurrency = 4;
         let itemIndex = 0;
 
         const worker = async () => {
           while (itemIndex < itemsToProbe.length) {
+            if (abortAuditRef.current) return;
             const idx = itemIndex++;
             const target = itemsToProbe[idx];
             if (!target.url) {
@@ -2747,6 +2792,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
         const workers = Array.from({ length: Math.min(concurrency, itemsToProbe.length) }, () => worker());
         await Promise.all(workers);
+
+        if (abortAuditRef.current) break;
 
         const ghostAngles = evaluateDeviceGhostAngles(profile, auditedItems);
 
@@ -2776,15 +2823,18 @@ export const ConfiguratorStudioPage: React.FC = () => {
           ghostAngles,
           brokenItems,
         });
+
+        // Modest 40ms pacing pause between devices to prevent browser socket pool starvation
+        await new Promise((r) => setTimeout(r, 40));
       } catch (err) {
         console.warn(`Failed auditing product #${p.product_id}:`, err);
       }
     }
 
     setGlobalAuditProgress({
-      scannedDevices: targetProfiles.length,
+      scannedDevices: deviceSummaries.length,
       totalDevices: targetProfiles.length,
-      currentDeviceName: 'Scan complete.',
+      currentDeviceName: abortAuditRef.current ? 'Scan stopped.' : 'Scan complete.',
     });
 
     const finalReport: GlobalCatalogAuditReport = {
@@ -5097,12 +5147,23 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         <strong className="text-white">{globalAuditProgress.currentDeviceName}</strong>
                       </span>
                     </div>
-                    <span className="font-mono text-zinc-400">
-                      {globalAuditProgress.totalDevices > 0
-                        ? Math.round((globalAuditProgress.scannedDevices / globalAuditProgress.totalDevices) * 100)
-                        : 0}
-                      %
-                    </span>
+                    <div className="flex items-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          abortAuditRef.current = true;
+                        }}
+                        className="px-2 py-0.5 rounded text-[11px] font-medium bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 transition-colors cursor-pointer"
+                      >
+                        Stop Audit
+                      </button>
+                      <span className="font-mono text-zinc-400">
+                        {globalAuditProgress.totalDevices > 0
+                          ? Math.round((globalAuditProgress.scannedDevices / globalAuditProgress.totalDevices) * 100)
+                          : 0}
+                        %
+                      </span>
+                    </div>
                   </div>
                   <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
                     <div
