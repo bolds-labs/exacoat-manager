@@ -1372,4 +1372,17 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Do not render synthetic feature badge pills (such as `[Precision fit]` or `[Foldable]`) on search result items.
   - Only explicit publication state flags (such as `Draft`) for administrators are retained.
 
+---
+
+## 47. Layer Finish Restrictions & Whitelist Precedence (`allowed_finish_slugs`)
+
+- **Problem & Root Cause**:
+  - In `configurator-loader.ts` (`exacoat-web`), layer finish filtering previously evaluated finish slugs and finish groups using non-exclusive sequential `return true` conditions.
+  - When an operator restricted a layer's material availability in Exacoat Manager (such as restricting Smart Keyboard Folio to Swarm and Black Camo), `allowed_finish_slugs` contained `["swarm", "black-camo"]`, while `allowed_finish_groups` retained standard default groups (`["Signature skins", "Colors", "Natural"]`).
+  - Because `allowedGroups.includes(f.group)` was checked right after `allowedSlugs`, any finish belonging to those groups returned `true`, completely bypassing the finish whitelist and exposing all 21 materials on the storefront.
+- **Whitelist Precedence Invariant**:
+  - **Explicit Slugs Take Absolute Precedence**: If `allowed_finish_slugs` is configured (`allowedSlugs.length > 0`), the loader strictly filters by slug whitelist only. Group checks are bypassed completely.
+  - **Slug Normalization**: Both finish slugs and whitelist entries are normalized via `(slug || '').toLowerCase().replace(/[^a-z0-9]/g, '')`, ensuring seamless matching regardless of hyphen or underscore conventions (e.g. `black-camo` vs `black_camo`).
+  - **Group-Level Restriction Fallback**: `allowed_finish_groups` filtering only applies when `allowed_finish_slugs` is empty and group count is genuinely restricted (`allowedGroups.length < 3`).
+
 
