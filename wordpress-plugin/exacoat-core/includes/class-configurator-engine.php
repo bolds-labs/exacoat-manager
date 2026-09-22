@@ -2104,7 +2104,7 @@ class Exacoat_Configurator_Engine {
 
 				$is_primary_layer = in_array( strtolower( trim( $layer_name ) ), [ 'back', 'back skin', 'top', 'top lid', 'device', 'body', 'main', 'base', 'full' ], true )
 					|| in_array( $layer_slug, [ 'back', 'back-skin', 'top', 'top-lid', 'main', 'device' ], true )
-					|| $idx === 0;
+					|| ( $idx === 0 && ! in_array( $layer_slug, [ 'series', 'version', 'connectivity', 'model' ], true ) && ! preg_match( '/\b(series|version|connectivity|model)\b/i', $layer_name ) );
 
 				$normalized_layers[] = [
 					'id'                    => $layer_slug,
@@ -2506,7 +2506,7 @@ class Exacoat_Configurator_Engine {
 					$is_primary = ( isset( $l['group'] ) && $l['group'] === 'primary' )
 						|| ( isset( $l['id'] ) && in_array( $l['id'], [ 'back', 'back-skin', 'device', 'main' ], true ) )
 						|| ( isset( $l['name'] ) && preg_match( '/\b(back|top lid|body|base|full)\b/i', $l['name'] ) )
-						|| $idx === 0;
+						|| ( $idx === 0 && ! in_array( $l['id'] ?? '', [ 'series', 'version', 'connectivity', 'model' ], true ) && ! preg_match( '/\b(series|version|connectivity|model)\b/i', $l['name'] ?? '' ) );
 					if ( $is_primary ) {
 						if ( empty( $l['group'] ) || $l['group'] !== 'primary' ) {
 							$l['group'] = 'primary';
@@ -2519,6 +2519,38 @@ class Exacoat_Configurator_Engine {
 					}
 				}
 				unset( $l );
+
+				// Auto-heal phone accents from legacy 40000 to 35000
+				$dev_fam = $profile['family'] ?? '';
+				if ( $dev_fam === 'phone' || $dev_fam === 'foldable' ) {
+					foreach ( $profile['layers'] as &$l ) {
+						$l_id = strtolower( $l['id'] ?? '' );
+						$l_name = strtolower( $l['name'] ?? '' );
+						if ( ( $l_id === 'accents' || strpos( $l_name, 'accent' ) !== false ) && (float) ( $l['extra_price'] ?? 0 ) == 40000 ) {
+							$l['extra_price'] = 35000;
+							$layers_modified = true;
+						}
+					}
+					unset( $l );
+				}
+
+				// Auto-heal tablet / iPad sides and accents from 0 to 50000
+				if ( $dev_fam === 'tablet' || stripos( $profile['category'] ?? '', 'ipad' ) !== false || stripos( $profile['device_name'] ?? '', 'ipad' ) !== false ) {
+					foreach ( $profile['layers'] as &$l ) {
+						$l_id = strtolower( $l['id'] ?? '' );
+						$l_name = strtolower( $l['name'] ?? '' );
+						if ( ( $l_id === 'sides' || $l_id === 'side' || strpos( $l_name, 'side' ) !== false ) && (float) ( $l['extra_price'] ?? 0 ) == 0 ) {
+							$l['extra_price'] = 50000;
+							$layers_modified = true;
+						}
+						if ( ( $l_id === 'accents' || strpos( $l_name, 'accent' ) !== false ) && (float) ( $l['extra_price'] ?? 0 ) == 0 ) {
+							$l['extra_price'] = 50000;
+							$layers_modified = true;
+						}
+					}
+					unset( $l );
+				}
+
 				if ( $layers_modified && ! empty( $modern_profile ) ) {
 					update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
 				}
@@ -2582,13 +2614,41 @@ class Exacoat_Configurator_Engine {
 				$is_primary = ( isset( $layer['group'] ) && $layer['group'] === 'primary' )
 					|| ( isset( $layer['id'] ) && in_array( $layer['id'], [ 'back', 'back-skin', 'device', 'main' ], true ) )
 					|| ( isset( $layer['name'] ) && preg_match( '/\b(back|top lid|body|base|full)\b/i', $layer['name'] ) )
-					|| $idx === 0;
+					|| ( $idx === 0 && ! in_array( $layer['id'] ?? '', [ 'series', 'version', 'connectivity', 'model' ], true ) && ! preg_match( '/\b(series|version|connectivity|model)\b/i', $layer['name'] ?? '' ) );
 				if ( $is_primary ) {
 					$layer['group'] = 'primary';
 					$layer['extra_price'] = 0;
 				}
 			}
 			unset( $layer );
+
+			// Auto-heal phone accents from legacy 40000 to 35000
+			$dev_fam = $profile['family'] ?? '';
+			if ( $dev_fam === 'phone' || $dev_fam === 'foldable' ) {
+				foreach ( $profile['layers'] as &$layer ) {
+					$l_id = strtolower( $layer['id'] ?? '' );
+					$l_name = strtolower( $layer['name'] ?? '' );
+					if ( ( $l_id === 'accents' || strpos( $l_name, 'accent' ) !== false ) && (float) ( $layer['extra_price'] ?? 0 ) == 40000 ) {
+						$layer['extra_price'] = 35000;
+					}
+				}
+				unset( $layer );
+			}
+
+			// Auto-heal tablet / iPad sides and accents from 0 to 50000
+			if ( $dev_fam === 'tablet' || stripos( $profile['category'] ?? '', 'ipad' ) !== false || stripos( $profile['device_name'] ?? '', 'ipad' ) !== false ) {
+				foreach ( $profile['layers'] as &$layer ) {
+					$l_id = strtolower( $layer['id'] ?? '' );
+					$l_name = strtolower( $layer['name'] ?? '' );
+					if ( ( $l_id === 'sides' || $l_id === 'side' || strpos( $l_name, 'side' ) !== false ) && (float) ( $layer['extra_price'] ?? 0 ) == 0 ) {
+						$layer['extra_price'] = 50000;
+					}
+					if ( ( $l_id === 'accents' || strpos( $l_name, 'accent' ) !== false ) && (float) ( $layer['extra_price'] ?? 0 ) == 0 ) {
+						$layer['extra_price'] = 50000;
+					}
+				}
+				unset( $layer );
+			}
 		}
 
 		// For v2 profiles, prune legacy per-layer shading/shadow properties so universal view-level shading takes precedence

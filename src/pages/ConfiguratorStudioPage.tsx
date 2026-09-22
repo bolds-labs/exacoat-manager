@@ -209,7 +209,8 @@ export const DEVICE_FAMILY_PRESET_PACKS: Record<string, { label: string; family:
     family: 'tablet',
     parts: [
       { name: 'Back Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
-      { name: 'Accents', group: 'accent', is_required: false, is_optional: true, extra_price: 35000 },
+      { name: 'Sides', group: 'protection', is_required: false, is_optional: true, extra_price: 50000 },
+      { name: 'Accents', group: 'accent', is_required: false, is_optional: true, extra_price: 50000 },
     ],
   },
   keyboard: {
@@ -4126,10 +4127,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
           layer.group === 'primary' ||
           layer.id === 'back' ||
           layer.id === 'back-skin' ||
-          idx === 0 ||
           /\b(back|top lid|body|base|full)\b/i.test(layer.name || '') ||
-          !layer.extra_price ||
-          Number(layer.extra_price) === 0;
+          (idx === 0 && !/\b(series|version|connectivity|model)\b/i.test(layer.name || '') && layer.id !== 'series' && layer.id !== 'version');
 
         const effectiveLayerExtra = isPrimary ? 0 : (Number(layer.extra_price) || 0);
         total += effectiveLayerExtra;
@@ -7742,9 +7741,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 activeTestLayer?.group === 'primary' ||
                                 activeTestLayer?.id === 'back' ||
                                 activeTestLayer?.id === 'back-skin' ||
-                                /\b(back|top lid|body|base|full)\b/i.test(activeTestLayer?.name || '') ||
-                                !activeTestLayer?.extra_price ||
-                                Number(activeTestLayer?.extra_price) === 0;
+                                /\b(back|top lid|body|base|full)\b/i.test(activeTestLayer?.name || '');
 
                               const effectiveLayerExtra = isPrimary ? 0 : (Number(activeTestLayer?.extra_price) || 0);
 
