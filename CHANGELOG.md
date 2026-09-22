@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.20] - 2026-09-23
+
+### Layer Finish Restrictions & Whitelist Precedence
+- **Material Availability Whitelist Precedence (`configurator-loader.ts`)**:
+  - Enforced strict whitelist priority for `allowed_finish_slugs` over default `allowed_finish_groups`, preventing restricted materials from exposing unselected catalog finishes.
+  - Added slug normalization to ensure punctuation parity (`black-camo` vs `black_camo`).
+- **Model Coverage Architecture in Studio Cutouts**:
+  - Restored Model Coverage under the Cutouts tab in Configurator Studio.
+  - Automated auto-healing in `class-configurator-engine.php` to promote smartphones to `model_cut_and_360` with authentic perimeter frame masks.
+- **Hardware Production Variants Extraction**:
+  - Ensured physical dimensions/connectivity are placed in variants rather than composable skin layers.
+  - Standardized accent rotation to 0 degrees catalog-wide.
+
 ## [0.1.14] - 2026-09-21
 
 ### Advanced Coupons Cashback & Store Credit Display Invariants
