@@ -567,6 +567,7 @@ export interface DeviceCoverageAndCutouts {
   pencil_cutout_pill?: string;
   has_model_cut?: boolean;
   model_cut_mask_url?: string;
+  model_cutout_url?: string;
   logo_target_layer_id?: string;
   coverage_target_layer_id?: string;
   available_coverages?: Array<{

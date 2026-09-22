@@ -3128,6 +3128,17 @@ export const ConfiguratorStudioPage: React.FC = () => {
     if (field === 'pencil_cutout_mask_url' && value) {
       nextCoverage.has_pencil_cutout = true;
     }
+    if (field === 'model_cut_mask_url' && value) {
+      nextCoverage.model_cutout_url = value;
+      nextCoverage.has_model_cut = true;
+    }
+    if (field === 'model_cutout_url' && value) {
+      nextCoverage.model_cut_mask_url = value;
+      nextCoverage.has_model_cut = true;
+    }
+    if (field === 'coverage_type' && value !== 'none') {
+      nextCoverage.has_model_cut = true;
+    }
     setEditingProfile({
       ...editingProfile,
       coverage_and_cutouts: nextCoverage,

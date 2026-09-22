@@ -1329,3 +1329,31 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **Accent Layer Rotation Invariant**:
   - Accent textures default to 0 degrees rotation (`texture_rotation = 0`).
   - Catalog-wide reversion restored all 147 accent layers back to 0 degrees from the previous 90 degrees rotation.
+
+---
+
+## 45. Model Coverage Architecture (Model Cut vs Model 360°)
+
+- **Smartphone Coverage vs Modular Composable Parts**:
+  - On smartphones (iPhones, Galaxy S series, Pixel, Xiaomi, Poco, Vivo, Oppo, Realme, Infinix, etc.), side frame skin protection is handled exclusively through **Model Coverage** (`coverage_type: 'model_cut_and_360'`).
+  - Webstore buyers choose between:
+    1. **Model Cut**: Precision back skin only (+IDR 0).
+    2. **Model 360°**: Full back skin + integrated side frame flaps wrap (+IDR 40,000).
+  - Smartphones do NOT have a separate "Sides" modular skin part in `layers`.
+- **Foldables & Tablets Separation**:
+  - **Foldables** (Z Flip, Z Fold, Razr): Cannot wrap around mechanical hinges and are strictly set to `coverage_type: 'model_cut_only'` (+IDR 0).
+  - **Tablets** (iPads, Galaxy Tab) & **Laptops**: Set to `coverage_type: 'none'`. Tablets offer sides as a separate modular composable part (`layers`) at +IDR 50,000, and laptops use separate Top, Bottom, and Keyboard surfaces.
+- **Legacy MKL Converter Discard Root Cause**:
+  - In legacy MKL configurator metadata, coverage was stored as a layer named `"Model"` with choices `"Model Cut"` and `"Model 360°"`.
+  - During initial v2 conversion, any layer on phones containing `"model"` was flagged as an obsolete hardware selector and discarded (`continue;`), causing `coverage_and_cutouts` to default to `coverage_type: 'none'`.
+  - Because `coverage_type === 'none'`, the storefront (`device-skin-configurator.tsx`) and Studio hid the coverage options completely.
+- **Backend Converter & Auto-Healing Invariant**:
+  - In `convert_mkl_to_profile()`, before discarding phone model layers, choice names are inspected for `"model cut"` or `"model 360"`. If present, it extracts the authentic `model_cut_mask_url` (from `*-Frame.png` media assets) and sets `coverage_type = 'model_cut_and_360'` with `model_360_extra_price = 40000`.
+  - In `rest_get_product_configurator()`, any smartphone with `coverage_type === 'none'` is automatically promoted and healed to `model_cut_and_360` with `has_model_cut = true` and `model_360_extra_price = 40000`. Foldables are promoted to `model_cut_only`.
+  - Bidirectional synchronization between `model_cut_mask_url` and `model_cutout_url` is enforced in `rest_save_product_configurator()`.
+- **Studio Cutouts Tab Management**:
+  - Model Coverage is managed under the **Cutouts** tab in Configurator Studio (`ConfiguratorStudioPage.tsx` Section 3).
+  - Operators can toggle "Buyer Choice on Webstore", select Coverage Mode (`Model Cut & 360°`, `Model Cut Only`, `Model 360° Only`), configure `360 Extra Price` (+IDR 40,000), and assign the `Perimeter Mask (Frame Flaps)` from the WordPress Media Library.
+- **Catalog Coverage Migration**:
+  - Catalog-wide migration restored `model_cut_and_360` across all 172 smartphones in staging, linking 148 matching `*-Frame.png` media upload assets to `model_cut_mask_url`, and `model_cut_only` across 12 foldables.
+

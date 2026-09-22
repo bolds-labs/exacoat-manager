@@ -1943,6 +1943,9 @@ class Exacoat_Configurator_Engine {
 		$variants = [];
 		$logo_cutout_by_view = [];
 		$has_logo_layer = false;
+		$has_coverage_layer = false;
+		$model_cut_image = '';
+		$model_360_price = 40000;
 
 		if ( is_array( $layers ) ) {
 			foreach ( $layers as $idx => $l ) {
@@ -1960,10 +1963,45 @@ class Exacoat_Configurator_Engine {
 				$is_required = ( ( $l['required'] ?? '' ) === '1' || ( $l['required'] ?? false ) === true );
 				$is_optional = ( ( $l['can_deselect'] ?? '' ) === '1' || strpos( (string) ( $l['class_name'] ?? '' ), 'optional' ) !== false );
 				
+				$raw_choices = $content_by_layer[ $layer_id_num ] ?? [];
+
+				// Detect if this layer represents Model Coverage (Model Cut vs Model 360)
+				$is_coverage = ( strpos( $layer_name_lower, 'coverage' ) !== false || strpos( $layer_name_lower, 'model cut' ) !== false || strpos( $layer_name_lower, 'model 360' ) !== false );
+				if ( ! $is_coverage && ( $layer_name_lower === 'model' || strpos( $layer_name_lower, 'cut' ) !== false ) ) {
+					foreach ( $raw_choices as $ch ) {
+						$ch_name_l = strtolower( $ch['name'] ?? '' );
+						if ( strpos( $ch_name_l, 'model cut' ) !== false || strpos( $ch_name_l, 'model 360' ) !== false || strpos( $ch_name_l, '360' ) !== false ) {
+							$is_coverage = true;
+							break;
+						}
+					}
+				}
+
+				if ( $is_coverage ) {
+					$has_coverage_layer = true;
+					foreach ( $raw_choices as $ch ) {
+						$ch_name_l = strtolower( $ch['name'] ?? '' );
+						if ( strpos( $ch_name_l, 'model cut' ) !== false && ! empty( $ch['images'] ) && is_array( $ch['images'] ) ) {
+							foreach ( $ch['images'] as $img_obj ) {
+								$url = $img_obj['image']['url'] ?? '';
+								if ( ! empty( $url ) ) {
+									$model_cut_image = $url;
+									break;
+								}
+							}
+						}
+						if ( ( strpos( $ch_name_l, 'model 360' ) !== false || strpos( $ch_name_l, '360' ) !== false ) && isset( $ch['extra_price'] ) && (float) $ch['extra_price'] > 0 ) {
+							$model_360_price = (float) $ch['extra_price'];
+						}
+					}
+					// Model coverage is managed by coverage_and_cutouts, strictly not a production variant
+					continue;
+				}
+
 				// Exacoat catalog rule: iPhones and smartphones are strictly separate standalone products (never combined with model variants)
 				$is_phone_device = ( $family === 'phone' || preg_match( '/\b(iphone|galaxy|pixel|xiaomi|redmi|poco|oppo|vivo|realme|infinix|oneplus|phone)\b/i', "{$product->get_name()} {$product->get_slug()}" ) );
 				if ( $is_phone_device && ( in_array( $layer_name_lower, [ 'model', 'series', 'iphone model', 'phone model', 'device model', 'connectivity' ], true ) || strpos( $layer_name_lower, 'iphone' ) !== false || strpos( $layer_name_lower, 'model' ) !== false ) ) {
-					// Discard legacy model selector layers on phones
+					// Discard legacy hardware model selector layers on phones
 					continue;
 				}
 
@@ -1972,46 +2010,6 @@ class Exacoat_Configurator_Engine {
 					|| in_array( $layer_name_lower, [ 'series', 'ipad series', 'version', 'ipad version', 'connectivity' ], true )
 					|| preg_match( '/\b(series|connectivity|version)\b/i', $layer_name_lower );
 				$is_logo = ( strpos( $layer_name_lower, 'logo' ) !== false || strpos( $layer_name_lower, 'cutout' ) !== false );
-				$is_coverage = ( strpos( $layer_name_lower, 'coverage' ) !== false || strpos( $layer_name_lower, 'model cut' ) !== false || strpos( $layer_name_lower, 'model 360' ) !== false );
-
-				$raw_choices = $content_by_layer[ $layer_id_num ] ?? [];
-
-				if ( $is_logo ) {
-					$has_logo_layer = true;
-					foreach ( $raw_choices as $ch ) {
-						$ch_name_lower = strtolower( $ch['name'] ?? '' );
-						if ( ! empty( $ch['images'] ) && is_array( $ch['images'] ) ) {
-							foreach ( $ch['images'] as $img_obj ) {
-								$url = $img_obj['image']['url'] ?? '';
-								if ( empty( $url ) ) continue;
-								$angle_id = $img_obj['angleId'] ?? null;
-								$angle_name = $img_obj['angle_name'] ?? '';
-
-								$matched = false;
-								foreach ( $views as $v ) {
-									if ( ( $angle_id && (int) ( $v['legacy_id'] ?? 0 ) === (int) $angle_id ) || ( $angle_name && strcasecmp( $v['name'], $angle_name ) === 0 ) ) {
-										$logo_cutout_by_view[ $v['id'] ] = $url;
-										$matched = true;
-									}
-								}
-								if ( ! $matched ) {
-									foreach ( $views as $v ) {
-										if ( empty( $logo_cutout_by_view[ $v['id'] ] ) ) {
-											$logo_cutout_by_view[ $v['id'] ] = $url;
-										}
-									}
-								}
-							}
-						}
-					}
-					// Logo Cutout is managed by coverage_and_cutouts, strictly not a production variant
-					continue;
-				}
-
-				if ( $is_coverage ) {
-					// Coverage is managed by coverage_and_cutouts, strictly not a production variant
-					continue;
-				}
 
 				if ( $is_selector ) {
 					$options = [];
@@ -2135,13 +2133,31 @@ class Exacoat_Configurator_Engine {
 		unset( $v );
 
 		$primary_logo_url = reset( $logo_cutout_by_view ) ?: '';
+		$is_phone = ( $family === 'phone' || preg_match( '/\b(iphone|galaxy|pixel|xiaomi|redmi|poco|oppo|vivo|realme|infinix|oneplus|phone)\b/i', "{$product->get_name()} {$product->get_slug()}" ) );
+		$is_foldable = ( $family === 'foldable' || preg_match( '/\b(fold|flip)\b/i', "{$product->get_name()} {$product->get_slug()}" ) );
+
+		$cov_type = 'none';
+		$has_cut = false;
+		if ( $has_coverage_layer ) {
+			$cov_type = 'model_cut_and_360';
+			$has_cut = true;
+		} elseif ( $is_foldable ) {
+			$cov_type = 'model_cut_only';
+			$has_cut = true;
+		} elseif ( $is_phone ) {
+			$cov_type = 'model_cut_and_360';
+			$has_cut = true;
+		}
+
 		$coverage_and_cutouts = [
 			'has_logo_cutout'       => $has_logo_layer || ! empty( $primary_logo_url ) || ( $family === 'laptop' ) || strpos( $cat_lower, 'macbook' ) !== false || strpos( $cat_lower, 'iphone' ) !== false,
 			'logo_cutout_mask_url'  => $primary_logo_url,
 			'has_pencil_cutout'     => false,
-			'has_model_cut'         => false,
-			'coverage_type'         => 'none',
-			'model_360_extra_price' => 40000,
+			'has_model_cut'         => $has_cut,
+			'coverage_type'         => $cov_type,
+			'model_cutout_url'      => $model_cut_image ?: '',
+			'model_cut_mask_url'    => $model_cut_image ?: '',
+			'model_360_extra_price' => $model_360_price ?: 40000,
 		];
 
 		$base_price = (float) ( $product->get_price() ?: $product->get_regular_price() ?: 0 );
@@ -2499,6 +2515,22 @@ class Exacoat_Configurator_Engine {
 				if ( ! isset( $profile['coverage_and_cutouts']['model_360_extra_price'] ) || ! is_numeric( $profile['coverage_and_cutouts']['model_360_extra_price'] ) ) {
 					$profile['coverage_and_cutouts']['model_360_extra_price'] = 40000;
 				}
+				// Auto-heal phone coverage to model_cut_and_360 if currently none
+				$dev_fam = $profile['family'] ?? '';
+				if ( $dev_fam === 'phone' && ( empty( $profile['coverage_and_cutouts']['coverage_type'] ) || $profile['coverage_and_cutouts']['coverage_type'] === 'none' ) ) {
+					$profile['coverage_and_cutouts']['coverage_type'] = 'model_cut_and_360';
+					$profile['coverage_and_cutouts']['has_model_cut'] = true;
+					$profile['coverage_and_cutouts']['model_360_extra_price'] = 40000;
+					if ( ! empty( $modern_profile ) ) {
+						update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
+					}
+				} elseif ( $dev_fam === 'foldable' && ( empty( $profile['coverage_and_cutouts']['coverage_type'] ) || $profile['coverage_and_cutouts']['coverage_type'] === 'none' ) ) {
+					$profile['coverage_and_cutouts']['coverage_type'] = 'model_cut_only';
+					$profile['coverage_and_cutouts']['has_model_cut'] = true;
+					if ( ! empty( $modern_profile ) ) {
+						update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
+					}
+				}
 			}
 
 			// Ensure selector layers (Series, Connectivity, Version) are strictly variants, never skin layers
@@ -2632,6 +2664,11 @@ class Exacoat_Configurator_Engine {
 				$raw_coverage['model_360_extra_price'] = 40000;
 			} else {
 				$raw_coverage['model_360_extra_price'] = (float) $raw_coverage['model_360_extra_price'];
+			}
+			if ( ! empty( $raw_coverage['model_cut_mask_url'] ) && empty( $raw_coverage['model_cutout_url'] ) ) {
+				$raw_coverage['model_cutout_url'] = $raw_coverage['model_cut_mask_url'];
+			} elseif ( ! empty( $raw_coverage['model_cutout_url'] ) && empty( $raw_coverage['model_cut_mask_url'] ) ) {
+				$raw_coverage['model_cut_mask_url'] = $raw_coverage['model_cutout_url'];
 			}
 		}
 
