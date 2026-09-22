@@ -4119,28 +4119,53 @@ export const ConfiguratorStudioPage: React.FC = () => {
     let total = editingProfile.base_price || 0;
     const multiplier = editingProfile.size_multiplier || 1.0;
 
-    editingProfile.layers.forEach((layer) => {
+    editingProfile.layers.forEach((layer, idx) => {
       const isSelected = selectedSimLayers[layer.id] ?? (layer.default_selected || layer.is_required);
       if (isSelected) {
-        const layerExtra = Number(layer.extra_price) || 0;
-        total += layerExtra;
+        const isPrimary =
+          layer.group === 'primary' ||
+          layer.id === 'back' ||
+          layer.id === 'back-skin' ||
+          idx === 0 ||
+          /\b(back|top lid|body|base|full)\b/i.test(layer.name || '') ||
+          !layer.extra_price ||
+          Number(layer.extra_price) === 0;
+
+        const effectiveLayerExtra = isPrimary ? 0 : (Number(layer.extra_price) || 0);
+        total += effectiveLayerExtra;
+
         const partFinishSlug = selectedLayerFinishes[layer.id] || selectedSimFinish;
         const fObj = finishes.find((f) => (f.slug || f.id) === partFinishSlug || f.id === partFinishSlug);
-        if (fObj && (fObj.extra_price || 0) > 0) {
-          const isPrimary = layer.group === 'primary' || layerExtra === 0;
-          const partBasePrice = layerExtra > 0 ? layerExtra : (editingProfile.base_price || 140000);
+        const baseFinishExtra = Number(fObj?.extra_price) || 0;
+
+        if (fObj && baseFinishExtra > 0) {
+          const isCustomDeviceFinish = Boolean(
+            fObj.is_custom_per_device ||
+            (layer.assets_by_view &&
+              Object.values(layer.assets_by_view).some(
+                (a) => a.render_texture_map && a.render_texture_map[fObj.slug || fObj.id]
+              ))
+          );
 
           let finishExtra = 0;
-          if (fObj.accent_extra_price && fObj.accent_extra_price > 0 && !isPrimary) {
+          if (isCustomDeviceFinish) {
+            // Custom device finishes (e.g. Everything set as +120,000): always honor exact price set on finish
+            finishExtra = Math.round(baseFinishExtra * (isPrimary ? multiplier : 1.0));
+          } else if (isPrimary) {
+            // Standard signature finishes on primary skin: honor extra_price * multiplier
+            finishExtra = Math.round(baseFinishExtra * multiplier);
+          } else if (fObj.accent_extra_price && fObj.accent_extra_price > 0) {
+            // Explicit accent override
             finishExtra = fObj.accent_extra_price;
           } else {
+            // Surcharge tiers for secondary/accent cutouts
             const matchedTier = surchargeTiers.find(
-              (t) => partBasePrice >= t.min_price && partBasePrice <= t.max_price
+              (t) => effectiveLayerExtra >= t.min_price && effectiveLayerExtra <= t.max_price
             );
             if (matchedTier) {
               finishExtra = matchedTier.surcharge;
             } else {
-              finishExtra = Math.round((fObj.extra_price || 0) * (isPrimary ? multiplier : 1.0));
+              finishExtra = Math.min(baseFinishExtra, 15000);
             }
           }
           total += finishExtra;
@@ -7713,18 +7738,40 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               const fSlug = finish.slug || finish.id;
                               const currentPartSlug = selectedLayerFinishes[activeTestPartId] || selectedSimFinish;
                               const isSelected = currentPartSlug === fSlug || currentPartSlug === finish.id;
-                              const isPrimary = activeTestLayer?.group === 'primary' || (Number(activeTestLayer?.extra_price) === 0);
-                              const partBasePrice = Number(activeTestLayer?.extra_price) > 0 ? Number(activeTestLayer?.extra_price) : (editingProfile.base_price || 140000);
+                              const isPrimary =
+                                activeTestLayer?.group === 'primary' ||
+                                activeTestLayer?.id === 'back' ||
+                                activeTestLayer?.id === 'back-skin' ||
+                                /\b(back|top lid|body|base|full)\b/i.test(activeTestLayer?.name || '') ||
+                                !activeTestLayer?.extra_price ||
+                                Number(activeTestLayer?.extra_price) === 0;
+
+                              const effectiveLayerExtra = isPrimary ? 0 : (Number(activeTestLayer?.extra_price) || 0);
+
+                              const isCustomDeviceFinish = Boolean(
+                                finish.is_custom_per_device ||
+                                (activeTestLayer?.assets_by_view &&
+                                  Object.values(activeTestLayer.assets_by_view).some(
+                                    (a) => a.render_texture_map && a.render_texture_map[finish.slug || finish.id]
+                                  ))
+                              );
+
                               let extra = 0;
-                              if ((finish.extra_price || 0) > 0) {
-                                if (finish.accent_extra_price && finish.accent_extra_price > 0 && !isPrimary) {
+                              const baseFinishExtra = Number(finish.extra_price) || 0;
+
+                              if (baseFinishExtra > 0) {
+                                if (isCustomDeviceFinish) {
+                                  extra = Math.round(baseFinishExtra * (isPrimary ? (editingProfile.size_multiplier || 1.0) : 1.0));
+                                } else if (isPrimary) {
+                                  extra = Math.round(baseFinishExtra * (editingProfile.size_multiplier || 1.0));
+                                } else if (finish.accent_extra_price && finish.accent_extra_price > 0) {
                                   extra = finish.accent_extra_price;
                                 } else {
-                                  const matchedTier = surchargeTiers.find((t) => partBasePrice >= t.min_price && partBasePrice <= t.max_price);
+                                  const matchedTier = surchargeTiers.find((t) => effectiveLayerExtra >= t.min_price && effectiveLayerExtra <= t.max_price);
                                   if (matchedTier) {
                                     extra = matchedTier.surcharge;
                                   } else {
-                                    extra = Math.round((finish.extra_price || 0) * (isPrimary ? (editingProfile.size_multiplier || 1.0) : 1.0));
+                                    extra = Math.min(baseFinishExtra, 15000);
                                   }
                                 }
                               }
@@ -8403,23 +8450,41 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     />
                                   </label>
 
-                                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans">
-                                    <span className="text-zinc-400 font-medium">Extra Price:</span>
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-zinc-500 font-mono text-[11px]">IDR</span>
-                                      <input
-                                        type="number"
-                                        step="5000"
-                                        value={currentActiveLayer.extra_price}
-                                        onChange={(e) =>
-                                          handleUpdateLayer(currentActiveLayer.id, {
-                                            extra_price: Number(e.target.value) || 0,
-                                          })
-                                        }
-                                        className="w-20 px-2 py-0.5 text-xs font-mono text-right rounded bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
-                                      />
-                                    </div>
-                                  </div>
+                                  {(() => {
+                                    const isPrimaryLayer =
+                                      currentActiveLayer.group === 'primary' ||
+                                      currentActiveLayer.id === 'back' ||
+                                      currentActiveLayer.id === 'back-skin' ||
+                                      /\b(back|top lid|body|base|full)\b/i.test(currentActiveLayer.name || '');
+
+                                    return (
+                                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-zinc-400 font-medium">Extra Price:</span>
+                                          {isPrimaryLayer && (
+                                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                              Included in Base
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-zinc-500 font-mono text-[11px]">IDR</span>
+                                          <input
+                                            type="number"
+                                            step="5000"
+                                            disabled={isPrimaryLayer}
+                                            value={isPrimaryLayer ? 0 : (currentActiveLayer.extra_price ?? 0)}
+                                            onChange={(e) =>
+                                              handleUpdateLayer(currentActiveLayer.id, {
+                                                extra_price: isPrimaryLayer ? 0 : (Number(e.target.value) || 0),
+                                              })
+                                            }
+                                            className="w-20 px-2 py-0.5 text-xs font-mono text-right rounded bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18] disabled:opacity-50"
+                                          />
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
 
                                 {/* Layer Display Mode: 3D Viewport vs Non-Visual Kit Part */}

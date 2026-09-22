@@ -2102,15 +2102,19 @@ class Exacoat_Configurator_Engine {
 				}
 				$layer_finish_slugs = array_values( array_unique( $layer_finish_slugs ) );
 
+				$is_primary_layer = in_array( strtolower( trim( $layer_name ) ), [ 'back', 'back skin', 'top', 'top lid', 'device', 'body', 'main', 'base', 'full' ], true )
+					|| in_array( $layer_slug, [ 'back', 'back-skin', 'top', 'top-lid', 'main', 'device' ], true )
+					|| $idx === 0;
+
 				$normalized_layers[] = [
 					'id'                    => $layer_slug,
 					'legacy_id'             => $layer_id_num,
 					'name'                  => $layer_name,
-					'group'                 => in_array( strtolower( $layer_name ), [ 'back', 'top', 'device' ] ) ? 'primary' : 'accent',
+					'group'                 => $is_primary_layer ? 'primary' : 'accent',
 					'is_required'           => $is_required,
 					'is_optional'           => $is_optional,
 					'default_selected'      => $is_required || ! $is_optional,
-					'extra_price'           => $layer_extra_price,
+					'extra_price'           => $is_primary_layer ? 0 : $layer_extra_price,
 					'z_index'               => $idx + 1,
 					'allowed_finish_groups' => [ 'Signature skins', 'Colors', 'Natural' ],
 					'allowed_finish_slugs'  => ( count( $layer_finish_slugs ) > 0 && count( $layer_finish_slugs ) < 15 ) ? $layer_finish_slugs : [],
@@ -2494,6 +2498,31 @@ class Exacoat_Configurator_Engine {
 					$profile['coverage_and_cutouts']['model_360_extra_price'] = 40000;
 				}
 			}
+
+			// Ensure primary layers never carry extra_price (the base skin is already covered by base_price)
+			if ( ! empty( $profile['layers'] ) && is_array( $profile['layers'] ) ) {
+				$layers_modified = false;
+				foreach ( $profile['layers'] as $idx => &$l ) {
+					$is_primary = ( isset( $l['group'] ) && $l['group'] === 'primary' )
+						|| ( isset( $l['id'] ) && in_array( $l['id'], [ 'back', 'back-skin', 'device', 'main' ], true ) )
+						|| ( isset( $l['name'] ) && preg_match( '/\b(back|top lid|body|base|full)\b/i', $l['name'] ) )
+						|| $idx === 0;
+					if ( $is_primary ) {
+						if ( empty( $l['group'] ) || $l['group'] !== 'primary' ) {
+							$l['group'] = 'primary';
+							$layers_modified = true;
+						}
+						if ( ! empty( $l['extra_price'] ) ) {
+							$l['extra_price'] = 0;
+							$layers_modified = true;
+						}
+					}
+				}
+				unset( $l );
+				if ( $layers_modified && ! empty( $modern_profile ) ) {
+					update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
+				}
+			}
 		}
 
 		return rest_ensure_response( [
@@ -2546,6 +2575,21 @@ class Exacoat_Configurator_Engine {
 			'presets'              => is_array( $params['presets'] ?? null ) ? self::sanitize_presets( $params['presets'] ) : [],
 			'updated_at'           => current_time( 'mysql' ),
 		];
+
+		// Ensure primary layers never carry extra_price on the layer itself (covered by base_price)
+		if ( ! empty( $profile['layers'] ) && is_array( $profile['layers'] ) ) {
+			foreach ( $profile['layers'] as $idx => &$layer ) {
+				$is_primary = ( isset( $layer['group'] ) && $layer['group'] === 'primary' )
+					|| ( isset( $layer['id'] ) && in_array( $layer['id'], [ 'back', 'back-skin', 'device', 'main' ], true ) )
+					|| ( isset( $layer['name'] ) && preg_match( '/\b(back|top lid|body|base|full)\b/i', $layer['name'] ) )
+					|| $idx === 0;
+				if ( $is_primary ) {
+					$layer['group'] = 'primary';
+					$layer['extra_price'] = 0;
+				}
+			}
+			unset( $layer );
+		}
 
 		// For v2 profiles, prune legacy per-layer shading/shadow properties so universal view-level shading takes precedence
 		if ( $profile['configurator_version'] === 'v2' && ! empty( $profile['layers'] ) ) {
