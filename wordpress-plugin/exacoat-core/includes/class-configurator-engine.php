@@ -1968,7 +1968,9 @@ class Exacoat_Configurator_Engine {
 				}
 
 				// Only tablets (e.g. iPad Wi-Fi vs Cellular, iPad versions) or explicit hardware where physical templates differ may have selector variants
-				$is_selector = strpos( (string) ( $l['class_name'] ?? '' ), 'none-hover' ) !== false || in_array( $layer_name_lower, [ 'ipad series', 'ipad version', 'connectivity' ], true );
+				$is_selector = strpos( (string) ( $l['class_name'] ?? '' ), 'none-hover' ) !== false
+					|| in_array( $layer_name_lower, [ 'series', 'ipad series', 'version', 'ipad version', 'connectivity' ], true )
+					|| preg_match( '/\b(series|connectivity|version)\b/i', $layer_name_lower );
 				$is_logo = ( strpos( $layer_name_lower, 'logo' ) !== false || strpos( $layer_name_lower, 'cutout' ) !== false );
 				$is_coverage = ( strpos( $layer_name_lower, 'coverage' ) !== false || strpos( $layer_name_lower, 'model cut' ) !== false || strpos( $layer_name_lower, 'model 360' ) !== false );
 
@@ -2499,9 +2501,54 @@ class Exacoat_Configurator_Engine {
 				}
 			}
 
-			// Ensure primary layers never carry extra_price (the base skin is already covered by base_price)
+			// Ensure selector layers (Series, Connectivity, Version) are strictly variants, never skin layers
 			if ( ! empty( $profile['layers'] ) && is_array( $profile['layers'] ) ) {
 				$layers_modified = false;
+				$pruned_layers = [];
+				foreach ( $profile['layers'] as $l ) {
+					$l_id = strtolower( $l['id'] ?? '' );
+					$l_name = strtolower( $l['name'] ?? '' );
+					$is_selector_layer = in_array( $l_id, [ 'series', 'connectivity', 'version' ], true )
+						|| preg_match( '/\b(series|connectivity|version)\b/i', $l_name );
+
+					if ( $is_selector_layer ) {
+						$layers_modified = true;
+						$already_in_variants = false;
+						if ( ! empty( $profile['variants'] ) && is_array( $profile['variants'] ) ) {
+							foreach ( $profile['variants'] as $v ) {
+								if ( strtolower( $v['id'] ?? '' ) === $l_id || strtolower( $v['name'] ?? '' ) === $l_name ) {
+									$already_in_variants = true;
+									break;
+								}
+							}
+						}
+						if ( ! $already_in_variants ) {
+							if ( ! isset( $profile['variants'] ) || ! is_array( $profile['variants'] ) ) {
+								$profile['variants'] = [];
+							}
+							$opts = [];
+							if ( ! empty( $l['allowed_finishes'] ) && is_array( $l['allowed_finishes'] ) ) {
+								foreach ( $l['allowed_finishes'] as $f_name ) {
+									$opts[] = [
+										'id'         => sanitize_title( $f_name ),
+										'name'       => $f_name,
+										'price_diff' => 0,
+									];
+								}
+							}
+							$profile['variants'][] = [
+								'id'      => $l['id'] ?? sanitize_title( $l['name'] ?? 'variant' ),
+								'name'    => $l['name'] ?? 'Variant',
+								'options' => $opts,
+							];
+						}
+					} else {
+						$pruned_layers[] = $l;
+					}
+				}
+				$profile['layers'] = $pruned_layers;
+
+				// Ensure primary layers never carry extra_price (the base skin is already covered by base_price)
 				foreach ( $profile['layers'] as $idx => &$l ) {
 					$is_primary = ( isset( $l['group'] ) && $l['group'] === 'primary' )
 						|| ( isset( $l['id'] ) && in_array( $l['id'], [ 'back', 'back-skin', 'device', 'main' ], true ) )
@@ -2608,8 +2655,52 @@ class Exacoat_Configurator_Engine {
 			'updated_at'           => current_time( 'mysql' ),
 		];
 
-		// Ensure primary layers never carry extra_price on the layer itself (covered by base_price)
+		// Ensure selector layers (Series, Connectivity, Version) are strictly variants, never skin layers
 		if ( ! empty( $profile['layers'] ) && is_array( $profile['layers'] ) ) {
+			$pruned_layers = [];
+			foreach ( $profile['layers'] as $l ) {
+				$l_id = strtolower( $l['id'] ?? '' );
+				$l_name = strtolower( $l['name'] ?? '' );
+				$is_selector_layer = in_array( $l_id, [ 'series', 'connectivity', 'version' ], true )
+					|| preg_match( '/\b(series|connectivity|version)\b/i', $l_name );
+
+				if ( $is_selector_layer ) {
+					$already_in_variants = false;
+					if ( ! empty( $profile['variants'] ) && is_array( $profile['variants'] ) ) {
+						foreach ( $profile['variants'] as $v ) {
+							if ( strtolower( $v['id'] ?? '' ) === $l_id || strtolower( $v['name'] ?? '' ) === $l_name ) {
+								$already_in_variants = true;
+								break;
+							}
+						}
+					}
+					if ( ! $already_in_variants ) {
+						if ( ! isset( $profile['variants'] ) || ! is_array( $profile['variants'] ) ) {
+							$profile['variants'] = [];
+						}
+						$opts = [];
+						if ( ! empty( $l['allowed_finishes'] ) && is_array( $l['allowed_finishes'] ) ) {
+							foreach ( $l['allowed_finishes'] as $f_name ) {
+								$opts[] = [
+									'id'         => sanitize_title( $f_name ),
+									'name'       => $f_name,
+									'price_diff' => 0,
+								];
+							}
+						}
+						$profile['variants'][] = [
+							'id'      => $l['id'] ?? sanitize_title( $l['name'] ?? 'variant' ),
+							'name'    => $l['name'] ?? 'Variant',
+							'options' => $opts,
+						];
+					}
+				} else {
+					$pruned_layers[] = $l;
+				}
+			}
+			$profile['layers'] = $pruned_layers;
+
+			// Ensure primary layers never carry extra_price on the layer itself (covered by base_price)
 			foreach ( $profile['layers'] as $idx => &$layer ) {
 				$is_primary = ( isset( $layer['group'] ) && $layer['group'] === 'primary' )
 					|| ( isset( $layer['id'] ) && in_array( $layer['id'], [ 'back', 'back-skin', 'device', 'main' ], true ) )
