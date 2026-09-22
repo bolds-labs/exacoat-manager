@@ -430,6 +430,7 @@ export interface GlobalFinish {
   in_stock: boolean;
   is_active?: boolean;
   extra_price: number;
+  accent_extra_price?: number;
   class_name?: string;
   is_custom_per_device?: boolean;
   badge_text?: string;
@@ -438,6 +439,39 @@ export interface GlobalFinish {
   shadow_opacity?: number;
   highlight_opacity?: number;
 }
+
+export interface FinishSurchargeTier {
+  id: string;
+  label: string;
+  min_price: number;
+  max_price: number;
+  surcharge: number;
+  description?: string;
+}
+
+export const DEFAULT_FINISH_SURCHARGE_TIERS: FinishSurchargeTier[] = [
+  {
+    id: 'tier_small',
+    label: 'Small Accents & Cutouts',
+    min_price: 10000,
+    max_price: 45000,
+    surcharge: 5000,
+  },
+  {
+    id: 'tier_medium',
+    label: 'Medium Parts & Accents',
+    min_price: 45001,
+    max_price: 95000,
+    surcharge: 15000,
+  },
+  {
+    id: 'tier_primary',
+    label: 'Full Skin & Main Body',
+    min_price: 95001,
+    max_price: 999999,
+    surcharge: 30000,
+  },
+];
 
 export const DEFAULT_GLOBAL_FINISHES: GlobalFinish[] = [
   { id: 'swarm', name: 'Swarm', group: 'Signature skins', slug: 'swarm', thumbnail: 'https://exacoat.com/wp-content/uploads/Swarm-Texture-Thumbnail.jpg', color_hex: '#1f2024', in_stock: true, extra_price: 30000 },
@@ -2045,6 +2079,7 @@ export async function fetchGlobalFinishesDirect(): Promise<{
   groups?: string[];
   group_settings?: Record<string, FinishGroupSetting>;
   presets?: ConfiguratorPreset[];
+  surcharge_tiers?: FinishSurchargeTier[];
   error?: string;
 }> {
   let localFinishes: GlobalFinish[] = DEFAULT_GLOBAL_FINISHES;
@@ -2072,6 +2107,7 @@ export async function fetchGlobalFinishesDirect(): Promise<{
         groups: Array.isArray(data?.groups) ? data.groups : undefined,
         group_settings: data?.group_settings,
         presets: Array.isArray(data?.presets) ? data.presets : undefined,
+        surcharge_tiers: Array.isArray(data?.surcharge_tiers) ? data.surcharge_tiers : undefined,
       };
     }
   } catch {}
@@ -2088,6 +2124,7 @@ export async function fetchGlobalFinishesDirect(): Promise<{
           groups: Array.isArray(nextData?.groups) ? nextData.groups : undefined,
           group_settings: nextData?.group_settings,
           presets: Array.isArray(nextData?.presets) ? nextData.presets : undefined,
+          surcharge_tiers: Array.isArray(nextData?.surcharge_tiers) ? nextData.surcharge_tiers : undefined,
         };
       }
     }
@@ -2096,7 +2133,68 @@ export async function fetchGlobalFinishesDirect(): Promise<{
   return {
     success: true,
     finishes: localFinishes,
+    surcharge_tiers: DEFAULT_FINISH_SURCHARGE_TIERS,
   };
+}
+
+export async function fetchFinishSurchargeTiersDirect(): Promise<{
+  success: boolean;
+  tiers: FinishSurchargeTier[];
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/configurator/surcharge-tiers?_t=${Date.now()}`;
+
+  try {
+    const res = await authenticatedFetch(url, { headers: { Accept: 'application/json' } });
+    const data = await res.json();
+    if (res.ok && !!data?.success && Array.isArray(data?.tiers)) {
+      return {
+        success: true,
+        tiers: data.tiers,
+      };
+    }
+  } catch (err: any) {
+    console.error('Failed to fetch surcharge tiers:', err);
+  }
+
+  return {
+    success: true,
+    tiers: DEFAULT_FINISH_SURCHARGE_TIERS,
+  };
+}
+
+export async function saveFinishSurchargeTiersDirect(tiers: FinishSurchargeTier[]): Promise<{
+  success: boolean;
+  tiers?: FinishSurchargeTier[];
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/configurator/surcharge-tiers`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ tiers }),
+    });
+    const data = await res.json();
+    if (res.ok && !!data?.success && Array.isArray(data?.tiers)) {
+      return {
+        success: true,
+        tiers: data.tiers,
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || 'Failed to save finish surcharge tiers',
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err?.message || 'Network error saving finish surcharge tiers',
+    };
+  }
 }
 
 export async function toggleFinishStockDirect(id: string, inStock: boolean): Promise<{ success: boolean; finishes?: GlobalFinish[]; error?: string }> {

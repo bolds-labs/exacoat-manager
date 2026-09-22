@@ -9,6 +9,8 @@ import {
   saveGlobalFinishDirect,
   GlobalFinish,
   DEFAULT_GLOBAL_FINISHES,
+  FinishSurchargeTier,
+  DEFAULT_FINISH_SURCHARGE_TIERS,
 } from '../lib/wordpressBridge';
 import {
   Layers,
@@ -24,12 +26,16 @@ import {
   Check,
   X,
   Edit3,
+  Coins,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { FinishSurchargeTiersModal } from '../components/modals/FinishSurchargeTiersModal';
 
 export const MaterialsStockPage: React.FC = () => {
   const { showToast } = useToast();
   const [finishes, setFinishes] = useState<GlobalFinish[]>(DEFAULT_GLOBAL_FINISHES);
+  const [surchargeTiers, setSurchargeTiers] = useState<FinishSurchargeTier[]>(DEFAULT_FINISH_SURCHARGE_TIERS);
+  const [showSurchargeTiersModal, setShowSurchargeTiersModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -46,6 +52,7 @@ export const MaterialsStockPage: React.FC = () => {
     thumbnail: '',
     texture_url: '',
     extra_price: 0,
+    accent_extra_price: 0,
     in_stock: true,
   });
 
@@ -60,6 +67,9 @@ export const MaterialsStockPage: React.FC = () => {
       const res = await fetchGlobalFinishesDirect();
       if (res.finishes && Array.isArray(res.finishes) && res.finishes.length > 0) {
         setFinishes(res.finishes);
+      }
+      if (res.surcharge_tiers && Array.isArray(res.surcharge_tiers) && res.surcharge_tiers.length > 0) {
+        setSurchargeTiers(res.surcharge_tiers);
       }
     } catch (err: any) {
       console.warn('Materials inventory load warning:', err);
@@ -162,6 +172,7 @@ export const MaterialsStockPage: React.FC = () => {
         thumbnail: newFinish.thumbnail.trim(),
         texture_url: newFinish.texture_url.trim() || newFinish.thumbnail.trim(),
         extra_price: Number(newFinish.extra_price) || 0,
+        accent_extra_price: Number(newFinish.accent_extra_price) || 0,
         in_stock: newFinish.in_stock,
       });
 
@@ -175,6 +186,7 @@ export const MaterialsStockPage: React.FC = () => {
           thumbnail: '',
           texture_url: '',
           extra_price: 0,
+          accent_extra_price: 0,
           in_stock: true,
         });
         loadFinishes(true);
@@ -206,6 +218,7 @@ export const MaterialsStockPage: React.FC = () => {
         thumbnail: editingFinish.thumbnail.trim(),
         texture_url: (editingFinish.texture_url || '').trim(),
         extra_price: Number(editingFinish.extra_price) || 0,
+        accent_extra_price: Number(editingFinish.accent_extra_price) || 0,
         in_stock: editingFinish.in_stock,
         shadow_opacity: editingFinish.shadow_opacity,
         highlight_opacity: editingFinish.highlight_opacity,
@@ -268,6 +281,14 @@ export const MaterialsStockPage: React.FC = () => {
             >
               <RefreshCw className={clsx('w-3.5 h-3.5', isRefreshing && 'animate-spin text-[#f3aa18]')} />
               Refresh
+            </button>
+            <button
+              onClick={() => setShowSurchargeTiersModal(true)}
+              className="px-3.5 py-2 text-xs font-mono font-medium rounded-xl border border-amber-500/30 hover:bg-amber-500/10 text-amber-300 transition-colors flex items-center gap-2 cursor-pointer"
+              title="Manage global finish surcharge brackets by part base price"
+            >
+              <Coins className="w-3.5 h-3.5 text-amber-400" />
+              <span>Surcharge Tiers ({surchargeTiers.length})</span>
             </button>
             <button
               onClick={() => setIsModalOpen(true)}
@@ -423,11 +444,22 @@ export const MaterialsStockPage: React.FC = () => {
 
                   {/* Pricing / Meta info */}
                   <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono">
-                    <span className="text-zinc-500">Tier surcharge:</span>
+                    <span className="text-zinc-500">Main Skin Extra:</span>
                     <span className="text-zinc-300 font-bold">
                       {(finish.extra_price ?? 0) > 0
                         ? `+IDR ${(finish.extra_price ?? 0).toLocaleString('id-ID')}`
                         : 'Standard (IDR 0)'}
+                    </span>
+                  </div>
+
+                  <div className="mt-1 flex items-center justify-between text-[11px] font-mono">
+                    <span className="text-zinc-500">Accent Extra:</span>
+                    <span className="text-amber-400 font-bold">
+                      {(finish.accent_extra_price ?? 0) > 0
+                        ? `+IDR ${(finish.accent_extra_price ?? 0).toLocaleString('id-ID')}`
+                        : (finish.extra_price ?? 0) > 0
+                        ? 'Dynamic Tier (e.g. +5k)'
+                        : 'IDR 0'}
                     </span>
                   </div>
 
@@ -584,15 +616,30 @@ export const MaterialsStockPage: React.FC = () => {
                 </p>
               </div>
 
-              <div>
-                <label className="block text-xs font-mono text-zinc-400 mb-1">Extra Surcharge (IDR)</label>
-                <input
-                  type="number"
-                  placeholder="0"
-                  value={newFinish.extra_price}
-                  onChange={(e) => setNewFinish({ ...newFinish, extra_price: Number(e.target.value) })}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-mono text-zinc-400 mb-1">Main Skin Extra (IDR)</label>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={newFinish.extra_price}
+                    onChange={(e) => setNewFinish({ ...newFinish, extra_price: Number(e.target.value) })}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
+                  />
+                  <p className="text-[10px] text-zinc-500 mt-1">e.g. 30,000 for Swarm, 0 for Matte Black.</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-zinc-400 mb-1">Accent Extra Override (IDR)</label>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={newFinish.accent_extra_price}
+                    onChange={(e) => setNewFinish({ ...newFinish, accent_extra_price: Number(e.target.value) })}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
+                  />
+                  <p className="text-[10px] text-zinc-500 mt-1">Leave 0 to auto-scale via dynamic surcharge tiers (e.g. +5k).</p>
+                </div>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/60 border border-white/5">
@@ -715,14 +762,29 @@ export const MaterialsStockPage: React.FC = () => {
                 </p>
               </div>
 
-              <div>
-                <label className="block text-xs font-mono text-zinc-400 mb-1">Extra Surcharge (IDR)</label>
-                <input
-                  type="number"
-                  value={editingFinish.extra_price ?? 0}
-                  onChange={(e) => setEditingFinish({ ...editingFinish, extra_price: Number(e.target.value) })}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-mono text-zinc-400 mb-1">Main Skin Extra (IDR)</label>
+                  <input
+                    type="number"
+                    value={editingFinish.extra_price ?? 0}
+                    onChange={(e) => setEditingFinish({ ...editingFinish, extra_price: Number(e.target.value) })}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
+                  />
+                  <p className="text-[10px] text-zinc-500 mt-1">e.g. 30,000 for Swarm, 0 for Matte Black.</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-zinc-400 mb-1">Accent Extra Override (IDR)</label>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={editingFinish.accent_extra_price ?? 0}
+                    onChange={(e) => setEditingFinish({ ...editingFinish, accent_extra_price: Number(e.target.value) })}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
+                  />
+                  <p className="text-[10px] text-zinc-500 mt-1">Leave 0 to auto-scale via dynamic surcharge tiers (e.g. +5k).</p>
+                </div>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/60 border border-white/5">
@@ -758,6 +820,14 @@ export const MaterialsStockPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Dynamic Finish Surcharge Tiers Modal */}
+      <FinishSurchargeTiersModal
+        isOpen={showSurchargeTiersModal}
+        onClose={() => setShowSurchargeTiersModal(false)}
+        tiers={surchargeTiers}
+        onTiersUpdated={(newTiers) => setSurchargeTiers(newTiers)}
+      />
     </div>
   );
 };

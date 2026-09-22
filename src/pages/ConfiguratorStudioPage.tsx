@@ -31,6 +31,10 @@ import {
   fetchConfiguratorPresetsDirect,
   saveConfiguratorPresetsDirect,
   syncDeviceFamiliesDirect,
+  FinishSurchargeTier,
+  DEFAULT_FINISH_SURCHARGE_TIERS,
+  fetchFinishSurchargeTiersDirect,
+  saveFinishSurchargeTiersDirect,
 } from '../lib/wordpressBridge';
 import {
   DeviceConfiguratorProfile,
@@ -50,6 +54,7 @@ import {
   Plus,
   RefreshCw,
   Compass,
+  Coins,
   SlidersHorizontal,
   Smartphone,
   Laptop,
@@ -101,6 +106,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { MediaLibraryModal } from '../components/modals/MediaLibraryModal';
+import { FinishSurchargeTiersModal } from '../components/modals/FinishSurchargeTiersModal';
 import { WpMediaItem } from '../lib/wordpressBridge';
 
 export interface AssetAuditItem {
@@ -688,6 +694,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [showPresetsManagerModal, setShowPresetsManagerModal] = useState(false);
   const [editingPreset, setEditingPreset] = useState<ConfiguratorPreset | null>(null);
   const [isSavingPresets, setIsSavingPresets] = useState(false);
+  const [surchargeTiers, setSurchargeTiers] = useState<FinishSurchargeTier[]>(DEFAULT_FINISH_SURCHARGE_TIERS);
+  const [showSurchargeTiersModal, setShowSurchargeTiersModal] = useState(false);
+  const [isSavingSurchargeTiers, setIsSavingSurchargeTiers] = useState(false);
+  const [editingTier, setEditingTier] = useState<FinishSurchargeTier | null>(null);
   const [isManagingGroups, setIsManagingGroups] = useState(false);
   const [editingGroupName, setEditingGroupName] = useState<{ oldName: string; newName: string } | null>(null);
   const [isRenamingGroup, setIsRenamingGroup] = useState(false);
@@ -819,6 +829,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
         }
         if (Array.isArray(finishesRes.presets)) {
           setConfiguratorPresets(finishesRes.presets);
+        }
+        if (Array.isArray(finishesRes.surcharge_tiers) && finishesRes.surcharge_tiers.length > 0) {
+          setSurchargeTiers(finishesRes.surcharge_tiers);
         }
       }
     } catch (err: any) {
@@ -4109,11 +4122,28 @@ export const ConfiguratorStudioPage: React.FC = () => {
     editingProfile.layers.forEach((layer) => {
       const isSelected = selectedSimLayers[layer.id] ?? (layer.default_selected || layer.is_required);
       if (isSelected) {
-        total += Number(layer.extra_price) || 0;
+        const layerExtra = Number(layer.extra_price) || 0;
+        total += layerExtra;
         const partFinishSlug = selectedLayerFinishes[layer.id] || selectedSimFinish;
         const fObj = finishes.find((f) => (f.slug || f.id) === partFinishSlug || f.id === partFinishSlug);
         if (fObj && (fObj.extra_price || 0) > 0) {
-          total += (fObj.extra_price || 0) * multiplier;
+          const isPrimary = layer.group === 'primary' || layerExtra === 0;
+          const partBasePrice = layerExtra > 0 ? layerExtra : (editingProfile.base_price || 140000);
+
+          let finishExtra = 0;
+          if (fObj.accent_extra_price && fObj.accent_extra_price > 0 && !isPrimary) {
+            finishExtra = fObj.accent_extra_price;
+          } else {
+            const matchedTier = surchargeTiers.find(
+              (t) => partBasePrice >= t.min_price && partBasePrice <= t.max_price
+            );
+            if (matchedTier) {
+              finishExtra = matchedTier.surcharge;
+            } else {
+              finishExtra = Math.round((fObj.extra_price || 0) * (isPrimary ? multiplier : 1.0));
+            }
+          }
+          total += finishExtra;
         }
       }
     });
@@ -4142,7 +4172,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     }
 
     return total;
-  }, [editingProfile, selectedSimLayers, selectedLayerFinishes, selectedSimFinish, finishes, selectedCoverage, selectedSimVariants]);
+  }, [editingProfile, selectedSimLayers, selectedLayerFinishes, selectedSimFinish, finishes, selectedCoverage, selectedSimVariants, surchargeTiers]);
 
   // Catalog Stats
   const stats = useMemo(() => {
@@ -4193,6 +4223,15 @@ export const ConfiguratorStudioPage: React.FC = () => {
             >
               <Palette className="w-3.5 h-3.5 text-sky-400" />
               <span>Master Textures (v2)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowSurchargeTiersModal(true)}
+              className="px-4 py-2 text-xs font-sans font-medium rounded-xl border border-amber-500/30 hover:bg-amber-500/10 text-amber-300 transition-colors flex items-center gap-2 cursor-pointer"
+              title="Manage global finish surcharge brackets by part base price"
+            >
+              <Coins className="w-3.5 h-3.5 text-amber-400" />
+              <span>Surcharge Tiers ({surchargeTiers.length})</span>
             </button>
             <button
               type="button"
@@ -7674,7 +7713,21 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               const fSlug = finish.slug || finish.id;
                               const currentPartSlug = selectedLayerFinishes[activeTestPartId] || selectedSimFinish;
                               const isSelected = currentPartSlug === fSlug || currentPartSlug === finish.id;
-                              const extra = (finish.extra_price || 0) * (editingProfile.size_multiplier || 1.0);
+                              const isPrimary = activeTestLayer?.group === 'primary' || (Number(activeTestLayer?.extra_price) === 0);
+                              const partBasePrice = Number(activeTestLayer?.extra_price) > 0 ? Number(activeTestLayer?.extra_price) : (editingProfile.base_price || 140000);
+                              let extra = 0;
+                              if ((finish.extra_price || 0) > 0) {
+                                if (finish.accent_extra_price && finish.accent_extra_price > 0 && !isPrimary) {
+                                  extra = finish.accent_extra_price;
+                                } else {
+                                  const matchedTier = surchargeTiers.find((t) => partBasePrice >= t.min_price && partBasePrice <= t.max_price);
+                                  if (matchedTier) {
+                                    extra = matchedTier.surcharge;
+                                  } else {
+                                    extra = Math.round((finish.extra_price || 0) * (isPrimary ? (editingProfile.size_multiplier || 1.0) : 1.0));
+                                  }
+                                }
+                              }
 
                               return (
                                 <button
@@ -10698,6 +10751,39 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   </span>
                                 </div>
                               </div>
+
+                              {/* Dynamic Finish Surcharges (Brackets) */}
+                              <div className="p-3 rounded-xl bg-zinc-950/80 border border-white/5 space-y-2.5">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5">
+                                    <Coins className="w-3.5 h-3.5 text-amber-400" />
+                                    <span className="text-xs font-bold text-white">Dynamic Finish Surcharges</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowSurchargeTiersModal(true)}
+                                    className="px-2 py-0.5 text-[10px] font-mono text-amber-300 hover:text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-md transition-colors cursor-pointer"
+                                  >
+                                    Manage Brackets ({surchargeTiers.length})
+                                  </button>
+                                </div>
+                                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                                  Finishes with signature upcharges scale by part base price. Accents (IDR 35,000) only add +5,000 instead of +30,000.
+                                </p>
+                                <div className="grid grid-cols-1 gap-1 pt-1">
+                                  {surchargeTiers.slice(0, 3).map((tier) => (
+                                    <div
+                                      key={tier.id}
+                                      className="flex items-center justify-between text-[11px] font-mono py-1 px-2 rounded bg-zinc-900/60 border border-white/5"
+                                    >
+                                      <span className="text-zinc-300 truncate max-w-[140px]">{tier.label}</span>
+                                      <span className="text-amber-400 font-bold">
+                                        +IDR {tier.surcharge.toLocaleString('id-ID')}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
                             </div>
 
                             {/* Device Production Variants */}
@@ -13183,6 +13269,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
         title={mediaPickerConfig.title}
         recommendedDimensions={mediaPickerConfig.recommendedDimensions}
         currentUrl={mediaPickerConfig.currentUrl}
+      />
+
+      {/* Dynamic Finish Surcharge Tiers Modal */}
+      <FinishSurchargeTiersModal
+        isOpen={showSurchargeTiersModal}
+        onClose={() => setShowSurchargeTiersModal(false)}
+        tiers={surchargeTiers}
+        onTiersUpdated={(newTiers) => setSurchargeTiers(newTiers)}
       />
     </div>
   );

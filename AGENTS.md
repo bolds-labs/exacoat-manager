@@ -1283,5 +1283,38 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - `configurator-loader.ts` and `configurator-types.ts` propagate `isCustomPerDevice` and angle-specific artwork maps to `choice` objects.
   - `stacked-layer-canvas.tsx` and `device-skin-configurator.tsx` evaluate `isCustomFinish` and lock `textureScale` to `1.0` during both live viewport rendering and cart thumbnail composite generation.
 
+---
+
+## 44. Dynamic Finish Surcharges & Part Base Price Bracket Matrix
+
+- **Problem & Root Cause**:
+  - Previously, premium/signature finishes (such as Swarm, Patina, and Black Camo) configured with a flat extra price (e.g. +IDR 30,000) added +30,000 uniformly across all parts.
+  - While adding +30,000 to the primary Back skin (~IDR 140,000 $\to$ 170,000) was correct, it caused an unintended price spike on small accent cutouts (e.g. an IDR 35,000 Accents cut ballooned to IDR 65,000, and a 20,000 Camera cut became 50,000).
+- **Part Base Price Invariant**:
+  - Secondary/accent layers store their base price directly in `layer.extra_price` (e.g. IDR 20,000 for Camera, IDR 35,000 for Accents, IDR 30,000 for Sides).
+  - Primary body layers (such as Back Skin or Laptop Top Lid) have `layer.extra_price === 0` because their base price is embedded in the device regular price (`editingProfile.base_price` or default ~IDR 140,000).
+  - Therefore, the effective part base price is:
+    ```typescript
+    const partBasePrice = layerExtra > 0 ? layerExtra : (profile.base_price || 140000);
+    ```
+- **Tier Bracket Engine**:
+  - When evaluating finish upcharge, if the finish has `accent_extra_price > 0` set, it acts as an explicit override on accent/secondary parts.
+  - Otherwise, the system matches `partBasePrice` against global surcharge tiers (`FinishSurchargeTier[]`):
+    - **Tier Small** (IDR 10,000 - 45,000): +IDR 5,000 (Camera, Accents, Logo cutouts)
+    - **Tier Medium** (IDR 45,001 - 95,000): +IDR 15,000 (Sub-assemblies, split wraps)
+    - **Tier Primary** (IDR 95,001 - 999,999): +IDR 30,000 (Full Back Skin, Top Lid)
+  - Standard finishes (such as Matte Black, Satin Colors, etc.) have `extra_price: 0` and always remain +IDR 0.
+- **Persistent Global State Invariant**:
+  - Surcharge tiers are persisted in the WordPress options table under `exacoat_finish_surcharge_tiers` via REST endpoints `GET /configurator/surcharge-tiers` and `POST /configurator/surcharge-tiers`.
+  - Never store surcharge tiers in browser `localStorage` (Rule 3).
+- **Cross-Surface Administration**:
+  - Reusable modal `FinishSurchargeTiersModal.tsx` provides live bracket simulation, tier editing, adding/deleting brackets, and database saving.
+  - Accessible from both **Configurator Studio** (`ConfiguratorStudioPage.tsx` top bar and Pricing inspector tab) and **Materials & Finishes Inventory** (`MaterialsStockPage.tsx` hero actions).
+  - Materials stock page allows setting both `extra_price` (Main Skin) and `accent_extra_price` (Accent Override) with real-time feedback.
+- **Headless Storefront Parity (`exacoat-web`)**:
+  - `configurator-loader.ts` queries and caches global surcharge tiers alongside finishes, computing `finishExtra` and `totalExtra` for each choice.
+  - Swatch selectors, live configurator viewports, and checkout carts reflect identical tier-adjusted totals seamlessly.
+
+
 
 

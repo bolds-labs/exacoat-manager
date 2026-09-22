@@ -27,6 +27,7 @@ class Exacoat_Configurator_Engine {
 	const AUDIT_TIME_META_KEY = '_configurator_last_audited';
 	const AUDIT_STATUS_META_KEY = '_configurator_audit_status';
 	const AUDIT_ISSUES_META_KEY = '_configurator_audit_issues';
+	const SURCHARGE_TIERS_OPTION_KEY = 'exacoat_finish_surcharge_tiers';
 
 	private static $cached_finishes = null;
 
@@ -172,6 +173,59 @@ class Exacoat_Configurator_Engine {
 			];
 		}
 		update_option( self::PRESETS_OPTION_KEY, $sanitized );
+		return true;
+	}
+
+	public static function get_default_surcharge_tiers(): array {
+		return [
+			[
+				'id'        => 'tier_small',
+				'label'     => 'Small Accents & Cutouts',
+				'min_price' => 10000,
+				'max_price' => 45000,
+				'surcharge' => 5000,
+			],
+			[
+				'id'        => 'tier_medium',
+				'label'     => 'Medium Parts & Accents',
+				'min_price' => 45001,
+				'max_price' => 95000,
+				'surcharge' => 15000,
+			],
+			[
+				'id'        => 'tier_primary',
+				'label'     => 'Full Skin & Main Body',
+				'min_price' => 95001,
+				'max_price' => 999999,
+				'surcharge' => 30000,
+			],
+		];
+	}
+
+	public static function get_surcharge_tiers(): array {
+		$tiers = get_option( self::SURCHARGE_TIERS_OPTION_KEY, null );
+		if ( ! is_array( $tiers ) || empty( $tiers ) ) {
+			return self::get_default_surcharge_tiers();
+		}
+		return $tiers;
+	}
+
+	public static function save_surcharge_tiers( array $tiers ): bool {
+		$sanitized = [];
+		foreach ( $tiers as $idx => $t ) {
+			if ( ! is_array( $t ) ) {
+				continue;
+			}
+			$id = ! empty( $t['id'] ) ? sanitize_key( $t['id'] ) : 'tier_' . ( $idx + 1 );
+			$sanitized[] = [
+				'id'        => $id,
+				'label'     => sanitize_text_field( $t['label'] ?? ( 'Tier ' . ( $idx + 1 ) ) ),
+				'min_price' => max( 0, (float) ( $t['min_price'] ?? 0 ) ),
+				'max_price' => max( 0, (float) ( $t['max_price'] ?? 0 ) ),
+				'surcharge' => max( 0, (float) ( $t['surcharge'] ?? 0 ) ),
+			];
+		}
+		update_option( self::SURCHARGE_TIERS_OPTION_KEY, $sanitized );
 		return true;
 	}
 
@@ -611,6 +665,20 @@ class Exacoat_Configurator_Engine {
 			'permission_callback' => [ __CLASS__, 'verify_permission' ],
 		] );
 
+		// GET /configurator/surcharge-tiers: Fetch finish surcharge price brackets
+		$register( '/configurator/surcharge-tiers', [
+			'methods'             => 'GET',
+			'callback'            => [ __CLASS__, 'rest_get_surcharge_tiers' ],
+			'permission_callback' => '__return_true',
+		] );
+
+		// POST /configurator/surcharge-tiers: Save finish surcharge price brackets
+		$register( '/configurator/surcharge-tiers', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_save_surcharge_tiers' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+		] );
+
 		// 4. GET /configurator/profiles: List all products and their configurator profiles
 		$register( '/configurator/profiles', [
 			'methods'             => 'GET',
@@ -745,17 +813,19 @@ class Exacoat_Configurator_Engine {
 	}
 
 	public static function rest_get_finishes( WP_REST_Request $request ): WP_REST_Response {
-		$finishes       = self::get_finishes();
-		$groups         = self::get_finish_groups();
-		$group_settings = self::get_finish_group_settings();
-		$presets        = self::get_configurator_presets();
+		$finishes        = self::get_finishes();
+		$groups          = self::get_finish_groups();
+		$group_settings  = self::get_finish_group_settings();
+		$presets         = self::get_configurator_presets();
+		$surcharge_tiers = self::get_surcharge_tiers();
 		$response = rest_ensure_response( [
-			'success'        => true,
-			'finishes'       => $finishes,
-			'groups'         => $groups,
-			'group_settings' => $group_settings,
-			'presets'        => $presets,
-			'total'          => count( $finishes ),
+			'success'         => true,
+			'finishes'        => $finishes,
+			'groups'          => $groups,
+			'group_settings'  => $group_settings,
+			'presets'         => $presets,
+			'surcharge_tiers' => $surcharge_tiers,
+			'total'           => count( $finishes ),
 		] );
 		$response->header( 'Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=300' );
 		return $response;
@@ -853,6 +923,7 @@ class Exacoat_Configurator_Engine {
 		$texture_url = esc_url_raw( $params['texture_url'] ?? '' );
 		$texture_big_url = esc_url_raw( $params['texture_big_url'] ?? '' );
 		$extra_price = isset( $params['extra_price'] ) ? (float) $params['extra_price'] : 0.0;
+		$accent_extra_price = isset( $params['accent_extra_price'] ) ? (float) $params['accent_extra_price'] : 0.0;
 		$in_stock = isset( $params['in_stock'] ) ? (bool) $params['in_stock'] : true;
 		$is_active = isset( $params['is_active'] ) ? (bool) $params['is_active'] : true;
 		$is_custom_per_device = ! empty( $params['is_custom_per_device'] );
@@ -880,6 +951,7 @@ class Exacoat_Configurator_Engine {
 					$f['texture_big_url'] = $texture_big_url;
 				}
 				$f['extra_price']          = $extra_price;
+				$f['accent_extra_price']   = $accent_extra_price;
 				$f['in_stock']             = $in_stock;
 				$f['is_active']            = $is_active;
 				$f['is_custom_per_device'] = $is_custom_per_device;
@@ -910,6 +982,7 @@ class Exacoat_Configurator_Engine {
 				'texture_url'          => $texture_url ?: $thumbnail,
 				'texture_big_url'      => $texture_big_url,
 				'extra_price'          => $extra_price,
+				'accent_extra_price'   => $accent_extra_price,
 				'in_stock'             => $in_stock,
 				'is_active'            => $is_active,
 				'is_custom_per_device' => $is_custom_per_device,
@@ -948,6 +1021,7 @@ class Exacoat_Configurator_Engine {
 				'texture_url'          => $texture_url,
 				'texture_big_url'      => $texture_big_url,
 				'extra_price'          => $extra_price,
+				'accent_extra_price'   => $accent_extra_price,
 				'in_stock'             => $in_stock,
 				'is_active'            => $is_active,
 				'is_custom_per_device' => $is_custom_per_device,
@@ -1162,6 +1236,39 @@ class Exacoat_Configurator_Engine {
 			'success' => true,
 			'message' => 'Configurator presets saved.',
 			'presets' => self::get_configurator_presets(),
+		] );
+	}
+
+	public static function rest_get_surcharge_tiers( WP_REST_Request $request ): WP_REST_Response {
+		$tiers = self::get_surcharge_tiers();
+		return rest_ensure_response( [
+			'success' => true,
+			'tiers'   => $tiers,
+			'total'   => count( $tiers ),
+		] );
+	}
+
+	public static function rest_save_surcharge_tiers( WP_REST_Request $request ): WP_REST_Response {
+		$params = $request->get_json_params() ?: $request->get_params();
+		$tiers  = $params['tiers'] ?? $params;
+
+		if ( ! is_array( $tiers ) ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Tiers must be an array.' ], 400 );
+		}
+
+		self::save_surcharge_tiers( $tiers );
+
+		// Automatically trigger storefront cache revalidation
+		self::trigger_storefront_revalidation( [
+			'tag'       => 'configurator',
+			'path'      => '/api/configurator/finishes',
+			'purge_all' => false,
+		] );
+
+		return rest_ensure_response( [
+			'success' => true,
+			'message' => 'Finish surcharge tiers saved.',
+			'tiers'   => self::get_surcharge_tiers(),
 		] );
 	}
 
@@ -2396,6 +2503,7 @@ class Exacoat_Configurator_Engine {
 			'groups'         => self::get_finish_groups(),
 			'group_settings' => self::get_finish_group_settings(),
 			'presets'        => self::get_configurator_presets(),
+			'surcharge_tiers'=> self::get_surcharge_tiers(),
 		] );
 	}
 

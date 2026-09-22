@@ -497,6 +497,15 @@ export interface ConfiguratorView {
   generated_shadow?: GeneratedShadowConfig;
 }
 
+export interface FinishSurchargeTier {
+  id: string;
+  label: string;
+  min_price: number;
+  max_price: number;
+  surcharge: number;
+  description?: string;
+}
+
 export interface ConfiguratorLayer {
   id: string;
   name: string;
