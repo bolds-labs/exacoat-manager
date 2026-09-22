@@ -1357,3 +1357,19 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **Catalog Coverage Migration**:
   - Catalog-wide migration restored `model_cut_and_360` across all 172 smartphones in staging, linking 148 matching `*-Frame.png` media upload assets to `model_cut_mask_url`, and `model_cut_only` across 12 foldables.
 
+---
+
+## 46. Header Featured Navigation & Search Category Formatting Invariants (`exacoat-web`)
+
+- **Header Featured Items Routing Invariant**:
+  - In `components/navigation/navbar.tsx` and `mobile-nav-drawer.tsx`, featured items under "New Releases" and "Popular" must point directly to `/product/{slug}` (e.g. `/product/iphone-17-pro-skins`, `/product/galaxy-s26-ultra-skins`), never to generic category landing hubs (such as `/shop/iphone` or `/shop/samsung`).
+  - Category hubs are reserved strictly for the "DEVICES" brand list on the left.
+- **Search Modal Category & Brand Labeling Invariant**:
+  - Devices belonging to the Apple ecosystem (iPhone, iPad, MacBook) must display `"Apple"` only under the clean title.
+  - Devices belonging to Samsung (Galaxy S, Galaxy Z, Galaxy A, Galaxy Tab) must display `"Samsung"` only (preventing redundant `Samsung • Samsung` concatenation).
+  - All other hardware devices display their clean category name (e.g. `Xiaomi`, `Poco`, `Google`, `PlayStation`).
+- **Search Result Tag Hygiene**:
+  - Do not render synthetic feature badge pills (such as `[Precision fit]` or `[Foldable]`) on search result items.
+  - Only explicit publication state flags (such as `Draft`) for administrators are retained.
+
+
