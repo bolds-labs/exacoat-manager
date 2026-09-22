@@ -1315,6 +1315,17 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - `configurator-loader.ts` queries and caches global surcharge tiers alongside finishes, computing `finishExtra` and `totalExtra` for each choice.
   - Swatch selectors, live configurator viewports, and checkout carts reflect identical tier-adjusted totals seamlessly.
 
+---
 
+## 41. Hardware Production Variants vs Skin Layers & Accent Rotation Invariant
 
-
+- **Hardware Selector Separation Invariant**:
+  - Hardware model differentiators (such as iPad Series `11"` vs `13"`, Wi-Fi vs Cellular, Version) must strictly exist in `variants` (Production Variants under Pricing & Rules).
+  - They must **never** be placed inside `layers` (Skin Layers / Composable Parts). Placing them in `layers` mistakenly assigns vinyl skin finishes/swatches to physical hardware dimensions.
+- **Root Cause & Converter Healing**:
+  - In legacy MKL converters, `$is_selector` previously checked literal strings `['ipad series', 'ipad version', 'connectivity']`. Because iPad fixtures in WooCommerce were named `"Series"` (lowercase `'series'`), they failed the check and leaked into `$profile['layers']`.
+  - In `class-configurator-engine.php` (v0.1.18+), selector detection uses regex `/\b(series|connectivity|version)\b/i`.
+  - In both `rest_get_product_configurator()` and `rest_save_product_configurator()`, automated self-healing inspects `$profile['layers']` and automatically extracts any selector layers into `$profile['variants']` with their original price differentials (+0, +40,000).
+- **Accent Layer Rotation Invariant**:
+  - Accent textures default to 0 degrees rotation (`texture_rotation = 0`).
+  - Catalog-wide reversion restored all 147 accent layers back to 0 degrees from the previous 90 degrees rotation.
