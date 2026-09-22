@@ -3117,31 +3117,58 @@ export const ConfiguratorStudioPage: React.FC = () => {
     });
   };
 
-  const handleSetCoverageAndCutouts = (field: keyof DeviceCoverageAndCutouts, value: any) => {
-    if (!editingProfile) return;
-    const currentCoverage = editingProfile.coverage_and_cutouts || {};
-    const nextCoverage = {
-      model_360_extra_price: 40000,
-      ...currentCoverage,
-      [field]: value,
-    };
-    if (field === 'pencil_cutout_mask_url' && value) {
-      nextCoverage.has_pencil_cutout = true;
-    }
-    if (field === 'model_cut_mask_url' && value) {
-      nextCoverage.model_cutout_url = value;
-      nextCoverage.has_model_cut = true;
-    }
-    if (field === 'model_cutout_url' && value) {
-      nextCoverage.model_cut_mask_url = value;
-      nextCoverage.has_model_cut = true;
-    }
-    if (field === 'coverage_type' && value !== 'none') {
-      nextCoverage.has_model_cut = true;
-    }
-    setEditingProfile({
-      ...editingProfile,
-      coverage_and_cutouts: nextCoverage,
+  const handleSetCoverageAndCutouts = (
+    fieldOrPatch: keyof DeviceCoverageAndCutouts | Partial<DeviceCoverageAndCutouts>,
+    value?: any
+  ) => {
+    setEditingProfile((prev) => {
+      if (!prev) return prev;
+      const currentCoverage = prev.coverage_and_cutouts || {};
+      const patch =
+        typeof fieldOrPatch === 'string'
+          ? { [fieldOrPatch]: value }
+          : fieldOrPatch;
+
+      const nextCoverage: DeviceCoverageAndCutouts = {
+        model_360_extra_price: 40000,
+        ...currentCoverage,
+        ...patch,
+      };
+
+      if ('pencil_cutout_mask_url' in patch) {
+        nextCoverage.has_pencil_cutout = Boolean(patch.pencil_cutout_mask_url);
+      }
+
+      if ('model_cut_mask_url' in patch) {
+        const val = patch.model_cut_mask_url || '';
+        nextCoverage.model_cutout_url = val;
+        nextCoverage.model_cut_mask_url = val;
+        if (!val) {
+          nextCoverage.has_model_cut = false;
+        }
+      }
+
+      if ('model_cutout_url' in patch) {
+        const val = patch.model_cutout_url || '';
+        nextCoverage.model_cutout_url = val;
+        nextCoverage.model_cut_mask_url = val;
+        if (!val) {
+          nextCoverage.has_model_cut = false;
+        }
+      }
+
+      if ('coverage_type' in patch) {
+        if (patch.coverage_type === 'none') {
+          nextCoverage.has_model_cut = false;
+        } else {
+          nextCoverage.has_model_cut = true;
+        }
+      }
+
+      return {
+        ...prev,
+        coverage_and_cutouts: nextCoverage,
+      };
     });
   };
 
@@ -10322,11 +10349,15 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       const currentCov = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none');
                                       const isEnabled = currentCov !== 'none';
                                       if (isEnabled) {
-                                        handleSetCoverageAndCutouts('coverage_type', 'none');
-                                        handleSetCoverageAndCutouts('has_model_cut', false);
+                                        handleSetCoverageAndCutouts({
+                                          coverage_type: 'none',
+                                          has_model_cut: false,
+                                        });
                                       } else {
-                                        handleSetCoverageAndCutouts('coverage_type', 'model_cut_and_360');
-                                        handleSetCoverageAndCutouts('has_model_cut', true);
+                                        handleSetCoverageAndCutouts({
+                                          coverage_type: 'model_cut_and_360',
+                                          has_model_cut: true,
+                                        });
                                       }
                                     }}
                                     className={clsx(
@@ -10502,10 +10533,25 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                           <button
                                             type="button"
                                             onClick={() => {
-                                              if (currentView) {
-                                                handleSetViewField(currentView.id, 'model_cut_mask_url', '');
-                                              }
-                                              handleSetCoverageAndCutouts('model_cut_mask_url', '');
+                                              setEditingProfile((prev) => {
+                                                if (!prev) return prev;
+                                                const updatedViews = prev.views.map((v) => ({
+                                                  ...v,
+                                                  model_cut_mask_url: '',
+                                                }));
+                                                const updatedCoverage = {
+                                                  ...(prev.coverage_and_cutouts || {}),
+                                                  model_cut_mask_url: '',
+                                                  model_cutout_url: '',
+                                                  has_model_cut: false,
+                                                };
+                                                return {
+                                                  ...prev,
+                                                  views: updatedViews,
+                                                  coverage_and_cutouts: updatedCoverage,
+                                                };
+                                              });
+                                              showToast('info', 'Mask Cleared', 'Removed perimeter frame flap mask.');
                                             }}
                                             className="text-[11px] text-zinc-500 hover:text-rose-400 font-medium cursor-pointer transition-colors"
                                           >

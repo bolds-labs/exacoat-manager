@@ -2515,16 +2515,16 @@ class Exacoat_Configurator_Engine {
 				if ( ! isset( $profile['coverage_and_cutouts']['model_360_extra_price'] ) || ! is_numeric( $profile['coverage_and_cutouts']['model_360_extra_price'] ) ) {
 					$profile['coverage_and_cutouts']['model_360_extra_price'] = 40000;
 				}
-				// Auto-heal phone coverage to model_cut_and_360 if currently none
+				// Default phone coverage only if coverage_type is missing/unset entirely (honor explicit 'none')
 				$dev_fam = $profile['family'] ?? '';
-				if ( $dev_fam === 'phone' && ( empty( $profile['coverage_and_cutouts']['coverage_type'] ) || $profile['coverage_and_cutouts']['coverage_type'] === 'none' ) ) {
+				if ( $dev_fam === 'phone' && ! isset( $profile['coverage_and_cutouts']['coverage_type'] ) ) {
 					$profile['coverage_and_cutouts']['coverage_type'] = 'model_cut_and_360';
 					$profile['coverage_and_cutouts']['has_model_cut'] = true;
 					$profile['coverage_and_cutouts']['model_360_extra_price'] = 40000;
 					if ( ! empty( $modern_profile ) ) {
 						update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
 					}
-				} elseif ( $dev_fam === 'foldable' && ( empty( $profile['coverage_and_cutouts']['coverage_type'] ) || $profile['coverage_and_cutouts']['coverage_type'] === 'none' ) ) {
+				} elseif ( $dev_fam === 'foldable' && ! isset( $profile['coverage_and_cutouts']['coverage_type'] ) ) {
 					$profile['coverage_and_cutouts']['coverage_type'] = 'model_cut_only';
 					$profile['coverage_and_cutouts']['has_model_cut'] = true;
 					if ( ! empty( $modern_profile ) ) {
@@ -2669,6 +2669,13 @@ class Exacoat_Configurator_Engine {
 				$raw_coverage['model_cutout_url'] = $raw_coverage['model_cut_mask_url'];
 			} elseif ( ! empty( $raw_coverage['model_cutout_url'] ) && empty( $raw_coverage['model_cut_mask_url'] ) ) {
 				$raw_coverage['model_cut_mask_url'] = $raw_coverage['model_cutout_url'];
+			} elseif ( isset( $raw_coverage['model_cut_mask_url'] ) && empty( $raw_coverage['model_cut_mask_url'] ) ) {
+				$raw_coverage['model_cutout_url'] = '';
+				$raw_coverage['model_cut_mask_url'] = '';
+				$raw_coverage['has_model_cut'] = false;
+			}
+			if ( isset( $raw_coverage['coverage_type'] ) && $raw_coverage['coverage_type'] === 'none' ) {
+				$raw_coverage['has_model_cut'] = false;
 			}
 		}
 

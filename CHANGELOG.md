@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.21] - 2026-09-23
+
+### Model Coverage Disabling & Clearing Architecture
+- **Model Coverage Disabling Resolution (`ConfiguratorStudioPage.tsx`, `class-configurator-engine.php`)**:
+  - Resolved race condition in the Studio toggle by upgrading `handleSetCoverageAndCutouts` to use a functional state updater and support atomic batch patches.
+  - Corrected backend auto-healing in `rest_get_product_configurator()` to honor `coverage_type = 'none'` as an intentional administrator setting rather than overwriting it back to `model_cut_and_360`.
+- **Perimeter Mask Clearing Resolution**:
+  - Upgraded the Clear button to completely clear `model_cut_mask_url` across all views and purge `model_cutout_url` and `has_model_cut` from `coverage_and_cutouts`.
+  - Updated `rest_save_product_configurator()` to prevent reviving cleared mask URLs from legacy fallback keys.
+
 ## [0.1.20] - 2026-09-23
 
 ### Layer Finish Restrictions & Whitelist Precedence

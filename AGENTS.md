@@ -1385,4 +1385,18 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - **Slug Normalization**: Both finish slugs and whitelist entries are normalized via `(slug || '').toLowerCase().replace(/[^a-z0-9]/g, '')`, ensuring seamless matching regardless of hyphen or underscore conventions (e.g. `black-camo` vs `black_camo`).
   - **Group-Level Restriction Fallback**: `allowed_finish_groups` filtering only applies when `allowed_finish_slugs` is empty and group count is genuinely restricted (`allowedGroups.length < 3`).
 
+---
+
+## 48. Model Coverage Disabling & Clearing Architecture
+
+- **Problem & Root Causes**:
+  1. **React State Stale Closure**: In `ConfiguratorStudioPage.tsx`, toggling "Buyer Choice on Webstore" previously made two consecutive non-functional state calls: `handleSetCoverageAndCutouts('coverage_type', 'none')` followed by `handleSetCoverageAndCutouts('has_model_cut', false)`. The second call executed against the stale closure, clobbering `coverage_type` and keeping it as `model_cut_and_360`.
+  2. **Backend Auto-Heal Overwriting Administrator Intent**: In `class-configurator-engine.php` (`rest_get_product_configurator()`), an auto-heal rule evaluated `if ($dev_fam === 'phone' && ($coverage_type === 'none' || empty($coverage_type)))`. Every time an admin loaded the device, it automatically forced `coverage_type` back to `model_cut_and_360` and saved it to the database, preventing admins from ever turning coverage off.
+  3. **Perimeter Mask Clearing Revived by Fallback Sync**: Clicking "Clear" in the UI only cleared `model_cut_mask_url` on `currentView` and `coverage_and_cutouts`, leaving `model_cutout_url` intact. In `rest_save_product_configurator()`, the backend saw `model_cutout_url` non-empty and copied it back into `model_cut_mask_url`, making it impossible to clear the mask.
+- **Architectural Invariants**:
+  - **Honoring Explicit 'none' Coverage**: `rest_get_product_configurator()` only defaults smartphone coverage when `coverage_type` is completely missing (`! isset($profile['coverage_and_cutouts']['coverage_type'])`). When set to `'none'`, it is honored as an intentional administrator disablement.
+  - **Atomic Patch Updates**: `handleSetCoverageAndCutouts()` uses functional state updaters (`setEditingProfile((prev) => ...)`) and accepts patch objects (`{ coverage_type: 'none', has_model_cut: false }`), ensuring clean state transitions without React race conditions.
+  - **Complete Mask Purging**: Clearing the perimeter mask purges `model_cut_mask_url` across all viewing angles, resets `model_cutout_url` to empty, and sets `has_model_cut: false` both in the Studio state and backend persistence.
+
+
 
