@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.37] - 2026-09-24
+
+### Hardware Body Colors Enhancement & Resilient Canvas Rendering
+- **Hardware Body Colors in Configurator Studio (`src/pages/ConfiguratorStudioPage.tsx`)**:
+  - Added visual image thumbnail preview (11x11) for every color variant with direct click-to-browse WordPress Media Library.
+  - Implemented automatic dominant color extraction (`detectDominantColorFromImage`) from uploaded chassis renders, sampling the median interquartile luminance band to capture authentic paint hues (e.g. `#ee7e40` for Cosmic Orange, `#3a3f4f` for Sierra Blue) with manual hex override and 1-click re-sampling wand button.
+  - Added HTML5 drag-and-drop reordering with vertical grip handles (`GripVertical`), drag-over line feedback, and precision Up/Down chevron buttons.
+  - Added active preview toggle button and status pill, allowing operators to click any color card in the list to immediately render it on the viewport canvas.
+  - Added broken-link tracking (`failedColorImages`) and a red "404 Not Found" badge on cards when asset URLs fail to load.
+- **Resilient Viewport Canvas Layer 1 Rendering**:
+  - Replaced catastrophic `<img onError>` display collapse with graceful fallback to the viewing angle's base chassis background (`currentView.background_url`).
+  - Added informative canvas alert badge when a color variant 404s, ensuring the device body remains visible at all times.
+
+## [0.1.36] - 2026-09-24
+
+### Brand Favicon Suite & Web App Manifest
+- Generated complete multi-resolution favicon suite from master logo asset (`P:\EXACOAT\Logo Images\New Logo\Logo V5\Exacoat Manager Favicon.png`):
+  - `favicon.ico` containing 4 embedded 32-bit ARGB resolutions (16x16, 32x32, 48x48, 64x64).
+  - High-precision Lanczos PNG derivatives: `favicon-16x16.png`, `favicon-32x32.png`, `favicon-48x48.png`, `apple-touch-icon.png` (180x180), `android-chrome-192x192.png`, and `android-chrome-512x512.png`.
+  - Added `public/site.webmanifest` and updated `index.html` with modern browser and mobile icon links.
+
 ## [0.1.27] - 2026-09-24
 
 ### Outside Click Modal Dismissal, Issues Popover Fix & Studio Engine Column Removal
