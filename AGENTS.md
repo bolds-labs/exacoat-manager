@@ -21,7 +21,22 @@ This document is the authoritative operational guideline, system boundaries, and
 
 ---
 
-## 2. Mandatory System & Brand Boundaries
+## 2. Mandatory Plugin Versioning & Packaging Protocol (`exacoat-core`)
+
+**CRITICAL DIRECTIVE: ALWAYS UPDATE PLUGIN VERSION ON ANY CHANGE.**
+- Whenever any code, fix, or configuration in `wordpress-plugin/exacoat-core/` or `exacoat-manager` is modified, you **MUST always bump the plugin version**:
+  1. `package.json`: bump `"version": "x.y.z"`
+  2. `wordpress-plugin/exacoat-core/exacoat-core.php`:
+     - Update header: `* Version: x.y.z`
+     - Update constant: `define( 'EXACOAT_CORE_VERSION', 'x.y.z' );`
+  3. `scripts/package-plugin.cjs`: update the changelog entry in the manifest generator.
+  4. Run `npm run build`: this automatically executes `scripts/package-plugin.cjs`, packages all distribution zip archives (`exacoat-core.zip`, `exacoat-core-v{version}.zip`), updates `public/version.json`, and updates `src/config/version.ts`.
+  5. Commit and push all updated files and generated archives to git remote.
+- **Never push changes to `exacoat-core` without incrementing the version and packaging the zip archives.**
+
+---
+
+## 3. Mandatory System & Brand Boundaries
 
 - **Exacoat Manager strictly manages Exacoat e-commerce operations.**
 - **NEVER use or reference `artmatter-core` in active runtime code.**
