@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.38] - 2026-09-24
+
+### Hardware Body Colors UX Streamlining & CORS-Safe Color Detection
+- **Configurator Studio Hardware Body Colors (`src/pages/ConfiguratorStudioPage.tsx`)**:
+  - Removed redundant hex text input field on the left side of the wand button; manual adjustments are cleanly handled via the native color swatch picker.
+  - Implemented `sanitizeHexForColorInput()` helper across all color picker inputs, preventing browser console warnings (`The specified value "#f" does not conform to the required format`) when partial hex values are handled.
+  - Resolved browser CORS policy blocks (`net::ERR_FAILED`) and canvas security taint on dominant color detection by routing chassis image sampling through `loadCorsSafeImageBlobUrl()` and the WordPress image proxy.
+  - Added automatic color detection on chassis image input blur and media library selection when color is unconfigured or default.
+- **CORS Image Loader Optimization (`src/lib/imageLoader.ts`)**:
+  - Optimized `loadCorsSafeImageBlobUrl()` to intelligently bypass direct cross-origin static fetches for WordPress uploads (`/wp-content/uploads/`), routing directly through `/wp-json/exacoat-core/v1/image-proxy` to prevent noisy browser console CORS errors.
+
 ## [0.1.37] - 2026-09-24
 
 ### Hardware Body Colors Enhancement & Resilient Canvas Rendering

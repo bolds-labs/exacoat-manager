@@ -81,7 +81,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       description: 'The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.',
-      changelog: `### Version ${version}\n- Enhanced Hardware Body Colors in Configurator Studio with image thumbnail previews and click-to-browse\n- Added automatic dominant color sampling from chassis renders with manual hex override\n- Added drag-and-drop reordering with grip handles and precision chevron controls\n- Added resilient canvas rendering with fallback to base chassis render on 404/broken assets`,
+      changelog: `### Version ${version}\n- Removed redundant hex text field next to wand button in Hardware Body Colors\n- Resolved cross-origin canvas security failure on dominant color extraction via CORS-safe blob loading\n- Added native hex sanitization to eliminate browser invalid CSS color format console warnings\n- Added automatic color detection on chassis image input blur and media library selection`,
     },
   };
 
