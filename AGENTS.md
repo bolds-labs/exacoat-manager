@@ -262,9 +262,10 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - `_configurator_last_audited`: ISO timestamp string of the last scan completion.
   - `_configurator_audit_status`: `'clean'` (0 broken assets, 0 ghost angles) or `'issues'` (one or more broken assets or ghost angles).
   - `_configurator_audit_issues`: Integer count of detected broken assets and ghost angles.
+  - `_configurator_audit_details`: JSON array of human-readable issue descriptions (e.g. broken chassis URL, missing skin mask, ghost viewing angle).
 - **REST Persistence Endpoints**:
-  - `POST /configurator/mark-audited`: Persists audit outcome for an individual device.
-  - `POST /configurator/batch-mark-audited`: Efficient batch persistence for catalog-wide audits.
+  - `POST /configurator/mark-audited`: Persists audit outcome and `audit_details` for an individual device.
+  - `POST /configurator/batch-mark-audited`: Efficient batch persistence for catalog-wide audits with `audit_details`.
   - `POST /configurator/reset-audit`: Clears audit records for individual devices or the entire catalog.
 - **Targeted Audit vs Full Catalog Scan**:
   - **Audit Unaudited ({count})**: Filters catalog to products where `last_audited_at` is empty or status is `'unaudited'`. Allows operators to pick up incremental audits without re-probing hundreds of already-verified devices.
@@ -274,10 +275,12 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - **Connection Pool Exhaustion Prevention**: Probe concurrency is strictly limited to 4 workers per device with a 40ms inter-device pause. This prevents exhausting the browser's HTTP/1.1 socket pool (6 sockets per host) or triggering Cloudflare/LiteSpeed burst rate-limiting.
   - **Probe Timeout & 1-Time Retry**: Increased probe timeout to 12000ms with a 500ms delay retry upon failure. Network congestion spikes no longer cause false-positive broken asset alerts.
   - **Request Timeout Guards & Stop Audit Control**: Profile fetch requests in catalog audits are wrapped in a 12s timeout guard to prevent scan hangs on slow backend responses, and an operator "Stop Audit" control allows immediate graceful cancellation.
-- **Studio UI & Card Badges**:
+- **Studio UI & Interactive Issue Inspection**:
   - Top bar metrics row tracks **Audited Clean** and **Unaudited Devices** in real time.
   - Catalog filter bar includes **All Audit**, **Audited**, **Unaudited**, and **Issues** tabs.
-  - Each product card displays persistent status badges (`[✓ Audited]`, `[! Issues]`, `[Unaudited]`) next to SKU.
+  - Status column in the catalog table renders interactive pills: emerald `[✓ Clean]`, muted `[Unaudited]`, or rose `[! X issues]`.
+  - Hovering over an issue badge reveals a rich popover listing every exact broken URL, layer, or ghost angle.
+  - Clicking an issue badge opens the device in the editor and immediately displays the Asset Integrity Audit modal for 1-click repairs (e.g. Remove Ghost Angle, Clear Broken Texture).
 
 ---
 
@@ -1201,17 +1204,11 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 
 ## 40. Seamless Master Texture Tiling & Configurable Generated 3D Shading
 
-- **Adaptive Non-Alpha Bounding Box Cover Architecture (Zero-Repeat & Clamped Minimum Scale)**:
-  - **The Invariant**: Skin textures are drawn with zero repeat (`repeat = false` / single `drawImage`), eliminating visible tiling seams and grid lines on non-seamless textures.
-  - **Mask Bounding Box Detection**: The rendering pipeline scans the alpha channel of `maskImg` (`getMaskBoundingBox`) to extract the precise non-alpha bounding box (`minX, minY, maxX, maxY`), width, height, and center (`centerX, centerY`). Sampled on a 250x250 offscreen canvas, this takes < 0.3ms and is cached per mask URL.
-  - **Adaptive Translation**: Textures are translated directly to the non-alpha center `(bbox.centerX, bbox.centerY)` rather than the arbitrary global canvas center `(500, 500)`. Off-center features (such as camera islands, S-Pen strips, side frames, trackpads, and hinges) receive an intentional, centered pattern composition.
-  - **Rotation-Aware Minimum Cover Scale**:
-    The minimum scale required to cover the target bounding box under rotation $\theta$ is:
-    `neededW = bbox.width * |cos(θ)| + bbox.height * |sin(θ)|`
-    `neededH = bbox.width * |sin(θ)| + bbox.height * |cos(θ)|`
-    `minCoverScale = Math.max(neededW / texImg.width, neededH / texImg.height)`
-  - **Scale Clamping**: The final scale is evaluated as `Math.max(minCoverScale, baseScale * zoom)`. Setting a low zoom never exposes empty canvas margins, transparent gaps, or untextured vinyl cuts.
-  - **Parity Across Ecosystem**: This architecture is implemented identically across `exacoat-manager` (`ConfiguratorStudioPage.tsx`) and `exacoat-web` (`stacked-layer-canvas.tsx` and `device-skin-configurator.tsx`).
+- **Seamless Master Texture Tiling Invariant (`createPattern` with `DOMMatrix`)**:
+  - In modern v2 rendering, skin textures must cover the entire 1000x1000 viewport before being clipped by the layer alpha mask (`destination-in`).
+  - Drawing a single rotated texture with `drawImage` shrinks its bounding box on rotated aspects (e.g. 90-degree rotated texture with 0.75 zoom creates a 750px box on a 1000px canvas), causing vertical accent strips (such as Galaxy S25 / S24 accents spanning Y=8 to Y=991) to get clipped at the top and bottom.
+  - **The Invariant**: Always draw textures using `ctx.createPattern(texImg, 'repeat')` with a `DOMMatrix` applying center translation, rotation, and scaling. This ensures infinite seamless tiling across the entire canvas area prior to mask clipping.
+  - A fallback `drawImage` bounding box calculation (`1000 * cos + 1000 * sin`) must also be maintained in case pattern initialization fails.
 
 - **Configurable Generated 3D Directional Shading Architecture**:
   - Directional shadow vector is cast towards **bottom-right** (+distance, +distance) by default, ensuring internal cutouts (such as camera rings, holes, and ports) receive realistic shadows on their lower and right borders.

@@ -7,20 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.1.24] - 2026-09-24
+## [0.1.25] - 2026-09-24
 
-### Adaptive Non-Alpha Bounding Box Cover & Zero-Repeat Texture Architecture
-- **Zero-Repeat Single Cover Rendering (`ConfiguratorStudioPage.tsx`)**:
-  - Replaced pattern tiling (`repeat`) with a single covered `drawImage` across vinyl skin layers, eliminating visible horizontal and vertical tiling seams on non-seamless textures.
-  - Implemented fast alpha channel scanning (`getMaskBoundingBox`) to extract the exact non-alpha bounding box (`minX, minY, maxX, maxY`), width, height, and center coordinates of the mask.
-  - Sampled on a 250x250 offscreen canvas (< 0.3ms execution time) and cached per mask URL to eliminate redundant CPU cycles during re-renders.
-- **Adaptive Centering on Off-Center Features**:
-  - Automatically translates textures to `(bbox.centerX, bbox.centerY)` rather than the arbitrary global canvas center `(500, 500)`, ensuring off-center features (camera islands, S-Pen strips, side frames, trackpads, and hinges) receive an intentional, centered pattern composition.
-- **Clamped Rotation-Aware Minimum Cover Scale**:
-  - Computes the minimum scale required to cover the rotated bounding box:
-    `minCoverScale = Math.max((w * |cos θ| + h * |sin θ|) / texW, (w * |sin θ| + h * |cos θ|) / texH)`
-  - Clamps the effective scale to `Math.max(minCoverScale, baseScale * zoom)`.
-  - Setting a low zoom or narrow aspect angle never exposes empty canvas borders, transparent margins, or untextured vinyl.
+### Master Texture Pattern Tiling, Issue Details Breakdown & Tablet/Foldable Shading Defaults
+- **Master Texture Seamless Pattern Tiling Reversion (`ConfiguratorStudioPage.tsx`, `stacked-layer-canvas.tsx`)**:
+  - Restored seamless pattern tiling (`createPattern(texImg, 'repeat')`) for master materials, reverting the non-alpha bounding box cover stretching that enlarged repeating pattern tiles (e.g. Swarm, Black Camo) on smartphones like iPhone 17 Pro.
+  - Pattern tiles now repeat naturally at authentic physical density according to angle texture scale.
+- **Detailed Issue Breakdown & Interactive Inspection in Studio Table (`ConfiguratorStudioPage.tsx`, `class-configurator-engine.php`)**:
+  - Added `_configurator_audit_details` WordPress post meta persistence in `class-configurator-engine.php` and returned `audit_details` in `rest_get_configurator_profiles`.
+  - Upgraded the status column in the Configurator Studio table from an ambiguous dot into interactive status pills (`[✓ Clean]`, `[! X issues]`, `[Unaudited]`).
+  - Implemented a rich hover popover detailing the exact broken assets (e.g. broken chassis URL, missing alpha cut mask) and ghost angles.
+  - Added 1-click inspection: clicking the issue badge loads the device in the editor and opens the Asset Integrity Audit dialog with 1-click cleanup actions (e.g. Remove Ghost Angle, Clear Broken Texture).
+  - Probed and synced all 71 staging products previously marked with issues: verified 64 false positives as Clean and recorded detailed issue breakdowns for the 7 products with real broken assets.
+- **Disabled Generated 3D Shading for Tablets, iPads, Keyboards & Foldables**:
+  - Updated 33 tablet, iPad, and foldable models on staging with `generated_shadow.enabled = false`.
+  - Updated code-level fallback defaults in `ConfiguratorStudioPage.tsx` and `stacked-layer-canvas.tsx` so tablets, iPads, keyboards, and foldables default `shouldApplyGeneratedShadow` to `false` when no authentic 3D shading file exists.
 
 ## [0.1.23] - 2026-09-23
 

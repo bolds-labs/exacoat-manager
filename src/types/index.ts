@@ -624,4 +624,5 @@ export interface ConfiguratorProfileSummary {
   last_audited_at?: string | null;
   audit_status?: 'clean' | 'issues' | 'unaudited';
   audit_issues?: number;
+  audit_details?: string[];
 }

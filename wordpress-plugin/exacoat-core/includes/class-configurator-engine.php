@@ -27,6 +27,7 @@ class Exacoat_Configurator_Engine {
 	const AUDIT_TIME_META_KEY = '_configurator_last_audited';
 	const AUDIT_STATUS_META_KEY = '_configurator_audit_status';
 	const AUDIT_ISSUES_META_KEY = '_configurator_audit_issues';
+	const AUDIT_DETAILS_META_KEY = '_configurator_audit_details';
 	const SURCHARGE_TIERS_OPTION_KEY = 'exacoat_finish_surcharge_tiers';
 
 	private static $cached_finishes = null;
@@ -1385,6 +1386,7 @@ class Exacoat_Configurator_Engine {
 		$status = sanitize_text_field( $params['audit_status'] ?? 'clean' );
 		$issues = (int) ( $params['audit_issues'] ?? 0 );
 		$timestamp = sanitize_text_field( $params['last_audited_at'] ?? current_time( 'mysql' ) );
+		$details = $params['audit_details'] ?? [];
 
 		if ( ! $pid || ! get_post( $pid ) ) {
 			return new WP_REST_Response( [ 'success' => false, 'message' => 'Invalid product ID' ], 400 );
@@ -1393,6 +1395,11 @@ class Exacoat_Configurator_Engine {
 		update_post_meta( $pid, self::AUDIT_TIME_META_KEY, $timestamp );
 		update_post_meta( $pid, self::AUDIT_STATUS_META_KEY, $status );
 		update_post_meta( $pid, self::AUDIT_ISSUES_META_KEY, $issues );
+		if ( ! empty( $details ) && is_array( $details ) ) {
+			update_post_meta( $pid, self::AUDIT_DETAILS_META_KEY, wp_slash( wp_json_encode( array_values( $details ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
+		} else {
+			delete_post_meta( $pid, self::AUDIT_DETAILS_META_KEY );
+		}
 
 		return rest_ensure_response( [
 			'success'         => true,
@@ -1400,6 +1407,7 @@ class Exacoat_Configurator_Engine {
 			'last_audited_at' => $timestamp,
 			'audit_status'    => $status,
 			'audit_issues'    => $issues,
+			'audit_details'   => is_array( $details ) ? array_values( $details ) : [],
 		] );
 	}
 
@@ -1422,10 +1430,16 @@ class Exacoat_Configurator_Engine {
 			$status = sanitize_text_field( $row['audit_status'] ?? 'clean' );
 			$issues = (int) ( $row['audit_issues'] ?? 0 );
 			$ts = sanitize_text_field( $row['last_audited_at'] ?? $now );
+			$details = $row['audit_details'] ?? [];
 
 			update_post_meta( $pid, self::AUDIT_TIME_META_KEY, $ts );
 			update_post_meta( $pid, self::AUDIT_STATUS_META_KEY, $status );
 			update_post_meta( $pid, self::AUDIT_ISSUES_META_KEY, $issues );
+			if ( ! empty( $details ) && is_array( $details ) ) {
+				update_post_meta( $pid, self::AUDIT_DETAILS_META_KEY, wp_slash( wp_json_encode( array_values( $details ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
+			} else {
+				delete_post_meta( $pid, self::AUDIT_DETAILS_META_KEY );
+			}
 			$updated++;
 		}
 
@@ -1448,6 +1462,7 @@ class Exacoat_Configurator_Engine {
 			delete_post_meta_by_key( self::AUDIT_TIME_META_KEY );
 			delete_post_meta_by_key( self::AUDIT_STATUS_META_KEY );
 			delete_post_meta_by_key( self::AUDIT_ISSUES_META_KEY );
+			delete_post_meta_by_key( self::AUDIT_DETAILS_META_KEY );
 			return rest_ensure_response( [ 'success' => true, 'message' => 'Cleared all device audit records.' ] );
 		}
 
@@ -1458,6 +1473,7 @@ class Exacoat_Configurator_Engine {
 		delete_post_meta( $pid, self::AUDIT_TIME_META_KEY );
 		delete_post_meta( $pid, self::AUDIT_STATUS_META_KEY );
 		delete_post_meta( $pid, self::AUDIT_ISSUES_META_KEY );
+		delete_post_meta( $pid, self::AUDIT_DETAILS_META_KEY );
 
 		return rest_ensure_response( [
 			'success'    => true,
@@ -2359,6 +2375,11 @@ class Exacoat_Configurator_Engine {
 			$last_audited = get_post_meta( $pid, self::AUDIT_TIME_META_KEY, true );
 			$audit_status = get_post_meta( $pid, self::AUDIT_STATUS_META_KEY, true );
 			$audit_issues = (int) get_post_meta( $pid, self::AUDIT_ISSUES_META_KEY, true );
+			$raw_audit_details = get_post_meta( $pid, self::AUDIT_DETAILS_META_KEY, true );
+			$audit_details = [];
+			if ( ! empty( $raw_audit_details ) ) {
+				$audit_details = is_array( $raw_audit_details ) ? $raw_audit_details : json_decode( $raw_audit_details, true );
+			}
 
 			$p_name = $product ? $product->get_name() : $p->post_title;
 			$p_slug = $product ? $product->get_slug() : $p->post_name;
@@ -2411,6 +2432,7 @@ class Exacoat_Configurator_Engine {
 				'last_audited_at'      => ! empty( $last_audited ) ? $last_audited : null,
 				'audit_status'         => ! empty( $audit_status ) ? $audit_status : 'unaudited',
 				'audit_issues'         => $audit_issues,
+				'audit_details'        => is_array( $audit_details ) ? array_values( $audit_details ) : [],
 			];
 		}
 

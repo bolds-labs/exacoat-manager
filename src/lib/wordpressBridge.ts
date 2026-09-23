@@ -2957,6 +2957,7 @@ export async function markDeviceAuditedDirect(data: {
   audit_status: 'clean' | 'issues';
   audit_issues?: number;
   last_audited_at?: string;
+  audit_details?: string[];
 }): Promise<{ success: boolean; message?: string }> {
   try {
     const base = getWordPressBaseUrl();
@@ -2986,6 +2987,7 @@ export async function batchMarkDevicesAuditedDirect(results: Array<{
   audit_status: 'clean' | 'issues';
   audit_issues?: number;
   last_audited_at?: string;
+  audit_details?: string[];
 }>): Promise<{ success: boolean; updated?: number; message?: string }> {
   try {
     const base = getWordPressBaseUrl();

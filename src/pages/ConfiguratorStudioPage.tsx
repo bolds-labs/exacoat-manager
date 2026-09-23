@@ -265,6 +265,7 @@ interface V2SkinCanvasLayerProps {
   textureScale?: number;
   hasViewShadow?: boolean;
   generatedShadowConfig?: GeneratedShadowConfig;
+  deviceFamily?: DeviceFamily;
 }
 
 /**
@@ -367,103 +368,6 @@ function applySyntheticDirectionalShading(
   }
 }
 
-interface MaskBoundingBox {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-  width: number;
-  height: number;
-  centerX: number;
-  centerY: number;
-}
-
-const maskBoundingBoxCache = new Map<string, MaskBoundingBox>();
-
-function getMaskBoundingBox(img: HTMLImageElement, cacheKey?: string): MaskBoundingBox {
-  if (cacheKey && maskBoundingBoxCache.has(cacheKey)) {
-    return maskBoundingBoxCache.get(cacheKey)!;
-  }
-
-  const defaultBbox: MaskBoundingBox = {
-    minX: 0,
-    minY: 0,
-    maxX: 1000,
-    maxY: 1000,
-    width: 1000,
-    height: 1000,
-    centerX: 500,
-    centerY: 500,
-  };
-
-  if (!img || img.naturalWidth === 0 || img.naturalHeight === 0) {
-    return defaultBbox;
-  }
-
-  try {
-    const sampleSize = 250;
-    const canvas = document.createElement('canvas');
-    canvas.width = sampleSize;
-    canvas.height = sampleSize;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return defaultBbox;
-
-    ctx.drawImage(img, 0, 0, sampleSize, sampleSize);
-    const imgData = ctx.getImageData(0, 0, sampleSize, sampleSize);
-    const data = imgData.data;
-
-    let minX = sampleSize;
-    let minY = sampleSize;
-    let maxX = -1;
-    let maxY = -1;
-
-    for (let y = 0; y < sampleSize; y++) {
-      const rowOffset = y * sampleSize * 4;
-      for (let x = 0; x < sampleSize; x++) {
-        const alpha = data[rowOffset + x * 4 + 3];
-        if (alpha > 15) {
-          if (x < minX) minX = x;
-          if (x > maxX) maxX = x;
-          if (y < minY) minY = y;
-          if (y > maxY) maxY = y;
-        }
-      }
-    }
-
-    if (maxX < minX || maxY < minY) {
-      if (cacheKey) maskBoundingBoxCache.set(cacheKey, defaultBbox);
-      return defaultBbox;
-    }
-
-    const scaleFactor = 1000 / sampleSize;
-    const realMinX = Math.max(0, Math.floor(minX * scaleFactor) - 4);
-    const realMinY = Math.max(0, Math.floor(minY * scaleFactor) - 4);
-    const realMaxX = Math.min(1000, Math.ceil((maxX + 1) * scaleFactor) + 4);
-    const realMaxY = Math.min(1000, Math.ceil((maxY + 1) * scaleFactor) + 4);
-
-    const width = Math.max(1, realMaxX - realMinX);
-    const height = Math.max(1, realMaxY - realMinY);
-    const centerX = realMinX + width / 2;
-    const centerY = realMinY + height / 2;
-
-    const bbox: MaskBoundingBox = {
-      minX: realMinX,
-      minY: realMinY,
-      maxX: realMaxX,
-      maxY: realMaxY,
-      width,
-      height,
-      centerX,
-      centerY,
-    };
-
-    if (cacheKey) maskBoundingBoxCache.set(cacheKey, bbox);
-    return bbox;
-  } catch {
-    return defaultBbox;
-  }
-}
-
 const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
   maskUrl,
   textureUrl,
@@ -479,6 +383,7 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
   textureScale = 1.0,
   hasViewShadow = false,
   generatedShadowConfig,
+  deviceFamily,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -519,41 +424,51 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
       ctx.clearRect(0, 0, 1000, 1000);
       if (!maskImg && !texImg) return;
 
-      // 1. Draw master texture adapted to the mask's non-alpha bounding box with zero repeat
+      // 1. Draw master texture with seamless pattern tiling, rotation, and scale
       if (texImg && texImg.width > 0 && texImg.height > 0) {
         if (maskImg) {
-          const bbox = getMaskBoundingBox(maskImg, maskUrl);
           const rot = (textureRotation || 0) % 360;
-          const rotRad = (rot * Math.PI) / 180;
-          const cos = Math.abs(Math.cos(rotRad));
-          const sin = Math.abs(Math.sin(rotRad));
-
-          // Calculate rotation-aware dimensions required to 100% cover the non-alpha bounding box
-          const neededW = bbox.width * cos + bbox.height * sin;
-          const neededH = bbox.width * sin + bbox.height * cos;
-
-          // Minimum scale to cover the non-alpha area with zero transparent borders
-          const minCoverScale = Math.max(neededW / texImg.width, neededH / texImg.height);
-
-          // Base scale relative to 1000px canvas to maintain uniform texture grain density
-          const baseScale = Math.max(1000 / texImg.width, 1000 / texImg.height);
           const zoom = typeof textureScale === 'number' && textureScale > 0 ? textureScale : 1.0;
-          const targetScale = baseScale * zoom;
+          const baseScale = Math.max(1000 / texImg.width, 1000 / texImg.height);
+          const scale = baseScale * zoom;
 
-          // Clamp scale to minCoverScale so setting a low zoom never reveals empty margins or forces repeating
-          const effectiveScale = Math.max(minCoverScale, targetScale);
-          const drawW = texImg.width * effectiveScale;
-          const drawH = texImg.height * effectiveScale;
-
-          ctx.save();
-          // Center the texture directly on the non-alpha area of the vinyl cut
-          ctx.translate(bbox.centerX, bbox.centerY);
-          if (rot !== 0) {
-            ctx.rotate(rotRad);
+          let patternPainted = false;
+          try {
+            const pattern = ctx.createPattern(texImg, 'repeat');
+            if (pattern) {
+              const matrix = new DOMMatrix();
+              matrix.translateSelf(500, 500);
+              if (rot !== 0) {
+                matrix.rotateSelf(rot);
+              }
+              matrix.scaleSelf(scale, scale);
+              matrix.translateSelf(-texImg.width / 2, -texImg.height / 2);
+              pattern.setTransform(matrix);
+              ctx.fillStyle = pattern;
+              ctx.fillRect(0, 0, 1000, 1000);
+              patternPainted = true;
+            }
+          } catch {
+            patternPainted = false;
           }
-          // Single cover draw with zero repeat seams
-          ctx.drawImage(texImg, -drawW / 2, -drawH / 2, drawW, drawH);
-          ctx.restore();
+
+          if (!patternPainted) {
+            // Fallback: scale drawImage sufficiently so rotation and zoom never leave empty borders
+            const rotRad = (rot * Math.PI) / 180;
+            const cos = Math.abs(Math.cos(rotRad));
+            const sin = Math.abs(Math.sin(rotRad));
+            const neededW = 1000 * cos + 1000 * sin;
+            const neededH = 1000 * sin + 1000 * cos;
+            const coverScale = Math.max(neededW / texImg.width, neededH / texImg.height, 1.0);
+            const drawW = texImg.width * coverScale;
+            const drawH = texImg.height * coverScale;
+
+            ctx.save();
+            ctx.translate(500, 500);
+            if (rot !== 0) ctx.rotate(rotRad);
+            ctx.drawImage(texImg, -drawW / 2, -drawH / 2, drawW, drawH);
+            ctx.restore();
+          }
         } else {
           // Pre-cut texture overlay drawn directly on 1000x1000 canvas
           ctx.drawImage(texImg, 0, 0, 1000, 1000);
@@ -594,9 +509,15 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
         layerGroup === 'primary' ||
         (/\b(back|top|body|device)\b/i.test(layerName) && !/\b(accent|camera|frame|side|logo|additional|addon)\b/i.test(layerName))
       );
+      const isTabletOrFoldable =
+        deviceFamily === 'tablet' ||
+        deviceFamily === 'foldable' ||
+        (deviceFamily as string) === 'tablet_laptop' ||
+        deviceFamily === 'keyboard';
+      const defaultGenEnabled = !isTabletOrFoldable && !hasViewShadow && Boolean(maskImg);
       const shouldApplyGeneratedShadow =
         isBackOrRequired &&
-        (generatedShadowConfig?.enabled ?? (!hasViewShadow && Boolean(maskImg)));
+        (generatedShadowConfig?.enabled ?? defaultGenEnabled);
 
       if (shouldApplyGeneratedShadow && maskImg) {
         applySyntheticDirectionalShading(ctx, 1000, 1000, generatedShadowConfig);
@@ -609,7 +530,7 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
     return () => {
       isCancelled = true;
     };
-  }, [maskUrl, textureUrl, fallbackColor, logoCutoutUrl, pencilCutoutUrl, modelCutoutUrl, textureRotation, textureScale, hasViewShadow, generatedShadowConfig, layerGroup, layerName, isRequired]);
+  }, [maskUrl, textureUrl, fallbackColor, logoCutoutUrl, pencilCutoutUrl, modelCutoutUrl, textureRotation, textureScale, hasViewShadow, generatedShadowConfig, layerGroup, layerName, isRequired, deviceFamily]);
 
   return (
     <canvas
@@ -1145,6 +1066,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
         if (profile.device_colors && profile.device_colors.length > 0) {
           setSelectedSimColor(profile.device_colors[0].id);
         }
+        return profile;
       } else {
         // Fallback profile from catalog item
         const fallbackSummary = profiles.find((p) => p.product_id === productId);
@@ -1204,6 +1126,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
           setSelectedSimLayers({ [defaultLayerId]: true });
           setActiveSimView('main_view');
           showToast('info', 'Loaded Base Profile', 'Created studio workspace for this device.');
+          return fallbackProfile;
         } else {
           showToast('error', 'Load Failed', res.error || 'Unable to load configurator profile');
         }
@@ -1212,6 +1135,15 @@ export const ConfiguratorStudioPage: React.FC = () => {
       showToast('error', 'Communication Error', err.message);
     } finally {
       setIsLoadingProfile(false);
+    }
+    return null;
+  };
+
+  const handleOpenAssetAuditForProduct = async (productId: number) => {
+    const prof = await handleOpenEditor(productId);
+    setShowAssetAuditModal(true);
+    if (prof) {
+      handleStartAssetAudit(prof);
     }
   };
 
@@ -2495,12 +2427,13 @@ export const ConfiguratorStudioPage: React.FC = () => {
     return ghostAngles;
   };
 
-  const handleStartAssetAudit = async () => {
-    if (!editingProfile) return;
+  const handleStartAssetAudit = async (targetProfile?: DeviceConfiguratorProfile | React.MouseEvent) => {
+    const profileToProbe = targetProfile && 'product_id' in targetProfile ? targetProfile : editingProfile;
+    if (!profileToProbe) return;
     setIsAuditingAssets(true);
     setShowAssetAuditModal(true);
 
-    const itemsToProbe = collectDeviceAuditItems(editingProfile, finishes);
+    const itemsToProbe = collectDeviceAuditItems(profileToProbe, finishes);
     // Invalidate cached probe entries for this device's items to guarantee live re-verification
     itemsToProbe.forEach((it) => {
       if (it.url) {
@@ -2544,7 +2477,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     await Promise.all(workers);
 
     // Ghost Angle Detection
-    const ghostAngles = evaluateDeviceGhostAngles(editingProfile, auditedItems);
+    const ghostAngles = evaluateDeviceGhostAngles(profileToProbe, auditedItems);
 
     const healthyCount = auditedItems.filter((i) => i.status === 'healthy').length;
     const brokenCount = auditedItems.filter((i) => i.status === 'broken').length;
@@ -2568,21 +2501,36 @@ export const ConfiguratorStudioPage: React.FC = () => {
     const auditStatus = totalIssues > 0 ? 'issues' : 'clean';
     const nowIso = new Date().toISOString();
 
+    const issueDetails: string[] = [];
+    ghostAngles.forEach((g) => {
+      issueDetails.push(`Ghost Angle: ${g.viewName} (0 skin cut masks, missing chassis)`);
+    });
+    auditedItems
+      .filter((i) => i.status === 'broken')
+      .forEach((b) => {
+        const targetLabel = b.layerName
+          ? `${b.layerName} • ${b.finishName || b.type}`
+          : `${b.viewName} • ${b.type}`;
+        issueDetails.push(`Broken Asset (${targetLabel}): ${b.url}`);
+      });
+
     markDeviceAuditedDirect({
-      product_id: editingProfile.product_id,
+      product_id: profileToProbe.product_id,
       audit_status: auditStatus,
       audit_issues: totalIssues,
       last_audited_at: nowIso,
+      audit_details: issueDetails,
     }).catch(console.warn);
 
     setProfiles((prev) =>
       prev.map((p) =>
-        p.product_id === editingProfile.product_id
+        p.product_id === profileToProbe.product_id
           ? {
               ...p,
               last_audited_at: nowIso,
               audit_status: auditStatus,
               audit_issues: totalIssues,
+              audit_details: issueDetails,
             }
           : p
       )
@@ -2942,10 +2890,22 @@ export const ConfiguratorStudioPage: React.FC = () => {
     const nowIso = new Date().toISOString();
     const auditRowsToPersist = deviceSummaries.map((ds) => {
       const issues = ds.brokenCount + ds.ghostAngles.length;
+      const issueDetails: string[] = [];
+      ds.ghostAngles.forEach((g) => {
+        issueDetails.push(`Ghost Angle: ${g.viewName} (0 skin cut masks, missing chassis)`);
+      });
+      ds.brokenItems.forEach((b) => {
+        const targetLabel = b.layerName
+          ? `${b.layerName} • ${b.finishName || b.type}`
+          : `${b.viewName} • ${b.type}`;
+        issueDetails.push(`Broken Asset (${targetLabel}): ${b.url}`);
+      });
+
       return {
         product_id: ds.productId,
         audit_status: (issues > 0 ? 'issues' : 'clean') as 'issues' | 'clean',
         audit_issues: issues,
+        audit_details: issueDetails,
         last_audited_at: nowIso,
       };
     });
@@ -2963,6 +2923,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
               last_audited_at: matched.last_audited_at,
               audit_status: matched.audit_status,
               audit_issues: matched.audit_issues,
+              audit_details: matched.audit_details,
             };
           }
           return p;
@@ -4964,7 +4925,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
             <table className="w-full text-left text-xs font-sans border-collapse">
               <thead>
                 <tr className="border-b border-white/10 bg-zinc-900/60 text-[11px] uppercase tracking-wider font-semibold text-zinc-400">
-                  <th className="py-3 px-4 w-10 text-center">Status</th>
+                  <th className="py-3 px-3 min-w-[95px] text-center">Status</th>
                   <th className="py-3 px-4 min-w-[220px]">Device / Model</th>
                   <th className="py-3 px-4 min-w-[150px]">Category</th>
                   <th className="py-3 px-3 text-center">Engine</th>
@@ -4992,25 +4953,73 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       onClick={() => handleOpenEditor(p.product_id)}
                       className="hover:bg-white/[0.03] transition-colors cursor-pointer group"
                     >
-                      {/* Status Dot */}
-                      <td className="py-3 px-4 text-center">
-                        <span
-                          className={clsx(
-                            'inline-block w-2.5 h-2.5 rounded-full',
-                            isAuditedClean
-                              ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]'
-                              : isAuditedIssues
-                              ? 'bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.6)]'
-                              : 'bg-zinc-600'
-                          )}
-                          title={
-                            isAuditedClean
-                              ? 'Audited clean'
-                              : isAuditedIssues
-                              ? `Issues detected (${p.audit_issues || 1})`
-                              : 'Unaudited'
+                      {/* Status / Issues Badge */}
+                      <td
+                        className="py-3 px-3 text-center relative group/issue"
+                        onClick={(e) => {
+                          if (isAuditedIssues) {
+                            e.stopPropagation();
+                            handleOpenAssetAuditForProduct(p.product_id);
                           }
-                        />
+                        }}
+                      >
+                        {isAuditedClean ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[10px] font-medium"
+                            title={p.last_audited_at ? `Audited clean on ${new Date(p.last_audited_at).toLocaleDateString()}` : 'Audited clean'}
+                          >
+                            <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />
+                            <span>Clean</span>
+                          </span>
+                        ) : isAuditedIssues ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenAssetAuditForProduct(p.product_id);
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-300 hover:bg-rose-500/25 hover:border-rose-500/40 text-[10px] font-semibold cursor-pointer transition-all shadow-[0_0_8px_rgba(251,113,133,0.15)]"
+                              title="Click to inspect and fix issues in Asset Integrity Audit"
+                            >
+                              <AlertTriangle className="w-2.5 h-2.5 text-rose-400" />
+                              <span>{p.audit_issues || 1} {p.audit_issues === 1 ? 'issue' : 'issues'}</span>
+                            </button>
+
+                            {/* Rich Hover Popover showing exact issues */}
+                            <div className="hidden group-hover/issue:block absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-50 w-72 p-2.5 rounded-xl bg-zinc-950/95 border border-rose-500/30 shadow-2xl backdrop-blur-md text-left pointer-events-none animate-in fade-in duration-150">
+                              <div className="flex items-center justify-between gap-2 pb-1.5 mb-1.5 border-b border-white/10">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-rose-300 flex items-center gap-1">
+                                  <AlertTriangle className="w-3 h-3 text-rose-400" />
+                                  <span>{p.audit_issues || 1} Detected {p.audit_issues === 1 ? 'Issue' : 'Issues'}</span>
+                                </span>
+                                <span className="text-[9px] font-mono text-zinc-400">Click to fix</span>
+                              </div>
+                              {p.audit_details && p.audit_details.length > 0 ? (
+                                <ul className="space-y-1 text-[11px] text-zinc-300 max-h-48 overflow-y-auto pr-1">
+                                  {p.audit_details.map((detail, idx) => (
+                                    <li key={idx} className="flex items-start gap-1.5 text-left leading-tight break-all">
+                                      <span className="text-rose-400 shrink-0">•</span>
+                                      <span className="text-zinc-300 font-sans">{detail}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p className="text-[11px] text-zinc-400 leading-snug">
+                                  Click to run real-time asset probe and view broken URLs and ghost angles.
+                                </p>
+                              )}
+                            </div>
+                          </>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-500 border border-zinc-700/50 text-[10px]"
+                            title="Unaudited device"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+                            <span>Unaudited</span>
+                          </span>
+                        )}
                       </td>
 
                       {/* Device Name & SKU */}
@@ -7780,6 +7789,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   textureScale={effectiveTextureScale}
                                   hasViewShadow={hasViewShadow}
                                   generatedShadowConfig={currentView?.generated_shadow}
+                                  deviceFamily={editingProfile.family}
                                 />
                               );
                             }
