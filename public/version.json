@@ -1,17 +1,17 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.30",
+  "version": "0.1.31",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.30.zip?v=0.1.30",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.31.zip?v=0.1.31",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-23T19:20:12.319Z",
+  "last_updated": "2026-09-23T19:29:51.667Z",
   "sections": {
     "description": "The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.",
-    "changelog": "### Version 0.1.30\n- Media details live thumbnail status inspection for sm (240x240) and md (720x720)\n- 1-click single attachment thumbnail generator with AJAX feedback\n- Shopee API v2 logistics arrangement detection fix for unarranged orders"
+    "changelog": "### Version 0.1.31\n- Media details live thumbnail status inspection for sm (240x240) and md (720x720)\n- 1-click single attachment thumbnail generator with AJAX feedback\n- Enforced protocol for automated version packaging on all plugin changes"
   }
 }
