@@ -4928,7 +4928,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   <th className="py-3 px-3 min-w-[95px] text-center">Status</th>
                   <th className="py-3 px-4 min-w-[220px]">Device / Model</th>
                   <th className="py-3 px-4 min-w-[150px]">Category</th>
-                  <th className="py-3 px-3 text-center">Engine</th>
                   <th className="py-3 px-3 text-center">Configurator</th>
                   <th className="py-3 px-4 text-center">Setup</th>
                   <th className="py-3 px-3 text-center">Scale</th>
@@ -4987,7 +4986,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             </button>
 
                             {/* Rich Hover Popover showing exact issues */}
-                            <div className="hidden group-hover/issue:block absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-50 w-72 p-2.5 rounded-xl bg-zinc-950/95 border border-rose-500/30 shadow-2xl backdrop-blur-md text-left pointer-events-none animate-in fade-in duration-150">
+                            <div className="hidden group-hover/issue:block absolute left-2 top-full mt-1.5 z-50 w-80 max-w-[calc(100vw-3rem)] p-2.5 rounded-xl bg-zinc-950/95 border border-rose-500/30 shadow-2xl backdrop-blur-md text-left pointer-events-none animate-in fade-in duration-150">
                               <div className="flex items-center justify-between gap-2 pb-1.5 mb-1.5 border-b border-white/10">
                                 <span className="text-[10px] font-bold uppercase tracking-wider text-rose-300 flex items-center gap-1">
                                   <AlertTriangle className="w-3 h-3 text-rose-400" />
@@ -5042,20 +5041,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       {/* Category */}
                       <td className="py-3 px-4 text-zinc-400 truncate max-w-[180px]">
                         {p.categories.join(', ') || 'Uncategorized'}
-                      </td>
-
-                      {/* Engine */}
-                      <td className="py-3 px-3 text-center">
-                        <span
-                          className={clsx(
-                            'text-[10px] font-mono px-2 py-0.5 rounded-md border font-medium',
-                            (p.configurator_version || 'v1') === 'v2'
-                              ? 'bg-white/10 text-white border-white/20'
-                              : 'bg-zinc-900 text-zinc-400 border-white/5'
-                          )}
-                        >
-                          {(p.configurator_version || 'v1') === 'v2' ? 'v2' : 'v1'}
-                        </span>
                       </td>
 
                       {/* Configurator Toggle */}
@@ -5165,8 +5150,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
       {/* Global Catalog Asset Audit Dialog */}
       {showGlobalAuditModal &&
         createPortal(
-          <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="w-full max-w-5xl max-h-[90vh] flex flex-col rounded-2xl bg-zinc-950 border border-white/15 shadow-2xl overflow-hidden font-sans">
+          <div
+            className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+            onClick={() => setShowGlobalAuditModal(false)}
+          >
+            <div
+              className="w-full max-w-5xl max-h-[90vh] flex flex-col rounded-2xl bg-zinc-950 border border-white/15 shadow-2xl overflow-hidden font-sans cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
               {/* Header */}
               <div className="p-5 border-b border-white/10 flex items-center justify-between gap-4 bg-zinc-900/50">
                 <div className="flex items-center gap-3">
@@ -5549,8 +5540,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
       {/* Global Master Textures Modal (v2 Engine) */}
       {showMasterTexturesModal &&
         createPortal(
-          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-            <div className="w-full max-w-5xl max-h-[92vh] rounded-3xl bg-[#121215] border border-white/15 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div
+            className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
+            onClick={() => setShowMasterTexturesModal(false)}
+          >
+            <div
+              className="w-full max-w-5xl max-h-[92vh] rounded-3xl bg-[#121215] border border-white/15 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150 cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
               {/* Header */}
               <div className="p-5 border-b border-white/10 flex items-start justify-between gap-4 bg-zinc-900/50">
                 <div className="flex items-start gap-3">
@@ -6600,8 +6597,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
       {/* Image Picker / Assignment Modal */}
       {imagePickerModal.isOpen &&
         createPortal(
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-            <div className="w-full max-w-lg rounded-2xl bg-[#121215] border border-white/15 shadow-2xl p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
+            onClick={() => setImagePickerModal((prev) => ({ ...prev, isOpen: false }))}
+          >
+            <div
+              className="w-full max-w-lg rounded-2xl bg-[#121215] border border-white/15 shadow-2xl p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150 cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex items-center justify-between pb-3 border-b border-white/10">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-lg bg-[#f3aa18]/15 border border-[#f3aa18]/30 flex items-center justify-center text-[#f3aa18]">
@@ -6767,8 +6770,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
       {/* Add New Finish Modal */}
       {showAddNewFinishModal &&
         createPortal(
-          <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-            <div className="w-full max-w-lg rounded-3xl bg-zinc-950 border border-white/15 p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+          <div
+            className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
+            onClick={() => setShowAddNewFinishModal(false)}
+          >
+            <div
+              className="w-full max-w-lg rounded-3xl bg-zinc-950 border border-white/15 p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150 cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex items-center justify-between border-b border-white/10 pb-3">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-lg bg-[#f3aa18]/15 border border-[#f3aa18]/30 flex items-center justify-center text-[#f3aa18]">
@@ -6984,8 +6993,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
       {/* Delete Finish Confirmation Modal */}
       {deletingFinishId &&
         createPortal(
-          <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-            <div className="w-full max-w-sm rounded-3xl bg-zinc-950 border border-rose-500/20 p-5 shadow-2xl space-y-3.5 text-center animate-in fade-in zoom-in-95 duration-150">
+          <div
+            className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
+            onClick={() => setDeletingFinishId(null)}
+          >
+            <div
+              className="w-full max-w-sm rounded-3xl bg-zinc-950 border border-rose-500/20 p-5 shadow-2xl space-y-3.5 text-center animate-in fade-in zoom-in-95 duration-150 cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 mx-auto">
                 <Trash2 className="w-5 h-5" />
               </div>
@@ -7019,8 +7034,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
       {/* Quick Price Edit Dialog */}
       {priceEditModal &&
         createPortal(
-          <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-2xl bg-zinc-950 border border-white/15 p-6 shadow-2xl space-y-5">
+          <div
+            className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            onClick={() => setPriceEditModal(null)}
+          >
+            <div
+              className="w-full max-w-md rounded-2xl bg-zinc-950 border border-white/15 p-6 shadow-2xl space-y-5 cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-bold text-white">Set Product Price</h3>
@@ -7087,8 +7108,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
       {/* Duplicate Product Dialog */}
       {duplicateModal &&
         createPortal(
-          <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <div className="w-full max-w-lg rounded-2xl bg-zinc-950 border border-white/15 p-6 shadow-2xl space-y-5">
+          <div
+            className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            onClick={() => setDuplicateModal(null)}
+          >
+            <div
+              className="w-full max-w-lg rounded-2xl bg-zinc-950 border border-white/15 p-6 shadow-2xl space-y-5 cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
@@ -11403,8 +11430,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
             {/* 3. Find & Replace in URLs Modal */}
             {showFindReplaceModal &&
               createPortal(
-                <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                  <div className="w-full max-w-lg rounded-2xl bg-zinc-950 border border-white/15 p-6 shadow-2xl space-y-5 font-sans">
+                <div
+                  className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+                  onClick={() => setShowFindReplaceModal(false)}
+                >
+                  <div
+                    className="w-full max-w-lg rounded-2xl bg-zinc-950 border border-white/15 p-6 shadow-2xl space-y-5 font-sans cursor-default"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-11 h-11 rounded-xl bg-[#f3aa18]/10 border border-[#f3aa18]/30 flex items-center justify-center text-[#f3aa18] shrink-0">
@@ -11549,8 +11582,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
             {/* 4. Focused Texture URL Edit Modal */}
             {editingTextureModal &&
               createPortal(
-                <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                  <div className="w-full max-w-lg rounded-2xl bg-zinc-950 border border-white/15 p-6 shadow-2xl space-y-5 font-sans">
+                <div
+                  className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+                  onClick={() => setEditingTextureModal(null)}
+                >
+                  <div
+                    className="w-full max-w-lg rounded-2xl bg-zinc-950 border border-white/15 p-6 shadow-2xl space-y-5 font-sans cursor-default"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-12 h-12 rounded-xl bg-zinc-900 border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
@@ -11673,8 +11712,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
             {/* 5. Asset Integrity Audit Modal */}
             {showAssetAuditModal &&
               createPortal(
-                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-                  <div className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl bg-zinc-950 border border-white/15 shadow-2xl overflow-hidden font-sans">
+                <div
+                  className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+                  onClick={() => setShowAssetAuditModal(false)}
+                >
+                  <div
+                    className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl bg-zinc-950 border border-white/15 shadow-2xl overflow-hidden font-sans cursor-default"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {/* Header */}
                     <div className="p-5 border-b border-white/10 flex items-center justify-between gap-4 bg-zinc-900/50">
                       <div className="flex items-center gap-3">
@@ -12084,8 +12129,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
       {/* Shading Extractor Modal */}
       {showShadingExtractorModal &&
         createPortal(
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
-            <div className="bg-zinc-900 border border-white/10 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+          <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[120] flex items-center justify-center p-4"
+            onClick={() => setShowShadingExtractorModal(false)}
+          >
+            <div
+              className="bg-zinc-900 border border-white/10 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200 cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
               {/* Header */}
               <div className="p-4 border-b border-white/10 flex items-center justify-between bg-zinc-900/80">
                 <div className="flex items-center gap-3">
@@ -12239,8 +12290,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
       {/* Group Display Settings Modal */}
       {editingGroupSetting &&
         createPortal(
-          <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-            <div className="w-full max-w-lg rounded-3xl bg-[#121215] border border-white/15 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div
+            className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            onClick={() => setEditingGroupSetting(null)}
+          >
+            <div
+              className="w-full max-w-lg rounded-3xl bg-[#121215] border border-white/15 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150 cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
               {/* Header */}
               <div className="p-5 border-b border-white/10 flex items-center justify-between bg-zinc-900/60">
                 <div className="flex items-center gap-3">
@@ -12481,8 +12538,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
       {/* Bespoke Presets Manager Modal */}
       {showPresetsManagerModal &&
         createPortal(
-          <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-            <div className="w-full max-w-3xl max-h-[90vh] rounded-3xl bg-[#121215] border border-white/15 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div
+            className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
+            onClick={() => setShowPresetsManagerModal(false)}
+          >
+            <div
+              className="w-full max-w-3xl max-h-[90vh] rounded-3xl bg-[#121215] border border-white/15 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150 cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
               {/* Header */}
               <div className="p-5 border-b border-white/10 flex items-center justify-between bg-zinc-900/60">
                 <div className="flex items-center gap-3">
@@ -12847,8 +12910,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
       {/* Per-Device Preset Add/Edit Modal */}
       {editingDevicePreset && editingProfile &&
         createPortal(
-          <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-            <div className="w-full max-w-lg rounded-2xl bg-zinc-950 border border-white/15 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          <div
+            className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            onClick={() => setEditingDevicePreset(null)}
+          >
+            <div
+              className="w-full max-w-lg rounded-2xl bg-zinc-950 border border-white/15 shadow-2xl overflow-hidden flex flex-col max-h-[90vh] cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
               {/* Modal Header */}
               <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between shrink-0 bg-zinc-900/60">
                 <div className="flex items-center gap-2">
@@ -13066,8 +13135,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
       {/* Transfer Setup & Portable JSON Modal */}
       {showTransferModal && editingProfile &&
         createPortal(
-          <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-            <div className="w-full max-w-3xl rounded-2xl bg-zinc-950 border border-white/15 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+          <div
+            className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            onClick={() => setShowTransferModal(false)}
+          >
+            <div
+              className="w-full max-w-3xl rounded-2xl bg-zinc-950 border border-white/15 shadow-2xl overflow-hidden flex flex-col max-h-[92vh] cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
               {/* Modal Header */}
               <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between shrink-0 bg-zinc-900/60">
                 <div className="flex items-center gap-3">

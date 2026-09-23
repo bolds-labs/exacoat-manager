@@ -2063,8 +2063,14 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
 
       {/* Refund Modal Overlay */}
       {isRefundModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-md bg-[#111111] border border-white/[0.1] rounded-2xl p-6 shadow-2xl space-y-5">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn cursor-pointer"
+          onClick={() => setIsRefundModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md bg-[#111111] border border-white/[0.1] rounded-2xl p-6 shadow-2xl space-y-5 cursor-default"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2 font-sans">
                 <RotateCcw className="w-4 h-4 text-rose-400" />

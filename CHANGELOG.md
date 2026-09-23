@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.27] - 2026-09-24
+
+### Outside Click Modal Dismissal, Issues Popover Fix & Studio Engine Column Removal
+- **Universal Outside Click Modal Dismissal**:
+  - Configured backdrop and wrapper click dismissal across the entire Exacoat Manager interface:
+    - Base Modal component (`src/components/ui/Modal.tsx`): Added `onClick={onClose}` to both outer flex wrapper and dark backdrop, stopping propagation on dialog cards. Closes all 15+ modals using `Modal.tsx` on outside click.
+    - Command Palette (`src/components/layout/CommandPalette.tsx`): Added backdrop click dismissal.
+    - Refund Overlay (`src/components/orders/OrderDetailDrawer.tsx`): Added outside click dismissal.
+    - Materials Stock Page (`src/pages/MaterialsStockPage.tsx`): Added outside click dismissal for Add Finish and Edit Material modals.
+    - Reviews Page (`src/pages/ReviewsPage.tsx`): Added outside click dismissal for full-size photo and video media lightbox.
+    - Configurator Studio (`src/pages/ConfiguratorStudioPage.tsx`): Added outside click dismissal across all 15 inline dialogs (Catalog Asset Audit, Master Textures, Image Picker, Add New Finish, Delete Finish Confirmation, Quick Price Edit, Duplicate Product, Find & Replace in URLs, Texture Map Edit, Asset Integrity Audit, 3D Shading Extractor, Group Display Settings, Presets Manager, Per-Device Curated Look Edit, and Transfer Setup / JSON Modal).
+- **Studio Table Issues Popover Alignment Fix (`src/pages/ConfiguratorStudioPage.tsx`)**:
+  - Anchored the issues hover popover to `left-2 top-full` instead of `left-1/2 -translate-x-1/2`, styled with `w-80 max-w-[calc(100vw-3rem)]`.
+  - Prevents the popover from overflowing the left boundary of the first column, resolving table overflow-x clipping.
+- **Engine Column Removal from Studio Catalog Table (`src/pages/ConfiguratorStudioPage.tsx`)**:
+  - Removed the obsolete "Engine" column header and table cell, simplifying the catalog overview.
+
 ## [0.1.26] - 2026-09-24
 
 ### iPad Skin Alpha Masks Configuration & Tablet Texture Scales (110% Ultra / 120% Standard)

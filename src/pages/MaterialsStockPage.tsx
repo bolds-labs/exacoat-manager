@@ -545,8 +545,14 @@ export const MaterialsStockPage: React.FC = () => {
 
       {/* Add Finish Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl bg-zinc-950 border border-white/10 p-6 shadow-2xl relative">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm cursor-pointer"
+          onClick={() => setIsModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-zinc-950 border border-white/10 p-6 shadow-2xl relative cursor-default"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between pb-4 border-b border-white/10">
               <div className="flex items-center gap-2">
                 <Layers className="w-4 h-4 text-[#f3aa18]" />
@@ -678,8 +684,14 @@ export const MaterialsStockPage: React.FC = () => {
 
       {/* Edit Material Modal */}
       {editingFinish && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-md bg-[#121215] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in cursor-pointer"
+          onClick={() => setEditingFinish(null)}
+        >
+          <div
+            className="w-full max-w-md bg-[#121215] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-4 cursor-default"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-white/5 pb-4">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-[#f3aa18]/15 border border-[#f3aa18]/30 flex items-center justify-center text-[#f3aa18]">

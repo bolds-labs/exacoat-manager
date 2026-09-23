@@ -1555,8 +1555,14 @@ export const ReviewsPage: React.FC<ReviewsPageProps> = ({
 
       {/* Media Lightbox & Video Player Modal */}
       {activeMedia && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="relative max-w-4xl w-full max-h-[90vh] bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer"
+          onClick={() => setActiveMedia(null)}
+        >
+          <div
+            className="relative max-w-4xl w-full max-h-[90vh] bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col cursor-default"
+            onClick={e => e.stopPropagation()}
+          >
             <button
               type="button"
               onClick={() => setActiveMedia(null)}

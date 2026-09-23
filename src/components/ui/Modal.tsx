@@ -82,11 +82,14 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   const modalContent = (
-    <div className={clsx("fixed inset-0 flex items-center justify-center p-2.5 sm:p-6 overflow-y-auto font-sans", zIndex)}>
+    <div
+      className={clsx("fixed inset-0 flex items-center justify-center p-2.5 sm:p-6 overflow-y-auto font-sans", zIndex)}
+      onClick={onClose}
+    >
       {/* Pure Monochrome Dark Backdrop with Blur & Transition */}
       <div
         className={clsx(
-          "fixed inset-0 bg-black/80 backdrop-blur-xl transition-opacity duration-280 ease-out",
+          "fixed inset-0 bg-black/80 backdrop-blur-xl transition-opacity duration-280 ease-out cursor-pointer",
           isVisible ? "opacity-100" : "opacity-0 pointer-events-none"
         )}
         onClick={onClose}
@@ -101,7 +104,7 @@ export const Modal: React.FC<ModalProps> = ({
           transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)',
         }}
         className={clsx(
-          'relative w-full rounded-3xl glass-panel border border-zinc-200 dark:border-white/15 bg-white/95 dark:bg-[#0d0f12]/95 backdrop-blur-2xl shadow-[0_25px_80px_rgba(0,0,0,0.75)] z-10 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh] transition-all duration-280 transform overscroll-contain',
+          'relative w-full rounded-3xl glass-panel border border-zinc-200 dark:border-white/15 bg-white/95 dark:bg-[#0d0f12]/95 backdrop-blur-2xl shadow-[0_25px_80px_rgba(0,0,0,0.75)] z-10 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh] transition-all duration-280 transform overscroll-contain cursor-default',
           isVisible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-3',
           maxWidthStyles[maxWidth],
           className
