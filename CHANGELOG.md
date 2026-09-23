@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.24] - 2026-09-24
+
+### Adaptive Non-Alpha Bounding Box Cover & Zero-Repeat Texture Architecture
+- **Zero-Repeat Single Cover Rendering (`ConfiguratorStudioPage.tsx`)**:
+  - Replaced pattern tiling (`repeat`) with a single covered `drawImage` across vinyl skin layers, eliminating visible horizontal and vertical tiling seams on non-seamless textures.
+  - Implemented fast alpha channel scanning (`getMaskBoundingBox`) to extract the exact non-alpha bounding box (`minX, minY, maxX, maxY`), width, height, and center coordinates of the mask.
+  - Sampled on a 250x250 offscreen canvas (< 0.3ms execution time) and cached per mask URL to eliminate redundant CPU cycles during re-renders.
+- **Adaptive Centering on Off-Center Features**:
+  - Automatically translates textures to `(bbox.centerX, bbox.centerY)` rather than the arbitrary global canvas center `(500, 500)`, ensuring off-center features (camera islands, S-Pen strips, side frames, trackpads, and hinges) receive an intentional, centered pattern composition.
+- **Clamped Rotation-Aware Minimum Cover Scale**:
+  - Computes the minimum scale required to cover the rotated bounding box:
+    `minCoverScale = Math.max((w * |cos θ| + h * |sin θ|) / texW, (w * |sin θ| + h * |cos θ|) / texH)`
+  - Clamps the effective scale to `Math.max(minCoverScale, baseScale * zoom)`.
+  - Setting a low zoom or narrow aspect angle never exposes empty canvas borders, transparent margins, or untextured vinyl.
+
 ## [0.1.23] - 2026-09-23
 
 ### Resilient Audit Probing & Xiaomi Pad Side View Cleanup

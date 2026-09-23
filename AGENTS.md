@@ -1201,11 +1201,17 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 
 ## 40. Seamless Master Texture Tiling & Configurable Generated 3D Shading
 
-- **Seamless Master Texture Tiling Invariant (`createPattern` with `DOMMatrix`)**:
-  - In modern v2 rendering, skin textures must cover the entire 1000x1000 viewport before being clipped by the layer alpha mask (`destination-in`).
-  - Drawing a single rotated texture with `drawImage` shrinks its bounding box on rotated aspects (e.g. 90-degree rotated texture with 0.75 zoom creates a 750px box on a 1000px canvas), causing vertical accent strips (such as Galaxy S25 / S24 accents spanning Y=8 to Y=991) to get clipped at the top and bottom.
-  - **The Invariant**: Always draw textures using `ctx.createPattern(texImg, 'repeat')` with a `DOMMatrix` applying center translation, rotation, and scaling. This ensures infinite seamless tiling across the entire canvas area prior to mask clipping.
-  - A fallback `drawImage` bounding box calculation (`1000 * cos + 1000 * sin`) must also be maintained in case pattern initialization fails.
+- **Adaptive Non-Alpha Bounding Box Cover Architecture (Zero-Repeat & Clamped Minimum Scale)**:
+  - **The Invariant**: Skin textures are drawn with zero repeat (`repeat = false` / single `drawImage`), eliminating visible tiling seams and grid lines on non-seamless textures.
+  - **Mask Bounding Box Detection**: The rendering pipeline scans the alpha channel of `maskImg` (`getMaskBoundingBox`) to extract the precise non-alpha bounding box (`minX, minY, maxX, maxY`), width, height, and center (`centerX, centerY`). Sampled on a 250x250 offscreen canvas, this takes < 0.3ms and is cached per mask URL.
+  - **Adaptive Translation**: Textures are translated directly to the non-alpha center `(bbox.centerX, bbox.centerY)` rather than the arbitrary global canvas center `(500, 500)`. Off-center features (such as camera islands, S-Pen strips, side frames, trackpads, and hinges) receive an intentional, centered pattern composition.
+  - **Rotation-Aware Minimum Cover Scale**:
+    The minimum scale required to cover the target bounding box under rotation $\theta$ is:
+    `neededW = bbox.width * |cos(θ)| + bbox.height * |sin(θ)|`
+    `neededH = bbox.width * |sin(θ)| + bbox.height * |cos(θ)|`
+    `minCoverScale = Math.max(neededW / texImg.width, neededH / texImg.height)`
+  - **Scale Clamping**: The final scale is evaluated as `Math.max(minCoverScale, baseScale * zoom)`. Setting a low zoom never exposes empty canvas margins, transparent gaps, or untextured vinyl cuts.
+  - **Parity Across Ecosystem**: This architecture is implemented identically across `exacoat-manager` (`ConfiguratorStudioPage.tsx`) and `exacoat-web` (`stacked-layer-canvas.tsx` and `device-skin-configurator.tsx`).
 
 - **Configurable Generated 3D Directional Shading Architecture**:
   - Directional shadow vector is cast towards **bottom-right** (+distance, +distance) by default, ensuring internal cutouts (such as camera rings, holes, and ports) receive realistic shadows on their lower and right borders.

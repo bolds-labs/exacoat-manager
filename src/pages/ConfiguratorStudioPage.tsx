@@ -367,6 +367,103 @@ function applySyntheticDirectionalShading(
   }
 }
 
+interface MaskBoundingBox {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  width: number;
+  height: number;
+  centerX: number;
+  centerY: number;
+}
+
+const maskBoundingBoxCache = new Map<string, MaskBoundingBox>();
+
+function getMaskBoundingBox(img: HTMLImageElement, cacheKey?: string): MaskBoundingBox {
+  if (cacheKey && maskBoundingBoxCache.has(cacheKey)) {
+    return maskBoundingBoxCache.get(cacheKey)!;
+  }
+
+  const defaultBbox: MaskBoundingBox = {
+    minX: 0,
+    minY: 0,
+    maxX: 1000,
+    maxY: 1000,
+    width: 1000,
+    height: 1000,
+    centerX: 500,
+    centerY: 500,
+  };
+
+  if (!img || img.naturalWidth === 0 || img.naturalHeight === 0) {
+    return defaultBbox;
+  }
+
+  try {
+    const sampleSize = 250;
+    const canvas = document.createElement('canvas');
+    canvas.width = sampleSize;
+    canvas.height = sampleSize;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return defaultBbox;
+
+    ctx.drawImage(img, 0, 0, sampleSize, sampleSize);
+    const imgData = ctx.getImageData(0, 0, sampleSize, sampleSize);
+    const data = imgData.data;
+
+    let minX = sampleSize;
+    let minY = sampleSize;
+    let maxX = -1;
+    let maxY = -1;
+
+    for (let y = 0; y < sampleSize; y++) {
+      const rowOffset = y * sampleSize * 4;
+      for (let x = 0; x < sampleSize; x++) {
+        const alpha = data[rowOffset + x * 4 + 3];
+        if (alpha > 15) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+
+    if (maxX < minX || maxY < minY) {
+      if (cacheKey) maskBoundingBoxCache.set(cacheKey, defaultBbox);
+      return defaultBbox;
+    }
+
+    const scaleFactor = 1000 / sampleSize;
+    const realMinX = Math.max(0, Math.floor(minX * scaleFactor) - 4);
+    const realMinY = Math.max(0, Math.floor(minY * scaleFactor) - 4);
+    const realMaxX = Math.min(1000, Math.ceil((maxX + 1) * scaleFactor) + 4);
+    const realMaxY = Math.min(1000, Math.ceil((maxY + 1) * scaleFactor) + 4);
+
+    const width = Math.max(1, realMaxX - realMinX);
+    const height = Math.max(1, realMaxY - realMinY);
+    const centerX = realMinX + width / 2;
+    const centerY = realMinY + height / 2;
+
+    const bbox: MaskBoundingBox = {
+      minX: realMinX,
+      minY: realMinY,
+      maxX: realMaxX,
+      maxY: realMaxY,
+      width,
+      height,
+      centerX,
+      centerY,
+    };
+
+    if (cacheKey) maskBoundingBoxCache.set(cacheKey, bbox);
+    return bbox;
+  } catch {
+    return defaultBbox;
+  }
+}
+
 const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
   maskUrl,
   textureUrl,
@@ -422,51 +519,41 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
       ctx.clearRect(0, 0, 1000, 1000);
       if (!maskImg && !texImg) return;
 
-      // 1. Draw master texture with seamless pattern tiling, rotation, and scale
+      // 1. Draw master texture adapted to the mask's non-alpha bounding box with zero repeat
       if (texImg && texImg.width > 0 && texImg.height > 0) {
         if (maskImg) {
+          const bbox = getMaskBoundingBox(maskImg, maskUrl);
           const rot = (textureRotation || 0) % 360;
-          const zoom = typeof textureScale === 'number' && textureScale > 0 ? textureScale : 1.0;
+          const rotRad = (rot * Math.PI) / 180;
+          const cos = Math.abs(Math.cos(rotRad));
+          const sin = Math.abs(Math.sin(rotRad));
+
+          // Calculate rotation-aware dimensions required to 100% cover the non-alpha bounding box
+          const neededW = bbox.width * cos + bbox.height * sin;
+          const neededH = bbox.width * sin + bbox.height * cos;
+
+          // Minimum scale to cover the non-alpha area with zero transparent borders
+          const minCoverScale = Math.max(neededW / texImg.width, neededH / texImg.height);
+
+          // Base scale relative to 1000px canvas to maintain uniform texture grain density
           const baseScale = Math.max(1000 / texImg.width, 1000 / texImg.height);
-          const scale = baseScale * zoom;
+          const zoom = typeof textureScale === 'number' && textureScale > 0 ? textureScale : 1.0;
+          const targetScale = baseScale * zoom;
 
-          let patternPainted = false;
-          try {
-            const pattern = ctx.createPattern(texImg, 'repeat');
-            if (pattern) {
-              const matrix = new DOMMatrix();
-              matrix.translateSelf(500, 500);
-              if (rot !== 0) {
-                matrix.rotateSelf(rot);
-              }
-              matrix.scaleSelf(scale, scale);
-              matrix.translateSelf(-texImg.width / 2, -texImg.height / 2);
-              pattern.setTransform(matrix);
-              ctx.fillStyle = pattern;
-              ctx.fillRect(0, 0, 1000, 1000);
-              patternPainted = true;
-            }
-          } catch {
-            patternPainted = false;
+          // Clamp scale to minCoverScale so setting a low zoom never reveals empty margins or forces repeating
+          const effectiveScale = Math.max(minCoverScale, targetScale);
+          const drawW = texImg.width * effectiveScale;
+          const drawH = texImg.height * effectiveScale;
+
+          ctx.save();
+          // Center the texture directly on the non-alpha area of the vinyl cut
+          ctx.translate(bbox.centerX, bbox.centerY);
+          if (rot !== 0) {
+            ctx.rotate(rotRad);
           }
-
-          if (!patternPainted) {
-            // Fallback: scale drawImage sufficiently so rotation and zoom never leave empty borders
-            const rotRad = (rot * Math.PI) / 180;
-            const cos = Math.abs(Math.cos(rotRad));
-            const sin = Math.abs(Math.sin(rotRad));
-            const neededW = 1000 * cos + 1000 * sin;
-            const neededH = 1000 * sin + 1000 * cos;
-            const coverScale = Math.max(neededW / texImg.width, neededH / texImg.height, 1.0);
-            const drawW = texImg.width * coverScale;
-            const drawH = texImg.height * coverScale;
-
-            ctx.save();
-            ctx.translate(500, 500);
-            if (rot !== 0) ctx.rotate(rotRad);
-            ctx.drawImage(texImg, -drawW / 2, -drawH / 2, drawW, drawH);
-            ctx.restore();
-          }
+          // Single cover draw with zero repeat seams
+          ctx.drawImage(texImg, -drawW / 2, -drawH / 2, drawW, drawH);
+          ctx.restore();
         } else {
           // Pre-cut texture overlay drawn directly on 1000x1000 canvas
           ctx.drawImage(texImg, 0, 0, 1000, 1000);
