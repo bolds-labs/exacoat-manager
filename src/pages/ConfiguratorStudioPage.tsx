@@ -103,6 +103,7 @@ import {
   Upload,
   FileJson,
   FileText,
+  Loader2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { MediaLibraryModal } from '../components/modals/MediaLibraryModal';
@@ -249,6 +250,76 @@ const InfoTooltip: React.FC<{ content?: string; text?: string }> = ({ content, t
     </span>
   );
 };
+
+/**
+ * Detects the dominant/representative hardware body color from an image URL.
+ * Uses an offscreen HTML5 canvas to sample non-transparent, non-glare, non-border pixels
+ * and calculates the median luminance quartile color.
+ */
+async function detectDominantColorFromImage(imageUrl: string): Promise<string | null> {
+  if (!imageUrl) return null;
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return resolve(null);
+
+        // Downscale to 80x80 for fast processing
+        canvas.width = 80;
+        canvas.height = 80;
+        ctx.drawImage(img, 0, 0, 80, 80);
+
+        const imgData = ctx.getImageData(0, 0, 80, 80);
+        const data = imgData.data;
+        const validPixels: { r: number; g: number; b: number; luma: number }[] = [];
+
+        for (let i = 0; i < data.length; i += 4) {
+          const a = data[i + 3];
+          if (a < 128) continue; // ignore transparent pixels
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+          // Filter out near-black frames, shadows, and lens housings
+          if (luma < 25 || (r < 25 && g < 25 && b < 25)) continue;
+          // Filter out bright specular glare
+          if (luma > 245 && r > 240 && g > 240 && b > 240) continue;
+
+          validPixels.push({ r, g, b, luma });
+        }
+
+        if (validPixels.length === 0) return resolve(null);
+
+        // Sort by luminance and sample the middle 50% interquartile band
+        validPixels.sort((p1, p2) => p1.luma - p2.luma);
+        const start = Math.floor(validPixels.length * 0.25);
+        const end = Math.floor(validPixels.length * 0.75);
+        const midPixels = validPixels.slice(start, end);
+
+        const sum = midPixels.reduce(
+          (acc, p) => ({ r: acc.r + p.r, g: acc.g + p.g, b: acc.b + p.b }),
+          { r: 0, g: 0, b: 0 }
+        );
+        const count = midPixels.length;
+        const avgR = Math.round(sum.r / count);
+        const avgG = Math.round(sum.g / count);
+        const avgB = Math.round(sum.b / count);
+
+        const toHex = (n: number) => n.toString(16).padStart(2, '0');
+        const hex = `#${toHex(avgR)}${toHex(avgG)}${toHex(avgB)}`;
+        resolve(hex);
+      } catch (err) {
+        console.warn('[COLOR-DETECT] Could not sample image (CORS or canvas security):', err);
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = imageUrl;
+  });
+}
 
 interface V2SkinCanvasLayerProps {
   maskUrl?: string;
@@ -809,6 +880,36 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [customAngleName, setCustomAngleName] = useState<string>('');
   const [isPresetDropdownOpen, setIsPresetDropdownOpen] = useState<boolean>(false);
   const [selectedSimVariants, setSelectedSimVariants] = useState<Record<string, string>>({});
+  const [draggedColorIdx, setDraggedColorIdx] = useState<number | null>(null);
+  const [dragOverColorIdx, setDragOverColorIdx] = useState<number | null>(null);
+  const [failedColorImages, setFailedColorImages] = useState<Record<string, boolean>>({});
+  const [detectingColorIdx, setDetectingColorIdx] = useState<number | null>(null);
+
+  const handleAutoDetectColor = async (colorIdx: number, imgUrl: string) => {
+    if (!imgUrl || !editingProfile) return;
+    setDetectingColorIdx(colorIdx);
+    try {
+      const detectedHex = await detectDominantColorFromImage(imgUrl);
+      if (detectedHex) {
+        const nextColors = [...(editingProfile.device_colors || [])];
+        if (nextColors[colorIdx]) {
+          nextColors[colorIdx] = { ...nextColors[colorIdx], hex: detectedHex };
+          setEditingProfile({ ...editingProfile, device_colors: nextColors });
+        }
+      }
+    } finally {
+      setDetectingColorIdx(null);
+    }
+  };
+
+  const handleMoveColor = (fromIndex: number, toIndex: number) => {
+    if (!editingProfile?.device_colors) return;
+    if (toIndex < 0 || toIndex >= editingProfile.device_colors.length) return;
+    const updated = [...editingProfile.device_colors];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+    setEditingProfile({ ...editingProfile, device_colors: updated });
+  };
 
   const loadData = async (quiet = false, allProducts = showAllProducts) => {
     try {
@@ -1065,7 +1166,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
         }
         if (profile.device_colors && profile.device_colors.length > 0) {
           setSelectedSimColor(profile.device_colors[0].id);
+        } else {
+          setSelectedSimColor('');
         }
+        setFailedColorImages({});
         return profile;
       } else {
         // Fallback profile from catalog item
@@ -7618,50 +7722,67 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         {/* Device Canvas Box */}
                         <div className="relative w-full max-w-[560px] lg:max-w-[620px] xl:max-w-[680px] aspect-square flex items-center justify-center drop-shadow-2xl transition-all">
                           {/* Layer 1: Hardware Chassis Base Image */}
-                          {currentView?.background_url ? (
-                            <div className="absolute inset-0 w-full h-full flex items-center justify-center pointer-events-none z-0">
-                              {(() => {
-                                const activeColor = editingProfile.device_colors?.find((c) => c.id === selectedSimColor);
-                                const chassisSrc =
-                                  (activeColor as any)?.body_images_by_view?.[currentView.id] ||
-                                  activeColor?.body_image_url ||
-                                  currentView.background_url;
-                                const hasDedicatedImage = Boolean(
-                                  (activeColor as any)?.body_images_by_view?.[currentView.id] || activeColor?.body_image_url
-                                );
+                          {(() => {
+                            const activeColor =
+                              editingProfile.device_colors?.find((c) => c.id === selectedSimColor) ||
+                              editingProfile.device_colors?.[0];
+                            const dedicatedColorImg =
+                              (activeColor as any)?.body_images_by_view?.[currentView?.id] ||
+                              (currentView?.is_default || currentView?.id === 'main_view'
+                                ? activeColor?.body_image_url
+                                : '');
+                            const isDedicatedFailing = Boolean(
+                              activeColor?.id && failedColorImages[activeColor.id]
+                            );
+                            const chassisSrc =
+                              !isDedicatedFailing && dedicatedColorImg
+                                ? dedicatedColorImg
+                                : currentView?.background_url;
+                            const hasDedicatedImage = Boolean(dedicatedColorImg && !isDedicatedFailing);
 
-                                return (
-                                  <>
-                                    <img
-                                      src={chassisSrc}
-                                      alt="Hardware Chassis"
-                                      className="w-full h-full object-contain pointer-events-none"
-                                      onError={(e) => {
-                                        (e.target as HTMLElement).style.display = 'none';
-                                      }}
-                                    />
-                                    {editingProfile.configurator_version === 'v2' && activeColor && !hasDedicatedImage && (
-                                      <div
-                                        style={{
-                                          backgroundColor: activeColor.hex || '#535559',
-                                          mixBlendMode: 'color',
-                                        }}
-                                        className="absolute inset-0 w-full h-full pointer-events-none opacity-30"
-                                      />
-                                    )}
-                                  </>
-                                );
-                              })()}
-                            </div>
-                          ) : (
-                            <div className="absolute inset-0 border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center justify-center text-xs text-zinc-500 text-center p-6">
-                              <Smartphone className="w-12 h-12 text-zinc-700 mb-3" />
-                              <span className="font-medium text-zinc-400">No Hardware Chassis Image</span>
-                              <span className="text-[11px] text-zinc-500 mt-1 max-w-xs">
-                                Set the base hardware render in the "Hardware Base" tab on the right.
-                              </span>
-                            </div>
-                          )}
+                            if (!chassisSrc) {
+                              return (
+                                <div className="absolute inset-0 border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center justify-center text-xs text-zinc-500 text-center p-6">
+                                  <Smartphone className="w-12 h-12 text-zinc-700 mb-3" />
+                                  <span className="font-medium text-zinc-400">No Hardware Chassis Image</span>
+                                  <span className="text-[11px] text-zinc-500 mt-1 max-w-xs">
+                                    Set the base hardware render in the "Hardware Base" tab on the right.
+                                  </span>
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div className="absolute inset-0 w-full h-full flex items-center justify-center pointer-events-none z-0">
+                                <img
+                                  key={`${activeColor?.id || 'default'}-${chassisSrc}`}
+                                  src={chassisSrc}
+                                  alt="Hardware Chassis"
+                                  className="w-full h-full object-contain pointer-events-none"
+                                  onError={() => {
+                                    if (activeColor?.id && dedicatedColorImg) {
+                                      setFailedColorImages((prev) => ({ ...prev, [activeColor.id]: true }));
+                                    }
+                                  }}
+                                />
+                                {isDedicatedFailing && (
+                                  <div className="absolute bottom-4 left-4 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-950/80 border border-rose-500/30 text-rose-300 text-[10px] backdrop-blur-md">
+                                    <AlertCircle className="w-3 h-3 text-rose-400 shrink-0" />
+                                    <span>Body color asset 404 (falling back to default chassis)</span>
+                                  </div>
+                                )}
+                                {editingProfile.configurator_version === 'v2' && activeColor && !hasDedicatedImage && (
+                                  <div
+                                    style={{
+                                      backgroundColor: activeColor.hex || '#535559',
+                                      mixBlendMode: 'color',
+                                    }}
+                                    className="absolute inset-0 w-full h-full pointer-events-none opacity-30"
+                                  />
+                                )}
+                              </div>
+                            );
+                          })()}
 
                           {/* Layer 2: Customizable Skin Texture Overlays (Sorted by z_index ascending: base layers first, accents on top) */}
                           {[...skinLayers]
@@ -9507,6 +9628,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                           device_colors: nextColors,
                                         });
                                         setSelectedSimColor(newColor.id);
+                                        if (currentView.background_url) {
+                                          handleAutoDetectColor(nextColors.length - 1, currentView.background_url);
+                                        }
                                       }}
                                       className="px-2.5 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/20 text-[11px] font-medium flex items-center gap-1 cursor-pointer transition-colors"
                                     >
@@ -9527,13 +9651,85 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                           (color as any)?.body_images_by_view?.[currentView.id] ||
                                           (currentView.is_default || currentView.id === 'main_view' ? color.body_image_url : '') ||
                                           '';
+                                        const isSimActive = (selectedSimColor || editingProfile.device_colors?.[0]?.id) === color.id;
+                                        const isImageBroken = Boolean(color.id && failedColorImages[color.id]);
 
                                         return (
                                           <div
                                             key={color.id || idx}
-                                            className="p-3 rounded-xl bg-zinc-950/80 border border-white/10 space-y-2.5"
+                                            draggable
+                                            onDragStart={(e) => {
+                                              setDraggedColorIdx(idx);
+                                              e.dataTransfer.effectAllowed = 'move';
+                                              e.dataTransfer.setData('text/plain', String(idx));
+                                            }}
+                                            onDragOver={(e) => {
+                                              e.preventDefault();
+                                              e.dataTransfer.dropEffect = 'move';
+                                              if (dragOverColorIdx !== idx) setDragOverColorIdx(idx);
+                                            }}
+                                            onDragLeave={() => {
+                                              if (dragOverColorIdx === idx) setDragOverColorIdx(null);
+                                            }}
+                                            onDrop={(e) => {
+                                              e.preventDefault();
+                                              if (draggedColorIdx !== null && draggedColorIdx !== idx) {
+                                                handleMoveColor(draggedColorIdx, idx);
+                                              }
+                                              setDraggedColorIdx(null);
+                                              setDragOverColorIdx(null);
+                                            }}
+                                            onDragEnd={() => {
+                                              setDraggedColorIdx(null);
+                                              setDragOverColorIdx(null);
+                                            }}
+                                            className={clsx(
+                                              'p-3 rounded-xl border transition-all space-y-2.5',
+                                              isSimActive
+                                                ? 'bg-zinc-950/95 border-sky-500/60 shadow-lg shadow-sky-950/30 ring-1 ring-sky-500/20'
+                                                : 'bg-zinc-950/80 border-white/10 hover:border-white/20',
+                                              dragOverColorIdx === idx && 'border-t-2 border-t-sky-400 bg-sky-950/30 scale-[1.01]',
+                                              draggedColorIdx === idx && 'opacity-40'
+                                            )}
                                           >
+                                            {/* Row 1: Drag handle, swatch, name, active preview badge, hex, wand, delete */}
                                             <div className="flex items-center gap-2">
+                                              {/* Drag Handle & Quick Reorder */}
+                                              <div className="flex items-center text-zinc-500 shrink-0">
+                                                <div
+                                                  className="cursor-grab active:cursor-grabbing p-1 hover:text-zinc-300 transition-colors"
+                                                  title="Drag and drop to reorder"
+                                                >
+                                                  <GripVertical className="w-3.5 h-3.5" />
+                                                </div>
+                                                <div className="flex flex-col">
+                                                  <button
+                                                    type="button"
+                                                    disabled={idx === 0}
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      handleMoveColor(idx, idx - 1);
+                                                    }}
+                                                    className="p-0.5 text-zinc-600 hover:text-zinc-300 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed transition-colors"
+                                                    title="Move up"
+                                                  >
+                                                    <ChevronUp className="w-3 h-3" />
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    disabled={idx === (editingProfile.device_colors?.length || 1) - 1}
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      handleMoveColor(idx, idx + 1);
+                                                    }}
+                                                    className="p-0.5 text-zinc-600 hover:text-zinc-300 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed transition-colors"
+                                                    title="Move down"
+                                                  >
+                                                    <ChevronDown className="w-3 h-3" />
+                                                  </button>
+                                                </div>
+                                              </div>
+
                                               {/* Swatch color picker */}
                                               <div
                                                 className="relative w-6 h-6 rounded-full border border-white/20 overflow-hidden shrink-0 cursor-pointer shadow-xs"
@@ -9561,8 +9757,25 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                   nextColors[idx] = { ...nextColors[idx], name: e.target.value };
                                                   setEditingProfile({ ...editingProfile, device_colors: nextColors });
                                                 }}
-                                                className="flex-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
+                                                className="flex-1 min-w-0 px-2.5 py-1 text-xs font-medium rounded-lg bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
                                               />
+
+                                              {/* Active Preview Toggle Button / Pill */}
+                                              {isSimActive ? (
+                                                <span className="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-400 text-[10px] font-bold flex items-center gap-1 shrink-0 select-none">
+                                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                                  <span>Active</span>
+                                                </span>
+                                              ) : (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => setSelectedSimColor(color.id)}
+                                                  className="px-2 py-0.5 rounded-full bg-white/5 hover:bg-sky-500/20 text-zinc-400 hover:text-sky-300 text-[10px] font-medium transition-colors cursor-pointer shrink-0"
+                                                  title="Preview this body color on stage"
+                                                >
+                                                  Preview
+                                                </button>
+                                              )}
 
                                               {/* Hex input */}
                                               <input
@@ -9574,8 +9787,28 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                   nextColors[idx] = { ...nextColors[idx], hex: e.target.value };
                                                   setEditingProfile({ ...editingProfile, device_colors: nextColors });
                                                 }}
-                                                className="w-20 px-2 py-1 text-xs font-mono rounded-lg bg-zinc-900 border border-white/10 text-zinc-300 focus:outline-none focus:border-sky-400 text-center"
+                                                className="w-18 px-1.5 py-1 text-xs font-mono rounded-lg bg-zinc-900 border border-white/10 text-zinc-300 focus:outline-none focus:border-sky-400 text-center"
                                               />
+
+                                              {/* Auto-detect eyedropper wand button */}
+                                              <button
+                                                type="button"
+                                                disabled={!currentAngleImg || detectingColorIdx === idx}
+                                                onClick={() => handleAutoDetectColor(idx, currentAngleImg)}
+                                                className={clsx(
+                                                  'p-1.5 rounded-lg border transition-colors cursor-pointer shrink-0',
+                                                  detectingColorIdx === idx
+                                                    ? 'bg-sky-500/20 text-sky-400 border-sky-500/30 animate-pulse'
+                                                    : 'bg-zinc-900 border-white/10 text-zinc-400 hover:text-sky-400 hover:border-sky-500/40'
+                                                )}
+                                                title="Auto-detect dominant body color from image"
+                                              >
+                                                {detectingColorIdx === idx ? (
+                                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-400" />
+                                                ) : (
+                                                  <Wand2 className="w-3.5 h-3.5" />
+                                                )}
+                                              </button>
 
                                               {/* Delete Color */}
                                               <button
@@ -9587,33 +9820,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                     setSelectedSimColor(nextColors[0]?.id || '');
                                                   }
                                                 }}
-                                                className="p-1.5 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer"
+                                                className="p-1.5 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer shrink-0"
                                                 title="Delete Color Variant"
                                               >
                                                 <Trash2 className="w-3.5 h-3.5" />
                                               </button>
                                             </div>
 
-                                            {/* Chassis image URL for current angle */}
-                                            <div className="flex gap-2">
-                                              <input
-                                                type="url"
-                                                placeholder={`Chassis image for ${color.name || 'color'}...`}
-                                                value={currentAngleImg}
-                                                onChange={(e) => {
-                                                  const url = e.target.value.trim();
-                                                  const nextColors = [...(editingProfile.device_colors || [])];
-                                                  const viewId = currentView.id || 'main_view';
-                                                  const updatedByView = { ...((nextColors[idx] as any).body_images_by_view || {}), [viewId]: url };
-                                                  nextColors[idx] = {
-                                                    ...nextColors[idx],
-                                                    body_images_by_view: updatedByView,
-                                                    body_image_url: currentView.is_default || viewId === 'main_view' ? url : (nextColors[idx].body_image_url || url),
-                                                  };
-                                                  setEditingProfile({ ...editingProfile, device_colors: nextColors });
-                                                }}
-                                                className="w-full px-2.5 py-1 text-[11px] font-mono rounded-lg bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
-                                              />
+                                            {/* Row 2: Image Thumbnail + URL Input + Media Library Browse */}
+                                            <div className="flex items-center gap-2.5 pt-0.5">
+                                              {/* Image Thumbnail Preview */}
                                               <button
                                                 type="button"
                                                 onClick={() =>
@@ -9632,15 +9848,115 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                         body_image_url: currentView.is_default || viewId === 'main_view' ? url : (nextColors[idx].body_image_url || url),
                                                       };
                                                       setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                                      setFailedColorImages((prev) => {
+                                                        const copy = { ...prev };
+                                                        delete copy[nextColors[idx].id];
+                                                        return copy;
+                                                      });
+                                                      handleAutoDetectColor(idx, url);
                                                     },
                                                   })
                                                 }
-                                                className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-[11px] font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
-                                                title="Browse Media Library"
+                                                className={clsx(
+                                                  'w-11 h-11 rounded-xl border overflow-hidden shrink-0 flex items-center justify-center relative group cursor-pointer transition-all hover:scale-105',
+                                                  isImageBroken
+                                                    ? 'bg-rose-950/40 border-rose-500/50'
+                                                    : 'bg-zinc-950 border-white/10 hover:border-sky-400/60'
+                                                )}
+                                                title={`Click to choose chassis render for ${color.name} from Media Library`}
                                               >
-                                                <FolderOpen className="w-3 h-3 text-[#f3aa18]" />
-                                                <span>Browse</span>
+                                                {currentAngleImg ? (
+                                                  <img
+                                                    src={currentAngleImg}
+                                                    alt={color.name}
+                                                    className="w-full h-full object-contain p-1"
+                                                    onError={() => {
+                                                      setFailedColorImages((prev) => ({ ...prev, [color.id]: true }));
+                                                    }}
+                                                  />
+                                                ) : (
+                                                  <div className="text-zinc-600 group-hover:text-sky-400 transition-colors flex flex-col items-center justify-center">
+                                                    <Smartphone className="w-4 h-4" />
+                                                  </div>
+                                                )}
+                                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                                  <FolderOpen className="w-3.5 h-3.5 text-[#f3aa18]" />
+                                                </div>
+                                                {isImageBroken && (
+                                                  <div className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-zinc-950" title="Image 404 / failed to load" />
+                                                )}
                                               </button>
+
+                                              {/* Chassis image URL for current angle */}
+                                              <div className="flex-1 min-w-0 flex gap-2">
+                                                <div className="relative flex-1 min-w-0">
+                                                  <input
+                                                    type="url"
+                                                    placeholder={`Chassis image for ${color.name || 'color'}...`}
+                                                    value={currentAngleImg}
+                                                    onChange={(e) => {
+                                                      const url = e.target.value.trim();
+                                                      const nextColors = [...(editingProfile.device_colors || [])];
+                                                      const viewId = currentView.id || 'main_view';
+                                                      const updatedByView = { ...((nextColors[idx] as any).body_images_by_view || {}), [viewId]: url };
+                                                      nextColors[idx] = {
+                                                        ...nextColors[idx],
+                                                        body_images_by_view: updatedByView,
+                                                        body_image_url: currentView.is_default || viewId === 'main_view' ? url : (nextColors[idx].body_image_url || url),
+                                                      };
+                                                      setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                                      setFailedColorImages((prev) => {
+                                                        const copy = { ...prev };
+                                                        delete copy[nextColors[idx].id];
+                                                        return copy;
+                                                      });
+                                                    }}
+                                                    className={clsx(
+                                                      'w-full px-2.5 py-1 text-[11px] font-mono rounded-lg bg-zinc-900 border text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600',
+                                                      isImageBroken ? 'border-rose-500/50 text-rose-300 pr-24' : 'border-white/10'
+                                                    )}
+                                                  />
+                                                  {isImageBroken && (
+                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-bold text-rose-400 bg-rose-950/80 px-1 py-0.5 rounded border border-rose-500/30">
+                                                      404 Not Found
+                                                    </span>
+                                                  )}
+                                                </div>
+
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    setMediaPickerConfig({
+                                                      isOpen: true,
+                                                      title: `Select Chassis Render for ${color.name} (${currentView.name})`,
+                                                      recommendedDimensions: '1000x1000 Transparent PNG',
+                                                      currentUrl: currentAngleImg,
+                                                      onSelect: (url) => {
+                                                        const nextColors = [...(editingProfile.device_colors || [])];
+                                                        const viewId = currentView.id || 'main_view';
+                                                        const updatedByView = { ...((nextColors[idx] as any).body_images_by_view || {}), [viewId]: url };
+                                                        nextColors[idx] = {
+                                                          ...nextColors[idx],
+                                                          body_images_by_view: updatedByView,
+                                                          body_image_url: currentView.is_default || viewId === 'main_view' ? url : (nextColors[idx].body_image_url || url),
+                                                        };
+                                                        setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                                        setFailedColorImages((prev) => {
+                                                          const copy = { ...prev };
+                                                          delete copy[nextColors[idx].id];
+                                                          return copy;
+                                                        });
+                                                        handleAutoDetectColor(idx, url);
+                                                      },
+                                                    })
+                                                  }
+                                                  className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 text-[11px] font-medium flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
+                                                  title="Browse Media Library"
+                                                >
+                                                  <FolderOpen className="w-3 h-3 text-[#f3aa18]" />
+                                                  <span>Browse</span>
+                                                </button>
+                                              </div>
                                             </div>
                                           </div>
                                         );

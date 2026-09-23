@@ -1,17 +1,17 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.36",
+  "version": "0.1.37",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.36.zip?v=0.1.36",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.37.zip?v=0.1.37",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-23T20:25:11.361Z",
+  "last_updated": "2026-09-23T20:40:57.145Z",
   "sections": {
     "description": "The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.",
-    "changelog": "### Version 0.1.36\n- Generated and configured brand favicon suite and site.webmanifest for manager.exacoat.com\n- Added multi-resolution favicon.ico, high-res PNGs, and Apple touch icon\n- Replaced legacy favicon.svg with standard browser and mobile icon links"
+    "changelog": "### Version 0.1.37\n- Enhanced Hardware Body Colors in Configurator Studio with image thumbnail previews and click-to-browse\n- Added automatic dominant color sampling from chassis renders with manual hex override\n- Added drag-and-drop reordering with grip handles and precision chevron controls\n- Added resilient canvas rendering with fallback to base chassis render on 404/broken assets"
   }
 }
