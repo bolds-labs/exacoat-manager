@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.26] - 2026-09-24
+
+### iPad Skin Alpha Masks Configuration & Tablet Texture Scales (110% Ultra / 120% Standard)
+- **iPad Alpha Mask Configuration (`mask_svg_url`)**:
+  - Populated authentic 200 OK alpha cut masks (`mask_svg_url`) across all 15 iPad products and keyboard accessories in both `layer.assets_by_view[view_id]` and `layer.mask_svg_url`.
+  - Solved the issue where iPad skin layers rendered blank in the v2 canvas engine due to missing alpha masks:
+    - iPad Pro 2020 (#334335), M1 (#334392), and M2 (#446933): Configured `iPad-Pro-2020-Skins-Matte-Black.png` (Back), `iPad-Pro-2020-Side-Matte-Black.png` (Sides), and `iPad-Pro-2020-Accents-Matte-Black.png` (Accents).
+    - iPad Pro M4 (#516605) and M5 (#539802): Configured `iPad-Pro-2024-M4-Skins-Matte-Black.png` (Back), `iPad-Pro-2024-M4-Sides-Skins-Matte-Black.png` (Sides), and `iPad-Pro-2024-M4-Accents-Matte-Black.png` (Accents).
+    - iPad Air 4 / 5 (#339317), Air M2 (#521095), Air M3 (#529234), and Air M4 (#540536): Configured `iPad-Air-4-Skins-Matte-Black.png` (Back), `iPad-Air-4-Side-Skins-Matte-Black.png` (Side), and `iPad-Air-4-Accents-Matte-Black.png` (Accents).
+    - iPad Mini 6 / 7 (#361082): Configured `iPad-Mini-6-Skins-Matte-Black.png` (Back), `iPad-Mini-6-Side-Matte-Black.png` (Side), and `iPad-Mini-6-Accents-Matte-Black.png` (Accents).
+    - iPad Pro 2018-2019 (#311643): Configured `iPad-Pro-2018-Skins-Matte-Black.png` (Back).
+    - Magic Keyboard iPad Pro M4 & M5 (#516583): Configured `Magic-Keyboard-iPad-M4-Skins-Black-Camo.png` (Top + Bottom) and `Magic-Keyboard-iPad-M4-Palm-Rest-Skins-Black-Camo.png` (Palm Rest).
+    - Magic Keyboard iPad Air M2, M3, M4 (#541664): Configured `Magic-Keyboard-iPad-Air-Skins-Black-Camo.png` (Top + Bottom) and `Magic-Keyboard-iPad-M4-Palm-Rest-Skins-Black-Camo.png` (Palm Rest).
+    - Smart Keyboard Folio (#446787) & Magic Keyboard iPad Pro M2 (#362642): Maintained authentic cut masks and verified 100% 200 OK responses.
+- **Galaxy Tab & Book Cover Texture Scale Synchronization**:
+  - Ultra Models (110% / `1.10`): Configured `texture_scale = 1.10` on profile and all views for Galaxy Tab S8 Ultra (#422869), S9 Ultra (#513783), S10 Ultra (#521363), and their Book Cover Keyboard accessories (#422911, #513811, #521362).
+  - Standard, Plus, and FE Models (120% / `1.20`): Configured `texture_scale = 1.20` on profile and all views for Galaxy Tab S7 / S7+, S7 FE, S8, S8+, S9, S9 FE+, S9+, S10+, S10 FE, and their Book Cover accessories.
+  - iPads (120% / `1.20`): Configured `texture_scale = 1.20` on profile and all views across all 15 iPad products.
+- **Backend Invariant (`class-configurator-engine.php`)**:
+  - Updated `rest_save_product_configurator` to automatically fall back to the WordPress post title (`$post->post_title`) and slug (`$post->post_name`) when `device_name` or `device_slug` is omitted or empty in incoming save payloads.
+
 ## [0.1.25] - 2026-09-24
 
 ### Master Texture Pattern Tiling, Issue Details Breakdown & Tablet/Foldable Shading Defaults

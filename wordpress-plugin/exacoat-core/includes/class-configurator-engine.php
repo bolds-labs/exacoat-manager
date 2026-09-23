@@ -2701,10 +2701,14 @@ class Exacoat_Configurator_Engine {
 			}
 		}
 
+		$post_obj = get_post( $product_id );
+		$dev_slug = ! empty( $params['device_slug'] ) ? sanitize_title( $params['device_slug'] ) : ( $post_obj ? $post_obj->post_name : '' );
+		$dev_name = ! empty( $params['device_name'] ) ? sanitize_text_field( $params['device_name'] ) : ( $post_obj ? $post_obj->post_title : '' );
+
 		$profile = [
 			'product_id'           => $product_id,
-			'device_slug'          => sanitize_title( $params['device_slug'] ?? '' ),
-			'device_name'          => sanitize_text_field( $params['device_name'] ?? '' ),
+			'device_slug'          => $dev_slug,
+			'device_name'          => $dev_name,
 			'category'             => sanitize_text_field( $params['category'] ?? '' ),
 			'family'               => sanitize_text_field( $params['family'] ?? 'phone' ),
 			'base_price'           => (float) ( $params['base_price'] ?? 0 ),
@@ -2715,7 +2719,7 @@ class Exacoat_Configurator_Engine {
 			'device_colors'        => is_array( $params['device_colors'] ?? null ) ? $params['device_colors'] : [],
 			'views'                => is_array( $params['views'] ?? null ) ? $params['views'] : [],
 			'layers'               => is_array( $params['layers'] ?? null ) ? $params['layers'] : [],
-			'variants'             => self::sanitize_variants( $params['variants'] ?? [], $params['family'] ?? 'phone', $params['device_name'] ?? '', $params['device_slug'] ?? '' ),
+			'variants'             => self::sanitize_variants( $params['variants'] ?? [], $params['family'] ?? 'phone', $dev_name, $dev_slug ),
 			'coverage_and_cutouts' => $raw_coverage,
 			'presets'              => is_array( $params['presets'] ?? null ) ? self::sanitize_presets( $params['presets'] ) : [],
 			'updated_at'           => current_time( 'mysql' ),
