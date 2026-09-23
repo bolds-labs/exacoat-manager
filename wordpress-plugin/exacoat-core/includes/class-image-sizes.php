@@ -30,6 +30,11 @@ class Exacoat_Image_Sizes {
 		// Register image sizes early
 		add_action( 'init', [ __CLASS__, 'register' ], 5 );
 
+		// Single-attachment media detail fields & instant regeneration
+		add_filter( 'attachment_fields_to_edit', [ __CLASS__, 'filter_attachment_fields' ], 10, 2 );
+		add_action( 'wp_ajax_exacoat_regenerate_single_thumbnail', [ __CLASS__, 'ajax_regenerate_single_thumbnail' ] );
+		add_action( 'admin_footer', [ __CLASS__, 'print_admin_scripts' ] );
+
 		// AJAX Endpoints for Admin Dashboard
 		add_action( 'wp_ajax_exacoat_regenerate_thumbnails', [ __CLASS__, 'ajax_regenerate_thumbnails' ] );
 		add_action( 'wp_ajax_artmatter_regenerate_thumbnails', [ __CLASS__, 'ajax_regenerate_thumbnails' ] );
@@ -306,6 +311,194 @@ class Exacoat_Image_Sizes {
 				? "Cleanup finished. Purged unused intermediate files across {$total_attachments} attachments."
 				: "Cleaned {$next_offset} of {$total_attachments} attachments...",
 		] );
+	}
+
+	/**
+	 * Append Exacoat thumbnail derivatives status and generate button to media details.
+	 *
+	 * @param array    $form_fields Existing form fields.
+	 * @param \WP_Post $post        Attachment post object.
+	 * @return array Modified form fields.
+	 */
+	public static function filter_attachment_fields( array $form_fields, \WP_Post $post ): array {
+		if ( ! wp_attachment_is_image( $post->ID ) ) {
+			return $form_fields;
+		}
+
+		$form_fields['exacoat_thumbnails'] = [
+			'label' => __( 'Exacoat Sizes', 'exacoat-core' ),
+			'input' => 'html',
+			'html'  => self::get_attachment_thumbnail_status_html( $post->ID ),
+		];
+
+		return $form_fields;
+	}
+
+	/**
+	 * Render HTML widget showing sm and md derivative presence, file size, and instant generate button.
+	 *
+	 * @param int $attachment_id Attachment ID.
+	 * @return string Rendered HTML.
+	 */
+	public static function get_attachment_thumbnail_status_html( int $attachment_id ): string {
+		if ( $attachment_id <= 0 || ! wp_attachment_is_image( $attachment_id ) ) {
+			return '';
+		}
+
+		$source_file = get_attached_file( $attachment_id );
+		if ( ! $source_file || ! file_exists( $source_file ) ) {
+			return '<span style="color:#ef4444;font-size:12px;">Original file not found on disk.</span>';
+		}
+
+		$dir      = dirname( $source_file );
+		$metadata = wp_get_attachment_metadata( $attachment_id );
+		$nonce    = wp_create_nonce( 'exacoat_media_thumb_nonce' );
+
+		$sizes = [
+			'sm' => [
+				'key'   => self::THUMB_SM,
+				'label' => 'sm (240x240)',
+			],
+			'md' => [
+				'key'   => self::THUMB_MD,
+				'label' => 'md (720x720)',
+			],
+		];
+
+		$has_missing = false;
+		$rows_html   = '';
+
+		foreach ( $sizes as $size_info ) {
+			$key        = $size_info['key'];
+			$label      = $size_info['label'];
+			$size_entry = ( is_array( $metadata ) && ! empty( $metadata['sizes'][ $key ] ) ) ? $metadata['sizes'][ $key ] : null;
+			$file_name  = ! empty( $size_entry['file'] ) ? $size_entry['file'] : '';
+			$file_path  = $file_name ? path_join( $dir, $file_name ) : '';
+			$exists     = $file_path && file_exists( $file_path );
+
+			if ( ! $exists ) {
+				$has_missing = true;
+				$status_html = '<span style="color:#dc2626;font-weight:600;font-size:11px;background:#fef2f2;padding:2px 7px;border-radius:4px;border:1px solid #fecaca;">Missing</span>';
+			} else {
+				$file_size = size_format( filesize( $file_path ), 1 );
+				$file_url  = wp_get_attachment_image_url( $attachment_id, $key );
+				if ( ! $file_url && $file_name ) {
+					$upload_dir = wp_upload_dir();
+					$rel_dir    = str_replace( wp_normalize_path( $upload_dir['basedir'] ), '', wp_normalize_path( $dir ) );
+					$file_url   = $upload_dir['baseurl'] . $rel_dir . '/' . $file_name;
+				}
+
+				$status_html = sprintf(
+					'<span style="color:#059669;font-weight:600;font-size:11px;background:#ecfdf5;padding:2px 7px;border-radius:4px;border:1px solid #a7f3d0;">Present (%s)</span>' .
+					( $file_url ? ' <a href="%s" target="_blank" rel="noopener noreferrer" style="font-size:11px;text-decoration:none;margin-left:4px;color:#2563eb;" title="View derivative">View &#8599;</a>' : '' ),
+					esc_html( $file_size ),
+					esc_url( $file_url )
+				);
+			}
+
+			$rows_html .= sprintf(
+				'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-size:12px;">' .
+					'<span style="font-weight:600;color:#374151;">%s</span>' .
+					'<div style="display:flex;align-items:center;">%s</div>' .
+				'</div>',
+				esc_html( $label ),
+				$status_html
+			);
+		}
+
+		$btn_text = $has_missing ? 'Generate sm & md' : 'Regenerate sm & md';
+
+		return sprintf(
+			'<div id="exacoat-thumb-status-%1$d" class="exacoat-thumb-status-container" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:9px 11px;margin-top:4px;max-width:320px;">' .
+				'%2$s' .
+				'<div style="margin-top:8px;padding-top:7px;border-top:1px solid #e5e7eb;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' .
+					'<button type="button" class="button button-small exacoat-regen-thumb-btn" data-attachment-id="%1$d" data-nonce="%3$s" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;height:26px;line-height:24px;">' .
+						'<span class="dashicons dashicons-update" style="font-size:13px;width:13px;height:13px;line-height:13px;"></span>' .
+						'<span>%4$s</span>' .
+					'</button>' .
+					'<span class="spinner exacoat-regen-spinner" style="float:none;margin:0;display:none;vertical-align:middle;"></span>' .
+					'<span class="exacoat-regen-msg" style="font-size:11px;font-weight:500;"></span>' .
+				'</div>' .
+			'</div>',
+			$attachment_id,
+			$rows_html,
+			esc_attr( $nonce ),
+			esc_html( $btn_text )
+		);
+	}
+
+	/**
+	 * AJAX Handler: Single Attachment Thumbnail Generation.
+	 */
+	public static function ajax_regenerate_single_thumbnail(): void {
+		if ( ! current_user_can( 'upload_files' ) ) {
+			wp_send_json_error( [ 'message' => 'Unauthorized user.' ] );
+		}
+
+		check_ajax_referer( 'exacoat_media_thumb_nonce', 'nonce' );
+
+		$attachment_id = isset( $_POST['attachment_id'] ) ? (int) $_POST['attachment_id'] : 0;
+		if ( $attachment_id <= 0 || ! wp_attachment_is_image( $attachment_id ) ) {
+			wp_send_json_error( [ 'message' => 'Invalid image attachment ID.' ] );
+		}
+
+		$success = self::regenerate_attachment_thumbnails( $attachment_id, false );
+		if ( ! $success ) {
+			wp_send_json_error( [ 'message' => 'Generation failed. Verify source file on disk.' ] );
+		}
+
+		$html = self::get_attachment_thumbnail_status_html( $attachment_id );
+		wp_send_json_success( [
+			'attachment_id' => $attachment_id,
+			'html'          => $html,
+			'message'       => 'Thumbnails generated successfully.',
+		] );
+	}
+
+	/**
+	 * Print inline admin JavaScript for 1-click thumbnail generation.
+	 */
+	public static function print_admin_scripts(): void {
+		if ( ! is_admin() ) {
+			return;
+		}
+		?>
+		<script>
+		jQuery(document).ready(function($) {
+			$(document).on('click', '.exacoat-regen-thumb-btn', function(e) {
+				e.preventDefault();
+				var $btn = $(this);
+				var attachmentId = $btn.data('attachment-id');
+				var nonce = $btn.data('nonce');
+				var $container = $('#exacoat-thumb-status-' + attachmentId);
+				var $spinner = $container.find('.exacoat-regen-spinner');
+				var $msg = $container.find('.exacoat-regen-msg');
+
+				$btn.prop('disabled', true);
+				$spinner.css('display', 'inline-block').addClass('is-active');
+				$msg.text('Generating...').css('color', '#6b7280');
+
+				$.post(ajaxurl, {
+					action: 'exacoat_regenerate_single_thumbnail',
+					attachment_id: attachmentId,
+					nonce: nonce
+				}).done(function(res) {
+					if (res && res.success && res.data && res.data.html) {
+						$container.replaceWith(res.data.html);
+					} else {
+						$btn.prop('disabled', false);
+						$spinner.css('display', 'none').removeClass('is-active');
+						$msg.text(res && res.data && res.data.message ? res.data.message : 'Error generating.').css('color', '#dc2626');
+					}
+				}).fail(function() {
+					$btn.prop('disabled', false);
+					$spinner.css('display', 'none').removeClass('is-active');
+					$msg.text('Network error.').css('color', '#dc2626');
+				});
+			});
+		});
+		</script>
+		<?php
 	}
 }
 
