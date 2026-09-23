@@ -16,7 +16,12 @@ export async function loadCorsSafeImageBlobUrl(
   }
 
   // Strategy 1: Direct CORS fetch with Blob conversion (Fastest if server allows CORS)
-  if (url) {
+  // Only attempt direct fetch if already on the same origin or not a known static WordPress upload,
+  // preventing noisy browser console CORS errors.
+  const isSameOrigin = typeof window !== 'undefined' && url.startsWith(window.location.origin);
+  const isKnownWpUpload = url.includes('/wp-content/uploads/');
+
+  if (url && (isSameOrigin || !isKnownWpUpload)) {
     try {
       const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
       if (res.ok) {
@@ -25,7 +30,7 @@ export async function loadCorsSafeImageBlobUrl(
           return URL.createObjectURL(blob);
         }
       }
-    } catch (directErr) {
+    } catch {
       // Direct fetch failed (e.g. CORS preflight), continue to WordPress proxy
     }
   }

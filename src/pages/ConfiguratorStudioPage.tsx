@@ -109,6 +109,7 @@ import { clsx } from 'clsx';
 import { MediaLibraryModal } from '../components/modals/MediaLibraryModal';
 import { FinishSurchargeTiersModal } from '../components/modals/FinishSurchargeTiersModal';
 import { WpMediaItem } from '../lib/wordpressBridge';
+import { loadCorsSafeImageBlobUrl } from '../lib/imageLoader';
 
 export interface AssetAuditItem {
   id: string;
@@ -252,73 +253,106 @@ const InfoTooltip: React.FC<{ content?: string; text?: string }> = ({ content, t
 };
 
 /**
+ * Sanitizes a color hex string for native HTML5 color inputs.
+ * Ensures the value is always a valid 7-character #rrggbb string to avoid browser warnings.
+ */
+function sanitizeHexForColorInput(hex?: string): string {
+  if (!hex) return '#535559';
+  const clean = hex.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(clean)) return clean;
+  if (/^#[0-9a-fA-F]{3}$/.test(clean)) {
+    return `#${clean[1]}${clean[1]}${clean[2]}${clean[2]}${clean[3]}${clean[3]}`;
+  }
+  return '#535559';
+}
+
+/**
  * Detects the dominant/representative hardware body color from an image URL.
+ * Converts the image to a same-origin CORS-safe blob URL first to prevent browser security blocks.
  * Uses an offscreen HTML5 canvas to sample non-transparent, non-glare, non-border pixels
  * and calculates the median luminance quartile color.
  */
 async function detectDominantColorFromImage(imageUrl: string): Promise<string | null> {
   if (!imageUrl) return null;
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        if (!ctx) return resolve(null);
+  try {
+    const safeUrl = await loadCorsSafeImageBlobUrl(imageUrl);
+    if (!safeUrl) return null;
 
-        // Downscale to 80x80 for fast processing
-        canvas.width = 80;
-        canvas.height = 80;
-        ctx.drawImage(img, 0, 0, 80, 80);
+    return await new Promise<string | null>((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          if (!ctx) {
+            if (safeUrl.startsWith('blob:')) URL.revokeObjectURL(safeUrl);
+            return resolve(null);
+          }
 
-        const imgData = ctx.getImageData(0, 0, 80, 80);
-        const data = imgData.data;
-        const validPixels: { r: number; g: number; b: number; luma: number }[] = [];
+          // Downscale to 80x80 for fast processing
+          canvas.width = 80;
+          canvas.height = 80;
+          ctx.drawImage(img, 0, 0, 80, 80);
 
-        for (let i = 0; i < data.length; i += 4) {
-          const a = data[i + 3];
-          if (a < 128) continue; // ignore transparent pixels
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
-          const luma = 0.299 * r + 0.587 * g + 0.114 * b;
-          // Filter out near-black frames, shadows, and lens housings
-          if (luma < 25 || (r < 25 && g < 25 && b < 25)) continue;
-          // Filter out bright specular glare
-          if (luma > 245 && r > 240 && g > 240 && b > 240) continue;
+          const imgData = ctx.getImageData(0, 0, 80, 80);
+          const data = imgData.data;
+          const validPixels: { r: number; g: number; b: number; luma: number }[] = [];
 
-          validPixels.push({ r, g, b, luma });
+          for (let i = 0; i < data.length; i += 4) {
+            const a = data[i + 3];
+            if (a < 128) continue; // ignore transparent pixels
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+            // Filter out near-black frames, shadows, and lens housings
+            if (luma < 25 || (r < 25 && g < 25 && b < 25)) continue;
+            // Filter out bright specular glare
+            if (luma > 245 && r > 240 && g > 240 && b > 240) continue;
+
+            validPixels.push({ r, g, b, luma });
+          }
+
+          if (safeUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(safeUrl);
+          }
+
+          if (validPixels.length === 0) return resolve(null);
+
+          // Sort by luminance and sample the middle 50% interquartile band
+          validPixels.sort((p1, p2) => p1.luma - p2.luma);
+          const start = Math.floor(validPixels.length * 0.25);
+          const end = Math.floor(validPixels.length * 0.75);
+          const midPixels = validPixels.slice(start, end);
+
+          const sum = midPixels.reduce(
+            (acc, p) => ({ r: acc.r + p.r, g: acc.g + p.g, b: acc.b + p.b }),
+            { r: 0, g: 0, b: 0 }
+          );
+          const count = midPixels.length;
+          const avgR = Math.round(sum.r / count);
+          const avgG = Math.round(sum.g / count);
+          const avgB = Math.round(sum.b / count);
+
+          const toHex = (n: number) => n.toString(16).padStart(2, '0');
+          const hex = `#${toHex(avgR)}${toHex(avgG)}${toHex(avgB)}`;
+          resolve(hex);
+        } catch (err) {
+          if (safeUrl.startsWith('blob:')) URL.revokeObjectURL(safeUrl);
+          console.warn('[COLOR-DETECT] Could not sample image canvas:', err);
+          resolve(null);
         }
-
-        if (validPixels.length === 0) return resolve(null);
-
-        // Sort by luminance and sample the middle 50% interquartile band
-        validPixels.sort((p1, p2) => p1.luma - p2.luma);
-        const start = Math.floor(validPixels.length * 0.25);
-        const end = Math.floor(validPixels.length * 0.75);
-        const midPixels = validPixels.slice(start, end);
-
-        const sum = midPixels.reduce(
-          (acc, p) => ({ r: acc.r + p.r, g: acc.g + p.g, b: acc.b + p.b }),
-          { r: 0, g: 0, b: 0 }
-        );
-        const count = midPixels.length;
-        const avgR = Math.round(sum.r / count);
-        const avgG = Math.round(sum.g / count);
-        const avgB = Math.round(sum.b / count);
-
-        const toHex = (n: number) => n.toString(16).padStart(2, '0');
-        const hex = `#${toHex(avgR)}${toHex(avgG)}${toHex(avgB)}`;
-        resolve(hex);
-      } catch (err) {
-        console.warn('[COLOR-DETECT] Could not sample image (CORS or canvas security):', err);
+      };
+      img.onerror = () => {
+        if (safeUrl.startsWith('blob:')) URL.revokeObjectURL(safeUrl);
         resolve(null);
-      }
-    };
-    img.onerror = () => resolve(null);
-    img.src = imageUrl;
-  });
+      };
+      img.src = safeUrl;
+    });
+  } catch (err) {
+    console.warn('[COLOR-DETECT] Error loading safe image blob:', err);
+    return null;
+  }
 }
 
 interface V2SkinCanvasLayerProps {
@@ -6581,7 +6615,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             <div className="relative w-4 h-4 rounded-full overflow-hidden border border-white/20 cursor-pointer shadow-xs shrink-0 flex items-center justify-center">
                               <input
                                 type="color"
-                                value={currentBadgeColorInput || '#f3aa18'}
+                                value={sanitizeHexForColorInput(currentBadgeColorInput || '#f3aa18')}
                                 onChange={(e) =>
                                   setEditingFinishBadgeColors((prev) => ({
                                     ...prev,
@@ -6978,7 +7012,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <input
                         type="color"
-                        value={newFinishForm.badge_color || '#f3aa18'}
+                        value={sanitizeHexForColorInput(newFinishForm.badge_color || '#f3aa18')}
                         onChange={(e) => setNewFinishForm((prev) => ({ ...prev, badge_color: e.target.value }))}
                         className="w-8 h-8 rounded-lg cursor-pointer border border-white/10 bg-zinc-900 p-0.5"
                       />
@@ -9737,7 +9771,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                               >
                                                 <input
                                                   type="color"
-                                                  value={color.hex || '#535559'}
+                                                  value={sanitizeHexForColorInput(color.hex)}
                                                   onChange={(e) => {
                                                     const nextColors = [...(editingProfile.device_colors || [])];
                                                     nextColors[idx] = { ...nextColors[idx], hex: e.target.value };
@@ -9776,19 +9810,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                   Preview
                                                 </button>
                                               )}
-
-                                              {/* Hex input */}
-                                              <input
-                                                type="text"
-                                                placeholder="#535559"
-                                                value={color.hex}
-                                                onChange={(e) => {
-                                                  const nextColors = [...(editingProfile.device_colors || [])];
-                                                  nextColors[idx] = { ...nextColors[idx], hex: e.target.value };
-                                                  setEditingProfile({ ...editingProfile, device_colors: nextColors });
-                                                }}
-                                                className="w-18 px-1.5 py-1 text-xs font-mono rounded-lg bg-zinc-900 border border-white/10 text-zinc-300 focus:outline-none focus:border-sky-400 text-center"
-                                              />
 
                                               {/* Auto-detect eyedropper wand button */}
                                               <button
@@ -9910,6 +9931,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                         delete copy[nextColors[idx].id];
                                                         return copy;
                                                       });
+                                                    }}
+                                                    onBlur={() => {
+                                                      if (currentAngleImg && (!color.hex || color.hex === '#535559')) {
+                                                        handleAutoDetectColor(idx, currentAngleImg);
+                                                      }
                                                     }}
                                                     className={clsx(
                                                       'w-full px-2.5 py-1 text-[11px] font-mono rounded-lg bg-zinc-900 border text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600',
