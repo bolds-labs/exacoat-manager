@@ -81,7 +81,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       description: 'The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.',
-      changelog: `### Version ${version}\n- Clean media URL support stripping /wp-content/uploads/ for direct CDN delivery\n- Active CDN symlink bridge for media.exacoat.com serving staging and production uploads\n- Unified maskMediaUrl routing all WordPress asset derivatives through edge CDN`,
+      changelog: `### Version ${version}\n- Optimized collections slider and single product gallery to use -md thumbnail derivative\n- Lightbox modal strictly loads full-resolution master asset on zoom click\n- Clean media URL support stripping /wp-content/uploads/ for direct CDN delivery`,
     },
   };
 

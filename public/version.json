@@ -1,17 +1,17 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.34",
+  "version": "0.1.35",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.34.zip?v=0.1.34",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.35.zip?v=0.1.35",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-23T20:09:15.884Z",
+  "last_updated": "2026-09-23T20:19:50.300Z",
   "sections": {
     "description": "The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.",
-    "changelog": "### Version 0.1.34\n- Clean media URL support stripping /wp-content/uploads/ for direct CDN delivery\n- Active CDN symlink bridge for media.exacoat.com serving staging and production uploads\n- Unified maskMediaUrl routing all WordPress asset derivatives through edge CDN"
+    "changelog": "### Version 0.1.35\n- Optimized collections slider and single product gallery to use -md thumbnail derivative\n- Lightbox modal strictly loads full-resolution master asset on zoom click\n- Clean media URL support stripping /wp-content/uploads/ for direct CDN delivery"
   }
 }
