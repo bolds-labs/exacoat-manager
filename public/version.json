@@ -1,17 +1,17 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.35",
+  "version": "0.1.36",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.35.zip?v=0.1.35",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.36.zip?v=0.1.36",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-23T20:19:50.300Z",
+  "last_updated": "2026-09-23T20:25:11.361Z",
   "sections": {
     "description": "The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.",
-    "changelog": "### Version 0.1.35\n- Optimized collections slider and single product gallery to use -md thumbnail derivative\n- Lightbox modal strictly loads full-resolution master asset on zoom click\n- Clean media URL support stripping /wp-content/uploads/ for direct CDN delivery"
+    "changelog": "### Version 0.1.36\n- Generated and configured brand favicon suite and site.webmanifest for manager.exacoat.com\n- Added multi-resolution favicon.ico, high-res PNGs, and Apple touch icon\n- Replaced legacy favicon.svg with standard browser and mobile icon links"
   }
 }

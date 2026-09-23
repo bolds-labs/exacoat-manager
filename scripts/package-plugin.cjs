@@ -81,7 +81,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       description: 'The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.',
-      changelog: `### Version ${version}\n- Optimized collections slider and single product gallery to use -md thumbnail derivative\n- Lightbox modal strictly loads full-resolution master asset on zoom click\n- Clean media URL support stripping /wp-content/uploads/ for direct CDN delivery`,
+      changelog: `### Version ${version}\n- Generated and configured brand favicon suite and site.webmanifest for manager.exacoat.com\n- Added multi-resolution favicon.ico, high-res PNGs, and Apple touch icon\n- Replaced legacy favicon.svg with standard browser and mobile icon links`,
     },
   };
 
