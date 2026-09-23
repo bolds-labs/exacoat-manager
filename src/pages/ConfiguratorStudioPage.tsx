@@ -7718,13 +7718,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === simNorm
                               );
                               const mappedTex = matchedKey ? textureMap[matchedKey] || '' : '';
-                              const customTex =
-                                assets.render_texture_map?.[layerFinishSlug] ||
-                                assets.render_texture_map?.[activeFinish?.slug || ''] ||
-                                assets.render_texture_map?.[activeFinish?.id || ''] ||
-                                mappedTex;
+                              const customTex = isCustomPerDevice
+                                ? (assets.render_texture_map?.[layerFinishSlug] ||
+                                   assets.render_texture_map?.[activeFinish?.slug || ''] ||
+                                   assets.render_texture_map?.[activeFinish?.id || ''] ||
+                                   mappedTex)
+                                : '';
 
-                              const isCustomDeviceFinish = isCustomPerDevice || Boolean(customTex);
+                              const isCustomDeviceFinish = isCustomPerDevice && Boolean(customTex);
 
                               const isBigDevice = editingProfile.family === 'laptop' || editingProfile.family === 'tablet' || (editingProfile.family as string) === 'tablet_laptop' || editingProfile.family === 'keyboard';
                               const useBigTexture = l.texture_size === 'big' || (l.texture_size !== 'small' && isBigDevice);
@@ -7732,7 +7733,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 ? activeFinish.texture_big_url
                                 : activeFinish?.texture_url || '';
 
-                              const textureToTile = customTex || activeTextureUrl;
+                              // In v2, standard finishes strictly use global master textures.
+                              // Only genuine custom-per-device finishes use per-device mapped artwork.
+                              const textureToTile = (isCustomPerDevice && customTex)
+                                ? customTex
+                                : (activeTextureUrl || customTex);
                               const fallbackColor = activeFinish?.color_hex || '#18181b';
 
                               // Do not render non-visual kit layers or layers without an alpha mask for this view
