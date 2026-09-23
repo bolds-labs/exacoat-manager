@@ -1418,5 +1418,24 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - **Atomic Patch Updates**: `handleSetCoverageAndCutouts()` uses functional state updaters (`setEditingProfile((prev) => ...)`) and accepts patch objects (`{ coverage_type: 'none', has_model_cut: false }`), ensuring clean state transitions without React race conditions.
   - **Complete Mask Purging**: Clearing the perimeter mask purges `model_cut_mask_url` across all viewing angles, resets `model_cutout_url` to empty, and sets `has_model_cut: false` both in the Studio state and backend persistence.
 
+---
+
+## 49. Multi-Angle Layer Synchronization, Scoped View Cutouts, and Production Device Variants Pipeline
+
+- **Problem & Root Causes**:
+  1. **Angle Texture Zoom / Scale Stagnation**: In Studio, `stacked-layer-canvas.tsx`, and `device-skin-configurator.tsx`, texture scale calculations evaluated `const isCustomFinish = Boolean(choice.isCustomPerDevice || (vAsset?.render_texture_map && choice.slug && vAsset.render_texture_map[choice.slug]))`. For migrated devices (such as iPad Pro M5), standard finishes (Swarm, Black Camo) existed in `render_texture_map`, causing `isCustomFinish` to evaluate to `true` and forcing `effectiveTextureScale = 1.0`, ignoring angle texture scale adjustments.
+  2. **Unsynchronized Secondary Angle Accordions**: `parseV2ConfiguratorProfile` in `configurator-loader.ts` failed to map `angleSwitch` onto layers. When users clicked "Sides" in the webstore, `handleToggleAccordion` received an undefined `angleSwitch`, leaving the viewport stuck on Main View instead of transitioning to Side View.
+  3. **Unscoped Cutout Punching**: Logo Cutout and Model Cut masks defaulted across all viewing angles without verifying view targets. As a result, Apple logo cutouts were punched onto Side View where no logo exists.
+  4. **Missing Production Device Variants in Storefront**: Hardware variants with price differences (such as iPad Air 11" vs 13" M4 with +IDR 40,000 for 13") were not returned in `parseV2ConfiguratorProfile`, omitted from storefront accordions, and excluded from WooCommerce cart price calculation.
+- **Architectural Invariants**:
+  - **Per-View Texture Scale Invariant**: `effectiveTextureScale` in both Studio and storefront rendering engines evaluates `currentView?.texture_scale ?? layer?.texture_scale ?? 1.0`. View-level texture scale adjustments always take precedence.
+  - **Angle Switching & Layer Synchronization (`angleSwitch`)**: In `parseV2ConfiguratorProfile`, each layer calculates `angleSwitch` based on `layer.angle_id`, single-view presence in `assets_by_view` (e.g. `side_view` for Sides skin), or name heuristic:
+    - Selecting a skin layer or opening its accordion automatically transitions `activeAngleId` to `layer.angleSwitch`.
+    - Switching viewing angles via top pills synchronizes and expands the corresponding layer accordion.
+    - Non-active view layers are excluded from single-angle rendering when `angles.length > 1`.
+  - **Scoped View Cutout Punching Invariant**: Logo Cutout (`logo_cutout_mask_url`) and Model Cut (`model_cut_mask_url`) evaluate `currentView.id === targetViewId` (defaulting strictly to `main_view` or configured `logo_cutout_view_id` / `model_cut_view_id`). They are never punched onto secondary angles like `side_view`.
+  - **Production Device Variants Pipeline**: `variants: ConfiguratorVariant[]` is mapped in `parseV2ConfiguratorProfile`, rendered as a top-priority accordion in the storefront, adds `variantsExtraPrice` to `totalPrice` / `formattedTotalPrice`, sorts at the very top of `CartItemLayer` breakdown, and forwards `exacoat_custom_price` and `exacoat_addon_data` to the WooCommerce cart.
+  - **Pure v2 Engine Cleanup**: All configurators operate on the v2 modern engine. Legacy v1 banner and v1 logo overlay elements have been completely pruned from Configurator Studio.
+
 
 

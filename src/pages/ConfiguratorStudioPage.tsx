@@ -7547,28 +7547,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden bg-zinc-950">
                     {/* LEFT / CENTER PANE: Spacious Interactive Device Canvas */}
                     <div className="flex-1 flex flex-col min-h-0 relative border-b lg:border-b-0 border-white/10 bg-radial from-zinc-900/40 via-zinc-950 to-zinc-950 overflow-hidden">
-                      {/* Legacy v1 Read-Only Notice Banner */}
-                      {editingProfile.configurator_version !== 'v2' && (
-                        <div className="bg-amber-500/10 border-b border-amber-500/20 px-5 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs z-20 shrink-0">
-                          <div className="flex items-center gap-2.5 text-amber-300">
-                            <Lock className="w-4 h-4 text-amber-400 shrink-0" />
-                            <div>
-                              <span className="font-bold">Legacy v1 Configurator (Read-Only Mode)</span>
-                              <span className="text-zinc-400 ml-2">
-                                Locked to protect live WooCommerce MKL settings. Convert to v2 to customize alpha masks, layer textures, and optional 3D shadows.
-                              </span>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={handleConvertToV2}
-                            className="px-3 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-black font-bold text-xs cursor-pointer transition-colors shadow-sm flex items-center gap-1.5 shrink-0"
-                          >
-                            <Wand2 className="w-3.5 h-3.5" />
-                            <span>Convert to v2 Modern Engine</span>
-                          </button>
-                        </div>
-                      )}
 
                       {/* Top Bar on Stage: Viewing Angles & Layer Toggles */}
                       <div className="p-5 flex flex-wrap items-center justify-between gap-3 z-10">
@@ -7762,18 +7740,20 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 return null;
                               }
 
+                              const targetLogoViewId = editingProfile.coverage_and_cutouts?.logo_cutout_view_id || 'main_view';
+                              const isCurrentViewForLogo = currentView?.id === targetLogoViewId || (!editingProfile.coverage_and_cutouts?.logo_cutout_view_id && (currentView?.is_default || currentView?.id === editingProfile.views?.[0]?.id));
                               const logoMaskUrl =
                                 currentView?.logo_cutout_mask_url ||
-                                editingProfile.coverage_and_cutouts?.logo_cutout_mask_url ||
-                                assets.logo_cutout_url;
+                                (isCurrentViewForLogo ? (editingProfile.coverage_and_cutouts?.logo_cutout_mask_url || assets.logo_cutout_url) : undefined);
                               const pencilMaskUrl =
                                 currentView?.pencil_cutout_mask_url ||
                                 editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url ||
                                 assets.pencil_cutout_url;
+                              const targetModelCutViewId = editingProfile.coverage_and_cutouts?.model_cut_view_id || 'main_view';
+                              const isCurrentViewForModelCut = currentView?.id === targetModelCutViewId || (!editingProfile.coverage_and_cutouts?.model_cut_view_id && (currentView?.is_default || currentView?.id === editingProfile.views?.[0]?.id));
                               const modelCutMaskUrl =
                                 currentView?.model_cut_mask_url ||
-                                editingProfile.coverage_and_cutouts?.model_cut_mask_url ||
-                                assets.model_cutout_url;
+                                (isCurrentViewForModelCut ? (editingProfile.coverage_and_cutouts?.model_cut_mask_url || assets.model_cutout_url) : undefined);
 
                               const covMode = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none');
                               const isModelCutOnly = covMode === 'model_cut_only';
@@ -7793,11 +7773,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 currentView?.highlight_png_url
                               );
 
-                              // Custom device finishes (uploaded per device template) are locked to 100% scale (1.0).
-                              // Repeating pattern materials follow the angle texture zoom/scale (e.g. 75%).
-                              const effectiveTextureScale = isCustomDeviceFinish
-                                ? 1.0
-                                : (currentView?.texture_scale ?? editingProfile.texture_scale ?? l.texture_scale ?? 1.0);
+                              // Pattern materials strictly follow angle texture zoom/scale if specified, then profile, then layer default.
+                              const effectiveTextureScale = currentView?.texture_scale ?? editingProfile.texture_scale ?? l.texture_scale ?? 1.0;
 
                               return (
                                 <V2SkinCanvasLayer
@@ -7858,40 +7835,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             );
                           })}
 
-                          {/* v1 Logo Cutout Overlay (Rendered above vinyl skin at zIndex 35 when logo is active) */}
-                          {editingProfile.configurator_version !== 'v2' && selectedLogoCutout && (() => {
-                            const logoUrl =
-                              currentView?.logo_image_url ||
-                              currentView?.logo_cutout_mask_url ||
-                              editingProfile.coverage_and_cutouts?.logo_cutout_mask_url ||
-                              (() => {
-                                const logoVar = editingProfile.variants?.find((v) =>
-                                  v.id.toLowerCase().includes('logo') || v.name.toLowerCase().includes('logo')
-                                );
-                                const withOpt =
-                                  logoVar?.options?.find(
-                                    (o) => o.image_url && (!o.id.toLowerCase().includes('without') && !o.name.toLowerCase().includes('without'))
-                                  ) || logoVar?.options?.find((o) => o.image_url);
-                                return withOpt?.image_url;
-                              })();
-
-                            if (!logoUrl) return null;
-
-                            return (
-                              <img
-                                src={logoUrl}
-                                alt="Logo Cutout"
-                                style={{ zIndex: 35 }}
-                                className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity"
-                                onError={(e) => {
-                                  (e.target as HTMLElement).style.display = 'none';
-                                }}
-                              />
-                            );
-                          })()}
-
                           {/* Layer 3: Realistic 3D Shading & Specular Highlights (Single Source) */}
-                          {editingProfile.configurator_version === 'v2' && currentView && (() => {
+                          {currentView && (() => {
                             const shadingSrc =
                               currentView.shadow_png_url ||
                               currentView.shading_image_url ||
@@ -8121,8 +8066,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         {/* Row 3: Configurable Choices (Coverage, Logo Cutout, Chassis Color) */}
                         <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-white/5 text-xs">
                           {/* Logo Cutout Toggle */}
-                          {(editingProfile.coverage_and_cutouts?.has_logo_cutout !== false || Boolean(currentView?.logo_cutout_mask_url || editingProfile.coverage_and_cutouts?.logo_cutout_mask_url)) && (
-                            <div className="flex items-center gap-1.5 bg-zinc-900/80 p-1 rounded-xl border border-white/10">
+                          {(() => {
+                            const targetLogoViewId = editingProfile.coverage_and_cutouts?.logo_cutout_view_id || 'main_view';
+                            const isViewForLogo = currentView?.id === targetLogoViewId || (!editingProfile.coverage_and_cutouts?.logo_cutout_view_id && (currentView?.is_default || currentView?.id === editingProfile.views?.[0]?.id));
+                            if (!isViewForLogo && !currentView?.logo_cutout_mask_url) return null;
+                            if (editingProfile.coverage_and_cutouts?.has_logo_cutout === false && !currentView?.logo_cutout_mask_url) return null;
+
+                            return (
+                              <div className="flex items-center gap-1.5 bg-zinc-900/80 p-1 rounded-xl border border-white/10">
                               <span className="text-[11px] text-zinc-400 font-medium px-2">Logo:</span>
                               <button
                                 type="button"
@@ -8167,7 +8118,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 Solid / No Logo
                               </button>
                             </div>
-                          )}
+                          ); })()}
 
                           {/* Pencil Cutout Toggle (Tablets: iPad, Galaxy Tab, etc.) */}
                           {Boolean(editingProfile.coverage_and_cutouts?.has_pencil_cutout || currentView?.pencil_cutout_mask_url || editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url) && (
@@ -8202,7 +8153,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                           {/* Coverage Style Toggle */}
                           {(() => {
-                            const hasModelCutMask = Boolean(currentView?.model_cut_mask_url || editingProfile.coverage_and_cutouts?.model_cut_mask_url);
+                            const targetModelCutViewId = editingProfile.coverage_and_cutouts?.model_cut_view_id || 'main_view';
+                            const isViewForModelCut = currentView?.id === targetModelCutViewId || (!editingProfile.coverage_and_cutouts?.model_cut_view_id && (currentView?.is_default || currentView?.id === editingProfile.views?.[0]?.id));
+                            if (!isViewForModelCut && !currentView?.model_cut_mask_url) return null;
+
+                            const hasModelCutMask = Boolean(currentView?.model_cut_mask_url || (isViewForModelCut && editingProfile.coverage_and_cutouts?.model_cut_mask_url));
                             const covType = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : (hasModelCutMask ? 'model_cut_and_360' : 'none'));
                             if (covType === 'none') return null;
 
@@ -10058,11 +10013,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         Custom pattern scale for this viewing angle (accounts for different zoom/POV). Applies to repeating patterns: custom device finishes always render at 100% scale.
                                       </p>
                                       <div className="flex items-center gap-3 pt-1">
-                                        <span className="text-[10px] font-mono text-zinc-500">50%</span>
+                                        <span className="text-[10px] font-mono text-zinc-500">30%</span>
                                         <input
                                           type="range"
-                                          min="50"
-                                          max="150"
+                                          min="30"
+                                          max="250"
                                           step="5"
                                           value={Math.round(((currentView.texture_scale ?? 1.0)) * 100)}
                                           onChange={(e) => {
@@ -10071,7 +10026,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                           }}
                                           className="w-full accent-sky-400 cursor-pointer h-2 bg-zinc-800 rounded-lg appearance-none"
                                         />
-                                        <span className="text-[10px] font-mono text-zinc-500">150%</span>
+                                        <span className="text-[10px] font-mono text-zinc-500">250%</span>
                                       </div>
                                     </div>
                                   </div>
@@ -10385,6 +10340,22 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     </div>
                                   </div>
                                 </div>
+                                {editingProfile.views && editingProfile.views.length > 1 && (
+                                  <div className="flex items-center justify-between text-[11px] pt-2 border-t border-white/5">
+                                    <span className="text-zinc-400 font-medium">Applies to Viewing Angle</span>
+                                    <select
+                                      value={editingProfile.coverage_and_cutouts?.logo_cutout_view_id || 'main_view'}
+                                      onChange={(e) => handleSetCoverageAndCutouts('logo_cutout_view_id', e.target.value)}
+                                      className="px-2 py-1 rounded-lg bg-zinc-800 border border-white/10 text-white text-xs focus:outline-none focus:border-[#f3aa18] cursor-pointer"
+                                    >
+                                      {editingProfile.views.map((v) => (
+                                        <option key={v.id} value={v.id}>
+                                          {v.name} ({v.id})
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
                               </div>
                             </div>
 
@@ -10833,6 +10804,22 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     </div>
                                   </div>
                                 </div>
+                                {editingProfile.views && editingProfile.views.length > 1 && (
+                                  <div className="flex items-center justify-between text-[11px] pt-2 border-t border-white/5">
+                                    <span className="text-zinc-400 font-medium">Applies to Viewing Angle</span>
+                                    <select
+                                      value={editingProfile.coverage_and_cutouts?.model_cut_view_id || 'main_view'}
+                                      onChange={(e) => handleSetCoverageAndCutouts('model_cut_view_id', e.target.value)}
+                                      className="px-2 py-1 rounded-lg bg-zinc-800 border border-white/10 text-white text-xs focus:outline-none focus:border-[#f3aa18] cursor-pointer"
+                                    >
+                                      {editingProfile.views.map((v) => (
+                                        <option key={v.id} value={v.id}>
+                                          {v.name} ({v.id})
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>

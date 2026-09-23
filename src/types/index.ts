@@ -560,6 +560,7 @@ export interface DeviceCoverageAndCutouts {
   model_360_extra_price?: number;
   has_logo_cutout?: boolean;
   logo_cutout_mask_url?: string;
+  logo_cutout_view_id?: string;
   has_pencil_cutout?: boolean;
   pencil_cutout_mask_url?: string;
   pencil_cutout_label?: string;
@@ -568,6 +569,7 @@ export interface DeviceCoverageAndCutouts {
   has_model_cut?: boolean;
   model_cut_mask_url?: string;
   model_cutout_url?: string;
+  model_cut_view_id?: string;
   logo_target_layer_id?: string;
   coverage_target_layer_id?: string;
   available_coverages?: Array<{
