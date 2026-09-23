@@ -81,7 +81,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       description: 'The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.',
-      changelog: `### Version ${version}\n- Media details live thumbnail status inspection for sm (240x240) and md (720x720)\n- 1-click single attachment thumbnail generator with AJAX feedback\n- Enforced protocol for automated version packaging on all plugin changes`,
+      changelog: `### Version ${version}\n- Media details live thumbnail status inspection for sm (240x240) and md (720x720)\n- 1-click single attachment thumbnail generator with AJAX feedback\n- Synchronized storefront shop gallery container width to match hero card across all devices`,
     },
   };
 
