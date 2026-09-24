@@ -73,6 +73,13 @@ export interface MarketplaceImageConfig {
   deviceOffsetX: number;
   deviceOffsetY: number;
   activeLayerIds?: string[];
+
+  // Skin Surface Lighting & Shading
+  surfaceGradientShading?: {
+    enabled?: boolean;
+    opacity?: number;
+    direction?: 'bottom_right' | 'top_left';
+  };
 }
 
 export const DEFAULT_FEATURE_CARDS_OFFICIAL: MarketplaceFeatureCard[] = [
@@ -1443,17 +1450,21 @@ function applySyntheticDirectionalShading(
     distance?: number;
     shadow_opacity?: number;
     highlight_opacity?: number;
+    direction?: 'bottom_right' | 'top_left';
+    surface_gradient_enabled?: boolean;
+    surface_gradient_opacity?: number;
   }
 ) {
-  if (options?.enabled === false) return;
+  if (options?.enabled === false && options?.surface_gradient_enabled === false) return;
 
   const softness = typeof options?.softness === 'number' ? options.softness : 6;
   const distance = typeof options?.distance === 'number' ? options.distance : 3;
   const shadowAlpha = typeof options?.shadow_opacity === 'number' ? options.shadow_opacity : 0.38;
   const highlightAlpha = typeof options?.highlight_opacity === 'number' ? options.highlight_opacity : 0.24;
+  const isBottomRight = (options?.direction ?? 'bottom_right') === 'bottom_right';
 
-  const shadowDx = distance;
-  const shadowDy = distance;
+  const shadowDx = isBottomRight ? distance : -distance;
+  const shadowDy = isBottomRight ? distance : -distance;
   const hlDx = -shadowDx;
   const hlDy = -shadowDy;
 
@@ -1480,7 +1491,7 @@ function applySyntheticDirectionalShading(
   invCtx.drawImage(maskCanvas, 0, 0);
 
   // Soft inner shadow
-  if (shadowAlpha > 0) {
+  if (options?.enabled !== false && shadowAlpha > 0) {
     const shadowCanvas = document.createElement('canvas');
     shadowCanvas.width = width;
     shadowCanvas.height = height;
@@ -1501,7 +1512,7 @@ function applySyntheticDirectionalShading(
   }
 
   // Soft rim highlight
-  if (highlightAlpha > 0) {
+  if (options?.enabled !== false && highlightAlpha > 0) {
     const hlCanvas = document.createElement('canvas');
     hlCanvas.width = width;
     hlCanvas.height = height;
@@ -1520,6 +1531,43 @@ function applySyntheticDirectionalShading(
       ctx.globalCompositeOperation = 'screen';
       ctx.globalAlpha = highlightAlpha;
       ctx.drawImage(hlCanvas, 0, 0);
+      ctx.restore();
+    }
+  }
+
+  // Soft diagonal surface gradient shadow (Simulates top-left incident light falloff across vinyl body)
+  const surfaceGradEnabled = options?.surface_gradient_enabled ?? true;
+  const surfaceGradOpacity = typeof options?.surface_gradient_opacity === 'number'
+    ? options.surface_gradient_opacity
+    : 0.22;
+
+  if (surfaceGradEnabled && surfaceGradOpacity > 0) {
+    const gradCanvas = document.createElement('canvas');
+    gradCanvas.width = width;
+    gradCanvas.height = height;
+    const gCtx = gradCanvas.getContext('2d');
+    if (gCtx) {
+      const x0 = isBottomRight ? width * 0.15 : width * 0.85;
+      const y0 = isBottomRight ? height * 0.08 : height * 0.95;
+      const x1 = isBottomRight ? width * 0.85 : width * 0.15;
+      const y1 = isBottomRight ? height * 0.95 : height * 0.08;
+
+      const grad = gCtx.createLinearGradient(x0, y0, x1, y1);
+      grad.addColorStop(0.0, 'rgba(0, 0, 0, 0)');
+      grad.addColorStop(0.40, 'rgba(0, 0, 0, 0)');
+      grad.addColorStop(0.65, `rgba(0, 0, 0, ${(surfaceGradOpacity * 0.22).toFixed(3)})`);
+      grad.addColorStop(0.85, `rgba(0, 0, 0, ${(surfaceGradOpacity * 0.65).toFixed(3)})`);
+      grad.addColorStop(1.0, `rgba(0, 0, 0, ${surfaceGradOpacity.toFixed(3)})`);
+
+      gCtx.fillStyle = grad;
+      gCtx.fillRect(0, 0, width, height);
+
+      gCtx.globalCompositeOperation = 'destination-in';
+      gCtx.drawImage(maskCanvas, 0, 0);
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.drawImage(gradCanvas, 0, 0);
       ctx.restore();
     }
   }
@@ -1819,7 +1867,7 @@ async function renderDeviceComposite(
       lCtx.drawImage(modelCutImg, 0, 0, 1500, 1500);
     }
 
-    // Synthetic directional inner shading for realistic skin edges
+    // Synthetic directional inner shading for realistic skin edges & surface gradient
     const isBackOrRequired = Boolean(
       layer.is_required ||
       layer.group === 'primary' ||
@@ -1827,9 +1875,16 @@ async function renderDeviceComposite(
     );
     const hasViewShadow = Boolean(currentView.shadow_png_url || currentView.highlight_png_url);
 
-    if (isBackOrRequired && !hasViewShadow) {
+    if (isBackOrRequired) {
       lCtx.globalCompositeOperation = 'source-over';
-      applySyntheticDirectionalShading(lCtx, 1500, 1500, currentView.generated_shadow);
+      const shadowOptions = {
+        ...currentView.generated_shadow,
+        enabled: !hasViewShadow ? (currentView.generated_shadow?.enabled ?? true) : false,
+        surface_gradient_enabled: config.surfaceGradientShading?.enabled ?? currentView.generated_shadow?.surface_gradient_enabled ?? true,
+        surface_gradient_opacity: config.surfaceGradientShading?.opacity ?? currentView.generated_shadow?.surface_gradient_opacity ?? 0.22,
+        direction: config.surfaceGradientShading?.direction ?? currentView.generated_shadow?.direction ?? 'bottom_right',
+      };
+      applySyntheticDirectionalShading(lCtx, 1500, 1500, shadowOptions);
     }
 
     // Merge layer onto device canvas

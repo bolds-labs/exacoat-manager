@@ -473,6 +473,8 @@ export interface GeneratedShadowConfig {
   shadow_opacity?: number;
   highlight_opacity?: number;
   direction?: 'bottom_right' | 'top_left';
+  surface_gradient_enabled?: boolean;
+  surface_gradient_opacity?: number;
 }
 
 export interface ConfiguratorView {

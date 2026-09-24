@@ -205,6 +205,8 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [deviceOffsetX, setDeviceOffsetX] = useState<number>(0);
   const [deviceOffsetY, setDeviceOffsetY] = useState<number>(110);
   const [activeLayerIds, setActiveLayerIds] = useState<Set<string>>(new Set());
+  const [enableSurfaceShading, setEnableSurfaceShading] = useState<boolean>(true);
+  const [surfaceShadingOpacity, setSurfaceShadingOpacity] = useState<number>(22);
 
   // Batch Generation State
   const [selectedFinishIds, setSelectedFinishIds] = useState<Set<string>>(new Set());
@@ -512,6 +514,10 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
       deviceOffsetX,
       deviceOffsetY,
       activeLayerIds: Array.from(activeLayerIds),
+      surfaceGradientShading: {
+        enabled: enableSurfaceShading,
+        opacity: surfaceShadingOpacity / 100,
+      },
     };
   };
 
@@ -552,6 +558,8 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     deviceOffsetX,
     deviceOffsetY,
     activeLayerIds,
+    enableSurfaceShading,
+    surfaceShadingOpacity,
     deviceNameText,
     showSubBadge,
     subBadgeText,
@@ -1447,6 +1455,48 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                         onChange={(e) => setDeviceOffsetY(parseInt(e.target.value, 10))}
                         className="w-full accent-[#f3aa18]"
                       />
+                    </div>
+
+                    {/* Realistic Skin Surface Shading */}
+                    <div className="pt-2 border-t border-white/5 space-y-2">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <div className="flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-[#f3aa18]" />
+                          <span className="font-bold text-zinc-200">Realistic Skin Shading</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setEnableSurfaceShading(!enableSurfaceShading)}
+                          className={clsx(
+                            'px-2 py-0.5 rounded text-[10px] font-bold border transition cursor-pointer',
+                            enableSurfaceShading
+                              ? 'bg-[#f3aa18]/20 text-[#f3aa18] border-[#f3aa18]/40'
+                              : 'bg-zinc-800 text-zinc-400 border-white/10'
+                          )}
+                        >
+                          {enableSurfaceShading ? 'Enabled' : 'Off'}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-zinc-400 leading-tight">
+                        Adds realistic top-left incident lighting with subtle diagonal shadow on the bottom half, eliminating flat/plain look on white and solid skins.
+                      </p>
+                      {enableSurfaceShading && (
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[11px] text-zinc-400">
+                            <span>Gradient Depth</span>
+                            <span className="font-mono text-[#f3aa18]">{surfaceShadingOpacity}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="5"
+                            max="50"
+                            step="1"
+                            value={surfaceShadingOpacity}
+                            onChange={(e) => setSurfaceShadingOpacity(parseInt(e.target.value, 10))}
+                            className="w-full accent-[#f3aa18]"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

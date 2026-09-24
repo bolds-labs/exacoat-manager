@@ -386,7 +386,7 @@ function applySyntheticDirectionalShading(
   height: number,
   options?: GeneratedShadowConfig
 ) {
-  if (options?.enabled === false) return;
+  if (options?.enabled === false && options?.surface_gradient_enabled === false) return;
 
   const softness = typeof options?.softness === 'number' ? options.softness : 6;
   const distance = typeof options?.distance === 'number' ? options.distance : 3;
@@ -426,7 +426,7 @@ function applySyntheticDirectionalShading(
   invCtx.drawImage(maskCanvas, 0, 0);
 
   // 2. Render Soft Inner Shadow cast towards bottom-right
-  if (shadowAlpha > 0) {
+  if (options?.enabled !== false && shadowAlpha > 0) {
     const shadowCanvas = document.createElement('canvas');
     shadowCanvas.width = width;
     shadowCanvas.height = height;
@@ -448,7 +448,7 @@ function applySyntheticDirectionalShading(
   }
 
   // 3. Render Soft Rim Highlight caught on top-left
-  if (highlightAlpha > 0) {
+  if (options?.enabled !== false && highlightAlpha > 0) {
     const hlCanvas = document.createElement('canvas');
     hlCanvas.width = width;
     hlCanvas.height = height;
@@ -469,6 +469,43 @@ function applySyntheticDirectionalShading(
       ctx.globalCompositeOperation = 'screen';
       ctx.globalAlpha = highlightAlpha;
       ctx.drawImage(hlCanvas, 0, 0);
+      ctx.restore();
+    }
+  }
+
+  // 4. Soft Diagonal Surface Gradient Shadow (Simulates top-left incident light falloff across vinyl body)
+  const surfaceGradEnabled = options?.surface_gradient_enabled ?? true;
+  const surfaceGradOpacity = typeof options?.surface_gradient_opacity === 'number'
+    ? options.surface_gradient_opacity
+    : 0.22;
+
+  if (surfaceGradEnabled && surfaceGradOpacity > 0) {
+    const gradCanvas = document.createElement('canvas');
+    gradCanvas.width = width;
+    gradCanvas.height = height;
+    const gCtx = gradCanvas.getContext('2d');
+    if (gCtx) {
+      const x0 = isBottomRight ? width * 0.15 : width * 0.85;
+      const y0 = isBottomRight ? height * 0.08 : height * 0.95;
+      const x1 = isBottomRight ? width * 0.85 : width * 0.15;
+      const y1 = isBottomRight ? height * 0.95 : height * 0.08;
+
+      const grad = gCtx.createLinearGradient(x0, y0, x1, y1);
+      grad.addColorStop(0.0, 'rgba(0, 0, 0, 0)');
+      grad.addColorStop(0.40, 'rgba(0, 0, 0, 0)');
+      grad.addColorStop(0.65, `rgba(0, 0, 0, ${(surfaceGradOpacity * 0.22).toFixed(3)})`);
+      grad.addColorStop(0.85, `rgba(0, 0, 0, ${(surfaceGradOpacity * 0.65).toFixed(3)})`);
+      grad.addColorStop(1.0, `rgba(0, 0, 0, ${surfaceGradOpacity.toFixed(3)})`);
+
+      gCtx.fillStyle = grad;
+      gCtx.fillRect(0, 0, width, height);
+
+      gCtx.globalCompositeOperation = 'destination-in';
+      gCtx.drawImage(maskCanvas, 0, 0);
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.drawImage(gradCanvas, 0, 0);
       ctx.restore();
     }
   }
@@ -10222,6 +10259,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       const distance = genShadow.distance ?? 3;
                                       const shadowOpacity = Math.round((genShadow.shadow_opacity ?? 0.40) * 100);
                                       const highlightOpacity = Math.round((genShadow.highlight_opacity ?? 0.25) * 100);
+                                      const surfaceGradOpacity = Math.round((genShadow.surface_gradient_opacity ?? 0.22) * 100);
                                       const direction = genShadow.direction ?? 'bottom_right';
 
                                       const updateGenShadow = (patch: Partial<GeneratedShadowConfig>) => {
@@ -10375,6 +10413,30 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                 </div>
                                               </div>
 
+                                              {/* Surface Gradient Shading (Diagonal Falloff) */}
+                                              <div className="space-y-1">
+                                                <div className="flex items-center justify-between text-[11px]">
+                                                  <span className="text-zinc-300">Surface Gradient Shading (Diagonal):</span>
+                                                  <span className="font-mono text-amber-300 text-[10px]">{surfaceGradOpacity}%</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-[9px] font-mono text-zinc-500">0%</span>
+                                                  <input
+                                                    type="range"
+                                                    min="0"
+                                                    max="60"
+                                                    step="2"
+                                                    value={surfaceGradOpacity}
+                                                    onChange={(e) => updateGenShadow({
+                                                      surface_gradient_enabled: Number(e.target.value) > 0,
+                                                      surface_gradient_opacity: Number(e.target.value) / 100,
+                                                    })}
+                                                    className="w-full accent-amber-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg appearance-none"
+                                                  />
+                                                  <span className="text-[9px] font-mono text-zinc-500">60%</span>
+                                                </div>
+                                              </div>
+
                                               {/* Reset Button */}
                                               <div className="pt-1 flex justify-end">
                                                 <button
@@ -10386,6 +10448,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                       distance: 3,
                                                       shadow_opacity: 0.40,
                                                       highlight_opacity: 0.25,
+                                                      surface_gradient_enabled: true,
+                                                      surface_gradient_opacity: 0.22,
                                                       direction: 'bottom_right',
                                                     })
                                                   }

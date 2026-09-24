@@ -8,6 +8,8 @@ export interface GeneratedShadowConfig {
   shadow_opacity?: number;
   highlight_opacity?: number;
   direction?: 'bottom_right' | 'top_left';
+  surface_gradient_enabled?: boolean;
+  surface_gradient_opacity?: number;
 }
 
 export interface V2SkinCanvasLayerProps {
@@ -34,6 +36,7 @@ export interface V2SkinCanvasLayerProps {
  * Simulates directional incident lighting with smooth Gaussian blur falloff:
  * - Shadow cast towards bottom-right (or inverted towards top-left)
  * - Specular rim highlight caught on top-left (or bottom-right)
+ * - Soft diagonal surface gradient across the vinyl body for photorealistic depth
  */
 export function applySyntheticDirectionalShading(
   ctx: CanvasRenderingContext2D,
@@ -41,7 +44,7 @@ export function applySyntheticDirectionalShading(
   height: number,
   options?: GeneratedShadowConfig
 ) {
-  if (options?.enabled === false) return;
+  if (options?.enabled === false && options?.surface_gradient_enabled === false) return;
 
   const softness = typeof options?.softness === 'number' ? options.softness : 6;
   const distance = typeof options?.distance === 'number' ? options.distance : 3;
@@ -81,7 +84,7 @@ export function applySyntheticDirectionalShading(
   invCtx.drawImage(maskCanvas, 0, 0);
 
   // 2. Render Soft Inner Shadow cast towards bottom-right
-  if (shadowAlpha > 0) {
+  if (options?.enabled !== false && shadowAlpha > 0) {
     const shadowCanvas = document.createElement('canvas');
     shadowCanvas.width = width;
     shadowCanvas.height = height;
@@ -103,7 +106,7 @@ export function applySyntheticDirectionalShading(
   }
 
   // 3. Render Soft Rim Highlight caught on top-left
-  if (highlightAlpha > 0) {
+  if (options?.enabled !== false && highlightAlpha > 0) {
     const hlCanvas = document.createElement('canvas');
     hlCanvas.width = width;
     hlCanvas.height = height;
@@ -124,6 +127,43 @@ export function applySyntheticDirectionalShading(
       ctx.globalCompositeOperation = 'screen';
       ctx.globalAlpha = highlightAlpha;
       ctx.drawImage(hlCanvas, 0, 0);
+      ctx.restore();
+    }
+  }
+
+  // 4. Soft Diagonal Surface Gradient Shadow (Simulates top-left incident light falloff across vinyl body)
+  const surfaceGradEnabled = options?.surface_gradient_enabled ?? true;
+  const surfaceGradOpacity = typeof options?.surface_gradient_opacity === 'number'
+    ? options.surface_gradient_opacity
+    : 0.22;
+
+  if (surfaceGradEnabled && surfaceGradOpacity > 0) {
+    const gradCanvas = document.createElement('canvas');
+    gradCanvas.width = width;
+    gradCanvas.height = height;
+    const gCtx = gradCanvas.getContext('2d');
+    if (gCtx) {
+      const x0 = isBottomRight ? width * 0.15 : width * 0.85;
+      const y0 = isBottomRight ? height * 0.08 : height * 0.95;
+      const x1 = isBottomRight ? width * 0.85 : width * 0.15;
+      const y1 = isBottomRight ? height * 0.95 : height * 0.08;
+
+      const grad = gCtx.createLinearGradient(x0, y0, x1, y1);
+      grad.addColorStop(0.0, 'rgba(0, 0, 0, 0)');
+      grad.addColorStop(0.40, 'rgba(0, 0, 0, 0)');
+      grad.addColorStop(0.65, `rgba(0, 0, 0, ${(surfaceGradOpacity * 0.22).toFixed(3)})`);
+      grad.addColorStop(0.85, `rgba(0, 0, 0, ${(surfaceGradOpacity * 0.65).toFixed(3)})`);
+      grad.addColorStop(1.0, `rgba(0, 0, 0, ${surfaceGradOpacity.toFixed(3)})`);
+
+      gCtx.fillStyle = grad;
+      gCtx.fillRect(0, 0, width, height);
+
+      gCtx.globalCompositeOperation = 'destination-in';
+      gCtx.drawImage(maskCanvas, 0, 0);
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.drawImage(gradCanvas, 0, 0);
       ctx.restore();
     }
   }
