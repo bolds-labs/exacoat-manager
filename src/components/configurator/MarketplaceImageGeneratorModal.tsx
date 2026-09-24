@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import { lockBodyScroll } from '../../lib/bodyScrollLock';
 import type { DeviceConfiguratorProfile } from '../../types';
 import type { GlobalFinish } from '../../lib/wordpressBridge';
 import {
@@ -96,14 +98,18 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [isGeneratingBatch, setIsGeneratingBatch] = useState<boolean>(false);
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; finishName: string } | null>(null);
 
-  // Close on Escape key
+  // Close on Escape key and lock body scroll
   useEffect(() => {
     if (!isOpen) return;
+    const unlock = lockBodyScroll();
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      unlock();
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [isOpen, onClose]);
 
   // Filter genuine skin layers (strictly exclude device chassis / hardware body)
@@ -504,10 +510,10 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || typeof document === 'undefined') return null;
 
-  return (
-    <div className="fixed inset-0 z-[220] bg-zinc-950 text-zinc-100 flex flex-col w-screen h-screen overflow-hidden select-none animate-fadeIn">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] bg-zinc-950 text-zinc-100 flex flex-col w-screen h-screen overflow-hidden select-none animate-fadeIn">
       {/* 1. TOP HEADER BAR */}
       <header className="h-16 px-6 border-b border-zinc-800/80 bg-zinc-900/90 backdrop-blur-md flex items-center justify-between shrink-0 z-30">
         <div className="flex items-center gap-3">
@@ -1676,6 +1682,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 };
