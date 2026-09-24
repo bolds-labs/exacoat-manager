@@ -34,6 +34,8 @@ import {
   CheckSquare,
   Square,
   RotateCcw,
+  Star,
+  Award,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -71,10 +73,21 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [showSubBadge, setShowSubBadge] = useState<boolean>(true);
   const [subBadgeText, setSubBadgeText] = useState<string>('Model Cut & 360');
   const [autoHeadlineWithFinish, setAutoHeadlineWithFinish] = useState<boolean>(true);
-  // Left headline now shows Product / Device Name (e.g. Xiaomi 15)
+  // Headline State
   const [headlineText, setHeadlineText] = useState<string>('');
   const [headlineFont, setHeadlineFont] = useState<'Chakra Petch' | 'Plus Jakarta Sans' | 'Inter'>('Chakra Petch');
+  const [headlineHighlightColor, setHeadlineHighlightColor] = useState<string>('#d2d2d2');
   const [featureCards, setFeatureCards] = useState<MarketplaceFeatureCard[]>(DEFAULT_FEATURE_CARDS_OFFICIAL);
+
+  // Brand Tagline under Logo Pill ("#1 Brand Skin di Indonesia")
+  const [showBrandTagline, setShowBrandTagline] = useState<boolean>(true);
+  const [brandTagline, setBrandTagline] = useState<string>('#1 Brand Skin di Indonesia');
+
+  // Primary Listing Cover Image Mode & Settings ("20+ SKINS SELECTION")
+  const [isPrimaryCoverMode, setIsPrimaryCoverMode] = useState<boolean>(false);
+  const [primarySkinId, setPrimarySkinId] = useState<string>('');
+  const [primaryTopRightText, setPrimaryTopRightText] = useState<string>('20+ SKINS SELECTION');
+  const [includePrimaryCoverInBatch, setIncludePrimaryCoverInBatch] = useState<boolean>(true);
 
   // Background State
   const [bgType, setBgType] = useState<'studio_light' | 'custom'>('studio_light');
@@ -90,12 +103,6 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [deviceOffsetX, setDeviceOffsetX] = useState<number>(0);
   const [deviceOffsetY, setDeviceOffsetY] = useState<number>(110);
   const [activeLayerIds, setActiveLayerIds] = useState<Set<string>>(new Set());
-
-  // 20+ Skins Swatches Stack (Defaulted to true for marketplace listings)
-  const [showSkinsStack, setShowSkinsStack] = useState<boolean>(true);
-  const [skinsCountText, setSkinsCountText] = useState<string>('20+');
-  const [skinsLabelText, setSkinsLabelText] = useState<string>('SKINS');
-  const [swatchFinishSlugs, setSwatchFinishSlugs] = useState<string[]>(['black-camo', 'forged-carbon']);
 
   // Batch Generation State
   const [selectedFinishIds, setSelectedFinishIds] = useState<Set<string>>(new Set());
@@ -238,13 +245,22 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     setSelectedFinishIds(new Set(initialSelection));
   }, [profile, finishes]);
 
-  // Set default preview finish once finishes load
+  // Set default preview finish and primary cover finish once finishes load
   useEffect(() => {
     if (!activePreviewFinishId && finishes.length > 0) {
       const firstInStock = finishes.find((f) => f.in_stock !== false) || finishes[0];
       setActivePreviewFinishId(firstInStock.id || firstInStock.slug);
     }
-  }, [finishes, activePreviewFinishId]);
+    if (!primarySkinId && finishes.length > 0) {
+      const darkFinish = finishes.find((f) => {
+        const s = (f.slug || f.name || '').toLowerCase();
+        return s.includes('black-camo') || s.includes('camo') || s.includes('swarm') || s.includes('carbon');
+      }) || finishes[0];
+      if (darkFinish) {
+        setPrimarySkinId(darkFinish.id || darkFinish.slug);
+      }
+    }
+  }, [finishes, activePreviewFinishId, primarySkinId]);
 
   // Active preview finish object
   const currentPreviewFinish = useMemo(() => {
@@ -262,6 +278,17 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
       }
     );
   }, [finishes, activePreviewFinishId]);
+
+  // Primary Cover Finish object (used when previewing or generating primary listing cover)
+  const primaryCoverFinish = useMemo(() => {
+    return (
+      finishes.find((f) => (f.id || f.slug) === primarySkinId) ||
+      currentPreviewFinish
+    );
+  }, [finishes, primarySkinId, currentPreviewFinish]);
+
+  // The actual finish rendered on the live canvas
+  const activeRenderFinish = isPrimaryCoverMode ? primaryCoverFinish : currentPreviewFinish;
 
   // Active View Object
   const currentView = useMemo(() => {
@@ -316,34 +343,41 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     return headlineText.trim() ? headlineText : defaultTitle;
   }, [autoHeadlineWithFinish, profile?.device_name, headlineText]);
 
-  // Effective Top-Right Pill Text (Skin Name)
+  // Effective Top-Right Pill Text (Skin Name or '20+ SKINS SELECTION')
   const effectiveTopRightText = useMemo(() => {
+    if (isPrimaryCoverMode) {
+      return (primaryTopRightText || '20+ SKINS SELECTION').trim().toUpperCase();
+    }
     if (topRightText.trim()) return topRightText.trim().toUpperCase();
     return (currentPreviewFinish?.name || '').toUpperCase();
-  }, [topRightText, currentPreviewFinish?.name]);
+  }, [isPrimaryCoverMode, primaryTopRightText, topRightText, currentPreviewFinish?.name]);
 
   // Build config object for export
   const buildRenderConfig = (): MarketplaceImageConfig | null => {
-    if (!profile || !currentPreviewFinish) return null;
+    if (!profile || !activeRenderFinish) return null;
     return {
       profile,
-      activeFinish: currentPreviewFinish,
+      activeFinish: activeRenderFinish,
       allFinishes: finishes,
       activeColorId,
       bgType,
       customBgUrl,
       showLogo: true,
+      brandTagline,
+      showBrandTagline,
+      isPrimaryImage: isPrimaryCoverMode,
       topRightText: effectiveTopRightText,
       deviceNameText: profile.device_name,
       subBadgeText: showSubBadge ? subBadgeText : '',
       headlineText: effectiveHeadline,
       headlineFont,
       autoHeadlineWithFinish,
+      headlineHighlightColor,
       featureCards,
-      showSkinsStack,
-      skinsCountText,
-      skinsLabelText,
-      swatchFinishSlugs,
+      showSkinsStack: false,
+      skinsCountText: '20+',
+      skinsLabelText: 'SKINS',
+      swatchFinishSlugs: [],
       selectedViewId,
       coverage,
       logoCutout,
@@ -357,7 +391,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
 
   // Synchronize master preview on live HTML5 Canvas
   useEffect(() => {
-    if (!isOpen || !profile || !currentPreviewFinish) return;
+    if (!isOpen || !profile || !activeRenderFinish) return;
     let isCancelled = false;
 
     const renderConfig = buildRenderConfig();
@@ -382,7 +416,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   }, [
     isOpen,
     profile,
-    currentPreviewFinish,
+    activeRenderFinish,
     activeColorId,
     selectedViewId,
     coverage,
@@ -397,11 +431,13 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     subBadgeText,
     effectiveHeadline,
     headlineFont,
+    headlineHighlightColor,
     featureCards,
-    showSkinsStack,
-    skinsCountText,
-    skinsLabelText,
-    swatchFinishSlugs,
+    isPrimaryCoverMode,
+    primaryTopRightText,
+    effectiveTopRightText,
+    showBrandTagline,
+    brandTagline,
     bgType,
     customBgUrl,
   ]);
@@ -409,7 +445,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   // Single Image Download (1500x1500px JPEG)
   const handleDownloadSingleImage = async () => {
     const config = buildRenderConfig();
-    if (!config || !profile || !currentPreviewFinish) return;
+    if (!config || !profile || !activeRenderFinish) return;
 
     try {
       setIsDownloadingSingle(true);
@@ -437,7 +473,9 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      const filename = `${profile.device_slug || 'device'}_${currentPreviewFinish.slug || currentPreviewFinish.id}_1500x1500.jpg`;
+      const filename = isPrimaryCoverMode
+        ? `${profile.device_slug || 'device'}_00_PRIMARY_COVER_20_SKINS_1500x1500.jpg`
+        : `${profile.device_slug || 'device'}_${activeRenderFinish.slug || activeRenderFinish.id}_1500x1500.jpg`;
       a.href = url;
       a.download = filename;
       document.body.appendChild(a);
@@ -467,11 +505,18 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
 
     try {
       setIsGeneratingBatch(true);
-      setBatchProgress({ current: 0, total: targetFinishes.length, finishName: 'Initializing...' });
+      const totalCount = targetFinishes.length + (includePrimaryCoverInBatch ? 1 : 0);
+      setBatchProgress({ current: 0, total: totalCount, finishName: 'Initializing...' });
 
+      const chosenPrimary = finishes.find((f) => (f.id || f.slug) === primarySkinId) || targetFinishes[0];
       const zipBlob = await batchGenerateMarketplaceZip(
         baseConfig,
         targetFinishes,
+        {
+          includePrimaryCover: includePrimaryCoverInBatch,
+          primaryFinish: chosenPrimary,
+          primaryTopRightText: primaryTopRightText || '20+ SKINS SELECTION',
+        },
         (current, total, finishName) => {
           setBatchProgress({ current, total, finishName });
         }
@@ -479,7 +524,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
 
       const url = URL.createObjectURL(zipBlob);
       const a = document.createElement('a');
-      const zipName = `exacoat-marketplace-${profile.device_slug || 'device'}-${targetFinishes.length}-skins.zip`;
+      const zipName = `exacoat-marketplace-${profile.device_slug || 'device'}-${totalCount}-images.zip`;
       a.href = url;
       a.download = zipName;
       document.body.appendChild(a);
@@ -487,7 +532,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      showToast('success', 'Batch Completed', `Exported ${targetFinishes.length} high-res marketplace images to ${zipName}`);
+      showToast('success', 'Batch Completed', `Exported ${totalCount} high-res marketplace images to ${zipName}`);
     } catch (err) {
       console.error('[Marketplace Generator] Batch export error:', err);
       showToast('error', 'Batch Export Failed', 'Failed to generate batch zip archive');
@@ -634,7 +679,11 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
             title="Render high-res 1500x1500px JPEG for active preview skin"
           >
             <Download className="w-4 h-4 text-[#f3aa18]" />
-            {isDownloadingSingle ? 'Rendering...' : 'Download Current Skin (JPG)'}
+            {isDownloadingSingle
+              ? 'Rendering...'
+              : isPrimaryCoverMode
+              ? 'Download Cover (20+ Skins)'
+              : 'Download Current Skin (JPG)'}
           </button>
 
           <button
@@ -677,11 +726,35 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                 <span className="text-[11px] text-zinc-500 hidden sm:inline">GPU-accelerated preview</span>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-zinc-900 border border-[#f3aa18]/30 text-[11px] font-bold text-[#f3aa18]">
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setIsPrimaryCoverMode(false)}
+                  className={clsx(
+                    'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition',
+                    !isPrimaryCoverMode
+                      ? 'bg-[#f3aa18]/20 border border-[#f3aa18] text-[#f3aa18]'
+                      : 'bg-zinc-900 border border-white/10 text-zinc-400 hover:text-zinc-200'
+                  )}
+                  title="Preview active skin variant"
+                >
                   <Sparkles className="w-3.5 h-3.5" />
-                  {currentPreviewFinish.name}
-                </span>
+                  <span>Variant ({currentPreviewFinish.name})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPrimaryCoverMode(true)}
+                  className={clsx(
+                    'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition',
+                    isPrimaryCoverMode
+                      ? 'bg-[#f3aa18] text-black font-extrabold shadow'
+                      : 'bg-zinc-900 border border-white/10 text-zinc-400 hover:text-zinc-200'
+                  )}
+                  title="Preview primary listing cover with '20+ SKINS SELECTION'"
+                >
+                  <Star className="w-3.5 h-3.5" />
+                  <span>Cover (20+ Skins)</span>
+                </button>
               </div>
             </div>
 
@@ -709,7 +782,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
               <div className="flex items-center justify-between text-xs px-1">
                 <span className="font-semibold text-zinc-300 flex items-center gap-1.5">
                   <Palette className="w-3.5 h-3.5 text-[#f3aa18]" />
-                  <span>Instant Skin Preview:</span>
+                  <span>{isPrimaryCoverMode ? 'Select Hero Skin for Cover:' : 'Instant Skin Preview:'}</span>
                 </span>
                 <div className="flex items-center gap-1 text-[11px]">
                   <button
@@ -741,13 +814,24 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
               {/* Scrollable Finishes Carousel */}
               <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
                 {finishes.map((f) => {
-                  const isSelected = (f.id || f.slug) === activePreviewFinishId;
+                  const finishId = f.id || f.slug;
+                  const isSelected = isPrimaryCoverMode
+                    ? finishId === primarySkinId
+                    : finishId === activePreviewFinishId;
+                  const isPrimary = finishId === primarySkinId;
+
                   return (
                     <button
                       key={f.id}
-                      onClick={() => setActivePreviewFinishId(f.id || f.slug)}
+                      onClick={() => {
+                        if (isPrimaryCoverMode) {
+                          setPrimarySkinId(finishId);
+                        } else {
+                          setActivePreviewFinishId(finishId);
+                        }
+                      }}
                       className={clsx(
-                        'flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition shrink-0',
+                        'flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition shrink-0',
                         isSelected
                           ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
                           : 'bg-zinc-800/80 border-zinc-700/80 text-zinc-300 hover:bg-zinc-800 hover:text-white'
@@ -762,6 +846,9 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                         }}
                       />
                       <span className="truncate max-w-[110px]">{f.name}</span>
+                      {isPrimary && (
+                        <Star className="w-3 h-3 text-[#f3aa18] fill-[#f3aa18]" />
+                      )}
                     </button>
                   );
                 })}
@@ -836,8 +923,15 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
+                        onClick={() => setTopRightText('20+ SKINS SELECTION')}
+                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#f3aa18]/20 text-[#f3aa18] hover:bg-[#f3aa18]/30"
+                      >
+                        20+ SKINS SELECTION
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => setTopRightText('')}
-                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#f3aa18]/20 text-[#f3aa18] hover:bg-[#f3aa18]/30 truncate max-w-[150px]"
+                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700 truncate max-w-[130px]"
                         title={currentPreviewFinish.name.toUpperCase()}
                       >
                         Auto ({currentPreviewFinish.name.toUpperCase()})
@@ -859,7 +953,101 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                     className="w-full px-3 py-2 rounded-xl text-xs font-bold bg-zinc-800/80 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
                   />
                   <p className="text-[11px] text-zinc-400">
-                    Displays in the top-right rounded rectangle. During batch export, each image outputs its own skin finish name automatically.
+                    Displays in the top-right rounded rectangle. In Cover Mode, it renders <b>20+ SKINS SELECTION</b>.
+                  </p>
+                </div>
+
+                {/* Primary Listing Cover Settings Box */}
+                <div className="p-3.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-zinc-800/80 to-zinc-800/80 border border-amber-500/30 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Star className="w-4 h-4 text-[#f3aa18]" />
+                      <span className="text-xs font-bold text-zinc-100">Primary Product Cover Image</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsPrimaryCoverMode(!isPrimaryCoverMode)}
+                      className={clsx(
+                        'px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1',
+                        isPrimaryCoverMode
+                          ? 'bg-[#f3aa18] text-black font-extrabold shadow'
+                          : 'bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white'
+                      )}
+                    >
+                      {isPrimaryCoverMode ? 'Viewing Cover Mode' : 'Preview Cover Mode'}
+                    </button>
+                  </div>
+
+                  <p className="text-[11px] text-zinc-400">
+                    Generates the marketplace main cover image featuring <b>20+ SKINS SELECTION</b> in the top-right box and your chosen hero skin.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-zinc-300">Default Hero Skin</label>
+                      <select
+                        value={primarySkinId}
+                        onChange={(e) => setPrimarySkinId(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-[#f3aa18]"
+                      >
+                        {finishes.map((f) => (
+                          <option key={f.id || f.slug} value={f.id || f.slug}>
+                            {f.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-zinc-300">Cover Top-Right Text</label>
+                      <input
+                        type="text"
+                        value={primaryTopRightText}
+                        onChange={(e) => setPrimaryTopRightText(e.target.value)}
+                        placeholder="20+ SKINS SELECTION"
+                        className="w-full px-2.5 py-1.5 rounded-lg text-xs font-bold bg-zinc-900 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
+                      />
+                    </div>
+                  </div>
+
+                  <label className="flex items-center gap-2 pt-1 text-xs font-medium text-zinc-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includePrimaryCoverInBatch}
+                      onChange={(e) => setIncludePrimaryCoverInBatch(e.target.checked)}
+                      className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
+                    />
+                    <span>Include Primary Cover Image in Batch ZIP export (<code>00_PRIMARY_COVER_...jpg</code>)</span>
+                  </label>
+                </div>
+
+                {/* Brand Tagline under Logo */}
+                <div className="p-3 rounded-xl bg-zinc-800/80 border border-zinc-700/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Award className="w-3.5 h-3.5 text-[#f3aa18]" />
+                      <label className="text-xs font-bold text-zinc-300">Brand Tagline (Under Logo)</label>
+                    </div>
+                    <label className="flex items-center gap-1 text-[11px] text-zinc-400 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={showBrandTagline}
+                        onChange={(e) => setShowBrandTagline(e.target.checked)}
+                        className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
+                      />
+                      Show
+                    </label>
+                  </div>
+                  <input
+                    type="text"
+                    value={brandTagline}
+                    onChange={(e) => setBrandTagline(e.target.value)}
+                    disabled={!showBrandTagline}
+                    placeholder="#1 Brand Skin di Indonesia"
+                    className="w-full px-3 py-2 rounded-xl text-xs font-semibold bg-zinc-900 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18] disabled:opacity-40"
+                  />
+                  <p className="text-[11px] text-zinc-400">
+                    Minimalist luxury capsule rendered directly beneath the Exacoat logo.
                   </p>
                 </div>
 
@@ -942,32 +1130,57 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 pb-1">
-                    <button
-                      type="button"
-                      onClick={() => setAutoHeadlineWithFinish(true)}
-                      className={clsx(
-                        'px-2.5 py-1 rounded-lg text-xs font-bold border transition flex items-center gap-1',
-                        autoHeadlineWithFinish
-                          ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
-                          : 'bg-zinc-800 border-zinc-700 text-zinc-400'
-                      )}
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      Auto ({profile.device_name})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAutoHeadlineWithFinish(false)}
-                      className={clsx(
-                        'px-2.5 py-1 rounded-lg text-xs font-bold border transition',
-                        !autoHeadlineWithFinish
-                          ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
-                          : 'bg-zinc-800 border-zinc-700 text-zinc-400'
-                      )}
-                    >
-                      Custom Text
-                    </button>
+                  <div className="flex items-center justify-between pb-1">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setAutoHeadlineWithFinish(true)}
+                        className={clsx(
+                          'px-2.5 py-1 rounded-lg text-xs font-bold border transition flex items-center gap-1',
+                          autoHeadlineWithFinish
+                            ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                            : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                        )}
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Auto ({profile.device_name})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAutoHeadlineWithFinish(false)}
+                        className={clsx(
+                          'px-2.5 py-1 rounded-lg text-xs font-bold border transition',
+                          !autoHeadlineWithFinish
+                            ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                            : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                        )}
+                      >
+                        Custom Text
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-zinc-400 font-bold">Highlight:</span>
+                      {[
+                        { label: 'Silver', color: '#d2d2d2' },
+                        { label: 'White', color: '#ffffff' },
+                        { label: 'Gold', color: '#f3aa18' },
+                      ].map((preset) => (
+                        <button
+                          key={preset.color}
+                          type="button"
+                          onClick={() => setHeadlineHighlightColor(preset.color)}
+                          className={clsx(
+                            'px-1.5 py-0.5 rounded text-[10px] font-bold border transition',
+                            headlineHighlightColor.toLowerCase() === preset.color.toLowerCase()
+                              ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                              : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-zinc-200'
+                          )}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {autoHeadlineWithFinish ? (
@@ -976,7 +1189,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                         {formatDeviceHeadline(profile.device_name)}
                       </div>
                       <p className="text-[11px] text-zinc-400">
-                        Product name styled with consistent font size and subtle white outline so it remains readable even if overlapping the phone.
+                        Product name rendered bold with <b>{headlineHighlightColor}</b> highlight outline for crisp legibility over the phone body.
                       </p>
                     </div>
                   ) : (
@@ -988,23 +1201,6 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                       className="w-full px-3 py-2 rounded-xl text-xs font-bold bg-zinc-800/80 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
                     />
                   )}
-                </div>
-
-                {/* Quick Toggle: 20+ Skins Selection Stack */}
-                <div className="p-3 rounded-xl bg-zinc-800/70 border border-zinc-700/80 flex items-center justify-between">
-                  <div>
-                    <div className="text-xs font-bold text-zinc-200">20+ Skins Column (Right Edge)</div>
-                    <div className="text-[11px] text-zinc-400">Shows other finishes swatches + &quot;20+ SKINS&quot; badge</div>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={showSkinsStack}
-                      onChange={(e) => setShowSkinsStack(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#f3aa18]"></div>
-                  </label>
                 </div>
 
                 {/* 3 Bottom Feature Cards Controls */}
@@ -1359,74 +1555,6 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                       />
                     </div>
                   </div>
-                </div>
-
-                {/* 20+ Skins Swatches Stack Controls */}
-                <div className="p-3 rounded-xl bg-zinc-800/80 border border-zinc-700/80 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-bold text-zinc-300">20+ Skins Selection Stack</div>
-                      <div className="text-[11px] text-zinc-400">Optional right-edge swatch column</div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={showSkinsStack}
-                      onChange={(e) => setShowSkinsStack(e.target.checked)}
-                      className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
-                    />
-                  </div>
-
-                  {showSkinsStack && (
-                    <>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[11px] text-zinc-400">Count Text</label>
-                          <input
-                            type="text"
-                            value={skinsCountText}
-                            onChange={(e) => setSkinsCountText(e.target.value)}
-                            className="w-full px-2 py-1 rounded-lg text-xs font-bold bg-zinc-900 border border-zinc-700 text-zinc-100"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[11px] text-zinc-400">Label Text</label>
-                          <input
-                            type="text"
-                            value={skinsLabelText}
-                            onChange={(e) => setSkinsLabelText(e.target.value)}
-                            className="w-full px-2 py-1 rounded-lg text-xs font-bold bg-zinc-900 border border-zinc-700 text-zinc-100"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[11px] text-zinc-400">Preview Swatches (Top 2)</label>
-                        <div className="grid grid-cols-2 gap-1.5">
-                          {[0, 1].map((idx) => (
-                            <select
-                              key={idx}
-                              value={swatchFinishSlugs[idx] || ''}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setSwatchFinishSlugs((prev) => {
-                                  const next = [...prev];
-                                  next[idx] = val;
-                                  return next;
-                                });
-                              }}
-                              className="w-full px-2 py-1 rounded-lg text-xs font-medium bg-zinc-900 border border-zinc-700 text-zinc-200"
-                            >
-                              {finishes.map((f) => (
-                                <option key={f.id} value={f.slug || f.id}>
-                                  {f.name}
-                                </option>
-                              ))}
-                            </select>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  )}
                 </div>
               </div>
             )}

@@ -25,7 +25,10 @@ export interface MarketplaceImageConfig {
 
   // Header
   showLogo: boolean;
+  brandTagline?: string;
+  showBrandTagline?: boolean;
   topRightText?: string;
+  isPrimaryImage?: boolean;
   deviceNameText?: string;
 
   // Headline
@@ -33,6 +36,7 @@ export interface MarketplaceImageConfig {
   headlineText: string;
   headlineFont: 'Chakra Petch' | 'Plus Jakarta Sans' | 'Inter';
   autoHeadlineWithFinish?: boolean;
+  headlineHighlightColor?: string;
 
   // Feature Cards (Bottom Row)
   featureCards: MarketplaceFeatureCard[];
@@ -371,8 +375,95 @@ async function drawLogoPill(
 }
 
 /**
- * Draws the skin name pill on top right in bold spaced capital letters
- * Features increased rounding (r=54)
+ * Draws a beautiful, premium, minimalist, modern tagline capsule directly beneath the Exacoat logo
+ * e.g. "#1 Brand Skin di Indonesia"
+ */
+function drawBrandTagline(
+  ctx: CanvasRenderingContext2D,
+  text: string = '#1 Brand Skin di Indonesia',
+  x: number = 50,
+  y: number = 208
+) {
+  if (!text.trim()) return;
+
+  ctx.save();
+
+  // Typography measurement
+  ctx.font = '700 22px "Plus Jakarta Sans", sans-serif';
+  const textMetrics = ctx.measureText(text);
+  const iconPadding = 26; // icon and spacing
+  const horizPadding = 22;
+  const pillW = textMetrics.width + iconPadding + horizPadding * 2;
+  const pillH = 42;
+  const pillR = pillH / 2;
+
+  // Subtle modern glass drop shadow
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.05)';
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetY = 4;
+
+  // Background capsule
+  pathRoundedRect(ctx, x, y, pillW, pillH, pillR);
+  const bgGrad = ctx.createLinearGradient(x, y, x, y + pillH);
+  bgGrad.addColorStop(0, 'rgba(255, 255, 255, 0.96)');
+  bgGrad.addColorStop(1, 'rgba(255, 255, 255, 0.84)');
+  ctx.fillStyle = bgGrad;
+  ctx.fill();
+
+  // Subtle refined border
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Gold Star / Spark Icon
+  const iconCx = x + horizPadding + 5;
+  const iconCy = y + pillH / 2;
+  ctx.fillStyle = '#f3aa18';
+  ctx.beginPath();
+  const spikes = 4;
+  const outerR = 7.5;
+  const innerR = 3.2;
+  let rot = (Math.PI / 2) * 3;
+  const step = Math.PI / spikes;
+  ctx.moveTo(iconCx, iconCy - outerR);
+  for (let i = 0; i < spikes; i++) {
+    ctx.lineTo(iconCx + Math.cos(rot) * outerR, iconCy + Math.sin(rot) * outerR);
+    rot += step;
+    ctx.lineTo(iconCx + Math.cos(rot) * innerR, iconCy + Math.sin(rot) * innerR);
+    rot += step;
+  }
+  ctx.closePath();
+  ctx.fill();
+
+  // Text inside capsule
+  const textX = x + horizPadding + iconPadding;
+  const textY = y + pillH / 2 + 1;
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+
+  // Highlight '#1' in gold if present
+  if (text.startsWith('#1')) {
+    ctx.font = '900 22px "Plus Jakarta Sans", sans-serif';
+    ctx.fillStyle = '#f3aa18';
+    ctx.fillText('#1', textX, textY);
+    const hashW = ctx.measureText('#1').width;
+
+    ctx.font = '700 21px "Plus Jakarta Sans", sans-serif';
+    ctx.fillStyle = '#27272a';
+    ctx.fillText(text.slice(2), textX + hashW, textY);
+  } else {
+    ctx.font = '700 21px "Plus Jakarta Sans", sans-serif';
+    ctx.fillStyle = '#27272a';
+    ctx.fillText(text, textX, textY);
+  }
+
+  ctx.restore();
+}
+
+/**
+ * Draws the skin name pill or '20+ SKINS SELECTION' on top right in bold spaced capital letters
+ * Features increased rounding (r=54) and 5-10% larger typography
  */
 function drawTopRightPill(
   ctx: CanvasRenderingContext2D,
@@ -402,19 +493,31 @@ function drawTopRightPill(
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // Typography: bold, spaced capital letters for the skin name
+  // Typography: bold, spaced capital letters for the skin name or '20+ SKINS SELECTION'
   ctx.fillStyle = '#09090b';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'center';
 
   const cleanText = text.toUpperCase();
-  const fontSize = cleanText.length > 20 ? 40 : cleanText.length > 15 ? 46 : 50;
+  // 5-10% larger font sizes:
+  // Short text (<= 12 chars, e.g. SWARM): was 50 -> now 56px (+12%)
+  // Medium text (13-22 chars, e.g. 20+ SKINS SELECTION): was 46 -> now 50px (+9%)
+  // Long text (> 22 chars): was 40 -> now 44px (+10%)
+  let fontSize = cleanText.length > 22 ? 44 : cleanText.length > 12 ? 50 : 56;
   ctx.font = `900 ${fontSize}px "Chakra Petch", "Plus Jakarta Sans", sans-serif`;
 
+  const spacing = cleanText.length > 22 ? '3px' : cleanText.length > 12 ? '5px' : '7px';
   try {
-    const spacing = cleanText.length > 20 ? '3px' : cleanText.length > 15 ? '5px' : '7px';
     (ctx as any).letterSpacing = spacing;
   } catch {}
+
+  // Safety check: ensure it fits nicely within w - 90
+  const maxW = w - 90;
+  while (ctx.measureText(cleanText).width > maxW && fontSize > 32) {
+    fontSize -= 2;
+    ctx.font = `900 ${fontSize}px "Chakra Petch", "Plus Jakarta Sans", sans-serif`;
+  }
+
   ctx.fillText(cleanText, x + w / 2, y + h / 2 + 2);
 
   ctx.restore();
@@ -427,8 +530,8 @@ const drawDeviceNamePill = drawTopRightPill;
  * Draws the left headline typography (Product / Device Name) and sub-badge
  * Features:
  * - Sub-badge is full-rounded capsule with transparent background (no background fill)
- * - Headline maintains consistent font size across finishes
- * - Subtle white outline halo ensures full legibility even when overlapping the phone body
+ * - Headline maintains consistent font size across finishes, enlarged to 126px bold
+ * - #d2d2d2 bold highlight halo ensures full legibility even when overlapping the phone body
  */
 function drawLeftHeadlineBlock(
   ctx: CanvasRenderingContext2D,
@@ -436,7 +539,8 @@ function drawLeftHeadlineBlock(
   headlineText: string,
   fontFamily: string,
   x: number = 50,
-  startY?: number
+  startY?: number,
+  highlightColor: string = '#d2d2d2'
 ) {
   ctx.save();
 
@@ -449,9 +553,9 @@ function drawLeftHeadlineBlock(
   const badgeH = 68;
   const badgeGap = 22;
 
-  // Consistent headline font size (locked across all finishes/devices)
-  let fontSize = 118;
-  let lineHeight = 124;
+  // Consistent headline font size (enlarged & bold 900)
+  let fontSize = 126;
+  let lineHeight = 132;
 
   ctx.font = `900 ${fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
   for (const line of lines) {
@@ -466,7 +570,7 @@ function drawLeftHeadlineBlock(
   // Anchor block nicely from the bottom so it sits comfortably above bottom cards
   const totalTextH = lines.length * lineHeight;
   const totalBlockH = (hasSubBadge ? badgeH + badgeGap : 0) + totalTextH;
-  const targetBottomY = 1150;
+  const targetBottomY = 1210;
   let currentY = startY ?? Math.max(680, targetBottomY - totalBlockH);
 
   // 1. Sub-badge pill (e.g. "Model Cut & 360")
@@ -490,22 +594,23 @@ function drawLeftHeadlineBlock(
     currentY += badgeH + badgeGap;
   }
 
-  // 2. Bold Headline Text with clean white contrast halo to guarantee 100% legibility on any background
+  // 2. Bold Headline Text with clean #d2d2d2 highlight outline
   if (lines.length > 0) {
     ctx.font = `900 ${fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
-    ctx.fillStyle = '#09090b';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
 
     for (const line of lines) {
-      // Subtle white outline so text remains clear and readable even when overlapping the phone body
+      // #d2d2d2 highlight outline so text remains clear and readable even when overlapping the phone body
       ctx.save();
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-      ctx.lineWidth = 6;
+      ctx.strokeStyle = highlightColor || '#d2d2d2';
+      ctx.lineWidth = 10;
       ctx.lineJoin = 'round';
+      ctx.miterLimit = 2;
       ctx.strokeText(line, x, currentY);
       ctx.restore();
 
+      ctx.fillStyle = '#09090b';
       ctx.fillText(line, x, currentY);
       currentY += lineHeight;
     }
@@ -517,6 +622,10 @@ function drawLeftHeadlineBlock(
 /**
  * Draws clean vector feature icons inside cards matching Image 2 & 3
  */
+/**
+ * Draws clean vector feature icons inside cards matching Image 2 & 3
+ * Scaled up ~25-30% to fit the larger circular badge
+ */
 function drawCardIcon(
   ctx: CanvasRenderingContext2D,
   cx: number,
@@ -526,15 +635,15 @@ function drawCardIcon(
   ctx.save();
   ctx.strokeStyle = '#10b981';
   ctx.fillStyle = '#10b981';
-  ctx.lineWidth = 2.4;
+  ctx.lineWidth = 3.0; // was 2.4 (+25% bolder)
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
   if (iconType === 'material') {
-    // Rosette star ribbon icon (matching Card 2 in Image 2)
+    // Rosette star ribbon icon (scaled up ~30%)
     const spikes = 5;
-    const outerR = 11.5;
-    const innerR = 5.5;
+    const outerR = 14.5;
+    const innerR = 7.0;
     let rot = (Math.PI / 2) * 3;
     let x = cx;
     let y = cy;
@@ -558,83 +667,83 @@ function drawCardIcon(
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.arc(cx, cy, 2.2, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 2.8, 0, Math.PI * 2);
     ctx.fill();
   } else if (iconType === 'fit') {
-    // Calipers / Precision Target icon
+    // Calipers / Precision Target icon (scaled up)
     ctx.beginPath();
-    ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 13, 0, Math.PI * 2);
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 3.8, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.beginPath();
-    ctx.moveTo(cx - 13, cy);
-    ctx.lineTo(cx - 9, cy);
-    ctx.moveTo(cx + 9, cy);
-    ctx.lineTo(cx + 13, cy);
-    ctx.moveTo(cx, cy - 13);
-    ctx.lineTo(cx, cy - 9);
-    ctx.moveTo(cx, cy + 9);
-    ctx.lineTo(cx, cy + 13);
+    ctx.moveTo(cx - 17, cy);
+    ctx.lineTo(cx - 12, cy);
+    ctx.moveTo(cx + 12, cy);
+    ctx.lineTo(cx + 17, cy);
+    ctx.moveTo(cx, cy - 17);
+    ctx.lineTo(cx, cy - 12);
+    ctx.moveTo(cx, cy + 12);
+    ctx.lineTo(cx, cy + 17);
     ctx.stroke();
   } else if (iconType === 'scratch') {
-    // Key / Shield Scratch Proof
+    // Key / Shield Scratch Proof (scaled up)
     ctx.beginPath();
-    ctx.moveTo(cx - 6, cy - 8);
-    ctx.lineTo(cx + 5, cy + 3);
+    ctx.moveTo(cx - 8, cy - 10);
+    ctx.lineTo(cx + 6, cy + 4);
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.arc(cx + 6, cy + 4, 4.5, 0, Math.PI * 2);
+    ctx.arc(cx + 7.5, cy + 5, 5.5, 0, Math.PI * 2);
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.moveTo(cx - 4, cy - 10);
-    ctx.lineTo(cx - 8, cy - 6);
+    ctx.moveTo(cx - 5, cy - 13);
+    ctx.lineTo(cx - 10, cy - 8);
     ctx.stroke();
   } else if (iconType === 'texture') {
-    // 3 vertical tactile texture bars matching Image 3
-    const barW = 2.6;
+    // 3 vertical tactile texture bars (scaled up)
+    const barW = 3.2;
     ctx.lineWidth = barW;
     ctx.lineCap = 'round';
 
     // Center bar
     ctx.beginPath();
-    ctx.moveTo(cx, cy - 8.5);
-    ctx.lineTo(cx, cy + 8.5);
+    ctx.moveTo(cx, cy - 11);
+    ctx.lineTo(cx, cy + 11);
     ctx.stroke();
 
     // Left bar
     ctx.beginPath();
-    ctx.moveTo(cx - 5.5, cy - 5.5);
-    ctx.lineTo(cx - 5.5, cy + 5.5);
+    ctx.moveTo(cx - 7, cy - 7);
+    ctx.lineTo(cx - 7, cy + 7);
     ctx.stroke();
 
     // Right bar
     ctx.beginPath();
-    ctx.moveTo(cx + 5.5, cy - 5.5);
-    ctx.lineTo(cx + 5.5, cy + 5.5);
+    ctx.moveTo(cx + 7, cy - 7);
+    ctx.lineTo(cx + 7, cy + 7);
     ctx.stroke();
   } else {
-    // Checkmark Badge / Guarantee Shield (Card 1 & Card 3 in Image 2)
+    // Checkmark Badge / Guarantee Shield (scaled up)
     ctx.beginPath();
-    ctx.moveTo(cx, cy - 12);
-    ctx.lineTo(cx + 10, cy - 7);
-    ctx.lineTo(cx + 10, cy + 3);
-    ctx.quadraticCurveTo(cx + 10, cy + 11, cx, cy + 13);
-    ctx.quadraticCurveTo(cx - 10, cy + 11, cx - 10, cy + 3);
-    ctx.lineTo(cx - 10, cy - 7);
+    ctx.moveTo(cx, cy - 15);
+    ctx.lineTo(cx + 13, cy - 9);
+    ctx.lineTo(cx + 13, cy + 4);
+    ctx.quadraticCurveTo(cx + 13, cy + 14, cx, cy + 16.5);
+    ctx.quadraticCurveTo(cx - 13, cy + 14, cx - 13, cy + 4);
+    ctx.lineTo(cx - 13, cy - 9);
     ctx.closePath();
     ctx.stroke();
 
     // Checkmark inside shield
     ctx.beginPath();
-    ctx.moveTo(cx - 4.5, cy + 1);
-    ctx.lineTo(cx - 1, cy + 4.5);
-    ctx.lineTo(cx + 5, cy - 2.5);
+    ctx.moveTo(cx - 5.5, cy + 1.5);
+    ctx.lineTo(cx - 1.5, cy + 5.5);
+    ctx.lineTo(cx + 6.5, cy - 3.5);
     ctx.stroke();
   }
 
@@ -645,16 +754,15 @@ function drawCardIcon(
  * Draws the 3 bottom feature cards in the foreground with genuine frosted glass styling
  * Features:
  * - Backdrop blur behind the cards so the phone body is softly blurred
- * - Less opacity on the card background for authentic glass refraction
- * - Further rounded corners (r=34) and narrower side margins
- * - Larger typography across all cards
- * - Protruding circular badge shifted slightly further right
+ * - Shorter card height (cardH=200) for sleek proportions
+ * - Typography 25% bigger for high marketplace mobile impact
+ * - Larger protruding circular badge (circleR=32) shifted to top-right
  */
 async function drawBottomFeatureCards(
   ctx: CanvasRenderingContext2D,
   cards: MarketplaceFeatureCard[],
-  startY: number = 1200,
-  cardH: number = 245,
+  startY: number = 1255,
+  cardH: number = 200,
   totalW: number = 1500
 ) {
   if (!cards || cards.length === 0) return;
@@ -664,7 +772,7 @@ async function drawBottomFeatureCards(
   const gap = 20;
   const availableW = totalW - marginX * 2 - gap * (numCards - 1);
   const cardW = availableW / numCards; // ~462.6px
-  const cardR = 34; // rounded further from 26 to 34
+  const cardR = 30; // smooth rounded corners for shorter card
 
   ctx.save();
 
@@ -686,8 +794,8 @@ async function drawBottomFeatureCards(
     // 1. Soft drop shadow behind card
     ctx.save();
     ctx.shadowColor = 'rgba(0, 0, 0, 0.14)';
-    ctx.shadowBlur = 34;
-    ctx.shadowOffsetY = 12;
+    ctx.shadowBlur = 30;
+    ctx.shadowOffsetY = 10;
     pathRoundedRect(ctx, x, y, cardW, cardH, cardR);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
     ctx.fill();
@@ -711,7 +819,7 @@ async function drawBottomFeatureCards(
     ctx.fillRect(x, y, cardW, cardH);
     ctx.restore();
 
-    // 3. Check if card has a photo banner (Image 3 macro photo style, e.g. "Textured Surface")
+    // 3. Check if card has a photo banner (e.g. "Textured Surface")
     if (card.imageUrl) {
       const photoH = Math.round(cardH * 0.58);
       const textH = cardH - photoH;
@@ -763,11 +871,11 @@ async function drawBottomFeatureCards(
       ctx.fillStyle = '#09090b';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = '800 38px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
+      ctx.font = '800 42px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
       ctx.fillText(card.title || 'Textured Surface', x + cardW / 2, y + photoH + textH / 2);
       ctx.restore();
     } else {
-      // Standard Card: Centered Title and Subtitle with larger typography
+      // Standard Card: Centered Title and Subtitle with 25% larger typography
       ctx.save();
       const titleLines = (card.title || '').split('\n').filter(Boolean);
       const maxTitleW = cardW - 48;
@@ -777,17 +885,23 @@ async function drawBottomFeatureCards(
       ctx.textBaseline = 'middle';
 
       if (titleLines.length >= 2) {
-        ctx.font = '900 40px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
-        ctx.fillText(titleLines[0], x + cardW / 2, y + 86, maxTitleW);
-        ctx.fillText(titleLines[1], x + cardW / 2, y + 130, maxTitleW);
-      } else {
-        ctx.font = '900 44px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
-        ctx.fillText(card.title || '', x + cardW / 2, y + 106, maxTitleW);
-      }
+        // Two-line title: 50px (was 40px, +25%!)
+        ctx.font = '900 50px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
+        ctx.fillText(titleLines[0], x + cardW / 2, y + 62, maxTitleW);
+        ctx.fillText(titleLines[1], x + cardW / 2, y + 112, maxTitleW);
 
-      ctx.font = 'italic 600 24px "Plus Jakarta Sans", sans-serif';
-      ctx.fillStyle = '#52525b';
-      ctx.fillText(card.subtitle || '', x + cardW / 2, y + 182, maxTitleW);
+        ctx.font = 'italic 600 26px "Plus Jakarta Sans", sans-serif';
+        ctx.fillStyle = '#52525b';
+        ctx.fillText(card.subtitle || '', x + cardW / 2, y + 158, maxTitleW);
+      } else {
+        // Single line title: 55px (was 44px, +25%!)
+        ctx.font = '900 55px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
+        ctx.fillText(card.title || '', x + cardW / 2, y + 80, maxTitleW);
+
+        ctx.font = 'italic 600 27px "Plus Jakarta Sans", sans-serif';
+        ctx.fillStyle = '#52525b';
+        ctx.fillText(card.subtitle || '', x + cardW / 2, y + 140, maxTitleW);
+      }
       ctx.restore();
     }
 
@@ -807,15 +921,15 @@ async function drawBottomFeatureCards(
     ctx.stroke();
     ctx.restore();
 
-    // 5. Absolute protruding icon badge breaking through top-right border (shifted a bit to the right)
-    const circleR = 25;
-    const circleX = x + cardW - 10;
+    // 5. Absolute protruding icon badge breaking through top-right border (enlarged to circleR=32)
+    const circleR = 32; // was 25 (+28% bigger!)
+    const circleX = x + cardW - 12;
     const circleY = y;
 
     ctx.save();
     ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetY = 3;
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 4;
 
     ctx.beginPath();
     ctx.arc(circleX, circleY, circleR, 0, Math.PI * 2);
@@ -824,7 +938,7 @@ async function drawBottomFeatureCards(
 
     ctx.shadowColor = 'transparent';
     ctx.strokeStyle = '#10b981';
-    ctx.lineWidth = 2.4;
+    ctx.lineWidth = 2.6;
     ctx.stroke();
 
     drawCardIcon(ctx, circleX, circleY, card.iconType);
@@ -1434,13 +1548,20 @@ export async function renderMarketplaceImageToCanvas(
   // 3. Top-Left Exacoat Logo Pill (Image 2 style, r=54, optical upward offset)
   if (config.showLogo) {
     await drawLogoPill(ctx, 50, 50, 460, 140, 54);
+    // Brand Tagline under logo pill ("#1 Brand Skin di Indonesia")
+    if (config.showBrandTagline !== false) {
+      drawBrandTagline(ctx, config.brandTagline || '#1 Brand Skin di Indonesia', 50, 208);
+    }
   }
 
-  // 4. Top-Right Pill: Displays the Skin Name in bold spaced uppercase (r=54)
-  const skinPillText = (config.topRightText?.trim() || config.activeFinish.name).toUpperCase();
+  // 4. Top-Right Pill: Displays the Skin Name or "20+ SKINS SELECTION" in bold spaced uppercase (r=54)
+  const defaultTopRight = config.isPrimaryImage
+    ? '20+ SKINS SELECTION'
+    : config.activeFinish.name;
+  const skinPillText = (config.topRightText?.trim() || defaultTopRight).toUpperCase();
   drawTopRightPill(ctx, skinPillText, 540, 50, 910, 140, 54);
 
-  // 5. Left Column: Sub-badge & Big Bold Headline (displays the Product / Device Name with subtle outline)
+  // 5. Left Column: Sub-badge & Big Bold Headline (displays the Product / Device Name with #d2d2d2 outline)
   const defaultDeviceTitle = formatDeviceHeadline(config.profile.device_name || config.deviceNameText || '');
   const effectiveHeadline = config.headlineText?.trim() ? config.headlineText : defaultDeviceTitle;
 
@@ -1449,36 +1570,13 @@ export async function renderMarketplaceImageToCanvas(
     config.subBadgeText || '',
     effectiveHeadline,
     config.headlineFont || 'Chakra Petch',
-    50
+    50,
+    undefined,
+    config.headlineHighlightColor || '#d2d2d2'
   );
 
-  // 6. Right Edge: 20+ Skins Swatches Stack (displays other skin choices)
-  if (config.showSkinsStack) {
-    const swatchList = config.allFinishes.filter((f) =>
-      config.swatchFinishSlugs.includes(f.slug || f.id)
-    );
-    const otherFinishes = config.allFinishes.filter(
-      (f) => (f.slug || f.id) !== (config.activeFinish.slug || config.activeFinish.id)
-    );
-    const effectiveSwatches =
-      swatchList.length >= 2
-        ? swatchList
-        : otherFinishes.length >= 2
-        ? otherFinishes.slice(0, 2)
-        : config.allFinishes.slice(0, 2);
-
-    await drawSkinsStack(
-      ctx,
-      effectiveSwatches,
-      config.skinsCountText || '20+',
-      config.skinsLabelText || 'SKINS',
-      width - 150,
-      490
-    );
-  }
-
-  // 7. Bottom Feature Cards (frosted glass with backdrop blur, less opacity, larger typography, r=34)
-  await drawBottomFeatureCards(ctx, config.featureCards, 1200, 245, width);
+  // 6. Bottom Feature Cards (frosted glass with backdrop blur, less opacity, 25% larger typography, shorter cardH=200)
+  await drawBottomFeatureCards(ctx, config.featureCards, 1255, 200, width);
 }
 
 /**
@@ -1503,26 +1601,59 @@ export async function generateMarketplaceImageBlob(
 }
 
 /**
- * Batch generates marketplace images for multiple finishes and zips them
+ * Batch generates marketplace images for multiple finishes and zips them.
+ * Automatically prepends the Primary Cover Image (e.g. "20+ SKINS SELECTION") as 00_PRIMARY_COVER_...
  */
 export async function batchGenerateMarketplaceZip(
   baseConfig: MarketplaceImageConfig,
   targetFinishes: GlobalFinish[],
+  options?: {
+    includePrimaryCover?: boolean;
+    primaryFinish?: GlobalFinish;
+    primaryTopRightText?: string;
+  },
   onProgress?: (current: number, total: number, finishName: string) => void
 ): Promise<Blob> {
   const zip = new JSZip();
-  const total = targetFinishes.length;
+  const includeCover = options?.includePrimaryCover !== false;
+  const total = targetFinishes.length + (includeCover ? 1 : 0);
+  let progressCount = 0;
 
-  for (let i = 0; i < total; i++) {
-    const finish = targetFinishes[i];
+  // 1. Generate Primary Cover Image if requested
+  if (includeCover) {
+    progressCount++;
     if (onProgress) {
-      onProgress(i + 1, total, finish.name);
+      onProgress(progressCount, total, 'Primary Cover (20+ Skins Selection)');
+    }
+
+    const coverFinish = options?.primaryFinish || targetFinishes[0] || baseConfig.activeFinish;
+    const coverConfig: MarketplaceImageConfig = {
+      ...baseConfig,
+      activeFinish: coverFinish,
+      isPrimaryImage: true,
+      topRightText: (options?.primaryTopRightText?.trim() || '20+ SKINS SELECTION').toUpperCase(),
+      headlineText: baseConfig.headlineText
+        ? baseConfig.headlineText
+        : formatDeviceHeadline(baseConfig.profile.device_name),
+    };
+
+    const coverBlob = await generateMarketplaceImageBlob(coverConfig);
+    zip.file('00_PRIMARY_COVER_20_SKINS_SELECTION.jpg', coverBlob);
+  }
+
+  // 2. Generate each variant finish image
+  for (let i = 0; i < targetFinishes.length; i++) {
+    const finish = targetFinishes[i];
+    progressCount++;
+    if (onProgress) {
+      onProgress(progressCount, total, finish.name);
     }
 
     const currentConfig: MarketplaceImageConfig = {
       ...baseConfig,
       activeFinish: finish,
-      topRightText: baseConfig.topRightText ? baseConfig.topRightText : finish.name.toUpperCase(),
+      isPrimaryImage: false,
+      topRightText: finish.name.toUpperCase(),
       headlineText: baseConfig.headlineText
         ? baseConfig.headlineText
         : formatDeviceHeadline(baseConfig.profile.device_name),
