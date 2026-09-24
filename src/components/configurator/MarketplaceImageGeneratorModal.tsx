@@ -182,6 +182,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     '/assets/brand/textured-skins-product-info.jpg'
   );
   const [batchVariantsLayoutMode, setBatchVariantsLayoutMode] = useState<'variant' | 'cover'>('variant');
+  const [batchCoverageMode, setBatchCoverageMode] = useState<'both' | '360' | 'cut'>('both');
 
   // Marketplace Channel Selector (Shopee vs Tokopedia)
   const [marketplaceChannel, setMarketplaceChannel] = useState<'shopee' | 'tokopedia'>('tokopedia');
@@ -638,7 +639,8 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
 
     try {
       setIsGeneratingBatch(true);
-      const totalCount = targetFinishes.length + (includePrimaryCoverInBatch ? 1 : 0);
+      const coverageMultiplier = hasCoverageOptions && batchCoverageMode === 'both' ? 2 : 1;
+      const totalCount = (targetFinishes.length + (includePrimaryCoverInBatch ? 1 : 0)) * coverageMultiplier;
       setBatchProgress({ current: 0, total: totalCount, finishName: 'Initializing...' });
 
       const chosenPrimary = finishes.find((f) => (f.id || f.slug) === primarySkinId) || targetFinishes[0];
@@ -656,6 +658,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
           coverScale: layoutMode === 'cover' ? deviceScale : undefined,
           coverOffsetX: layoutMode === 'cover' ? deviceOffsetX : undefined,
           coverOffsetY: layoutMode === 'cover' ? deviceOffsetY : undefined,
+          coverageMode: hasCoverageOptions ? batchCoverageMode : 'current',
         },
         (current, total, finishName) => {
           setBatchProgress({ current, total, finishName });
@@ -664,7 +667,10 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
 
       const url = URL.createObjectURL(zipBlob);
       const a = document.createElement('a');
-      const zipName = `exacoat-marketplace-${profile.device_slug || 'device'}-${totalCount}-images.zip`;
+      const coverageTag = hasCoverageOptions && batchCoverageMode === 'both' ? '360-and-cut' : (hasCoverageOptions ? batchCoverageMode : '');
+      const zipName = coverageTag
+        ? `exacoat-marketplace-${profile.device_slug || 'device'}-${totalCount}-images-${coverageTag}.zip`
+        : `exacoat-marketplace-${profile.device_slug || 'device'}-${totalCount}-images.zip`;
       a.href = url;
       a.download = zipName;
       document.body.appendChild(a);
@@ -838,7 +844,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
             ) : (
               <>
                 <FolderArchive className="w-4 h-4" />
-                Generate All ({selectedFinishIds.size}) as ZIP
+                Generate All ({hasCoverageOptions && batchCoverageMode === 'both' ? selectedFinishIds.size * 2 : selectedFinishIds.size} Images) as ZIP
               </>
             )}
           </button>
@@ -2435,6 +2441,62 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                     </button>
                   </div>
                 </div>
+
+                {/* Coverage in ZIP Options */}
+                {hasCoverageOptions && (
+                  <div className="p-2.5 rounded-xl bg-zinc-800/80 border border-zinc-700/80 space-y-2 shrink-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-zinc-300">Coverage in ZIP</span>
+                      <span className="text-[10px] text-zinc-400 font-mono">
+                        {batchCoverageMode === 'both' ? 'Both 360 & Cut (2x images)' : batchCoverageMode === '360' ? '360 Only' : 'Cut Only'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1.5 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setBatchCoverageMode('both')}
+                        className={clsx(
+                          'p-2 rounded-lg border text-center transition font-semibold text-[11px]',
+                          batchCoverageMode === 'both'
+                            ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                            : 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                        )}
+                      >
+                        <div>Both (360 + Cut)</div>
+                        <div className="text-[9px] text-zinc-400 font-normal">Folders 360/ & cut/</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setBatchCoverageMode('360')}
+                        className={clsx(
+                          'p-2 rounded-lg border text-center transition font-semibold text-[11px]',
+                          batchCoverageMode === '360'
+                            ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                            : 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                        )}
+                      >
+                        <div>360 Only</div>
+                        <div className="text-[9px] text-zinc-400 font-normal">Full Body Wrap</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setBatchCoverageMode('cut')}
+                        className={clsx(
+                          'p-2 rounded-lg border text-center transition font-semibold text-[11px]',
+                          batchCoverageMode === 'cut'
+                            ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                            : 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                        )}
+                      >
+                        <div>Cut Only</div>
+                        <div className="text-[9px] text-zinc-400 font-normal">Back Only</div>
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Batch Export Layout Options */}
                 <div className="p-2.5 rounded-xl bg-zinc-800/80 border border-zinc-700/80 space-y-2 shrink-0">

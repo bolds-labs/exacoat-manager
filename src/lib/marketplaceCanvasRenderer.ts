@@ -1699,9 +1699,15 @@ async function renderDeviceComposite(
     }
 
     // Cutouts resolution
-    const covMode = profile.coverage_and_cutouts?.coverage_type || (profile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none');
+    const hasModelCutAsset = Boolean(
+      profile.coverage_and_cutouts?.model_cut_mask_url ||
+      profile.coverage_and_cutouts?.has_model_cut ||
+      profile.views?.some((v) => Boolean(v.model_cut_mask_url)) ||
+      profile.layers?.some((l) => Object.values(l.assets_by_view || {}).some((a) => Boolean(a.model_cutout_url)))
+    );
+    const covMode = profile.coverage_and_cutouts?.coverage_type || (hasModelCutAsset ? 'model_cut_and_360' : 'none');
     const isModelCutOnly = covMode === 'model_cut_only';
-    const hasCoverageOptions = covMode === 'model_cut_and_360';
+    const hasCoverageOptions = covMode === 'model_cut_and_360' || (hasModelCutAsset && !isModelCutOnly);
     const shouldApplyModelCut = isModelCutOnly || (hasCoverageOptions && coverage === 'model_cut');
     const shouldApplyLogoCutout = logoCutout && (profile.coverage_and_cutouts?.has_logo_cutout ?? true);
     const shouldApplyPencilCutout = pencilCutout && Boolean(profile.coverage_and_cutouts?.has_pencil_cutout);
@@ -2103,13 +2109,11 @@ export async function batchGenerateMarketplaceZip(
     coverScale?: number;
     coverOffsetX?: number;
     coverOffsetY?: number;
+    coverageMode?: 'both' | '360' | 'cut' | 'current';
   },
   onProgress?: (current: number, total: number, finishName: string) => void
 ): Promise<Blob> {
   const zip = new JSZip();
-  const includeCover = options?.includePrimaryCover !== false;
-  const total = targetFinishes.length + (includeCover ? 1 : 0);
-  let progressCount = 0;
 
   const isLaptop =
     baseConfig.profile.family === 'laptop' ||
@@ -2140,33 +2144,6 @@ export async function batchGenerateMarketplaceZip(
     ? options.coverOffsetY
     : (baseConfig.layoutMode === 'cover' && baseConfig.deviceOffsetY !== undefined ? baseConfig.deviceOffsetY : defaultCoverY);
 
-  // 1. Generate Primary Cover Image if requested
-  if (includeCover) {
-    progressCount++;
-    if (onProgress) {
-      onProgress(progressCount, total, 'Primary Cover (20+ Skins Selection)');
-    }
-
-    const coverFinish = options?.primaryFinish || targetFinishes[0] || baseConfig.activeFinish;
-    const coverConfig: MarketplaceImageConfig = {
-      ...baseConfig,
-      activeFinish: coverFinish,
-      isPrimaryImage: true,
-      layoutMode: 'cover',
-      deviceScale: coverScale,
-      deviceOffsetX: coverOffsetX,
-      deviceOffsetY: coverOffsetY,
-      featureCards: DEFAULT_FEATURE_CARDS_OFFICIAL,
-      topRightText: (options?.primaryTopRightText?.trim() || '20+ SKINS SELECTION').toUpperCase(),
-      headlineText: baseConfig.headlineText
-        ? baseConfig.headlineText
-        : formatDeviceHeadline(baseConfig.profile.device_name),
-    };
-
-    const coverBlob = await generateMarketplaceImageBlob(coverConfig);
-    zip.file('00_PRIMARY_COVER_20_SKINS_SELECTION.jpg', coverBlob);
-  }
-
   // Resolve Variant Images placement
   const useVariantLayout = (options?.variantsLayoutMode || 'variant') === 'variant';
 
@@ -2188,34 +2165,109 @@ export async function batchGenerateMarketplaceZip(
         : (baseConfig.layoutMode === 'variant' && baseConfig.deviceOffsetY !== undefined ? baseConfig.deviceOffsetY : defaultVariantY))
     : coverOffsetY;
 
-  // 2. Generate each variant finish image
-  for (let i = 0; i < targetFinishes.length; i++) {
-    const finish = targetFinishes[i];
-    progressCount++;
-    if (onProgress) {
-      onProgress(progressCount, total, finish.name);
+  // Detect coverage options support
+  const hasModelCutAsset = Boolean(
+    baseConfig.profile.coverage_and_cutouts?.model_cut_mask_url ||
+    baseConfig.profile.coverage_and_cutouts?.has_model_cut ||
+    baseConfig.profile.views?.some((v) => Boolean(v.model_cut_mask_url)) ||
+    baseConfig.profile.layers?.some((l) => Object.values(l.assets_by_view || {}).some((a) => Boolean(a.model_cutout_url)))
+  );
+  const covMode = baseConfig.profile.coverage_and_cutouts?.coverage_type || (hasModelCutAsset ? 'model_cut_and_360' : 'none');
+  const isModelCutOnly = covMode === 'model_cut_only';
+  const hasBothCoverages = (covMode === 'model_cut_and_360' || hasModelCutAsset) && !isModelCutOnly;
+
+  let coveragesToRun: ('model_360' | 'model_cut')[];
+  if (options?.coverageMode === '360') {
+    coveragesToRun = ['model_360'];
+  } else if (options?.coverageMode === 'cut') {
+    coveragesToRun = ['model_cut'];
+  } else if (options?.coverageMode === 'current') {
+    coveragesToRun = [baseConfig.coverage || 'model_360'];
+  } else {
+    // Default: generate both 360 and cut if device supports both!
+    coveragesToRun = hasBothCoverages ? ['model_360', 'model_cut'] : [isModelCutOnly ? 'model_cut' : (baseConfig.coverage || 'model_360')];
+  }
+
+  const includeCover = options?.includePrimaryCover !== false;
+  const itemsPerCoverage = targetFinishes.length + (includeCover ? 1 : 0);
+  const total = itemsPerCoverage * coveragesToRun.length;
+  let progressCount = 0;
+
+  for (const cov of coveragesToRun) {
+    const isBoth = coveragesToRun.length > 1;
+    const covLabel = cov === 'model_cut' ? 'Model Cut' : 'Model 360';
+    const covFolder = cov === 'model_cut' ? 'cut' : '360';
+    const covSuffix = cov === 'model_cut' ? 'CUT' : '360';
+
+    // 1. Generate Primary Cover Image if requested
+    if (includeCover) {
+      progressCount++;
+      if (onProgress) {
+        onProgress(progressCount, total, isBoth ? `Primary Cover (${covLabel})` : 'Primary Cover (20+ Skins Selection)');
+      }
+
+      const coverFinish = options?.primaryFinish || targetFinishes[0] || baseConfig.activeFinish;
+      const subBadge = baseConfig.subBadgeText === 'Model Cut & 360'
+        ? covLabel
+        : baseConfig.subBadgeText;
+
+      const coverConfig: MarketplaceImageConfig = {
+        ...baseConfig,
+        activeFinish: coverFinish,
+        coverage: cov,
+        isPrimaryImage: true,
+        layoutMode: 'cover',
+        deviceScale: coverScale,
+        deviceOffsetX: coverOffsetX,
+        deviceOffsetY: coverOffsetY,
+        subBadgeText: subBadge,
+        featureCards: DEFAULT_FEATURE_CARDS_OFFICIAL,
+        topRightText: (options?.primaryTopRightText?.trim() || '20+ SKINS SELECTION').toUpperCase(),
+        headlineText: baseConfig.headlineText
+          ? baseConfig.headlineText
+          : formatDeviceHeadline(baseConfig.profile.device_name),
+      };
+
+      const coverBlob = await generateMarketplaceImageBlob(coverConfig);
+      const coverFileName = isBoth
+        ? `${covFolder}/00_PRIMARY_COVER_20_SKINS_SELECTION_${covSuffix}.jpg`
+        : `00_PRIMARY_COVER_20_SKINS_SELECTION.jpg`;
+
+      zip.file(coverFileName, coverBlob);
     }
 
-    const currentConfig: MarketplaceImageConfig = {
-      ...baseConfig,
-      activeFinish: finish,
-      isPrimaryImage: false,
-      layoutMode: useVariantLayout ? 'variant' : 'cover',
-      deviceScale: variantScale,
-      deviceOffsetX: variantOffsetX,
-      deviceOffsetY: variantOffsetY,
-      topRightText: finish.name.toUpperCase(),
-      headlineText: baseConfig.headlineText
-        ? baseConfig.headlineText
-        : formatDeviceHeadline(baseConfig.profile.device_name),
-    };
+    // 2. Generate each variant finish image
+    for (let i = 0; i < targetFinishes.length; i++) {
+      const finish = targetFinishes[i];
+      progressCount++;
+      if (onProgress) {
+        onProgress(progressCount, total, isBoth ? `${finish.name} (${covLabel})` : finish.name);
+      }
 
-    const blob = await generateMarketplaceImageBlob(currentConfig);
-    const indexStr = String(i + 1).padStart(2, '0');
-    const slugStr = (finish.slug || finish.id || `finish_${i + 1}`).replace(/[^a-z0-9_-]/gi, '_');
-    const filename = `${indexStr}_${slugStr}.jpg`;
+      const currentConfig: MarketplaceImageConfig = {
+        ...baseConfig,
+        activeFinish: finish,
+        coverage: cov,
+        isPrimaryImage: false,
+        layoutMode: useVariantLayout ? 'variant' : 'cover',
+        deviceScale: variantScale,
+        deviceOffsetX: variantOffsetX,
+        deviceOffsetY: variantOffsetY,
+        topRightText: finish.name.toUpperCase(),
+        headlineText: baseConfig.headlineText
+          ? baseConfig.headlineText
+          : formatDeviceHeadline(baseConfig.profile.device_name),
+      };
 
-    zip.file(filename, blob);
+      const blob = await generateMarketplaceImageBlob(currentConfig);
+      const indexStr = String(i + 1).padStart(2, '0');
+      const slugStr = (finish.slug || finish.id || `finish_${i + 1}`).replace(/[^a-z0-9_-]/gi, '_');
+      const fileName = isBoth
+        ? `${covFolder}/${indexStr}_${slugStr}_${covSuffix.toLowerCase()}.jpg`
+        : `${indexStr}_${slugStr}.jpg`;
+
+      zip.file(fileName, blob);
+    }
   }
 
   return await zip.generateAsync({ type: 'blob' });
