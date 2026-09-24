@@ -49,6 +49,7 @@ export interface MarketplaceImageConfig {
   deviceScale: number;
   deviceOffsetX: number;
   deviceOffsetY: number;
+  activeLayerIds?: string[];
 }
 
 export const DEFAULT_FEATURE_CARDS_OFFICIAL: MarketplaceFeatureCard[] = [
@@ -497,13 +498,13 @@ function drawCardIcon(
 }
 
 /**
- * Draws the 3 bottom feature cards in the foreground (matching Image 2)
+ * Draws the 3 bottom feature cards in the foreground with centered frosted glass styling
  */
 function drawBottomFeatureCards(
   ctx: CanvasRenderingContext2D,
   cards: MarketplaceFeatureCard[],
-  startY: number = 1235,
-  cardH: number = 215,
+  startY: number = 1225,
+  cardH: number = 225,
   totalW: number = 1500
 ) {
   if (!cards || cards.length === 0) return;
@@ -520,75 +521,67 @@ function drawBottomFeatureCards(
     const x = marginX + idx * (cardW + gap);
     const y = startY;
 
-    // 1. Card background with soft contact shadow
+    // 1. Frosted Glass background with soft drop shadow
     ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.06)';
-    ctx.shadowBlur = 24;
-    ctx.shadowOffsetY = 8;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.08)';
+    ctx.shadowBlur = 28;
+    ctx.shadowOffsetY = 10;
 
-    pathRoundedRect(ctx, x, y, cardW, cardH, 28);
-    ctx.fillStyle = '#ffffff';
+    pathRoundedRect(ctx, x, y, cardW, cardH, 26);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
     ctx.fill();
     ctx.restore();
 
-    // 2. Card subtle border
+    // 2. Crisp translucent border (glass inner stroke)
     ctx.save();
-    pathRoundedRect(ctx, x, y, cardW, cardH, 28);
-    ctx.strokeStyle = '#e4e4e7';
-    ctx.lineWidth = 1.5;
+    pathRoundedRect(ctx, x, y, cardW, cardH, 26);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.06)';
+    ctx.lineWidth = 1;
     ctx.stroke();
     ctx.restore();
 
-    // 3. Subtle horizontal divider line
-    const dividerY = y + 132;
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(x + 32, dividerY);
-    ctx.lineTo(x + cardW - 32, dividerY);
-    ctx.strokeStyle = '#f1f1f4';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.restore();
-
-    // 4. Green circular badge on top-right of card
-    const circleR = 27;
-    const circleX = x + cardW - 40;
-    const circleY = y + 42;
+    // 3. Centered emerald circular icon badge on top of card
+    const circleR = 25;
+    const circleX = x + cardW / 2;
+    const circleY = y + 46;
 
     ctx.save();
     ctx.beginPath();
     ctx.arc(circleX, circleY, circleR, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.10)';
     ctx.fill();
     ctx.strokeStyle = '#10b981';
-    ctx.lineWidth = 2.2;
+    ctx.lineWidth = 2.4;
     ctx.stroke();
 
     drawCardIcon(ctx, circleX, circleY, card.iconType);
     ctx.restore();
 
-    // 5. Card Title (supports 1 or 2 lines)
+    // 4. Centered Card Title (unified heading font size across all 3 cards)
     ctx.save();
     const titleLines = (card.title || '').split('\n').filter(Boolean);
-    const maxTitleW = cardW - 88;
+    const maxTitleW = cardW - 40;
 
     ctx.fillStyle = '#09090b';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '800 32px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
 
     if (titleLines.length >= 2) {
-      ctx.font = '800 30px "Plus Jakarta Sans", "Chakra Petch", sans-serif';
-      ctx.fillText(titleLines[0], x + 34, y + 44, maxTitleW);
-      ctx.fillText(titleLines[1], x + 34, y + 80, maxTitleW);
+      ctx.fillText(titleLines[0], x + cardW / 2, y + 106, maxTitleW);
+      ctx.fillText(titleLines[1], x + cardW / 2, y + 140, maxTitleW);
     } else {
-      ctx.font = '800 34px "Plus Jakarta Sans", "Chakra Petch", sans-serif';
-      ctx.fillText(card.title || '', x + 34, y + 62, maxTitleW);
+      ctx.fillText(card.title || '', x + cardW / 2, y + 116, maxTitleW);
     }
 
-    // 6. Card Subtitle (italic, under divider line)
+    // 5. Centered Card Subtitle (italic, subtle under title)
     ctx.font = 'italic 500 20px "Plus Jakarta Sans", "Inter", sans-serif';
     ctx.fillStyle = '#52525b';
-    ctx.fillText(card.subtitle || '', x + 34, y + 168, maxTitleW);
+    ctx.fillText(card.subtitle || '', x + cardW / 2, y + 180, maxTitleW);
     ctx.restore();
   });
 
@@ -814,15 +807,13 @@ async function renderDeviceComposite(
 
   let chassisSrc = dedicatedColorImg || currentView?.background_url;
   if (!chassisSrc) {
-    const devLayer = profile.layers.find((l) => {
-      const n = (l.name || '').toLowerCase();
-      const id = (l.id || '').toLowerCase();
-      return n === 'device' || id === 'device' || n.includes('chassis') || n.includes('hardware');
-    });
-    if (devLayer) {
-      const devAsset = devLayer.assets_by_view?.[currentView.id] || devLayer.assets_by_view?.['main_view'];
-      chassisSrc = (devAsset as any)?.overlay_url || (devAsset as any)?.background_url || '';
-    }
+    const rawLayers = profile.layers || [];
+    const deviceLayer = rawLayers.find((l) => (l.name || '').toLowerCase() === 'device');
+    const devImg =
+      deviceLayer?.assets_by_view?.[currentView?.id || '']?.render_texture_map?.['device'] ||
+      Object.values(deviceLayer?.assets_by_view || {})[0]?.render_texture_map?.['device'] ||
+      Object.values(deviceLayer?.assets_by_view || {})[0]?.base_hardware_body_url;
+    chassisSrc = devImg || '';
   }
 
   if (chassisSrc) {
@@ -843,9 +834,12 @@ async function renderDeviceComposite(
     const lName = (l.name || '').toLowerCase().trim();
     const lId = (l.id || '').toLowerCase().trim();
     if (lName === 'device' || lId === 'device') return false;
-    if (lName.includes('device-body') || lName.includes('device_body')) return false;
+    if (lName.includes('device-body') || lName.includes('device_body') || lName.includes('device body')) return false;
     if (lName.includes('chassis') || lName.includes('hardware')) return false;
     if ((l.group as string) === 'device' || (l.group as string) === 'hardware') return false;
+    if (config.activeLayerIds && config.activeLayerIds.length > 0) {
+      if (!config.activeLayerIds.includes(l.id)) return false;
+    }
     return true;
   });
 
@@ -1162,8 +1156,8 @@ export async function renderMarketplaceImageToCanvas(
   const deviceCanvas = await renderDeviceComposite(config);
 
   // Close-Up Hero Shot Scaling & Placement (matching Image 2)
-  // Base scale = 1.7 ensures the phone is large, zoomed-in, and prominent in the right half of the canvas
-  const baseScale = 1.7;
+  // Base scale = 1.18 ensures the phone fits beautifully in the right half of the canvas
+  const baseScale = 1.18;
   const effectiveScale = (config.deviceScale || 1.0) * baseScale;
   const dw = 1500 * effectiveScale;
   const dh = 1500 * effectiveScale;
@@ -1171,8 +1165,8 @@ export async function renderMarketplaceImageToCanvas(
   // Center of phone in deviceCanvas is (750, 750).
   // Target placement: phone positioned on the right with camera island centered in upper-right half,
   // top of phone dipping below "ALL DEVICES" pill, bottom extending behind cards.
-  const targetCenterX = 1120 + (config.deviceOffsetX || 0);
-  const targetCenterY = 1205 + (config.deviceOffsetY || 0);
+  const targetCenterX = 1040 + (config.deviceOffsetX || 0);
+  const targetCenterY = 910 + (config.deviceOffsetY || 0);
 
   const dx = targetCenterX - 750 * effectiveScale;
   const dy = targetCenterY - 750 * effectiveScale;
