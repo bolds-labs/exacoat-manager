@@ -404,8 +404,8 @@ export function formatFeeLabel(feeName: string, order?: { rma?: any; meta_data?:
   }
 
   // Common fee labels
-  if (nameLower === 'unique code' || nameLower === 'kode unik') {
-    return 'Kode Unik Pembayaran';
+  if (nameLower === 'unique code' || nameLower.includes('kode unik') || nameLower.includes('unique payment code')) {
+    return 'Unique Payment Code';
   }
   if (nameLower === 'via wallet' || nameLower.includes('wallet')) {
     return 'Store Credit / Wallet';

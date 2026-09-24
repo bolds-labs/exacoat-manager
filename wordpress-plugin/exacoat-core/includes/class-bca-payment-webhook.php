@@ -25,6 +25,17 @@ class Exacoat_BCA_Payment_Webhook {
 	const CRON_ACTION = 'exawebhook_process_queue';
 
 	/**
+	 * Strict bounds for Unique Payment Code (Rp 1 - Rp 100)
+	 */
+	const MIN_UNIQUE_CODE = 1;
+	const MAX_UNIQUE_CODE = 100;
+
+	/**
+	 * Active order lookback window in days (used by both generator and webhook matcher)
+	 */
+	const ACTIVE_WINDOW_DAYS = 5;
+
+	/**
 	 * Initialize hooks and filters
 	 */
 	public static function init() {
@@ -34,9 +45,11 @@ class Exacoat_BCA_Payment_Webhook {
 		// 2. Cron queue processor
 		add_action( self::CRON_ACTION, [ __CLASS__, 'process_queue' ] );
 
-		// 3. Unique Payment Code (Kode Unik) Fee Generation
+		// 3. Unique Payment Code Fee Generation & Post-Order Collision Guard
 		add_action( 'woocommerce_cart_calculate_fees', [ __CLASS__, 'add_unique_payment_code_fee' ], 20 );
 		add_action( 'woocommerce_checkout_create_order', [ __CLASS__, 'save_unique_code_to_order' ], 10, 2 );
+		add_action( 'woocommerce_checkout_order_processed', [ __CLASS__, 'ensure_order_unique_total_by_id' ], 20, 1 );
+		add_action( 'woocommerce_store_api_checkout_order_processed', [ __CLASS__, 'ensure_order_unique_total' ], 20, 1 );
 		add_action( 'woocommerce_thankyou', [ __CLASS__, 'clear_session_unique_code' ] );
 
 		// 4. Admin Order Meta Display
@@ -298,20 +311,20 @@ class Exacoat_BCA_Payment_Webhook {
 	}
 
 	/**
-	 * Match and update WooCommerce order status with atomic locking & deduplication
+	 * Match and update WooCommerce order status with atomic locking, collision disambiguation & deduplication
 	 */
 	public static function match_update_woocommerce_order_status( int $payment_amount, string $description ): ?int {
 		if ( $payment_amount <= 0 || ! function_exists( 'wc_get_orders' ) ) {
 			return null;
 		}
 
-		// Fetch recent pending and on-hold orders (last 5 days)
+		// Fetch all active pending and on-hold orders within the lookback window
 		$orders = wc_get_orders( [
 			'status'       => [ 'pending', 'on-hold' ],
-			'limit'        => 50,
+			'limit'        => -1,
 			'orderby'      => 'date',
 			'order'        => 'DESC',
-			'date_created' => '>' . ( time() - ( 5 * DAY_IN_SECONDS ) ),
+			'date_created' => '>' . ( time() - ( self::ACTIVE_WINDOW_DAYS * DAY_IN_SECONDS ) ),
 		] );
 
 		if ( empty( $orders ) ) {
@@ -321,11 +334,66 @@ class Exacoat_BCA_Payment_Webhook {
 
 		$mutation_hash = md5( $payment_amount . '|' . trim( $description ) );
 
+		// Collect all candidate orders that match the exact integer payment amount
+		$candidates = [];
 		foreach ( $orders as $order ) {
 			if ( ! $order instanceof \WC_Order ) {
 				continue;
 			}
+			$order_total = (int) round( (float) $order->get_total() );
+			if ( $order_total === $payment_amount ) {
+				$candidates[] = $order;
+			}
+		}
 
+		if ( empty( $candidates ) ) {
+			self::record_unmatched_mutation( $payment_amount, $description );
+			return null;
+		}
+
+		// If multiple orders happen to share the exact same amount, disambiguate safely
+		if ( count( $candidates ) > 1 ) {
+			$bca_gateways = [ 'bacs', 'bca', 'bank_transfer', 'manual_bca' ];
+			$bacs_only    = array_values( array_filter( $candidates, function( \WC_Order $o ) use ( $bca_gateways ) {
+				return in_array( strtolower( (string) $o->get_payment_method() ), $bca_gateways, true );
+			} ) );
+
+			if ( count( $bacs_only ) === 1 ) {
+				$candidates = $bacs_only;
+			} else {
+				$pool = ! empty( $bacs_only ) ? $bacs_only : $candidates;
+				$desc_upper = strtoupper( $description );
+				$matched_by_desc = [];
+
+				foreach ( $pool as $cand ) {
+					$oid   = (string) $cand->get_id();
+					$fname = strtoupper( trim( (string) $cand->get_billing_first_name() ) );
+					$lname = strtoupper( trim( (string) $cand->get_billing_last_name() ) );
+
+					if (
+						( $oid !== '' && strpos( $desc_upper, $oid ) !== false )
+						|| ( strlen( $fname ) >= 3 && strpos( $desc_upper, $fname ) !== false )
+						|| ( strlen( $lname ) >= 3 && strpos( $desc_upper, $lname ) !== false )
+					) {
+						$matched_by_desc[] = $cand;
+					}
+				}
+
+				if ( count( $matched_by_desc ) === 1 ) {
+					$candidates = $matched_by_desc;
+				} else {
+					// Refuse to blindly confirm when multiple orders share the exact same amount and cannot be disambiguated
+					$conflict_ids = array_map( function( \WC_Order $o ) { return '#' . $o->get_id(); }, $pool );
+					self::record_unmatched_mutation(
+						$payment_amount,
+						sprintf( '[AMBIGUOUS AMOUNT CONFLICT: %s] %s', implode( ', ', $conflict_ids ), $description )
+					);
+					return null;
+				}
+			}
+		}
+
+		foreach ( $candidates as $order ) {
 			$order_id = $order->get_id();
 
 			// Atomic order lock
@@ -350,7 +418,7 @@ class Exacoat_BCA_Payment_Webhook {
 					}
 				}
 
-				// Match by exact integer total
+				// Double-check integer total inside lock
 				$order_total = (int) round( (float) $order->get_total() );
 
 				if ( $order_total === $payment_amount ) {
@@ -373,6 +441,7 @@ class Exacoat_BCA_Payment_Webhook {
 					$order->add_order_note( $note_content, false );
 					$order->save();
 
+					delete_transient( 'exa_pending_order_totals' );
 					self::unlock_order( $order_id );
 
 					// Log success
@@ -451,7 +520,39 @@ class Exacoat_BCA_Payment_Webhook {
 	}
 
 	/**
-	 * Add Unique Payment Code (Kode Unik) Fee to WooCommerce Cart
+	 * Check whether a fee name represents the Unique Payment Code
+	 */
+	public static function is_unique_code_fee_name( string $name ): bool {
+		$lower = strtolower( trim( $name ) );
+		return strpos( $lower, 'unique payment code' ) !== false
+			|| strpos( $lower, 'kode unik' ) !== false
+			|| $lower === 'unique code';
+	}
+
+	/**
+	 * Compute cart base total prior to adding Unique Payment Code
+	 */
+	public static function get_cart_base_total(): int {
+		if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
+			return 0;
+		}
+
+		$cart_contents_total = (float) WC()->cart->get_cart_contents_total();
+		$shipping_total      = (float) WC()->cart->get_shipping_total();
+		$other_fees_total    = 0.0;
+
+		foreach ( WC()->cart->get_fees() as $fee ) {
+			$fee_name = (string) ( $fee->name ?? '' );
+			if ( ! self::is_unique_code_fee_name( $fee_name ) ) {
+				$other_fees_total += (float) ( $fee->amount ?? 0 );
+			}
+		}
+
+		return (int) round( $cart_contents_total + $shipping_total + $other_fees_total );
+	}
+
+	/**
+	 * Add Unique Payment Code Fee (Rp 1 - Rp 100) to WooCommerce Cart
 	 */
 	public static function add_unique_payment_code_fee() {
 		// Only run on frontend, Store API, or AJAX checkout
@@ -493,50 +594,60 @@ class Exacoat_BCA_Payment_Webhook {
 			return;
 		}
 
-		// Retrieve or generate unique code (1-499)
+		$base_total      = self::get_cart_base_total();
+		$existing_totals = self::get_active_pending_totals();
+
+		// Retrieve or regenerate unique code (strictly 1-100 and collision-free against active orders)
 		$unique_code = (int) WC()->session->get( 'bca_unique_payment_code' );
-		if ( ! $unique_code || $unique_code < 1 || $unique_code > 999 ) {
-			$unique_code = self::generate_unique_code();
+		if (
+			! $unique_code
+			|| $unique_code < self::MIN_UNIQUE_CODE
+			|| $unique_code > self::MAX_UNIQUE_CODE
+			|| ( $base_total > 0 && in_array( $base_total + $unique_code, $existing_totals, true ) )
+		) {
+			$unique_code = self::generate_unique_code( $base_total, $existing_totals );
 			WC()->session->set( 'bca_unique_payment_code', $unique_code );
-			WC()->session->set( 'random_fee', $unique_code ); // Support legacy snippet
+			WC()->session->set( 'random_fee', $unique_code );
 		}
 
 		// Add non-taxable fee to cart
-		WC()->cart->add_fee( __( 'Kode Unik Pembayaran', 'exacoat-core' ), $unique_code, false );
+		WC()->cart->add_fee( __( 'Unique Payment Code', 'exacoat-core' ), $unique_code, false );
 	}
 
 	/**
-	 * Generate a collision-free unique code comparing against active pending orders
+	 * Generate a collision-free unique code (1-100) comparing against all active pending/on-hold orders
 	 */
-	public static function generate_unique_code(): int {
-		$min = 1;
-		$max = 499;
-
-		$subtotal = 0;
-		if ( function_exists( 'WC' ) && WC()->cart ) {
-			$subtotal = (int) round( (float) WC()->cart->get_subtotal() );
+	public static function generate_unique_code( ?int $base_total = null, ?array $existing_totals = null ): int {
+		if ( null === $base_total ) {
+			$base_total = self::get_cart_base_total();
 		}
 
-		$existing_totals = self::get_active_pending_totals();
+		if ( null === $existing_totals ) {
+			$existing_totals = self::get_active_pending_totals();
+		}
 
-		// Try up to 10 random numbers to ensure collision freedom
-		for ( $i = 0; $i < 10; $i++ ) {
-			$candidate = wp_rand( $min, $max );
-			if ( ! in_array( $subtotal + $candidate, $existing_totals, true ) ) {
-				return $candidate;
+		// Test all 100 shuffled values (1..100) so any non-overlapping code is guaranteed to be found
+		$candidates = range( self::MIN_UNIQUE_CODE, self::MAX_UNIQUE_CODE );
+		shuffle( $candidates );
+
+		foreach ( $candidates as $candidate ) {
+			if ( ! in_array( $base_total + $candidate, $existing_totals, true ) ) {
+				return (int) $candidate;
 			}
 		}
 
-		return wp_rand( $min, $max );
+		return wp_rand( self::MIN_UNIQUE_CODE, self::MAX_UNIQUE_CODE );
 	}
 
 	/**
-	 * Get list of integer totals for pending/on-hold orders in the last 48 hours (cached)
+	 * Get list of integer totals for pending/on-hold orders in the last 5 days
 	 */
-	private static function get_active_pending_totals(): array {
-		$cached = get_transient( 'exa_pending_order_totals' );
-		if ( is_array( $cached ) ) {
-			return $cached;
+	public static function get_active_pending_totals( int $exclude_order_id = 0, bool $force_refresh = false ): array {
+		if ( ! $force_refresh && 0 === $exclude_order_id ) {
+			$cached = get_transient( 'exa_pending_order_totals' );
+			if ( is_array( $cached ) ) {
+				return $cached;
+			}
 		}
 
 		if ( ! function_exists( 'wc_get_orders' ) ) {
@@ -545,20 +656,28 @@ class Exacoat_BCA_Payment_Webhook {
 
 		$orders = wc_get_orders( [
 			'status'       => [ 'pending', 'on-hold' ],
-			'limit'        => 50,
-			'date_created' => '>' . ( time() - ( 2 * DAY_IN_SECONDS ) ),
+			'limit'        => -1,
+			'date_created' => '>' . ( time() - ( self::ACTIVE_WINDOW_DAYS * DAY_IN_SECONDS ) ),
 			'return'       => 'ids',
 		] );
 
 		$totals = [];
 		foreach ( $orders as $order_id ) {
+			if ( $exclude_order_id > 0 && (int) $order_id === $exclude_order_id ) {
+				continue;
+			}
 			$order = wc_get_order( $order_id );
 			if ( $order ) {
 				$totals[] = (int) round( (float) $order->get_total() );
 			}
 		}
 
-		set_transient( 'exa_pending_order_totals', $totals, 30 ); // 30s cache
+		$totals = array_values( array_unique( $totals ) );
+
+		if ( 0 === $exclude_order_id ) {
+			set_transient( 'exa_pending_order_totals', $totals, 15 );
+		}
+
 		return $totals;
 	}
 
@@ -579,9 +698,81 @@ class Exacoat_BCA_Payment_Webhook {
 	}
 
 	/**
+	 * Wrapper for classic checkout hook that passes order ID
+	 */
+	public static function ensure_order_unique_total_by_id( $order_id ) {
+		if ( ! $order_id || ! function_exists( 'wc_get_order' ) ) {
+			return;
+		}
+		$order = wc_get_order( $order_id );
+		if ( $order instanceof \WC_Order ) {
+			self::ensure_order_unique_total( $order );
+		}
+	}
+
+	/**
+	 * Ensure newly created order has a strictly non-overlapping total and 1..100 Unique Payment Code
+	 */
+	public static function ensure_order_unique_total( $order ) {
+		if ( ! $order instanceof \WC_Order ) {
+			return;
+		}
+
+		delete_transient( 'exa_pending_order_totals' );
+
+		$fee_item_target = null;
+		$current_code    = 0;
+
+		foreach ( $order->get_items( 'fee' ) as $item_id => $fee_item ) {
+			$fee_name = (string) $fee_item->get_name();
+			if ( self::is_unique_code_fee_name( $fee_name ) ) {
+				$fee_item_target = $fee_item;
+				$current_code    = (int) round( (float) $fee_item->get_total() );
+				break;
+			}
+		}
+
+		if ( ! $fee_item_target ) {
+			return;
+		}
+
+		$existing_totals = self::get_active_pending_totals( $order->get_id(), true );
+		$order_total     = (int) round( (float) $order->get_total() );
+		$base_total      = $order_total - $current_code;
+
+		$needs_update = false;
+		$new_code     = $current_code;
+
+		if (
+			$current_code < self::MIN_UNIQUE_CODE
+			|| $current_code > self::MAX_UNIQUE_CODE
+			|| in_array( $order_total, $existing_totals, true )
+		) {
+			$new_code     = self::generate_unique_code( $base_total, $existing_totals );
+			$needs_update = true;
+		}
+
+		if ( $fee_item_target->get_name() !== 'Unique Payment Code' ) {
+			$fee_item_target->set_name( 'Unique Payment Code' );
+			$needs_update = true;
+		}
+
+		if ( $needs_update ) {
+			$fee_item_target->set_amount( (string) $new_code );
+			$fee_item_target->set_total( (string) $new_code );
+			$fee_item_target->save();
+			$order->update_meta_data( '_bca_unique_code', $new_code );
+			$order->calculate_totals( false );
+			$order->save();
+			delete_transient( 'exa_pending_order_totals' );
+		}
+	}
+
+	/**
 	 * Clear session unique code after successful checkout
 	 */
 	public static function clear_session_unique_code() {
+		delete_transient( 'exa_pending_order_totals' );
 		if ( function_exists( 'WC' ) && WC()->session ) {
 			WC()->session->__unset( 'bca_unique_payment_code' );
 			WC()->session->__unset( 'random_fee' );
@@ -598,7 +789,7 @@ class Exacoat_BCA_Payment_Webhook {
 
 		$code = $order->get_meta( '_bca_unique_code' );
 		if ( $code ) {
-			echo '<p class="form-field form-field-wide"><strong>' . esc_html__( 'Kode Unik BCA:', 'exacoat-core' ) . '</strong> Rp ' . esc_html( number_format( (int) $code, 0, ',', '.' ) ) . '</p>';
+			echo '<p class="form-field form-field-wide"><strong>' . esc_html__( 'Unique Payment Code (BCA):', 'exacoat-core' ) . '</strong> Rp ' . esc_html( number_format( (int) $code, 0, ',', '.' ) ) . '</p>';
 		}
 
 		$mutation = $order->get_meta( '_bca_mutation_desc' );

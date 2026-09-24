@@ -521,7 +521,8 @@ class Exacoat_Customer_Auth {
 				'name'  => $fee_name,
 				'total' => $fee_total,
 			];
-			if ( stripos( $fee_name, 'Kode Unik' ) !== false ) {
+			if ( stripos( $fee_name, 'Kode Unik' ) !== false || stripos( $fee_name, 'Unique Payment Code' ) !== false || strtolower( trim( $fee_name ) ) === 'unique code' ) {
+				$fee_lines[ count( $fee_lines ) - 1 ]['name'] = 'Unique Payment Code';
 				$unique_code = (int) round( $fee_total );
 			}
 		}

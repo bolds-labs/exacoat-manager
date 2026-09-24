@@ -1645,7 +1645,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
               return (
                 <div className="flex items-center justify-between text-neutral-400">
                   <span className="text-amber-400 text-xs flex items-center gap-1">
-                    Kode Unik Pembayaran (BCA)
+                    Unique Payment Code
                   </span>
                   <span className="font-mono text-amber-400 font-semibold">
                     +{formatCurrency(Number(bcaCode), order.currency)}
