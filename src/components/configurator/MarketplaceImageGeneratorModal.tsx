@@ -5,7 +5,9 @@ import type { GlobalFinish } from '../../lib/wordpressBridge';
 import {
   MarketplaceFeatureCard,
   MarketplaceImageConfig,
+  DEFAULT_FEATURE_CARDS_OFFICIAL,
   DEFAULT_FEATURE_CARDS_VINYL,
+  DEFAULT_FEATURE_CARDS_FIT,
   DEFAULT_FEATURE_CARDS_CLEAR,
   renderMarketplaceImageToCanvas,
   generateMarketplaceImageBlob,
@@ -62,18 +64,21 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [isRenderingPreview, setIsRenderingPreview] = useState(false);
   const [isDownloadingSingle, setIsDownloadingSingle] = useState(false);
 
-  // Template State
-  const [deviceNameText, setDeviceNameText] = useState<string>('');
-  const [subBadgeText, setSubBadgeText] = useState<string>('x2 pcs');
+  // Template State (Layout & Copy)
+  const [deviceNameText, setDeviceNameText] = useState<string>('ALL DEVICES');
+  const [showSubBadge, setShowSubBadge] = useState<boolean>(true);
+  const [subBadgeText, setSubBadgeText] = useState<string>('Model Cut & 360');
+  const [autoHeadlineWithFinish, setAutoHeadlineWithFinish] = useState<boolean>(true);
   const [headlineText, setHeadlineText] = useState<string>('Ark\nInvisible\nSkin');
   const [headlineFont, setHeadlineFont] = useState<'Chakra Petch' | 'Plus Jakarta Sans' | 'Inter'>('Chakra Petch');
-  const [featureCards, setFeatureCards] = useState<MarketplaceFeatureCard[]>(DEFAULT_FEATURE_CARDS_VINYL);
+  const [featureCards, setFeatureCards] = useState<MarketplaceFeatureCard[]>(DEFAULT_FEATURE_CARDS_OFFICIAL);
 
   // Background State
   const [bgType, setBgType] = useState<'studio_light' | 'custom'>('studio_light');
   const [customBgUrl, setCustomBgUrl] = useState<string>('');
 
   // Device & Swatches State
+  const [activeColorId, setActiveColorId] = useState<string>('');
   const [coverage, setCoverage] = useState<'model_360' | 'model_cut'>('model_360');
   const [logoCutout, setLogoCutout] = useState<boolean>(true);
   const [pencilCutout, setPencilCutout] = useState<boolean>(true);
@@ -83,7 +88,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [deviceOffsetY, setDeviceOffsetY] = useState<number>(0);
 
   // 20+ Skins Swatches
-  const [showSkinsStack, setShowSkinsStack] = useState<boolean>(true);
+  const [showSkinsStack, setShowSkinsStack] = useState<boolean>(false);
   const [skinsCountText, setSkinsCountText] = useState<string>('20+');
   const [skinsLabelText, setSkinsLabelText] = useState<string>('SKINS');
   const [swatchFinishSlugs, setSwatchFinishSlugs] = useState<string[]>(['black-camo', 'forged-carbon']);
@@ -97,27 +102,53 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   useEffect(() => {
     if (!profile) return;
 
-    setDeviceNameText(profile.device_name.toUpperCase());
+    // Top-right pill defaults to 'ALL DEVICES' matching Image 2
+    setDeviceNameText('ALL DEVICES');
+
+    // Default view
     const defaultView = profile.views.find((v) => v.is_default) || profile.views[0];
     if (defaultView) {
       setSelectedViewId(defaultView.id);
     }
 
-    const hasClearSkin = profile.category?.toLowerCase().includes('ark') || profile.device_slug?.toLowerCase().includes('ark');
-    if (hasClearSkin) {
-      setHeadlineText('Ark\nInvisible\nSkin');
+    // Default color
+    if (profile.device_colors && profile.device_colors.length > 0) {
+      setActiveColorId(profile.device_colors[0].id);
+    }
+
+    // Sub-badge detection: if profile has model cut or model_cut_and_360, default to 'Model Cut & 360'
+    const cov = profile.coverage_and_cutouts?.coverage_type;
+    const hasModelCut = profile.coverage_and_cutouts?.has_model_cut;
+    const isArk = profile.category?.toLowerCase().includes('ark') || profile.device_slug?.toLowerCase().includes('ark');
+
+    if (isArk) {
       setSubBadgeText('x2 pcs');
+      setHeadlineText('Ark\nInvisible\nSkin');
+      setAutoHeadlineWithFinish(false);
       setFeatureCards(DEFAULT_FEATURE_CARDS_CLEAR);
     } else {
-      setHeadlineText('Ultra\nPrecision\nSkin');
-      setSubBadgeText('#1 Skin di Indonesia');
-      setFeatureCards(DEFAULT_FEATURE_CARDS_VINYL);
+      if (cov === 'model_cut_and_360' || hasModelCut) {
+        setSubBadgeText('Model Cut & 360');
+      } else if (cov === 'model_cut_only') {
+        setSubBadgeText('Model Cut');
+      } else {
+        setSubBadgeText('Model Cut & 360');
+      }
+      setAutoHeadlineWithFinish(true);
+      setFeatureCards(DEFAULT_FEATURE_CARDS_OFFICIAL);
     }
+
+    setShowSubBadge(true);
 
     const defaultCoverage = profile.coverage_and_cutouts?.has_model_cut ? 'model_cut' : 'model_360';
     setCoverage(defaultCoverage);
     setLogoCutout(profile.coverage_and_cutouts?.has_logo_cutout ?? true);
     setPencilCutout(Boolean(profile.coverage_and_cutouts?.has_pencil_cutout));
+
+    // Reset device hero shot offsets
+    setDeviceScale(1.0);
+    setDeviceOffsetX(0);
+    setDeviceOffsetY(0);
 
     // Load custom background from storage if previously saved
     try {
@@ -181,13 +212,17 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
       profile,
       activeFinish: currentPreviewFinish,
       allFinishes: finishes,
+      activeColorId,
       bgType,
       customBgUrl,
       showLogo: true,
       deviceNameText,
-      subBadgeText,
-      headlineText,
+      subBadgeText: showSubBadge ? subBadgeText : '',
+      headlineText: autoHeadlineWithFinish
+        ? `${currentPreviewFinish.name}\nSkins`
+        : headlineText,
       headlineFont,
+      autoHeadlineWithFinish,
       featureCards,
       showSkinsStack,
       skinsCountText,
@@ -222,10 +257,13 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     profile,
     currentPreviewFinish,
     finishes,
+    activeColorId,
     bgType,
     customBgUrl,
     deviceNameText,
+    showSubBadge,
     subBadgeText,
+    autoHeadlineWithFinish,
     headlineText,
     headlineFont,
     featureCards,
@@ -251,13 +289,17 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
         profile,
         activeFinish: currentPreviewFinish,
         allFinishes: finishes,
+        activeColorId,
         bgType,
         customBgUrl,
         showLogo: true,
         deviceNameText,
-        subBadgeText,
-        headlineText,
+        subBadgeText: showSubBadge ? subBadgeText : '',
+        headlineText: autoHeadlineWithFinish
+          ? `${currentPreviewFinish.name}\nSkins`
+          : headlineText,
         headlineFont,
+        autoHeadlineWithFinish,
         featureCards,
         showSkinsStack,
         skinsCountText,
@@ -310,13 +352,17 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
         profile,
         activeFinish: targetFinishes[0],
         allFinishes: finishes,
+        activeColorId,
         bgType,
         customBgUrl,
         showLogo: true,
         deviceNameText,
-        subBadgeText,
-        headlineText,
+        subBadgeText: showSubBadge ? subBadgeText : '',
+        headlineText: autoHeadlineWithFinish
+          ? `${targetFinishes[0].name}\nSkins`
+          : headlineText,
         headlineFont,
+        autoHeadlineWithFinish,
         featureCards,
         showSkinsStack,
         skinsCountText,
@@ -392,12 +438,12 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   // Select top popular finishes
   const handleSelectPopularFinishes = () => {
     const popularSlugs = [
+      'woven',
       'swarm',
       'black-camo',
       'forged-carbon',
       'carbon-fiber-black',
       'slate',
-      'woven',
       'matte-black',
       'leather-black',
       'titanium-black',
@@ -647,29 +693,94 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
             <div className="space-y-4 overflow-y-auto max-h-[500px] pr-1 scrollbar-thin">
               {/* Device Model Top-Right Pill */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
-                  Device Name Badge (Top Right)
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                    Device Name Badge (Top Right)
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setDeviceNameText('ALL DEVICES')}
+                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300"
+                    >
+                      ALL DEVICES
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeviceNameText(profile.device_name.toUpperCase())}
+                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300 truncate max-w-[120px]"
+                      title={profile.device_name.toUpperCase()}
+                    >
+                      {profile.device_name.toUpperCase()}
+                    </button>
+                  </div>
+                </div>
                 <input
                   type="text"
                   value={deviceNameText}
                   onChange={(e) => setDeviceNameText(e.target.value)}
-                  placeholder="e.g. IPHONE 17 PRO / MAX"
+                  placeholder="e.g. ALL DEVICES or IPHONE 17 PRO"
                   className="w-full px-3 py-2 rounded-lg text-xs font-bold bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
                 />
               </div>
 
               {/* Sub-badge Text */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
-                  Sub-Badge Tag (Above Headline)
-                </label>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                      Sub-Badge Tag (Above Headline)
+                    </label>
+                    <label className="flex items-center gap-1 text-[11px] text-zinc-500 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={showSubBadge}
+                        onChange={(e) => setShowSubBadge(e.target.checked)}
+                        className="rounded text-[#f3aa18] focus:ring-[#f3aa18] scale-90"
+                      />
+                      Show
+                    </label>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSubBadge(true);
+                        setSubBadgeText('Model Cut & 360');
+                      }}
+                      className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300"
+                    >
+                      Model Cut & 360
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSubBadge(true);
+                        setSubBadgeText('Model Cut');
+                      }}
+                      className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300"
+                    >
+                      Model Cut
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSubBadge(true);
+                        setSubBadgeText('x2 pcs');
+                      }}
+                      className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300"
+                    >
+                      x2 pcs
+                    </button>
+                  </div>
+                </div>
                 <input
                   type="text"
                   value={subBadgeText}
                   onChange={(e) => setSubBadgeText(e.target.value)}
-                  placeholder="e.g. x2 pcs or #1 Skin di Indonesia (leave blank to hide)"
-                  className="w-full px-3 py-2 rounded-lg text-xs font-medium bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
+                  disabled={!showSubBadge}
+                  placeholder="e.g. Model Cut & 360, Model Cut, or x2 pcs"
+                  className="w-full px-3 py-2 rounded-lg text-xs font-semibold bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-[#f3aa18] disabled:opacity-40"
                 />
               </div>
 
@@ -686,19 +797,61 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                       onChange={(e) => setHeadlineFont(e.target.value as any)}
                       className="px-2 py-0.5 rounded text-[11px] font-bold bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200"
                     >
-                      <option value="Chakra Petch">Chakra Petch (Technical)</option>
+                      <option value="Chakra Petch">Chakra Petch (Image 2)</option>
                       <option value="Plus Jakarta Sans">Plus Jakarta (Modern)</option>
                       <option value="Inter">Inter (Clean)</option>
                     </select>
                   </div>
                 </div>
-                <textarea
-                  rows={3}
-                  value={headlineText}
-                  onChange={(e) => setHeadlineText(e.target.value)}
-                  placeholder="Enter multi-line headline (one per line)"
-                  className="w-full px-3 py-2 rounded-lg text-xs font-bold bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
-                />
+
+                <div className="flex items-center gap-2 pb-1">
+                  <button
+                    type="button"
+                    onClick={() => setAutoHeadlineWithFinish(true)}
+                    className={clsx(
+                      'px-2.5 py-1 rounded-lg text-xs font-bold border transition flex items-center gap-1',
+                      autoHeadlineWithFinish
+                        ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                        : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400'
+                    )}
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Auto ({currentPreviewFinish.name} Skins)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAutoHeadlineWithFinish(false)}
+                    className={clsx(
+                      'px-2.5 py-1 rounded-lg text-xs font-bold border transition',
+                      !autoHeadlineWithFinish
+                        ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                        : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400'
+                    )}
+                  >
+                    Custom Text
+                  </button>
+                </div>
+
+                {autoHeadlineWithFinish ? (
+                  <div className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-xs space-y-1">
+                    <div className="font-bold text-zinc-900 dark:text-zinc-100 font-mono">
+                      {currentPreviewFinish.name}
+                      <br />
+                      Skins
+                    </div>
+                    <p className="text-[11px] text-zinc-500">
+                      Matches Image 2 format. During batch generation, each skin exports with its own finish name automatically.
+                    </p>
+                  </div>
+                ) : (
+                  <textarea
+                    rows={3}
+                    value={headlineText}
+                    onChange={(e) => setHeadlineText(e.target.value)}
+                    placeholder="Enter multi-line headline (one per line)"
+                    className="w-full px-3 py-2 rounded-lg text-xs font-bold bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
+                  />
+                )}
               </div>
 
               {/* Bottom Feature Cards (3 Horizontal Cards) */}
@@ -709,16 +862,22 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                   </label>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => setFeatureCards(DEFAULT_FEATURE_CARDS_VINYL)}
+                      onClick={() => setFeatureCards(DEFAULT_FEATURE_CARDS_OFFICIAL)}
+                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#f3aa18]/20 text-[#f3aa18] hover:bg-[#f3aa18]/30"
+                    >
+                      Image 2 Official
+                    </button>
+                    <button
+                      onClick={() => setFeatureCards(DEFAULT_FEATURE_CARDS_FIT)}
                       className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300"
                     >
-                      3M Vinyl Preset
+                      Accurate Fit
                     </button>
                     <button
                       onClick={() => setFeatureCards(DEFAULT_FEATURE_CARDS_CLEAR)}
                       className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300"
                     >
-                      Ark Clear Preset
+                      Ark Clear
                     </button>
                   </div>
                 </div>
@@ -740,9 +899,10 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                         }}
                         className="px-1.5 py-0.5 rounded text-[10px] bg-zinc-100 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border-none"
                       >
-                        <option value="material">3M Layers Icon</option>
+                        <option value="shield">Shield Check (Image 2 Card 1)</option>
+                        <option value="material">Star / Rosette (Image 2 Card 2)</option>
+                        <option value="guarantee">Guarantee Shield (Image 2 Card 3)</option>
                         <option value="fit">Accurate Fit Target</option>
-                        <option value="guarantee">Guarantee Shield</option>
                         <option value="scratch">Scratch Proof Key</option>
                       </select>
                     </div>
@@ -801,6 +961,36 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                         )}
                       >
                         {v.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Hardware Color Selector (if available) */}
+              {profile.device_colors && profile.device_colors.length > 1 && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                    Hardware Base Color
+                  </label>
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                    {profile.device_colors.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setActiveColorId(c.id)}
+                        className={clsx(
+                          'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition shrink-0',
+                          activeColorId === c.id
+                            ? 'bg-[#f3aa18]/15 border-[#f3aa18] text-[#f3aa18]'
+                            : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300'
+                        )}
+                      >
+                        <span
+                          className="w-3.5 h-3.5 rounded-full border border-black/20"
+                          style={{ backgroundColor: c.hex || '#555' }}
+                        />
+                        <span>{c.name}</span>
                       </button>
                     ))}
                   </div>
@@ -866,16 +1056,30 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                   <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
                     Device Placement & Zoom
                   </span>
-                  <button
-                    onClick={() => {
-                      setDeviceScale(1.0);
-                      setDeviceOffsetX(0);
-                      setDeviceOffsetY(0);
-                    }}
-                    className="text-[11px] text-[#f3aa18] hover:underline"
-                  >
-                    Reset
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeviceScale(1.0);
+                        setDeviceOffsetX(0);
+                        setDeviceOffsetY(0);
+                      }}
+                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#f3aa18]/20 text-[#f3aa18] hover:bg-[#f3aa18]/30"
+                    >
+                      Hero Shot (Image 2)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeviceScale(0.65);
+                        setDeviceOffsetX(150);
+                        setDeviceOffsetY(-80);
+                      }}
+                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300"
+                    >
+                      Centered Full
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-1">
@@ -885,8 +1089,8 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                   </div>
                   <input
                     type="range"
-                    min="0.75"
-                    max="1.45"
+                    min="0.5"
+                    max="2.2"
                     step="0.02"
                     value={deviceScale}
                     onChange={(e) => setDeviceScale(parseFloat(e.target.value))}
@@ -902,8 +1106,8 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                     </div>
                     <input
                       type="range"
-                      min="-250"
-                      max="250"
+                      min="-400"
+                      max="400"
                       step="5"
                       value={deviceOffsetX}
                       onChange={(e) => setDeviceOffsetX(parseInt(e.target.value, 10))}
@@ -918,8 +1122,8 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                     </div>
                     <input
                       type="range"
-                      min="-200"
-                      max="200"
+                      min="-400"
+                      max="400"
                       step="5"
                       value={deviceOffsetY}
                       onChange={(e) => setDeviceOffsetY(parseInt(e.target.value, 10))}
@@ -932,8 +1136,13 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
               {/* 20+ Skins Swatches Stack Controls */}
               <div className="p-3 rounded-xl bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
-                    20+ Skins Selection Stack
+                  <div>
+                    <div className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                      20+ Skins Selection Stack
+                    </div>
+                    <div className="text-[11px] text-zinc-500">
+                      Optional right-edge swatch column
+                    </div>
                   </div>
                   <input
                     type="checkbox"
@@ -1023,7 +1232,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                       Exacoat Monogram Light
                     </div>
                     <div className="text-[11px] text-zinc-500">
-                      Clean studio lighting with subtle brand pattern
+                      Clean studio lighting with subtle brand pattern (Image 2)
                     </div>
                   </button>
 
