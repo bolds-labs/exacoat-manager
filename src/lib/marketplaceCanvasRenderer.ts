@@ -7,7 +7,8 @@ export interface MarketplaceFeatureCard {
   id: string;
   title: string;
   subtitle: string;
-  iconType: 'material' | 'fit' | 'guarantee' | 'scratch' | 'matte' | 'shield';
+  iconType: 'material' | 'fit' | 'guarantee' | 'scratch' | 'matte' | 'shield' | 'texture';
+  imageUrl?: string;
 }
 
 export interface MarketplaceImageConfig {
@@ -75,6 +76,28 @@ export const DEFAULT_FEATURE_CARDS_OFFICIAL: MarketplaceFeatureCard[] = [
 
 export const DEFAULT_FEATURE_CARDS_VINYL: MarketplaceFeatureCard[] = DEFAULT_FEATURE_CARDS_OFFICIAL;
 
+export const DEFAULT_FEATURE_CARDS_TEXTURE: MarketplaceFeatureCard[] = [
+  {
+    id: 'card_1',
+    title: '100% Original',
+    subtitle: 'Exacoat Official Store',
+    iconType: 'shield',
+  },
+  {
+    id: 'card_2',
+    title: '3M Material',
+    subtitle: 'From USA, Japan, Italy',
+    iconType: 'material',
+  },
+  {
+    id: 'card_3',
+    title: 'Textured Surface',
+    subtitle: '',
+    iconType: 'texture',
+    imageUrl: 'https://exacoat.com/wp-content/uploads/Textured-Skins-Product-Info.jpg',
+  },
+];
+
 export const DEFAULT_FEATURE_CARDS_FIT: MarketplaceFeatureCard[] = [
   {
     id: 'card_1',
@@ -118,6 +141,30 @@ export const DEFAULT_FEATURE_CARDS_CLEAR: MarketplaceFeatureCard[] = [
 ];
 
 /**
+ * Formats a finish name into a clean editorial headline without the "Skins" suffix.
+ * Multi-word finishes wrap onto separate lines so they never collide with the phone.
+ */
+export function formatFinishHeadline(name: string): string {
+  if (!name) return '';
+  const cleaned = name.trim();
+  const words = cleaned.split(/\s+/);
+  if (words.length <= 1) return cleaned;
+  if (words.length === 2) return words.join('\n');
+  const lines: string[] = [];
+  let current = words[0];
+  for (let i = 1; i < words.length; i++) {
+    if ((current + ' ' + words[i]).length <= 12) {
+      current += ' ' + words[i];
+    } else {
+      lines.push(current);
+      current = words[i];
+    }
+  }
+  lines.push(current);
+  return lines.join('\n');
+}
+
+/**
  * Draws rounded rectangle path on canvas
  */
 function pathRoundedRect(
@@ -142,30 +189,46 @@ function pathRoundedRect(
 }
 
 /**
- * Renders the subtle geometric Exacoat monogram studio background
+ * Renders the subtle geometric Exacoat monogram studio background with rich lighting gradient
  */
 function drawStudioLightBackground(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number
 ) {
-  // 1. Base subtle studio gradient
+  // 1. Base studio background gradient: clean soft light from top-center falling off to smooth studio neutral silver-grey
   const bgGrad = ctx.createRadialGradient(
-    width * 0.45,
-    height * 0.45,
-    120,
+    width * 0.48,
+    height * 0.42,
+    80,
     width * 0.5,
     height * 0.5,
-    width * 0.9
+    width * 0.95
   );
   bgGrad.addColorStop(0, '#ffffff');
-  bgGrad.addColorStop(0.55, '#f8f9fa');
-  bgGrad.addColorStop(1, '#e9ecef');
+  bgGrad.addColorStop(0.35, '#f8f9fb');
+  bgGrad.addColorStop(0.70, '#eceef2');
+  bgGrad.addColorStop(1, '#dfe3e8');
 
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, width, height);
 
-  // 2. Geometric brand monogram pattern
+  // 2. Secondary soft diagonal studio spotlight beam behind the phone
+  const spotGrad = ctx.createRadialGradient(
+    width * 0.72,
+    height * 0.48,
+    40,
+    width * 0.72,
+    height * 0.48,
+    width * 0.55
+  );
+  spotGrad.addColorStop(0, 'rgba(255, 255, 255, 0.75)');
+  spotGrad.addColorStop(0.45, 'rgba(255, 255, 255, 0.28)');
+  spotGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = spotGrad;
+  ctx.fillRect(0, 0, width, height);
+
+  // 3. Geometric brand monogram pattern
   const patternCanvas = document.createElement('canvas');
   patternCanvas.width = 160;
   patternCanvas.height = 160;
@@ -174,7 +237,7 @@ function drawStudioLightBackground(
   if (pCtx) {
     pCtx.save();
     pCtx.translate(80, 80);
-    pCtx.fillStyle = 'rgba(15, 23, 42, 0.024)';
+    pCtx.fillStyle = 'rgba(15, 23, 42, 0.038)';
 
     // Draw 3-wing clover monogram
     for (let i = 0; i < 3; i++) {
@@ -206,17 +269,17 @@ function drawStudioLightBackground(
     }
   }
 
-  // 3. Soft vignette around borders
+  // 4. Soft vignette around borders
   const vignette = ctx.createRadialGradient(
     width * 0.5,
     height * 0.5,
-    width * 0.45,
+    width * 0.42,
     width * 0.5,
     height * 0.5,
-    width * 0.78
+    width * 0.80
   );
   vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
-  vignette.addColorStop(1, 'rgba(0, 0, 0, 0.035)');
+  vignette.addColorStop(1, 'rgba(0, 0, 0, 0.045)');
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, width, height);
 }
@@ -233,13 +296,29 @@ async function drawLogoPill(
 ) {
   ctx.save();
 
-  // Pill container
+  // Subtle drop shadow
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.16)';
+  ctx.shadowBlur = 24;
+  ctx.shadowOffsetY = 8;
+
+  // Pill container with rich dark gradient
   pathRoundedRect(ctx, x, y, w, h, 40);
-  ctx.fillStyle = '#18181b';
+  const pillGrad = ctx.createLinearGradient(x, y, x, y + h);
+  pillGrad.addColorStop(0, '#2e2e34');
+  pillGrad.addColorStop(0.35, '#1e1e22');
+  pillGrad.addColorStop(1, '#0e0e11');
+  ctx.fillStyle = pillGrad;
   ctx.fill();
 
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-  ctx.lineWidth = 2;
+  ctx.shadowColor = 'transparent';
+
+  // Inner top highlight stroke
+  const borderGrad = ctx.createLinearGradient(x, y, x, y + h);
+  borderGrad.addColorStop(0, 'rgba(255, 255, 255, 0.28)');
+  borderGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.10)');
+  borderGrad.addColorStop(1, 'rgba(255, 255, 255, 0.03)');
+  ctx.strokeStyle = borderGrad;
+  ctx.lineWidth = 2.5;
   ctx.stroke();
 
   // Load and draw SVG logo
@@ -248,7 +327,7 @@ async function drawLogoPill(
     const logoImg = await loadCorsSafeImageElement('/assets/brand/exacoat-logo.svg');
     if (logoImg && logoImg.width > 0 && logoImg.height > 0) {
       const logoAspect = logoImg.width / logoImg.height;
-      const targetH = 50;
+      const targetH = 68;
       const targetW = targetH * logoAspect;
       const logoX = x + (w - targetW) / 2;
       const logoY = y + (h - targetH) / 2;
@@ -261,11 +340,11 @@ async function drawLogoPill(
 
   // Fallback vector typography
   if (!svgDrawn) {
-    ctx.fillStyle = '#f3aa18';
-    ctx.font = '800 52px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
+    ctx.fillStyle = '#f59e0b';
+    ctx.font = '800 62px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
-    ctx.fillText('exacoat.', x + w / 2, y + h / 2 + 2);
+    ctx.fillText('exacoat.', x + w / 2, y + h / 2 + 3);
   }
 
   ctx.restore();
@@ -319,6 +398,7 @@ function drawDeviceNamePill(
 
 /**
  * Draws the left headline typography and sub-badge (matching Image 2)
+ * Features dynamic bottom-anchoring and white contrast halo for complete legibility on any background
  */
 function drawLeftHeadlineBlock(
   ctx: CanvasRenderingContext2D,
@@ -326,20 +406,61 @@ function drawLeftHeadlineBlock(
   headlineText: string,
   fontFamily: string,
   x: number = 50,
-  startY: number = 720
+  startY?: number
 ) {
   ctx.save();
-  let currentY = startY;
+
+  const lines = headlineText
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const hasSubBadge = Boolean(subBadgeText.trim());
+  const badgeH = 76;
+  const badgeGap = 24;
+
+  let fontSize = 140;
+  let lineHeight = 146;
+
+  if (lines.length > 0) {
+    const maxLineLen = Math.max(...lines.map((l) => l.length));
+    if (maxLineLen > 14) {
+      fontSize = 88;
+      lineHeight = 96;
+    } else if (maxLineLen > 10) {
+      fontSize = 110;
+      lineHeight = 118;
+    } else if (maxLineLen > 6) {
+      fontSize = 126;
+      lineHeight = 132;
+    }
+
+    // Dynamic width constraint: ensure no line exceeds 640px width to prevent colliding with phone
+    ctx.font = `900 ${fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
+    for (const line of lines) {
+      const w = ctx.measureText(line).width;
+      if (w > 640) {
+        const ratio = 640 / w;
+        fontSize = Math.floor(fontSize * ratio);
+        lineHeight = Math.floor(fontSize * 1.05);
+      }
+    }
+  }
+
+  // Anchor block nicely from the bottom so it sits just above the bottom cards (Y=1205)
+  const totalTextH = lines.length * lineHeight;
+  const totalBlockH = (hasSubBadge ? badgeH + badgeGap : 0) + totalTextH;
+  const targetBottomY = 1150;
+  let currentY = startY ?? Math.max(680, targetBottomY - totalBlockH);
 
   // 1. Sub-badge pill (e.g. "Model Cut & 360")
-  if (subBadgeText.trim()) {
+  if (hasSubBadge) {
     ctx.font = '800 34px "Chakra Petch", sans-serif';
     const textMetrics = ctx.measureText(subBadgeText);
     const badgeW = textMetrics.width + 64;
-    const badgeH = 76;
 
     // Subtle shadow
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.05)';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.06)';
     ctx.shadowBlur = 12;
     ctx.shadowOffsetY = 4;
 
@@ -357,34 +478,24 @@ function drawLeftHeadlineBlock(
     ctx.textAlign = 'center';
     ctx.fillText(subBadgeText, x + badgeW / 2, currentY + badgeH / 2 + 1);
 
-    currentY += badgeH + 28;
+    currentY += badgeH + badgeGap;
   }
 
-  // 2. Bold Headline Text (e.g. "Woven\nSkins")
-  const lines = headlineText
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean);
-
+  // 2. Bold Headline Text with clean white contrast halo to guarantee 100% legibility on any background
   if (lines.length > 0) {
-    const maxLineLen = Math.max(...lines.map((l) => l.length));
-    let fontSize = 145;
-    let lineHeight = 152;
-
-    if (maxLineLen > 16) {
-      fontSize = 90;
-      lineHeight = 98;
-    } else if (maxLineLen > 11) {
-      fontSize = 115;
-      lineHeight = 122;
-    }
-
     ctx.font = `900 ${fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
     ctx.fillStyle = '#09090b';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
 
     for (const line of lines) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+      ctx.lineWidth = 6;
+      ctx.lineJoin = 'round';
+      ctx.strokeText(line, x, currentY);
+      ctx.restore();
+
       ctx.fillText(line, x, currentY);
       currentY += lineHeight;
     }
@@ -394,7 +505,7 @@ function drawLeftHeadlineBlock(
 }
 
 /**
- * Draws clean vector feature icons inside cards matching Image 2
+ * Draws clean vector feature icons inside cards matching Image 2 & 3
  */
 function drawCardIcon(
   ctx: CanvasRenderingContext2D,
@@ -474,6 +585,29 @@ function drawCardIcon(
     ctx.moveTo(cx - 4, cy - 10);
     ctx.lineTo(cx - 8, cy - 6);
     ctx.stroke();
+  } else if (iconType === 'texture') {
+    // 3 vertical tactile texture bars matching Image 3
+    const barW = 2.6;
+    ctx.lineWidth = barW;
+    ctx.lineCap = 'round';
+
+    // Center bar
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 8.5);
+    ctx.lineTo(cx, cy + 8.5);
+    ctx.stroke();
+
+    // Left bar
+    ctx.beginPath();
+    ctx.moveTo(cx - 5.5, cy - 5.5);
+    ctx.lineTo(cx - 5.5, cy + 5.5);
+    ctx.stroke();
+
+    // Right bar
+    ctx.beginPath();
+    ctx.moveTo(cx + 5.5, cy - 5.5);
+    ctx.lineTo(cx + 5.5, cy + 5.5);
+    ctx.stroke();
   } else {
     // Checkmark Badge / Guarantee Shield (Card 1 & Card 3 in Image 2)
     ctx.beginPath();
@@ -499,99 +633,164 @@ function drawCardIcon(
 
 /**
  * Draws the 3 bottom feature cards in the foreground with centered frosted glass styling
+ * Supports optional photo banner (macro closeup, e.g. "Textured Surface" in Image 3)
  */
-function drawBottomFeatureCards(
+async function drawBottomFeatureCards(
   ctx: CanvasRenderingContext2D,
   cards: MarketplaceFeatureCard[],
-  startY: number = 1225,
-  cardH: number = 225,
+  startY: number = 1205,
+  cardH: number = 240,
   totalW: number = 1500
 ) {
   if (!cards || cards.length === 0) return;
 
   const numCards = Math.min(3, cards.length);
-  const marginX = 50;
-  const gap = 28;
+  const marginX = 46;
+  const gap = 24;
   const availableW = totalW - marginX * 2 - gap * (numCards - 1);
-  const cardW = availableW / numCards;
+  const cardW = availableW / numCards; // ~454px for 3 cards
 
   ctx.save();
 
-  cards.slice(0, 3).forEach((card, idx) => {
+  for (let idx = 0; idx < numCards; idx++) {
+    const card = cards[idx];
     const x = marginX + idx * (cardW + gap);
     const y = startY;
 
     // 1. Frosted Glass background with soft drop shadow
     ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
-    ctx.shadowBlur = 32;
-    ctx.shadowOffsetY = 12;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.14)';
+    ctx.shadowBlur = 36;
+    ctx.shadowOffsetY = 14;
 
     pathRoundedRect(ctx, x, y, cardW, cardH, 26);
     const glassGrad = ctx.createLinearGradient(x, y, x, y + cardH);
-    glassGrad.addColorStop(0, 'rgba(255, 255, 255, 0.92)');
-    glassGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.85)');
-    glassGrad.addColorStop(1, 'rgba(255, 255, 255, 0.78)');
+    glassGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+    glassGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.90)');
+    glassGrad.addColorStop(1, 'rgba(255, 255, 255, 0.84)');
     ctx.fillStyle = glassGrad;
     ctx.fill();
     ctx.restore();
 
-    // 2. Crisp translucent border (glass inner stroke)
+    // 2. Check if card has a photo banner (Image 3 macro photo style, e.g. "Textured Surface")
+    if (card.imageUrl) {
+      const photoH = Math.round(cardH * 0.58); // ~139px
+      const textH = cardH - photoH; // ~101px
+
+      // Clip top rounded area for photo
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(x + 26, y);
+      ctx.lineTo(x + cardW - 26, y);
+      ctx.quadraticCurveTo(x + cardW, y, x + cardW, y + 26);
+      ctx.lineTo(x + cardW, y + photoH);
+      ctx.lineTo(x, y + photoH);
+      ctx.lineTo(x, y + 26);
+      ctx.quadraticCurveTo(x, y, x + 26, y);
+      ctx.closePath();
+      ctx.clip();
+
+      try {
+        const photoImg = await loadCorsSafeImageElement(card.imageUrl);
+        if (photoImg && photoImg.width > 0 && photoImg.height > 0) {
+          const scale = Math.max(cardW / photoImg.width, photoH / photoImg.height);
+          const dw = photoImg.width * scale;
+          const dh = photoImg.height * scale;
+          const dx = x + (cardW - dw) / 2;
+          const dy = y + (photoH - dh) / 2;
+          ctx.drawImage(photoImg, dx, dy, dw, dh);
+        } else {
+          ctx.fillStyle = '#18181b';
+          ctx.fillRect(x, y, cardW, photoH);
+        }
+      } catch {
+        ctx.fillStyle = '#18181b';
+        ctx.fillRect(x, y, cardW, photoH);
+      }
+      ctx.restore();
+
+      // Divider line between photo and text
+      ctx.save();
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, y + photoH);
+      ctx.lineTo(x + cardW, y + photoH);
+      ctx.stroke();
+      ctx.restore();
+
+      // Centered Card Title in lower portion
+      ctx.save();
+      ctx.fillStyle = '#09090b';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '800 36px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
+      ctx.fillText(card.title || 'Textured Surface', x + cardW / 2, y + photoH + textH / 2);
+      ctx.restore();
+    } else {
+      // Standard Card: Centered Title and Subtitle with larger typography
+      ctx.save();
+      const titleLines = (card.title || '').split('\n').filter(Boolean);
+      const maxTitleW = cardW - 56;
+
+      ctx.fillStyle = '#09090b';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      if (titleLines.length >= 2) {
+        ctx.font = '900 38px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
+        ctx.fillText(titleLines[0], x + cardW / 2, y + 84, maxTitleW);
+        ctx.fillText(titleLines[1], x + cardW / 2, y + 128, maxTitleW);
+      } else {
+        ctx.font = '900 42px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
+        ctx.fillText(card.title || '', x + cardW / 2, y + 104, maxTitleW);
+      }
+
+      ctx.font = 'italic 600 23px "Plus Jakarta Sans", sans-serif';
+      ctx.fillStyle = '#52525b';
+      ctx.fillText(card.subtitle || '', x + cardW / 2, y + 178, maxTitleW);
+      ctx.restore();
+    }
+
+    // 3. Crisp translucent border (glass inner stroke)
     ctx.save();
     pathRoundedRect(ctx, x, y, cardW, cardH, 26);
     const borderGrad = ctx.createLinearGradient(x, y, x, y + cardH);
     borderGrad.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
     borderGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.65)');
-    borderGrad.addColorStop(1, 'rgba(255, 255, 255, 0.40)');
+    borderGrad.addColorStop(1, 'rgba(255, 255, 255, 0.35)');
     ctx.strokeStyle = borderGrad;
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.07)';
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
     ctx.lineWidth = 1;
     ctx.stroke();
     ctx.restore();
 
-    // 3. Top-right corner circular icon badge hitting the border
-    const circleR = 23;
-    const circleX = x + cardW - 36;
-    const circleY = y + 36;
+    // 4. Absolute protruding icon badge breaking through the top-right border (Image 2 & 3 style)
+    const circleR = 25;
+    const circleX = x + cardW - 22;
+    const circleY = y; // Exactly on top border line
 
     ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 3;
+
     ctx.beginPath();
     ctx.arc(circleX, circleY, circleR, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.12)';
+    ctx.fillStyle = '#ffffff';
     ctx.fill();
+
+    ctx.shadowColor = 'transparent';
     ctx.strokeStyle = '#10b981';
-    ctx.lineWidth = 2.2;
+    ctx.lineWidth = 2.4;
     ctx.stroke();
 
     drawCardIcon(ctx, circleX, circleY, card.iconType);
     ctx.restore();
-
-    // 4. Centered Card Title (larger 38px bold Chakra Petch across all 3 cards)
-    ctx.save();
-    const titleLines = (card.title || '').split('\n').filter(Boolean);
-    const maxTitleW = cardW - 56;
-
-    ctx.fillStyle = '#09090b';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = '800 38px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
-
-    if (titleLines.length >= 2) {
-      ctx.fillText(titleLines[0], x + cardW / 2, y + 82, maxTitleW);
-      ctx.fillText(titleLines[1], x + cardW / 2, y + 124, maxTitleW);
-    } else {
-      ctx.fillText(card.title || '', x + cardW / 2, y + 102, maxTitleW);
-    }
-
-    // 5. Centered Card Subtitle (italic, subtle under title)
-    ctx.font = 'italic 500 21px "Plus Jakarta Sans", "Inter", sans-serif';
-    ctx.fillStyle = '#52525b';
-    ctx.fillText(card.subtitle || '', x + cardW / 2, y + 174, maxTitleW);
-    ctx.restore();
-  });
+  }
 
   ctx.restore();
 }
@@ -604,8 +803,8 @@ async function drawSkinsStack(
   swatchFinishes: GlobalFinish[],
   countText: string = '20+',
   labelText: string = 'SKINS',
-  x: number = 1330,
-  startY: number = 520
+  x: number = 1350,
+  startY: number = 490
 ) {
   const swatchSize = 105;
   const radius = 22;
@@ -616,8 +815,8 @@ async function drawSkinsStack(
   // Draw 2 swatch thumbnails
   for (const finish of swatchFinishes.slice(0, 2)) {
     ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
-    ctx.shadowBlur = 14;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.14)';
+    ctx.shadowBlur = 16;
     ctx.shadowOffsetY = 6;
 
     pathRoundedRect(ctx, x, currentY, swatchSize, swatchSize, radius);
@@ -646,19 +845,22 @@ async function drawSkinsStack(
 
     ctx.save();
     pathRoundedRect(ctx, x, currentY, swatchSize, swatchSize, radius);
-    ctx.strokeStyle = '#e4e4e7';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)';
+    ctx.lineWidth = 1;
     ctx.stroke();
     ctx.restore();
 
-    currentY += swatchSize + 14;
+    currentY += swatchSize + 16;
   }
 
   // "20+ SKINS" badge
-  const badgeH = 86;
+  const badgeH = 88;
   ctx.save();
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.08)';
-  ctx.shadowBlur = 16;
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
+  ctx.shadowBlur = 18;
   ctx.shadowOffsetY = 6;
 
   pathRoundedRect(ctx, x, currentY, swatchSize, badgeH, radius);
@@ -675,11 +877,11 @@ async function drawSkinsStack(
   ctx.textAlign = 'center';
   ctx.fillStyle = '#09090b';
 
-  ctx.font = '900 32px "Plus Jakarta Sans", sans-serif';
-  ctx.fillText(countText, x + swatchSize / 2, currentY + 36);
+  ctx.font = '900 34px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
+  ctx.fillText(countText, x + swatchSize / 2, currentY + 38);
 
   ctx.font = '800 16px "Plus Jakarta Sans", sans-serif';
-  ctx.fillText(labelText, x + swatchSize / 2, currentY + 64);
+  ctx.fillText(labelText, x + swatchSize / 2, currentY + 68);
   ctx.restore();
 
   ctx.restore();
@@ -1164,17 +1366,16 @@ export async function renderMarketplaceImageToCanvas(
   const deviceCanvas = await renderDeviceComposite(config);
 
   // Close-Up Hero Shot Scaling & Placement (matching Image 2)
-  // Base scale = 1.05 ensures the phone fits comfortably without crowding the headline
-  const baseScale = 1.05;
+  // Base scale = 1.02 provides optimal proportion and generous breathing room for typography
+  const baseScale = 1.02;
   const effectiveScale = (config.deviceScale || 1.0) * baseScale;
   const dw = 1500 * effectiveScale;
   const dh = 1500 * effectiveScale;
 
   // Center of phone in deviceCanvas is (750, 750).
-  // Target placement: phone positioned on the right with camera island centered in upper-right half,
-  // top of phone dipping below "ALL DEVICES" pill, bottom extending behind cards.
-  const targetCenterX = 1040 + (config.deviceOffsetX || 0);
-  const targetCenterY = 890 + (config.deviceOffsetY || 0);
+  // Target placement: phone positioned comfortably on the right with camera lenses prominent
+  const targetCenterX = 1070 + (config.deviceOffsetX || 0);
+  const targetCenterY = 875 + (config.deviceOffsetY || 0);
 
   const dx = targetCenterX - 750 * effectiveScale;
   const dy = targetCenterY - 750 * effectiveScale;
@@ -1201,38 +1402,46 @@ export async function renderMarketplaceImageToCanvas(
     drawDeviceNamePill(ctx, config.deviceNameText, 540, 50, 910, 140);
   }
 
-  // 5. Left Column: Sub-badge & Big Bold Headline (placed lower for balanced composition)
+  // 5. Left Column: Sub-badge & Big Bold Headline (without "Skins" suffix, multi-word wrapped)
   const effectiveHeadline = config.autoHeadlineWithFinish
-    ? `${config.activeFinish.name}\nSkins`
-    : (config.headlineText || `${config.activeFinish.name}\nSkins`);
+    ? formatFinishHeadline(config.activeFinish.name)
+    : (config.headlineText || formatFinishHeadline(config.activeFinish.name));
 
   drawLeftHeadlineBlock(
     ctx,
     config.subBadgeText || '',
     effectiveHeadline,
     config.headlineFont || 'Chakra Petch',
-    50,
-    720
+    50
   );
 
-  // 6. Right Edge: 20+ Skins Swatches Stack (toggleable option)
+  // 6. Right Edge: 20+ Skins Swatches Stack (displays other skin choices)
   if (config.showSkinsStack) {
     const swatchList = config.allFinishes.filter((f) =>
       config.swatchFinishSlugs.includes(f.slug || f.id)
     );
-    const effectiveSwatches = swatchList.length > 0 ? swatchList : config.allFinishes.slice(0, 2);
+    const otherFinishes = config.allFinishes.filter(
+      (f) => (f.slug || f.id) !== (config.activeFinish.slug || config.activeFinish.id)
+    );
+    const effectiveSwatches =
+      swatchList.length >= 2
+        ? swatchList
+        : otherFinishes.length >= 2
+        ? otherFinishes.slice(0, 2)
+        : config.allFinishes.slice(0, 2);
+
     await drawSkinsStack(
       ctx,
       effectiveSwatches,
       config.skinsCountText || '20+',
       config.skinsLabelText || 'SKINS',
-      width - 155,
-      520
+      width - 150,
+      490
     );
   }
 
   // 7. Bottom Feature Cards (3 cards row in foreground - overlays bottom of phone)
-  drawBottomFeatureCards(ctx, config.featureCards, 1235, 215, width);
+  await drawBottomFeatureCards(ctx, config.featureCards, 1205, 240, width);
 }
 
 /**
@@ -1277,7 +1486,7 @@ export async function batchGenerateMarketplaceZip(
       ...baseConfig,
       activeFinish: finish,
       headlineText: baseConfig.autoHeadlineWithFinish
-        ? `${finish.name}\nSkins`
+        ? formatFinishHeadline(finish.name)
         : baseConfig.headlineText,
     };
 

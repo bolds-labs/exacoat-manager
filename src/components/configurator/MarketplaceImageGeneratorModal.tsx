@@ -7,8 +7,10 @@ import {
   MarketplaceFeatureCard,
   MarketplaceImageConfig,
   DEFAULT_FEATURE_CARDS_OFFICIAL,
+  DEFAULT_FEATURE_CARDS_TEXTURE,
   DEFAULT_FEATURE_CARDS_FIT,
   DEFAULT_FEATURE_CARDS_CLEAR,
+  formatFinishHeadline,
   renderMarketplaceImageToCanvas,
   generateMarketplaceImageBlob,
   batchGenerateMarketplaceZip,
@@ -85,8 +87,8 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [deviceOffsetY, setDeviceOffsetY] = useState<number>(0);
   const [activeLayerIds, setActiveLayerIds] = useState<Set<string>>(new Set());
 
-  // 20+ Skins Swatches Stack (Optional)
-  const [showSkinsStack, setShowSkinsStack] = useState<boolean>(false);
+  // 20+ Skins Swatches Stack (Defaulted to true for marketplace listings)
+  const [showSkinsStack, setShowSkinsStack] = useState<boolean>(true);
   const [skinsCountText, setSkinsCountText] = useState<string>('20+');
   const [skinsLabelText, setSkinsLabelText] = useState<string>('SKINS');
   const [swatchFinishSlugs, setSwatchFinishSlugs] = useState<string[]>(['black-camo', 'forged-carbon']);
@@ -302,9 +304,9 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   // Effective Headline
   const effectiveHeadline = useMemo(() => {
     if (autoHeadlineWithFinish) {
-      return `${currentPreviewFinish.name}\nSkins`;
+      return formatFinishHeadline(currentPreviewFinish.name);
     }
-    return headlineText || `${currentPreviewFinish.name}\nSkins`;
+    return headlineText || formatFinishHeadline(currentPreviewFinish.name);
   }, [autoHeadlineWithFinish, currentPreviewFinish.name, headlineText]);
 
   // Build config object for export
@@ -932,7 +934,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                       )}
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      Auto ({currentPreviewFinish.name} Skins)
+                      Auto ({currentPreviewFinish.name})
                     </button>
                     <button
                       type="button"
@@ -950,13 +952,11 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
 
                   {autoHeadlineWithFinish ? (
                     <div className="p-3 rounded-xl bg-zinc-800/60 border border-zinc-700 text-xs space-y-1">
-                      <div className="font-bold text-zinc-100 font-mono">
-                        {currentPreviewFinish.name}
-                        <br />
-                        Skins
+                      <div className="font-bold text-zinc-100 font-mono whitespace-pre-line text-sm">
+                        {formatFinishHeadline(currentPreviewFinish.name)}
                       </div>
                       <p className="text-[11px] text-zinc-400">
-                        Matches Image 2 format. During batch generation, each skin exports with its own finish name automatically.
+                        Finish name formatted cleanly without &quot;Skins&quot;. Multi-word finishes wrap to keep generous distance from the phone.
                       </p>
                     </div>
                   ) : (
@@ -970,16 +970,40 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                   )}
                 </div>
 
+                {/* Quick Toggle: 20+ Skins Selection Stack */}
+                <div className="p-3 rounded-xl bg-zinc-800/70 border border-zinc-700/80 flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-zinc-200">20+ Skins Column (Right Edge)</div>
+                    <div className="text-[11px] text-zinc-400">Shows other finishes swatches + &quot;20+ SKINS&quot; badge</div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showSkinsStack}
+                      onChange={(e) => setShowSkinsStack(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#f3aa18]"></div>
+                  </label>
+                </div>
+
                 {/* 3 Bottom Feature Cards Controls */}
                 <div className="space-y-2 pt-2 border-t border-zinc-800">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-1.5">
                     <label className="text-xs font-bold text-zinc-300">Bottom Feature Cards (3 Cards Row)</label>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 flex-wrap">
                       <button
                         onClick={() => setFeatureCards(DEFAULT_FEATURE_CARDS_OFFICIAL)}
                         className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#f3aa18]/20 text-[#f3aa18] hover:bg-[#f3aa18]/30"
                       >
                         Official Store
+                      </button>
+                      <button
+                        onClick={() => setFeatureCards(DEFAULT_FEATURE_CARDS_TEXTURE)}
+                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#10b981]/20 text-[#10b981] hover:bg-[#10b981]/30"
+                        title="Features Textured Surface macro photo banner card"
+                      >
+                        Textured (Image 3)
                       </button>
                       <button
                         onClick={() => setFeatureCards(DEFAULT_FEATURE_CARDS_FIT)}
@@ -999,7 +1023,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                   {featureCards.map((card, idx) => (
                     <div
                       key={card.id}
-                      className="p-3 rounded-xl bg-zinc-800/80 border border-zinc-700/80 space-y-2"
+                      className="p-3 rounded-xl bg-zinc-800/80 border border-zinc-700/80 space-y-2.5"
                     >
                       <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
                         <span>Card {idx + 1}</span>
@@ -1016,6 +1040,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                           <option value="shield">Shield Check</option>
                           <option value="material">Star / Rosette (3M)</option>
                           <option value="guarantee">Guarantee Shield</option>
+                          <option value="texture">Tactile Texture (Image 3)</option>
                           <option value="fit">Accurate Fit Target</option>
                           <option value="scratch">Scratch Proof Key</option>
                         </select>
@@ -1041,17 +1066,70 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                           <label className="text-[10px] text-zinc-400 block mb-0.5">Subtitle (Centered)</label>
                           <input
                             type="text"
-                            value={card.subtitle}
+                            value={card.subtitle || ''}
                             onChange={(e) => {
                               const val = e.target.value;
                               setFeatureCards((prev) =>
                                 prev.map((c, i) => (i === idx ? { ...c, subtitle: val } : c))
                               );
                             }}
-                            placeholder="Subtitle"
+                            placeholder="Subtitle (Optional for Photo Card)"
                             className="w-full px-2 py-1 rounded-lg text-xs font-medium bg-zinc-900 border border-zinc-700 text-zinc-300"
                           />
                         </div>
+                      </div>
+
+                      {/* Photo Banner Input (Image 3 style) */}
+                      <div className="pt-1.5 border-t border-zinc-700/60">
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[10px] font-semibold text-zinc-300">Macro Photo Banner (Image 3)</label>
+                          {card.imageUrl ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFeatureCards((prev) =>
+                                  prev.map((c, i) => (i === idx ? { ...c, imageUrl: undefined } : c))
+                                );
+                              }}
+                              className="text-[10px] font-bold text-red-400 hover:underline"
+                            >
+                              Remove Photo
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFeatureCards((prev) =>
+                                  prev.map((c, i) =>
+                                    i === idx
+                                      ? {
+                                          ...c,
+                                          title: c.title || 'Textured Surface',
+                                          iconType: 'texture',
+                                          imageUrl: 'https://exacoat.com/wp-content/uploads/Textured-Skins-Product-Info.jpg',
+                                        }
+                                      : c
+                                  )
+                                );
+                              }}
+                              className="text-[10px] font-bold text-[#10b981] hover:underline"
+                            >
+                              + Use Textured Skins Photo
+                            </button>
+                          )}
+                        </div>
+                        <input
+                          type="text"
+                          value={card.imageUrl || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFeatureCards((prev) =>
+                              prev.map((c, i) => (i === idx ? { ...c, imageUrl: val.trim() || undefined } : c))
+                            );
+                          }}
+                          placeholder="e.g. https://exacoat.com/wp-content/uploads/Textured-Skins-Product-Info.jpg"
+                          className="w-full px-2 py-1 rounded-lg text-xs bg-zinc-900 border border-zinc-700 text-zinc-300 font-mono text-[11px]"
+                        />
                       </div>
                     </div>
                   ))}
