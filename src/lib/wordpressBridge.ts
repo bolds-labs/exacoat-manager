@@ -438,6 +438,8 @@ export interface GlobalFinish {
   order?: number;
   shadow_opacity?: number;
   highlight_opacity?: number;
+  surface_gradient_enabled?: boolean;
+  surface_gradient_opacity?: number;
 }
 
 export interface FinishSurchargeTier {
@@ -483,7 +485,7 @@ export const DEFAULT_GLOBAL_FINISHES: GlobalFinish[] = [
   { id: 'forged-carbon', name: 'Forged Carbon', group: 'Signature skins', slug: 'forged-carbon', thumbnail: 'https://exacoat.com/wp-content/uploads/Forged-Carbon-Texture-Thumbnail.jpg', color_hex: '#2e2e33', in_stock: true, extra_price: 30000 },
   { id: 'woven', name: 'Woven', group: 'Signature skins', slug: 'woven', thumbnail: 'https://exacoat.com/wp-content/uploads/Woven-Texture-Thumbnail.jpg', color_hex: '#2b2d30', in_stock: true, extra_price: 30000 },
   { id: 'matte-black', name: 'Matte Black', group: 'Colors', slug: 'matte-black', thumbnail: 'https://exacoat.com/wp-content/uploads/Matte-Black-Texture-Thumbnail.jpg', color_hex: '#18181b', in_stock: true, extra_price: 0 },
-  { id: 'matte-white', name: 'Matte White', group: 'Colors', slug: 'matte-white', thumbnail: 'https://exacoat.com/wp-content/uploads/Matte-White-Texture-Thumbnail.jpg', color_hex: '#f4f4f6', in_stock: true, extra_price: 0 },
+  { id: 'matte-white', name: 'Matte White', group: 'Colors', slug: 'matte-white', thumbnail: 'https://exacoat.com/wp-content/uploads/Matte-White-Texture-Thumbnail.jpg', color_hex: '#f4f4f6', in_stock: true, extra_price: 0, surface_gradient_enabled: true, surface_gradient_opacity: 0.22 },
   { id: 'arctic-blue', name: 'Arctic Blue', group: 'Colors', slug: 'arctic-blue', thumbnail: 'https://exacoat.com/wp-content/uploads/Arctic-Blue-Texture-Thumbnail.jpg', color_hex: '#7ba7c2', in_stock: true, extra_price: 0 },
   { id: 'glacial-green', name: 'Glacial Green', group: 'Colors', slug: 'glacial-green', thumbnail: 'https://exacoat.com/wp-content/uploads/Glacial-Green-Texture-Thumbnail.jpg', color_hex: '#8db4a2', in_stock: true, extra_price: 0 },
   { id: 'mellow-yellow', name: 'Mellow Yellow', group: 'Colors', slug: 'mellow-yellow', thumbnail: 'https://exacoat.com/wp-content/uploads/Mellow-Yellow-Texture-Thumbnail.jpg', color_hex: '#e8ca65', in_stock: true, extra_price: 0 },

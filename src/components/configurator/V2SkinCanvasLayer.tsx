@@ -29,6 +29,8 @@ export interface V2SkinCanvasLayerProps {
   generatedShadowConfig?: GeneratedShadowConfig;
   deviceFamily?: DeviceFamily;
   className?: string;
+  surfaceGradientEnabled?: boolean;
+  surfaceGradientOpacity?: number;
 }
 
 /**
@@ -186,6 +188,8 @@ export const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
   generatedShadowConfig,
   deviceFamily,
   className,
+  surfaceGradientEnabled,
+  surfaceGradientOpacity,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -323,7 +327,12 @@ export const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
         (generatedShadowConfig?.enabled ?? defaultGenEnabled);
 
       if (shouldApplyGeneratedShadow && maskImg) {
-        applySyntheticDirectionalShading(ctx, 1000, 1000, generatedShadowConfig);
+        const shadowOptions = {
+          ...generatedShadowConfig,
+          surface_gradient_enabled: surfaceGradientEnabled ?? false,
+          surface_gradient_opacity: surfaceGradientOpacity ?? 0.22,
+        };
+        applySyntheticDirectionalShading(ctx, 1000, 1000, shadowOptions);
       }
 
       // Reset composite operation to normal
@@ -333,7 +342,7 @@ export const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
     return () => {
       isCancelled = true;
     };
-  }, [maskUrl, textureUrl, fallbackColor, logoCutoutUrl, pencilCutoutUrl, modelCutoutUrl, textureRotation, textureScale, hasViewShadow, generatedShadowConfig, layerGroup, layerName, isRequired, deviceFamily]);
+  }, [maskUrl, textureUrl, fallbackColor, logoCutoutUrl, pencilCutoutUrl, modelCutoutUrl, textureRotation, textureScale, hasViewShadow, generatedShadowConfig, layerGroup, layerName, isRequired, deviceFamily, surfaceGradientEnabled, surfaceGradientOpacity]);
 
   return (
     <canvas

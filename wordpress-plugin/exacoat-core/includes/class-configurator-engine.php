@@ -359,6 +359,8 @@ class Exacoat_Configurator_Engine {
 				'thumbnail'   => 'https://exacoat.com/wp-content/uploads/Matte-White-Texture-Thumbnail.jpg',
 				'extra_price' => 0,
 				'in_stock'    => true,
+				'surface_gradient_enabled' => true,
+				'surface_gradient_opacity' => 0.22,
 			],
 			[
 				'id'          => 'arctic-blue',
@@ -933,6 +935,8 @@ class Exacoat_Configurator_Engine {
 		$badge_color = sanitize_text_field( $params['badge_color'] ?? '' );
 		$shadow_opacity = isset( $params['shadow_opacity'] ) ? (float) $params['shadow_opacity'] : null;
 		$highlight_opacity = isset( $params['highlight_opacity'] ) ? (float) $params['highlight_opacity'] : null;
+		$surface_gradient_enabled = isset( $params['surface_gradient_enabled'] ) ? (bool) $params['surface_gradient_enabled'] : null;
+		$surface_gradient_opacity = isset( $params['surface_gradient_opacity'] ) ? (float) $params['surface_gradient_opacity'] : null;
 
 		$finishes = self::get_finishes();
 		$updated = false;
@@ -963,6 +967,12 @@ class Exacoat_Configurator_Engine {
 				}
 				if ( isset( $params['highlight_opacity'] ) ) {
 					$f['highlight_opacity'] = (float) $params['highlight_opacity'];
+				}
+				if ( isset( $params['surface_gradient_enabled'] ) ) {
+					$f['surface_gradient_enabled'] = (bool) $params['surface_gradient_enabled'];
+				}
+				if ( isset( $params['surface_gradient_opacity'] ) ) {
+					$f['surface_gradient_opacity'] = (float) $params['surface_gradient_opacity'];
 				}
 				if ( isset( $params['order'] ) ) {
 					$f['order'] = $order;
@@ -996,6 +1006,12 @@ class Exacoat_Configurator_Engine {
 			}
 			if ( $highlight_opacity !== null ) {
 				$new_finish['highlight_opacity'] = $highlight_opacity;
+			}
+			if ( $surface_gradient_enabled !== null ) {
+				$new_finish['surface_gradient_enabled'] = $surface_gradient_enabled;
+			}
+			if ( $surface_gradient_opacity !== null ) {
+				$new_finish['surface_gradient_opacity'] = $surface_gradient_opacity;
 			}
 			$finishes[] = $new_finish;
 		}

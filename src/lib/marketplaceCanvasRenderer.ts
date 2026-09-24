@@ -1877,11 +1877,18 @@ async function renderDeviceComposite(
 
     if (isBackOrRequired) {
       lCtx.globalCompositeOperation = 'source-over';
+      const finishGradEnabled = config.surfaceGradientShading?.enabled !== undefined
+        ? config.surfaceGradientShading.enabled
+        : Boolean(activeFinish.surface_gradient_enabled);
+      const finishGradOpacity = typeof config.surfaceGradientShading?.opacity === 'number'
+        ? config.surfaceGradientShading.opacity
+        : (typeof activeFinish.surface_gradient_opacity === 'number' ? activeFinish.surface_gradient_opacity : 0.22);
+
       const shadowOptions = {
         ...currentView.generated_shadow,
         enabled: !hasViewShadow ? (currentView.generated_shadow?.enabled ?? true) : false,
-        surface_gradient_enabled: config.surfaceGradientShading?.enabled ?? currentView.generated_shadow?.surface_gradient_enabled ?? true,
-        surface_gradient_opacity: config.surfaceGradientShading?.opacity ?? currentView.generated_shadow?.surface_gradient_opacity ?? 0.22,
+        surface_gradient_enabled: finishGradEnabled,
+        surface_gradient_opacity: finishGradOpacity,
         direction: config.surfaceGradientShading?.direction ?? currentView.generated_shadow?.direction ?? 'bottom_right',
       };
       applySyntheticDirectionalShading(lCtx, 1500, 1500, shadowOptions);

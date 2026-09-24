@@ -372,6 +372,8 @@ interface V2SkinCanvasLayerProps {
   hasViewShadow?: boolean;
   generatedShadowConfig?: GeneratedShadowConfig;
   deviceFamily?: DeviceFamily;
+  surfaceGradientEnabled?: boolean;
+  surfaceGradientOpacity?: number;
 }
 
 /**
@@ -474,7 +476,7 @@ function applySyntheticDirectionalShading(
   }
 
   // 4. Soft Diagonal Surface Gradient Shadow (Simulates top-left incident light falloff across vinyl body)
-  const surfaceGradEnabled = options?.surface_gradient_enabled ?? true;
+  const surfaceGradEnabled = options?.surface_gradient_enabled ?? false;
   const surfaceGradOpacity = typeof options?.surface_gradient_opacity === 'number'
     ? options.surface_gradient_opacity
     : 0.22;
@@ -527,6 +529,8 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
   hasViewShadow = false,
   generatedShadowConfig,
   deviceFamily,
+  surfaceGradientEnabled,
+  surfaceGradientOpacity,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -664,7 +668,12 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
         (generatedShadowConfig?.enabled ?? defaultGenEnabled);
 
       if (shouldApplyGeneratedShadow && maskImg) {
-        applySyntheticDirectionalShading(ctx, 1000, 1000, generatedShadowConfig);
+        const shadowOptions = {
+          ...generatedShadowConfig,
+          surface_gradient_enabled: surfaceGradientEnabled ?? false,
+          surface_gradient_opacity: surfaceGradientOpacity ?? 0.22,
+        };
+        applySyntheticDirectionalShading(ctx, 1000, 1000, shadowOptions);
       }
 
       // Reset composite operation to normal
@@ -674,7 +683,7 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
     return () => {
       isCancelled = true;
     };
-  }, [maskUrl, textureUrl, fallbackColor, logoCutoutUrl, pencilCutoutUrl, modelCutoutUrl, textureRotation, textureScale, hasViewShadow, generatedShadowConfig, layerGroup, layerName, isRequired, deviceFamily]);
+  }, [maskUrl, textureUrl, fallbackColor, logoCutoutUrl, pencilCutoutUrl, modelCutoutUrl, textureRotation, textureScale, hasViewShadow, generatedShadowConfig, layerGroup, layerName, isRequired, deviceFamily, surfaceGradientEnabled, surfaceGradientOpacity]);
 
   return (
     <canvas
@@ -830,6 +839,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [editingFinishBadgeColors, setEditingFinishBadgeColors] = useState<Record<string, string>>({});
   const [editingFinishShadowOpacities, setEditingFinishShadowOpacities] = useState<Record<string, number>>({});
   const [editingFinishHighlightOpacities, setEditingFinishHighlightOpacities] = useState<Record<string, number>>({});
+  const [editingFinishSurfaceGradEnabled, setEditingFinishSurfaceGradEnabled] = useState<Record<string, boolean>>({});
+  const [editingFinishSurfaceGradOpacities, setEditingFinishSurfaceGradOpacities] = useState<Record<string, number>>({});
   const [imagePickerModal, setImagePickerModal] = useState<{
     isOpen: boolean;
     finishId: string;
@@ -3812,6 +3823,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
     const isHighlightDirty =
       editingFinishHighlightOpacities[f.id] !== undefined &&
       editingFinishHighlightOpacities[f.id] !== (typeof f.highlight_opacity === 'number' ? f.highlight_opacity : 0.35);
+    const isSurfaceGradEnabledDirty =
+      editingFinishSurfaceGradEnabled[f.id] !== undefined &&
+      editingFinishSurfaceGradEnabled[f.id] !== Boolean(f.surface_gradient_enabled);
+    const isSurfaceGradOpacityDirty =
+      editingFinishSurfaceGradOpacities[f.id] !== undefined &&
+      editingFinishSurfaceGradOpacities[f.id] !== (typeof f.surface_gradient_opacity === 'number' ? f.surface_gradient_opacity : 0.22);
 
     return (
       isThumbDirty ||
@@ -3826,7 +3843,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
       isBadgeTextDirty ||
       isBadgeColorDirty ||
       isShadowDirty ||
-      isHighlightDirty
+      isHighlightDirty ||
+      isSurfaceGradEnabledDirty ||
+      isSurfaceGradOpacityDirty
     );
   };
 
@@ -3848,6 +3867,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
     editingFinishBadgeColors,
     editingFinishShadowOpacities,
     editingFinishHighlightOpacities,
+    editingFinishSurfaceGradEnabled,
+    editingFinishSurfaceGradOpacities,
   ]);
 
   // Discard all uncommitted master finish edits and close
@@ -3865,6 +3886,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
     setEditingFinishBadgeColors({});
     setEditingFinishShadowOpacities({});
     setEditingFinishHighlightOpacities({});
+    setEditingFinishSurfaceGradEnabled({});
+    setEditingFinishSurfaceGradOpacities({});
     setShowMasterTexturesModal(false);
   };
 
@@ -3903,6 +3926,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
         const newShadow = customShadow !== undefined ? customShadow : (typeof f.shadow_opacity === 'number' ? f.shadow_opacity : 0.85);
         const customHighlight = editingFinishHighlightOpacities[f.id];
         const newHighlight = customHighlight !== undefined ? customHighlight : (typeof f.highlight_opacity === 'number' ? f.highlight_opacity : 0.35);
+        const customSurfaceGradEnabled = editingFinishSurfaceGradEnabled[f.id];
+        const newSurfaceGradEnabled = customSurfaceGradEnabled !== undefined ? customSurfaceGradEnabled : Boolean(f.surface_gradient_enabled);
+        const customSurfaceGradOpacity = editingFinishSurfaceGradOpacities[f.id];
+        const newSurfaceGradOpacity = customSurfaceGradOpacity !== undefined ? customSurfaceGradOpacity : (typeof f.surface_gradient_opacity === 'number' ? f.surface_gradient_opacity : 0.22);
 
         return {
           ...f,
@@ -3919,6 +3946,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
           badge_color: newBadgeColor,
           shadow_opacity: newShadow,
           highlight_opacity: newHighlight,
+          surface_gradient_enabled: newSurfaceGradEnabled,
+          surface_gradient_opacity: newSurfaceGradOpacity,
         };
       });
 
@@ -3952,6 +3981,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
         setEditingFinishBadgeColors({});
         setEditingFinishShadowOpacities({});
         setEditingFinishHighlightOpacities({});
+        setEditingFinishSurfaceGradEnabled({});
+        setEditingFinishSurfaceGradOpacities({});
       } else {
         showToast('error', 'Save Failed', res.error || 'Failed saving finishes.');
       }
@@ -3990,6 +4021,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
     const newShadow = customShadow !== undefined ? customShadow : (typeof finish.shadow_opacity === 'number' ? finish.shadow_opacity : 0.85);
     const customHighlight = editingFinishHighlightOpacities[finish.id];
     const newHighlight = customHighlight !== undefined ? customHighlight : (typeof finish.highlight_opacity === 'number' ? finish.highlight_opacity : 0.35);
+    const customSurfaceGradEnabled = editingFinishSurfaceGradEnabled[finish.id];
+    const newSurfaceGradEnabled = customSurfaceGradEnabled !== undefined ? customSurfaceGradEnabled : Boolean(finish.surface_gradient_enabled);
+    const customSurfaceGradOpacity = editingFinishSurfaceGradOpacities[finish.id];
+    const newSurfaceGradOpacity = customSurfaceGradOpacity !== undefined ? customSurfaceGradOpacity : (typeof finish.surface_gradient_opacity === 'number' ? finish.surface_gradient_opacity : 0.22);
 
     try {
       setSavingFinishId(finish.id);
@@ -4010,6 +4045,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
         badge_color: newBadgeColor,
         shadow_opacity: newShadow,
         highlight_opacity: newHighlight,
+        surface_gradient_enabled: newSurfaceGradEnabled,
+        surface_gradient_opacity: newSurfaceGradOpacity,
       });
       if (res.success) {
         showToast('success', 'Finish Saved', `Finish "${newName}" updated successfully.`);
@@ -4034,6 +4071,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     badge_color: newBadgeColor,
                     shadow_opacity: newShadow,
                     highlight_opacity: newHighlight,
+                    surface_gradient_enabled: newSurfaceGradEnabled,
+                    surface_gradient_opacity: newSurfaceGradOpacity,
                   }
                 : f
             )
@@ -6260,6 +6299,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         : typeof f.highlight_opacity === 'number'
                         ? f.highlight_opacity
                         : 0.35;
+                    const currentSurfaceGradEnabled =
+                      editingFinishSurfaceGradEnabled[f.id] !== undefined
+                        ? editingFinishSurfaceGradEnabled[f.id]
+                        : Boolean(f.surface_gradient_enabled);
+                    const currentSurfaceGradOpacity =
+                      editingFinishSurfaceGradOpacities[f.id] !== undefined
+                        ? editingFinishSurfaceGradOpacities[f.id]
+                        : typeof f.surface_gradient_opacity === 'number'
+                        ? f.surface_gradient_opacity
+                        : 0.22;
 
                     const isSaving = savingFinishId === f.id;
                     const hasUnsavedChanges = isFinishDirty(f);
@@ -6674,6 +6723,52 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-sky-400"
                                   title="Screen specular highlight intensity for this finish"
                                 />
+                              </div>
+
+                              {/* Diagonal Surface Gradient Shading (Realistic falloff) */}
+                              <div className="col-span-2 pt-1 border-t border-white/5 space-y-1.5">
+                                <div className="flex items-center justify-between text-[10.5px]">
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setEditingFinishSurfaceGradEnabled((prev) => ({
+                                          ...prev,
+                                          [f.id]: !currentSurfaceGradEnabled,
+                                        }))
+                                      }
+                                      className={clsx(
+                                        'px-1.5 py-0.5 rounded text-[9.5px] font-bold uppercase tracking-wider transition-colors cursor-pointer',
+                                        currentSurfaceGradEnabled
+                                          ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                                          : 'bg-zinc-800 text-zinc-500 border border-zinc-700/50 hover:text-zinc-300'
+                                      )}
+                                    >
+                                      {currentSurfaceGradEnabled ? 'Active' : 'Off'}
+                                    </button>
+                                    <span className="text-zinc-400 font-medium">Surface Shading:</span>
+                                  </div>
+                                  <span className="font-mono font-bold text-purple-400 bg-purple-500/10 border border-purple-500/20 px-1.5 py-0.5 rounded-md text-[10px]">
+                                    {currentSurfaceGradEnabled ? `${Math.round(currentSurfaceGradOpacity * 100)}%` : 'Disabled'}
+                                  </span>
+                                </div>
+                                {currentSurfaceGradEnabled && (
+                                  <input
+                                    type="range"
+                                    min="0.05"
+                                    max="0.60"
+                                    step="0.01"
+                                    value={currentSurfaceGradOpacity}
+                                    onChange={(e) =>
+                                      setEditingFinishSurfaceGradOpacities((prev) => ({
+                                        ...prev,
+                                        [f.id]: parseFloat(e.target.value),
+                                      }))
+                                    }
+                                    className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-purple-400"
+                                    title="Realistic diagonal surface gradient intensity for light-colored skins"
+                                  />
+                                )}
                               </div>
                             </div>
                           </div>
@@ -8049,6 +8144,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   hasViewShadow={hasViewShadow}
                                   generatedShadowConfig={currentView?.generated_shadow}
                                   deviceFamily={editingProfile.family}
+                                  surfaceGradientEnabled={activeFinish?.surface_gradient_enabled === true}
+                                  surfaceGradientOpacity={activeFinish?.surface_gradient_opacity}
                                 />
                               );
                             }
@@ -10259,7 +10356,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       const distance = genShadow.distance ?? 3;
                                       const shadowOpacity = Math.round((genShadow.shadow_opacity ?? 0.40) * 100);
                                       const highlightOpacity = Math.round((genShadow.highlight_opacity ?? 0.25) * 100);
-                                      const surfaceGradOpacity = Math.round((genShadow.surface_gradient_opacity ?? 0.22) * 100);
                                       const direction = genShadow.direction ?? 'bottom_right';
 
                                       const updateGenShadow = (patch: Partial<GeneratedShadowConfig>) => {
@@ -10413,30 +10509,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                 </div>
                                               </div>
 
-                                              {/* Surface Gradient Shading (Diagonal Falloff) */}
-                                              <div className="space-y-1">
-                                                <div className="flex items-center justify-between text-[11px]">
-                                                  <span className="text-zinc-300">Surface Gradient Shading (Diagonal):</span>
-                                                  <span className="font-mono text-amber-300 text-[10px]">{surfaceGradOpacity}%</span>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                  <span className="text-[9px] font-mono text-zinc-500">0%</span>
-                                                  <input
-                                                    type="range"
-                                                    min="0"
-                                                    max="60"
-                                                    step="2"
-                                                    value={surfaceGradOpacity}
-                                                    onChange={(e) => updateGenShadow({
-                                                      surface_gradient_enabled: Number(e.target.value) > 0,
-                                                      surface_gradient_opacity: Number(e.target.value) / 100,
-                                                    })}
-                                                    className="w-full accent-amber-400 cursor-pointer h-1.5 bg-zinc-800 rounded-lg appearance-none"
-                                                  />
-                                                  <span className="text-[9px] font-mono text-zinc-500">60%</span>
-                                                </div>
-                                              </div>
-
                                               {/* Reset Button */}
                                               <div className="pt-1 flex justify-end">
                                                 <button
@@ -10448,8 +10520,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                       distance: 3,
                                                       shadow_opacity: 0.40,
                                                       highlight_opacity: 0.25,
-                                                      surface_gradient_enabled: true,
-                                                      surface_gradient_opacity: 0.22,
                                                       direction: 'bottom_right',
                                                     })
                                                   }
