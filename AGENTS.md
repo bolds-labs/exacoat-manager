@@ -1453,5 +1453,27 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - **Production Device Variants Pipeline**: `variants: ConfiguratorVariant[]` is mapped in `parseV2ConfiguratorProfile`, rendered as a top-priority accordion in the storefront, adds `variantsExtraPrice` to `totalPrice` / `formattedTotalPrice`, sorts at the very top of `CartItemLayer` breakdown, and forwards `exacoat_custom_price` and `exacoat_addon_data` to the WooCommerce cart.
   - **Pure v2 Engine Cleanup**: All configurators operate on the v2 modern engine. Legacy v1 banner and v1 logo overlay elements have been completely pruned from Configurator Studio.
 
+---
 
+## 50. Store Credit & Cashback Notification & FIFO Expiration Lifecycle System
+
+- **ACFW Email Suppression & ZeptoMail Routing Invariant**:
+  - Advanced Coupons for WooCommerce (ACFW) by default dispatches generic, unstyled emails (`acfw_store_credit_reminder_email`, `acfw_store_credit_email`, `customer_store_credit`) via basic WordPress `wp_mail()`.
+  - In `Exacoat_Store_Credit_Manager`, all unstyled ACFW WooCommerce emails are suppressed via standard WooCommerce email filters.
+  - 100% of store credit communications route through `Exacoat_Email_Engine` and the Zoho ZeptoMail API with Exacoat's light/dark-mode quiet luxury design system, SVG branding, and direct storefront CTAs.
+- **Immediate Cashback Notification & Deduplication Lock**:
+  - Hooked to `woocommerce_order_status_completed`.
+  - `Exacoat_Store_Credit_Manager::resolve_order_cashback()` evaluates order metadata (`_cashback_earned`, `_acfw_cashback_earned`) or calculates dynamic rewards from applied ACFW cashback coupons.
+  - Dedup meta `_exacoat_cashback_email_sent` prevents duplicate sends during rapid status toggles or webhook retries.
+  - Dispatches `customer_cashback_earned` immediately upon order completion.
+- **Individual FIFO 1-Year Expiration Model**:
+  - In ACFW, store credit grants are stored in a transactional ledger. Each cashback reward earns an individual expiration timestamp (`+1 year` from qualifying order date) stored in `_exacoat_cashback_expiry_ts` and `_exacoat_cashback_expiry_date`.
+  - When customers redeem credit at checkout, ACFW consumes balances using First-In-First-Out (FIFO): oldest credits closest to expiry are redeemed first.
+  - Credits expire one-by-one based on the exact grant date, rather than resetting or expiring all credits at once.
+- **Dual Action Scheduler Lifecycle Jobs (`exacoat-store-credit` queue)**:
+  - **Job 1 (Day 7 Follow-Up - `followup_7d`)**: Scheduled for 7 days post-order to nudge repeat purchases while intent is fresh.
+  - **Job 2 (Day 335 Pre-Expiry Warning - `pre_expiry_30d`)**: Scheduled for 11 months post-grant (30 days before expiration), creating urgency to redeem remaining credit before it lapses.
+  - **Job Safety Guards**: Both jobs verify the customer still holds a positive balance (`> 0`), ensure no intermediate purchase occurred, and enforce a 14-day anti-spam cooldown via `_exacoat_last_sc_reminder_sent`.
+- **Manager ERP Preview Parity**:
+  - Both templates (`customer_cashback_earned` and `customer_store_credit_reminder`) are previewable in Exacoat Manager (`#emails`) with real-time rendering, SVG logo, balance cards, and dynamic 1-year expiration badges.
 
