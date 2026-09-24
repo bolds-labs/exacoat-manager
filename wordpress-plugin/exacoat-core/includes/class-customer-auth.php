@@ -348,26 +348,41 @@ class Exacoat_Customer_Auth {
 		$per_page = 10;
 		$customer_query = wc_get_orders( [
 			'customer_id' => $user->ID,
-			'limit'       => -1,
+			'limit'       => 50,
 			'return'      => 'ids',
 			'orderby'     => 'date',
 			'order'       => 'DESC',
 		] );
-		$email_query = wc_get_orders( [
-			'billing_email' => $user->user_email,
-			'limit'         => -1,
-			'return'        => 'ids',
-			'orderby'       => 'date',
-			'order'         => 'DESC',
-		] );
+		$user_billing_email = (string) get_user_meta( $user->ID, 'billing_email', true );
+		$emails = array_values( array_unique( array_filter( [
+			strtolower( trim( (string) $user->user_email ) ),
+			strtolower( trim( $user_billing_email ) ),
+		] ) ) );
+		$email_query = [];
+		foreach ( $emails as $em ) {
+			$by_cust = wc_get_orders( [
+				'customer' => $em,
+				'limit'    => 50,
+				'return'   => 'ids',
+				'orderby'  => 'date',
+				'order'    => 'DESC',
+			] );
+			if ( is_array( $by_cust ) ) {
+				$email_query = array_merge( $email_query, $by_cust );
+			}
+			$by_bill = wc_get_orders( [
+				'billing_email' => $em,
+				'limit'         => 50,
+				'return'        => 'ids',
+				'orderby'       => 'date',
+				'order'         => 'DESC',
+			] );
+			if ( is_array( $by_bill ) && count( $by_bill ) < 50 ) {
+				$email_query = array_merge( $email_query, $by_bill );
+			}
+		}
 		$order_ids = array_values( array_unique( array_map( 'intval', array_merge( $customer_query, $email_query ) ) ) );
-		usort( $order_ids, function( $a, $b ) {
-			$order_a = wc_get_order( $a );
-			$order_b = wc_get_order( $b );
-			$time_a  = $order_a && $order_a->get_date_created() ? $order_a->get_date_created()->getTimestamp() : 0;
-			$time_b  = $order_b && $order_b->get_date_created() ? $order_b->get_date_created()->getTimestamp() : 0;
-			return $time_b <=> $time_a;
-		} );
+		rsort( $order_ids, SORT_NUMERIC );
 		$total       = count( $order_ids );
 		$total_pages = max( 1, (int) ceil( $total / $per_page ) );
 		$order_ids   = array_slice( $order_ids, ( $page - 1 ) * $per_page, $per_page );
@@ -802,8 +817,18 @@ class Exacoat_Customer_Auth {
 	}
 
 	private static function user_owns_order( WP_User $user, WC_Order $order ): bool {
-		return (int) $order->get_user_id() === (int) $user->ID
-			|| ( $order->get_billing_email() && 0 === strcasecmp( trim( $order->get_billing_email() ), trim( $user->user_email ) ) );
+		if ( (int) $order->get_user_id() === (int) $user->ID ) {
+			return true;
+		}
+		$order_email = trim( (string) $order->get_billing_email() );
+		if ( ! $order_email ) {
+			return false;
+		}
+		if ( 0 === strcasecmp( $order_email, trim( (string) $user->user_email ) ) ) {
+			return true;
+		}
+		$user_billing_email = trim( (string) get_user_meta( $user->ID, 'billing_email', true ) );
+		return $user_billing_email && 0 === strcasecmp( $order_email, $user_billing_email );
 	}
 
 	public static function rest_link_ticket( WP_REST_Request $request ) {

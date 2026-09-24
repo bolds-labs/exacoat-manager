@@ -1,17 +1,17 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.46",
+  "version": "0.1.47",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.46.zip?v=0.1.46",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.47.zip?v=0.1.47",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-24T11:58:08.948Z",
+  "last_updated": "2026-09-24T12:56:27.008Z",
   "sections": {
     "description": "The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.",
-    "changelog": "### Version 0.1.46\n- Removed Model 360 wrap options from all Fold and Flip devices, locking coverage to Model Cut\n- Configured official alpha cut masks across all MacBook Pro (M1-2021/M3 body) and MacBook Air (Top-New) models for top, bottom, and trackpad layers\n- Disabled generated 3D directional shading across all Fold/Flip and MacBook devices\n- Enforced persistent backend and frontend safeguards against directional shading on laptops and 360 wrap on foldables"
+    "changelog": "### Version 0.1.47\n- Removed Model 360 wrap options from all Fold and Flip devices, locking coverage to Model Cut\n- Configured official alpha cut masks across all MacBook Pro (M1-2021/M3 body) and MacBook Air (Top-New) models for top, bottom, and trackpad layers\n- Disabled generated 3D directional shading across all Fold/Flip and MacBook devices\n- Enforced persistent backend and frontend safeguards against directional shading on laptops and 360 wrap on foldables"
   }
 }
