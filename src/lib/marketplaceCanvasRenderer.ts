@@ -1822,12 +1822,20 @@ export async function renderMarketplaceImageToCanvas(
   const dx = targetCenterX - 750 * effectiveScale;
   const dy = targetCenterY - 750 * effectiveScale;
 
-  // Soft studio contact shadow under phone
+  // Studio contact shadow under phone cast to bottom-right: visible, crisp, and defined
   ctx.save();
-  ctx.shadowColor = 'rgba(15, 23, 42, 0.20)';
-  ctx.shadowBlur = 54;
-  ctx.shadowOffsetX = -18;
-  ctx.shadowOffsetY = 28;
+  // Primary directional cast shadow (bottom-right: X +26px, Y +32px, crisp blur 22px)
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.38)';
+  ctx.shadowBlur = 22;
+  ctx.shadowOffsetX = 26;
+  ctx.shadowOffsetY = 32;
+  ctx.drawImage(deviceCanvas, dx, dy, dw, dh);
+
+  // Secondary contact occlusion rim for depth
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.22)';
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetX = 12;
+  ctx.shadowOffsetY = 16;
   ctx.drawImage(deviceCanvas, dx, dy, dw, dh);
   ctx.restore();
 

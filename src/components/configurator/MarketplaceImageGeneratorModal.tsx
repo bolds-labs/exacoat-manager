@@ -61,8 +61,81 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
 }) => {
   const { showToast } = useToast();
 
-  // Active Tab in Sidebar
-  const [activeTab, setActiveTab] = useState<'template' | 'device' | 'background' | 'batch'>('template');
+  // Active Tab in Sidebar (Device & View is first order of selection)
+  const [activeTab, setActiveTab] = useState<'device' | 'template' | 'background' | 'batch'>('device');
+
+  // Collapsible Layout & Copy Sections State (All collapsed by default for a clean, tidy sidebar)
+  const [openCopySections, setOpenCopySections] = useState<Record<string, boolean>>({
+    template: false,
+    variantStack: false,
+    skinBadge: false,
+    coverSettings: false,
+    tagline: false,
+    subBadge: false,
+    headline: false,
+    featureCards: false,
+  });
+
+  const toggleCopySection = (key: string) => {
+    setOpenCopySections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleExpandAllCopySections = () => {
+    setOpenCopySections({
+      template: true,
+      variantStack: true,
+      skinBadge: true,
+      coverSettings: true,
+      tagline: true,
+      subBadge: true,
+      headline: true,
+      featureCards: true,
+    });
+  };
+
+  const handleCollapseAllCopySections = () => {
+    setOpenCopySections({
+      template: false,
+      variantStack: false,
+      skinBadge: false,
+      coverSettings: false,
+      tagline: false,
+      subBadge: false,
+      headline: false,
+      featureCards: false,
+    });
+  };
+
+  // Determine actual coverage & cutout capabilities of this profile
+  const coverageType = profile?.coverage_and_cutouts?.coverage_type;
+  const hasCoverageOptions =
+    coverageType === 'model_cut_and_360' ||
+    (Boolean(profile?.coverage_and_cutouts?.has_model_cut) &&
+      Boolean(profile?.coverage_and_cutouts?.available_coverages && profile.coverage_and_cutouts.available_coverages.length > 1));
+  const isModelCutOnly = coverageType === 'model_cut_only';
+  const isModel360Only = coverageType === 'model_360_only';
+
+  const hasLogoCutoutSupport = useMemo(() => {
+    if (!profile) return false;
+    if (profile.coverage_and_cutouts?.has_logo_cutout === false) return false;
+    return Boolean(
+      profile.coverage_and_cutouts?.has_logo_cutout === true ||
+      profile.coverage_and_cutouts?.logo_cutout_mask_url ||
+      profile.views?.some((v) => Boolean(v.logo_cutout_mask_url)) ||
+      profile.layers?.some((l) => Object.values(l.assets_by_view || {}).some((a) => Boolean(a.logo_cutout_url)))
+    );
+  }, [profile]);
+
+  const hasPencilCutoutSupport = useMemo(() => {
+    if (!profile) return false;
+    if (profile.coverage_and_cutouts?.has_pencil_cutout === false) return false;
+    return Boolean(
+      profile.coverage_and_cutouts?.has_pencil_cutout === true ||
+      profile.coverage_and_cutouts?.pencil_cutout_mask_url ||
+      profile.views?.some((v) => Boolean(v.pencil_cutout_mask_url)) ||
+      profile.layers?.some((l) => Object.values(l.assets_by_view || {}).some((a) => Boolean(a.pencil_cutout_url)))
+    );
+  }, [profile]);
 
   // Preview Canvas State & Ref
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -175,35 +248,47 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
       setActiveColorId(profile.device_colors[0].id);
     }
 
-    // Sub-badge detection
-    const cov = profile.coverage_and_cutouts?.coverage_type;
-    const hasModelCut = profile.coverage_and_cutouts?.has_model_cut;
+    // Sub-badge and headline initialization based on actual device capabilities
     const isArk = profile.category?.toLowerCase().includes('ark') || profile.device_slug?.toLowerCase().includes('ark');
 
     if (isArk) {
       setSubBadgeText('x2 pcs');
+      setShowSubBadge(true);
       setHeadlineText('Ark\nInvisible\nSkin');
       setAutoHeadlineWithFinish(false);
       setFeatureCards(DEFAULT_FEATURE_CARDS_CLEAR);
     } else {
-      if (cov === 'model_cut_and_360' || hasModelCut) {
+      if (hasCoverageOptions) {
         setSubBadgeText('Model Cut & 360');
-      } else if (cov === 'model_cut_only') {
+        setShowSubBadge(true);
+      } else if (isModelCutOnly || profile.coverage_and_cutouts?.has_model_cut) {
         setSubBadgeText('Model Cut');
+        setShowSubBadge(true);
+      } else if (isModel360Only) {
+        setSubBadgeText('Model 360');
+        setShowSubBadge(true);
       } else {
-        setSubBadgeText('Model Cut & 360');
+        setSubBadgeText(profile.family === 'laptop' ? 'Top & Inside' : 'Precision Fit');
+        setShowSubBadge(false);
       }
       setAutoHeadlineWithFinish(true);
       setHeadlineText(formatDeviceHeadline(profile.device_name));
       setFeatureCards(DEFAULT_FEATURE_CARDS_OFFICIAL);
     }
 
-    setShowSubBadge(true);
+    // Default coverage mode strictly reflecting device profile
+    if (isModelCutOnly) {
+      setCoverage('model_cut');
+    } else if (isModel360Only) {
+      setCoverage('model_360');
+    } else if (hasCoverageOptions) {
+      setCoverage(profile.coverage_and_cutouts?.has_model_cut ? 'model_cut' : 'model_360');
+    } else {
+      setCoverage('model_360');
+    }
 
-    const defaultCoverage = profile.coverage_and_cutouts?.has_model_cut ? 'model_cut' : 'model_360';
-    setCoverage(defaultCoverage);
-    setLogoCutout(profile.coverage_and_cutouts?.has_logo_cutout ?? true);
-    setPencilCutout(Boolean(profile.coverage_and_cutouts?.has_pencil_cutout));
+    setLogoCutout(hasLogoCutoutSupport);
+    setPencilCutout(hasPencilCutoutSupport);
 
     // Reset device offsets based on layout mode (variant: 75% zoom, Y = -15px; cover: 100% zoom, Y = 110px)
     if (layoutMode === 'cover') {
@@ -216,7 +301,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
       setDeviceOffsetY(-15);
     }
 
-    // Initialize active skin layer IDs
+    // Initialize active skin layer IDs: strictly activate ONLY the first genuine skin layer
     const initialLayers = new Set<string>();
     const genuineSkinLayers = (profile.layers || []).filter((l) => {
       if (l.is_non_visual) return false;
@@ -229,18 +314,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
       return true;
     });
 
-    genuineSkinLayers.forEach((l) => {
-      if (
-        l.is_required ||
-        l.group === 'primary' ||
-        l.group === 'accent' ||
-        l.name.toLowerCase().includes('back') ||
-        l.name.toLowerCase().includes('camera')
-      ) {
-        initialLayers.add(l.id);
-      }
-    });
-    if (initialLayers.size === 0 && genuineSkinLayers.length > 0) {
+    if (genuineSkinLayers.length > 0) {
       initialLayers.add(genuineSkinLayers[0].id);
     }
     setActiveLayerIds(initialLayers);
@@ -940,22 +1014,9 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
           </div>
 
           {/* RIGHT SECTION: CONTROLS & FINE-TUNING SIDEBAR */}
-          <div className="w-full lg:w-[420px] bg-zinc-900 border-t lg:border-t-0 lg:border-l border-zinc-800/80 flex flex-col shrink-0 overflow-hidden">
+          <div className="w-full lg:w-[540px] xl:w-[580px] 2xl:w-[620px] bg-zinc-900 border-t lg:border-t-0 lg:border-l border-zinc-800/80 flex flex-col shrink-0 overflow-hidden">
             {/* Tabs Header */}
             <div className="flex items-center gap-1 border-b border-zinc-800 p-3 bg-zinc-900/90 shrink-0">
-              <button
-                onClick={() => setActiveTab('template')}
-                className={clsx(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition',
-                  activeTab === 'template'
-                    ? 'bg-zinc-100 text-zinc-950 shadow'
-                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                )}
-              >
-                <Type className="w-3.5 h-3.5" />
-                Layout & Copy
-              </button>
-
               <button
                 onClick={() => setActiveTab('device')}
                 className={clsx(
@@ -967,6 +1028,19 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
               >
                 <SlidersHorizontal className="w-3.5 h-3.5" />
                 Device & View
+              </button>
+
+              <button
+                onClick={() => setActiveTab('template')}
+                className={clsx(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition',
+                  activeTab === 'template'
+                    ? 'bg-zinc-100 text-zinc-950 shadow'
+                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                )}
+              >
+                <Type className="w-3.5 h-3.5" />
+                Layout & Copy
               </button>
 
               <button
@@ -996,629 +1070,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
               </button>
             </div>
 
-            {/* TAB 1: TEMPLATE & COPYWRITING */}
-            {activeTab === 'template' && (
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
-                {/* Template Layout Selector (Cover vs Variant) */}
-                <div className="p-3 rounded-xl bg-zinc-800/80 border border-zinc-700/80 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-zinc-200">Listing Template Layout</span>
-                    <span className="text-[10px] text-zinc-400 font-mono">
-                      {layoutMode === 'cover' ? 'Hero Close-Up (100%)' : 'Full Device (75%)'}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLayoutMode('cover');
-                        setIsPrimaryCoverMode(true);
-                        setDeviceScale(1.0);
-                        setDeviceOffsetX(0);
-                        setDeviceOffsetY(110);
-                      }}
-                      className={clsx(
-                        'p-2.5 rounded-xl border text-left transition space-y-1',
-                        layoutMode === 'cover'
-                          ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
-                          : 'bg-zinc-900/80 border-zinc-700 text-zinc-300 hover:bg-zinc-800'
-                      )}
-                    >
-                      <div className="flex items-center gap-1.5 font-bold text-xs">
-                        <Star className="w-3.5 h-3.5" />
-                        <span>Cover Layout</span>
-                      </div>
-                      <p className="text-[10px] text-zinc-400 leading-tight">
-                        100% Zoom, 3 bottom glass cards, large headline & 20+ Skins title
-                      </p>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLayoutMode('variant');
-                        setIsPrimaryCoverMode(false);
-                        setDeviceScale(0.75);
-                        setDeviceOffsetX(0);
-                        setDeviceOffsetY(-15);
-                      }}
-                      className={clsx(
-                        'p-2.5 rounded-xl border text-left transition space-y-1',
-                        layoutMode === 'variant'
-                          ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
-                          : 'bg-zinc-900/80 border-zinc-700 text-zinc-300 hover:bg-zinc-800'
-                      )}
-                    >
-                      <div className="flex items-center gap-1.5 font-bold text-xs">
-                        <Layers className="w-3.5 h-3.5" />
-                        <span>Variant Layout</span>
-                      </div>
-                      <p className="text-[10px] text-zinc-400 leading-tight">
-                        75% Zoom, stacked left trust cards + Textured Surface photo
-                      </p>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Variant Mode: Left Column Trust Stack & Texture Photo Controls */}
-                {layoutMode === 'variant' && (
-                  <div className="p-3.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-zinc-800/80 to-zinc-800/80 border border-amber-500/30 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <Layers className="w-3.5 h-3.5 text-[#f3aa18]" />
-                        <span className="text-xs font-bold text-zinc-100">Left Column: Trust Stack & Texture</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowOriginal3M(true);
-                            setShowMaterialOrigin(true);
-                            setShowWarranty(true);
-                            setShowTexturePhoto(true);
-                          }}
-                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#f3aa18]/20 text-[#f3aa18] hover:bg-[#f3aa18]/30"
-                        >
-                          Full Stack (4)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowOriginal3M(false);
-                            setShowMaterialOrigin(false);
-                            setShowWarranty(false);
-                            setShowTexturePhoto(true);
-                          }}
-                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                        >
-                          Texture Only
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowOriginal3M(true);
-                            setShowMaterialOrigin(true);
-                            setShowWarranty(true);
-                            setShowTexturePhoto(false);
-                          }}
-                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                        >
-                          3 Trust Only
-                        </button>
-                      </div>
-                    </div>
-
-                    <p className="text-[11px] text-zinc-400">
-                      Replaces bottom cards with vertical stacked frosted glass cards on the left, keeping the full 75% device view unobstructed.
-                    </p>
-
-                    <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
-                      <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={showOriginal3M}
-                          onChange={(e) => setShowOriginal3M(e.target.checked)}
-                          className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
-                        />
-                        <span>100% Original</span>
-                      </label>
-                      <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={showMaterialOrigin}
-                          onChange={(e) => setShowMaterialOrigin(e.target.checked)}
-                          className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
-                        />
-                        <span>3M Material</span>
-                      </label>
-                      <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={showWarranty}
-                          onChange={(e) => setShowWarranty(e.target.checked)}
-                          className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
-                        />
-                        <span>Warranty</span>
-                      </label>
-                      <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={showTexturePhoto}
-                          onChange={(e) => setShowTexturePhoto(e.target.checked)}
-                          className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
-                        />
-                        <span>Textured Surface</span>
-                      </label>
-                    </div>
-
-                    {showTexturePhoto && (
-                      <div className="space-y-1.5 pt-1 border-t border-zinc-700/60">
-                        <div className="flex items-center justify-between text-[11px] text-zinc-300 font-semibold">
-                          <span>Textured Surface Macro Image URL:</span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setTexturePhotoUrl('https://exacoat.com/wp-content/uploads/Textured-Skins-Product-Info.jpg')
-                            }
-                            className="text-[10px] text-[#f3aa18] hover:underline"
-                          >
-                            Reset Official URL
-                          </button>
-                        </div>
-                        <input
-                          type="text"
-                          value={texturePhotoUrl}
-                          onChange={(e) => setTexturePhotoUrl(e.target.value)}
-                          placeholder="https://exacoat.com/wp-content/uploads/Textured-Skins-Product-Info.jpg"
-                          className="w-full px-2.5 py-1.5 rounded-lg text-xs bg-zinc-900 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
-                        />
-                        <p className="text-[10px] text-zinc-500">
-                          Preloaded with Exacoat official textured surface photo.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Device Name Badge (Top Right) */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-zinc-300">Skin Name Badge (Top Right Rectangle)</label>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setTopRightText('20+ SKINS SELECTION')}
-                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#f3aa18]/20 text-[#f3aa18] hover:bg-[#f3aa18]/30"
-                      >
-                        20+ SKINS SELECTION
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setTopRightText('')}
-                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700 truncate max-w-[130px]"
-                        title={currentPreviewFinish.name.toUpperCase()}
-                      >
-                        Auto ({currentPreviewFinish.name.toUpperCase()})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setTopRightText('ALL DEVICES')}
-                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                      >
-                        ALL DEVICES
-                      </button>
-                    </div>
-                  </div>
-                  <input
-                    type="text"
-                    value={topRightText}
-                    onChange={(e) => setTopRightText(e.target.value)}
-                    placeholder={`e.g. ${currentPreviewFinish.name.toUpperCase()}`}
-                    className="w-full px-3 py-2 rounded-xl text-xs font-bold bg-zinc-800/80 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
-                  />
-                  <p className="text-[11px] text-zinc-400">
-                    Displays in the top-right rounded rectangle. In Cover Mode, it renders <b>20+ SKINS SELECTION</b>.
-                  </p>
-                </div>
-
-                {/* Primary Listing Cover Settings Box */}
-                <div className="p-3.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-zinc-800/80 to-zinc-800/80 border border-amber-500/30 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Star className="w-4 h-4 text-[#f3aa18]" />
-                      <span className="text-xs font-bold text-zinc-100">Primary Product Cover Image</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsPrimaryCoverMode(!isPrimaryCoverMode)}
-                      className={clsx(
-                        'px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1',
-                        isPrimaryCoverMode
-                          ? 'bg-[#f3aa18] text-black font-extrabold shadow'
-                          : 'bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white'
-                      )}
-                    >
-                      {isPrimaryCoverMode ? 'Viewing Cover Mode' : 'Preview Cover Mode'}
-                    </button>
-                  </div>
-
-                  <p className="text-[11px] text-zinc-400">
-                    Generates the marketplace main cover image featuring <b>20+ SKINS SELECTION</b> in the top-right box and your chosen hero skin.
-                  </p>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-zinc-300">Default Hero Skin</label>
-                      <select
-                        value={primarySkinId}
-                        onChange={(e) => setPrimarySkinId(e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-[#f3aa18]"
-                      >
-                        {finishes.map((f) => (
-                          <option key={f.id || f.slug} value={f.id || f.slug}>
-                            {f.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-zinc-300">Cover Top-Right Text</label>
-                      <input
-                        type="text"
-                        value={primaryTopRightText}
-                        onChange={(e) => setPrimaryTopRightText(e.target.value)}
-                        placeholder="20+ SKINS SELECTION"
-                        className="w-full px-2.5 py-1.5 rounded-lg text-xs font-bold bg-zinc-900 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
-                      />
-                    </div>
-                  </div>
-
-                  <label className="flex items-center gap-2 pt-1 text-xs font-medium text-zinc-300 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={includePrimaryCoverInBatch}
-                      onChange={(e) => setIncludePrimaryCoverInBatch(e.target.checked)}
-                      className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
-                    />
-                    <span>Include Primary Cover Image in Batch ZIP export (<code>00_PRIMARY_COVER_...jpg</code>)</span>
-                  </label>
-                </div>
-
-                {/* Brand Tagline under Logo */}
-                <div className="p-3 rounded-xl bg-zinc-800/80 border border-zinc-700/80 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <Award className="w-3.5 h-3.5 text-[#f3aa18]" />
-                      <label className="text-xs font-bold text-zinc-300">Brand Tagline (Under Logo)</label>
-                    </div>
-                    <label className="flex items-center gap-1 text-[11px] text-zinc-400 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={showBrandTagline}
-                        onChange={(e) => setShowBrandTagline(e.target.checked)}
-                        className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
-                      />
-                      Show
-                    </label>
-                  </div>
-                  <input
-                    type="text"
-                    value={brandTagline}
-                    onChange={(e) => setBrandTagline(e.target.value)}
-                    disabled={!showBrandTagline}
-                    placeholder="#1 Brand Skin di Indonesia"
-                    className="w-full px-3 py-2 rounded-xl text-xs font-semibold bg-zinc-900 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18] disabled:opacity-40"
-                  />
-                  <p className="text-[11px] text-zinc-400">
-                    Minimalist luxury capsule rendered directly beneath the Exacoat logo.
-                  </p>
-                </div>
-
-                {/* Sub-Badge Tag (Above Headline) */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs font-bold text-zinc-300">Sub-Badge Tag (Above Headline)</label>
-                      <label className="flex items-center gap-1 text-[11px] text-zinc-400 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={showSubBadge}
-                          onChange={(e) => setShowSubBadge(e.target.checked)}
-                          className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
-                        />
-                        Show
-                      </label>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowSubBadge(true);
-                          setSubBadgeText('Model Cut & 360');
-                        }}
-                        className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                      >
-                        Model Cut & 360
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowSubBadge(true);
-                          setSubBadgeText('Model Cut');
-                        }}
-                        className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                      >
-                        Model Cut
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowSubBadge(true);
-                          setSubBadgeText('x2 pcs');
-                        }}
-                        className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                      >
-                        x2 pcs
-                      </button>
-                    </div>
-                  </div>
-                  <input
-                    type="text"
-                    value={subBadgeText}
-                    onChange={(e) => setSubBadgeText(e.target.value)}
-                    disabled={!showSubBadge}
-                    placeholder="e.g. Model Cut & 360, Model Cut, or x2 pcs"
-                    className="w-full px-3 py-2 rounded-xl text-xs font-semibold bg-zinc-800/80 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18] disabled:opacity-40"
-                  />
-                  <p className="text-[11px] text-zinc-400">
-                    Rendered as a full-rounded capsule with transparent background (no fill).
-                  </p>
-                </div>
-
-                {/* Product Title Headline */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-zinc-300">Product Title (Left Headline)</label>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] text-zinc-400">Font:</span>
-                      <select
-                        value={headlineFont}
-                        onChange={(e) => setHeadlineFont(e.target.value as any)}
-                        className="px-2 py-0.5 rounded text-[11px] font-bold bg-zinc-800 border border-zinc-700 text-zinc-200"
-                      >
-                        <option value="Chakra Petch">Chakra Petch (Image 2)</option>
-                        <option value="Plus Jakarta Sans">Plus Jakarta (Modern)</option>
-                        <option value="Inter">Inter (Clean)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pb-1">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setAutoHeadlineWithFinish(true)}
-                        className={clsx(
-                          'px-2.5 py-1 rounded-lg text-xs font-bold border transition flex items-center gap-1',
-                          autoHeadlineWithFinish
-                            ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
-                            : 'bg-zinc-800 border-zinc-700 text-zinc-400'
-                        )}
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        Auto ({profile.device_name})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAutoHeadlineWithFinish(false)}
-                        className={clsx(
-                          'px-2.5 py-1 rounded-lg text-xs font-bold border transition',
-                          !autoHeadlineWithFinish
-                            ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
-                            : 'bg-zinc-800 border-zinc-700 text-zinc-400'
-                        )}
-                      >
-                        Custom Text
-                      </button>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-zinc-400 font-bold">Highlight:</span>
-                      {[
-                        { label: 'Silver', color: '#d2d2d2' },
-                        { label: 'White', color: '#ffffff' },
-                        { label: 'Gold', color: '#f3aa18' },
-                      ].map((preset) => (
-                        <button
-                          key={preset.color}
-                          type="button"
-                          onClick={() => setHeadlineHighlightColor(preset.color)}
-                          className={clsx(
-                            'px-1.5 py-0.5 rounded text-[10px] font-bold border transition',
-                            headlineHighlightColor.toLowerCase() === preset.color.toLowerCase()
-                              ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
-                              : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-zinc-200'
-                          )}
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {autoHeadlineWithFinish ? (
-                    <div className="p-3 rounded-xl bg-zinc-800/60 border border-zinc-700 text-xs space-y-1">
-                      <div className="font-bold text-zinc-100 font-mono whitespace-pre-line text-sm">
-                        {formatDeviceHeadline(profile.device_name)}
-                      </div>
-                      <p className="text-[11px] text-zinc-400">
-                        Product name rendered bold with <b>{headlineHighlightColor}</b> highlight outline for crisp legibility over the phone body.
-                      </p>
-                    </div>
-                  ) : (
-                    <textarea
-                      rows={3}
-                      value={headlineText}
-                      onChange={(e) => setHeadlineText(e.target.value)}
-                      placeholder="Enter multi-line headline (one per line)"
-                      className="w-full px-3 py-2 rounded-xl text-xs font-bold bg-zinc-800/80 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
-                    />
-                  )}
-                </div>
-
-                {/* 3 Bottom Feature Cards Controls */}
-                <div className="space-y-2 pt-2 border-t border-zinc-800">
-                  <div className="flex items-center justify-between flex-wrap gap-1.5">
-                    <label className="text-xs font-bold text-zinc-300">Bottom Feature Cards (3 Cards Row)</label>
-                    <div className="flex items-center gap-1 flex-wrap">
-                      <button
-                        onClick={() => setFeatureCards(DEFAULT_FEATURE_CARDS_OFFICIAL)}
-                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#f3aa18]/20 text-[#f3aa18] hover:bg-[#f3aa18]/30"
-                      >
-                        Official Store
-                      </button>
-                      <button
-                        onClick={() => setFeatureCards(DEFAULT_FEATURE_CARDS_TEXTURE)}
-                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#10b981]/20 text-[#10b981] hover:bg-[#10b981]/30"
-                        title="Features Textured Surface macro photo banner card"
-                      >
-                        Textured (Image 3)
-                      </button>
-                      <button
-                        onClick={() => setFeatureCards(DEFAULT_FEATURE_CARDS_FIT)}
-                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                      >
-                        Accurate Fit
-                      </button>
-                      <button
-                        onClick={() => setFeatureCards(DEFAULT_FEATURE_CARDS_CLEAR)}
-                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                      >
-                        Ark Clear
-                      </button>
-                    </div>
-                  </div>
-
-                  {featureCards.map((card, idx) => (
-                    <div
-                      key={card.id}
-                      className="p-3 rounded-xl bg-zinc-800/80 border border-zinc-700/80 space-y-2.5"
-                    >
-                      <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                        <span>Card {idx + 1}</span>
-                        <select
-                          value={card.iconType}
-                          onChange={(e) => {
-                            const val = e.target.value as MarketplaceFeatureCard['iconType'];
-                            setFeatureCards((prev) =>
-                              prev.map((c, i) => (i === idx ? { ...c, iconType: val } : c))
-                            );
-                          }}
-                          className="px-2 py-0.5 rounded text-[10px] bg-zinc-700 text-zinc-200 border-none font-medium"
-                        >
-                          <option value="shield">Shield Check</option>
-                          <option value="material">Star / Rosette (3M)</option>
-                          <option value="guarantee">Guarantee Shield</option>
-                          <option value="texture">Tactile Texture (Image 3)</option>
-                          <option value="fit">Accurate Fit Target</option>
-                          <option value="scratch">Scratch Proof Key</option>
-                        </select>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] text-zinc-400 block mb-0.5">Title (Centered)</label>
-                          <input
-                            type="text"
-                            value={card.title}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setFeatureCards((prev) =>
-                                prev.map((c, i) => (i === idx ? { ...c, title: val } : c))
-                              );
-                            }}
-                            placeholder="Card Title"
-                            className="w-full px-2 py-1 rounded-lg text-xs font-bold bg-zinc-900 border border-zinc-700 text-zinc-100"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-zinc-400 block mb-0.5">Subtitle (Centered)</label>
-                          <input
-                            type="text"
-                            value={card.subtitle || ''}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setFeatureCards((prev) =>
-                                prev.map((c, i) => (i === idx ? { ...c, subtitle: val } : c))
-                              );
-                            }}
-                            placeholder="Subtitle (Optional for Photo Card)"
-                            className="w-full px-2 py-1 rounded-lg text-xs font-medium bg-zinc-900 border border-zinc-700 text-zinc-300"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Photo Banner Input (Image 3 style) */}
-                      <div className="pt-1.5 border-t border-zinc-700/60">
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="text-[10px] font-semibold text-zinc-300">Macro Photo Banner (Image 3)</label>
-                          {card.imageUrl ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setFeatureCards((prev) =>
-                                  prev.map((c, i) => (i === idx ? { ...c, imageUrl: undefined } : c))
-                                );
-                              }}
-                              className="text-[10px] font-bold text-red-400 hover:underline"
-                            >
-                              Remove Photo
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setFeatureCards((prev) =>
-                                  prev.map((c, i) =>
-                                    i === idx
-                                      ? {
-                                          ...c,
-                                          title: c.title || 'Textured Surface',
-                                          iconType: 'texture',
-                                          imageUrl: 'https://exacoat.com/wp-content/uploads/Textured-Skins-Product-Info.jpg',
-                                        }
-                                      : c
-                                  )
-                                );
-                              }}
-                              className="text-[10px] font-bold text-[#10b981] hover:underline"
-                            >
-                              + Use Textured Skins Photo
-                            </button>
-                          )}
-                        </div>
-                        <input
-                          type="text"
-                          value={card.imageUrl || ''}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setFeatureCards((prev) =>
-                              prev.map((c, i) => (i === idx ? { ...c, imageUrl: val.trim() || undefined } : c))
-                            );
-                          }}
-                          placeholder="e.g. https://exacoat.com/wp-content/uploads/Textured-Skins-Product-Info.jpg"
-                          className="w-full px-2 py-1 rounded-lg text-xs bg-zinc-900 border border-zinc-700 text-zinc-300 font-mono text-[11px]"
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* TAB 2: DEVICE & VIEW SETTINGS */}
+            {/* TAB 1: DEVICE & VIEW SETTINGS */}
             {activeTab === 'device' && (
               <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
                 {/* Angle Selector (if multi-angle) */}
@@ -1703,7 +1155,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                   </div>
                 )}
 
-                {/* Coverage & Cutout Options (Collapsible) */}
+                {/* Coverage & Cutout Options (Collapsible, reflecting profile capabilities) */}
                 <div className="rounded-xl bg-zinc-800/80 border border-zinc-700/80 overflow-hidden">
                   <button
                     type="button"
@@ -1712,8 +1164,16 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-zinc-300">Coverage & Cutouts</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-400 font-mono">
-                        {coverage === 'model_360' ? '360° Wrap' : 'Back Cut'}{logoCutout ? ' • Logo' : ''}
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-700 text-zinc-300 font-mono">
+                        {hasCoverageOptions
+                          ? (coverage === 'model_360' ? '360° Wrap' : 'Back Cut')
+                          : isModelCutOnly
+                          ? 'Back Cut Only'
+                          : isModel360Only
+                          ? '360° Wrap Only'
+                          : 'Standard Fit'}
+                        {hasLogoCutoutSupport && logoCutout ? ' • Logo' : ''}
+                        {hasPencilCutoutSupport && pencilCutout ? ' • Pencil' : ''}
                       </span>
                     </div>
                     {showCoverageSection ? (
@@ -1725,51 +1185,80 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
 
                   {showCoverageSection && (
                     <div className="p-3 pt-0 space-y-3 border-t border-zinc-700/60">
-                      <div className="flex items-center gap-4 pt-2">
-                        <label className="flex items-center gap-2 text-xs font-medium text-zinc-300 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="coverage"
-                            checked={coverage === 'model_360'}
-                            onChange={() => setCoverage('model_360')}
-                            className="text-[#f3aa18] focus:ring-[#f3aa18]"
-                          />
-                          Model 360 (Full Wrap)
-                        </label>
-                        <label className="flex items-center gap-2 text-xs font-medium text-zinc-300 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="coverage"
-                            checked={coverage === 'model_cut'}
-                            onChange={() => setCoverage('model_cut')}
-                            className="text-[#f3aa18] focus:ring-[#f3aa18]"
-                          />
-                          Model Cut (Back Only)
-                        </label>
-                      </div>
+                      {/* Coverage Selection or Status */}
+                      {hasCoverageOptions ? (
+                        <div className="space-y-1.5 pt-2">
+                          <label className="text-[11px] font-bold text-zinc-300 block">Coverage Style</label>
+                          <div className="flex items-center gap-4">
+                            <label className="flex items-center gap-2 text-xs font-medium text-zinc-300 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="coverage"
+                                checked={coverage === 'model_360'}
+                                onChange={() => setCoverage('model_360')}
+                                className="text-[#f3aa18] focus:ring-[#f3aa18]"
+                              />
+                              Model 360 (Full Wrap)
+                            </label>
+                            <label className="flex items-center gap-2 text-xs font-medium text-zinc-300 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="coverage"
+                                checked={coverage === 'model_cut'}
+                                onChange={() => setCoverage('model_cut')}
+                                className="text-[#f3aa18] focus:ring-[#f3aa18]"
+                              />
+                              Model Cut (Back Only)
+                            </label>
+                          </div>
+                        </div>
+                      ) : isModelCutOnly ? (
+                        <div className="pt-2 text-xs text-zinc-300 flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                          <span>This device profile is configured for <b>Model Cut (Back Only)</b>.</span>
+                        </div>
+                      ) : isModel360Only ? (
+                        <div className="pt-2 text-xs text-zinc-300 flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                          <span>This device profile is configured for <b>Model 360 (Full Wrap)</b>.</span>
+                        </div>
+                      ) : (
+                        <div className="pt-2 text-xs text-zinc-400">
+                          Standard precision fit (no alternate coverage styles configured for this device).
+                        </div>
+                      )}
 
-                      <div className="flex items-center gap-4 pt-1">
-                        <label className="flex items-center gap-2 text-xs font-medium text-zinc-300 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={logoCutout}
-                            onChange={(e) => setLogoCutout(e.target.checked)}
-                            className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
-                          />
-                          Punch Logo Cutout
-                        </label>
-                        {profile.coverage_and_cutouts?.has_pencil_cutout && (
-                          <label className="flex items-center gap-2 text-xs font-medium text-zinc-300 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={pencilCutout}
-                              onChange={(e) => setPencilCutout(e.target.checked)}
-                              className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
-                            />
-                            Pencil Cutout
-                          </label>
-                        )}
-                      </div>
+                      {/* Cutout Options */}
+                      {(hasLogoCutoutSupport || hasPencilCutoutSupport) ? (
+                        <div className="flex items-center gap-4 pt-1 border-t border-zinc-700/40">
+                          {hasLogoCutoutSupport && (
+                            <label className="flex items-center gap-2 text-xs font-medium text-zinc-300 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={logoCutout}
+                                onChange={(e) => setLogoCutout(e.target.checked)}
+                                className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
+                              />
+                              Punch Logo Cutout
+                            </label>
+                          )}
+                          {hasPencilCutoutSupport && (
+                            <label className="flex items-center gap-2 text-xs font-medium text-zinc-300 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={pencilCutout}
+                                onChange={(e) => setPencilCutout(e.target.checked)}
+                                className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
+                              />
+                              Pencil Cutout
+                            </label>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-[11px] text-zinc-500 pt-1 border-t border-zinc-700/40">
+                          No cutout options configured for this device.
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1865,6 +1354,807 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                       />
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: TEMPLATE & COPYWRITING */}
+            {activeTab === 'template' && (
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin">
+                {/* Header utility bar: Expand/Collapse All */}
+                <div className="flex items-center justify-between pb-1">
+                  <span className="text-xs font-bold text-zinc-300">Layout & Copy Elements</span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={handleExpandAllCopySections}
+                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white transition"
+                    >
+                      Expand All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCollapseAllCopySections}
+                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white transition"
+                    >
+                      Collapse All
+                    </button>
+                  </div>
+                </div>
+
+                {/* 1. Template Layout Selector (Cover vs Variant) */}
+                <div className="rounded-xl bg-zinc-800/80 border border-zinc-700/80 overflow-hidden transition">
+                  <button
+                    type="button"
+                    onClick={() => toggleCopySection('template')}
+                    className="w-full flex items-center justify-between p-3.5 hover:bg-zinc-750 transition text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <SlidersHorizontal className="w-4 h-4 text-[#f3aa18]" />
+                      <span className="text-xs font-bold text-zinc-200">Listing Template Layout</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-700/80 text-zinc-300 font-mono">
+                        {layoutMode === 'cover' ? 'Hero Close-Up (100%)' : 'Full Device (75%)'}
+                      </span>
+                    </div>
+                    {openCopySections.template ? (
+                      <ChevronUp className="w-4 h-4 text-zinc-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-zinc-400" />
+                    )}
+                  </button>
+
+                  {openCopySections.template && (
+                    <div className="p-3.5 pt-0 space-y-2.5 border-t border-zinc-700/50">
+                      <div className="grid grid-cols-2 gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLayoutMode('cover');
+                            setIsPrimaryCoverMode(true);
+                            setDeviceScale(1.0);
+                            setDeviceOffsetX(0);
+                            setDeviceOffsetY(110);
+                          }}
+                          className={clsx(
+                            'p-2.5 rounded-xl border text-left transition space-y-1',
+                            layoutMode === 'cover'
+                              ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                              : 'bg-zinc-900/80 border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                          )}
+                        >
+                          <div className="flex items-center gap-1.5 font-bold text-xs">
+                            <Star className="w-3.5 h-3.5" />
+                            <span>Cover Layout</span>
+                          </div>
+                          <p className="text-[10px] text-zinc-400 leading-tight">
+                            100% Zoom, 3 bottom glass cards, large headline & 20+ Skins title
+                          </p>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLayoutMode('variant');
+                            setIsPrimaryCoverMode(false);
+                            setDeviceScale(0.75);
+                            setDeviceOffsetX(0);
+                            setDeviceOffsetY(-15);
+                          }}
+                          className={clsx(
+                            'p-2.5 rounded-xl border text-left transition space-y-1',
+                            layoutMode === 'variant'
+                              ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                              : 'bg-zinc-900/80 border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                          )}
+                        >
+                          <div className="flex items-center gap-1.5 font-bold text-xs">
+                            <Layers className="w-3.5 h-3.5" />
+                            <span>Variant Layout</span>
+                          </div>
+                          <p className="text-[10px] text-zinc-400 leading-tight">
+                            75% Zoom, stacked left trust cards + Textured Surface photo
+                          </p>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Variant Mode: Left Column Trust Stack & Texture Photo Controls */}
+                {layoutMode === 'variant' && (
+                  <div className="rounded-xl bg-gradient-to-r from-amber-500/10 via-zinc-800/80 to-zinc-800/80 border border-amber-500/30 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => toggleCopySection('variantStack')}
+                      className="w-full flex items-center justify-between p-3.5 hover:bg-zinc-750/50 transition text-left"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Layers className="w-4 h-4 text-[#f3aa18]" />
+                        <span className="text-xs font-bold text-zinc-100">Left Column: Trust Stack & Texture</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-700/80 text-amber-300 font-mono">
+                          {[showOriginal3M, showMaterialOrigin, showWarranty, showTexturePhoto].filter(Boolean).length}/4 Active
+                        </span>
+                      </div>
+                      {openCopySections.variantStack ? (
+                        <ChevronUp className="w-4 h-4 text-zinc-400" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-zinc-400" />
+                      )}
+                    </button>
+
+                    {openCopySections.variantStack && (
+                      <div className="p-3.5 pt-0 space-y-3 border-t border-amber-500/20">
+                        <div className="flex items-center justify-between pt-2">
+                          <p className="text-[11px] text-zinc-400">
+                            Replaces bottom cards with vertical stacked frosted glass cards on the left, keeping the full 75% device view unobstructed.
+                          </p>
+                          <div className="flex items-center gap-1 shrink-0 ml-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowOriginal3M(true);
+                                setShowMaterialOrigin(true);
+                                setShowWarranty(true);
+                                setShowTexturePhoto(true);
+                              }}
+                              className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#f3aa18]/20 text-[#f3aa18] hover:bg-[#f3aa18]/30"
+                            >
+                              Full Stack
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowOriginal3M(false);
+                                setShowMaterialOrigin(false);
+                                setShowWarranty(false);
+                                setShowTexturePhoto(true);
+                              }}
+                              className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                            >
+                              Texture Only
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={showOriginal3M}
+                              onChange={(e) => setShowOriginal3M(e.target.checked)}
+                              className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
+                            />
+                            <span>100% Original</span>
+                          </label>
+                          <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={showMaterialOrigin}
+                              onChange={(e) => setShowMaterialOrigin(e.target.checked)}
+                              className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
+                            />
+                            <span>3M Material</span>
+                          </label>
+                          <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={showWarranty}
+                              onChange={(e) => setShowWarranty(e.target.checked)}
+                              className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
+                            />
+                            <span>Warranty</span>
+                          </label>
+                          <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={showTexturePhoto}
+                              onChange={(e) => setShowTexturePhoto(e.target.checked)}
+                              className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
+                            />
+                            <span>Textured Surface</span>
+                          </label>
+                        </div>
+
+                        {showTexturePhoto && (
+                          <div className="space-y-1.5 pt-1 border-t border-zinc-700/60">
+                            <div className="flex items-center justify-between text-[11px] text-zinc-300 font-semibold">
+                              <span>Textured Surface Macro Image URL:</span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setTexturePhotoUrl('https://exacoat.com/wp-content/uploads/Textured-Skins-Product-Info.jpg')
+                                }
+                                className="text-[10px] text-[#f3aa18] hover:underline"
+                              >
+                                Reset Official URL
+                              </button>
+                            </div>
+                            <input
+                              type="text"
+                              value={texturePhotoUrl}
+                              onChange={(e) => setTexturePhotoUrl(e.target.value)}
+                              placeholder="https://exacoat.com/wp-content/uploads/Textured-Skins-Product-Info.jpg"
+                              className="w-full px-2.5 py-1.5 rounded-lg text-xs bg-zinc-900 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
+                            />
+                            <p className="text-[10px] text-zinc-500">
+                              Preloaded with Exacoat official textured surface photo.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 3. Skin Name Badge (Top Right) */}
+                <div className="rounded-xl bg-zinc-800/80 border border-zinc-700/80 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleCopySection('skinBadge')}
+                    className="w-full flex items-center justify-between p-3.5 hover:bg-zinc-750 transition text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Type className="w-4 h-4 text-[#f3aa18]" />
+                      <span className="text-xs font-bold text-zinc-200">Skin Name Badge (Top Right)</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-700/80 text-zinc-300 font-mono truncate max-w-[150px]">
+                        {topRightText.trim() ? topRightText : currentPreviewFinish.name.toUpperCase()}
+                      </span>
+                    </div>
+                    {openCopySections.skinBadge ? (
+                      <ChevronUp className="w-4 h-4 text-zinc-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-zinc-400" />
+                    )}
+                  </button>
+
+                  {openCopySections.skinBadge && (
+                    <div className="p-3.5 pt-0 space-y-2 border-t border-zinc-700/50">
+                      <div className="flex items-center justify-between pt-2">
+                        <label className="text-[11px] font-bold text-zinc-300">Preset Quick Fill</label>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setTopRightText('20+ SKINS SELECTION')}
+                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#f3aa18]/20 text-[#f3aa18] hover:bg-[#f3aa18]/30"
+                          >
+                            20+ SKINS SELECTION
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTopRightText('')}
+                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700 truncate max-w-[130px]"
+                            title={currentPreviewFinish.name.toUpperCase()}
+                          >
+                            Auto ({currentPreviewFinish.name.toUpperCase()})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTopRightText('ALL DEVICES')}
+                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                          >
+                            ALL DEVICES
+                          </button>
+                        </div>
+                      </div>
+                      <input
+                        type="text"
+                        value={topRightText}
+                        onChange={(e) => setTopRightText(e.target.value)}
+                        placeholder={`e.g. ${currentPreviewFinish.name.toUpperCase()}`}
+                        className="w-full px-3 py-2 rounded-xl text-xs font-bold bg-zinc-900 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
+                      />
+                      <p className="text-[11px] text-zinc-400">
+                        Displays in the top-right rounded rectangle. In Cover Mode, it renders <b>20+ SKINS SELECTION</b>.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* 4. Primary Product Cover Settings Box */}
+                <div className="rounded-xl bg-gradient-to-r from-amber-500/10 via-zinc-800/80 to-zinc-800/80 border border-amber-500/30 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleCopySection('coverSettings')}
+                    className="w-full flex items-center justify-between p-3.5 hover:bg-zinc-750/50 transition text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Star className="w-4 h-4 text-[#f3aa18]" />
+                      <span className="text-xs font-bold text-zinc-100">Primary Product Cover Image</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-700/80 text-amber-300 font-mono">
+                        {isPrimaryCoverMode ? 'Cover Active' : includePrimaryCoverInBatch ? 'In Batch' : 'Standby'}
+                      </span>
+                    </div>
+                    {openCopySections.coverSettings ? (
+                      <ChevronUp className="w-4 h-4 text-zinc-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-zinc-400" />
+                    )}
+                  </button>
+
+                  {openCopySections.coverSettings && (
+                    <div className="p-3.5 pt-0 space-y-3 border-t border-amber-500/20">
+                      <div className="flex items-center justify-between pt-2">
+                        <p className="text-[11px] text-zinc-400">
+                          Generates the marketplace main cover image featuring <b>20+ SKINS SELECTION</b> in the top-right box and your chosen hero skin.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setIsPrimaryCoverMode(!isPrimaryCoverMode)}
+                          className={clsx(
+                            'px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1 shrink-0 ml-2',
+                            isPrimaryCoverMode
+                              ? 'bg-[#f3aa18] text-black font-extrabold shadow'
+                              : 'bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white'
+                          )}
+                        >
+                          {isPrimaryCoverMode ? 'Viewing Cover' : 'Preview Cover'}
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-zinc-300">Default Hero Skin</label>
+                          <select
+                            value={primarySkinId}
+                            onChange={(e) => setPrimarySkinId(e.target.value)}
+                            className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-[#f3aa18]"
+                          >
+                            {finishes.map((f) => (
+                              <option key={f.id || f.slug} value={f.id || f.slug}>
+                                {f.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-zinc-300">Cover Top-Right Text</label>
+                          <input
+                            type="text"
+                            value={primaryTopRightText}
+                            onChange={(e) => setPrimaryTopRightText(e.target.value)}
+                            placeholder="20+ SKINS SELECTION"
+                            className="w-full px-2.5 py-1.5 rounded-lg text-xs font-bold bg-zinc-900 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
+                          />
+                        </div>
+                      </div>
+
+                      <label className="flex items-center gap-2 pt-1 text-xs font-medium text-zinc-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={includePrimaryCoverInBatch}
+                          onChange={(e) => setIncludePrimaryCoverInBatch(e.target.checked)}
+                          className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
+                        />
+                        <span>Include Primary Cover Image in Batch ZIP export (<code>00_PRIMARY_COVER_...jpg</code>)</span>
+                      </label>
+                    </div>
+                  )}
+                </div>
+
+                {/* 5. Brand Tagline under Logo */}
+                <div className="rounded-xl bg-zinc-800/80 border border-zinc-700/80 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleCopySection('tagline')}
+                    className="w-full flex items-center justify-between p-3.5 hover:bg-zinc-750 transition text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Award className="w-4 h-4 text-[#f3aa18]" />
+                      <span className="text-xs font-bold text-zinc-200">Brand Tagline (Under Logo)</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-700/80 text-zinc-300 font-mono truncate max-w-[150px]">
+                        {showBrandTagline ? brandTagline : 'Hidden'}
+                      </span>
+                    </div>
+                    {openCopySections.tagline ? (
+                      <ChevronUp className="w-4 h-4 text-zinc-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-zinc-400" />
+                    )}
+                  </button>
+
+                  {openCopySections.tagline && (
+                    <div className="p-3.5 pt-0 space-y-2 border-t border-zinc-700/50">
+                      <div className="flex items-center justify-between pt-2">
+                        <span className="text-[11px] font-bold text-zinc-300">Capsule Visibility</span>
+                        <label className="flex items-center gap-1.5 text-xs text-zinc-300 cursor-pointer font-medium">
+                          <input
+                            type="checkbox"
+                            checked={showBrandTagline}
+                            onChange={(e) => setShowBrandTagline(e.target.checked)}
+                            className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
+                          />
+                          Show Tagline Capsule
+                        </label>
+                      </div>
+                      <input
+                        type="text"
+                        value={brandTagline}
+                        onChange={(e) => setBrandTagline(e.target.value)}
+                        disabled={!showBrandTagline}
+                        placeholder="#1 Brand Skin di Indonesia"
+                        className="w-full px-3 py-2 rounded-xl text-xs font-semibold bg-zinc-900 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18] disabled:opacity-40"
+                      />
+                      <p className="text-[11px] text-zinc-400">
+                        Minimalist luxury capsule rendered directly beneath the Exacoat logo.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* 6. Sub-Badge Capsule (Above Headline) */}
+                <div className="rounded-xl bg-zinc-800/80 border border-zinc-700/80 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleCopySection('subBadge')}
+                    className="w-full flex items-center justify-between p-3.5 hover:bg-zinc-750 transition text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-[#f3aa18]" />
+                      <span className="text-xs font-bold text-zinc-200">Sub-Badge Capsule (Above Headline)</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-700/80 text-zinc-300 font-mono truncate max-w-[150px]">
+                        {showSubBadge ? subBadgeText : 'Hidden'}
+                      </span>
+                    </div>
+                    {openCopySections.subBadge ? (
+                      <ChevronUp className="w-4 h-4 text-zinc-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-zinc-400" />
+                    )}
+                  </button>
+
+                  {openCopySections.subBadge && (
+                    <div className="p-3.5 pt-0 space-y-2 border-t border-zinc-700/50">
+                      <div className="flex items-center justify-between pt-2">
+                        <label className="flex items-center gap-1.5 text-xs text-zinc-300 cursor-pointer font-medium">
+                          <input
+                            type="checkbox"
+                            checked={showSubBadge}
+                            onChange={(e) => setShowSubBadge(e.target.checked)}
+                            className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
+                          />
+                          Show Sub-Badge
+                        </label>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowSubBadge(true);
+                              setSubBadgeText('Model Cut & 360');
+                            }}
+                            className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                          >
+                            Model Cut & 360
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowSubBadge(true);
+                              setSubBadgeText('Model Cut');
+                            }}
+                            className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                          >
+                            Model Cut
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowSubBadge(true);
+                              setSubBadgeText('x2 pcs');
+                            }}
+                            className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                          >
+                            x2 pcs
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowSubBadge(true);
+                              setSubBadgeText('Precision Fit');
+                            }}
+                            className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                          >
+                            Precision Fit
+                          </button>
+                        </div>
+                      </div>
+                      <input
+                        type="text"
+                        value={subBadgeText}
+                        onChange={(e) => setSubBadgeText(e.target.value)}
+                        disabled={!showSubBadge}
+                        placeholder="e.g. Model Cut & 360, Model Cut, or x2 pcs"
+                        className="w-full px-3 py-2 rounded-xl text-xs font-semibold bg-zinc-900 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18] disabled:opacity-40"
+                      />
+                      <p className="text-[11px] text-zinc-400">
+                        Rendered as a full-rounded capsule with transparent background (no fill).
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* 7. Product Title Headline */}
+                <div className="rounded-xl bg-zinc-800/80 border border-zinc-700/80 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleCopySection('headline')}
+                    className="w-full flex items-center justify-between p-3.5 hover:bg-zinc-750 transition text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Type className="w-4 h-4 text-[#f3aa18]" />
+                      <span className="text-xs font-bold text-zinc-200">Product Title (Left Headline)</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-700/80 text-zinc-300 font-mono">
+                        {headlineFont} • {headlineHighlightColor}
+                      </span>
+                    </div>
+                    {openCopySections.headline ? (
+                      <ChevronUp className="w-4 h-4 text-zinc-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-zinc-400" />
+                    )}
+                  </button>
+
+                  {openCopySections.headline && (
+                    <div className="p-3.5 pt-0 space-y-2.5 border-t border-zinc-700/50">
+                      <div className="flex items-center justify-between pt-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] text-zinc-400 font-bold">Font:</span>
+                          <select
+                            value={headlineFont}
+                            onChange={(e) => setHeadlineFont(e.target.value as any)}
+                            className="px-2 py-0.5 rounded text-[11px] font-bold bg-zinc-900 border border-zinc-700 text-zinc-200"
+                          >
+                            <option value="Chakra Petch">Chakra Petch (Image 2)</option>
+                            <option value="Plus Jakarta Sans">Plus Jakarta (Modern)</option>
+                            <option value="Inter">Inter (Clean)</option>
+                          </select>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-zinc-400 font-bold">Highlight:</span>
+                          {[
+                            { label: 'Silver', color: '#d2d2d2' },
+                            { label: 'White', color: '#ffffff' },
+                            { label: 'Gold', color: '#f3aa18' },
+                          ].map((preset) => (
+                            <button
+                              key={preset.color}
+                              type="button"
+                              onClick={() => setHeadlineHighlightColor(preset.color)}
+                              className={clsx(
+                                'px-1.5 py-0.5 rounded text-[10px] font-bold border transition',
+                                headlineHighlightColor.toLowerCase() === preset.color.toLowerCase()
+                                  ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                                  : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-zinc-200'
+                              )}
+                            >
+                              {preset.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setAutoHeadlineWithFinish(true)}
+                          className={clsx(
+                            'px-2.5 py-1 rounded-lg text-xs font-bold border transition flex items-center gap-1',
+                            autoHeadlineWithFinish
+                              ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                              : 'bg-zinc-900 border-zinc-700 text-zinc-400'
+                          )}
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          Auto ({profile.device_name})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAutoHeadlineWithFinish(false)}
+                          className={clsx(
+                            'px-2.5 py-1 rounded-lg text-xs font-bold border transition',
+                            !autoHeadlineWithFinish
+                              ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                              : 'bg-zinc-900 border-zinc-700 text-zinc-400'
+                          )}
+                        >
+                          Custom Text
+                        </button>
+                      </div>
+
+                      {autoHeadlineWithFinish ? (
+                        <div className="p-3 rounded-xl bg-zinc-900/80 border border-zinc-700 text-xs space-y-1">
+                          <div className="font-bold text-zinc-100 font-mono whitespace-pre-line text-sm">
+                            {formatDeviceHeadline(profile.device_name)}
+                          </div>
+                          <p className="text-[11px] text-zinc-400">
+                            Product name rendered bold with <b>{headlineHighlightColor}</b> highlight outline for crisp legibility over the phone body.
+                          </p>
+                        </div>
+                      ) : (
+                        <textarea
+                          rows={3}
+                          value={headlineText}
+                          onChange={(e) => setHeadlineText(e.target.value)}
+                          placeholder="Enter multi-line headline (one per line)"
+                          className="w-full px-3 py-2 rounded-xl text-xs font-bold bg-zinc-900 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* 8. Bottom 3 Feature Cards */}
+                <div className="rounded-xl bg-zinc-800/80 border border-zinc-700/80 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleCopySection('featureCards')}
+                    className="w-full flex items-center justify-between p-3.5 hover:bg-zinc-750 transition text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-[#f3aa18]" />
+                      <span className="text-xs font-bold text-zinc-200">Bottom 3 Feature Cards</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-700/80 text-zinc-300 font-mono">
+                        {layoutMode === 'cover' ? 'Active on Cover' : 'Hidden on Variant'}
+                      </span>
+                    </div>
+                    {openCopySections.featureCards ? (
+                      <ChevronUp className="w-4 h-4 text-zinc-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-zinc-400" />
+                    )}
+                  </button>
+
+                  {openCopySections.featureCards && (
+                    <div className="p-3.5 pt-0 space-y-3 border-t border-zinc-700/50">
+                      <div className="flex items-center justify-between flex-wrap gap-1.5 pt-2">
+                        <label className="text-[11px] font-bold text-zinc-300">Preset Configurations</label>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <button
+                            onClick={() => setFeatureCards(DEFAULT_FEATURE_CARDS_OFFICIAL)}
+                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#f3aa18]/20 text-[#f3aa18] hover:bg-[#f3aa18]/30"
+                          >
+                            Official Store
+                          </button>
+                          <button
+                            onClick={() => setFeatureCards(DEFAULT_FEATURE_CARDS_TEXTURE)}
+                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#10b981]/20 text-[#10b981] hover:bg-[#10b981]/30"
+                            title="Features Textured Surface macro photo banner card"
+                          >
+                            Textured (Image 3)
+                          </button>
+                          <button
+                            onClick={() => setFeatureCards(DEFAULT_FEATURE_CARDS_FIT)}
+                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                          >
+                            Accurate Fit
+                          </button>
+                          <button
+                            onClick={() => setFeatureCards(DEFAULT_FEATURE_CARDS_CLEAR)}
+                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                          >
+                            Ark Clear
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2.5">
+                        {featureCards.map((card, idx) => (
+                          <div
+                            key={card.id}
+                            className="p-3 rounded-xl bg-zinc-900/80 border border-zinc-700/80 space-y-2.5"
+                          >
+                            <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                              <span>Card {idx + 1}</span>
+                              <select
+                                value={card.iconType}
+                                onChange={(e) => {
+                                  const val = e.target.value as MarketplaceFeatureCard['iconType'];
+                                  setFeatureCards((prev) =>
+                                    prev.map((c, i) => (i === idx ? { ...c, iconType: val } : c))
+                                  );
+                                }}
+                                className="px-2 py-0.5 rounded text-[10px] bg-zinc-800 text-zinc-200 border-none font-medium"
+                              >
+                                <option value="shield">Shield Check</option>
+                                <option value="material">Star / Rosette (3M)</option>
+                                <option value="guarantee">Guarantee Shield</option>
+                                <option value="texture">Tactile Texture (Image 3)</option>
+                                <option value="fit">Accurate Fit Target</option>
+                                <option value="scratch">Scratch Proof Key</option>
+                              </select>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="text-[10px] text-zinc-400 block mb-0.5">Title (Centered)</label>
+                                <input
+                                  type="text"
+                                  value={card.title}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setFeatureCards((prev) =>
+                                      prev.map((c, i) => (i === idx ? { ...c, title: val } : c))
+                                    );
+                                  }}
+                                  placeholder="Card Title"
+                                  className="w-full px-2 py-1 rounded-lg text-xs font-bold bg-zinc-950 border border-zinc-700 text-zinc-100"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-zinc-400 block mb-0.5">Subtitle (Centered)</label>
+                                <input
+                                  type="text"
+                                  value={card.subtitle || ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setFeatureCards((prev) =>
+                                      prev.map((c, i) => (i === idx ? { ...c, subtitle: val } : c))
+                                    );
+                                  }}
+                                  placeholder="Subtitle (Optional for Photo Card)"
+                                  className="w-full px-2 py-1 rounded-lg text-xs font-medium bg-zinc-950 border border-zinc-700 text-zinc-300"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Photo Banner Input (Image 3 style) */}
+                            <div className="pt-1.5 border-t border-zinc-800">
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="text-[10px] font-semibold text-zinc-300">Macro Photo Banner (Image 3)</label>
+                                {card.imageUrl ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setFeatureCards((prev) =>
+                                        prev.map((c, i) => (i === idx ? { ...c, imageUrl: undefined } : c))
+                                      );
+                                    }}
+                                    className="text-[10px] font-bold text-red-400 hover:underline"
+                                  >
+                                    Remove Photo
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setFeatureCards((prev) =>
+                                        prev.map((c, i) =>
+                                          i === idx
+                                            ? {
+                                                ...c,
+                                                title: c.title || 'Textured Surface',
+                                                iconType: 'texture',
+                                                imageUrl: 'https://exacoat.com/wp-content/uploads/Textured-Skins-Product-Info.jpg',
+                                              }
+                                            : c
+                                        )
+                                      );
+                                    }}
+                                    className="text-[10px] font-bold text-[#10b981] hover:underline"
+                                  >
+                                    + Use Textured Skins Photo
+                                  </button>
+                                )}
+                              </div>
+                              <input
+                                type="text"
+                                value={card.imageUrl || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setFeatureCards((prev) =>
+                                    prev.map((c, i) => (i === idx ? { ...c, imageUrl: val.trim() || undefined } : c))
+                                  );
+                                }}
+                                placeholder="e.g. https://exacoat.com/wp-content/uploads/Textured-Skins-Product-Info.jpg"
+                                className="w-full px-2 py-1 rounded-lg text-xs bg-zinc-950 border border-zinc-700 text-zinc-300 font-mono text-[11px]"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
