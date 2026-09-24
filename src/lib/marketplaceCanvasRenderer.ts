@@ -47,6 +47,19 @@ export interface MarketplaceImageConfig {
   skinsLabelText: string;
   swatchFinishSlugs: string[];
 
+  // Layout Mode: 'cover' (hero close-up 100%, 3 bottom cards, left headline) vs 'variant' (full device 75%, left stacked cards + textured surface, clean bottom)
+  layoutMode?: 'cover' | 'variant';
+
+  // Variant Left Stacked Cards Options
+  variantLeftCards?: {
+    showOriginal3M?: boolean;
+    showMaterialOrigin?: boolean;
+    showWarranty?: boolean;
+    showTexturePhoto?: boolean;
+    texturePhotoUrl?: string;
+    warrantyTitle?: string;
+  };
+
   // Device Positioning & Angles
   selectedViewId?: string;
   coverage: 'model_360' | 'model_cut';
@@ -325,22 +338,36 @@ async function drawLogoPill(
   ctx.shadowBlur = 24;
   ctx.shadowOffsetY = 8;
 
-  // Pill container with rich dark gradient and further rounding
+  // Pill container with enhanced dimensional gradient and further rounding
   pathRoundedRect(ctx, x, y, w, h, r);
-  const pillGrad = ctx.createLinearGradient(x, y, x, y + h);
-  pillGrad.addColorStop(0, '#2e2e34');
-  pillGrad.addColorStop(0.35, '#1e1e22');
-  pillGrad.addColorStop(1, '#0e0e11');
+  const pillGrad = ctx.createLinearGradient(x, y, x + w * 0.12, y + h);
+  pillGrad.addColorStop(0, '#464854');      // crisp gunmetal highlight at top
+  pillGrad.addColorStop(0.18, '#2d2f38');   // sleek dark titanium
+  pillGrad.addColorStop(0.50, '#1b1c21');   // deep graphite
+  pillGrad.addColorStop(0.82, '#0f1013');   // rich obsidian
+  pillGrad.addColorStop(1.0, '#07080a');    // pure dark base
   ctx.fillStyle = pillGrad;
   ctx.fill();
 
   ctx.shadowColor = 'transparent';
 
-  // Inner top highlight stroke
+  // Specular top-half glass sheen
+  ctx.save();
+  pathRoundedRect(ctx, x, y, w, h, r);
+  ctx.clip();
+  const glossGrad = ctx.createLinearGradient(x, y, x, y + h * 0.52);
+  glossGrad.addColorStop(0, 'rgba(255, 255, 255, 0.22)');
+  glossGrad.addColorStop(0.45, 'rgba(255, 255, 255, 0.06)');
+  glossGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = glossGrad;
+  ctx.fillRect(x, y, w, h * 0.52);
+  ctx.restore();
+
+  // Crisp inner top glass highlight stroke
   const borderGrad = ctx.createLinearGradient(x, y, x, y + h);
-  borderGrad.addColorStop(0, 'rgba(255, 255, 255, 0.28)');
-  borderGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.10)');
-  borderGrad.addColorStop(1, 'rgba(255, 255, 255, 0.03)');
+  borderGrad.addColorStop(0, 'rgba(255, 255, 255, 0.48)');
+  borderGrad.addColorStop(0.35, 'rgba(255, 255, 255, 0.20)');
+  borderGrad.addColorStop(1, 'rgba(255, 255, 255, 0.05)');
   ctx.strokeStyle = borderGrad;
   ctx.lineWidth = 2.5;
   ctx.stroke();
@@ -901,20 +928,36 @@ async function drawBottomFeatureCards(
       ctx.restore();
     }
 
-    // 4. Crisp translucent glass border with rounded corners
+    // 4. Luminous glass border with inner refraction bevel line
     ctx.save();
     pathRoundedRect(ctx, x, y, cardW, cardH, cardR);
-    const borderGrad = ctx.createLinearGradient(x, y, x, y + cardH);
-    borderGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
-    borderGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.55)');
-    borderGrad.addColorStop(1, 'rgba(255, 255, 255, 0.30)');
+
+    // Subtle ambient rim glow for frosted glass
+    ctx.shadowColor = 'rgba(255, 255, 255, 0.50)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+
+    const borderGrad = ctx.createLinearGradient(x, y, x + cardW * 0.45, y + cardH);
+    borderGrad.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
+    borderGrad.addColorStop(0.28, 'rgba(255, 255, 255, 0.82)');
+    borderGrad.addColorStop(0.68, 'rgba(255, 255, 255, 0.45)');
+    borderGrad.addColorStop(1, 'rgba(255, 255, 255, 0.22)');
     ctx.strokeStyle = borderGrad;
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2.4;
     ctx.stroke();
 
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
-    ctx.lineWidth = 1;
+    // Inner subtle refraction bevel line
+    ctx.shadowColor = 'transparent';
+    pathRoundedRect(ctx, x + 1.5, y + 1.5, cardW - 3, cardH - 3, Math.max(4, cardR - 1.5));
+    const innerRimGrad = ctx.createLinearGradient(x, y, x, y + cardH);
+    innerRimGrad.addColorStop(0, 'rgba(255, 255, 255, 0.65)');
+    innerRimGrad.addColorStop(0.35, 'rgba(255, 255, 255, 0.16)');
+    innerRimGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.strokeStyle = innerRimGrad;
+    ctx.lineWidth = 1.2;
     ctx.stroke();
+
     ctx.restore();
 
     // 5. Absolute protruding icon badge breaking through top-right border (enlarged to circleR=32)
@@ -942,6 +985,243 @@ async function drawBottomFeatureCards(
   }
 
   ctx.restore();
+}
+
+/**
+ * Draws the vertical stacked feature cards on the left column for Variant listing images.
+ * Matches the authentic Exacoat marketplace variant composition in user reference:
+ * - 100% Original (Exacoat Official Store)
+ * - 3M Material (USA • Japan • Italy)
+ * - Installation Warranty (Garansi Pemasangan)
+ * - Textured Surface (High-res macro photo thumbnail)
+ */
+async function drawLeftStackedFeatureCards(
+  ctx: CanvasRenderingContext2D,
+  options: {
+    showOriginal3M?: boolean;
+    showMaterialOrigin?: boolean;
+    showWarranty?: boolean;
+    showTexturePhoto?: boolean;
+    texturePhotoUrl?: string;
+    warrantyTitle?: string;
+  } = {},
+  x: number = 50,
+  startY: number = 272,
+  w: number = 460
+) {
+  const showOriginal = options.showOriginal3M !== false;
+  const showMaterial = options.showMaterialOrigin !== false;
+  const showWarranty = options.showWarranty !== false;
+  const showTexture = options.showTexturePhoto !== false;
+  const textureUrl =
+    options.texturePhotoUrl?.trim() ||
+    '/assets/brand/textured-skins-product-info.jpg';
+
+  let currentY = startY;
+  const cardR = 26;
+  const cardGap = 20;
+
+  // Helper to render standard glass card background and border glass
+  const drawGlassCardBg = (cy: number, ch: number) => {
+    // 1. Soft ambient shadow
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetY = 8;
+    pathRoundedRect(ctx, x, cy, w, ch, cardR);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+    ctx.fill();
+    ctx.restore();
+
+    // 2. Glass gradient fill
+    ctx.save();
+    pathRoundedRect(ctx, x, cy, w, ch, cardR);
+    ctx.clip();
+    const glassGrad = ctx.createLinearGradient(x, cy, x, cy + ch);
+    glassGrad.addColorStop(0, 'rgba(255, 255, 255, 0.92)');
+    glassGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.82)');
+    glassGrad.addColorStop(1, 'rgba(255, 255, 255, 0.72)');
+    ctx.fillStyle = glassGrad;
+    ctx.fillRect(x, cy, w, ch);
+    ctx.restore();
+
+    // 3. Crisp Glass Border
+    ctx.save();
+    pathRoundedRect(ctx, x, cy, w, ch, cardR);
+    ctx.shadowColor = 'rgba(255, 255, 255, 0.45)';
+    ctx.shadowBlur = 6;
+    const borderGrad = ctx.createLinearGradient(x, cy, x + w * 0.4, cy + ch);
+    borderGrad.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
+    borderGrad.addColorStop(0.3, 'rgba(255, 255, 255, 0.82)');
+    borderGrad.addColorStop(0.7, 'rgba(255, 255, 255, 0.45)');
+    borderGrad.addColorStop(1, 'rgba(255, 255, 255, 0.22)');
+    ctx.strokeStyle = borderGrad;
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+
+    // Inner rim
+    ctx.shadowColor = 'transparent';
+    pathRoundedRect(ctx, x + 1.5, cy + 1.5, w - 3, ch - 3, Math.max(4, cardR - 1.5));
+    const innerRimGrad = ctx.createLinearGradient(x, cy, x, cy + ch);
+    innerRimGrad.addColorStop(0, 'rgba(255, 255, 255, 0.60)');
+    innerRimGrad.addColorStop(0.35, 'rgba(255, 255, 255, 0.15)');
+    innerRimGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.strokeStyle = innerRimGrad;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.restore();
+  };
+
+  // Helper to draw top-right green badge on a card
+  const drawCornerBadge = (cy: number, iconType: MarketplaceFeatureCard['iconType']) => {
+    const circleR = 26;
+    const circleX = x + w - 12;
+    const circleY = cy;
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 3;
+    ctx.beginPath();
+    ctx.arc(circleX, circleY, circleR, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 2.4;
+    ctx.stroke();
+
+    drawCardIcon(ctx, circleX, circleY, iconType);
+    ctx.restore();
+  };
+
+  // 1. "100% Original" Card
+  if (showOriginal) {
+    const cardH = 98;
+    drawGlassCardBg(currentY, cardH);
+    drawCornerBadge(currentY, 'shield');
+
+    ctx.save();
+    ctx.fillStyle = '#09090b';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '900 38px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
+    ctx.fillText('100% Original', x + w / 2 - 4, currentY + 36);
+
+    ctx.font = 'italic 600 21px "Plus Jakarta Sans", sans-serif';
+    ctx.fillStyle = '#52525b';
+    ctx.fillText('Exacoat Official Store', x + w / 2 - 4, currentY + 70);
+    ctx.restore();
+
+    currentY += cardH + cardGap;
+  }
+
+  // 2. "3M Material" Card
+  if (showMaterial) {
+    const cardH = 98;
+    drawGlassCardBg(currentY, cardH);
+    drawCornerBadge(currentY, 'material');
+
+    ctx.save();
+    ctx.fillStyle = '#09090b';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '900 38px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
+    ctx.fillText('3M Material', x + w / 2 - 4, currentY + 36);
+
+    ctx.font = 'italic 600 21px "Plus Jakarta Sans", sans-serif';
+    ctx.fillStyle = '#52525b';
+    ctx.fillText('USA • Japan • Italy', x + w / 2 - 4, currentY + 70);
+    ctx.restore();
+
+    currentY += cardH + cardGap;
+  }
+
+  // 3. "Installation Warranty" Card
+  if (showWarranty) {
+    const cardH = 98;
+    drawGlassCardBg(currentY, cardH);
+    drawCornerBadge(currentY, 'guarantee');
+
+    ctx.save();
+    ctx.fillStyle = '#09090b';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '900 35px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
+    ctx.fillText(options.warrantyTitle || 'Installation Warranty', x + w / 2 - 4, currentY + 36);
+
+    ctx.font = 'italic 600 21px "Plus Jakarta Sans", sans-serif';
+    ctx.fillStyle = '#52525b';
+    ctx.fillText('Risk free installation', x + w / 2 - 4, currentY + 70);
+    ctx.restore();
+
+    currentY += cardH + cardGap;
+  }
+
+  // 4. "Textured Surface" Macro Photo Card
+  if (showTexture) {
+    const cardH = 265;
+    const photoH = 180;
+    const textH = cardH - photoH;
+
+    drawGlassCardBg(currentY, cardH);
+    drawCornerBadge(currentY, 'texture');
+
+    // Photo top rounded area
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x + cardR, currentY);
+    ctx.lineTo(x + w - cardR, currentY);
+    ctx.quadraticCurveTo(x + w, currentY, x + w, currentY + cardR);
+    ctx.lineTo(x + w, currentY + photoH);
+    ctx.lineTo(x, currentY + photoH);
+    ctx.lineTo(x, currentY + cardR);
+    ctx.quadraticCurveTo(x, currentY, x + cardR, currentY);
+    ctx.closePath();
+    ctx.clip();
+
+    try {
+      let photoImg = await loadCorsSafeImageElement(textureUrl);
+      if (!photoImg && textureUrl !== '/assets/brand/textured-skins-product-info.jpg') {
+        photoImg = await loadCorsSafeImageElement('/assets/brand/textured-skins-product-info.jpg');
+      }
+      if (photoImg && photoImg.width > 0 && photoImg.height > 0) {
+        const scale = Math.max(w / photoImg.width, photoH / photoImg.height);
+        const dw = photoImg.width * scale;
+        const dh = photoImg.height * scale;
+        const dx = x + (w - dw) / 2;
+        const dy = currentY + (photoH - dh) / 2;
+        ctx.drawImage(photoImg, dx, dy, dw, dh);
+      } else {
+        ctx.fillStyle = '#18181b';
+        ctx.fillRect(x, currentY, w, photoH);
+      }
+    } catch {
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(x, currentY, w, photoH);
+    }
+    ctx.restore();
+
+    // Divider line between photo and text
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x, currentY + photoH);
+    ctx.lineTo(x + w, currentY + photoH);
+    ctx.stroke();
+    ctx.restore();
+
+    // Title at bottom
+    ctx.save();
+    ctx.fillStyle = '#09090b';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '900 34px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
+    ctx.fillText('Textured Surface', x + w / 2, currentY + photoH + textH / 2);
+    ctx.restore();
+  }
 }
 
 /**
@@ -1514,18 +1794,31 @@ export async function renderMarketplaceImageToCanvas(
   // 2. Render Phone Device
   const deviceCanvas = await renderDeviceComposite(config);
 
-  // Close-Up Hero Shot Scaling & Placement (matching Image 2)
-  // Base scale = 1.0 (100% default zoom) with Y offset default 110px
-  const baseScale = 1.0;
-  const effectiveScale = (config.deviceScale || 1.0) * baseScale;
+  const isVariantLayout =
+    config.layoutMode === 'variant' ||
+    (!config.isPrimaryImage && config.layoutMode !== 'cover');
+
+  // Device Scaling & Placement
+  let effectiveScale: number;
+  let targetCenterX: number;
+  let targetCenterY: number;
+
+  if (isVariantLayout) {
+    // Variant Layout: Scale 75%, vertical Y: -15px, centered between left stacked cards and right swatches
+    const baseVariantScale = config.deviceScale !== undefined ? config.deviceScale : 0.75;
+    effectiveScale = baseVariantScale * 1.0;
+    targetCenterX = 920 + (config.deviceOffsetX || 0);
+    targetCenterY = 750 + (config.deviceOffsetY !== undefined ? config.deviceOffsetY : -15);
+  } else {
+    // Cover Layout: Close-Up Hero Shot (Scale 100%, vertical Y: 110px)
+    const baseCoverScale = config.deviceScale !== undefined ? config.deviceScale : 1.0;
+    effectiveScale = baseCoverScale * 1.0;
+    targetCenterX = 1070 + (config.deviceOffsetX || 0);
+    targetCenterY = 875 + (config.deviceOffsetY !== undefined ? config.deviceOffsetY : 110);
+  }
+
   const dw = 1500 * effectiveScale;
   const dh = 1500 * effectiveScale;
-
-  // Center of phone in deviceCanvas is (750, 750).
-  // Target placement: phone positioned comfortably on the right with camera lenses prominent
-  const targetCenterX = 1070 + (config.deviceOffsetX || 0);
-  const targetCenterY = 875 + (config.deviceOffsetY !== undefined ? config.deviceOffsetY : 110);
-
   const dx = targetCenterX - 750 * effectiveScale;
   const dy = targetCenterY - 750 * effectiveScale;
 
@@ -1557,22 +1850,44 @@ export async function renderMarketplaceImageToCanvas(
   const skinPillText = (config.topRightText?.trim() || defaultTopRight).toUpperCase();
   drawTopRightPill(ctx, skinPillText, 540, 50, 910, 140, 54);
 
-  // 5. Left Column: Sub-badge & Big Bold Headline (displays the Product / Device Name with #d2d2d2 outline)
-  const defaultDeviceTitle = formatDeviceHeadline(config.profile.device_name || config.deviceNameText || '');
-  const effectiveHeadline = config.headlineText?.trim() ? config.headlineText : defaultDeviceTitle;
+  // 5. Left Column Content & Bottom Feature Cards
+  if (isVariantLayout) {
+    // Variant Layout: stacked trust cards and Textured Surface macro preview photo on left column
+    await drawLeftStackedFeatureCards(ctx, config.variantLeftCards || {}, 50, 272, 460);
+    // Bottom feature cards omitted on variant images, leaving the phone body clean and visible!
+  } else {
+    // Cover Layout: Sub-badge & Big Bold Headline (displays the Product / Device Name with highlight outline)
+    const defaultDeviceTitle = formatDeviceHeadline(config.profile.device_name || config.deviceNameText || '');
+    const effectiveHeadline = config.headlineText?.trim() ? config.headlineText : defaultDeviceTitle;
 
-  drawLeftHeadlineBlock(
-    ctx,
-    config.subBadgeText || '',
-    effectiveHeadline,
-    config.headlineFont || 'Chakra Petch',
-    50,
-    undefined,
-    config.headlineHighlightColor || '#d2d2d2'
-  );
+    drawLeftHeadlineBlock(
+      ctx,
+      config.subBadgeText || '',
+      effectiveHeadline,
+      config.headlineFont || 'Chakra Petch',
+      50,
+      undefined,
+      config.headlineHighlightColor || '#d2d2d2'
+    );
 
-  // 6. Bottom Feature Cards (frosted glass with backdrop blur, less opacity, 25% larger typography, shorter cardH=200)
-  await drawBottomFeatureCards(ctx, config.featureCards, 1255, 200, width);
+    // 3 bottom feature cards with genuine frosted border glass
+    await drawBottomFeatureCards(ctx, config.featureCards, 1255, 200, width);
+  }
+
+  // 6. Right Edge Swatch Stack ("20+ SKINS")
+  if (config.showSkinsStack) {
+    const swatches = (config.swatchFinishSlugs || []).length > 0
+      ? config.swatchFinishSlugs.map((slug) => ({ slug, name: slug } as GlobalFinish))
+      : [];
+    await drawSkinsStack(
+      ctx,
+      swatches,
+      config.skinsCountText || '20+',
+      config.skinsLabelText || 'SKINS',
+      1350,
+      490
+    );
+  }
 }
 
 /**
@@ -1607,6 +1922,7 @@ export async function batchGenerateMarketplaceZip(
     includePrimaryCover?: boolean;
     primaryFinish?: GlobalFinish;
     primaryTopRightText?: string;
+    variantsLayoutMode?: 'cover' | 'variant';
   },
   onProgress?: (current: number, total: number, finishName: string) => void
 ): Promise<Blob> {
@@ -1627,6 +1943,10 @@ export async function batchGenerateMarketplaceZip(
       ...baseConfig,
       activeFinish: coverFinish,
       isPrimaryImage: true,
+      layoutMode: 'cover',
+      deviceScale: 1.0,
+      deviceOffsetX: 0,
+      deviceOffsetY: 110,
       topRightText: (options?.primaryTopRightText?.trim() || '20+ SKINS SELECTION').toUpperCase(),
       headlineText: baseConfig.headlineText
         ? baseConfig.headlineText
@@ -1645,10 +1965,15 @@ export async function batchGenerateMarketplaceZip(
       onProgress(progressCount, total, finish.name);
     }
 
+    const useVariantLayout = (options?.variantsLayoutMode || 'variant') === 'variant';
     const currentConfig: MarketplaceImageConfig = {
       ...baseConfig,
       activeFinish: finish,
       isPrimaryImage: false,
+      layoutMode: useVariantLayout ? 'variant' : 'cover',
+      deviceScale: useVariantLayout ? 0.75 : 1.0,
+      deviceOffsetX: 0,
+      deviceOffsetY: useVariantLayout ? -15 : 110,
       topRightText: finish.name.toUpperCase(),
       headlineText: baseConfig.headlineText
         ? baseConfig.headlineText

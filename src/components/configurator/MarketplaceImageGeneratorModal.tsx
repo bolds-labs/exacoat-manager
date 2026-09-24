@@ -87,17 +87,30 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [showBrandTagline, setShowBrandTagline] = useState<boolean>(true);
   const [brandTagline, setBrandTagline] = useState<string>('#1 Brand Skin di Indonesia');
 
+  // Layout Mode: 'cover' (hero close-up 100%, 3 bottom cards, left headline) vs 'variant' (full device 75%, left stacked cards + textured surface, clean bottom)
+  const [layoutMode, setLayoutMode] = useState<'cover' | 'variant'>('variant');
+
   // Primary Listing Cover Image Mode & Settings ("20+ SKINS SELECTION")
   const [isPrimaryCoverMode, setIsPrimaryCoverMode] = useState<boolean>(false);
   const [primarySkinId, setPrimarySkinId] = useState<string>('');
   const [primaryTopRightText, setPrimaryTopRightText] = useState<string>('20+ SKINS SELECTION');
   const [includePrimaryCoverInBatch, setIncludePrimaryCoverInBatch] = useState<boolean>(true);
 
+  // Variant Layout Stacked Left Cards Options
+  const [showOriginal3M, setShowOriginal3M] = useState<boolean>(true);
+  const [showMaterialOrigin, setShowMaterialOrigin] = useState<boolean>(true);
+  const [showWarranty, setShowWarranty] = useState<boolean>(true);
+  const [showTexturePhoto, setShowTexturePhoto] = useState<boolean>(true);
+  const [texturePhotoUrl, setTexturePhotoUrl] = useState<string>(
+    'https://exacoat.com/wp-content/uploads/Textured-Skins-Product-Info.jpg'
+  );
+  const [batchVariantsLayoutMode, setBatchVariantsLayoutMode] = useState<'variant' | 'cover'>('variant');
+
   // Background State
   const [bgType, setBgType] = useState<'studio_light' | 'custom'>('studio_light');
   const [customBgUrl, setCustomBgUrl] = useState<string>('');
 
-  // Device & Swatches State (Default zoom 100%, vertical Y 110px)
+  // Device & Swatches State (Default zoom 75% for variant, 100% for cover)
   const [activeColorId, setActiveColorId] = useState<string>('');
   const [coverage, setCoverage] = useState<'model_360' | 'model_cut'>('model_360');
   const [logoCutout, setLogoCutout] = useState<boolean>(true);
@@ -192,10 +205,16 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     setLogoCutout(profile.coverage_and_cutouts?.has_logo_cutout ?? true);
     setPencilCutout(Boolean(profile.coverage_and_cutouts?.has_pencil_cutout));
 
-    // Reset device hero shot offsets (default 100% zoom, Y = 110px)
-    setDeviceScale(1.0);
-    setDeviceOffsetX(0);
-    setDeviceOffsetY(110);
+    // Reset device offsets based on layout mode (variant: 75% zoom, Y = -15px; cover: 100% zoom, Y = 110px)
+    if (layoutMode === 'cover') {
+      setDeviceScale(1.0);
+      setDeviceOffsetX(0);
+      setDeviceOffsetY(110);
+    } else {
+      setDeviceScale(0.75);
+      setDeviceOffsetX(0);
+      setDeviceOffsetY(-15);
+    }
 
     // Initialize active skin layer IDs
     const initialLayers = new Set<string>();
@@ -385,6 +404,15 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
       autoHeadlineWithFinish,
       headlineHighlightColor,
       featureCards,
+      layoutMode,
+      variantLeftCards: {
+        showOriginal3M,
+        showMaterialOrigin,
+        showWarranty,
+        showTexturePhoto,
+        texturePhotoUrl,
+        warrantyTitle: 'Installation Warranty',
+      },
       showSkinsStack: false,
       skinsCountText: '20+',
       skinsLabelText: 'SKINS',
@@ -444,6 +472,12 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     headlineFont,
     headlineHighlightColor,
     featureCards,
+    layoutMode,
+    showOriginal3M,
+    showMaterialOrigin,
+    showWarranty,
+    showTexturePhoto,
+    texturePhotoUrl,
     isPrimaryCoverMode,
     primaryTopRightText,
     effectiveTopRightText,
@@ -527,6 +561,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
           includePrimaryCover: includePrimaryCoverInBatch,
           primaryFinish: chosenPrimary,
           primaryTopRightText: primaryTopRightText || '20+ SKINS SELECTION',
+          variantsLayoutMode: batchVariantsLayoutMode,
         },
         (current, total, finishName) => {
           setBatchProgress({ current, total, finishName });
@@ -798,19 +833,40 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                   <button
                     type="button"
                     onClick={() => {
+                      setLayoutMode('cover');
+                      setIsPrimaryCoverMode(true);
                       setDeviceScale(1.0);
                       setDeviceOffsetX(0);
                       setDeviceOffsetY(110);
                     }}
                     className={clsx(
                       'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition',
-                      deviceScale === 1.0 && deviceOffsetX === 0 && deviceOffsetY === 110
+                      layoutMode === 'cover'
                         ? 'bg-[#f3aa18]/25 border-[#f3aa18] text-[#f3aa18]'
                         : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'
                     )}
                   >
                     <Smartphone className="w-3 h-3 text-[#f3aa18]" />
-                    Phone
+                    Cover Shot (100%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLayoutMode('variant');
+                      setIsPrimaryCoverMode(false);
+                      setDeviceScale(0.75);
+                      setDeviceOffsetX(0);
+                      setDeviceOffsetY(-15);
+                    }}
+                    className={clsx(
+                      'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition',
+                      layoutMode === 'variant'
+                        ? 'bg-[#f3aa18]/25 border-[#f3aa18] text-[#f3aa18]'
+                        : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'
+                    )}
+                  >
+                    <Smartphone className="w-3 h-3 text-[#f3aa18]" />
+                    Variant Shot (75%)
                   </button>
                   <button
                     type="button"
@@ -828,17 +884,6 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                   >
                     <Laptop className="w-3 h-3 text-[#f3aa18]" />
                     Laptop
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDeviceScale(0.75);
-                      setDeviceOffsetX(-40);
-                      setDeviceOffsetY(20);
-                    }}
-                    className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-bold border border-zinc-700 transition"
-                  >
-                    Centered
                   </button>
                 </div>
               </div>
@@ -860,6 +905,12 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                           setPrimarySkinId(finishId);
                         } else {
                           setActivePreviewFinishId(finishId);
+                          if (layoutMode === 'cover') {
+                            setLayoutMode('variant');
+                            setDeviceScale(0.75);
+                            setDeviceOffsetX(0);
+                            setDeviceOffsetY(-15);
+                          }
                         }
                       }}
                       className={clsx(
@@ -948,6 +999,188 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
             {/* TAB 1: TEMPLATE & COPYWRITING */}
             {activeTab === 'template' && (
               <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
+                {/* Template Layout Selector (Cover vs Variant) */}
+                <div className="p-3 rounded-xl bg-zinc-800/80 border border-zinc-700/80 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-zinc-200">Listing Template Layout</span>
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {layoutMode === 'cover' ? 'Hero Close-Up (100%)' : 'Full Device (75%)'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLayoutMode('cover');
+                        setIsPrimaryCoverMode(true);
+                        setDeviceScale(1.0);
+                        setDeviceOffsetX(0);
+                        setDeviceOffsetY(110);
+                      }}
+                      className={clsx(
+                        'p-2.5 rounded-xl border text-left transition space-y-1',
+                        layoutMode === 'cover'
+                          ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                          : 'bg-zinc-900/80 border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                      )}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-xs">
+                        <Star className="w-3.5 h-3.5" />
+                        <span>Cover Layout</span>
+                      </div>
+                      <p className="text-[10px] text-zinc-400 leading-tight">
+                        100% Zoom, 3 bottom glass cards, large headline & 20+ Skins title
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLayoutMode('variant');
+                        setIsPrimaryCoverMode(false);
+                        setDeviceScale(0.75);
+                        setDeviceOffsetX(0);
+                        setDeviceOffsetY(-15);
+                      }}
+                      className={clsx(
+                        'p-2.5 rounded-xl border text-left transition space-y-1',
+                        layoutMode === 'variant'
+                          ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                          : 'bg-zinc-900/80 border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                      )}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-xs">
+                        <Layers className="w-3.5 h-3.5" />
+                        <span>Variant Layout</span>
+                      </div>
+                      <p className="text-[10px] text-zinc-400 leading-tight">
+                        75% Zoom, stacked left trust cards + Textured Surface photo
+                      </p>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Variant Mode: Left Column Trust Stack & Texture Photo Controls */}
+                {layoutMode === 'variant' && (
+                  <div className="p-3.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-zinc-800/80 to-zinc-800/80 border border-amber-500/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-[#f3aa18]" />
+                        <span className="text-xs font-bold text-zinc-100">Left Column: Trust Stack & Texture</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowOriginal3M(true);
+                            setShowMaterialOrigin(true);
+                            setShowWarranty(true);
+                            setShowTexturePhoto(true);
+                          }}
+                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#f3aa18]/20 text-[#f3aa18] hover:bg-[#f3aa18]/30"
+                        >
+                          Full Stack (4)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowOriginal3M(false);
+                            setShowMaterialOrigin(false);
+                            setShowWarranty(false);
+                            setShowTexturePhoto(true);
+                          }}
+                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                        >
+                          Texture Only
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowOriginal3M(true);
+                            setShowMaterialOrigin(true);
+                            setShowWarranty(true);
+                            setShowTexturePhoto(false);
+                          }}
+                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                        >
+                          3 Trust Only
+                        </button>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-zinc-400">
+                      Replaces bottom cards with vertical stacked frosted glass cards on the left, keeping the full 75% device view unobstructed.
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
+                      <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={showOriginal3M}
+                          onChange={(e) => setShowOriginal3M(e.target.checked)}
+                          className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
+                        />
+                        <span>100% Original</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={showMaterialOrigin}
+                          onChange={(e) => setShowMaterialOrigin(e.target.checked)}
+                          className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
+                        />
+                        <span>3M Material</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={showWarranty}
+                          onChange={(e) => setShowWarranty(e.target.checked)}
+                          className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
+                        />
+                        <span>Warranty</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={showTexturePhoto}
+                          onChange={(e) => setShowTexturePhoto(e.target.checked)}
+                          className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
+                        />
+                        <span>Textured Surface</span>
+                      </label>
+                    </div>
+
+                    {showTexturePhoto && (
+                      <div className="space-y-1.5 pt-1 border-t border-zinc-700/60">
+                        <div className="flex items-center justify-between text-[11px] text-zinc-300 font-semibold">
+                          <span>Textured Surface Macro Image URL:</span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setTexturePhotoUrl('https://exacoat.com/wp-content/uploads/Textured-Skins-Product-Info.jpg')
+                            }
+                            className="text-[10px] text-[#f3aa18] hover:underline"
+                          >
+                            Reset Official URL
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={texturePhotoUrl}
+                          onChange={(e) => setTexturePhotoUrl(e.target.value)}
+                          placeholder="https://exacoat.com/wp-content/uploads/Textured-Skins-Product-Info.jpg"
+                          className="w-full px-2.5 py-1.5 rounded-lg text-xs bg-zinc-900 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
+                        />
+                        <p className="text-[10px] text-zinc-500">
+                          Preloaded with Exacoat official textured surface photo.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Device Name Badge (Top Right) */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
@@ -1752,6 +1985,46 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                       className="px-2 py-0.5 rounded text-[11px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition"
                     >
                       Clear
+                    </button>
+                  </div>
+                </div>
+
+                {/* Batch Export Layout Options */}
+                <div className="p-2.5 rounded-xl bg-zinc-800/80 border border-zinc-700/80 space-y-2 shrink-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-zinc-300">Variant Images Layout in ZIP</span>
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {batchVariantsLayoutMode === 'variant' ? '75% Zoom + Left Trust' : '100% Zoom + Bottom Cards'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setBatchVariantsLayoutMode('variant')}
+                      className={clsx(
+                        'p-2 rounded-lg border text-left transition font-semibold text-[11px]',
+                        batchVariantsLayoutMode === 'variant'
+                          ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                          : 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                      )}
+                    >
+                      <div>Variant Shot (75%)</div>
+                      <div className="text-[10px] text-zinc-400 font-normal">Full device + Left Trust Stack</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setBatchVariantsLayoutMode('cover')}
+                      className={clsx(
+                        'p-2 rounded-lg border text-left transition font-semibold text-[11px]',
+                        batchVariantsLayoutMode === 'cover'
+                          ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                          : 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                      )}
+                    >
+                      <div>Cover Shot (100%)</div>
+                      <div className="text-[10px] text-zinc-400 font-normal">Hero close-up + Bottom Cards</div>
                     </button>
                   </div>
                 </div>
