@@ -32,7 +32,10 @@ class Exacoat_Store_Credit_Manager {
 		// 2. Intercept order completion to award and notify cashback
 		add_action( 'woocommerce_order_status_completed', [ __CLASS__, 'handle_order_completed' ], 25, 1 );
 
-		// 3. Listen to direct store credit additions (manual admin credit or refunds)
+		// 3. Listen to direct store credit additions (manual admin credit, REST API entry creation, or refunds)
+		add_action( 'acfw_create_store_credit_entry', [ __CLASS__, 'handle_acfw_entry_created' ], 20, 2 );
+		add_action( 'acfw_after_save_store_credit_entry', [ __CLASS__, 'handle_acfw_entry_created' ], 20, 2 );
+		add_filter( 'rest_post_dispatch', [ __CLASS__, 'intercept_store_credit_rest_entry' ], 20, 3 );
 		add_action( 'acfw_store_credit_added', [ __CLASS__, 'handle_acfw_store_credit_added' ], 10, 4 );
 		add_action( 'acfw_add_store_credit', [ __CLASS__, 'handle_acfw_add_store_credit' ], 10, 3 );
 		add_action( 'advanced_coupons_add_store_credit', [ __CLASS__, 'handle_acfw_add_store_credit' ], 10, 3 );
@@ -82,6 +85,9 @@ class Exacoat_Store_Credit_Manager {
 		$order->save();
 
 		$customer_id = (int) $order->get_customer_id();
+		if ( $customer_id > 0 ) {
+			update_user_meta( $customer_id, '_exacoat_last_credit_grant_ts', time() );
+		}
 		$currency    = $order->get_currency() ?: 'IDR';
 		$balance     = self::get_customer_balance( $customer_id );
 
@@ -146,36 +152,85 @@ class Exacoat_Store_Credit_Manager {
 	}
 
 	/**
-	 * Handle direct addition of store credit via ACFW hook.
+	 * Handle direct store credit entry creation (manual admin grants, REST API entry creation, or refunds).
 	 */
-	public static function handle_acfw_store_credit_added( $customer_id, $amount, $reason = '', $args = [] ) {
-		$customer_id = (int) $customer_id;
-		$amount      = (float) $amount;
-		if ( ! $customer_id || $amount <= 0 ) {
-			return;
+	public static function handle_acfw_entry_created( $data, $entry_obj = null ) {
+		$type      = '';
+		$user_id   = 0;
+		$amount    = 0.0;
+		$entry_id  = 0;
+		$object_id = 0;
+
+		if ( is_array( $data ) ) {
+			$type      = strtolower( (string) ( $data['type'] ?? '' ) );
+			$user_id   = (int) ( $data['user_id'] ?? 0 );
+			$amount    = (float) ( $data['amount'] ?? $data['amount_raw'] ?? 0 );
+			$entry_id  = (int) ( $data['id'] ?? $data['key'] ?? 0 );
+			$object_id = (int) ( $data['object_id'] ?? 0 );
 		}
 
-		// If this was already triggered by an order completion, skip to avoid double emailing
-		if ( is_string( $reason ) && preg_match( '/#(\d+)/', $reason, $matches ) ) {
-			$order_id = (int) $matches[1];
-			$order    = wc_get_order( $order_id );
-			if ( $order && 'yes' === $order->get_meta( '_exacoat_cashback_email_sent' ) ) {
-				return;
+		if ( is_object( $entry_obj ) && method_exists( $entry_obj, 'get_prop' ) ) {
+			if ( ! $type ) {
+				$type = strtolower( (string) $entry_obj->get_prop( 'type' ) );
+			}
+			if ( ! $user_id ) {
+				$user_id = (int) $entry_obj->get_prop( 'user_id' );
+			}
+			if ( $amount <= 0 ) {
+				$amount = (float) $entry_obj->get_prop( 'amount' );
+			}
+			if ( ! $entry_id && method_exists( $entry_obj, 'get_id' ) ) {
+				$entry_id = (int) $entry_obj->get_id();
+			}
+			if ( ! $object_id ) {
+				$object_id = (int) $entry_obj->get_prop( 'object_id' );
 			}
 		}
 
-		// Schedule 7-day follow-up reminder for the recipient
-		if ( function_exists( 'as_schedule_single_action' ) ) {
-			as_schedule_single_action(
-				time() + ( 7 * DAY_IN_SECONDS ),
-				self::REMINDER_ACTION,
-				[
-					'customer_id' => $customer_id,
-					'order_id'    => 0,
-				],
-				self::QUEUE_GROUP
-			);
+		if ( 'increase' !== $type || $user_id <= 0 || $amount <= 0 ) {
+			return;
 		}
+
+		self::notify_direct_store_credit_grant( $user_id, $amount, $entry_id, $object_id );
+	}
+
+	/**
+	 * Intercept POST /wp-json/wc-store-credits/v1/entries from WP Admin Store Credit adjustments.
+	 */
+	public static function intercept_store_credit_rest_entry( $response, $server, $request ) {
+		if ( ! is_object( $request ) || ! method_exists( $request, 'get_method' ) || ! method_exists( $request, 'get_route' ) ) {
+			return $response;
+		}
+		if ( 'POST' !== strtoupper( (string) $request->get_method() ) ) {
+			return $response;
+		}
+		$route = (string) $request->get_route();
+		if ( false === strpos( $route, '/wc-store-credits/v1/entries' ) ) {
+			return $response;
+		}
+		if ( is_wp_error( $response ) || ( is_object( $response ) && method_exists( $response, 'get_status' ) && $response->get_status() >= 300 ) ) {
+			return $response;
+		}
+
+		$params  = is_object( $request ) && method_exists( $request, 'get_params' ) ? (array) $request->get_params() : [];
+		$res_arr = is_object( $response ) && method_exists( $response, 'get_data' ) ? (array) $response->get_data() : [];
+		$merged  = array_merge( $params, is_array( $res_arr['data'] ?? null ) ? $res_arr['data'] : $res_arr );
+
+		self::handle_acfw_entry_created( $merged );
+		return $response;
+	}
+
+	/**
+	 * Handle direct addition of store credit via ACFW hook.
+	 */
+	public static function handle_acfw_store_credit_added( $customer_id, $amount, $reason = '', $args = [] ) {
+		$order_id = 0;
+		if ( is_string( $reason ) && preg_match( '/#(\d+)/', $reason, $matches ) ) {
+			$order_id = (int) $matches[1];
+		} elseif ( is_array( $args ) ) {
+			$order_id = (int) ( $args['object_id'] ?? $args['order_id'] ?? 0 );
+		}
+		self::notify_direct_store_credit_grant( (int) $customer_id, (float) $amount, 0, $order_id );
 	}
 
 	/**
@@ -183,6 +238,112 @@ class Exacoat_Store_Credit_Manager {
 	 */
 	public static function handle_acfw_add_store_credit( $customer_id, $amount, $reason = '' ) {
 		self::handle_acfw_store_credit_added( $customer_id, $amount, $reason );
+	}
+
+	/**
+	 * Dispatch branded store credit email via ZeptoMail and schedule 7-day + 335-day pre-expiry Action Scheduler reminders.
+	 */
+	public static function notify_direct_store_credit_grant( int $customer_id, float $amount, int $entry_id = 0, int $order_id = 0 ) {
+		if ( $customer_id <= 0 || $amount <= 0 ) {
+			return;
+		}
+
+		if ( $order_id > 0 && function_exists( 'wc_get_order' ) ) {
+			$order = wc_get_order( $order_id );
+			if ( $order && 'yes' === $order->get_meta( '_exacoat_cashback_email_sent' ) ) {
+				return;
+			}
+		}
+
+		if ( $entry_id > 0 ) {
+			$last_entry_id = (int) get_user_meta( $customer_id, '_exacoat_last_notified_sc_entry_id', true );
+			if ( $last_entry_id === $entry_id ) {
+				return;
+			}
+		}
+		$last_ts = (int) get_user_meta( $customer_id, '_exacoat_last_credit_grant_ts', true );
+		if ( $last_ts && ( time() - $last_ts ) < 15 ) {
+			return;
+		}
+
+		update_user_meta( $customer_id, '_exacoat_last_credit_grant_ts', time() );
+		if ( $entry_id > 0 ) {
+			update_user_meta( $customer_id, '_exacoat_last_notified_sc_entry_id', $entry_id );
+		}
+
+		$user = get_userdata( $customer_id );
+		if ( ! $user || empty( $user->user_email ) || ! is_email( $user->user_email ) ) {
+			return;
+		}
+
+		$recipient_email = $user->user_email;
+		$first_name      = $user->first_name ?: ( $user->display_name ?: 'Customer' );
+		$full_name       = trim( $user->first_name . ' ' . $user->last_name ) ?: $first_name;
+		$currency        = function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'IDR';
+
+		$balance = self::get_customer_balance( $customer_id );
+		if ( $balance < $amount ) {
+			$balance = $amount;
+		}
+
+		$expiry_ts   = strtotime( '+1 year' );
+		$expiry_date = date_i18n( get_option( 'date_format', 'F j, Y' ), $expiry_ts );
+
+		$shop_url = function_exists( 'exacoat_storefront_url' )
+			? exacoat_storefront_url( 'shop' )
+			: home_url( '/shop/' );
+
+		$formatted_amount  = self::format_amount( $amount, $currency );
+		$formatted_balance = self::format_amount( $balance, $currency );
+
+		$data = [
+			'customer_first_name'  => $first_name,
+			'customer_name'        => $full_name,
+			'order_number'         => $order_id ?: 'Store Credit Adjustment',
+			'order_id'             => $order_id ?: '',
+			'cashback_amount'      => $formatted_amount,
+			'store_credit_balance' => $formatted_balance,
+			'shop_url'             => $shop_url,
+			'expiry_date'          => $expiry_date,
+			'badge_text'           => 'Store Credit',
+			'title'                => 'Store credit added to your account',
+			'body_primary'         => "Hi {$first_name}, {$formatted_amount} in store credit has been added to your Exacoat account.",
+			'body_secondary'       => "Your available balance is now {$formatted_balance} and remains valid until {$expiry_date}. Apply your balance directly during checkout.",
+			'cta_text'             => 'Shop Device Skins',
+		];
+
+		if ( class_exists( 'Exacoat_Email_Engine' ) ) {
+			Exacoat_Email_Engine::send_email(
+				'customer_cashback_earned',
+				$recipient_email,
+				$full_name,
+				$data
+			);
+		}
+
+		if ( function_exists( 'as_schedule_single_action' ) ) {
+			as_schedule_single_action(
+				time() + ( 7 * DAY_IN_SECONDS ),
+				self::REMINDER_ACTION,
+				[
+					'customer_id' => $customer_id,
+					'order_id'    => (int) $order_id,
+					'type'        => 'followup_7d',
+				],
+				self::QUEUE_GROUP
+			);
+
+			as_schedule_single_action(
+				time() + ( 335 * DAY_IN_SECONDS ),
+				self::REMINDER_ACTION,
+				[
+					'customer_id' => $customer_id,
+					'order_id'    => (int) $order_id,
+					'type'        => 'pre_expiry_30d',
+				],
+				self::QUEUE_GROUP
+			);
+		}
 	}
 
 	/**
