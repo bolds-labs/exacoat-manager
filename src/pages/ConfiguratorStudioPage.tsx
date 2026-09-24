@@ -1109,6 +1109,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     setIsLoadingProfile(true);
     setInspectorTab('skins');
     try {
+      const summary = profiles.find((p) => p.product_id === productId);
       const res = await fetchProductConfiguratorProfileDirect(productId);
       if (res.success && res.profile) {
         const rawLayers = res.profile.layers || [];
@@ -1124,17 +1125,19 @@ export const ConfiguratorStudioPage: React.FC = () => {
           return devImg ? { ...v, background_url: devImg } : v;
         });
 
-        const devFamily = res.profile.family || 'phone';
+        const devFamily = res.profile.family || summary?.family || 'phone';
         const isBigFamily = devFamily === 'laptop' || devFamily === 'tablet' || (devFamily as string) === 'tablet_laptop' || devFamily === 'keyboard';
         const normalizedMultiplier = isBigFamily
           ? 2.0
           : (devFamily === 'foldable' ? 1.3 : (res.profile.size_multiplier || 1.0));
 
+        const devName = res.profile.device_name || summary?.name || `Device #${productId}`;
+        const devSlug = res.profile.device_slug || summary?.slug || '';
         const cleanVariants = sanitizeDeviceVariants(
           res.profile.variants,
           devFamily,
-          res.profile.device_name,
-          res.profile.device_slug
+          devName,
+          devSlug
         );
 
         const rawCoverage = res.profile.coverage_and_cutouts;
@@ -1145,8 +1148,19 @@ export const ConfiguratorStudioPage: React.FC = () => {
             : 40000,
         } : undefined;
 
+        const resolvedBasePrice = Number(res.profile.base_price) > 0
+          ? Number(res.profile.base_price)
+          : (summary?.price || 0);
+
         const profile: DeviceConfiguratorProfile = {
           ...res.profile,
+          product_id: Number(res.profile.product_id) || productId,
+          device_name: devName,
+          device_slug: devSlug,
+          category: res.profile.category || summary?.categories?.[0] || 'General',
+          base_price: resolvedBasePrice,
+          currency: res.profile.currency || 'IDR',
+          family: devFamily,
           size_multiplier: normalizedMultiplier,
           views: viewsWithBody,
           layers: cleanedLayers,
@@ -1366,8 +1380,19 @@ export const ConfiguratorStudioPage: React.FC = () => {
           : 40000,
       } : undefined;
 
+      const targetPid = Number(editingProfile.product_id) || selectedProductId || 0;
+      if (!targetPid) {
+        showToast('error', 'Save Failed', 'Valid product_id is required');
+        return;
+      }
+
+      const summary = profiles.find((p) => p.product_id === targetPid);
+      const safePrice = Number(editingProfile.base_price) > 0 ? Number(editingProfile.base_price) : (summary?.price || 0);
+
       const profileToSave = {
         ...editingProfile,
+        product_id: targetPid,
+        base_price: safePrice,
         variants: cleanVariants,
         ...(coverageToSave ? { coverage_and_cutouts: coverageToSave } : {}),
       };
@@ -1700,6 +1725,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
         setProfiles((prev) =>
           prev.map((p) => (p.product_id === priceEditModal.productId ? { ...p, price: tempPrice } : p))
         );
+        if (editingProfile && editingProfile.product_id === priceEditModal.productId) {
+          setEditingProfile((prev) => prev ? { ...prev, base_price: tempPrice } : prev);
+        }
         setPriceEditModal(null);
       } else {
         showToast('error', 'Update Failed', res.error || 'Failed setting product price');

@@ -1841,6 +1841,34 @@ class Exacoat_Configurator_Engine {
 	}
 
 	/**
+	 * Helper to reliably resolve a product's base price across simple and variable products
+	 */
+	public static function get_product_base_price( $product ): float {
+		if ( ! $product || ! is_object( $product ) ) {
+			return 0.0;
+		}
+
+		$price = (float) ( $product->get_price() ?: $product->get_regular_price() ?: 0 );
+
+		if ( $price <= 0 && method_exists( $product, 'is_type' ) && $product->is_type( 'variable' ) ) {
+			if ( method_exists( $product, 'get_variation_price' ) ) {
+				$min_price = (float) $product->get_variation_price( 'min', true );
+				if ( $min_price > 0 ) {
+					return $min_price;
+				}
+			}
+			if ( method_exists( $product, 'get_variation_regular_price' ) ) {
+				$min_reg_price = (float) $product->get_variation_regular_price( 'min', true );
+				if ( $min_reg_price > 0 ) {
+					return $min_reg_price;
+				}
+			}
+		}
+
+		return $price;
+	}
+
+	/**
 	 * Convert legacy MKL product meta into modern Composable Device Profile
 	 */
 	public static function convert_mkl_to_profile( int $product_id ): array {
@@ -2176,7 +2204,7 @@ class Exacoat_Configurator_Engine {
 			'model_360_extra_price' => $model_360_price ?: 40000,
 		];
 
-		$base_price = (float) ( $product->get_price() ?: $product->get_regular_price() ?: 0 );
+		$base_price = self::get_product_base_price( $product );
 
 		return [
 			'product_id'           => $product_id,
@@ -2417,7 +2445,7 @@ class Exacoat_Configurator_Engine {
 				'name'                 => $p_name,
 				'slug'                 => $p_slug,
 				'status'               => $product ? $product->get_status() : $p->post_status,
-				'price'                => $product ? (float) $product->get_price() : 0,
+				'price'                => self::get_product_base_price( $product ),
 				'categories'           => $cats,
 				'is_migrated'          => $is_migrated,
 				'configurator_version' => $profile_data['configurator_version'] ?? 'v1',
@@ -2490,11 +2518,30 @@ class Exacoat_Configurator_Engine {
 
 		$product = wc_get_product( $product_id );
 		if ( $profile && is_array( $profile ) ) {
+			$p_name = $product ? $product->get_name() : ( $profile['device_name'] ?? "Device #{$product_id}" );
+			$p_slug = $product ? $product->get_slug() : ( $profile['device_slug'] ?? '' );
+			$cats = $product ? wp_get_post_terms( $product_id, 'product_cat', [ 'fields' => 'names' ] ) : [];
+
+			// Guarantee essential product identity and price fields are always populated
+			$profile['product_id'] = $product_id;
+			if ( empty( $profile['device_name'] ) ) {
+				$profile['device_name'] = $p_name;
+			}
+			if ( empty( $profile['device_slug'] ) ) {
+				$profile['device_slug'] = $p_slug;
+			}
+			if ( empty( $profile['category'] ) ) {
+				$profile['category'] = ! empty( $cats[0] ) ? $cats[0] : 'General';
+			}
+			if ( empty( $profile['currency'] ) ) {
+				$profile['currency'] = get_woocommerce_currency();
+			}
+			if ( ! isset( $profile['base_price'] ) || (float) $profile['base_price'] <= 0 ) {
+				$profile['base_price'] = self::get_product_base_price( $product );
+			}
+
 			if ( $product ) {
 				$profile['status'] = $product->get_status();
-				$p_name = $product->get_name();
-				$p_slug = $product->get_slug();
-				$cats = wp_get_post_terms( $product_id, 'product_cat', [ 'fields' => 'names' ] );
 
 				$fam = $profile['family'] ?? '';
 				$mult = isset( $profile['size_multiplier'] ) ? (float) $profile['size_multiplier'] : 0;
@@ -2514,6 +2561,11 @@ class Exacoat_Configurator_Engine {
 				} elseif ( $fam === 'foldable' && $mult <= 1.0 ) {
 					$mult = 1.3;
 					$profile['size_multiplier'] = 1.3;
+					$needs_save = true;
+				}
+
+				// Auto-heal missing identity or base_price in persistent metadata
+				if ( is_array( $modern_profile ) && ( empty( $modern_profile['product_id'] ) || empty( $modern_profile['device_name'] ) || empty( $modern_profile['base_price'] ) ) ) {
 					$needs_save = true;
 				}
 
@@ -2658,6 +2710,20 @@ class Exacoat_Configurator_Engine {
 			}
 		}
 
+		if ( is_array( $profile ) ) {
+			$profile['product_id'] = (int) ( $profile['product_id'] ?? $product_id );
+			$profile['base_price'] = (float) ( $profile['base_price'] ?? self::get_product_base_price( $product ) );
+			if ( empty( $profile['device_name'] ) && $product ) {
+				$profile['device_name'] = $product->get_name();
+			}
+			if ( empty( $profile['device_slug'] ) && $product ) {
+				$profile['device_slug'] = $product->get_slug();
+			}
+			if ( empty( $profile['currency'] ) ) {
+				$profile['currency'] = get_woocommerce_currency();
+			}
+		}
+
 		return rest_ensure_response( [
 			'success'        => true,
 			'profile'        => $profile,
@@ -2674,7 +2740,7 @@ class Exacoat_Configurator_Engine {
 	 */
 	public static function rest_save_product_configurator( WP_REST_Request $request ): WP_REST_Response {
 		$params = $request->get_json_params() ?: $request->get_params();
-		$product_id = (int) ( $params['product_id'] ?? 0 );
+		$product_id = (int) ( $params['product_id'] ?? $params['id'] ?? $request->get_param( 'product_id' ) ?? $request->get_param( 'id' ) ?? 0 );
 
 		if ( ! $product_id || ! get_post( $product_id ) ) {
 			return new WP_REST_Response( [ 'success' => false, 'message' => 'Valid product_id is required' ], 400 );
@@ -2702,8 +2768,14 @@ class Exacoat_Configurator_Engine {
 		}
 
 		$post_obj = get_post( $product_id );
+		$wc_product = wc_get_product( $product_id );
 		$dev_slug = ! empty( $params['device_slug'] ) ? sanitize_title( $params['device_slug'] ) : ( $post_obj ? $post_obj->post_name : '' );
 		$dev_name = ! empty( $params['device_name'] ) ? sanitize_text_field( $params['device_name'] ) : ( $post_obj ? $post_obj->post_title : '' );
+
+		$raw_price = isset( $params['base_price'] ) ? (float) $params['base_price'] : 0;
+		if ( $raw_price <= 0 && $wc_product ) {
+			$raw_price = self::get_product_base_price( $wc_product );
+		}
 
 		$profile = [
 			'product_id'           => $product_id,
@@ -2711,7 +2783,7 @@ class Exacoat_Configurator_Engine {
 			'device_name'          => $dev_name,
 			'category'             => sanitize_text_field( $params['category'] ?? '' ),
 			'family'               => sanitize_text_field( $params['family'] ?? 'phone' ),
-			'base_price'           => (float) ( $params['base_price'] ?? 0 ),
+			'base_price'           => $raw_price,
 			'currency'             => sanitize_text_field( $params['currency'] ?? 'IDR' ),
 			'size_multiplier'      => (float) ( $params['size_multiplier'] ?? 1.0 ),
 			'texture_scale'        => isset( $params['texture_scale'] ) ? (float) $params['texture_scale'] : 1.0,
@@ -2847,7 +2919,8 @@ class Exacoat_Configurator_Engine {
 		}
 
 		// Sync WooCommerce product price with configurator base_price
-		if ( isset( $params['base_price'] ) && (float) $params['base_price'] >= 0 ) {
+		// Require base_price > 0 to prevent accidental zero wipes
+		if ( isset( $params['base_price'] ) && (float) $params['base_price'] > 0 ) {
 			$product = wc_get_product( $product_id );
 			if ( $product ) {
 				$new_price = (float) $params['base_price'];
@@ -3033,7 +3106,7 @@ class Exacoat_Configurator_Engine {
 	 */
 	public static function rest_set_product_price( WP_REST_Request $request ): WP_REST_Response {
 		$params = $request->get_json_params() ?: $request->get_params();
-		$product_id = (int) ( $params['product_id'] ?? 0 );
+		$product_id = (int) ( $params['product_id'] ?? $params['id'] ?? $request->get_param( 'product_id' ) ?? $request->get_param( 'id' ) ?? 0 );
 		$price = isset( $params['price'] ) ? (float) $params['price'] : null;
 
 		if ( ! $product_id || $price === null || $price < 0 ) {

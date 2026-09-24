@@ -81,7 +81,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       description: 'The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.',
-      changelog: `### Version ${version}\n- Added 1-year store credit expiration support across transactional email templates and client-side previewer\n- Configured individual FIFO cashback expiration dates calculated 1 year from the qualifying order date\n- Scheduled automated 30-day pre-expiry warning Action Scheduler jobs (335 days post-grant) to drive repeat skin conversions before expiration`,
+      changelog: `### Version ${version}\n- Resolved "Valid product_id is required" error when editing MacBook Pro and MacBook Air devices by guaranteeing product_id and device identity in configurator REST endpoints and Studio editor\n- Resolved base price IDR 0 display on laptops and variable products by retrieving true WooCommerce prices and variation price fallbacks\n- Guarded product saving to prevent unintentional zero-price overwrites on WooCommerce products`,
     },
   };
 

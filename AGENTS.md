@@ -266,6 +266,13 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Endpoint `POST /configurator/toggle-configurator` provides 1-click toggling from Exacoat Manager.
   - Catalog cards and the Studio top bar display interactive status badges (`Configurator` vs `Excluded`).
   - The catalog header provides a scope selector (`Configurators` vs `All Products`) and searches across names, slugs, and numeric SKUs (e.g. searching `474343` or `A54`).
+- **Device Identity & Base Price Integrity Invariant**:
+  - In `rest_get_product_configurator`, profiles loaded from post meta `_exacoat_configurator_profile` must guarantee that `product_id`, `device_name`, `device_slug`, `category`, `currency`, and `base_price` are always populated from the queried WooCommerce product (`wc_get_product($product_id)`).
+  - Older profiles (e.g. MacBook Pro, MacBook Air, older iPads) that were saved or migrated with only layer/view layouts without top-level product identity fields are automatically healed in post meta upon retrieval.
+  - Price resolution (`get_product_base_price()`) supports both simple and variable WooCommerce products by evaluating variation minimum prices (`$product->get_variation_price('min', true)`), preventing base price IDR 0 display on laptops and variable products.
+  - In `rest_save_product_configurator`, `base_price > 0` is strictly required before synchronizing WooCommerce product regular prices, preventing accidental zero-price overwrites from uninitialized frontend states.
+  - Client-side bridge `fetchProductConfiguratorProfileDirect()` and `saveProductConfiguratorProfileDirect()` strictly validate and enforce `targetProductId`, eliminating `"Valid product_id is required"` errors.
+
 - **Catalog Pagination**:
   `rest_get_configurator_profiles` accepts `per_page` up to `500` (or `per_page: -1`) to load the entire store catalog in a single request, eliminating the previous 100-item cutoff.
 

@@ -3114,10 +3114,19 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
           }))
         : [];
 
+      const numId = typeof idOrSlug === 'number' ? idOrSlug : parseInt(String(idOrSlug), 10);
+      const safeProductId = Number(data.profile.product_id) || (Number.isFinite(numId) ? numId : 0);
+
       return {
         success: true,
         profile: {
           ...data.profile,
+          product_id: safeProductId || Number((data.profile as any).id) || 0,
+          base_price: Number(data.profile.base_price) || 0,
+          device_name: data.profile.device_name || '',
+          device_slug: data.profile.device_slug || '',
+          category: data.profile.category || 'General',
+          currency: data.profile.currency || 'IDR',
           layers: cleanLayers,
           variants: cleanVariants,
           presets: sanitizedPresets,
@@ -3153,6 +3162,12 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
             success: true,
             profile: {
               ...parsedModern,
+              product_id: p.id,
+              device_name: p.name,
+              device_slug: p.slug,
+              category: (p.categories || [])[0]?.name || 'General',
+              base_price: Number(parsedModern.base_price) || Number(p.price) || 0,
+              currency: 'IDR',
               layers: cleanLayers,
               variants: cleanVariants,
               configurator_version: parsedModern.configurator_version || 'v1',
@@ -3423,8 +3438,14 @@ export async function saveProductConfiguratorProfileDirect(profile: Partial<Devi
       tagline: typeof p.tagline === 'string' ? p.tagline.replace(/360u00b0/gi, '360°').replace(/360\\u00b0/gi, '360°') : p.tagline,
     })) : profile.presets;
 
+    const targetProductId = Number(profile.product_id) || Number((profile as any).id) || 0;
+    if (!targetProductId) {
+      return { success: false, error: 'Valid product_id is required' };
+    }
+
     const payload = {
       ...profile,
+      product_id: targetProductId,
       ...(cleanVariants !== undefined ? { variants: cleanVariants } : {}),
       ...(cleanPresets !== undefined ? { presets: cleanPresets } : {}),
     };

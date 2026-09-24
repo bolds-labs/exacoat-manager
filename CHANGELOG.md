@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.42] - 2026-09-24
+
+### Configurator Studio Product Identity & Base Price Resolution
+- **MacBook and Variable Product Editing Fix**:
+  - Resolved `Valid product_id is required` error when editing MacBook Pro, MacBook Air, and other devices whose persistent configurator profiles in `_exacoat_configurator_profile` lacked top-level identity fields.
+  - Guaranteed `product_id`, `device_name`, `device_slug`, `category`, and `currency` are always populated from the queried WooCommerce product in `rest_get_product_configurator()`.
+  - Added on-the-fly post meta auto-healing so devices with legacy or incomplete metadata are permanently repaired upon retrieval.
+- **Base Price Resolution & Zero-Wipe Protection**:
+  - Implemented `get_product_base_price()` helper in `class-configurator-engine.php` to resolve true product prices across simple and variable WooCommerce products (evaluating variation minimum prices).
+  - Resolved `Base: IDR 0` display in Configurator Studio top bar and Device Settings input for laptops and variable products.
+  - Added strict guard `base_price > 0` before updating WooCommerce product regular prices in `rest_save_product_configurator()`, preventing accidental zero-price overwrites from uninitialized frontend states.
+  - Enhanced client bridge `fetchProductConfiguratorProfileDirect()` and `saveProductConfiguratorProfileDirect()` with resilient ID and price fallbacks.
+
 ## [0.1.41] - 2026-09-24
 
 ### Dedicated 30-Day Pre-Expiry Store Credit Warning Email Template
