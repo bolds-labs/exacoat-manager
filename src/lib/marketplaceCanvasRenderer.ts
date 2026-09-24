@@ -1536,7 +1536,7 @@ function applySyntheticDirectionalShading(
   }
 
   // Soft diagonal surface gradient shadow (Simulates top-left incident light falloff across vinyl body)
-  const surfaceGradEnabled = options?.surface_gradient_enabled ?? true;
+  const surfaceGradEnabled = options?.surface_gradient_enabled ?? false;
   const surfaceGradOpacity = typeof options?.surface_gradient_opacity === 'number'
     ? options.surface_gradient_opacity
     : 0.22;
@@ -1547,16 +1547,16 @@ function applySyntheticDirectionalShading(
     gradCanvas.height = height;
     const gCtx = gradCanvas.getContext('2d');
     if (gCtx) {
-      const x0 = isBottomRight ? width * 0.15 : width * 0.85;
-      const y0 = isBottomRight ? height * 0.08 : height * 0.95;
-      const x1 = isBottomRight ? width * 0.85 : width * 0.15;
-      const y1 = isBottomRight ? height * 0.95 : height * 0.08;
+      const x0 = isBottomRight ? width * 0.10 : width * 0.90;
+      const y0 = isBottomRight ? height * 0.05 : height * 0.95;
+      const x1 = isBottomRight ? width * 0.90 : width * 0.10;
+      const y1 = isBottomRight ? height * 0.95 : height * 0.05;
 
       const grad = gCtx.createLinearGradient(x0, y0, x1, y1);
       grad.addColorStop(0.0, 'rgba(0, 0, 0, 0)');
-      grad.addColorStop(0.40, 'rgba(0, 0, 0, 0)');
-      grad.addColorStop(0.65, `rgba(0, 0, 0, ${(surfaceGradOpacity * 0.22).toFixed(3)})`);
-      grad.addColorStop(0.85, `rgba(0, 0, 0, ${(surfaceGradOpacity * 0.65).toFixed(3)})`);
+      grad.addColorStop(0.30, 'rgba(0, 0, 0, 0)');
+      grad.addColorStop(0.55, `rgba(0, 0, 0, ${(surfaceGradOpacity * 0.35).toFixed(3)})`);
+      grad.addColorStop(0.80, `rgba(0, 0, 0, ${(surfaceGradOpacity * 0.75).toFixed(3)})`);
       grad.addColorStop(1.0, `rgba(0, 0, 0, ${surfaceGradOpacity.toFixed(3)})`);
 
       gCtx.fillStyle = grad;
@@ -1871,7 +1871,8 @@ async function renderDeviceComposite(
     const isBackOrRequired = Boolean(
       layer.is_required ||
       layer.group === 'primary' ||
-      (/\b(back|top|body)\b/i.test(layer.name) && !/\b(accent|camera|frame|side|logo|additional|addon)\b/i.test(layer.name))
+      /\b(back|body|top|base|full)\b/i.test(layer.name) ||
+      !/\b(accent|camera lens|frame|side|logo|additional|addon)\b/i.test(layer.name)
     );
     const hasViewShadow = Boolean(currentView.shadow_png_url || currentView.highlight_png_url);
 

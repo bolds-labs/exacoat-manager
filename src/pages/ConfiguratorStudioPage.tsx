@@ -487,16 +487,16 @@ function applySyntheticDirectionalShading(
     gradCanvas.height = height;
     const gCtx = gradCanvas.getContext('2d');
     if (gCtx) {
-      const x0 = isBottomRight ? width * 0.15 : width * 0.85;
-      const y0 = isBottomRight ? height * 0.08 : height * 0.95;
-      const x1 = isBottomRight ? width * 0.85 : width * 0.15;
-      const y1 = isBottomRight ? height * 0.95 : height * 0.08;
+      const x0 = isBottomRight ? width * 0.10 : width * 0.90;
+      const y0 = isBottomRight ? height * 0.05 : height * 0.95;
+      const x1 = isBottomRight ? width * 0.90 : width * 0.10;
+      const y1 = isBottomRight ? height * 0.95 : height * 0.05;
 
       const grad = gCtx.createLinearGradient(x0, y0, x1, y1);
       grad.addColorStop(0.0, 'rgba(0, 0, 0, 0)');
-      grad.addColorStop(0.40, 'rgba(0, 0, 0, 0)');
-      grad.addColorStop(0.65, `rgba(0, 0, 0, ${(surfaceGradOpacity * 0.22).toFixed(3)})`);
-      grad.addColorStop(0.85, `rgba(0, 0, 0, ${(surfaceGradOpacity * 0.65).toFixed(3)})`);
+      grad.addColorStop(0.30, 'rgba(0, 0, 0, 0)');
+      grad.addColorStop(0.55, `rgba(0, 0, 0, ${(surfaceGradOpacity * 0.35).toFixed(3)})`);
+      grad.addColorStop(0.80, `rgba(0, 0, 0, ${(surfaceGradOpacity * 0.75).toFixed(3)})`);
       grad.addColorStop(1.0, `rgba(0, 0, 0, ${surfaceGradOpacity.toFixed(3)})`);
 
       gCtx.fillStyle = grad;
@@ -650,11 +650,12 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
         ctx.drawImage(modelCutoutImg, 0, 0, 1000, 1000);
       }
 
-      // 6. Directional Bevel & Inner Shading (strictly on back or required skins without 3D shadow map, never on additionals/accents)
+      // 6. Directional Bevel & Inner Shading and Master Texture Surface Shading
       const isBackOrRequired = Boolean(
         isRequired ||
         layerGroup === 'primary' ||
-        (/\b(back|top|body|device)\b/i.test(layerName) && !/\b(accent|camera|frame|side|logo|additional|addon)\b/i.test(layerName))
+        /\b(back|body|top|base|full)\b/i.test(layerName) ||
+        !/\b(accent|camera lens|frame|side|logo|additional|addon)\b/i.test(layerName)
       );
       const isTabletOrFoldableOrLaptop =
         deviceFamily === 'tablet' ||
@@ -666,11 +667,13 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
       const shouldApplyGeneratedShadow =
         isBackOrRequired &&
         (generatedShadowConfig?.enabled ?? defaultGenEnabled);
+      const shouldApplySurfaceGradient = Boolean(surfaceGradientEnabled);
 
-      if (shouldApplyGeneratedShadow && maskImg) {
+      if ((shouldApplyGeneratedShadow || shouldApplySurfaceGradient) && maskImg) {
         const shadowOptions = {
           ...generatedShadowConfig,
-          surface_gradient_enabled: surfaceGradientEnabled ?? false,
+          enabled: shouldApplyGeneratedShadow ? (generatedShadowConfig?.enabled ?? true) : false,
+          surface_gradient_enabled: shouldApplySurfaceGradient,
           surface_gradient_opacity: surfaceGradientOpacity ?? 0.22,
         };
         applySyntheticDirectionalShading(ctx, 1000, 1000, shadowOptions);
@@ -6584,14 +6587,24 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 title="Click to assign Master Texture (Standard)"
                               >
                                 {currentTextureInput ? (
-                                  <img
-                                    src={currentTextureInput}
-                                    alt="Texture"
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                      (e.target as HTMLElement).style.display = 'none';
-                                    }}
-                                  />
+                                  <div className="relative w-full h-full">
+                                    <img
+                                      src={currentTextureInput}
+                                      alt="Texture"
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        (e.target as HTMLElement).style.display = 'none';
+                                      }}
+                                    />
+                                    {currentSurfaceGradEnabled && (
+                                      <div
+                                        className="absolute inset-0 pointer-events-none"
+                                        style={{
+                                          background: `linear-gradient(135deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,${(currentSurfaceGradOpacity * 0.35).toFixed(3)}) 55%, rgba(0,0,0,${(currentSurfaceGradOpacity * 0.75).toFixed(3)}) 80%, rgba(0,0,0,${currentSurfaceGradOpacity.toFixed(3)}) 100%)`,
+                                        }}
+                                      />
+                                    )}
+                                  </div>
                                 ) : (
                                   <div className="text-zinc-600 group-hover:text-amber-400 transition-colors flex flex-col items-center justify-center gap-0.5">
                                     <Layers className="w-4 h-4" />
@@ -6633,14 +6646,24 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 title="Click to assign Master Texture (Big / Laptop & Tablet)"
                               >
                                 {currentTextureBigInput ? (
-                                  <img
-                                    src={currentTextureBigInput}
-                                    alt="Big Texture"
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                      (e.target as HTMLElement).style.display = 'none';
-                                    }}
-                                  />
+                                  <div className="relative w-full h-full">
+                                    <img
+                                      src={currentTextureBigInput}
+                                      alt="Big Texture"
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        (e.target as HTMLElement).style.display = 'none';
+                                      }}
+                                    />
+                                    {currentSurfaceGradEnabled && (
+                                      <div
+                                        className="absolute inset-0 pointer-events-none"
+                                        style={{
+                                          background: `linear-gradient(135deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,${(currentSurfaceGradOpacity * 0.35).toFixed(3)}) 55%, rgba(0,0,0,${(currentSurfaceGradOpacity * 0.75).toFixed(3)}) 80%, rgba(0,0,0,${currentSurfaceGradOpacity.toFixed(3)}) 100%)`,
+                                        }}
+                                      />
+                                    )}
+                                  </div>
                                 ) : (
                                   <div className="text-zinc-600 group-hover:text-amber-400 transition-colors flex flex-col items-center justify-center gap-0.5">
                                     <Laptop className="w-4 h-4" />
@@ -8144,8 +8167,20 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   hasViewShadow={hasViewShadow}
                                   generatedShadowConfig={currentView?.generated_shadow}
                                   deviceFamily={editingProfile.family}
-                                  surfaceGradientEnabled={activeFinish?.surface_gradient_enabled === true}
-                                  surfaceGradientOpacity={activeFinish?.surface_gradient_opacity}
+                                  surfaceGradientEnabled={
+                                    activeFinish
+                                      ? (editingFinishSurfaceGradEnabled[activeFinish.id] !== undefined
+                                          ? editingFinishSurfaceGradEnabled[activeFinish.id]
+                                          : Boolean(activeFinish.surface_gradient_enabled))
+                                      : false
+                                  }
+                                  surfaceGradientOpacity={
+                                    activeFinish
+                                      ? (editingFinishSurfaceGradOpacities[activeFinish.id] !== undefined
+                                          ? editingFinishSurfaceGradOpacities[activeFinish.id]
+                                          : (typeof activeFinish.surface_gradient_opacity === 'number' ? activeFinish.surface_gradient_opacity : 0.22))
+                                      : 0.22
+                                  }
                                 />
                               );
                             }
