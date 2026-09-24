@@ -1117,7 +1117,7 @@ class Exacoat_Core {
 
 			$filepath = '';
 
-			if ( $product_id > 0 ) {
+			if ( $product_id > 0 && empty( $url ) ) {
 				$thumb_id = get_post_thumbnail_id( $product_id );
 				if ( $thumb_id ) {
 					$filepath = (string) get_attached_file( $thumb_id );
