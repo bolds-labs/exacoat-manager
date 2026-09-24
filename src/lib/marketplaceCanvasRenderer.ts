@@ -116,7 +116,7 @@ export const DEFAULT_FEATURE_CARDS_TEXTURE: MarketplaceFeatureCard[] = [
     title: 'Textured Surface',
     subtitle: '',
     iconType: 'texture',
-    imageUrl: 'https://exacoat.com/wp-content/uploads/Textured-Skins-Product-Info.jpg',
+    imageUrl: '/assets/brand/textured-skins-product-info.jpg',
   },
 ];
 
@@ -1094,9 +1094,12 @@ async function drawLeftStackedFeatureCards(
   const showMaterial = options.showMaterialOrigin !== false;
   const showWarranty = options.showWarranty !== false;
   const showTexture = options.showTexturePhoto !== false;
-  const textureUrl =
+  let textureUrl =
     options.texturePhotoUrl?.trim() ||
     '/assets/brand/textured-skins-product-info.jpg';
+  if (textureUrl.includes('Textured-Skins-Product-Info.jpg') || textureUrl.includes('textured-skins-product-info.jpg')) {
+    textureUrl = '/assets/brand/textured-skins-product-info.jpg';
+  }
 
   const textCardH = 114;
   const photoH = 230;
@@ -2034,14 +2037,47 @@ export async function generateMarketplaceImageBlob(
   await renderMarketplaceImageToCanvas(canvas, config);
 
   return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (blob) resolve(blob);
-        else reject(new Error('Canvas toBlob failed'));
-      },
-      'image/jpeg',
-      0.95
-    );
+    try {
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            try {
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+              const arr = dataUrl.split(',');
+              const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+              const bstr = atob(arr[1]);
+              let n = bstr.length;
+              const u8arr = new Uint8Array(n);
+              while (n--) {
+                u8arr[n] = bstr.charCodeAt(n);
+              }
+              resolve(new Blob([u8arr], { type: mime }));
+            } catch (fallbackErr) {
+              reject(fallbackErr || new Error('Canvas toBlob failed'));
+            }
+          }
+        },
+        'image/jpeg',
+        0.95
+      );
+    } catch (toBlobErr) {
+      try {
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+        const arr = dataUrl.split(',');
+        const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        resolve(new Blob([u8arr], { type: mime }));
+      } catch (fallbackErr) {
+        reject(toBlobErr || fallbackErr || new Error('Canvas export failed'));
+      }
+    }
   });
 }
 

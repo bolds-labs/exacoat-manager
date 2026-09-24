@@ -10,8 +10,35 @@ export async function loadCorsSafeImageBlobUrl(
 ): Promise<string> {
   if (!url && !productId) return '';
 
+  // Intercept known bundled brand assets to use same-origin public files
+  if (url && (url.includes('Textured-Skins-Product-Info.jpg') || url.includes('textured-skins-product-info.jpg'))) {
+    url = '/assets/brand/textured-skins-product-info.jpg';
+  }
+  if (url && url.includes('tokopedia-official-store-badge')) {
+    url = '/assets/brand/tokopedia-official-store-badge.png';
+  }
+  if (url && url.includes('exacoat-logo')) {
+    url = '/assets/brand/exacoat-logo.svg';
+  }
+
   // Already local data or blob URL - 100% same-origin safe
   if (url && (url.startsWith('data:') || url.startsWith('blob:'))) {
+    return url;
+  }
+
+  // Same-origin relative path (e.g. /assets/brand/...)
+  if (url && url.startsWith('/')) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob && blob.size > 0) {
+          return URL.createObjectURL(blob);
+        }
+      }
+    } catch {
+      // Fallback to relative URL
+    }
     return url;
   }
 
@@ -94,6 +121,22 @@ export async function loadCorsSafeImageBlobUrl(
     // Continue to fallback
   }
 
+  // Strategy 5: Public CORS proxy fallback for remote HTTP assets to prevent canvas tainting
+  if (url && url.startsWith('http')) {
+    try {
+      const corsProxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+      const res = await fetch(corsProxyUrl);
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob && blob.size > 0) {
+          return URL.createObjectURL(blob);
+        }
+      }
+    } catch {
+      // Fallback
+    }
+  }
+
   // Fallback: return original URL
   return url;
 }
@@ -105,13 +148,24 @@ export async function loadCorsSafeImageElement(
   url: string,
   productId?: number | string
 ): Promise<HTMLImageElement> {
+  // Intercept known bundled brand assets
+  if (url && (url.includes('Textured-Skins-Product-Info.jpg') || url.includes('textured-skins-product-info.jpg'))) {
+    url = '/assets/brand/textured-skins-product-info.jpg';
+  }
+  if (url && url.includes('tokopedia-official-store-badge')) {
+    url = '/assets/brand/tokopedia-official-store-badge.png';
+  }
+  if (url && url.includes('exacoat-logo')) {
+    url = '/assets/brand/exacoat-logo.svg';
+  }
+
   const blobUrl = await loadCorsSafeImageBlobUrl(url, productId);
   const sourceLabel = url || `product ${productId}`;
 
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
-    // Blob URLs are same-origin so they don't need anonymous crossOrigin
-    if (!blobUrl.startsWith('blob:') && !blobUrl.startsWith('data:')) {
+    const isBlobOrData = blobUrl.startsWith('blob:') || blobUrl.startsWith('data:');
+    if (!isBlobOrData) {
       img.crossOrigin = 'anonymous';
     }
     img.onload = () => resolve(img);

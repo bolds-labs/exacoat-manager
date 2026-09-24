@@ -179,7 +179,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [showWarranty, setShowWarranty] = useState<boolean>(true);
   const [showTexturePhoto, setShowTexturePhoto] = useState<boolean>(true);
   const [texturePhotoUrl, setTexturePhotoUrl] = useState<string>(
-    'https://exacoat.com/wp-content/uploads/Textured-Skins-Product-Info.jpg'
+    '/assets/brand/textured-skins-product-info.jpg'
   );
   const [batchVariantsLayoutMode, setBatchVariantsLayoutMode] = useState<'variant' | 'cover'>('variant');
 
@@ -1713,7 +1713,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                               <button
                                 type="button"
                                 onClick={() =>
-                                  setTexturePhotoUrl('https://exacoat.com/wp-content/uploads/Textured-Skins-Product-Info.jpg')
+                                  setTexturePhotoUrl('/assets/brand/textured-skins-product-info.jpg')
                                 }
                                 className="text-[10px] text-[#f3aa18] hover:underline"
                               >
@@ -1724,7 +1724,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                               type="text"
                               value={texturePhotoUrl}
                               onChange={(e) => setTexturePhotoUrl(e.target.value)}
-                              placeholder="https://exacoat.com/wp-content/uploads/Textured-Skins-Product-Info.jpg"
+                              placeholder="/assets/brand/textured-skins-product-info.jpg"
                               className="w-full px-2.5 py-1.5 rounded-lg text-xs bg-zinc-900 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
                             />
                             <p className="text-[10px] text-zinc-500">
@@ -2276,7 +2276,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                                                 ...c,
                                                 title: c.title || 'Textured Surface',
                                                 iconType: 'texture',
-                                                imageUrl: 'https://exacoat.com/wp-content/uploads/Textured-Skins-Product-Info.jpg',
+                                                imageUrl: '/assets/brand/textured-skins-product-info.jpg',
                                               }
                                             : c
                                         )
@@ -2297,7 +2297,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                                     prev.map((c, i) => (i === idx ? { ...c, imageUrl: val.trim() || undefined } : c))
                                   );
                                 }}
-                                placeholder="e.g. https://exacoat.com/wp-content/uploads/Textured-Skins-Product-Info.jpg"
+                                placeholder="e.g. /assets/brand/textured-skins-product-info.jpg"
                                 className="w-full px-2 py-1 rounded-lg text-xs bg-zinc-950 border border-zinc-700 text-zinc-300 font-mono text-[11px]"
                               />
                             </div>
