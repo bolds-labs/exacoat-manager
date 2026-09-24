@@ -492,16 +492,18 @@ async function drawTokopediaBadge(
   badgeUrl: string = '/assets/brand/tokopedia-official-store-badge.png',
   x: number = 50,
   y: number = 268,
-  containerW: number = 460
+  _containerW: number = 460
 ) {
   try {
     const img = await loadCorsSafeImageElement(badgeUrl);
     if (!img || img.width <= 0 || img.height <= 0) return;
 
     const naturalRatio = img.width / img.height;
-    const badgeH = 74;
+    // Scaled up ~20% (was 74 -> now 89px)
+    const badgeH = 89;
     const badgeW = Math.round(badgeH * naturalRatio);
-    const badgeX = x + Math.round((containerW - badgeW) / 2);
+    // Align left flush with the logo pill & tagline container
+    const badgeX = x;
 
     ctx.save();
     ctx.shadowColor = 'rgba(0, 0, 0, 0.08)';
