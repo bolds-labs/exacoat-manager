@@ -1,17 +1,17 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.39",
+  "version": "0.1.40",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.39.zip?v=0.1.39",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.40.zip?v=0.1.40",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-24T09:08:20.279Z",
+  "last_updated": "2026-09-24T09:26:49.367Z",
   "sections": {
     "description": "The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.",
-    "changelog": "### Version 0.1.39\n- Added native Exacoat Email Engine templates for customer cashback earned and store credit balance reminder\n- Integrated Exacoat_Store_Credit_Manager with Action Scheduler for automated 7-day post-cashback follow-ups\n- Suppressed unstyled Advanced Coupons default WooCommerce emails to route all notifications through Zoho ZeptoMail API\n- Added dynamic order cashback resolution supporting ACFW coupon definitions, meta keys, and user balance lookups"
+    "changelog": "### Version 0.1.40\n- Added 1-year store credit expiration support across transactional email templates and client-side previewer\n- Configured individual FIFO cashback expiration dates calculated 1 year from the qualifying order date\n- Scheduled automated 30-day pre-expiry warning Action Scheduler jobs (335 days post-grant) to drive repeat skin conversions before expiration"
   }
 }

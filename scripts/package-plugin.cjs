@@ -81,7 +81,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       description: 'The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.',
-      changelog: `### Version ${version}\n- Added native Exacoat Email Engine templates for customer cashback earned and store credit balance reminder\n- Integrated Exacoat_Store_Credit_Manager with Action Scheduler for automated 7-day post-cashback follow-ups\n- Suppressed unstyled Advanced Coupons default WooCommerce emails to route all notifications through Zoho ZeptoMail API\n- Added dynamic order cashback resolution supporting ACFW coupon definitions, meta keys, and user balance lookups`,
+      changelog: `### Version ${version}\n- Added 1-year store credit expiration support across transactional email templates and client-side previewer\n- Configured individual FIFO cashback expiration dates calculated 1 year from the qualifying order date\n- Scheduled automated 30-day pre-expiry warning Action Scheduler jobs (335 days post-grant) to drive repeat skin conversions before expiration`,
     },
   };
 

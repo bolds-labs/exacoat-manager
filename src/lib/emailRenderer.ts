@@ -824,6 +824,7 @@ function renderStoreCreditEmail(event: string, data: Record<string, any>): Rende
   const custName = escapeHtml(data.customer_first_name || data.customer_name || 'Customer');
   const balance = escapeHtml(data.store_credit_balance || 'Rp 50.000');
   const cashbackAmount = escapeHtml(data.cashback_amount || 'Rp 25.000');
+  const expiryDate = escapeHtml(data.expiry_date || '');
   const orderNum = escapeHtml(data.order_number || '14589');
   const shopUrl = escapeHtml(data.shop_url || 'https://exacoat.com/shop/');
 
@@ -906,8 +907,8 @@ function renderStoreCreditEmail(event: string, data: Record<string, any>): Rende
                         <span class="balance-text" style="font-size:34px;font-weight:800;letter-spacing:-0.5px;color:#111111;">${balance}</span>
                       </div>
                       ${cashbackPill}
-                      <p style="margin:12px 0 0;font-size:12px;color:#71717a;">
-                        Applied automatically at checkout when signed in
+                      <p style="margin:12px 0 0;font-size:12.5px;color:#71717a;">
+                        ${expiryDate ? `Valid for 1 year &bull; Active through <strong style="color:#111111;">${expiryDate}</strong>` : 'Valid for 1 year &bull; Applied automatically at checkout'}
                       </p>
                     </td>
                   </tr>
@@ -923,7 +924,7 @@ function renderStoreCreditEmail(event: string, data: Record<string, any>): Rende
                   </tr>
                   <tr>
                     <td align="center" style="padding-top:8px;">
-                      <span style="font-size:12px;color:#71717a;">Your store credit balance is saved in your account with no immediate expiry.</span>
+                      <span style="font-size:12px;color:#71717a;">Store credit is valid for 1 year from the date earned and applies automatically at checkout.</span>
                     </td>
                   </tr>
                 </table>

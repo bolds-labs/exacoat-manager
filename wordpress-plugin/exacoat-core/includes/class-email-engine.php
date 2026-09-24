@@ -377,6 +377,7 @@ class Exacoat_Email_Engine {
 					'cashback_amount'      => 'Rp 25.000',
 					'store_credit_balance' => 'Rp 25.000',
 					'order_number'         => '14589',
+					'expiry_date'          => date( 'F j, Y', strtotime( '+1 year' ) ),
 					'shop_url'             => 'https://exacoat.com/shop/',
 				],
 			],
@@ -394,6 +395,7 @@ class Exacoat_Email_Engine {
 				'defaults'       => [
 					'customer_first_name'  => 'Alex',
 					'store_credit_balance' => 'Rp 50.000',
+					'expiry_date'          => date( 'F j, Y', strtotime( '+1 year' ) ),
 					'shop_url'             => 'https://exacoat.com/shop/',
 				],
 			],
@@ -1760,6 +1762,7 @@ class Exacoat_Email_Engine {
 		$balance         = esc_html( $data['store_credit_balance'] ?? 'Rp 25.000' );
 		$cashback_amount = esc_html( $data['cashback_amount'] ?? '' );
 		$order_num       = esc_html( $data['order_number'] ?? '' );
+		$expiry_date     = esc_html( $data['expiry_date'] ?? '' );
 		$shop_url        = esc_url( $data['shop_url'] ?? ( function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'shop' ) : home_url( '/shop/' ) ) );
 		$badge_text      = esc_html( $data['badge_text'] ?? ( $tmpl['badge'] ?? 'Store Credit' ) );
 		$title           = esc_html( $data['title'] ?? ( $tmpl['title'] ?? 'Your store credit is ready' ) );
@@ -1861,7 +1864,7 @@ class Exacoat_Email_Engine {
                   </tr>
                   <tr>
                     <td align=\"center\" style=\"padding-top:8px;\">
-                      <span style=\"font-size:12px;color:#71717a;\">Your store credit balance is saved in your account with no immediate expiry.</span>
+                      <span style=\"font-size:12px;color:#71717a;\">Store credit is valid for 1 year from the date earned and applies automatically at checkout.</span>
                     </td>
                   </tr>
                 </table>

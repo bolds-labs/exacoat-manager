@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.40] - 2026-09-24
+
+### 1-Year Store Credit Expiration Lifecycle & Pre-Expiry Warnings
+- **1-Year Expiration Integration (`Exacoat_Store_Credit_Manager`)**:
+  - Configured 1-year individual FIFO store credit expiration calculated from the completion date of each qualifying cashback order.
+  - Added timestamp and human-readable expiry metadata to orders (`_exacoat_cashback_expiry_ts`, `_exacoat_cashback_expiry_date`).
+  - Added 30-day pre-expiry warning Action Scheduler job (`pre_expiry_30d`) enqueued for 335 days post-grant, triggering an urgency email to drive repeat purchases before expiration.
+- **Email Template & Manager Preview Enhancements (`Exacoat_Email_Engine` & Manager ERP)**:
+  - Updated `customer_cashback_earned` and `customer_store_credit_reminder` templates to prominently display 1-year validity and exact expiration dates.
+  - Updated client-side email previewer in Exacoat Manager (`#emails`) with 1-year validity copy and preloaded expiration defaults.
+
 ## [0.1.39] - 2026-09-24
 
 ### Store Credit & Cashback Email Overrides via ZeptoMail

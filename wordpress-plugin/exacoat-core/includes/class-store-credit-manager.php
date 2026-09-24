@@ -73,6 +73,11 @@ class Exacoat_Store_Credit_Manager {
 		// Mark order as notified immediately to prevent race conditions
 		$order->update_meta_data( '_exacoat_cashback_email_sent', 'yes' );
 		$order->update_meta_data( '_exacoat_cashback_email_sent_at', current_time( 'mysql' ) );
+
+		$expiry_ts   = strtotime( '+1 year' );
+		$expiry_date = date_i18n( get_option( 'date_format', 'F j, Y' ), $expiry_ts );
+		$order->update_meta_data( '_exacoat_cashback_expiry_ts', $expiry_ts );
+		$order->update_meta_data( '_exacoat_cashback_expiry_date', $expiry_date );
 		$order->save();
 
 		$customer_id = (int) $order->get_customer_id();
@@ -99,6 +104,7 @@ class Exacoat_Store_Credit_Manager {
 			'cashback_amount'      => self::format_amount( $cashback['amount'], $currency ),
 			'store_credit_balance' => self::format_amount( $balance, $currency ),
 			'shop_url'             => $shop_url,
+			'expiry_date'          => $expiry_date,
 			'cta_text'             => 'Shop Device Skins',
 		];
 
@@ -110,18 +116,28 @@ class Exacoat_Store_Credit_Manager {
 			$data
 		);
 
-		// Schedule 7-day follow-up reminder if customer account exists
+		// Schedule lifecycle reminder jobs if customer account exists
 		if ( $customer_id && function_exists( 'as_schedule_single_action' ) ) {
-			if ( function_exists( 'as_unschedule_action' ) ) {
-				as_unschedule_action( self::REMINDER_ACTION, [ 'customer_id' => $customer_id ], self::QUEUE_GROUP );
-			}
-			$reminder_delay = 7 * DAY_IN_SECONDS;
+			// Job 1: 7-day follow-up reminder
 			as_schedule_single_action(
-				time() + $reminder_delay,
+				time() + ( 7 * DAY_IN_SECONDS ),
 				self::REMINDER_ACTION,
 				[
 					'customer_id' => $customer_id,
 					'order_id'    => (int) $order_id,
+					'type'        => 'followup_7d',
+				],
+				self::QUEUE_GROUP
+			);
+
+			// Job 2: 30-day pre-expiry warning (335 days after grant, 30 days before 1-year mark)
+			as_schedule_single_action(
+				time() + ( 335 * DAY_IN_SECONDS ),
+				self::REMINDER_ACTION,
+				[
+					'customer_id' => $customer_id,
+					'order_id'    => (int) $order_id,
+					'type'        => 'pre_expiry_30d',
 				],
 				self::QUEUE_GROUP
 			);
@@ -223,13 +239,35 @@ class Exacoat_Store_Credit_Manager {
 			? exacoat_storefront_url( 'shop' )
 			: home_url( '/shop/' );
 
+		$type          = (string) ( $args['type'] ?? 'followup_7d' );
+		$is_pre_expiry = ( 'pre_expiry_30d' === $type );
+		$expiry_date   = '';
+
+		if ( $order_id ) {
+			$orig_order = wc_get_order( $order_id );
+			if ( $orig_order ) {
+				$expiry_date = (string) $orig_order->get_meta( '_exacoat_cashback_expiry_date' );
+			}
+		}
+		if ( empty( $expiry_date ) && $is_pre_expiry ) {
+			$expiry_date = date_i18n( get_option( 'date_format', 'F j, Y' ), strtotime( '+30 days' ) );
+		}
+
 		$data = [
 			'customer_first_name'  => $first_name,
 			'customer_name'        => $full_name,
 			'store_credit_balance' => self::format_amount( $balance, $currency ),
 			'shop_url'             => $shop_url,
-			'cta_text'             => 'Use Your Credit',
+			'expiry_date'          => $expiry_date,
+			'cta_text'             => $is_pre_expiry ? 'Use Credit Before It Expires' : 'Use Your Credit',
 		];
+
+		if ( $is_pre_expiry ) {
+			$data['badge_text']     = 'Expiring Soon';
+			$data['title']          = 'Your store credit is expiring soon';
+			$data['body_primary']   = "A friendly reminder that your store credit balance of {$data['store_credit_balance']} is set to expire in 30 days.";
+			$data['body_secondary'] = 'Apply your balance during checkout on any precision device skin or accessories before it expires.';
+		}
 
 		Exacoat_Email_Engine::send_email(
 			'customer_store_credit_reminder',

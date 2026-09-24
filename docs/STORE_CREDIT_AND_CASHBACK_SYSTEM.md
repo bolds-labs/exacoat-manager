@@ -61,23 +61,21 @@ Exacoat Core introduces [`Exacoat_Store_Credit_Manager`](file:///c:/AI/exacoat-m
 
 ---
 
-## 4. Action Scheduler Integration
+## 4. 1-Year Expiration Lifecycle & Action Scheduler
 
+### Individual FIFO Expiration Model
+* **Separate Expiry per Credit**: Each cashback issuance is stamped with its own expiration date (`_exacoat_cashback_expiry_ts` and `_exacoat_cashback_expiry_date`), calculated exactly 1 year from the date of the qualifying order.
+* **FIFO Consumption**: Advanced Coupons deducts store credit balances using First-In-First-Out (FIFO). When a customer spends credit, the earliest-expiring credit is used first.
+* **Independent Expiry**: If a customer earned Rp 25.000 in January and Rp 50.000 in March, only the January credit expires after 1 year, while the March credit remains valid until March of the following year.
+
+### Dual Action Scheduler Lifecycle Jobs
 * **Queue Group**: `exacoat-store-credit`
 * **Action Hook**: `exacoat_send_store_credit_reminder_job`
-* **Scheduling**:
-  ```php
-  as_schedule_single_action(
-      time() + ( 7 * DAY_IN_SECONDS ),
-      'exacoat_send_store_credit_reminder_job',
-      [
-          'customer_id' => $customer_id,
-          'order_id'    => (int) $order_id,
-      ],
-      'exacoat-store-credit'
-  );
-  ```
-* **Cancellation Safety**: When a new reminder is enqueued, any existing pending job for the customer is safely unscheduled via `as_unschedule_action()`.
+* **Job 1 (Day 7 Follow-Up)**:
+  Enqueued for 7 days post-purchase (`time() + ( 7 * DAY_IN_SECONDS )`). Reminds customer to return and use their credit while purchase excitement is high.
+* **Job 2 (Day 335 Pre-Expiry Alert - 30 Days Left)**:
+  Enqueued for 335 days post-purchase (`time() + ( 335 * DAY_IN_SECONDS )`). Warns customer that their credit will expire in 30 days, creating real urgency to complete another order.
+* **Safety Checks**: Both jobs verify that customer store credit balance is still > 0, ensure no intermediate order was placed, and respect a 14-day anti-spam cooldown.
 
 ---
 

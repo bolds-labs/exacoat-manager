@@ -232,13 +232,14 @@ export const EMAIL_TEMPLATES_CATALOG: { category: string; items: EmailTemplateIt
         badge: 'Store Credit',
         badgeVariant: 'lime',
         subject: 'You received {{cashback_amount}} cashback on order #{{order_number}}',
-        trigger: 'Dispatched immediately when an order earning cashback reaches completed status.',
-        payload: '{ "event": "customer_cashback_earned", "recipient_email": "customer@gmail.com", "customer_first_name": "William", "order_number": "14589", "cashback_amount": "Rp 25.000", "store_credit_balance": "Rp 50.000", "shop_url": "https://exacoat.com/shop/" }',
+        trigger: 'Dispatched immediately when an order earning cashback reaches completed status. Mentions 1-year validity period.',
+        payload: '{ "event": "customer_cashback_earned", "recipient_email": "customer@gmail.com", "customer_first_name": "William", "order_number": "14589", "cashback_amount": "Rp 25.000", "store_credit_balance": "Rp 50.000", "expiry_date": "September 24, 2027", "shop_url": "https://exacoat.com/shop/" }',
         defaults: {
           customer_first_name: 'William',
           order_number: '14589',
           cashback_amount: 'Rp 25.000',
           store_credit_balance: 'Rp 50.000',
+          expiry_date: 'September 24, 2027',
           shop_url: 'https://exacoat.com/shop/',
         }
       },
@@ -249,11 +250,12 @@ export const EMAIL_TEMPLATES_CATALOG: { category: string; items: EmailTemplateIt
         badge: 'Reminder',
         badgeVariant: 'amber',
         subject: 'You have {{store_credit_balance}} store credit waiting in your Exacoat account',
-        trigger: 'Dispatched after 7 days (or inactivity) if customer has positive unused store credit.',
-        payload: '{ "event": "customer_store_credit_reminder", "recipient_email": "customer@gmail.com", "customer_first_name": "William", "store_credit_balance": "Rp 50.000", "shop_url": "https://exacoat.com/shop/" }',
+        trigger: 'Dispatched after 7 days (or 30 days before 1-year expiry) if customer has positive unused store credit.',
+        payload: '{ "event": "customer_store_credit_reminder", "recipient_email": "customer@gmail.com", "customer_first_name": "William", "store_credit_balance": "Rp 50.000", "expiry_date": "September 24, 2027", "shop_url": "https://exacoat.com/shop/" }',
         defaults: {
           customer_first_name: 'William',
           store_credit_balance: 'Rp 50.000',
+          expiry_date: 'September 24, 2027',
           shop_url: 'https://exacoat.com/shop/',
         }
       }
