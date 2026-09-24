@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.39.zip?v=0.1.39",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-24T09:03:36.420Z",
+  "last_updated": "2026-09-24T09:08:20.279Z",
   "sections": {
     "description": "The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.",
     "changelog": "### Version 0.1.39\n- Added native Exacoat Email Engine templates for customer cashback earned and store credit balance reminder\n- Integrated Exacoat_Store_Credit_Manager with Action Scheduler for automated 7-day post-cashback follow-ups\n- Suppressed unstyled Advanced Coupons default WooCommerce emails to route all notifications through Zoho ZeptoMail API\n- Added dynamic order cashback resolution supporting ACFW coupon definitions, meta keys, and user balance lookups"

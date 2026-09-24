@@ -18,6 +18,8 @@ export function renderEmailHtmlLocally(event: string, customData: Record<string,
     return renderReviewInvitationEmail(customData);
   } else if (event === 'customer_order_review_reward') {
     return renderReviewRewardEmail(customData);
+  } else if (event === 'customer_cashback_earned' || event === 'customer_store_credit_reminder') {
+    return renderStoreCreditEmail(event, customData);
   } else if (event.startsWith('customer_order_')) {
     return renderCustomerOrderEmail(event, customData);
   } else {
@@ -815,6 +817,143 @@ function renderReviewRewardEmail(data: Record<string, any>): RenderedEmail {
   </table>
 </body>
 </html>`;
+  return { subject, html, isLightMode: true };
+}
+
+function renderStoreCreditEmail(event: string, data: Record<string, any>): RenderedEmail {
+  const custName = escapeHtml(data.customer_first_name || data.customer_name || 'Customer');
+  const balance = escapeHtml(data.store_credit_balance || 'Rp 50.000');
+  const cashbackAmount = escapeHtml(data.cashback_amount || 'Rp 25.000');
+  const orderNum = escapeHtml(data.order_number || '14589');
+  const shopUrl = escapeHtml(data.shop_url || 'https://exacoat.com/shop/');
+
+  const isCashback = event === 'customer_cashback_earned';
+  const badgeText = isCashback ? 'Store Credit' : 'Store Credit';
+  const title = isCashback ? 'Your cashback is ready to use' : 'Your store credit is waiting';
+  const subject = isCashback
+    ? `You received ${cashbackAmount} cashback on order #${orderNum}`
+    : `You have ${balance} store credit waiting in your Exacoat account`;
+
+  const bodyPrimary = isCashback
+    ? `Your cashback of ${cashbackAmount} from order #${orderNum} has been credited to your Exacoat store credit balance.`
+    : `You still have ${balance} in store credit available in your Exacoat account.`;
+
+  const bodySecondary = isCashback
+    ? `Your available store credit balance is now ${balance}. You can apply it directly during checkout on your next order.`
+    : 'Use it on your next precision skin, camera protection, or accessories. Simply log in and apply your balance at checkout.';
+
+  const ctaText = isCashback ? 'Shop Device Skins' : 'Use Your Credit';
+
+  const cashbackPill = isCashback && cashbackAmount
+    ? `<div style="display:inline-block;padding:4px 12px;background:#ecfdf5;color:#047857;font-size:12px;font-weight:700;border-radius:9999px;border:1px solid #a7f3d0;margin-top:10px;">
+        +${cashbackAmount} Cashback from Order #${orderNum}
+      </div>`
+    : '';
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+    body {
+      margin: 0; padding: 0; width: 100% !important; background-color: #f7f7f7;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+    table { border-collapse: collapse; }
+    img { border: 0; display: block; }
+    @media only screen and (max-width: 620px) {
+      .container-table { width: 100% !important; border-radius: 0 !important; }
+      .mobile-padding { padding-left: 24px !important; padding-right: 24px !important; }
+      .balance-text { font-size: 28px !important; }
+    }
+  </style>
+</head>
+<body bgcolor="#f7f7f7" style="margin:0;padding:0;background-color:#f7f7f7;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="padding:44px 16px;">
+    <tr>
+      <td align="center">
+        <table class="container-table" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #e5e5e5;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.04);">
+          <tbody>
+            <tr>
+              <td style="padding:28px 40px 22px;border-bottom:1px solid #f0f0f0;" class="mobile-padding">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td valign="middle">
+                      ${BRAND_LOGO_HTML}
+                    </td>
+                    <td align="right" valign="middle">
+                      <span style="display:inline-block;padding:5px 13px;background:#f4f4f5;color:#3f3f46;font-size:11px;font-weight:600;border-radius:999px;border:1px solid #e4e4e7;letter-spacing:0.3px;">${badgeText}</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:36px 40px 32px;" class="mobile-padding">
+                <h1 style="margin:0 0 16px;font-size:24px;font-weight:800;color:#111111;letter-spacing:-0.5px;line-height:1.25;">${title}</h1>
+                <p style="margin:0 0 12px;font-size:15px;font-weight:600;color:#18181b;">Hi ${custName},</p>
+                <p style="margin:0 0 14px;font-size:14.5px;line-height:1.7;color:#3f3f46;">${bodyPrimary}</p>
+                <p style="margin:0 0 24px;font-size:14.5px;line-height:1.7;color:#52525b;">${bodySecondary}</p>
+
+                <table width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #e4e4e7;border-radius:14px;overflow:hidden;margin-bottom:28px;">
+                  <tr>
+                    <td align="center" style="padding:26px 20px;">
+                      <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:1px;">Available Store Credit</p>
+                      <div style="margin:6px 0;">
+                        <span class="balance-text" style="font-size:34px;font-weight:800;letter-spacing:-0.5px;color:#111111;">${balance}</span>
+                      </div>
+                      ${cashbackPill}
+                      <p style="margin:12px 0 0;font-size:12px;color:#71717a;">
+                        Applied automatically at checkout when signed in
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td align="center" style="padding:6px 0 12px;">
+                      <a href="${shopUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:15px 36px;font-size:14px;font-weight:600;color:#ffffff;background:#111111;border-radius:12px;text-decoration:none;letter-spacing:0.2px;">
+                        ${ctaText} &rarr;
+                      </a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td align="center" style="padding-top:8px;">
+                      <span style="font-size:12px;color:#71717a;">Your store credit balance is saved in your account with no immediate expiry.</span>
+                    </td>
+                  </tr>
+                </table>
+
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td height="36" style="height:36px;font-size:0;line-height:0;">&nbsp;</td>
+                  </tr>
+                </table>
+
+                <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #f0f0f0;text-align:center;">
+                  <tr>
+                    <td align="center" style="padding-top:28px;">
+                      <p style="margin:0 0 10px;font-size:12px;line-height:1.65;color:#71717a;">
+                        Have questions about your order or store credit? Reach our team at <a href="mailto:support@exacoat.com" style="color:#111111;text-decoration:underline;font-weight:500;">support@exacoat.com</a>
+                      </p>
+                      <p style="margin:0;font-size:11px;color:#a1a1aa;letter-spacing:0.2px;">&copy; Exacoat</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
   return { subject, html, isLightMode: true };
 }
 
