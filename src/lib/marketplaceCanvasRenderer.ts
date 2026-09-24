@@ -491,23 +491,23 @@ async function drawTokopediaBadge(
   ctx: CanvasRenderingContext2D,
   badgeUrl: string = '/assets/brand/tokopedia-official-store-badge.png',
   x: number = 50,
-  y: number = 268,
-  _containerW: number = 460
+  y: number = 284,
+  containerW: number = 460
 ) {
   try {
     const img = await loadCorsSafeImageElement(badgeUrl);
     if (!img || img.width <= 0 || img.height <= 0) return;
 
     const naturalRatio = img.width / img.height;
-    // Scaled up ~20% (was 74 -> now 89px)
-    const badgeH = 89;
-    const badgeW = Math.round(badgeH * naturalRatio);
+    // Exactly as wide as the Exacoat card background on top left (460px)
+    const badgeW = containerW;
+    const badgeH = Math.round(badgeW / naturalRatio);
     // Align left flush with the logo pill & tagline container
     const badgeX = x;
 
     ctx.save();
     ctx.shadowColor = 'rgba(0, 0, 0, 0.08)';
-    ctx.shadowBlur = 12;
+    ctx.shadowBlur = 14;
     ctx.shadowOffsetY = 4;
     ctx.drawImage(img, badgeX, y, badgeW, badgeH);
     ctx.restore();
@@ -1911,10 +1911,10 @@ export async function renderMarketplaceImageToCanvas(
   let targetCenterY: number;
 
   if (isVariantLayout) {
-    // Variant Layout: Scale 75%, vertical Y: 80px, horizontal X: 75px
+    // Variant Layout: Scale 75%, vertical Y: 80px, centered on top skin card (540 + 910/2 = 995px)
     const baseVariantScale = config.deviceScale !== undefined ? config.deviceScale : 0.75;
     effectiveScale = baseVariantScale * 1.0;
-    targetCenterX = 920 + (config.deviceOffsetX !== undefined ? config.deviceOffsetX : 75);
+    targetCenterX = 995 + (config.deviceOffsetX || 0);
     targetCenterY = 750 + (config.deviceOffsetY !== undefined ? config.deviceOffsetY : 80);
   } else {
     // Cover Layout: Close-Up Hero Shot (Scale 100%, vertical Y: 110px)
@@ -1962,7 +1962,7 @@ export async function renderMarketplaceImageToCanvas(
         ctx,
         config.tokopediaBadgeUrl || '/assets/brand/tokopedia-official-store-badge.png',
         50,
-        268,
+        284,
         460
       );
     }
@@ -2097,7 +2097,7 @@ export async function batchGenerateMarketplaceZip(
       isPrimaryImage: false,
       layoutMode: useVariantLayout ? 'variant' : 'cover',
       deviceScale: useVariantLayout ? (baseConfig.deviceScale !== undefined ? baseConfig.deviceScale : 0.75) : 1.0,
-      deviceOffsetX: useVariantLayout ? (baseConfig.deviceOffsetX !== undefined ? baseConfig.deviceOffsetX : 75) : (baseConfig.deviceOffsetX || 0),
+      deviceOffsetX: useVariantLayout ? (baseConfig.deviceOffsetX !== undefined ? baseConfig.deviceOffsetX : 0) : (baseConfig.deviceOffsetX || 0),
       deviceOffsetY: useVariantLayout ? (baseConfig.deviceOffsetY !== undefined ? baseConfig.deviceOffsetY : 80) : 110,
       topRightText: finish.name.toUpperCase(),
       headlineText: baseConfig.headlineText

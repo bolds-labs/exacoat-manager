@@ -201,7 +201,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [showCoverageSection, setShowCoverageSection] = useState<boolean>(false);
   const [selectedViewId, setSelectedViewId] = useState<string>('');
   const [deviceScale, setDeviceScale] = useState<number>(0.75);
-  const [deviceOffsetX, setDeviceOffsetX] = useState<number>(75);
+  const [deviceOffsetX, setDeviceOffsetX] = useState<number>(0);
   const [deviceOffsetY, setDeviceOffsetY] = useState<number>(80);
   const [activeLayerIds, setActiveLayerIds] = useState<Set<string>>(new Set());
 
@@ -307,7 +307,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
       setDeviceOffsetY(110);
     } else {
       setDeviceScale(0.75);
-      setDeviceOffsetX(75);
+      setDeviceOffsetX(0);
       setDeviceOffsetY(80);
     }
 
@@ -1279,59 +1279,91 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
 
                 {/* Device Position & Scale Fine-Tuning */}
                 <div className="p-3 rounded-xl bg-zinc-800/80 border border-zinc-700/80 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-zinc-300">Device Placement & Zoom</span>
-                    <div className="flex items-center gap-1.5">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-zinc-300">Device Placement Presets</span>
+                      <span className="text-[10px] text-zinc-400">1-click layout & zoom</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5">
                       <button
                         type="button"
                         onClick={() => {
+                          setLayoutMode('cover');
+                          setIsPrimaryCoverMode(true);
                           setDeviceScale(1.0);
                           setDeviceOffsetX(0);
                           setDeviceOffsetY(110);
                         }}
                         className={clsx(
-                          'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition',
-                          deviceScale === 1.0 && deviceOffsetX === 0 && deviceOffsetY === 110
+                          'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition text-left',
+                          layoutMode === 'cover' && deviceScale === 1.0 && deviceOffsetX === 0 && deviceOffsetY === 110
                             ? 'bg-[#f3aa18]/25 border-[#f3aa18] text-[#f3aa18]'
                             : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
                         )}
                       >
-                        <Smartphone className="w-3 h-3 text-[#f3aa18]" />
-                        Phone
+                        <Smartphone className="w-3 h-3 text-[#f3aa18] shrink-0" />
+                        <span className="truncate">Cover - Phone</span>
                       </button>
+
                       <button
                         type="button"
                         onClick={() => {
+                          setLayoutMode('variant');
+                          setIsPrimaryCoverMode(false);
                           setDeviceScale(0.75);
-                          setDeviceOffsetX(75);
+                          setDeviceOffsetX(0);
                           setDeviceOffsetY(80);
                         }}
                         className={clsx(
-                          'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition',
-                          deviceScale === 0.75 && deviceOffsetX === 75 && deviceOffsetY === 80
+                          'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition text-left',
+                          layoutMode === 'variant' && deviceScale === 0.75 && deviceOffsetX === 0 && deviceOffsetY === 80
                             ? 'bg-[#f3aa18]/25 border-[#f3aa18] text-[#f3aa18]'
                             : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
                         )}
                       >
-                        <Layers className="w-3 h-3 text-[#f3aa18]" />
-                        Variant
+                        <Smartphone className="w-3 h-3 text-emerald-400 shrink-0" />
+                        <span className="truncate">Variant - Phone</span>
                       </button>
+
                       <button
                         type="button"
                         onClick={() => {
+                          setLayoutMode('cover');
+                          setIsPrimaryCoverMode(true);
                           setDeviceScale(1.0);
                           setDeviceOffsetX(140);
                           setDeviceOffsetY(-55);
                         }}
                         className={clsx(
-                          'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition',
-                          deviceScale === 1.0 && deviceOffsetX === 140 && deviceOffsetY === -55
+                          'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition text-left',
+                          layoutMode === 'cover' && deviceScale === 1.0 && deviceOffsetX === 140 && deviceOffsetY === -55
                             ? 'bg-[#f3aa18]/25 border-[#f3aa18] text-[#f3aa18]'
                             : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
                         )}
                       >
-                        <Laptop className="w-3 h-3 text-[#f3aa18]" />
-                        Laptop
+                        <Laptop className="w-3 h-3 text-[#f3aa18] shrink-0" />
+                        <span className="truncate">Cover - Laptop</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLayoutMode('variant');
+                          setIsPrimaryCoverMode(false);
+                          setDeviceScale(0.75);
+                          setDeviceOffsetX(140);
+                          setDeviceOffsetY(-20);
+                        }}
+                        className={clsx(
+                          'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition text-left',
+                          layoutMode === 'variant' && deviceScale === 0.75 && deviceOffsetX === 140 && deviceOffsetY === -20
+                            ? 'bg-[#f3aa18]/25 border-[#f3aa18] text-[#f3aa18]'
+                            : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                        )}
+                      >
+                        <Laptop className="w-3 h-3 text-emerald-400 shrink-0" />
+                        <span className="truncate">Variant - Laptop</span>
                       </button>
                     </div>
                   </div>
@@ -1545,7 +1577,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                             setLayoutMode('variant');
                             setIsPrimaryCoverMode(false);
                             setDeviceScale(0.75);
-                            setDeviceOffsetX(75);
+                            setDeviceOffsetX(0);
                             setDeviceOffsetY(80);
                           }}
                           className={clsx(
