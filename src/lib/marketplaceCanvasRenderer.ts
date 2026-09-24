@@ -1996,8 +1996,16 @@ export async function renderMarketplaceImageToCanvas(
       config.headlineHighlightColor || '#d2d2d2'
     );
 
-    // 3 bottom feature cards with genuine frosted border glass
-    await drawBottomFeatureCards(ctx, config.featureCards, 1255, 200, width);
+    // 3 bottom feature cards with genuine frosted border glass (clean official text cards, strictly no textured surface on cover)
+    const rawCards = config.featureCards && config.featureCards.length > 0
+      ? config.featureCards
+      : DEFAULT_FEATURE_CARDS_OFFICIAL;
+    const cleanCoverCards = rawCards.map((c) => ({
+      ...c,
+      imageUrl: undefined,
+    }));
+
+    await drawBottomFeatureCards(ctx, cleanCoverCards, 1255, 200, width);
   }
 
   // 6. Right Edge Swatch Stack ("20+ SKINS")
@@ -2073,6 +2081,7 @@ export async function batchGenerateMarketplaceZip(
       deviceScale: 1.0,
       deviceOffsetX: 0,
       deviceOffsetY: 110,
+      featureCards: DEFAULT_FEATURE_CARDS_OFFICIAL,
       topRightText: (options?.primaryTopRightText?.trim() || '20+ SKINS SELECTION').toUpperCase(),
       headlineText: baseConfig.headlineText
         ? baseConfig.headlineText

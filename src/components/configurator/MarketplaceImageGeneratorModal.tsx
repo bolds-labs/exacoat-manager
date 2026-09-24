@@ -165,10 +165,10 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [brandTagline, setBrandTagline] = useState<string>('#1 Brand Skin di Indonesia');
 
   // Layout Mode: 'cover' (hero close-up 100%, 3 bottom cards, left headline) vs 'variant' (full device 75%, left stacked cards + textured surface, clean bottom)
-  const [layoutMode, setLayoutMode] = useState<'cover' | 'variant'>('variant');
+  const [layoutMode, setLayoutMode] = useState<'cover' | 'variant'>('cover');
 
   // Primary Listing Cover Image Mode & Settings ("20+ SKINS SELECTION")
-  const [isPrimaryCoverMode, setIsPrimaryCoverMode] = useState<boolean>(false);
+  const [isPrimaryCoverMode, setIsPrimaryCoverMode] = useState<boolean>(true);
   const [primarySkinId, setPrimarySkinId] = useState<string>('');
   const [primaryTopRightText, setPrimaryTopRightText] = useState<string>('20+ SKINS SELECTION');
   const [includePrimaryCoverInBatch, setIncludePrimaryCoverInBatch] = useState<boolean>(true);
@@ -193,16 +193,16 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [bgType, setBgType] = useState<'studio_light' | 'custom'>('studio_light');
   const [customBgUrl, setCustomBgUrl] = useState<string>('');
 
-  // Device & Swatches State (Default zoom 75% for variant: X = 75px, Y = 80px)
+  // Device & Swatches State (Default zoom 100% for cover: X = 0px, Y = 110px)
   const [activeColorId, setActiveColorId] = useState<string>('');
   const [coverage, setCoverage] = useState<'model_360' | 'model_cut'>('model_360');
   const [logoCutout, setLogoCutout] = useState<boolean>(true);
   const [pencilCutout, setPencilCutout] = useState<boolean>(true);
   const [showCoverageSection, setShowCoverageSection] = useState<boolean>(false);
   const [selectedViewId, setSelectedViewId] = useState<string>('');
-  const [deviceScale, setDeviceScale] = useState<number>(0.75);
+  const [deviceScale, setDeviceScale] = useState<number>(1.0);
   const [deviceOffsetX, setDeviceOffsetX] = useState<number>(0);
-  const [deviceOffsetY, setDeviceOffsetY] = useState<number>(80);
+  const [deviceOffsetY, setDeviceOffsetY] = useState<number>(110);
   const [activeLayerIds, setActiveLayerIds] = useState<Set<string>>(new Set());
 
   // Batch Generation State
@@ -926,6 +926,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                       setDeviceScale(1.0);
                       setDeviceOffsetX(0);
                       setDeviceOffsetY(110);
+                      setFeatureCards(DEFAULT_FEATURE_CARDS_OFFICIAL);
                     }}
                     className={clsx(
                       'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition',
@@ -959,13 +960,20 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                   <button
                     type="button"
                     onClick={() => {
-                      setDeviceScale(1.0);
-                      setDeviceOffsetX(140);
-                      setDeviceOffsetY(-55);
+                      if (layoutMode === 'variant') {
+                        setDeviceScale(0.75);
+                        setDeviceOffsetX(140);
+                        setDeviceOffsetY(-20);
+                      } else {
+                        setDeviceScale(1.0);
+                        setDeviceOffsetX(140);
+                        setDeviceOffsetY(-55);
+                      }
                     }}
                     className={clsx(
                       'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition',
-                      deviceScale === 1.0 && deviceOffsetX === 140 && deviceOffsetY === -55
+                      (deviceScale === 1.0 && deviceOffsetX === 140 && deviceOffsetY === -55) ||
+                      (deviceScale === 0.75 && deviceOffsetX === 140 && deviceOffsetY === -20)
                         ? 'bg-[#f3aa18]/25 border-[#f3aa18] text-[#f3aa18]'
                         : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'
                     )}
@@ -1294,6 +1302,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                           setDeviceScale(1.0);
                           setDeviceOffsetX(0);
                           setDeviceOffsetY(110);
+                          setFeatureCards(DEFAULT_FEATURE_CARDS_OFFICIAL);
                         }}
                         className={clsx(
                           'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition text-left',
@@ -1334,6 +1343,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                           setDeviceScale(1.0);
                           setDeviceOffsetX(140);
                           setDeviceOffsetY(-55);
+                          setFeatureCards(DEFAULT_FEATURE_CARDS_OFFICIAL);
                         }}
                         className={clsx(
                           'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition text-left',
@@ -1554,6 +1564,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                             setDeviceScale(1.0);
                             setDeviceOffsetX(0);
                             setDeviceOffsetY(110);
+                            setFeatureCards(DEFAULT_FEATURE_CARDS_OFFICIAL);
                           }}
                           className={clsx(
                             'p-2.5 rounded-xl border text-left transition space-y-1',
