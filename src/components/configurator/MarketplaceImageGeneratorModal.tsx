@@ -650,6 +650,12 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
           primaryFinish: chosenPrimary,
           primaryTopRightText: primaryTopRightText || '20+ SKINS SELECTION',
           variantsLayoutMode: batchVariantsLayoutMode,
+          variantScale: layoutMode === 'variant' ? deviceScale : undefined,
+          variantOffsetX: layoutMode === 'variant' ? deviceOffsetX : undefined,
+          variantOffsetY: layoutMode === 'variant' ? deviceOffsetY : undefined,
+          coverScale: layoutMode === 'cover' ? deviceScale : undefined,
+          coverOffsetX: layoutMode === 'cover' ? deviceOffsetX : undefined,
+          coverOffsetY: layoutMode === 'cover' ? deviceOffsetY : undefined,
         },
         (current, total, finishName) => {
           setBatchProgress({ current, total, finishName });

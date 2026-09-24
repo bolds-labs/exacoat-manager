@@ -1160,9 +1160,13 @@ async function drawLeftStackedFeatureCards(
     ctx.fillRect(x, cy, w, ch);
     ctx.restore();
 
-    // 3. Crisp Glass Border
+    // 3. Crisp Glass Border with subtle contrast edge
     ctx.save();
     pathRoundedRect(ctx, x, cy, w, ch, cardR);
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
     ctx.shadowColor = 'rgba(255, 255, 255, 0.45)';
     ctx.shadowBlur = 6;
     const borderGrad = ctx.createLinearGradient(x, cy, x + w * 0.4, cy + ch);
@@ -2093,6 +2097,12 @@ export async function batchGenerateMarketplaceZip(
     primaryFinish?: GlobalFinish;
     primaryTopRightText?: string;
     variantsLayoutMode?: 'cover' | 'variant';
+    variantScale?: number;
+    variantOffsetX?: number;
+    variantOffsetY?: number;
+    coverScale?: number;
+    coverOffsetX?: number;
+    coverOffsetY?: number;
   },
   onProgress?: (current: number, total: number, finishName: string) => void
 ): Promise<Blob> {
@@ -2100,6 +2110,35 @@ export async function batchGenerateMarketplaceZip(
   const includeCover = options?.includePrimaryCover !== false;
   const total = targetFinishes.length + (includeCover ? 1 : 0);
   let progressCount = 0;
+
+  const isLaptop =
+    baseConfig.profile.family === 'laptop' ||
+    baseConfig.deviceOffsetX === 140 ||
+    (baseConfig.profile.device_slug || '').toLowerCase().includes('macbook') ||
+    (baseConfig.profile.device_name || '').toLowerCase().includes('laptop') ||
+    (baseConfig.profile.device_name || '').toLowerCase().includes('macbook');
+
+  // Default placement geometry
+  const defaultCoverScale = isLaptop ? 1.0 : 1.0;
+  const defaultCoverX = isLaptop ? 140 : 0;
+  const defaultCoverY = isLaptop ? -55 : 110;
+
+  const defaultVariantScale = 0.75;
+  const defaultVariantX = isLaptop ? 140 : 0;
+  const defaultVariantY = isLaptop ? -20 : 80;
+
+  // Resolve Cover Image placement
+  const coverScale = options?.coverScale !== undefined
+    ? options.coverScale
+    : (baseConfig.layoutMode === 'cover' && baseConfig.deviceScale !== undefined ? baseConfig.deviceScale : defaultCoverScale);
+
+  const coverOffsetX = options?.coverOffsetX !== undefined
+    ? options.coverOffsetX
+    : (baseConfig.layoutMode === 'cover' && baseConfig.deviceOffsetX !== undefined ? baseConfig.deviceOffsetX : defaultCoverX);
+
+  const coverOffsetY = options?.coverOffsetY !== undefined
+    ? options.coverOffsetY
+    : (baseConfig.layoutMode === 'cover' && baseConfig.deviceOffsetY !== undefined ? baseConfig.deviceOffsetY : defaultCoverY);
 
   // 1. Generate Primary Cover Image if requested
   if (includeCover) {
@@ -2114,9 +2153,9 @@ export async function batchGenerateMarketplaceZip(
       activeFinish: coverFinish,
       isPrimaryImage: true,
       layoutMode: 'cover',
-      deviceScale: 1.0,
-      deviceOffsetX: 0,
-      deviceOffsetY: 110,
+      deviceScale: coverScale,
+      deviceOffsetX: coverOffsetX,
+      deviceOffsetY: coverOffsetY,
       featureCards: DEFAULT_FEATURE_CARDS_OFFICIAL,
       topRightText: (options?.primaryTopRightText?.trim() || '20+ SKINS SELECTION').toUpperCase(),
       headlineText: baseConfig.headlineText
@@ -2128,6 +2167,27 @@ export async function batchGenerateMarketplaceZip(
     zip.file('00_PRIMARY_COVER_20_SKINS_SELECTION.jpg', coverBlob);
   }
 
+  // Resolve Variant Images placement
+  const useVariantLayout = (options?.variantsLayoutMode || 'variant') === 'variant';
+
+  const variantScale = useVariantLayout
+    ? (options?.variantScale !== undefined
+        ? options.variantScale
+        : (baseConfig.layoutMode === 'variant' && baseConfig.deviceScale !== undefined ? baseConfig.deviceScale : defaultVariantScale))
+    : coverScale;
+
+  const variantOffsetX = useVariantLayout
+    ? (options?.variantOffsetX !== undefined
+        ? options.variantOffsetX
+        : (baseConfig.layoutMode === 'variant' && baseConfig.deviceOffsetX !== undefined ? baseConfig.deviceOffsetX : defaultVariantX))
+    : coverOffsetX;
+
+  const variantOffsetY = useVariantLayout
+    ? (options?.variantOffsetY !== undefined
+        ? options.variantOffsetY
+        : (baseConfig.layoutMode === 'variant' && baseConfig.deviceOffsetY !== undefined ? baseConfig.deviceOffsetY : defaultVariantY))
+    : coverOffsetY;
+
   // 2. Generate each variant finish image
   for (let i = 0; i < targetFinishes.length; i++) {
     const finish = targetFinishes[i];
@@ -2136,15 +2196,14 @@ export async function batchGenerateMarketplaceZip(
       onProgress(progressCount, total, finish.name);
     }
 
-    const useVariantLayout = (options?.variantsLayoutMode || 'variant') === 'variant';
     const currentConfig: MarketplaceImageConfig = {
       ...baseConfig,
       activeFinish: finish,
       isPrimaryImage: false,
       layoutMode: useVariantLayout ? 'variant' : 'cover',
-      deviceScale: useVariantLayout ? (baseConfig.deviceScale !== undefined ? baseConfig.deviceScale : 0.75) : 1.0,
-      deviceOffsetX: useVariantLayout ? (baseConfig.deviceOffsetX !== undefined ? baseConfig.deviceOffsetX : 0) : (baseConfig.deviceOffsetX || 0),
-      deviceOffsetY: useVariantLayout ? (baseConfig.deviceOffsetY !== undefined ? baseConfig.deviceOffsetY : 80) : 110,
+      deviceScale: variantScale,
+      deviceOffsetX: variantOffsetX,
+      deviceOffsetY: variantOffsetY,
       topRightText: finish.name.toUpperCase(),
       headlineText: baseConfig.headlineText
         ? baseConfig.headlineText
