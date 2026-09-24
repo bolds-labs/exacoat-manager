@@ -11,6 +11,7 @@ import {
   DEFAULT_FEATURE_CARDS_FIT,
   DEFAULT_FEATURE_CARDS_CLEAR,
   formatFinishHeadline,
+  formatDeviceHeadline,
   renderMarketplaceImageToCanvas,
   generateMarketplaceImageBlob,
   batchGenerateMarketplaceZip,
@@ -64,11 +65,14 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [isDownloadingSingle, setIsDownloadingSingle] = useState(false);
 
   // Template State (Layout & Copy)
-  const [deviceNameText, setDeviceNameText] = useState<string>('ALL DEVICES');
+  // Top right pill now shows Skin Name (e.g. CARBON FIBER BLACK)
+  const [topRightText, setTopRightText] = useState<string>('');
+  const [deviceNameText, setDeviceNameText] = useState<string>('');
   const [showSubBadge, setShowSubBadge] = useState<boolean>(true);
   const [subBadgeText, setSubBadgeText] = useState<string>('Model Cut & 360');
   const [autoHeadlineWithFinish, setAutoHeadlineWithFinish] = useState<boolean>(true);
-  const [headlineText, setHeadlineText] = useState<string>('Ark\nInvisible\nSkin');
+  // Left headline now shows Product / Device Name (e.g. Xiaomi 15)
+  const [headlineText, setHeadlineText] = useState<string>('');
   const [headlineFont, setHeadlineFont] = useState<'Chakra Petch' | 'Plus Jakarta Sans' | 'Inter'>('Chakra Petch');
   const [featureCards, setFeatureCards] = useState<MarketplaceFeatureCard[]>(DEFAULT_FEATURE_CARDS_OFFICIAL);
 
@@ -76,7 +80,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [bgType, setBgType] = useState<'studio_light' | 'custom'>('studio_light');
   const [customBgUrl, setCustomBgUrl] = useState<string>('');
 
-  // Device & Swatches State
+  // Device & Swatches State (Default zoom 100%, vertical Y 110px)
   const [activeColorId, setActiveColorId] = useState<string>('');
   const [coverage, setCoverage] = useState<'model_360' | 'model_cut'>('model_360');
   const [logoCutout, setLogoCutout] = useState<boolean>(true);
@@ -84,7 +88,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [selectedViewId, setSelectedViewId] = useState<string>('');
   const [deviceScale, setDeviceScale] = useState<number>(1.0);
   const [deviceOffsetX, setDeviceOffsetX] = useState<number>(0);
-  const [deviceOffsetY, setDeviceOffsetY] = useState<number>(0);
+  const [deviceOffsetY, setDeviceOffsetY] = useState<number>(110);
   const [activeLayerIds, setActiveLayerIds] = useState<Set<string>>(new Set());
 
   // 20+ Skins Swatches Stack (Defaulted to true for marketplace listings)
@@ -131,8 +135,9 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   useEffect(() => {
     if (!profile) return;
 
-    // Top-right pill defaults to 'ALL DEVICES' matching Image 2
-    setDeviceNameText('ALL DEVICES');
+    // Top-right pill defaults to active finish name
+    setTopRightText('');
+    setDeviceNameText(profile.device_name);
 
     // Default view
     const defaultView = profile.views.find((v) => v.is_default) || profile.views[0];
@@ -164,6 +169,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
         setSubBadgeText('Model Cut & 360');
       }
       setAutoHeadlineWithFinish(true);
+      setHeadlineText(formatDeviceHeadline(profile.device_name));
       setFeatureCards(DEFAULT_FEATURE_CARDS_OFFICIAL);
     }
 
@@ -174,10 +180,10 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     setLogoCutout(profile.coverage_and_cutouts?.has_logo_cutout ?? true);
     setPencilCutout(Boolean(profile.coverage_and_cutouts?.has_pencil_cutout));
 
-    // Reset device hero shot offsets
+    // Reset device hero shot offsets (default 100% zoom, Y = 110px)
     setDeviceScale(1.0);
     setDeviceOffsetX(0);
-    setDeviceOffsetY(0);
+    setDeviceOffsetY(110);
 
     // Initialize active skin layer IDs
     const initialLayers = new Set<string>();
@@ -301,13 +307,20 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     return currentView.shadow_png_url || currentView.shading_image_url || currentView.highlight_png_url || '';
   }, [currentView]);
 
-  // Effective Headline
+  // Effective Headline (Product / Device Name)
   const effectiveHeadline = useMemo(() => {
+    const defaultTitle = formatDeviceHeadline(profile?.device_name || '');
     if (autoHeadlineWithFinish) {
-      return formatFinishHeadline(currentPreviewFinish.name);
+      return defaultTitle;
     }
-    return headlineText || formatFinishHeadline(currentPreviewFinish.name);
-  }, [autoHeadlineWithFinish, currentPreviewFinish.name, headlineText]);
+    return headlineText.trim() ? headlineText : defaultTitle;
+  }, [autoHeadlineWithFinish, profile?.device_name, headlineText]);
+
+  // Effective Top-Right Pill Text (Skin Name)
+  const effectiveTopRightText = useMemo(() => {
+    if (topRightText.trim()) return topRightText.trim().toUpperCase();
+    return (currentPreviewFinish?.name || '').toUpperCase();
+  }, [topRightText, currentPreviewFinish?.name]);
 
   // Build config object for export
   const buildRenderConfig = (): MarketplaceImageConfig | null => {
@@ -320,7 +333,8 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
       bgType,
       customBgUrl,
       showLogo: true,
-      deviceNameText,
+      topRightText: effectiveTopRightText,
+      deviceNameText: profile.device_name,
       subBadgeText: showSubBadge ? subBadgeText : '',
       headlineText: effectiveHeadline,
       headlineFont,
@@ -703,7 +717,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                     onClick={() => {
                       setDeviceScale(1.0);
                       setDeviceOffsetX(0);
-                      setDeviceOffsetY(0);
+                      setDeviceOffsetY(110);
                     }}
                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-bold border border-zinc-700 transition"
                   >
@@ -818,32 +832,35 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                 {/* Device Name Badge (Top Right) */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-zinc-300">Device Name Badge (Top Right)</label>
+                    <label className="text-xs font-bold text-zinc-300">Skin Name Badge (Top Right Rectangle)</label>
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => setDeviceNameText('ALL DEVICES')}
-                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                        onClick={() => setTopRightText('')}
+                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#f3aa18]/20 text-[#f3aa18] hover:bg-[#f3aa18]/30 truncate max-w-[150px]"
+                        title={currentPreviewFinish.name.toUpperCase()}
                       >
-                        ALL DEVICES
+                        Auto ({currentPreviewFinish.name.toUpperCase()})
                       </button>
                       <button
                         type="button"
-                        onClick={() => setDeviceNameText(profile.device_name.toUpperCase())}
-                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700 truncate max-w-[130px]"
-                        title={profile.device_name.toUpperCase()}
+                        onClick={() => setTopRightText('ALL DEVICES')}
+                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
                       >
-                        {profile.device_name.toUpperCase()}
+                        ALL DEVICES
                       </button>
                     </div>
                   </div>
                   <input
                     type="text"
-                    value={deviceNameText}
-                    onChange={(e) => setDeviceNameText(e.target.value)}
-                    placeholder="e.g. ALL DEVICES or IPHONE 17 PRO"
+                    value={topRightText}
+                    onChange={(e) => setTopRightText(e.target.value)}
+                    placeholder={`e.g. ${currentPreviewFinish.name.toUpperCase()}`}
                     className="w-full px-3 py-2 rounded-xl text-xs font-bold bg-zinc-800/80 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
                   />
+                  <p className="text-[11px] text-zinc-400">
+                    Displays in the top-right rounded rectangle. During batch export, each image outputs its own skin finish name automatically.
+                  </p>
                 </div>
 
                 {/* Sub-Badge Tag (Above Headline) */}
@@ -902,6 +919,9 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                     placeholder="e.g. Model Cut & 360, Model Cut, or x2 pcs"
                     className="w-full px-3 py-2 rounded-xl text-xs font-semibold bg-zinc-800/80 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18] disabled:opacity-40"
                   />
+                  <p className="text-[11px] text-zinc-400">
+                    Rendered as a full-rounded capsule with transparent background (no fill).
+                  </p>
                 </div>
 
                 {/* Product Title Headline */}
@@ -934,7 +954,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                       )}
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      Auto ({currentPreviewFinish.name})
+                      Auto ({profile.device_name})
                     </button>
                     <button
                       type="button"
@@ -953,10 +973,10 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                   {autoHeadlineWithFinish ? (
                     <div className="p-3 rounded-xl bg-zinc-800/60 border border-zinc-700 text-xs space-y-1">
                       <div className="font-bold text-zinc-100 font-mono whitespace-pre-line text-sm">
-                        {formatFinishHeadline(currentPreviewFinish.name)}
+                        {formatDeviceHeadline(profile.device_name)}
                       </div>
                       <p className="text-[11px] text-zinc-400">
-                        Finish name formatted cleanly without &quot;Skins&quot;. Multi-word finishes wrap to keep generous distance from the phone.
+                        Product name styled with consistent font size and subtle white outline so it remains readable even if overlapping the phone.
                       </p>
                     </div>
                   ) : (
@@ -1282,7 +1302,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                       onClick={() => {
                         setDeviceScale(1.0);
                         setDeviceOffsetX(0);
-                        setDeviceOffsetY(0);
+                        setDeviceOffsetY(110);
                       }}
                       className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#f3aa18]/20 text-[#f3aa18] hover:bg-[#f3aa18]/30 transition"
                     >
