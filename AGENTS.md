@@ -1508,3 +1508,37 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Generated shading is completely disabled (generated_shadow: { enabled: false }) across all viewing angles for all MacBooks (Pro, Air, Neo) and all Fold/Flip models.
   - In ConfiguratorStudioPage.tsx, laptop is added to isTabletOrFoldableOrLaptop, ensuring directional shading defaults to disabled for laptops, foldables, and tablets.
   - In class-configurator-engine.php, rest_save_product_configurator(), rest_get_product_configurator(), and rest_sync_device_families() enforce generated_shadow: { enabled: false } for both laptop and foldable families.
+
+---
+
+## 52. Square 1500x1500px Marketplace Image Generator & Batch Exporter Pipeline
+
+- **Automated Marketplace Listing Creation**:
+  - Replaces manual Photoshop editing workflows with an automated, browser-side high-resolution rendering pipeline producing crisp 1500x1500px JPG product listing images for Shopee, Tokopedia, and TikTok Shop.
+  - Located in src/lib/marketplaceCanvasRenderer.ts and src/components/configurator/MarketplaceImageGeneratorModal.tsx.
+- **Layout Architecture & Visual Hierarchy**:
+  - **Top Bar**:
+    - Top-Left: Dark graphite pill badge (#18181b, radius 20px) containing the official Exacoat vector logo (/assets/brand/exacoat-logo.svg).
+    - Top-Right: Device name badge (white card, border #e2e8f0, dark bold uppercase typography) dynamically populated from profile.device_name.
+  - **Left Headline Block**:
+    - Sub-badge pill (e.g. x2 pcs or #1 Skin di Indonesia).
+    - Bold multi-line product title rendered in technical font (Chakra Petch, Plus Jakarta Sans, or Inter).
+  - **Center-Right Device Render**:
+    - High-resolution hardware chassis and skin layer composite rendered with alpha masks, master finish textures, punch cutouts (logo, pencil, model cut), and contact drop shadow.
+    - Fine-grained interactive sliders allow adjusting scale, X position, and Y position to frame any phone, tablet, or foldable gracefully.
+  - **Right Edge (20+ Skins Swatches Stack)**:
+    - Vertical stack displaying 2 to 3 rounded square preview swatches of other popular catalog finishes (e.g. Black Camo, Forged Carbon, Wood) plus a clean 20+ SKINS pill badge.
+    - Demonstrates to marketplace buyers that extensive skin variations exist beyond the listing's main hero image.
+  - **Bottom Row (3 Horizontal Feature Cards)**:
+    - 3 cards side by side along the bottom (width: 420px, height: 185px, margin: 60px).
+    - Natural, non-slop copywriting: "3M Material (USA · Japan · Italy)", "Accurate fit (Zero gap precision cut)", "Garansi Pemasangan (Bebas gelembung & presisi)".
+    - Circular top-right icon badge with green vector glyphs (material layers, precision crosshairs, guarantee shield).
+- **Background Pipeline**:
+  - **Exacoat Monogram Light**: Studio radial gradient lighting with subtle 3-leaf clover geometric monogram vector pattern.
+  - **Custom Background**: Drag-and-drop or file upload of external JPG/PNG backgrounds from disk or image URL, automatically persisted in browser localStorage.
+- **Multi-Skin Batch Export & ZIP Packaging**:
+  - Checkbox selection table allows selecting any subset of finishes with quick action pills ("Popular 13", "All", "Clear").
+  - "Save Defaults" button persists preferred skin selections to localStorage (exacoat_marketplace_default_finishes).
+  - "Generate All as ZIP" renders all selected finishes sequentially on the 1500x1500px offscreen canvas and packages them into a single .zip file using JSZip (exacoat-marketplace-[device-slug].zip).
+  - Includes 1-click single image download button for instant single-skin export.
+

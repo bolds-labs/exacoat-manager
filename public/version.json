@@ -1,17 +1,17 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.48",
+  "version": "0.1.49",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.48.zip?v=0.1.48",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.49.zip?v=0.1.49",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-24T13:38:28.439Z",
+  "last_updated": "2026-09-24T15:38:50.471Z",
   "sections": {
     "description": "The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.",
-    "changelog": "### Version 0.1.48\n- Removed Model 360 wrap options from all Fold and Flip devices, locking coverage to Model Cut\n- Configured official alpha cut masks across all MacBook Pro (M1-2021/M3 body) and MacBook Air (Top-New) models for top, bottom, and trackpad layers\n- Disabled generated 3D directional shading across all Fold/Flip and MacBook devices\n- Enforced persistent backend and frontend safeguards against directional shading on laptops and 360 wrap on foldables"
+    "changelog": "### Version 0.1.49\n- Added 1500x1500px Marketplace Product Image Generator in Configurator Studio\n- Integrated offscreen HTML5 canvas compositor supporting custom backgrounds and Exacoat monogram studio light\n- Added multi-skin batch generation engine with JSZip packaging and customizable layout typography and swatches\n- Preserved natural copywriting and accurate fit feature cards"
   }
 }

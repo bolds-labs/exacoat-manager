@@ -108,6 +108,7 @@ import {
 import { clsx } from 'clsx';
 import { MediaLibraryModal } from '../components/modals/MediaLibraryModal';
 import { FinishSurchargeTiersModal } from '../components/modals/FinishSurchargeTiersModal';
+import { MarketplaceImageGeneratorModal } from '../components/configurator/MarketplaceImageGeneratorModal';
 import { WpMediaItem } from '../lib/wordpressBridge';
 import { loadCorsSafeImageBlobUrl } from '../lib/imageLoader';
 
@@ -770,6 +771,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [categorySearch, setCategorySearch] = useState('');
   const categoryDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Marketplace Image Generator Modal state (1500x1500px)
+  const [showMarketplaceModal, setShowMarketplaceModal] = useState(false);
+
   // Global Master Textures Modal state (v2 Engine)
   const [showMasterTexturesModal, setShowMasterTexturesModal] = useState(false);
   const [masterTextureSearch, setMasterTextureSearch] = useState('');
@@ -1297,6 +1301,13 @@ export const ConfiguratorStudioPage: React.FC = () => {
     setShowAssetAuditModal(true);
     if (prof) {
       handleStartAssetAudit(prof);
+    }
+  };
+
+  const handleOpenMarketplaceForProduct = async (productId: number) => {
+    const prof = await handleOpenEditor(productId);
+    if (prof) {
+      setShowMarketplaceModal(true);
     }
   };
 
@@ -5290,6 +5301,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             type="button"
+                            onClick={() => handleOpenMarketplaceForProduct(p.product_id)}
+                            className="p-1.5 rounded-lg border border-white/10 hover:bg-[#f3aa18]/20 hover:border-[#f3aa18]/40 text-zinc-400 hover:text-[#f3aa18] transition-colors cursor-pointer"
+                            title="Generate 1500x1500px marketplace images"
+                          >
+                            <ImageIcon className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => handleOpenDuplicateModal(p)}
                             className="p-1.5 rounded-lg border border-white/10 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors cursor-pointer"
                             title="Duplicate product & profile"
@@ -7535,6 +7554,17 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 >
                   <ArrowLeftRight className="w-3.5 h-3.5 text-cyan-400" />
                   <span>Transfer Setup / JSON</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowMarketplaceModal(true)}
+                  disabled={!editingProfile}
+                  className="px-3.5 py-2 text-xs font-sans font-semibold rounded-xl border border-[#f3aa18]/30 hover:bg-[#f3aa18]/10 text-[#f3aa18] hover:text-[#f3aa18] transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  title="Create square 1500x1500px marketplace product listing images for Shopee, Tokopedia, TikTok"
+                >
+                  <ImageIcon className="w-3.5 h-3.5 text-[#f3aa18]" />
+                  <span>Marketplace Images</span>
                 </button>
 
                 <button
@@ -14126,6 +14156,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
         onClose={() => setShowSurchargeTiersModal(false)}
         tiers={surchargeTiers}
         onTiersUpdated={(newTiers) => setSurchargeTiers(newTiers)}
+      />
+
+      {/* Square 1500x1500px Marketplace Image Generator Modal */}
+      <MarketplaceImageGeneratorModal
+        isOpen={showMarketplaceModal}
+        onClose={() => setShowMarketplaceModal(false)}
+        profile={editingProfile}
+        finishes={finishes}
       />
     </div>
   );

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.49] - 2026-09-24
+
+### Configurator Studio 1500x1500px Marketplace Product Image Generator & Batch Exporter
+- **Automated High-Res Marketplace Listing Pipeline**:
+  - Replaced manual Photoshop product image generation with an integrated HTML5 canvas rendering engine producing square 1500x1500px JPG listing images.
+  - Adapted modern product card layout with top-left Exacoat logo, top-right dynamic device name badge, left bold headline block, and 3 horizontal feature cards along the bottom.
+  - Preserved natural marketplace copywriting with "Accurate fit" (zero gap precision cut) and "Garansi Pemasangan" (bebas gelembung dan presisi).
+  - Integrated 20+ Skins Selection stack from catalog finish thumbnails to showcase full skin variety directly on marketplace listings.
+  - Supports custom background image uploads, image URLs, and Exacoat monogram studio light background.
+  - Multi-skin batch generator renders selected finishes sequentially and packages them into a single downloadable ZIP archive via JSZip.
+  - Added dedicated action buttons in both Configurator Studio top bar and catalog table rows.
+
 ## [0.1.43] - 2026-09-24
 
 ### Configurator Studio Foldable & MacBook Invariants: Model 360 Removal, Official Alpha Masks, and 3D Directional Shading Removal

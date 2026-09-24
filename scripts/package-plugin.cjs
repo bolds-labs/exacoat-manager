@@ -81,7 +81,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       description: 'The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.',
-      changelog: `### Version ${version}\n- Removed Model 360 wrap options from all Fold and Flip devices, locking coverage to Model Cut\n- Configured official alpha cut masks across all MacBook Pro (M1-2021/M3 body) and MacBook Air (Top-New) models for top, bottom, and trackpad layers\n- Disabled generated 3D directional shading across all Fold/Flip and MacBook devices\n- Enforced persistent backend and frontend safeguards against directional shading on laptops and 360 wrap on foldables`,
+      changelog: `### Version ${version}\n- Added 1500x1500px Marketplace Product Image Generator in Configurator Studio\n- Integrated offscreen HTML5 canvas compositor supporting custom backgrounds and Exacoat monogram studio light\n- Added multi-skin batch generation engine with JSZip packaging and customizable layout typography and swatches\n- Preserved natural copywriting and accurate fit feature cards`,
     },
   };
 
