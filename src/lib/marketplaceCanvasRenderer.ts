@@ -376,25 +376,21 @@ async function drawLogoPill(
 
 /**
  * Draws a beautiful, premium, minimalist, modern tagline capsule directly beneath the Exacoat logo
- * e.g. "#1 Brand Skin di Indonesia"
+ * Matches the width of the Exacoat card on top (w=460) with larger typography and black '#1'
  */
 function drawBrandTagline(
   ctx: CanvasRenderingContext2D,
   text: string = '#1 Brand Skin di Indonesia',
   x: number = 50,
-  y: number = 208
+  y: number = 206,
+  w: number = 460
 ) {
   if (!text.trim()) return;
 
   ctx.save();
 
-  // Typography measurement
-  ctx.font = '700 22px "Plus Jakarta Sans", sans-serif';
-  const textMetrics = ctx.measureText(text);
-  const iconPadding = 26; // icon and spacing
-  const horizPadding = 22;
-  const pillW = textMetrics.width + iconPadding + horizPadding * 2;
-  const pillH = 42;
+  const pillW = w; // Exactly matches width of Exacoat card above (460px)
+  const pillH = 48;
   const pillR = pillH / 2;
 
   // Subtle modern glass drop shadow
@@ -416,14 +412,22 @@ function drawBrandTagline(
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
+  // Larger typography (25px Plus Jakarta Sans bold)
+  ctx.font = '700 25px "Plus Jakarta Sans", sans-serif';
+  const textMetrics = ctx.measureText(text);
+  const iconW = 18;
+  const iconGap = 12;
+  const totalContentW = iconW + iconGap + textMetrics.width;
+  const startContentX = x + Math.max(16, (pillW - totalContentW) / 2);
+
   // Gold Star / Spark Icon
-  const iconCx = x + horizPadding + 5;
+  const iconCx = startContentX + iconW / 2;
   const iconCy = y + pillH / 2;
   ctx.fillStyle = '#f3aa18';
   ctx.beginPath();
   const spikes = 4;
-  const outerR = 7.5;
-  const innerR = 3.2;
+  const outerR = 8.5;
+  const innerR = 3.6;
   let rot = (Math.PI / 2) * 3;
   const step = Math.PI / spikes;
   ctx.moveTo(iconCx, iconCy - outerR);
@@ -436,27 +440,14 @@ function drawBrandTagline(
   ctx.closePath();
   ctx.fill();
 
-  // Text inside capsule
-  const textX = x + horizPadding + iconPadding;
+  // Text inside capsule: all dark black (#18181b), including '#1'
+  const textX = startContentX + iconW + iconGap;
   const textY = y + pillH / 2 + 1;
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
-
-  // Highlight '#1' in gold if present
-  if (text.startsWith('#1')) {
-    ctx.font = '900 22px "Plus Jakarta Sans", sans-serif';
-    ctx.fillStyle = '#f3aa18';
-    ctx.fillText('#1', textX, textY);
-    const hashW = ctx.measureText('#1').width;
-
-    ctx.font = '700 21px "Plus Jakarta Sans", sans-serif';
-    ctx.fillStyle = '#27272a';
-    ctx.fillText(text.slice(2), textX + hashW, textY);
-  } else {
-    ctx.font = '700 21px "Plus Jakarta Sans", sans-serif';
-    ctx.fillStyle = '#27272a';
-    ctx.fillText(text, textX, textY);
-  }
+  ctx.fillStyle = '#18181b';
+  ctx.font = '700 25px "Plus Jakarta Sans", sans-serif';
+  ctx.fillText(text, textX, textY);
 
   ctx.restore();
 }
@@ -530,8 +521,8 @@ const drawDeviceNamePill = drawTopRightPill;
  * Draws the left headline typography (Product / Device Name) and sub-badge
  * Features:
  * - Sub-badge is full-rounded capsule with transparent background (no background fill)
- * - Headline maintains consistent font size across finishes, enlarged to 126px bold
- * - #d2d2d2 bold highlight halo ensures full legibility even when overlapping the phone body
+ * - Headline enlarged 25% to 158px extra bold
+ * - Soft ambient shadow blur (no hard outline) for subtle, beautiful contrast
  */
 function drawLeftHeadlineBlock(
   ctx: CanvasRenderingContext2D,
@@ -553,15 +544,15 @@ function drawLeftHeadlineBlock(
   const badgeH = 68;
   const badgeGap = 22;
 
-  // Consistent headline font size (enlarged & bold 900)
-  let fontSize = 126;
-  let lineHeight = 132;
+  // Consistent headline font size (enlarged 25% to 158px & extra bold 900)
+  let fontSize = 158;
+  let lineHeight = 164;
 
   ctx.font = `900 ${fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
   for (const line of lines) {
     const w = ctx.measureText(line).width;
-    if (w > 660) {
-      const ratio = 660 / w;
+    if (w > 720) {
+      const ratio = 720 / w;
       fontSize = Math.floor(fontSize * ratio);
       lineHeight = Math.floor(fontSize * 1.05);
     }
@@ -570,8 +561,8 @@ function drawLeftHeadlineBlock(
   // Anchor block nicely from the bottom so it sits comfortably above bottom cards
   const totalTextH = lines.length * lineHeight;
   const totalBlockH = (hasSubBadge ? badgeH + badgeGap : 0) + totalTextH;
-  const targetBottomY = 1210;
-  let currentY = startY ?? Math.max(680, targetBottomY - totalBlockH);
+  const targetBottomY = 1220;
+  let currentY = startY ?? Math.max(650, targetBottomY - totalBlockH);
 
   // 1. Sub-badge pill (e.g. "Model Cut & 360")
   // Full-rounded capsule with transparent background (no background fill)
@@ -594,19 +585,24 @@ function drawLeftHeadlineBlock(
     currentY += badgeH + badgeGap;
   }
 
-  // 2. Bold Headline Text with clean #d2d2d2 highlight outline
+  // 2. Bold Headline Text with subtle blurred ambient shadow / halo (not hard outline)
   if (lines.length > 0) {
     ctx.font = `900 ${fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
 
     for (const line of lines) {
-      // #d2d2d2 highlight outline so text remains clear and readable even when overlapping the phone body
+      // Soft blurred shadow halo behind the text (no hard outline)
       ctx.save();
-      ctx.strokeStyle = highlightColor || '#d2d2d2';
-      ctx.lineWidth = 10;
+      ctx.shadowColor = highlightColor || 'rgba(210, 210, 210, 0.85)';
+      ctx.shadowBlur = 18;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+
+      // Soft subtle stroke with blurred shadow
+      ctx.strokeStyle = 'rgba(220, 220, 225, 0.45)';
+      ctx.lineWidth = 4;
       ctx.lineJoin = 'round';
-      ctx.miterLimit = 2;
       ctx.strokeText(line, x, currentY);
       ctx.restore();
 
@@ -1550,7 +1546,7 @@ export async function renderMarketplaceImageToCanvas(
     await drawLogoPill(ctx, 50, 50, 460, 140, 54);
     // Brand Tagline under logo pill ("#1 Brand Skin di Indonesia")
     if (config.showBrandTagline !== false) {
-      drawBrandTagline(ctx, config.brandTagline || '#1 Brand Skin di Indonesia', 50, 208);
+      drawBrandTagline(ctx, config.brandTagline || '#1 Brand Skin di Indonesia', 50, 206, 460);
     }
   }
 

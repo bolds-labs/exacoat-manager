@@ -36,6 +36,10 @@ import {
   RotateCcw,
   Star,
   Award,
+  Smartphone,
+  Laptop,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -98,6 +102,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [coverage, setCoverage] = useState<'model_360' | 'model_cut'>('model_360');
   const [logoCutout, setLogoCutout] = useState<boolean>(true);
   const [pencilCutout, setPencilCutout] = useState<boolean>(true);
+  const [showCoverageSection, setShowCoverageSection] = useState<boolean>(false);
   const [selectedViewId, setSelectedViewId] = useState<string>('');
   const [deviceScale, setDeviceScale] = useState<number>(1.0);
   const [deviceOffsetX, setDeviceOffsetX] = useState<number>(0);
@@ -221,10 +226,16 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     }
     setActiveLayerIds(initialLayers);
 
-    // Load custom background from storage if previously saved
+    // Load custom background and bg style from storage if previously saved
     try {
       const savedBg = localStorage.getItem(STORAGE_CUSTOM_BG_KEY);
-      if (savedBg) setCustomBgUrl(savedBg);
+      const savedBgType = localStorage.getItem('exacoat_marketplace_bg_type');
+      if (savedBg) {
+        setCustomBgUrl(savedBg);
+      }
+      if (savedBgType === 'custom' || (savedBg && !savedBgType)) {
+        setBgType('custom');
+      }
     } catch {}
 
     // Load default batch selection from storage
@@ -542,15 +553,14 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     }
   };
 
-  // Save current selection as default in localStorage
+  // Save current selection and background as default in localStorage
   const handleSaveDefaults = () => {
     try {
       const list = Array.from(selectedFinishIds);
       localStorage.setItem(STORAGE_DEFAULT_SKINS_KEY, JSON.stringify(list));
-      if (customBgUrl) {
-        localStorage.setItem(STORAGE_CUSTOM_BG_KEY, customBgUrl);
-      }
-      showToast('success', 'Defaults Saved', `Saved ${list.length} finishes as your default batch set.`);
+      localStorage.setItem(STORAGE_CUSTOM_BG_KEY, customBgUrl || '');
+      localStorage.setItem('exacoat_marketplace_bg_type', bgType);
+      showToast('success', 'Defaults Saved', `Saved ${list.length} finishes and background settings as default.`);
     } catch {
       showToast('error', 'Save Failed', 'Could not save defaults to browser storage');
     }
@@ -792,10 +802,32 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                       setDeviceOffsetX(0);
                       setDeviceOffsetY(110);
                     }}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-bold border border-zinc-700 transition"
+                    className={clsx(
+                      'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition',
+                      deviceScale === 1.0 && deviceOffsetX === 0 && deviceOffsetY === 110
+                        ? 'bg-[#f3aa18]/25 border-[#f3aa18] text-[#f3aa18]'
+                        : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'
+                    )}
                   >
-                    <RotateCcw className="w-3 h-3 text-[#f3aa18]" />
-                    Hero Shot
+                    <Smartphone className="w-3 h-3 text-[#f3aa18]" />
+                    Phone
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeviceScale(1.0);
+                      setDeviceOffsetX(140);
+                      setDeviceOffsetY(-55);
+                    }}
+                    className={clsx(
+                      'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition',
+                      deviceScale === 1.0 && deviceOffsetX === 140 && deviceOffsetY === -55
+                        ? 'bg-[#f3aa18]/25 border-[#f3aa18] text-[#f3aa18]'
+                        : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'
+                    )}
+                  >
+                    <Laptop className="w-3 h-3 text-[#f3aa18]" />
+                    Laptop
                   </button>
                   <button
                     type="button"
@@ -1438,72 +1470,117 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                   </div>
                 )}
 
-                {/* Coverage & Cutout Options */}
-                <div className="p-3 rounded-xl bg-zinc-800/80 border border-zinc-700/80 space-y-3">
-                  <div className="text-xs font-bold text-zinc-300">Coverage & Cutouts</div>
-
-                  <div className="flex items-center gap-4">
-                    <label className="flex items-center gap-2 text-xs font-medium text-zinc-300 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="coverage"
-                        checked={coverage === 'model_360'}
-                        onChange={() => setCoverage('model_360')}
-                        className="text-[#f3aa18] focus:ring-[#f3aa18]"
-                      />
-                      Model 360 (Full Wrap)
-                    </label>
-                    <label className="flex items-center gap-2 text-xs font-medium text-zinc-300 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="coverage"
-                        checked={coverage === 'model_cut'}
-                        onChange={() => setCoverage('model_cut')}
-                        className="text-[#f3aa18] focus:ring-[#f3aa18]"
-                      />
-                      Model Cut (Back Only)
-                    </label>
-                  </div>
-
-                  <div className="flex items-center gap-4 pt-1">
-                    <label className="flex items-center gap-2 text-xs font-medium text-zinc-300 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={logoCutout}
-                        onChange={(e) => setLogoCutout(e.target.checked)}
-                        className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
-                      />
-                      Punch Logo Cutout
-                    </label>
-                    {profile.coverage_and_cutouts?.has_pencil_cutout && (
-                      <label className="flex items-center gap-2 text-xs font-medium text-zinc-300 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={pencilCutout}
-                          onChange={(e) => setPencilCutout(e.target.checked)}
-                          className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
-                        />
-                        Pencil Cutout
-                      </label>
+                {/* Coverage & Cutout Options (Collapsible) */}
+                <div className="rounded-xl bg-zinc-800/80 border border-zinc-700/80 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowCoverageSection(!showCoverageSection)}
+                    className="w-full flex items-center justify-between p-3 hover:bg-zinc-750 transition text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-zinc-300">Coverage & Cutouts</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-400 font-mono">
+                        {coverage === 'model_360' ? '360° Wrap' : 'Back Cut'}{logoCutout ? ' • Logo' : ''}
+                      </span>
+                    </div>
+                    {showCoverageSection ? (
+                      <ChevronUp className="w-4 h-4 text-zinc-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-zinc-400" />
                     )}
-                  </div>
+                  </button>
+
+                  {showCoverageSection && (
+                    <div className="p-3 pt-0 space-y-3 border-t border-zinc-700/60">
+                      <div className="flex items-center gap-4 pt-2">
+                        <label className="flex items-center gap-2 text-xs font-medium text-zinc-300 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="coverage"
+                            checked={coverage === 'model_360'}
+                            onChange={() => setCoverage('model_360')}
+                            className="text-[#f3aa18] focus:ring-[#f3aa18]"
+                          />
+                          Model 360 (Full Wrap)
+                        </label>
+                        <label className="flex items-center gap-2 text-xs font-medium text-zinc-300 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="coverage"
+                            checked={coverage === 'model_cut'}
+                            onChange={() => setCoverage('model_cut')}
+                            className="text-[#f3aa18] focus:ring-[#f3aa18]"
+                          />
+                          Model Cut (Back Only)
+                        </label>
+                      </div>
+
+                      <div className="flex items-center gap-4 pt-1">
+                        <label className="flex items-center gap-2 text-xs font-medium text-zinc-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={logoCutout}
+                            onChange={(e) => setLogoCutout(e.target.checked)}
+                            className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
+                          />
+                          Punch Logo Cutout
+                        </label>
+                        {profile.coverage_and_cutouts?.has_pencil_cutout && (
+                          <label className="flex items-center gap-2 text-xs font-medium text-zinc-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={pencilCutout}
+                              onChange={(e) => setPencilCutout(e.target.checked)}
+                              className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
+                            />
+                            Pencil Cutout
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Device Position & Scale Fine-Tuning */}
                 <div className="p-3 rounded-xl bg-zinc-800/80 border border-zinc-700/80 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-zinc-300">Device Placement & Zoom</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDeviceScale(1.0);
-                        setDeviceOffsetX(0);
-                        setDeviceOffsetY(110);
-                      }}
-                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#f3aa18]/20 text-[#f3aa18] hover:bg-[#f3aa18]/30 transition"
-                    >
-                      Reset Hero Shot
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeviceScale(1.0);
+                          setDeviceOffsetX(0);
+                          setDeviceOffsetY(110);
+                        }}
+                        className={clsx(
+                          'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition',
+                          deviceScale === 1.0 && deviceOffsetX === 0 && deviceOffsetY === 110
+                            ? 'bg-[#f3aa18]/25 border-[#f3aa18] text-[#f3aa18]'
+                            : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                        )}
+                      >
+                        <Smartphone className="w-3 h-3 text-[#f3aa18]" />
+                        Phone
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeviceScale(1.0);
+                          setDeviceOffsetX(140);
+                          setDeviceOffsetY(-55);
+                        }}
+                        className={clsx(
+                          'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition',
+                          deviceScale === 1.0 && deviceOffsetX === 140 && deviceOffsetY === -55
+                            ? 'bg-[#f3aa18]/25 border-[#f3aa18] text-[#f3aa18]'
+                            : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                        )}
+                      >
+                        <Laptop className="w-3 h-3 text-[#f3aa18]" />
+                        Laptop
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-1">
@@ -1627,6 +1704,26 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                     </div>
                   </div>
                 )}
+
+                <div className="pt-2 flex items-center justify-between border-t border-zinc-800">
+                  <span className="text-[11px] text-zinc-400">Remember background style for all sessions</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        localStorage.setItem(STORAGE_CUSTOM_BG_KEY, customBgUrl || '');
+                        localStorage.setItem('exacoat_marketplace_bg_type', bgType);
+                        showToast('success', 'Background Saved', 'Default background saved to browser storage.');
+                      } catch {
+                        showToast('error', 'Error', 'Failed to save background to browser storage.');
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 border border-zinc-700 transition"
+                  >
+                    <Bookmark className="w-3.5 h-3.5 text-[#f3aa18]" />
+                    Save as Default Background
+                  </button>
+                </div>
               </div>
             )}
 
