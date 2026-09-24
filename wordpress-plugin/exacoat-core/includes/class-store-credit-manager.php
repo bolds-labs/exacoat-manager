@@ -43,6 +43,7 @@ class Exacoat_Store_Credit_Manager {
 		// 5. Admin AJAX test endpoints
 		add_action( 'wp_ajax_exacoat_test_cashback_email', [ __CLASS__, 'ajax_test_cashback_email' ] );
 		add_action( 'wp_ajax_exacoat_test_store_credit_reminder', [ __CLASS__, 'ajax_test_store_credit_reminder' ] );
+		add_action( 'wp_ajax_exacoat_test_store_credit_pre_expiry', [ __CLASS__, 'ajax_test_store_credit_pre_expiry' ] );
 	}
 
 	/**
@@ -269,8 +270,9 @@ class Exacoat_Store_Credit_Manager {
 			$data['body_secondary'] = 'Apply your balance during checkout on any precision device skin or accessories before it expires.';
 		}
 
+		$email_event = $is_pre_expiry ? 'customer_store_credit_pre_expiry' : 'customer_store_credit_reminder';
 		Exacoat_Email_Engine::send_email(
-			'customer_store_credit_reminder',
+			$email_event,
 			$user->user_email,
 			$full_name,
 			$data
@@ -423,6 +425,46 @@ class Exacoat_Store_Credit_Manager {
 	/**
 	 * AJAX Handler: Dispatch Live Test Store Credit Reminder
 	 */
+	
+	/**
+	 * Admin AJAX: Test Store Credit Pre-Expiry 30-Day Warning Email
+	 */
+	public static function ajax_test_store_credit_pre_expiry() {
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			wp_send_json_error( [ 'message' => 'Unauthorized' ], 403 );
+		}
+
+		$recipient = sanitize_email( $_POST['recipient_email'] ?? get_option( 'admin_email' ) );
+		$data = [
+			'customer_first_name'  => 'William',
+			'customer_name'        => 'William',
+			'recipient_email'      => $recipient,
+			'store_credit_balance' => 'Rp 50.000',
+			'balance_raw'          => 50000,
+			'currency'             => 'IDR',
+			'shop_url'             => 'https://exacoat.com/shop/',
+			'reminder_type'        => 'pre_expiry_30d',
+			'expiry_date'          => date_i18n( get_option( 'date_format', 'F j, Y' ), strtotime( '+30 days' ) ),
+			'badge_text'           => 'Expiring Soon',
+			'title'                => 'Your store credit is expiring soon',
+			'body_primary'         => 'A friendly reminder that your store credit balance of Rp 50.000 is scheduled to expire in 30 days.',
+			'body_secondary'       => 'Apply your balance during checkout on any precision device skin or accessories before it expires.',
+			'cta_text'             => 'Use Credit Before It Expires',
+		];
+
+		if ( class_exists( 'Exacoat_Email_Engine' ) ) {
+			$res = Exacoat_Email_Engine::send_email(
+				'customer_store_credit_pre_expiry',
+				$recipient,
+				'William',
+				$data
+			);
+			wp_send_json_success( [ 'message' => 'Test pre-expiry warning email dispatched', 'response' => $res ] );
+		} else {
+			wp_send_json_error( [ 'message' => 'Exacoat_Email_Engine not found' ] );
+		}
+	}
+
 	public static function ajax_test_store_credit_reminder() {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error( [ 'message' => 'Unauthorized' ] );

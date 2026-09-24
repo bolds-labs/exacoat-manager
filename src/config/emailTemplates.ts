@@ -244,13 +244,29 @@ export const EMAIL_TEMPLATES_CATALOG: { category: string; items: EmailTemplateIt
         }
       },
       {
+        key: 'customer_store_credit_pre_expiry',
+        name: 'Store Credit Pre-Expiry Alert (30 Days Left)',
+        category: '💳 Store Credit & Cashback',
+        badge: 'Expiring Soon',
+        badgeVariant: 'amber',
+        subject: 'Your {{store_credit_balance}} store credit expires in 30 days',
+        trigger: 'Dispatched 335 days after issuance (30 days before 1-year expiry) to alert customer before credit lapses.',
+        payload: '{ "event": "customer_store_credit_pre_expiry", "recipient_email": "customer@gmail.com", "customer_first_name": "William", "store_credit_balance": "Rp 50.000", "expiry_date": "October 24, 2027", "shop_url": "https://exacoat.com/shop/" }',
+        defaults: {
+          customer_first_name: 'William',
+          store_credit_balance: 'Rp 50.000',
+          expiry_date: 'October 24, 2027',
+          shop_url: 'https://exacoat.com/shop/',
+        }
+      },
+      {
         key: 'customer_store_credit_reminder',
-        name: 'Store Credit Balance Reminder',
+        name: 'Store Credit Balance Reminder (7-Day Follow-Up)',
         category: '💳 Store Credit & Cashback',
         badge: 'Reminder',
         badgeVariant: 'amber',
         subject: 'You have {{store_credit_balance}} store credit waiting in your Exacoat account',
-        trigger: 'Dispatched after 7 days (or 30 days before 1-year expiry) if customer has positive unused store credit.',
+        trigger: 'Dispatched 7 days post-purchase to remind customer of their available balance while intent is high.',
         payload: '{ "event": "customer_store_credit_reminder", "recipient_email": "customer@gmail.com", "customer_first_name": "William", "store_credit_balance": "Rp 50.000", "expiry_date": "September 24, 2027", "shop_url": "https://exacoat.com/shop/" }',
         defaults: {
           customer_first_name: 'William',

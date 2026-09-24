@@ -399,6 +399,24 @@ class Exacoat_Email_Engine {
 					'shop_url'             => 'https://exacoat.com/shop/',
 				],
 			],
+						'customer_store_credit_pre_expiry' => [
+				'category'       => 'Store Credits',
+				'label'          => 'Store Credit Pre-Expiry Warning (30 Days Left)',
+				'subject'        => 'Your {{store_credit_balance}} store credit expires in 30 days',
+				'badge'          => 'Expiring Soon',
+				'icon'           => 'document_verified',
+				'title'          => 'Your store credit is expiring soon',
+				'body_primary'   => 'A friendly reminder that your store credit balance of {{store_credit_balance}} is scheduled to expire in 30 days.',
+				'body_secondary' => 'Apply your balance during checkout on any precision device skin or accessories before it expires.',
+				'cta_text'       => 'Use Credit Before It Expires',
+				'type'           => 'store_credit',
+				'defaults'       => [
+					'customer_first_name'  => 'Alex',
+					'store_credit_balance' => 'Rp 50.000',
+					'expiry_date'          => date( 'F j, Y', strtotime( '+30 days' ) ),
+					'shop_url'             => 'https://exacoat.com/shop/',
+				],
+			],
 			'customer_order_review_reward' => [
 				'category'       => 'Orders',
 				'label'          => 'Exacoat Perks Promo Code',
@@ -504,7 +522,7 @@ class Exacoat_Email_Engine {
 		}
 
 		// Branch directly to Light-Mode Store Credit / Cashback Layout
-		if ( $type === 'store_credit' || in_array( $event, [ 'customer_cashback_earned', 'customer_store_credit_reminder' ], true ) ) {
+		if ( $type === 'store_credit' || in_array( $event, [ 'customer_cashback_earned', 'customer_store_credit_reminder', 'customer_store_credit_pre_expiry' ], true ) ) {
 			return self::render_store_credit_html( $event, $merged_data, $tmpl );
 		}
 

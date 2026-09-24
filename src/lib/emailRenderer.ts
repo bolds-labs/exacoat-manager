@@ -18,7 +18,7 @@ export function renderEmailHtmlLocally(event: string, customData: Record<string,
     return renderReviewInvitationEmail(customData);
   } else if (event === 'customer_order_review_reward') {
     return renderReviewRewardEmail(customData);
-  } else if (event === 'customer_cashback_earned' || event === 'customer_store_credit_reminder') {
+  } else if (event === 'customer_cashback_earned' || event === 'customer_store_credit_reminder' || event === 'customer_store_credit_pre_expiry') {
     return renderStoreCreditEmail(event, customData);
   } else if (event.startsWith('customer_order_')) {
     return renderCustomerOrderEmail(event, customData);
@@ -829,21 +829,26 @@ function renderStoreCreditEmail(event: string, data: Record<string, any>): Rende
   const shopUrl = escapeHtml(data.shop_url || 'https://exacoat.com/shop/');
 
   const isCashback = event === 'customer_cashback_earned';
-  const badgeText = isCashback ? 'Store Credit' : 'Store Credit';
-  const title = isCashback ? 'Your cashback is ready to use' : 'Your store credit is waiting';
+  const isPreExpiry = event === 'customer_store_credit_pre_expiry';
+  const badgeText = isCashback ? 'Store Credit' : (isPreExpiry ? 'Expiring Soon' : 'Store Credit');
+  const title = isCashback
+    ? 'Your cashback is ready to use'
+    : (isPreExpiry ? 'Your store credit is expiring soon' : 'Your store credit is waiting');
   const subject = isCashback
     ? `You received ${cashbackAmount} cashback on order #${orderNum}`
-    : `You have ${balance} store credit waiting in your Exacoat account`;
+    : (isPreExpiry ? `Your ${balance} store credit expires in 30 days` : `You have ${balance} store credit waiting in your Exacoat account`);
 
   const bodyPrimary = isCashback
     ? `Your cashback of ${cashbackAmount} from order #${orderNum} has been credited to your Exacoat store credit balance.`
-    : `You still have ${balance} in store credit available in your Exacoat account.`;
+    : (isPreExpiry ? `A friendly reminder that your store credit balance of ${balance} is scheduled to expire in 30 days.` : `You still have ${balance} in store credit available in your Exacoat account.`);
 
   const bodySecondary = isCashback
     ? `Your available store credit balance is now ${balance}. You can apply it directly during checkout on your next order.`
-    : 'Use it on your next precision skin, camera protection, or accessories. Simply log in and apply your balance at checkout.';
+    : (isPreExpiry ? 'Apply your balance during checkout on any precision device skin or accessories before it expires.' : 'Use it on your next precision skin, camera protection, or accessories. Simply log in and apply your balance at checkout.');
 
-  const ctaText = isCashback ? 'Shop Device Skins' : 'Use Your Credit';
+  const ctaText = isCashback
+    ? 'Shop Device Skins'
+    : (isPreExpiry ? 'Use Credit Before It Expires' : 'Use Your Credit');
 
   const cashbackPill = isCashback && cashbackAmount
     ? `<div style="display:inline-block;padding:4px 12px;background:#ecfdf5;color:#047857;font-size:12px;font-weight:700;border-radius:9999px;border:1px solid #a7f3d0;margin-top:10px;">

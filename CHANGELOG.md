@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.41] - 2026-09-24
+
+### Dedicated 30-Day Pre-Expiry Store Credit Warning Email Template
+- **Pre-Expiry Email Template (`customer_store_credit_pre_expiry`)**:
+  - Registered as a first-class email template in `Exacoat_Email_Engine` and Exacoat Manager ERP (`#emails`).
+  - Features subject: `Your {{store_credit_balance}} store credit expires in 30 days`, amber `Expiring Soon` badge, exact expiry date badge, and direct urgency CTA: `Use Credit Before It Expires →`.
+  - Automatically dispatched by `Exacoat_Store_Credit_Manager` during the 335-day (11 months post-grant) Action Scheduler job.
+
 ## [0.1.40] - 2026-09-24
 
 ### 1-Year Store Credit Expiration Lifecycle & Pre-Expiry Warnings
