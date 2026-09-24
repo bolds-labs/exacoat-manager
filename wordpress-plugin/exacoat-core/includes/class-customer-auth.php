@@ -391,9 +391,9 @@ class Exacoat_Customer_Auth {
 			foreach ( $order->get_items() as $item ) {
 				$product = $item->get_product();
 				$product_id = $item->get_product_id();
-				$image = self::resolve_order_item_image_url( $product, $product_id );
+				$image = self::resolve_order_item_image_url( $product, $product_id, $item );
 				$slug = ( $product instanceof WC_Product ) ? $product->get_slug() : '';
-				$url  = $slug ? '/posters/' . rawurlencode( $slug ) : '';
+				$url  = $slug ? '/product/' . rawurlencode( $slug ) : '';
 				$items[] = [
 					'id'       => $product_id,
 					'name'     => $item->get_name(),
@@ -401,6 +401,7 @@ class Exacoat_Customer_Auth {
 					'image'    => $image,
 					'slug'     => $slug,
 					'url'      => $url,
+					'layers'   => self::extract_order_item_layers( $item ),
 				];
 			}
 			$view_url        = $order->get_checkout_order_received_url() ?: $order->get_view_order_url();
@@ -424,7 +425,7 @@ class Exacoat_Customer_Auth {
 				'currency'        => $order->get_currency(),
 				'itemCount'       => $order->get_item_count(),
 				'viewUrl'         => esc_url_raw( $view_url ),
-				'shippingMethod'  => (string) $order->get_shipping_method(),
+				'shippingMethod'  => self::resolve_order_shipping_method( $order ),
 				'trackingNumber'  => $tracking_number,
 				'trackingCarrier' => $carrier_name,
 				'trackingUrl'     => esc_url_raw( $tracking_url ),
@@ -468,9 +469,9 @@ class Exacoat_Customer_Auth {
 		foreach ( $order->get_items() as $item ) {
 			$product    = $item->get_product();
 			$product_id = $item->get_product_id();
-			$image      = self::resolve_order_item_image_url( $product, $product_id );
+			$image      = self::resolve_order_item_image_url( $product, $product_id, $item );
 			$slug = ( $product instanceof WC_Product ) ? $product->get_slug() : '';
-			$url  = $slug ? '/posters/' . rawurlencode( $slug ) : '';
+			$url  = $slug ? '/product/' . rawurlencode( $slug ) : '';
 			$items[] = [
 				'id'       => $product_id,
 				'name'     => $item->get_name(),
@@ -479,6 +480,7 @@ class Exacoat_Customer_Auth {
 				'total'    => (float) $item->get_total(),
 				'slug'     => $slug,
 				'url'      => $url,
+				'layers'   => self::extract_order_item_layers( $item ),
 			];
 		}
 
@@ -509,6 +511,21 @@ class Exacoat_Customer_Auth {
 			$checkpoints = $order->get_meta( '_exacoat_tracking_checkpoints' ) ?: ( $order->get_meta( '_artmatter_tracking_checkpoints' ) ?: ( get_post_meta( $order->get_id(), '_exacoat_tracking_checkpoints', true ) ?: get_post_meta( $order->get_id(), '_artmatter_tracking_checkpoints', true ) ) );
 		}
 
+		$fee_lines   = [];
+		$unique_code = null;
+		foreach ( $order->get_fees() as $fee ) {
+			$fee_name  = $fee->get_name();
+			$fee_total = (float) $fee->get_total();
+			$fee_lines[] = [
+				'id'    => $fee->get_id(),
+				'name'  => $fee_name,
+				'total' => $fee_total,
+			];
+			if ( stripos( $fee_name, 'Kode Unik' ) !== false ) {
+				$unique_code = (int) round( $fee_total );
+			}
+		}
+
 		return self::response( [
 			'success' => true,
 			'order'   => [
@@ -528,13 +545,17 @@ class Exacoat_Customer_Auth {
 				'viewUrl'          => '',
 				'trackingUrl'      => esc_url_raw( $tracking_url ),
 				'paymentMethod'    => $order->get_payment_method_title(),
-				'shippingMethod'   => $order->get_shipping_method(),
+				'paymentMethodId'  => (string) $order->get_payment_method(),
+				'shippingMethod'   => self::resolve_order_shipping_method( $order ),
 				'shippingAddress'  => trim( wp_strip_all_tags( $shipping_address ) ),
 				'billingEmail'     => $order->get_billing_email(),
 				'billingPhone'     => $order->get_billing_phone(),
 				'trackingNumber'   => $tracking_number,
 				'trackingCarrier'  => $carrier_name,
 				'checkpoints'      => is_array( $checkpoints ) ? array_values( $checkpoints ) : [],
+				'feeLines'         => $fee_lines,
+				'uniqueCode'       => $unique_code,
+				'orderKey'         => (string) $order->get_order_key(),
 			],
 		] );
 	}
@@ -1165,8 +1186,27 @@ class Exacoat_Customer_Auth {
 		return $response;
 	}
 
-	private static function resolve_order_item_image_url( $product, int $product_id ): string {
+	private static function resolve_order_item_image_url( $product, int $product_id, $item = null ): string {
 		$image = '';
+
+		// 0. Primary: check configured composite skin image or thumbnail URL on order line item
+		if ( $item instanceof WC_Order_Item_Product ) {
+			$custom_img = (string) (
+				$item->get_meta( '_configured_image_url' )
+				?: $item->get_meta( '_configurator_image' )
+				?: $item->get_meta( '_thumbnail_url' )
+				?: $item->get_meta( '_product_image_url' )
+				?: $item->get_meta( '_skin_image_url' )
+				?: $item->get_meta( 'image_url' )
+				?: $item->get_meta( 'mkl_pc_thumbnail_url' )
+			);
+			if ( ! empty( $custom_img ) ) {
+				if ( function_exists( 'artmatter_media_url' ) ) {
+					$custom_img = artmatter_media_url( $custom_img );
+				}
+				return esc_url_raw( $custom_img );
+			}
+		}
 
 		// 1. Try master product attachment with preview derivative
 		$master_id = $product_id > 0 ? (int) get_post_meta( $product_id, '_artmatter_master_attachment_id', true ) : 0;
@@ -1215,6 +1255,90 @@ class Exacoat_Customer_Auth {
 		}
 
 		return esc_url_raw( $image );
+	}
+
+	private static function extract_order_item_layers( $item ): array {
+		if ( ! $item instanceof WC_Order_Item_Product ) {
+			return [];
+		}
+
+		$layers = [];
+
+		$config_meta = $item->get_meta( '_configurator_data_raw' ) ?: $item->get_meta( '_configurator_data' ) ?: $item->get_meta( '_pc_configurator_data' );
+		if ( is_string( $config_meta ) ) {
+			$decoded = json_decode( $config_meta, true );
+			if ( is_array( $decoded ) ) {
+				$config_meta = $decoded;
+			}
+		}
+
+		if ( is_array( $config_meta ) ) {
+			foreach ( $config_meta as $idx => $l ) {
+				$layer_name = trim( (string) ( $l['layer_name'] ?? $l['layerName'] ?? $l['layer_title'] ?? $l['label'] ?? '' ) );
+				$choice_name = trim( (string) ( $l['name'] ?? $l['choiceName'] ?? $l['choice_name'] ?? $l['choice'] ?? $l['value'] ?? '' ) );
+				if ( ! empty( $layer_name ) || ! empty( $choice_name ) ) {
+					$layers[] = [
+						'layerId'    => (string) ( $l['layer_id'] ?? $l['layerId'] ?? ( $idx + 1 ) ),
+						'layerName'  => $layer_name,
+						'choiceName' => $choice_name,
+					];
+				}
+			}
+		}
+
+		// Fallback: extract from formatted item meta data
+		if ( empty( $layers ) ) {
+			$meta_data = $item->get_formatted_meta_data( '' );
+			foreach ( $meta_data as $m ) {
+				$key = trim( wp_strip_all_tags( (string) $m->display_key ) );
+				$val = trim( wp_strip_all_tags( (string) $m->display_value ) );
+				if ( empty( $key ) || empty( $val ) ) {
+					continue;
+				}
+				if ( str_starts_with( $key, '_' ) || in_array( strtolower( $key ), [ 'sku', 'product id', 'items' ], true ) ) {
+					continue;
+				}
+				$layers[] = [
+					'layerId'    => (string) $m->id,
+					'layerName'  => $key,
+					'choiceName' => $val,
+				];
+			}
+		}
+
+		return $layers;
+	}
+
+	private static function resolve_order_shipping_method( WC_Order $order ): string {
+		$active_shipping = '';
+		$shipping_lines = $order->get_shipping_methods();
+		if ( ! empty( $shipping_lines ) ) {
+			// 1. Prioritize courier line with positive shipping cost
+			foreach ( $shipping_lines as $shipping_item ) {
+				if ( (float) $shipping_item->get_total() > 0 ) {
+					$active_shipping = $shipping_item->get_name();
+					break;
+				}
+			}
+			// 2. If no paid line, pick non-pickup courier line
+			if ( empty( $active_shipping ) ) {
+				foreach ( $shipping_lines as $shipping_item ) {
+					if ( $shipping_item->get_method_id() !== 'local_pickup' && ! empty( $shipping_item->get_name() ) ) {
+						$active_shipping = $shipping_item->get_name();
+						break;
+					}
+				}
+			}
+			// 3. Fallback to last line or first line
+			if ( empty( $active_shipping ) ) {
+				$last_line = end( $shipping_lines );
+				$active_shipping = $last_line ? $last_line->get_name() : '';
+			}
+		}
+		if ( empty( $active_shipping ) ) {
+			$active_shipping = (string) $order->get_shipping_method();
+		}
+		return $active_shipping;
 	}
 
 	private static function error( string $message, int $status ): WP_REST_Response {
