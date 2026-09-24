@@ -556,6 +556,8 @@ class Exacoat_Customer_Auth {
 				'feeLines'         => $fee_lines,
 				'uniqueCode'       => $unique_code,
 				'orderKey'         => (string) $order->get_order_key(),
+				'snapToken'        => (string) ( $order->get_meta( '_mt_payment_snap_token' ) ?: '' ),
+				'snapUrl'          => (string) ( $order->get_meta( '_mt_payment_url' ) ?: '' ),
 			],
 		] );
 	}
