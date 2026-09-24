@@ -38,6 +38,7 @@ import {
   Award,
   Smartphone,
   Laptop,
+  Store,
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
@@ -66,6 +67,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
 
   // Collapsible Layout & Copy Sections State (All collapsed by default for a clean, tidy sidebar)
   const [openCopySections, setOpenCopySections] = useState<Record<string, boolean>>({
+    channel: false,
     template: false,
     variantStack: false,
     skinBadge: false,
@@ -82,6 +84,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
 
   const handleExpandAllCopySections = () => {
     setOpenCopySections({
+      channel: true,
       template: true,
       variantStack: true,
       skinBadge: true,
@@ -95,6 +98,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
 
   const handleCollapseAllCopySections = () => {
     setOpenCopySections({
+      channel: false,
       template: false,
       variantStack: false,
       skinBadge: false,
@@ -179,20 +183,26 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   );
   const [batchVariantsLayoutMode, setBatchVariantsLayoutMode] = useState<'variant' | 'cover'>('variant');
 
+  // Marketplace Channel Selector (Shopee vs Tokopedia)
+  const [marketplaceChannel, setMarketplaceChannel] = useState<'shopee' | 'tokopedia'>('tokopedia');
+  const [tokopediaBadgeUrl, setTokopediaBadgeUrl] = useState<string>(
+    '/assets/brand/tokopedia-official-store-badge.png'
+  );
+
   // Background State
   const [bgType, setBgType] = useState<'studio_light' | 'custom'>('studio_light');
   const [customBgUrl, setCustomBgUrl] = useState<string>('');
 
-  // Device & Swatches State (Default zoom 75% for variant, 100% for cover)
+  // Device & Swatches State (Default zoom 75% for variant: X = 75px, Y = 80px)
   const [activeColorId, setActiveColorId] = useState<string>('');
   const [coverage, setCoverage] = useState<'model_360' | 'model_cut'>('model_360');
   const [logoCutout, setLogoCutout] = useState<boolean>(true);
   const [pencilCutout, setPencilCutout] = useState<boolean>(true);
   const [showCoverageSection, setShowCoverageSection] = useState<boolean>(false);
   const [selectedViewId, setSelectedViewId] = useState<string>('');
-  const [deviceScale, setDeviceScale] = useState<number>(1.0);
-  const [deviceOffsetX, setDeviceOffsetX] = useState<number>(0);
-  const [deviceOffsetY, setDeviceOffsetY] = useState<number>(110);
+  const [deviceScale, setDeviceScale] = useState<number>(0.75);
+  const [deviceOffsetX, setDeviceOffsetX] = useState<number>(75);
+  const [deviceOffsetY, setDeviceOffsetY] = useState<number>(80);
   const [activeLayerIds, setActiveLayerIds] = useState<Set<string>>(new Set());
 
   // Batch Generation State
@@ -290,15 +300,15 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     setLogoCutout(hasLogoCutoutSupport);
     setPencilCutout(hasPencilCutoutSupport);
 
-    // Reset device offsets based on layout mode (variant: 75% zoom, Y = -15px; cover: 100% zoom, Y = 110px)
+    // Reset device offsets based on layout mode (variant: 75% zoom, X = 75px, Y = 80px; cover: 100% zoom, Y = 110px)
     if (layoutMode === 'cover') {
       setDeviceScale(1.0);
       setDeviceOffsetX(0);
       setDeviceOffsetY(110);
     } else {
       setDeviceScale(0.75);
-      setDeviceOffsetX(0);
-      setDeviceOffsetY(-15);
+      setDeviceOffsetX(75);
+      setDeviceOffsetY(80);
     }
 
     // Initialize active skin layer IDs: strictly activate ONLY the first genuine skin layer
@@ -479,6 +489,8 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
       headlineHighlightColor,
       featureCards,
       layoutMode,
+      marketplaceChannel,
+      tokopediaBadgeUrl,
       variantLeftCards: {
         showOriginal3M,
         showMaterialOrigin,
@@ -547,6 +559,8 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     headlineHighlightColor,
     featureCards,
     layoutMode,
+    marketplaceChannel,
+    tokopediaBadgeUrl,
     showOriginal3M,
     showMaterialOrigin,
     showWarranty,
@@ -1288,6 +1302,23 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                       <button
                         type="button"
                         onClick={() => {
+                          setDeviceScale(0.75);
+                          setDeviceOffsetX(75);
+                          setDeviceOffsetY(80);
+                        }}
+                        className={clsx(
+                          'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition',
+                          deviceScale === 0.75 && deviceOffsetX === 75 && deviceOffsetY === 80
+                            ? 'bg-[#f3aa18]/25 border-[#f3aa18] text-[#f3aa18]'
+                            : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                        )}
+                      >
+                        <Layers className="w-3 h-3 text-[#f3aa18]" />
+                        Variant
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
                           setDeviceScale(1.0);
                           setDeviceOffsetX(140);
                           setDeviceOffsetY(-55);
@@ -1382,7 +1413,84 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                   </div>
                 </div>
 
-                {/* 1. Template Layout Selector (Cover vs Variant) */}
+                {/* 1. Marketplace Channel Selector (Shopee vs Tokopedia) */}
+                <div className="rounded-xl bg-zinc-800/80 border border-zinc-700/80 overflow-hidden transition">
+                  <button
+                    type="button"
+                    onClick={() => toggleCopySection('channel')}
+                    className="w-full flex items-center justify-between p-3.5 hover:bg-zinc-750 transition text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Store className="w-4 h-4 text-[#f3aa18]" />
+                      <span className="text-xs font-bold text-zinc-200">Marketplace Channel</span>
+                      <span
+                        className={clsx(
+                          'text-[10px] px-2 py-0.5 rounded-full font-mono font-bold',
+                          marketplaceChannel === 'tokopedia'
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                        )}
+                      >
+                        {marketplaceChannel === 'tokopedia' ? 'Tokopedia (Official Badge)' : 'Shopee'}
+                      </span>
+                    </div>
+                    {openCopySections.channel ? (
+                      <ChevronUp className="w-4 h-4 text-zinc-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-zinc-400" />
+                    )}
+                  </button>
+
+                  {openCopySections.channel && (
+                    <div className="p-3.5 pt-0 space-y-2.5 border-t border-zinc-700/50">
+                      <p className="text-[11px] text-zinc-400 pt-2">
+                        Select target marketplace platform. When Tokopedia is active, the official store badge is rendered under the #1 Brand Skin tagline.
+                      </p>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setMarketplaceChannel('tokopedia')}
+                          className={clsx(
+                            'p-2.5 rounded-xl border text-left transition space-y-1',
+                            marketplaceChannel === 'tokopedia'
+                              ? 'bg-emerald-500/15 border-emerald-500 text-emerald-300'
+                              : 'bg-zinc-900/80 border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                          )}
+                        >
+                          <div className="flex items-center gap-1.5 font-bold text-xs">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                            <span>Tokopedia</span>
+                          </div>
+                          <p className="text-[10px] text-zinc-400 leading-tight">
+                            Includes Tokopedia Official Store Badge under tagline
+                          </p>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setMarketplaceChannel('shopee')}
+                          className={clsx(
+                            'p-2.5 rounded-xl border text-left transition space-y-1',
+                            marketplaceChannel === 'shopee'
+                              ? 'bg-orange-500/15 border-orange-500 text-orange-300'
+                              : 'bg-zinc-900/80 border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                          )}
+                        >
+                          <div className="flex items-center gap-1.5 font-bold text-xs">
+                            <span className="w-2 h-2 rounded-full bg-orange-400" />
+                            <span>Shopee</span>
+                          </div>
+                          <p className="text-[10px] text-zinc-400 leading-tight">
+                            Clean Exacoat branding without marketplace platform badge
+                          </p>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Template Layout Selector (Cover vs Variant) */}
                 <div className="rounded-xl bg-zinc-800/80 border border-zinc-700/80 overflow-hidden transition">
                   <button
                     type="button"
@@ -1437,8 +1545,8 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                             setLayoutMode('variant');
                             setIsPrimaryCoverMode(false);
                             setDeviceScale(0.75);
-                            setDeviceOffsetX(0);
-                            setDeviceOffsetY(-15);
+                            setDeviceOffsetX(75);
+                            setDeviceOffsetY(80);
                           }}
                           className={clsx(
                             'p-2.5 rounded-xl border text-left transition space-y-1',

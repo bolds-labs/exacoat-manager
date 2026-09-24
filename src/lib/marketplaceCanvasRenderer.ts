@@ -50,6 +50,10 @@ export interface MarketplaceImageConfig {
   // Layout Mode: 'cover' (hero close-up 100%, 3 bottom cards, left headline) vs 'variant' (full device 75%, left stacked cards + textured surface, clean bottom)
   layoutMode?: 'cover' | 'variant';
 
+  // Marketplace Channel Selector (Shopee vs Tokopedia)
+  marketplaceChannel?: 'shopee' | 'tokopedia';
+  tokopediaBadgeUrl?: string;
+
   // Variant Left Stacked Cards Options
   variantLeftCards?: {
     showOriginal3M?: boolean;
@@ -480,6 +484,37 @@ function drawBrandTagline(
 }
 
 /**
+ * Draws the Tokopedia Official Store Badge under the #1 Brand Skin di Indonesia tagline
+ * Source: /assets/brand/tokopedia-official-store-badge.png (natural aspect ratio ~2.97)
+ */
+async function drawTokopediaBadge(
+  ctx: CanvasRenderingContext2D,
+  badgeUrl: string = '/assets/brand/tokopedia-official-store-badge.png',
+  x: number = 50,
+  y: number = 268,
+  containerW: number = 460
+) {
+  try {
+    const img = await loadCorsSafeImageElement(badgeUrl);
+    if (!img || img.width <= 0 || img.height <= 0) return;
+
+    const naturalRatio = img.width / img.height;
+    const badgeH = 74;
+    const badgeW = Math.round(badgeH * naturalRatio);
+    const badgeX = x + Math.round((containerW - badgeW) / 2);
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.08)';
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 4;
+    ctx.drawImage(img, badgeX, y, badgeW, badgeH);
+    ctx.restore();
+  } catch (err) {
+    console.warn('[Marketplace Canvas] Could not draw Tokopedia badge:', err);
+  }
+}
+
+/**
  * Draws the skin name pill or '20+ SKINS SELECTION' on top right in bold spaced capital letters
  * Features increased rounding (r=54) and 5-10% larger typography
  */
@@ -643,11 +678,13 @@ function drawLeftHeadlineBlock(
 }
 
 /**
- * Draws clean vector feature icons inside cards matching Image 2 & 3
- */
-/**
- * Draws clean vector feature icons inside cards matching Image 2 & 3
- * Scaled up ~25-30% to fit the larger circular badge
+ * Draws clean vector feature icons inside circular badges using Nucleo design principles:
+ * - 'shield': Verified certified seal with scalloped rosette and bold checkmark (100% Original)
+ * - 'material': 3D multi-layer isometric film sheets (3M Material from USA/Japan/Italy)
+ * - 'guarantee': Protective shield with circular replacement cycle arrow (Installation Warranty)
+ * - 'texture': 3D hexagonal honeycomb cell with internal tactile carbon relief lines (Textured Surface)
+ * - 'fit': Precision target crosshairs
+ * - 'scratch': Deflection shield with hardness sparkle
  */
 function drawCardIcon(
   ctx: CanvasRenderingContext2D,
@@ -658,115 +695,157 @@ function drawCardIcon(
   ctx.save();
   ctx.strokeStyle = '#10b981';
   ctx.fillStyle = '#10b981';
-  ctx.lineWidth = 3.0; // was 2.4 (+25% bolder)
+  ctx.lineWidth = 2.8;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
   if (iconType === 'material') {
-    // Rosette star ribbon icon (scaled up ~30%)
-    const spikes = 5;
-    const outerR = 14.5;
-    const innerR = 7.0;
-    let rot = (Math.PI / 2) * 3;
-    let x = cx;
-    let y = cy;
-    const step = Math.PI / spikes;
-
+    // 3M Material: 3 stacked isometric sheets representing multi-layer vinyl film
+    // 1. Top rhombus sheet
     ctx.beginPath();
-    ctx.moveTo(cx, cy - outerR);
-    for (let i = 0; i < spikes; i++) {
-      x = cx + Math.cos(rot) * outerR;
-      y = cy + Math.sin(rot) * outerR;
-      ctx.lineTo(x, y);
-      rot += step;
-
-      x = cx + Math.cos(rot) * innerR;
-      y = cy + Math.sin(rot) * innerR;
-      ctx.lineTo(x, y);
-      rot += step;
-    }
-    ctx.lineTo(cx, cy - outerR);
+    ctx.moveTo(cx, cy - 11);
+    ctx.lineTo(cx + 13, cy - 5);
+    ctx.lineTo(cx, cy + 1);
+    ctx.lineTo(cx - 13, cy - 5);
     ctx.closePath();
     ctx.stroke();
 
+    // 2. Middle chevron sheet
     ctx.beginPath();
-    ctx.arc(cx, cy, 2.8, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (iconType === 'fit') {
-    // Calipers / Precision Target icon (scaled up)
-    ctx.beginPath();
-    ctx.arc(cx, cy, 13, 0, Math.PI * 2);
+    ctx.moveTo(cx - 13, cy + 1);
+    ctx.lineTo(cx, cy + 7);
+    ctx.lineTo(cx + 13, cy + 1);
     ctx.stroke();
 
+    // 3. Bottom chevron sheet
     ctx.beginPath();
-    ctx.arc(cx, cy, 3.8, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.moveTo(cx - 17, cy);
-    ctx.lineTo(cx - 12, cy);
-    ctx.moveTo(cx + 12, cy);
-    ctx.lineTo(cx + 17, cy);
-    ctx.moveTo(cx, cy - 17);
-    ctx.lineTo(cx, cy - 12);
-    ctx.moveTo(cx, cy + 12);
-    ctx.lineTo(cx, cy + 17);
+    ctx.moveTo(cx - 13, cy + 7);
+    ctx.lineTo(cx, cy + 13);
+    ctx.lineTo(cx + 13, cy + 7);
     ctx.stroke();
-  } else if (iconType === 'scratch') {
-    // Key / Shield Scratch Proof (scaled up)
-    ctx.beginPath();
-    ctx.moveTo(cx - 8, cy - 10);
-    ctx.lineTo(cx + 6, cy + 4);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(cx + 7.5, cy + 5, 5.5, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(cx - 5, cy - 13);
-    ctx.lineTo(cx - 10, cy - 8);
-    ctx.stroke();
-  } else if (iconType === 'texture') {
-    // 3 vertical tactile texture bars (scaled up)
-    const barW = 3.2;
-    ctx.lineWidth = barW;
-    ctx.lineCap = 'round';
-
-    // Center bar
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - 11);
-    ctx.lineTo(cx, cy + 11);
-    ctx.stroke();
-
-    // Left bar
-    ctx.beginPath();
-    ctx.moveTo(cx - 7, cy - 7);
-    ctx.lineTo(cx - 7, cy + 7);
-    ctx.stroke();
-
-    // Right bar
-    ctx.beginPath();
-    ctx.moveTo(cx + 7, cy - 7);
-    ctx.lineTo(cx + 7, cy + 7);
-    ctx.stroke();
-  } else {
-    // Checkmark Badge / Guarantee Shield (scaled up)
+  } else if (iconType === 'guarantee') {
+    // Installation Warranty: Protective shield with circular replacement cycle arrow inside
+    // 1. Shield outline
     ctx.beginPath();
     ctx.moveTo(cx, cy - 15);
     ctx.lineTo(cx + 13, cy - 9);
-    ctx.lineTo(cx + 13, cy + 4);
-    ctx.quadraticCurveTo(cx + 13, cy + 14, cx, cy + 16.5);
-    ctx.quadraticCurveTo(cx - 13, cy + 14, cx - 13, cy + 4);
+    ctx.lineTo(cx + 13, cy + 3);
+    ctx.quadraticCurveTo(cx + 13, cy + 13, cx, cy + 16.5);
+    ctx.quadraticCurveTo(cx - 13, cy + 13, cx - 13, cy + 3);
     ctx.lineTo(cx - 13, cy - 9);
     ctx.closePath();
     ctx.stroke();
 
-    // Checkmark inside shield
+    // 2. Circular replacement cycle arrow inside shield
+    const arcR = 5.2;
+    const arcCy = cy + 1;
     ctx.beginPath();
-    ctx.moveTo(cx - 5.5, cy + 1.5);
-    ctx.lineTo(cx - 1.5, cy + 5.5);
-    ctx.lineTo(cx + 6.5, cy - 3.5);
+    ctx.arc(cx, arcCy, arcR, -Math.PI * 0.75, Math.PI * 0.85, false);
+    ctx.stroke();
+
+    // Arrowhead at start of arc
+    ctx.beginPath();
+    ctx.moveTo(cx - 1.5, arcCy - arcR - 3.5);
+    ctx.lineTo(cx + 2.5, arcCy - arcR);
+    ctx.lineTo(cx - 1.5, arcCy - arcR + 3.5);
+    ctx.stroke();
+  } else if (iconType === 'texture') {
+    // Textured Surface: 3D hexagonal honeycomb / carbon facet with tactile relief
+    const hexR = 14;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const angle = (i * Math.PI) / 3 - Math.PI / 6;
+      const px = cx + Math.cos(angle) * hexR;
+      const py = cy + Math.sin(angle) * hexR;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.stroke();
+
+    // 3 internal isometric spokes meeting at center
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx, cy + hexR);
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx - Math.cos(Math.PI / 6) * hexR, cy - Math.sin(Math.PI / 6) * hexR);
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(Math.PI / 6) * hexR, cy - Math.sin(Math.PI / 6) * hexR);
+    ctx.stroke();
+
+    // Tactile relief lines in top facet
+    ctx.beginPath();
+    ctx.moveTo(cx - 4.5, cy - 8);
+    ctx.lineTo(cx + 4.5, cy - 8);
+    ctx.moveTo(cx - 2.5, cy - 4.5);
+    ctx.lineTo(cx + 2.5, cy - 4.5);
+    ctx.stroke();
+  } else if (iconType === 'fit') {
+    // Precision Fit: Target reticle with crosshairs
+    ctx.beginPath();
+    ctx.arc(cx, cy, 12, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(cx - 16, cy);
+    ctx.lineTo(cx - 10, cy);
+    ctx.moveTo(cx + 10, cy);
+    ctx.lineTo(cx + 16, cy);
+    ctx.moveTo(cx, cy - 16);
+    ctx.lineTo(cx, cy - 10);
+    ctx.moveTo(cx, cy + 10);
+    ctx.lineTo(cx, cy + 16);
+    ctx.stroke();
+  } else if (iconType === 'scratch') {
+    // Scratch Proof: Shield with 4-point hardness sparkle deflection
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 14);
+    ctx.lineTo(cx + 12, cy - 8);
+    ctx.lineTo(cx + 12, cy + 3);
+    ctx.quadraticCurveTo(cx + 12, cy + 12, cx, cy + 15);
+    ctx.quadraticCurveTo(cx - 12, cy + 12, cx - 12, cy + 3);
+    ctx.lineTo(cx - 12, cy - 8);
+    ctx.closePath();
+    ctx.stroke();
+
+    // Sparkle
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 6);
+    ctx.lineTo(cx + 2, cy - 2);
+    ctx.lineTo(cx + 6, cy);
+    ctx.lineTo(cx + 2, cy + 2);
+    ctx.lineTo(cx, cy + 6);
+    ctx.lineTo(cx - 2, cy + 2);
+    ctx.lineTo(cx - 6, cy);
+    ctx.lineTo(cx - 2, cy - 2);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    // 'shield' or fallback: 100% Original Verified Certificate Seal with 12 scalloped lobes & checkmark
+    const lobes = 12;
+    const baseR = 14;
+    const lobeAmp = 1.6;
+    ctx.beginPath();
+    for (let i = 0; i < lobes * 2; i++) {
+      const angle = (i * Math.PI) / lobes;
+      const r = i % 2 === 0 ? baseR + lobeAmp : baseR - lobeAmp;
+      const px = cx + Math.cos(angle) * r;
+      const py = cy + Math.sin(angle) * r;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.stroke();
+
+    // Bold checkmark inside seal
+    ctx.beginPath();
+    ctx.moveTo(cx - 5.5, cy);
+    ctx.lineTo(cx - 1.5, cy + 4);
+    ctx.lineTo(cx + 6.5, cy - 4);
     ctx.stroke();
   }
 
@@ -1006,7 +1085,7 @@ async function drawLeftStackedFeatureCards(
     warrantyTitle?: string;
   } = {},
   x: number = 50,
-  startY: number = 272,
+  _startY: number = 272,
   w: number = 460
 ) {
   const showOriginal = options.showOriginal3M !== false;
@@ -1017,9 +1096,40 @@ async function drawLeftStackedFeatureCards(
     options.texturePhotoUrl?.trim() ||
     '/assets/brand/textured-skins-product-info.jpg';
 
-  let currentY = startY;
+  const textCardH = 114;
+  const photoH = 230;
+  const textH = 88;
+  const textureCardH = photoH + textH;
+  const cardGap = 16;
   const cardR = 26;
-  const cardGap = 20;
+
+  // Calculate total height of enabled cards to align bottom at 1450px
+  let totalHeight = 0;
+  let activeCardsCount = 0;
+
+  if (showOriginal) {
+    totalHeight += textCardH;
+    activeCardsCount++;
+  }
+  if (showMaterial) {
+    totalHeight += textCardH;
+    activeCardsCount++;
+  }
+  if (showWarranty) {
+    totalHeight += textCardH;
+    activeCardsCount++;
+  }
+  if (showTexture) {
+    totalHeight += textureCardH;
+    activeCardsCount++;
+  }
+  if (activeCardsCount > 1) {
+    totalHeight += (activeCardsCount - 1) * cardGap;
+  }
+
+  // Anchor stack to the bottom (targetBottomY = 1450px, leaving 50px bottom canvas margin)
+  const targetBottomY = 1450;
+  let currentY = targetBottomY - totalHeight;
 
   // Helper to render standard glass card background and border glass
   const drawGlassCardBg = (cy: number, ch: number) => {
@@ -1072,14 +1182,14 @@ async function drawLeftStackedFeatureCards(
     ctx.restore();
   };
 
-  // Helper to draw top-right green badge on a card
+  // Helper to draw top-right circular green badge on a card
   const drawCornerBadge = (cy: number, iconType: MarketplaceFeatureCard['iconType']) => {
     const circleR = 26;
     const circleX = x + w - 12;
     const circleY = cy;
 
     ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.14)';
     ctx.shadowBlur = 10;
     ctx.shadowOffsetY = 3;
     ctx.beginPath();
@@ -1096,10 +1206,9 @@ async function drawLeftStackedFeatureCards(
     ctx.restore();
   };
 
-  // 1. "100% Original" Card
+  // 1. "100% Original" Card (Top of stack)
   if (showOriginal) {
-    const cardH = 98;
-    drawGlassCardBg(currentY, cardH);
+    drawGlassCardBg(currentY, textCardH);
     drawCornerBadge(currentY, 'shield');
 
     ctx.save();
@@ -1107,20 +1216,19 @@ async function drawLeftStackedFeatureCards(
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = '900 38px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
-    ctx.fillText('100% Original', x + w / 2 - 4, currentY + 36);
+    ctx.fillText('100% Original', x + w / 2 - 4, currentY + 42);
 
     ctx.font = 'italic 600 21px "Plus Jakarta Sans", sans-serif';
     ctx.fillStyle = '#52525b';
-    ctx.fillText('Exacoat Official Store', x + w / 2 - 4, currentY + 70);
+    ctx.fillText('Exacoat Official Store', x + w / 2 - 4, currentY + 80);
     ctx.restore();
 
-    currentY += cardH + cardGap;
+    currentY += textCardH + cardGap;
   }
 
   // 2. "3M Material" Card
   if (showMaterial) {
-    const cardH = 98;
-    drawGlassCardBg(currentY, cardH);
+    drawGlassCardBg(currentY, textCardH);
     drawCornerBadge(currentY, 'material');
 
     ctx.save();
@@ -1128,20 +1236,19 @@ async function drawLeftStackedFeatureCards(
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = '900 38px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
-    ctx.fillText('3M Material', x + w / 2 - 4, currentY + 36);
+    ctx.fillText('3M Material', x + w / 2 - 4, currentY + 42);
 
     ctx.font = 'italic 600 21px "Plus Jakarta Sans", sans-serif';
     ctx.fillStyle = '#52525b';
-    ctx.fillText('USA • Japan • Italy', x + w / 2 - 4, currentY + 70);
+    ctx.fillText('USA • Japan • Italy', x + w / 2 - 4, currentY + 80);
     ctx.restore();
 
-    currentY += cardH + cardGap;
+    currentY += textCardH + cardGap;
   }
 
   // 3. "Installation Warranty" Card
   if (showWarranty) {
-    const cardH = 98;
-    drawGlassCardBg(currentY, cardH);
+    drawGlassCardBg(currentY, textCardH);
     drawCornerBadge(currentY, 'guarantee');
 
     ctx.save();
@@ -1149,24 +1256,19 @@ async function drawLeftStackedFeatureCards(
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = '900 35px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
-    ctx.fillText(options.warrantyTitle || 'Installation Warranty', x + w / 2 - 4, currentY + 36);
+    ctx.fillText(options.warrantyTitle || 'Installation Warranty', x + w / 2 - 4, currentY + 42);
 
     ctx.font = 'italic 600 21px "Plus Jakarta Sans", sans-serif';
     ctx.fillStyle = '#52525b';
-    ctx.fillText('Risk free installation', x + w / 2 - 4, currentY + 70);
+    ctx.fillText('Risk free installation', x + w / 2 - 4, currentY + 80);
     ctx.restore();
 
-    currentY += cardH + cardGap;
+    currentY += textCardH + cardGap;
   }
 
-  // 4. "Textured Surface" Macro Photo Card
+  // 4. "Textured Surface" Macro Photo Card (Bottom of stack)
   if (showTexture) {
-    const cardH = 265;
-    const photoH = 180;
-    const textH = cardH - photoH;
-
-    drawGlassCardBg(currentY, cardH);
-    drawCornerBadge(currentY, 'texture');
+    drawGlassCardBg(currentY, textureCardH);
 
     // Photo top rounded area
     ctx.save();
@@ -1221,6 +1323,9 @@ async function drawLeftStackedFeatureCards(
     ctx.font = '900 34px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
     ctx.fillText('Textured Surface', x + w / 2, currentY + photoH + textH / 2);
     ctx.restore();
+
+    // Corner badge drawn in front of the photo
+    drawCornerBadge(currentY, 'texture');
   }
 }
 
@@ -1804,11 +1909,11 @@ export async function renderMarketplaceImageToCanvas(
   let targetCenterY: number;
 
   if (isVariantLayout) {
-    // Variant Layout: Scale 75%, vertical Y: -15px, centered between left stacked cards and right swatches
+    // Variant Layout: Scale 75%, vertical Y: 80px, horizontal X: 75px
     const baseVariantScale = config.deviceScale !== undefined ? config.deviceScale : 0.75;
     effectiveScale = baseVariantScale * 1.0;
-    targetCenterX = 920 + (config.deviceOffsetX || 0);
-    targetCenterY = 750 + (config.deviceOffsetY !== undefined ? config.deviceOffsetY : -15);
+    targetCenterX = 920 + (config.deviceOffsetX !== undefined ? config.deviceOffsetX : 75);
+    targetCenterY = 750 + (config.deviceOffsetY !== undefined ? config.deviceOffsetY : 80);
   } else {
     // Cover Layout: Close-Up Hero Shot (Scale 100%, vertical Y: 110px)
     const baseCoverScale = config.deviceScale !== undefined ? config.deviceScale : 1.0;
@@ -1848,6 +1953,16 @@ export async function renderMarketplaceImageToCanvas(
     // Brand Tagline under logo pill ("#1 Brand Skin di Indonesia")
     if (config.showBrandTagline !== false) {
       drawBrandTagline(ctx, config.brandTagline || '#1 Brand Skin di Indonesia', 50, 206, 460);
+    }
+    // Tokopedia Official Store Badge under tagline (when channel is tokopedia)
+    if (config.marketplaceChannel === 'tokopedia') {
+      await drawTokopediaBadge(
+        ctx,
+        config.tokopediaBadgeUrl || '/assets/brand/tokopedia-official-store-badge.png',
+        50,
+        268,
+        460
+      );
     }
   }
 
@@ -1979,9 +2094,9 @@ export async function batchGenerateMarketplaceZip(
       activeFinish: finish,
       isPrimaryImage: false,
       layoutMode: useVariantLayout ? 'variant' : 'cover',
-      deviceScale: useVariantLayout ? 0.75 : 1.0,
-      deviceOffsetX: 0,
-      deviceOffsetY: useVariantLayout ? -15 : 110,
+      deviceScale: useVariantLayout ? (baseConfig.deviceScale !== undefined ? baseConfig.deviceScale : 0.75) : 1.0,
+      deviceOffsetX: useVariantLayout ? (baseConfig.deviceOffsetX !== undefined ? baseConfig.deviceOffsetX : 75) : (baseConfig.deviceOffsetX || 0),
+      deviceOffsetY: useVariantLayout ? (baseConfig.deviceOffsetY !== undefined ? baseConfig.deviceOffsetY : 80) : 110,
       topRightText: finish.name.toUpperCase(),
       headlineText: baseConfig.headlineText
         ? baseConfig.headlineText
