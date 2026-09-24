@@ -1484,3 +1484,27 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **Manager ERP Preview Parity**:
   - Both templates (`customer_cashback_earned` and `customer_store_credit_reminder`) are previewable in Exacoat Manager (`#emails`) with real-time rendering, SVG logo, balance cards, and dynamic 1-year expiration badges.
 
+---
+
+## 51. Foldable & MacBook Configurator Invariants: Model 360 Removal, Official Alpha Masks, and 3D Directional Shading Removal
+
+- **Foldable & Flip Devices Invariant (No Model 360 Wrap)**:
+  - Foldable and flip smartphones (Galaxy Z Fold series, Galaxy Z Flip series) do not physically support full frame 360 wrap skins due to hinges, flexible displays, and distinct front/back chassis halves.
+  - Model 360 wrap options are strictly removed catalog-wide across all foldable profiles (coverage_type: 'model_cut_only', has_model_cut: true, model_360_extra_price: 0).
+  - Configurator Studio UI restricts coverage selection for family === 'foldable' to Model Cut Only with a locked badge. Model 360 wrap controls, toggle buttons, upcharge price inputs, and preset options are completely hidden.
+  - In class-configurator-engine.php, both rest_get_product_configurator() and rest_save_product_configurator() enforce coverage_type = 'model_cut_only' and model_360_extra_price = 0 whenever family === 'foldable'.
+- **MacBook Official Vinyl Alpha Cut Masks Architecture**:
+  - In the v2 modern configurator engine, skin layers render dynamically on HTML5 canvas by compositing global master finish textures onto alpha cut masks (assets_by_view[viewId].mask_svg_url).
+  - **Group A (MacBook Pro models using Macbook-Pro-M1-2021-Body.png or Macbook-Pro-M3-Body.png)**:
+    - Top view (top_view, Top layer): https://staging.exacoat.com/wp-content/uploads/Macbook-Pro-M1-2021-Skins-Matte-Black.png
+    - Bottom view (bottom_view, Bottom layer): https://staging.exacoat.com/wp-content/uploads/Macbook-Pro-M1-2021-Bottom-Skins-Matte-Black.png
+    - Trackpad view (trackpad_view, Trackpad layer): https://staging.exacoat.com/wp-content/uploads/Macbook-Pro-M1-2021-Trackpad-Skins-Matte-Black.png
+  - **Group B (MacBook Air and legacy MacBook models using Macbook-Pro-Top-New.png)**:
+    - Top view (top_view, Top layer): https://staging.exacoat.com/wp-content/uploads/Macbook-Pro-Skins-Matte-Black-New.png
+    - Bottom view (bottom_view, Bottom layer): https://staging.exacoat.com/wp-content/uploads/Macbook-Pro-Bottom-Skins-Matte-Black-New.png
+    - Trackpad view (trackpad_view, Trackpad layer): https://staging.exacoat.com/wp-content/uploads/Macbook-Pro-Trackpad-Skins-Matte-Black-New.png
+- **Removal of Generated 3D Directional Shading on MacBooks & Foldables**:
+  - Synthetic directional bevel and shadow shading (applySyntheticDirectionalShading) was designed for smartphones without hardware shadow maps. On flat aluminum laptop lids and foldable dual-screen phones, synthetic directional shading creates unnatural gradients across broad flat areas.
+  - Generated shading is completely disabled (generated_shadow: { enabled: false }) across all viewing angles for all MacBooks (Pro, Air, Neo) and all Fold/Flip models.
+  - In ConfiguratorStudioPage.tsx, laptop is added to isTabletOrFoldableOrLaptop, ensuring directional shading defaults to disabled for laptops, foldables, and tablets.
+  - In class-configurator-engine.php, rest_save_product_configurator(), rest_get_product_configurator(), and rest_sync_device_families() enforce generated_shadow: { enabled: false } for both laptop and foldable families.

@@ -614,12 +614,13 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
         layerGroup === 'primary' ||
         (/\b(back|top|body|device)\b/i.test(layerName) && !/\b(accent|camera|frame|side|logo|additional|addon)\b/i.test(layerName))
       );
-      const isTabletOrFoldable =
+      const isTabletOrFoldableOrLaptop =
         deviceFamily === 'tablet' ||
         deviceFamily === 'foldable' ||
+        deviceFamily === 'laptop' ||
         (deviceFamily as string) === 'tablet_laptop' ||
         deviceFamily === 'keyboard';
-      const defaultGenEnabled = !isTabletOrFoldable && !hasViewShadow && Boolean(maskImg);
+      const defaultGenEnabled = !isTabletOrFoldableOrLaptop && !hasViewShadow && Boolean(maskImg);
       const shouldApplyGeneratedShadow =
         isBackOrRequired &&
         (generatedShadowConfig?.enabled ?? defaultGenEnabled);
@@ -8349,12 +8350,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             const covType = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : (hasModelCutMask ? 'model_cut_and_360' : 'none'));
                             if (covType === 'none') return null;
 
-                            if (covType === 'model_cut_only') {
+                            if (covType === 'model_cut_only' || editingProfile.family === 'foldable') {
                               return (
                                 <div className="flex items-center gap-1.5 bg-zinc-900/80 px-2.5 py-1 rounded-xl border border-white/10 text-xs">
                                   <span className="text-[11px] text-zinc-400 font-medium">Coverage:</span>
                                   <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 text-[11px]">
-                                    Model Cut (Flat Back Only)
+                                    Model Cut
                                   </span>
                                 </div>
                               );
@@ -10181,7 +10182,13 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     {(() => {
                                       const genShadow = currentView.generated_shadow || {};
                                       const hasViewShadow = Boolean(currentView.shadow_png_url || currentView.shading_image_url || currentView.highlight_png_url);
-                                      const isGenEnabled = genShadow.enabled ?? (!hasViewShadow);
+                                      const isNoGenDefaultFam =
+                                        editingProfile.family === 'tablet' ||
+                                        editingProfile.family === 'foldable' ||
+                                        editingProfile.family === 'laptop' ||
+                                        (editingProfile.family as string) === 'tablet_laptop' ||
+                                        editingProfile.family === 'keyboard';
+                                      const isGenEnabled = genShadow.enabled ?? (!isNoGenDefaultFam && !hasViewShadow);
                                       const softness = genShadow.softness ?? 6;
                                       const distance = genShadow.distance ?? 3;
                                       const shadowOpacity = Math.round((genShadow.shadow_opacity ?? 0.40) * 100);
@@ -10998,7 +11005,17 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </div>
 
                               {/* Coverage Mode Selection */}
-                              {((editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none')) !== 'none') ? (
+                              {editingProfile.family === 'foldable' ? (
+                                <div className="space-y-1.5">
+                                  <span className="text-[11px] text-zinc-400 font-medium">Coverage Mode</span>
+                                  <div className="p-2.5 rounded-lg bg-zinc-950/60 border border-white/5 text-xs text-zinc-300 flex items-center justify-between">
+                                    <span>Model Cut Only (Foldable / Flip - No 360 wrap)</span>
+                                    <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 text-[10px]">
+                                      Locked
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : ((editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none')) !== 'none') ? (
                                 <div className="space-y-1.5">
                                   <span className="text-[11px] text-zinc-400 font-medium">Coverage Mode</span>
                                   <div className="grid grid-cols-3 gap-1.5">
@@ -11034,7 +11051,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               )}
 
                                 {/* Upcharge for Model 360 */}
-                                {(editingProfile.coverage_and_cutouts?.coverage_type === 'model_cut_and_360' ||
+                                {editingProfile.family !== 'foldable' && (editingProfile.coverage_and_cutouts?.coverage_type === 'model_cut_and_360' ||
                                   (!editingProfile.coverage_and_cutouts?.coverage_type && editingProfile.coverage_and_cutouts?.has_model_cut)) && (
                                   <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-950/60 border border-white/5 text-xs mt-2">
                                     <div className="flex items-center gap-1.5">
@@ -13021,32 +13038,38 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="text-[11px] font-medium text-zinc-300 block mb-1">Coverage</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setEditingPreset({ ...editingPreset, coverage: 'model_360' })}
-                            className={clsx(
-                              'py-2 rounded-xl text-xs font-semibold border cursor-pointer transition-colors',
-                              editingPreset.coverage === 'model_360'
-                                ? 'bg-amber-400/20 border-amber-400 text-amber-300'
-                                : 'bg-zinc-900 border-white/10 text-zinc-400 hover:text-white'
-                            )}
-                          >
-                            Model 360°
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingPreset({ ...editingPreset, coverage: 'model_cut' })}
-                            className={clsx(
-                              'py-2 rounded-xl text-xs font-semibold border cursor-pointer transition-colors',
-                              editingPreset.coverage === 'model_cut'
-                                ? 'bg-amber-400/20 border-amber-400 text-amber-300'
-                                : 'bg-zinc-900 border-white/10 text-zinc-400 hover:text-white'
-                            )}
-                          >
-                            Model Cut
-                          </button>
-                        </div>
+                        {(editingProfile?.family === 'foldable' || editingProfile?.family === 'laptop') ? (
+                          <div className="py-2 px-3 rounded-xl bg-zinc-900 border border-white/10 text-xs font-semibold text-amber-300">
+                            Model Cut Only
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditingPreset({ ...editingPreset, coverage: 'model_360' })}
+                              className={clsx(
+                                'py-2 rounded-xl text-xs font-semibold border cursor-pointer transition-colors',
+                                editingPreset.coverage === 'model_360'
+                                  ? 'bg-amber-400/20 border-amber-400 text-amber-300'
+                                  : 'bg-zinc-900 border-white/10 text-zinc-400 hover:text-white'
+                              )}
+                            >
+                              Model 360°
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingPreset({ ...editingPreset, coverage: 'model_cut' })}
+                              className={clsx(
+                                'py-2 rounded-xl text-xs font-semibold border cursor-pointer transition-colors',
+                                editingPreset.coverage === 'model_cut'
+                                  ? 'bg-amber-400/20 border-amber-400 text-amber-300'
+                                  : 'bg-zinc-900 border-white/10 text-zinc-400 hover:text-white'
+                              )}
+                            >
+                              Model Cut
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       <div>
@@ -13362,7 +13385,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       }
                       className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-white/10 text-white text-xs focus:border-[#f3aa18] outline-none"
                     >
-                      <option value="model_360">Model 360°</option>
+                      {editingProfile?.family !== 'foldable' && editingProfile?.family !== 'laptop' && (
+                        <option value="model_360">Model 360°</option>
+                      )}
                       <option value="model_cut">Model Cut</option>
                     </select>
                   </div>

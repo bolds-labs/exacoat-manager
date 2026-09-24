@@ -2598,12 +2598,35 @@ class Exacoat_Configurator_Engine {
 					if ( ! empty( $modern_profile ) ) {
 						update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
 					}
-				} elseif ( $dev_fam === 'foldable' && ! isset( $profile['coverage_and_cutouts']['coverage_type'] ) ) {
-					$profile['coverage_and_cutouts']['coverage_type'] = 'model_cut_only';
-					$profile['coverage_and_cutouts']['has_model_cut'] = true;
-					if ( ! empty( $modern_profile ) ) {
+				} elseif ( $dev_fam === 'foldable' ) {
+					$cur_cov = $profile['coverage_and_cutouts']['coverage_type'] ?? '';
+					if ( $cur_cov !== 'none' && $cur_cov !== 'model_cut_only' ) {
+						$profile['coverage_and_cutouts']['coverage_type'] = 'model_cut_only';
+						$profile['coverage_and_cutouts']['has_model_cut'] = true;
+						$needs_save = true;
+					}
+					if ( ! empty( $profile['coverage_and_cutouts']['model_360_extra_price'] ) ) {
+						$profile['coverage_and_cutouts']['model_360_extra_price'] = 0;
+						$needs_save = true;
+					}
+					if ( $needs_save && ! empty( $modern_profile ) ) {
 						update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
 					}
+				}
+			}
+
+			// Ensure foldables and laptops default to directional shading disabled
+			if ( in_array( $profile['family'] ?? '', [ 'foldable', 'laptop' ], true ) && ! empty( $profile['views'] ) && is_array( $profile['views'] ) ) {
+				$views_updated = false;
+				foreach ( $profile['views'] as &$v ) {
+					if ( is_array( $v ) && ( ! isset( $v['generated_shadow']['enabled'] ) || $v['generated_shadow']['enabled'] !== false ) ) {
+						$v['generated_shadow'] = [ 'enabled' => false ];
+						$views_updated = true;
+					}
+				}
+				unset( $v );
+				if ( $views_updated && ! empty( $modern_profile ) ) {
+					update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
 				}
 			}
 
@@ -2748,10 +2771,16 @@ class Exacoat_Configurator_Engine {
 
 		$raw_coverage = is_array( $params['coverage_and_cutouts'] ?? null ) ? $params['coverage_and_cutouts'] : null;
 		if ( is_array( $raw_coverage ) ) {
-			if ( ! isset( $raw_coverage['model_360_extra_price'] ) || ! is_numeric( $raw_coverage['model_360_extra_price'] ) ) {
-				$raw_coverage['model_360_extra_price'] = 40000;
+			if ( ( $params['family'] ?? '' ) === 'foldable' ) {
+				$raw_coverage['coverage_type'] = ( ( $raw_coverage['coverage_type'] ?? '' ) === 'none' ) ? 'none' : 'model_cut_only';
+				$raw_coverage['has_model_cut'] = ( $raw_coverage['coverage_type'] !== 'none' );
+				$raw_coverage['model_360_extra_price'] = 0;
 			} else {
-				$raw_coverage['model_360_extra_price'] = (float) $raw_coverage['model_360_extra_price'];
+				if ( ! isset( $raw_coverage['model_360_extra_price'] ) || ! is_numeric( $raw_coverage['model_360_extra_price'] ) ) {
+					$raw_coverage['model_360_extra_price'] = 40000;
+				} else {
+					$raw_coverage['model_360_extra_price'] = (float) $raw_coverage['model_360_extra_price'];
+				}
 			}
 			if ( ! empty( $raw_coverage['model_cut_mask_url'] ) && empty( $raw_coverage['model_cutout_url'] ) ) {
 				$raw_coverage['model_cutout_url'] = $raw_coverage['model_cut_mask_url'];
@@ -2777,6 +2806,26 @@ class Exacoat_Configurator_Engine {
 			$raw_price = self::get_product_base_price( $wc_product );
 		}
 
+		$raw_views = is_array( $params['views'] ?? null ) ? $params['views'] : [];
+		if ( in_array( $params['family'] ?? '', [ 'foldable', 'laptop' ], true ) ) {
+			foreach ( $raw_views as &$v ) {
+				if ( is_array( $v ) ) {
+					$v['generated_shadow'] = [ 'enabled' => false ];
+				}
+			}
+			unset( $v );
+		}
+
+		$raw_presets = is_array( $params['presets'] ?? null ) ? self::sanitize_presets( $params['presets'] ) : [];
+		if ( in_array( $params['family'] ?? '', [ 'foldable', 'laptop' ], true ) ) {
+			foreach ( $raw_presets as &$p ) {
+				if ( is_array( $p ) && isset( $p['coverage'] ) && $p['coverage'] === 'model_360' ) {
+					$p['coverage'] = 'model_cut';
+				}
+			}
+			unset( $p );
+		}
+
 		$profile = [
 			'product_id'           => $product_id,
 			'device_slug'          => $dev_slug,
@@ -2789,11 +2838,11 @@ class Exacoat_Configurator_Engine {
 			'texture_scale'        => isset( $params['texture_scale'] ) ? (float) $params['texture_scale'] : 1.0,
 			'configurator_version' => in_array( $params['configurator_version'] ?? '', [ 'v1', 'v2' ], true ) ? $params['configurator_version'] : 'v2',
 			'device_colors'        => is_array( $params['device_colors'] ?? null ) ? $params['device_colors'] : [],
-			'views'                => is_array( $params['views'] ?? null ) ? $params['views'] : [],
+			'views'                => $raw_views,
 			'layers'               => is_array( $params['layers'] ?? null ) ? $params['layers'] : [],
 			'variants'             => self::sanitize_variants( $params['variants'] ?? [], $params['family'] ?? 'phone', $dev_name, $dev_slug ),
 			'coverage_and_cutouts' => $raw_coverage,
-			'presets'              => is_array( $params['presets'] ?? null ) ? self::sanitize_presets( $params['presets'] ) : [],
+			'presets'              => $raw_presets,
 			'updated_at'           => current_time( 'mysql' ),
 		];
 
@@ -3068,6 +3117,34 @@ class Exacoat_Configurator_Engine {
 			if ( count( $existing_variants ) !== count( $cleaned_variants ) ) {
 				$profile_data['variants'] = $cleaned_variants;
 				$needs_save = true;
+			}
+
+			// Foldable coverage: strictly model_cut_only, no 360 wrap, no 360 price
+			if ( $next_fam === 'foldable' ) {
+				if ( ! isset( $profile_data['coverage_and_cutouts'] ) || ! is_array( $profile_data['coverage_and_cutouts'] ) ) {
+					$profile_data['coverage_and_cutouts'] = [];
+				}
+				$cur_cov = $profile_data['coverage_and_cutouts']['coverage_type'] ?? '';
+				if ( $cur_cov !== 'none' && $cur_cov !== 'model_cut_only' ) {
+					$profile_data['coverage_and_cutouts']['coverage_type'] = 'model_cut_only';
+					$profile_data['coverage_and_cutouts']['has_model_cut'] = true;
+					$needs_save = true;
+				}
+				if ( ! empty( $profile_data['coverage_and_cutouts']['model_360_extra_price'] ) ) {
+					$profile_data['coverage_and_cutouts']['model_360_extra_price'] = 0;
+					$needs_save = true;
+				}
+			}
+
+			// Foldables and laptops: disable directional shading
+			if ( in_array( $next_fam, [ 'foldable', 'laptop' ], true ) && ! empty( $profile_data['views'] ) && is_array( $profile_data['views'] ) ) {
+				foreach ( $profile_data['views'] as &$v ) {
+					if ( is_array( $v ) && ( ! isset( $v['generated_shadow']['enabled'] ) || $v['generated_shadow']['enabled'] !== false ) ) {
+						$v['generated_shadow'] = [ 'enabled' => false ];
+						$needs_save = true;
+					}
+				}
+				unset( $v );
 			}
 
 			if ( $needs_save ) {

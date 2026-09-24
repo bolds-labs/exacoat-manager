@@ -81,7 +81,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       description: 'The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.',
-      changelog: `### Version ${version}\n- Resolved "Valid product_id is required" error when editing MacBook Pro and MacBook Air devices by guaranteeing product_id and device identity in configurator REST endpoints and Studio editor\n- Resolved base price IDR 0 display on laptops and variable products by retrieving true WooCommerce prices and variation price fallbacks\n- Guarded product saving to prevent unintentional zero-price overwrites on WooCommerce products`,
+      changelog: `### Version ${version}\n- Removed Model 360 wrap options from all Fold and Flip devices, locking coverage to Model Cut\n- Configured official alpha cut masks across all MacBook Pro (M1-2021/M3 body) and MacBook Air (Top-New) models for top, bottom, and trackpad layers\n- Disabled generated 3D directional shading across all Fold/Flip and MacBook devices\n- Enforced persistent backend and frontend safeguards against directional shading on laptops and 360 wrap on foldables`,
     },
   };
 

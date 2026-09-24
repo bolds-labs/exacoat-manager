@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.43] - 2026-09-24
+
+### Configurator Studio Foldable & MacBook Invariants: Model 360 Removal, Official Alpha Masks, and 3D Directional Shading Removal
+- **Foldable & Flip Devices (12 Models: Galaxy Z Fold & Flip Series)**:
+  - Removed Model 360 wrap options catalog-wide across all 12 Fold and Flip profiles on staging.
+  - Locked coverage mode to Model Cut Only (coverage_type: 'model_cut_only', has_model_cut: true) and cleared Model 360 extra price (model_360_extra_price: 0).
+  - Updated Studio UI to disable and hide Model 360 controls, toggles, upcharge inputs, and preset options when viewing or editing foldables.
+  - Disabled generated 3D directional shading (generated_shadow: { enabled: false }) on all foldable viewing angles.
+- **MacBook Pro Models (Group A: M1-2021 & M3 Body Chassis)**:
+  - Configured official high-resolution vinyl alpha cut masks across all 10 MacBook Pro models:
+    - Top view: Macbook-Pro-M1-2021-Skins-Matte-Black.png
+    - Bottom view: Macbook-Pro-M1-2021-Bottom-Skins-Matte-Black.png
+    - Trackpad view: Macbook-Pro-M1-2021-Trackpad-Skins-Matte-Black.png
+  - Disabled generated 3D directional shading (generated_shadow: { enabled: false }) across all viewing angles.
+- **MacBook Air & Legacy MacBook Models (Group B: Top-New Chassis)**:
+  - Configured official high-resolution vinyl alpha cut masks across all 15 MacBook Air and legacy MacBook models:
+    - Top view: Macbook-Pro-Skins-Matte-Black-New.png
+    - Bottom view: Macbook-Pro-Bottom-Skins-Matte-Black-New.png
+    - Trackpad view: Macbook-Pro-Trackpad-Skins-Matte-Black-New.png
+  - Disabled generated 3D directional shading (generated_shadow: { enabled: false }) across all viewing angles.
+- **Persistent Engine Safeguards (class-configurator-engine.php & ConfiguratorStudioPage.tsx)**:
+  - Excluded laptop and foldable device families from default synthetic directional shading in canvas rendering.
+  - Auto-heals and enforces model_cut_only and disabled directional shading on rest_get_product_configurator() and rest_save_product_configurator().
+  - Integrated catalog-wide enforcement inside rest_sync_device_families().
+
 ## [0.1.42] - 2026-09-24
 
 ### Configurator Studio Product Identity & Base Price Resolution
