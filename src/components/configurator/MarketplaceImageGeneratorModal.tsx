@@ -944,7 +944,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                       setIsPrimaryCoverMode(false);
                       setDeviceScale(0.75);
                       setDeviceOffsetX(0);
-                      setDeviceOffsetY(-15);
+                      setDeviceOffsetY(80);
                     }}
                     className={clsx(
                       'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition',
@@ -997,7 +997,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                             setLayoutMode('variant');
                             setDeviceScale(0.75);
                             setDeviceOffsetX(0);
-                            setDeviceOffsetY(-15);
+                            setDeviceOffsetY(80);
                           }
                         }
                       }}

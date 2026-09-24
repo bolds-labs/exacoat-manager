@@ -499,8 +499,8 @@ async function drawTokopediaBadge(
     if (!img || img.width <= 0 || img.height <= 0) return;
 
     const naturalRatio = img.width / img.height;
-    // Exactly as wide as the Exacoat card background on top left (460px)
-    const badgeW = containerW;
+    // Scaled to 75% width of the container card (75% of 460px = 345px)
+    const badgeW = Math.round(containerW * 0.75);
     const badgeH = Math.round(badgeW / naturalRatio);
     // Align left flush with the logo pill & tagline container
     const badgeX = x;
@@ -1958,11 +1958,12 @@ export async function renderMarketplaceImageToCanvas(
     }
     // Tokopedia Official Store Badge under tagline (when channel is tokopedia)
     if (config.marketplaceChannel === 'tokopedia') {
+      const badgeY = config.showBrandTagline !== false ? 284 : 206;
       await drawTokopediaBadge(
         ctx,
         config.tokopediaBadgeUrl || '/assets/brand/tokopedia-official-store-badge.png',
         50,
-        284,
+        badgeY,
         460
       );
     }
