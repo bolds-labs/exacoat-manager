@@ -326,7 +326,7 @@ function drawLeftHeadlineBlock(
   headlineText: string,
   fontFamily: string,
   x: number = 50,
-  startY: number = 635
+  startY: number = 720
 ) {
   ctx.save();
   let currentY = startY;
@@ -523,65 +523,73 @@ function drawBottomFeatureCards(
 
     // 1. Frosted Glass background with soft drop shadow
     ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.08)';
-    ctx.shadowBlur = 28;
-    ctx.shadowOffsetY = 10;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
+    ctx.shadowBlur = 32;
+    ctx.shadowOffsetY = 12;
 
     pathRoundedRect(ctx, x, y, cardW, cardH, 26);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+    const glassGrad = ctx.createLinearGradient(x, y, x, y + cardH);
+    glassGrad.addColorStop(0, 'rgba(255, 255, 255, 0.92)');
+    glassGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.85)');
+    glassGrad.addColorStop(1, 'rgba(255, 255, 255, 0.78)');
+    ctx.fillStyle = glassGrad;
     ctx.fill();
     ctx.restore();
 
     // 2. Crisp translucent border (glass inner stroke)
     ctx.save();
     pathRoundedRect(ctx, x, y, cardW, cardH, 26);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-    ctx.lineWidth = 2;
+    const borderGrad = ctx.createLinearGradient(x, y, x, y + cardH);
+    borderGrad.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
+    borderGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.65)');
+    borderGrad.addColorStop(1, 'rgba(255, 255, 255, 0.40)');
+    ctx.strokeStyle = borderGrad;
+    ctx.lineWidth = 2.5;
     ctx.stroke();
 
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.06)';
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.07)';
     ctx.lineWidth = 1;
     ctx.stroke();
     ctx.restore();
 
-    // 3. Centered emerald circular icon badge on top of card
-    const circleR = 25;
-    const circleX = x + cardW / 2;
-    const circleY = y + 46;
+    // 3. Top-right corner circular icon badge hitting the border
+    const circleR = 23;
+    const circleX = x + cardW - 36;
+    const circleY = y + 36;
 
     ctx.save();
     ctx.beginPath();
     ctx.arc(circleX, circleY, circleR, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.10)';
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.12)';
     ctx.fill();
     ctx.strokeStyle = '#10b981';
-    ctx.lineWidth = 2.4;
+    ctx.lineWidth = 2.2;
     ctx.stroke();
 
     drawCardIcon(ctx, circleX, circleY, card.iconType);
     ctx.restore();
 
-    // 4. Centered Card Title (unified heading font size across all 3 cards)
+    // 4. Centered Card Title (larger 38px bold Chakra Petch across all 3 cards)
     ctx.save();
     const titleLines = (card.title || '').split('\n').filter(Boolean);
-    const maxTitleW = cardW - 40;
+    const maxTitleW = cardW - 56;
 
     ctx.fillStyle = '#09090b';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '800 32px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
+    ctx.font = '800 38px "Chakra Petch", "Plus Jakarta Sans", sans-serif';
 
     if (titleLines.length >= 2) {
-      ctx.fillText(titleLines[0], x + cardW / 2, y + 106, maxTitleW);
-      ctx.fillText(titleLines[1], x + cardW / 2, y + 140, maxTitleW);
+      ctx.fillText(titleLines[0], x + cardW / 2, y + 82, maxTitleW);
+      ctx.fillText(titleLines[1], x + cardW / 2, y + 124, maxTitleW);
     } else {
-      ctx.fillText(card.title || '', x + cardW / 2, y + 116, maxTitleW);
+      ctx.fillText(card.title || '', x + cardW / 2, y + 102, maxTitleW);
     }
 
     // 5. Centered Card Subtitle (italic, subtle under title)
-    ctx.font = 'italic 500 20px "Plus Jakarta Sans", "Inter", sans-serif';
+    ctx.font = 'italic 500 21px "Plus Jakarta Sans", "Inter", sans-serif';
     ctx.fillStyle = '#52525b';
-    ctx.fillText(card.subtitle || '', x + cardW / 2, y + 180, maxTitleW);
+    ctx.fillText(card.subtitle || '', x + cardW / 2, y + 174, maxTitleW);
     ctx.restore();
   });
 
@@ -1156,8 +1164,8 @@ export async function renderMarketplaceImageToCanvas(
   const deviceCanvas = await renderDeviceComposite(config);
 
   // Close-Up Hero Shot Scaling & Placement (matching Image 2)
-  // Base scale = 1.18 ensures the phone fits beautifully in the right half of the canvas
-  const baseScale = 1.18;
+  // Base scale = 1.05 ensures the phone fits comfortably without crowding the headline
+  const baseScale = 1.05;
   const effectiveScale = (config.deviceScale || 1.0) * baseScale;
   const dw = 1500 * effectiveScale;
   const dh = 1500 * effectiveScale;
@@ -1166,7 +1174,7 @@ export async function renderMarketplaceImageToCanvas(
   // Target placement: phone positioned on the right with camera island centered in upper-right half,
   // top of phone dipping below "ALL DEVICES" pill, bottom extending behind cards.
   const targetCenterX = 1040 + (config.deviceOffsetX || 0);
-  const targetCenterY = 910 + (config.deviceOffsetY || 0);
+  const targetCenterY = 890 + (config.deviceOffsetY || 0);
 
   const dx = targetCenterX - 750 * effectiveScale;
   const dy = targetCenterY - 750 * effectiveScale;
@@ -1193,7 +1201,7 @@ export async function renderMarketplaceImageToCanvas(
     drawDeviceNamePill(ctx, config.deviceNameText, 540, 50, 910, 140);
   }
 
-  // 5. Left Column: Sub-badge & Big Bold Headline
+  // 5. Left Column: Sub-badge & Big Bold Headline (placed lower for balanced composition)
   const effectiveHeadline = config.autoHeadlineWithFinish
     ? `${config.activeFinish.name}\nSkins`
     : (config.headlineText || `${config.activeFinish.name}\nSkins`);
@@ -1204,7 +1212,7 @@ export async function renderMarketplaceImageToCanvas(
     effectiveHeadline,
     config.headlineFont || 'Chakra Petch',
     50,
-    635
+    720
   );
 
   // 6. Right Edge: 20+ Skins Swatches Stack (toggleable option)

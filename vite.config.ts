@@ -44,13 +44,18 @@ export default defineConfig({
     host: true,
     proxy: {
       '/cms': {
-        target: 'https://staging.exacoat.com',
+        target: process.env.VITE_WORDPRESS_URL || 'https://exacoat.com',
         changeOrigin: true,
         secure: true,
         rewrite: (path) => path.replace(/^\/cms/, ''),
       },
+      '/wp-content': {
+        target: process.env.VITE_WORDPRESS_URL || 'https://exacoat.com',
+        changeOrigin: true,
+        secure: true,
+      },
       '/wp-json': {
-        target: 'https://staging.exacoat.com',
+        target: process.env.VITE_WORDPRESS_URL || 'https://exacoat.com',
         changeOrigin: true,
         secure: true,
       },

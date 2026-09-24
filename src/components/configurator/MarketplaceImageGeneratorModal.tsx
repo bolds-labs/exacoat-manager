@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { lockBodyScroll } from '../../lib/bodyScrollLock';
 import type { DeviceConfiguratorProfile } from '../../types';
@@ -9,10 +9,10 @@ import {
   DEFAULT_FEATURE_CARDS_OFFICIAL,
   DEFAULT_FEATURE_CARDS_FIT,
   DEFAULT_FEATURE_CARDS_CLEAR,
+  renderMarketplaceImageToCanvas,
   generateMarketplaceImageBlob,
   batchGenerateMarketplaceZip,
 } from '../../lib/marketplaceCanvasRenderer';
-import { V2SkinCanvasLayer } from './V2SkinCanvasLayer';
 import { useToast } from '../../context/ToastContext';
 import {
   X,
@@ -30,10 +30,6 @@ import {
   Check,
   CheckSquare,
   Square,
-  ShieldCheck,
-  Award,
-  Crosshair,
-  KeyRound,
   RotateCcw,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -59,8 +55,10 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   // Active Tab in Sidebar
   const [activeTab, setActiveTab] = useState<'template' | 'device' | 'background' | 'batch'>('template');
 
-  // Preview State
+  // Preview Canvas State & Ref
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [activePreviewFinishId, setActivePreviewFinishId] = useState<string>('');
+  const [isRenderingPreview, setIsRenderingPreview] = useState(false);
   const [isDownloadingSingle, setIsDownloadingSingle] = useState(false);
 
   // Template State (Layout & Copy)
@@ -341,6 +339,57 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     };
   };
 
+  // Synchronize master preview on live HTML5 Canvas
+  useEffect(() => {
+    if (!isOpen || !profile || !currentPreviewFinish) return;
+    let isCancelled = false;
+
+    const renderConfig = buildRenderConfig();
+    if (!renderConfig) return;
+
+    setIsRenderingPreview(true);
+    const timer = setTimeout(async () => {
+      if (isCancelled || !canvasRef.current) return;
+      try {
+        await renderMarketplaceImageToCanvas(canvasRef.current, renderConfig);
+      } catch (err) {
+        console.error('[Marketplace Generator] Canvas preview render error:', err);
+      } finally {
+        if (!isCancelled) setIsRenderingPreview(false);
+      }
+    }, 60);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    isOpen,
+    profile,
+    currentPreviewFinish,
+    activeColorId,
+    selectedViewId,
+    coverage,
+    logoCutout,
+    pencilCutout,
+    deviceScale,
+    deviceOffsetX,
+    deviceOffsetY,
+    activeLayerIds,
+    deviceNameText,
+    showSubBadge,
+    subBadgeText,
+    effectiveHeadline,
+    headlineFont,
+    featureCards,
+    showSkinsStack,
+    skinsCountText,
+    skinsLabelText,
+    swatchFinishSlugs,
+    bgType,
+    customBgUrl,
+  ]);
+
   // Single Image Download (1500x1500px JPEG)
   const handleDownloadSingleImage = async () => {
     const config = buildRenderConfig();
@@ -348,7 +397,28 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
 
     try {
       setIsDownloadingSingle(true);
-      const blob = await generateMarketplaceImageBlob(config);
+      let blob: Blob | null = null;
+
+      if (canvasRef.current) {
+        blob = await new Promise<Blob | null>((resolve) => {
+          try {
+            canvasRef.current?.toBlob(
+              (b) => resolve(b),
+              'image/jpeg',
+              0.95
+            );
+          } catch {
+            resolve(null);
+          }
+        });
+      }
+
+      if (!blob) {
+        blob = await generateMarketplaceImageBlob(config);
+      }
+
+      if (!blob) throw new Error('Blob export failed');
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       const filename = `${profile.device_slug || 'device'}_${currentPreviewFinish.slug || currentPreviewFinish.id}_1500x1500.jpg`;
@@ -494,21 +564,6 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     showToast('success', 'Background Loaded', 'Applied custom background image from disk.');
   };
 
-  // Helper for rendering feature card vector icons in DOM preview
-  const renderCardIcon = (iconType: MarketplaceFeatureCard['iconType']) => {
-    switch (iconType) {
-      case 'material':
-        return <Award className="w-4 h-4 text-emerald-600" />;
-      case 'fit':
-        return <Crosshair className="w-4 h-4 text-emerald-600" />;
-      case 'scratch':
-        return <KeyRound className="w-4 h-4 text-emerald-600" />;
-      case 'shield':
-      case 'guarantee':
-      default:
-        return <ShieldCheck className="w-4 h-4 text-emerald-600" />;
-    }
-  };
 
   if (!isOpen || typeof document === 'undefined') return null;
 
@@ -614,260 +669,23 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
               </div>
             </div>
 
-            {/* 1:1 ASPECT RATIO MASTER PREVIEW STAGE */}
-            <div className="w-full max-w-[min(620px,calc(100vh-230px))] aspect-square relative rounded-3xl overflow-hidden shadow-2xl border border-white/15 select-none bg-white">
-              {/* STAGE LAYER 1: BACKGROUND */}
-              {bgType === 'custom' && customBgUrl ? (
-                <img
-                  src={customBgUrl}
-                  alt="Custom Background"
-                  className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
-                />
-              ) : (
-                <div className="absolute inset-0 pointer-events-none z-0 bg-gradient-to-br from-[#ffffff] via-[#f7f8fa] to-[#eceef2]">
-                  {/* Subtle Exacoat Monogram Pattern Watermark */}
-                  <svg className="w-full h-full opacity-[0.045]" viewBox="0 0 1500 1500" fill="none">
-                    <defs>
-                      <pattern id="exacoat-geo-pattern" width="160" height="160" patternUnits="userSpaceOnUse">
-                        <circle cx="80" cy="80" r="42" fill="#000000" />
-                        <path d="M 80 20 L 140 140 L 20 140 Z" fill="#000000" />
-                        <rect x="68" y="68" width="24" height="24" rx="6" fill="#ffffff" />
-                      </pattern>
-                    </defs>
-                    <rect width="1500" height="1500" fill="url(#exacoat-geo-pattern)" />
-                  </svg>
-                  <div className="absolute inset-0 bg-radial-gradient from-white/70 via-transparent to-black/5" />
-                </div>
-              )}
+            {/* 1:1 ASPECT RATIO MASTER CANVAS PREVIEW STAGE */}
+            <div className="w-full max-w-[min(620px,calc(100vh-230px))] aspect-square relative rounded-3xl overflow-hidden shadow-2xl border border-white/15 select-none bg-zinc-900 flex items-center justify-center">
+              <canvas
+                ref={canvasRef}
+                width={1500}
+                height={1500}
+                className="w-full h-full object-contain"
+              />
 
-              {/* STAGE LAYER 2: PHONE DEVICE CONTAINER (60fps GPU-accelerated transform) */}
-              <div
-                className="absolute inset-0 pointer-events-none z-10"
-                style={{
-                  transformOrigin: '50% 50%',
-                  transform: `translate(${(1040 - 750 + deviceOffsetX) / 15}%, ${(910 - 750 + deviceOffsetY) / 15}%) scale(${deviceScale * 1.18})`,
-                  transition: 'transform 0.05s ease-out',
-                }}
-              >
-                {/* Contact Shadow Under Phone */}
-                <div
-                  className="absolute inset-0 w-full h-full pointer-events-none"
-                  style={{
-                    filter: 'drop-shadow(14px 24px 38px rgba(15, 23, 42, 0.22))',
-                  }}
-                >
-                  {/* Hardware Chassis Base Image (contains real camera lenses, metal frame, ports) */}
-                  {chassisSrc && (
-                    <img
-                      src={chassisSrc}
-                      alt="Hardware Chassis"
-                      className="absolute inset-0 w-full h-full object-contain pointer-events-none z-0"
-                    />
-                  )}
-
-                  {/* Active Skin Canvas Layers */}
-                  {availableSkinLayers
-                    .filter((l) => activeLayerIds.has(l.id))
-                    .sort((a, b) => (a.z_index || 1) - (b.z_index || 1))
-                    .map((layer) => {
-                      if (!currentView) return null;
-                      const viewSpecificAsset = layer.assets_by_view?.[currentView.id || 'main_view'];
-                      const assets =
-                        viewSpecificAsset ||
-                        layer.assets_by_view?.['main_view'] ||
-                        Object.values(layer.assets_by_view || {})[0] ||
-                        {};
-
-                      if (!assets.mask_svg_url) return null;
-
-                      // Texture resolution
-                      const isCustomPerDevice = Boolean(currentPreviewFinish.is_custom_per_device);
-                      const customTex = isCustomPerDevice
-                        ? (assets.render_texture_map?.[currentPreviewFinish.slug] ||
-                           assets.render_texture_map?.[currentPreviewFinish.id])
-                        : '';
-
-                      const isBigDevice =
-                        profile.family === 'laptop' ||
-                        profile.family === 'tablet' ||
-                        (profile.family as string) === 'tablet_laptop' ||
-                        profile.family === 'keyboard';
-                      const useBigTexture = layer.texture_size === 'big' || (layer.texture_size !== 'small' && isBigDevice);
-                      const activeTexUrl = (useBigTexture && currentPreviewFinish.texture_big_url)
-                        ? currentPreviewFinish.texture_big_url
-                        : currentPreviewFinish.texture_url || '';
-
-                      const textureToTile = (isCustomPerDevice && customTex)
-                        ? customTex
-                        : (activeTexUrl || customTex);
-
-                      // Cutouts resolution
-                      const covMode = profile.coverage_and_cutouts?.coverage_type || (profile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none');
-                      const shouldApplyModelCut = covMode === 'model_cut_only' || (covMode === 'model_cut_and_360' && coverage === 'model_cut');
-                      const shouldApplyLogoCutout = logoCutout && (profile.coverage_and_cutouts?.has_logo_cutout ?? true);
-                      const shouldApplyPencilCutout = pencilCutout && Boolean(profile.coverage_and_cutouts?.has_pencil_cutout);
-
-                      const targetLogoViewId = profile.coverage_and_cutouts?.logo_cutout_view_id || 'main_view';
-                      const isLogoView = currentView.id === targetLogoViewId || (!profile.coverage_and_cutouts?.logo_cutout_view_id && (currentView.is_default || currentView.id === profile.views?.[0]?.id));
-                      const logoCutoutUrl = shouldApplyLogoCutout && isLogoView
-                        ? currentView.logo_cutout_mask_url || profile.coverage_and_cutouts?.logo_cutout_mask_url || assets.logo_cutout_url
-                        : undefined;
-
-                      const pencilCutoutUrl = shouldApplyPencilCutout
-                        ? currentView.pencil_cutout_mask_url || profile.coverage_and_cutouts?.pencil_cutout_mask_url || assets.pencil_cutout_url
-                        : undefined;
-
-                      const targetModelCutViewId = profile.coverage_and_cutouts?.model_cut_view_id || 'main_view';
-                      const isModelCutView = currentView.id === targetModelCutViewId || (!profile.coverage_and_cutouts?.model_cut_view_id && (currentView.is_default || currentView.id === profile.views?.[0]?.id));
-                      const modelCutoutUrl = shouldApplyModelCut && isModelCutView
-                        ? currentView.model_cut_mask_url || profile.coverage_and_cutouts?.model_cut_mask_url || assets.model_cutout_url
-                        : undefined;
-
-                      const hasViewShadow = Boolean(currentView.shadow_png_url || currentView.shading_image_url || currentView.highlight_png_url);
-                      const effectiveTextureScale = currentView.texture_scale ?? profile.texture_scale ?? layer.texture_scale ?? 1.0;
-
-                      return (
-                        <V2SkinCanvasLayer
-                          key={`live-skin-${layer.id}-${currentPreviewFinish.slug}-${currentView.id}`}
-                          maskUrl={assets.mask_svg_url}
-                          textureUrl={textureToTile}
-                          fallbackColor={currentPreviewFinish.color_hex || '#18181b'}
-                          logoCutoutUrl={logoCutoutUrl}
-                          pencilCutoutUrl={pencilCutoutUrl}
-                          modelCutoutUrl={modelCutoutUrl}
-                          zIndex={(layer.z_index || 1) + 5}
-                          layerName={layer.name}
-                          layerGroup={layer.group}
-                          isRequired={layer.is_required}
-                          textureRotation={layer.texture_rotation ?? 0}
-                          textureScale={effectiveTextureScale}
-                          hasViewShadow={hasViewShadow}
-                          generatedShadowConfig={currentView?.generated_shadow}
-                          deviceFamily={profile.family}
-                        />
-                      );
-                    })}
-
-                  {/* 3D Specular and Realistic Shadows */}
-                  {shadingSrc && (
-                    <>
-                      <img
-                        src={shadingSrc}
-                        alt="Shadow Layer"
-                        style={{
-                          mixBlendMode: 'multiply',
-                          opacity: currentPreviewFinish.shadow_opacity ?? currentView?.shadow_opacity ?? 0.85,
-                          zIndex: 20,
-                        }}
-                        className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                      />
-                      <img
-                        src={shadingSrc}
-                        alt="Highlight Layer"
-                        style={{
-                          mixBlendMode: 'screen',
-                          opacity: currentPreviewFinish.highlight_opacity ?? currentView?.highlight_opacity ?? 0.35,
-                          zIndex: 25,
-                        }}
-                        className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                      />
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* STAGE LAYER 3: TOP BAR OVERLAYS (EXACOAT LOGO & ALL DEVICES PILL) */}
-              <div className="absolute top-0 inset-x-0 p-[3.3%] flex items-center justify-between pointer-events-none z-20">
-                {/* Exacoat Logo Pill (Top-Left) */}
-                <div className="w-[30.7%] h-[9.3%] aspect-[460/140] rounded-[14px] md:rounded-[18px] bg-zinc-950 flex items-center justify-center border border-white/10 shadow-lg">
-                  <span className="font-black text-[#f3aa18] text-base md:text-xl tracking-tight flex items-baseline">
-                    exacoat
-                    <span className="text-[10px] ml-0.5 border border-[#f3aa18] rounded-full w-3 h-3 flex items-center justify-center font-normal scale-90">
-                      R
-                    </span>
-                  </span>
-                </div>
-
-                {/* Device Name Pill (Top-Right, e.g. "ALL DEVICES") */}
-                <div className="w-[60.7%] h-[9.3%] aspect-[910/140] rounded-[14px] md:rounded-[18px] bg-white border border-zinc-200/90 shadow-md flex items-center justify-center px-4">
-                  <span className="font-black text-zinc-950 uppercase tracking-wider text-xs md:text-sm lg:text-base truncate text-center">
-                    {deviceNameText || 'ALL DEVICES'}
-                  </span>
-                </div>
-              </div>
-
-              {/* STAGE LAYER 4: LEFT COLUMN (SUB-BADGE & BIG BOLD HEADLINE) */}
-              <div
-                className="absolute left-[3.3%] top-[42.3%] z-20 flex flex-col items-start pointer-events-none max-w-[42%]"
-                style={{ fontFamily: headlineFont === 'Chakra Petch' ? 'Chakra Petch, sans-serif' : headlineFont }}
-              >
-                {/* Sub-badge Tag */}
-                {showSubBadge && subBadgeText && (
-                  <div className="mb-2.5 px-3 py-1 rounded-full bg-white border-2 border-zinc-950 shadow-sm">
-                    <span className="text-[10px] md:text-xs font-black text-zinc-950 tracking-wide">
-                      {subBadgeText}
-                    </span>
-                  </div>
-                )}
-
-                {/* Big Bold Headline */}
-                <div className="font-black text-zinc-950 leading-[0.92] tracking-tight uppercase whitespace-pre-line text-2xl md:text-3xl lg:text-4xl drop-shadow-sm">
-                  {effectiveHeadline}
-                </div>
-              </div>
-
-              {/* STAGE LAYER 5: 20+ SKINS SELECTION STACK (RIGHT EDGE) */}
-              {showSkinsStack && (
-                <div className="absolute right-[3%] top-[34.6%] z-20 flex flex-col items-center gap-2 pointer-events-none w-[7.5%]">
-                  {swatchFinishSlugs.slice(0, 2).map((slug, idx) => {
-                    const swatchFinish = finishes.find((f) => (f.slug || f.id) === slug);
-                    return (
-                      <div
-                        key={idx}
-                        className="w-full aspect-square rounded-[10px] md:rounded-[14px] border-2 border-white shadow-md overflow-hidden bg-zinc-800"
-                      >
-                        {swatchFinish?.thumbnail ? (
-                          <img src={swatchFinish.thumbnail} alt="Swatch" className="w-full h-full object-cover" />
-                        ) : (
-                          <div
-                            className="w-full h-full"
-                            style={{ backgroundColor: swatchFinish?.color_hex || '#333' }}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                  <div className="w-full py-1.5 rounded-[10px] md:rounded-[14px] bg-white border-2 border-zinc-200 shadow-md flex flex-col items-center justify-center">
-                    <span className="text-[11px] font-black text-zinc-950 leading-none">{skinsCountText}</span>
-                    <span className="text-[8px] font-extrabold text-zinc-700 leading-none mt-0.5">{skinsLabelText}</span>
+              {isRenderingPreview && (
+                <div className="absolute inset-0 bg-black/25 backdrop-blur-[2px] flex items-center justify-center z-30 transition-opacity">
+                  <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-zinc-900/90 border border-white/10 text-xs font-semibold text-zinc-200 shadow-xl">
+                    <RefreshCw className="w-4 h-4 animate-spin text-[#f3aa18]" />
+                    <span>Rendering canvas preview...</span>
                   </div>
                 </div>
               )}
-
-              {/* STAGE LAYER 6: 3 CENTERED FROSTED GLASS FEATURE CARDS (FOREGROUND OVERLAY) */}
-              <div className="absolute bottom-[2.5%] inset-x-0 px-[3.3%] z-20 grid grid-cols-3 gap-[1.8%] pointer-events-none">
-                {featureCards.slice(0, 3).map((card) => (
-                  <div
-                    key={card.id}
-                    className="aspect-[430/215] rounded-[16px] md:rounded-[22px] backdrop-blur-xl bg-white/90 border border-white/80 shadow-xl p-2 md:p-3 flex flex-col items-center justify-center text-center"
-                  >
-                    {/* Centered emerald circular icon badge */}
-                    <div className="w-7 h-7 md:w-9 md:h-9 rounded-full bg-emerald-500/10 border-2 border-emerald-500 flex items-center justify-center text-emerald-600 mb-1 shrink-0">
-                      {renderCardIcon(card.iconType)}
-                    </div>
-
-                    {/* Centered Title (all 3 cards share the same heading font size) */}
-                    <div className="text-[11px] md:text-[13px] font-black text-zinc-950 uppercase tracking-tight text-center leading-tight line-clamp-2">
-                      {card.title}
-                    </div>
-
-                    {/* Centered Subtitle */}
-                    <div className="text-[8px] md:text-[10px] italic font-medium text-zinc-500 text-center mt-0.5 truncate max-w-full">
-                      {card.subtitle}
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
 
             {/* DOCK BAR: FAST 1-CLICK FINISH SWITCHER */}

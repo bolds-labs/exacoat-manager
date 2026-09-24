@@ -15,13 +15,34 @@ export async function loadCorsSafeImageBlobUrl(
     return url;
   }
 
-  // Strategy 1: Direct CORS fetch with Blob conversion (Fastest if server allows CORS)
-  // Only attempt direct fetch if already on the same origin or not a known static WordPress upload,
-  // preventing noisy browser console CORS errors.
-  const isSameOrigin = typeof window !== 'undefined' && url.startsWith(window.location.origin);
-  const isKnownWpUpload = url.includes('/wp-content/uploads/');
+  // Strategy 1: Relative local proxy fetch for WordPress uploads if running under Vite / same host
+  if (url && typeof window !== 'undefined' && url.includes('/wp-content/')) {
+    const wpPathMatch = url.match(/\/wp-content\/(.+)$/);
+    if (wpPathMatch) {
+      const relPath = wpPathMatch[1];
+      const proxyCandidates = [
+        `${window.location.origin}/wp-content/${relPath}`,
+        `${window.location.origin}/cms/wp-content/${relPath}`,
+      ];
 
-  if (url && (isSameOrigin || !isKnownWpUpload)) {
+      for (const candidate of proxyCandidates) {
+        try {
+          const res = await fetch(candidate, { mode: 'cors', credentials: 'omit' });
+          if (res.ok) {
+            const blob = await res.blob();
+            if (blob && blob.size > 0) {
+              return URL.createObjectURL(blob);
+            }
+          }
+        } catch {
+          // Continue to next strategy
+        }
+      }
+    }
+  }
+
+  // Strategy 2: Direct CORS fetch with Blob conversion (Fastest if server allows CORS)
+  if (url) {
     try {
       const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
       if (res.ok) {
@@ -38,7 +59,7 @@ export async function loadCorsSafeImageBlobUrl(
   const wpBaseUrl = getWpBaseUrl();
   const numPid = productId ? (typeof productId === 'number' ? productId : parseInt(String(productId), 10)) : undefined;
   
-  // Strategy 2: Fetch via Exacoat Core WordPress REST CORS Proxy
+  // Strategy 3: Fetch via Exacoat Core WordPress REST CORS Proxy
   try {
     const proxyParams = new URLSearchParams();
     if (numPid && !isNaN(numPid)) proxyParams.set('product_id', String(numPid));
@@ -53,10 +74,10 @@ export async function loadCorsSafeImageBlobUrl(
       }
     }
   } catch (proxyErr) {
-    console.warn('[IMAGE LOADER] Proxy fetch attempt failed:', proxyErr);
+    // Proxy fetch attempt failed
   }
 
-  // Strategy 3: Tactile source image proxy alias
+  // Strategy 4: Tactile source image proxy alias
   try {
     const tactileParams = new URLSearchParams();
     if (numPid && !isNaN(numPid)) tactileParams.set('product_id', String(numPid));
@@ -95,16 +116,11 @@ export async function loadCorsSafeImageElement(
     }
     img.onload = () => resolve(img);
     img.onerror = () => {
-      // If anonymous failed on remote URL, try one more time with anonymous flag on original URL
-      if (blobUrl !== url) {
-        const retryImg = new Image();
-        retryImg.crossOrigin = 'anonymous';
-        retryImg.onload = () => resolve(retryImg);
-        retryImg.onerror = () => reject(new Error(`Failed to load product image: ${sourceLabel}`));
-        retryImg.src = url;
-      } else {
-        reject(new Error(`Failed to load product image: ${sourceLabel}`));
-      }
+      // If anonymous failed on remote URL, try one more time without crossOrigin so canvas can still paint it
+      const retryImg = new Image();
+      retryImg.onload = () => resolve(retryImg);
+      retryImg.onerror = () => reject(new Error(`Failed to load product image: ${sourceLabel}`));
+      retryImg.src = url;
     };
     img.src = blobUrl;
   });
