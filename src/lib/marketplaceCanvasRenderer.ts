@@ -2193,6 +2193,12 @@ export async function batchGenerateMarketplaceZip(
   const total = itemsPerCoverage * coveragesToRun.length;
   let progressCount = 0;
 
+  const devicePrefix = (baseConfig.profile.device_slug || baseConfig.profile.device_name || 'device')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9_-]/g, '');
+
   for (const cov of coveragesToRun) {
     const isBoth = coveragesToRun.length > 1;
     const covLabel = cov === 'model_cut' ? 'Model Cut' : 'Model 360';
@@ -2230,8 +2236,8 @@ export async function batchGenerateMarketplaceZip(
 
       const coverBlob = await generateMarketplaceImageBlob(coverConfig);
       const coverFileName = isBoth
-        ? `${covFolder}/00_PRIMARY_COVER_20_SKINS_SELECTION_${covSuffix}.jpg`
-        : `00_PRIMARY_COVER_20_SKINS_SELECTION.jpg`;
+        ? `${covFolder}/${devicePrefix}_cover_${covSuffix.toLowerCase()}.jpg`
+        : `${devicePrefix}_cover.jpg`;
 
       zip.file(coverFileName, coverBlob);
     }
@@ -2260,11 +2266,15 @@ export async function batchGenerateMarketplaceZip(
       };
 
       const blob = await generateMarketplaceImageBlob(currentConfig);
-      const indexStr = String(i + 1).padStart(2, '0');
-      const slugStr = (finish.slug || finish.id || `finish_${i + 1}`).replace(/[^a-z0-9_-]/gi, '_');
+      const finishSlug = (finish.slug || finish.id || finish.name || `finish_${i + 1}`)
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9_-]/g, '');
+
       const fileName = isBoth
-        ? `${covFolder}/${indexStr}_${slugStr}_${covSuffix.toLowerCase()}.jpg`
-        : `${indexStr}_${slugStr}.jpg`;
+        ? `${covFolder}/${devicePrefix}_${finishSlug}_${covSuffix.toLowerCase()}.jpg`
+        : `${devicePrefix}_${finishSlug}.jpg`;
 
       zip.file(fileName, blob);
     }

@@ -606,10 +606,20 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
       if (!blob) throw new Error('Blob export failed');
 
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const devSlug = (profile.device_slug || profile.device_name || 'device')
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9_-]/g, '');
+      const finishSlug = (activeRenderFinish.slug || activeRenderFinish.id || activeRenderFinish.name || 'skin')
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9_-]/g, '');
       const filename = isPrimaryCoverMode
-        ? `${profile.device_slug || 'device'}_00_PRIMARY_COVER_20_SKINS_1500x1500.jpg`
-        : `${profile.device_slug || 'device'}_${activeRenderFinish.slug || activeRenderFinish.id}_1500x1500.jpg`;
+        ? `${devSlug}_cover_1500x1500.jpg`
+        : `${devSlug}_${finishSlug}_1500x1500.jpg`;
+      const a = document.createElement('a');
       a.href = url;
       a.download = filename;
       document.body.appendChild(a);
@@ -1889,7 +1899,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                           onChange={(e) => setIncludePrimaryCoverInBatch(e.target.checked)}
                           className="rounded text-[#f3aa18] focus:ring-[#f3aa18]"
                         />
-                        <span>Include Primary Cover Image in Batch ZIP export (<code>00_PRIMARY_COVER_...jpg</code>)</span>
+                        <span>Include Primary Cover Image in Batch ZIP export</span>
                       </label>
                     </div>
                   )}
