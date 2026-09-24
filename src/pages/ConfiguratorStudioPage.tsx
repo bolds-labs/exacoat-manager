@@ -7559,8 +7559,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowMarketplaceModal(true)}
-                  disabled={!editingProfile}
-                  className="px-3.5 py-2 text-xs font-sans font-semibold rounded-xl border border-[#f3aa18]/30 hover:bg-[#f3aa18]/10 text-[#f3aa18] hover:text-[#f3aa18] transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="px-3.5 py-2 text-xs font-sans font-semibold rounded-xl border border-[#f3aa18]/30 hover:bg-[#f3aa18]/10 text-[#f3aa18] hover:text-[#f3aa18] transition-colors flex items-center gap-2 cursor-pointer"
                   title="Create square 1500x1500px marketplace product listing images for Shopee, Tokopedia, TikTok"
                 >
                   <ImageIcon className="w-3.5 h-3.5 text-[#f3aa18]" />

@@ -432,12 +432,11 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     showToast('success', 'Background Loaded', 'Applied custom background image from disk.');
   };
 
-  if (!profile) return null;
-
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
+      zIndex="z-[220]"
       maxWidth="7xl"
       title={
         <div className="flex items-center gap-3">
@@ -452,12 +451,13 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
               </span>
             </div>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Batch create square marketplace listing product images for {profile.device_name}
+              {profile ? `Batch create square marketplace listing product images for ${profile.device_name}` : 'Loading device profile...'}
             </p>
           </div>
         </div>
       }
       footer={
+        !profile ? null : (
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2">
             <button
@@ -502,9 +502,15 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
             </button>
           </div>
         </div>
-      }
+      )}
     >
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[660px]">
+      {!profile ? (
+        <div className="flex flex-col items-center justify-center py-24 text-zinc-400">
+          <RefreshCw className="w-8 h-8 animate-spin text-[#f3aa18] mb-3" />
+          <p className="text-sm font-semibold">Loading device profile...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[660px]">
         {/* LEFT COLUMN: LIVE CANVAS PREVIEW (7 Cols) */}
         <div className="lg:col-span-7 flex flex-col gap-4">
           {/* Main 1:1 Canvas Stage */}
@@ -1177,6 +1183,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
           )}
         </div>
       </div>
+      )}
     </Modal>
   );
 };
