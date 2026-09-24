@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.39] - 2026-09-24
+
+### Store Credit & Cashback Email Overrides via ZeptoMail
+- **Native Cashback Email Templates (`Exacoat_Email_Engine`)**:
+  - Registered `customer_cashback_earned` in the universal transactional email engine, dispatched whenever an order earning cashback reaches completion.
+  - Registered `customer_store_credit_reminder` in the universal transactional email engine, dispatched to remind customers of their available store credit balance.
+  - Implemented `render_store_credit_html()` featuring the official Exacoat brand logo SVG, prominent store credit balance display, order reference pill badge, and direct call-to-action button linking to the storefront.
+- **Store Credit & Cashback Subsystem (`Exacoat_Store_Credit_Manager`)**:
+  - Automatically suppresses default unstyled WooCommerce emails registered by Advanced Coupons for WooCommerce (`acfw_store_credit_reminder_email`, `acfw_store_credit_email`, `customer_store_credit`), ensuring 100% of store credit communications route through Zoho ZeptoMail API.
+  - Added order completion hook (`woocommerce_order_status_completed`) with deduplication locks (`_exacoat_cashback_email_sent`) to prevent duplicate notices.
+  - Implemented dynamic order cashback resolution (`resolve_order_cashback`), inspecting order metadata and ACFW coupon definitions.
+  - Integrated Action Scheduler (`exacoat-store-credit` queue) for an automated 7-day follow-up reminder (`exacoat_send_store_credit_reminder_job`), evaluating positive balance and recent purchase activity.
+
 ## [0.1.38] - 2026-09-24
 
 ### Hardware Body Colors UX Streamlining & CORS-Safe Color Detection

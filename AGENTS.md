@@ -16,6 +16,7 @@ This document is the authoritative operational guideline, system boundaries, and
   - Shipping & Tracking System: [`docs/SHIPPING_AND_TRACKING_SYSTEM.md`](file:///c:/AI/exacoat-manager/docs/SHIPPING_AND_TRACKING_SYSTEM.md)
   - Multi-Channel Marketplace Architecture: [`docs/MARKETPLACE_ARCHITECTURE.md`](file:///c:/AI/exacoat-manager/docs/MARKETPLACE_ARCHITECTURE.md)
   - Checkout & Order Engine: [`docs/CHECKOUT_AND_ORDER_SYSTEM.md`](file:///c:/AI/exacoat-manager/docs/CHECKOUT_AND_ORDER_SYSTEM.md)
+  - Store Credit & Cashback System: [`docs/STORE_CREDIT_AND_CASHBACK_SYSTEM.md`](file:///c:/AI/exacoat-manager/docs/STORE_CREDIT_AND_CASHBACK_SYSTEM.md)
   - User Changelog: [`CHANGELOG.md`](file:///c:/AI/exacoat-manager/CHANGELOG.md)
 - Always inspect recent git commits (`git log -n 25 --oneline`) before starting to understand recent context and avoid reverting intentional changes.
 

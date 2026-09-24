@@ -3,7 +3,7 @@
  * Plugin Name:       Exacoat Core Platform
  * Plugin URI:        https://exacoat.com
  * Description:       Proprietary e-commerce core engine, configurator manager, and ERP workstation integration for Exacoat.
- * Version:           0.1.38
+ * Version:           0.1.39
  * Author:            Exacoat
  * Author URI:        https://exacoat.com
  * License:           Proprietary
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'EXACOAT_CORE_VERSION' ) ) {
-	define( 'EXACOAT_CORE_VERSION', '0.1.38' );
+	define( 'EXACOAT_CORE_VERSION', '0.1.39' );
 }
 if ( ! defined( 'EXACOAT_CORE_FILE' ) ) {
 	define( 'EXACOAT_CORE_FILE', __FILE__ );
@@ -326,6 +326,7 @@ require_once EXACOAT_CORE_PATH . 'includes/class-guarantee-manager.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-shopee-client.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-tiktok-client.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-webhook-dispatcher.php';
+require_once EXACOAT_CORE_PATH . 'includes/class-store-credit-manager.php';
 require_once EXACOAT_CORE_PATH . 'admin/class-admin-settings.php';
 require_once EXACOAT_CORE_PATH . 'admin/class-github-updater.php';
 

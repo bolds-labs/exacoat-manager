@@ -81,7 +81,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       description: 'The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.',
-      changelog: `### Version ${version}\n- Removed redundant hex text field next to wand button in Hardware Body Colors\n- Resolved cross-origin canvas security failure on dominant color extraction via CORS-safe blob loading\n- Added native hex sanitization to eliminate browser invalid CSS color format console warnings\n- Added automatic color detection on chassis image input blur and media library selection`,
+      changelog: `### Version ${version}\n- Added native Exacoat Email Engine templates for customer cashback earned and store credit balance reminder\n- Integrated Exacoat_Store_Credit_Manager with Action Scheduler for automated 7-day post-cashback follow-ups\n- Suppressed unstyled Advanced Coupons default WooCommerce emails to route all notifications through Zoho ZeptoMail API\n- Added dynamic order cashback resolution supporting ACFW coupon definitions, meta keys, and user balance lookups`,
     },
   };
 

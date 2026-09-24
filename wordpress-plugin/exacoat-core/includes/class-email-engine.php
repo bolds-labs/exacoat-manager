@@ -361,6 +361,42 @@ class Exacoat_Email_Engine {
 				'type'           => 'customer_order',
 				'defaults'       => self::get_mock_order_defaults( '14589' ),
 			],
+			'customer_cashback_earned' => [
+				'category'       => 'Store Credits',
+				'label'          => 'Cashback Credited (Store Credit)',
+				'subject'        => 'You received {{cashback_amount}} cashback on order #{{order_number}}',
+				'badge'          => 'Store Credit',
+				'icon'           => 'document_verified',
+				'title'          => 'Your cashback is ready to use',
+				'body_primary'   => 'Your cashback of {{cashback_amount}} from order #{{order_number}} has been credited to your Exacoat store credit balance.',
+				'body_secondary' => 'Your available store credit balance is now {{store_credit_balance}}. You can apply it directly during checkout on your next order.',
+				'cta_text'       => 'Shop Device Skins',
+				'type'           => 'store_credit',
+				'defaults'       => [
+					'customer_first_name'  => 'Alex',
+					'cashback_amount'      => 'Rp 25.000',
+					'store_credit_balance' => 'Rp 25.000',
+					'order_number'         => '14589',
+					'shop_url'             => 'https://exacoat.com/shop/',
+				],
+			],
+			'customer_store_credit_reminder' => [
+				'category'       => 'Store Credits',
+				'label'          => 'Store Credit Balance Reminder',
+				'subject'        => 'You have {{store_credit_balance}} store credit waiting in your Exacoat account',
+				'badge'          => 'Store Credit',
+				'icon'           => 'document_verified',
+				'title'          => 'Your store credit is waiting',
+				'body_primary'   => 'You still have {{store_credit_balance}} in store credit available in your Exacoat account.',
+				'body_secondary' => 'Use it on your next precision skin, camera protection, or accessories. Simply log in and apply your balance at checkout.',
+				'cta_text'       => 'Use Your Credit',
+				'type'           => 'store_credit',
+				'defaults'       => [
+					'customer_first_name'  => 'Alex',
+					'store_credit_balance' => 'Rp 50.000',
+					'shop_url'             => 'https://exacoat.com/shop/',
+				],
+			],
 			'customer_order_review_reward' => [
 				'category'       => 'Orders',
 				'label'          => 'Exacoat Perks Promo Code',
@@ -463,6 +499,11 @@ class Exacoat_Email_Engine {
 		// Branch directly to Product Review Invitation Layout
 		if ( $event === 'customer_order_review_invitation' || $type === 'review_invitation' ) {
 			return self::render_review_invitation_html( $event, $merged_data, $tmpl );
+		}
+
+		// Branch directly to Light-Mode Store Credit / Cashback Layout
+		if ( $type === 'store_credit' || in_array( $event, [ 'customer_cashback_earned', 'customer_store_credit_reminder' ], true ) ) {
+			return self::render_store_credit_html( $event, $merged_data, $tmpl );
 		}
 
 		// Branch directly to Exacoat Perks Promo Code Reward Layout
@@ -1681,6 +1722,157 @@ class Exacoat_Email_Engine {
               <td style=\"padding:24px 36px 28px;background:#fcfcfd;border-top:1px solid #f0f0f2;text-align:center;\" class=\"mobile-padding\">
                 <p style=\"margin:0 0 8px;font-size:12px;line-height:1.65;color:#71717a;\">
                   Have questions about your order? Reach our team at <a href=\"mailto:support@exacoat.com\" style=\"color:#111111;text-decoration:underline;font-weight:500;\">support@exacoat.com</a>
+                </p>
+                <p style=\"margin:0;font-size:11px;color:#a1a1aa;letter-spacing:0.2px;\">
+                  &copy; Exacoat
+                </p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>";
+
+		return [
+			'subject'   => $subject,
+			'html'      => $html,
+			'tmpl_info' => $tmpl,
+		];
+	}
+
+	/**
+	 * Render Professional Light-Mode Store Credit & Cashback Notification Email
+	 */
+	public static function render_store_credit_html( string $event, array $data, array $tmpl ): array {
+		$replacements = [];
+		foreach ( $data as $k => $v ) {
+			if ( is_scalar( $v ) ) {
+				$val_str = (string) $v;
+				$replacements[ '{{' . $k . '}}' ] = $val_str;
+				$replacements[ '{' . $k . '}' ]   = $val_str;
+			}
+		}
+
+		$cust_name       = esc_html( $data['customer_first_name'] ?? ( $data['customer_name'] ?? 'Customer' ) );
+		$balance         = esc_html( $data['store_credit_balance'] ?? 'Rp 25.000' );
+		$cashback_amount = esc_html( $data['cashback_amount'] ?? '' );
+		$order_num       = esc_html( $data['order_number'] ?? '' );
+		$shop_url        = esc_url( $data['shop_url'] ?? ( function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'shop' ) : home_url( '/shop/' ) ) );
+		$badge_text      = esc_html( $data['badge_text'] ?? ( $tmpl['badge'] ?? 'Store Credit' ) );
+		$title           = esc_html( $data['title'] ?? ( $tmpl['title'] ?? 'Your store credit is ready' ) );
+		$cta_text        = esc_html( $data['cta_text'] ?? ( $tmpl['cta_text'] ?? 'Shop Device Skins' ) );
+
+		$subject        = str_replace( array_keys( $replacements ), array_values( $replacements ), $tmpl['subject'] );
+		$title          = str_replace( array_keys( $replacements ), array_values( $replacements ), $title );
+		$body_primary   = str_replace( array_keys( $replacements ), array_values( $replacements ), $tmpl['body_primary'] ?? '' );
+		$body_secondary = str_replace( array_keys( $replacements ), array_values( $replacements ), $tmpl['body_secondary'] ?? '' );
+
+		// Clean up tags
+		$tag_pattern    = '/\{\{[a-zA-Z0-9_-]+\}\}|\{[a-zA-Z0-9_-]+\}/';
+		$subject        = preg_replace( $tag_pattern, '', $subject );
+		$subject        = preg_replace( '/\s{2,}/', ' ', trim( $subject ) );
+		$title          = preg_replace( $tag_pattern, '', $title );
+		$body_primary   = preg_replace( $tag_pattern, '', $body_primary );
+		$body_secondary = preg_replace( $tag_pattern, '', $body_secondary );
+
+		$cashback_pill = '';
+		if ( ! empty( $cashback_amount ) ) {
+			$order_label = ! empty( $order_num ) ? " from Order #{$order_num}" : '';
+			$cashback_pill = "<div style=\"display:inline-block;padding:4px 12px;background:#ecfdf5;color:#047857;font-size:12px;font-weight:700;border-radius:9999px;border:1px solid #a7f3d0;margin-top:10px;\">
+				+{$cashback_amount} Cashback{$order_label}
+			</div>";
+		}
+
+		$html = "<!doctype html>
+<html lang=\"en\" xmlns:v=\"urn:schemas-microsoft-com:vml\" xmlns:o=\"urn:schemas-microsoft-com:office:office\">
+<head>
+  <meta charset=\"utf-8\">
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+  <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">
+  <title>" . esc_html( $subject ) . "</title>
+  <style>
+    body { margin:0; padding:0; width:100% !important; background-color:#f8f8fa; font-family:'Neue Haas Display','Neue Haas Grotesk Text Pro',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
+    table { border-collapse:collapse; }
+    img { border:0; outline:none; text-decoration:none; display:block; }
+    @media only screen and (max-width:620px) {
+      .container-table { width:100% !important; border-radius:0 !important; border-left:none !important; border-right:none !important; }
+      .mobile-padding { padding:24px 20px !important; }
+      .balance-text { font-size:28px !important; }
+    }
+  </style>
+</head>
+<body style=\"margin:0;padding:40px 10px;background-color:#f8f8fa;\">
+  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">
+    <tr>
+      <td align=\"center\">
+        <table class=\"container-table\" width=\"580\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:580px;background:#ffffff;border:1px solid #eaeaea;border-radius:18px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.03);\">
+          <tbody>
+            <!-- Header -->
+            <tr>
+              <td style=\"padding:28px 36px 20px;border-bottom:1px solid #f0f0f2;\" class=\"mobile-padding\">
+                <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">
+                  <tr>
+                    <td valign=\"middle\">
+                      " . self::get_brand_logo_html() . "
+                    </td>
+                    <td align=\"right\" valign=\"middle\">
+                      <span style=\"display:inline-block;padding:5px 12px;background:#f4f4f5;color:#18181b;font-size:11px;font-weight:600;border-radius:9999px;border:1px solid #e4e4e7;\">{$badge_text}</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Main Content -->
+            <tr>
+              <td style=\"padding:36px 36px 28px;\" class=\"mobile-padding\">
+                <h1 style=\"margin:0 0 16px;font-size:24px;font-weight:600;color:#111111;letter-spacing:-0.4px;line-height:1.3;\">{$title}</h1>
+                <p style=\"margin:0 0 12px;font-size:15px;font-weight:500;color:#18181b;\">Hi {$cust_name},</p>
+                <p style=\"margin:0 0 14px;font-size:14px;line-height:1.7;color:#3f3f46;\">{$body_primary}</p>
+                <p style=\"margin:0 0 24px;font-size:14px;line-height:1.7;color:#52525b;\">{$body_secondary}</p>
+
+                <!-- Store Credit Card -->
+                <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#fafafa;border:1px solid #e4e4e7;border-radius:14px;overflow:hidden;margin-bottom:28px;\">
+                  <tr>
+                    <td align=\"center\" style=\"padding:26px 20px;\">
+                      <p style=\"margin:0 0 6px;font-size:11px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:1px;\">Available Store Credit</p>
+                      <div style=\"margin:6px 0;\">
+                        <span class=\"balance-text\" style=\"font-size:34px;font-weight:800;letter-spacing:-0.5px;color:#111111;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif;\">{$balance}</span>
+                      </div>
+                      {$cashback_pill}
+                      <p style=\"margin:12px 0 0;font-size:12px;color:#71717a;\">
+                        Applied automatically at checkout when signed in
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- Action Button -->
+                <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">
+                  <tr>
+                    <td align=\"center\" style=\"padding:6px 0 12px;\">
+                      <a href=\"{$shop_url}\" target=\"_blank\" style=\"display:inline-block;padding:15px 36px;font-size:14px;font-weight:600;color:#ffffff;background:#111111;border-radius:12px;text-decoration:none;letter-spacing:0.2px;\">
+                        {$cta_text} &rarr;
+                      </a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td align=\"center\" style=\"padding-top:8px;\">
+                      <span style=\"font-size:12px;color:#71717a;\">Your store credit balance is saved in your account with no immediate expiry.</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style=\"padding:24px 36px 28px;background:#fcfcfd;border-top:1px solid #f0f0f2;text-align:center;\" class=\"mobile-padding\">
+                <p style=\"margin:0 0 8px;font-size:12px;line-height:1.65;color:#71717a;\">
+                  Have questions about your order or store credit? Reach our team at <a href=\"mailto:support@exacoat.com\" style=\"color:#111111;text-decoration:underline;font-weight:500;\">support@exacoat.com</a>
                 </p>
                 <p style=\"margin:0;font-size:11px;color:#a1a1aa;letter-spacing:0.2px;\">
                   &copy; Exacoat
