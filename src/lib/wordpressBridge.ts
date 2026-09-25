@@ -6473,6 +6473,7 @@ export async function uploadWordPressMediaDirect(
     const data = await res.json();
     if (res.ok && data?.success && data?.url) {
       const uploadedUrl = String(data.url);
+      const fileSize = Number(data.file_size || optimized.optimizedSize);
       const item: WpMediaItem = {
         id: Number(data.id || Date.now()),
         title: String(data.title || optimized.file.name.replace(/\.[^/.]+$/, '')),
@@ -6481,9 +6482,8 @@ export async function uploadWordPressMediaDirect(
         thumbnail_url: String(data.thumbnail_url || uploadedUrl),
         width: Number(data.width || optimized.width || 0),
         height: Number(data.height || optimized.height || 0),
-        mime_type: String(data.mime_type || optimized.file.type || 'image/png'),
+        mime: String(data.mime_type || optimized.file.type || 'image/png'),
         date: String(data.date || new Date().toISOString()),
-        file_size: Number(data.file_size || optimized.optimizedSize),
       };
 
       return {
@@ -6494,7 +6494,7 @@ export async function uploadWordPressMediaDirect(
         item,
         optimization: {
           originalSize: optimized.originalSize,
-          optimizedSize: item.file_size || optimized.optimizedSize,
+          optimizedSize: fileSize,
           savedBytes: optimized.savedBytes,
           savedPercent: optimized.savedPercent,
           formatLabel: optimized.formatLabel,
