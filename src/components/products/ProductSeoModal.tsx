@@ -20,8 +20,10 @@ import {
   Key,
   AlertTriangle,
   Wand2,
+  Share2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { EXACOAT_WORDMARK_DATA_URL_DARK } from '../../lib/brandAssets';
 import {
   normalizeDeviceName,
   buildCanonicalSeoTitle,
@@ -450,83 +452,148 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
           </div>
         )}
 
-        {/* Google SERP Snippet Preview */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs text-zinc-500">
-            <span className="font-medium flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300">
-              <Globe className="w-3.5 h-3.5 text-blue-500" />
-              Google Search Snippet Preview
-            </span>
-            <span className="text-[10px] font-mono text-zinc-400">
-              {isGalleryImage ? 'SERP Thumbnail: Gallery Image #1' : 'SERP Thumbnail: Primary Image'}
-            </span>
-          </div>
-          <div className="p-3.5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-xs flex items-start justify-between gap-4">
-            <div className="space-y-1 min-w-0 flex-1">
-              <div className="flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-                <span className="font-medium text-zinc-700 dark:text-zinc-300">exacoat.com</span>
-                <span>›</span>
-                <span>product</span>
-                <span>›</span>
-                <span className="font-mono text-zinc-500 dark:text-zinc-400 truncate max-w-[200px]">
-                  {product.slug || 'product-slug'}
-                </span>
-              </div>
-              <div className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer line-clamp-1">
-                {cleanRedundantSeoTitle(seoTitle || buildCanonicalSeoTitle(product.name), product.name)}
-              </div>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">
-                {cleanSeoCopy(
-                  seoDesc ||
-                    shortDesc ||
-                    `Protect your ${cleanDevice} with precision-engineered textured wraps. Real scratch defense without bulk, laser-measured fit, and clean residue-free removal.`,
-                  {
-                    deviceName: product.name,
-                    productSlug: product.slug,
-                  }
-                )}
-              </p>
-            </div>
-
-            {googleImageUrl && (
-              <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 shrink-0">
-                <img
-                  src={googleImageUrl}
-                  alt={`${cleanDevice} Google Search Thumbnail`}
-                  className="w-full h-full object-cover"
-                />
-                <span
-                  className={clsx(
-                    'absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold backdrop-blur-md border',
-                    isGalleryImage
-                      ? 'bg-emerald-950/85 text-emerald-300 border-emerald-500/40'
-                      : 'bg-zinc-900/85 text-zinc-300 border-zinc-700'
-                  )}
-                >
-                  {isGalleryImage ? 'Gallery #1' : 'Cutout #0'}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Image Routing Verification Bar (Google Search vs Dynamic OG) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
-            <div className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/80 dark:border-zinc-800/80 flex items-center justify-between gap-2">
-              <span className="text-zinc-500 dark:text-zinc-400">Google Search Image:</span>
+        {/* Live Search & Social Visual Previews (Side-by-Side) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          {/* Column 1: Google SERP Snippet Preview */}
+          <div className="space-y-1.5 flex flex-col">
+            <div className="flex items-center justify-between text-xs text-zinc-500">
+              <span className="font-medium flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300">
+                <Globe className="w-3.5 h-3.5 text-blue-500" />
+                Google Search Result
+              </span>
               <span
                 className={clsx(
-                  'font-mono font-medium',
-                  isGalleryImage ? 'text-emerald-500' : 'text-amber-400'
+                  'text-[10px] font-mono px-1.5 py-0.5 rounded border',
+                  isGalleryImage
+                    ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                 )}
               >
-                {isGalleryImage ? 'Gallery Photo (images[1])' : 'Fallback (images[0])'}
+                {isGalleryImage ? 'Gallery Image #1' : 'Primary Image'}
               </span>
             </div>
-            <div className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/80 dark:border-zinc-800/80 flex items-center justify-between gap-2">
-              <span className="text-zinc-500 dark:text-zinc-400">Social / OG Card:</span>
-              <span className="font-mono font-medium text-blue-400 truncate max-w-[190px]">
-                /api/og?kind=product&amp;slug={product.slug || '...'}
+            <div className="p-3.5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-xs flex-1 flex flex-col justify-between gap-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1 min-w-0 flex-1">
+                  <div className="flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                    <span className="font-medium text-zinc-700 dark:text-zinc-300">exacoat.com</span>
+                    <span>›</span>
+                    <span>product</span>
+                    <span>›</span>
+                    <span className="font-mono text-zinc-500 dark:text-zinc-400 truncate max-w-[130px]">
+                      {product.slug || 'product-slug'}
+                    </span>
+                  </div>
+                  <div className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer line-clamp-1">
+                    {cleanRedundantSeoTitle(seoTitle || buildCanonicalSeoTitle(product.name), product.name)}
+                  </div>
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-3 leading-relaxed">
+                    {cleanSeoCopy(
+                      seoDesc ||
+                        shortDesc ||
+                        `Protect your ${cleanDevice} with precision-engineered textured wraps. Real scratch defense without bulk, laser-measured fit, and clean residue-free removal.`,
+                      {
+                        deviceName: product.name,
+                        productSlug: product.slug,
+                      }
+                    )}
+                  </p>
+                </div>
+
+                {googleImageUrl && (
+                  <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 shrink-0">
+                    <img
+                      src={googleImageUrl}
+                      alt={`${cleanDevice} Google Search Thumbnail`}
+                      className="w-full h-full object-cover"
+                    />
+                    <span
+                      className={clsx(
+                        'absolute bottom-1 right-1 px-1 py-0.5 rounded text-[8px] font-mono font-semibold backdrop-blur-md border',
+                        isGalleryImage
+                          ? 'bg-emerald-950/85 text-emerald-300 border-emerald-500/40'
+                          : 'bg-zinc-900/85 text-zinc-300 border-zinc-700'
+                      )}
+                    >
+                      {isGalleryImage ? 'images[1]' : 'images[0]'}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-2 border-t border-zinc-100 dark:border-zinc-900 flex items-center justify-between text-[10px] text-zinc-500">
+                <span>Indexed via Product JSON-LD &amp; meta thumbnail</span>
+                <span className="font-mono text-zinc-400">1:1 / 4:3</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Column 2: Visual Social / OpenGraph Card Preview (1200x630) */}
+          <div className="space-y-1.5 flex flex-col">
+            <div className="flex items-center justify-between text-xs text-zinc-500">
+              <span className="font-medium flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300">
+                <Share2 className="w-3.5 h-3.5 text-[#f3aa18]" />
+                Social / OG Share Card
               </span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700/60">
+                1200 × 630
+              </span>
+            </div>
+
+            <div className="rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-xs flex-1 flex flex-col">
+              {/* 1200x630 OG Visual Canvas matching app/api/og/route.tsx */}
+              <div
+                className="relative w-full aspect-[1200/630] px-4 py-3.5 flex flex-col justify-between overflow-hidden select-none"
+                style={{
+                  backgroundColor: '#080808',
+                  backgroundImage:
+                    'radial-gradient(circle at 0% 0%, rgba(243,170,24,0.24) 0%, rgba(243,170,24,0.06) 32%, transparent 60%), linear-gradient(135deg, #141414 0%, #080808 50%, #000000 100%)',
+                }}
+              >
+                {/* Top Wordmark */}
+                <div className="flex items-center justify-between z-10">
+                  <img
+                    src={EXACOAT_WORDMARK_DATA_URL_DARK}
+                    alt="Exacoat"
+                    className="h-3.5 w-auto object-contain"
+                  />
+                  <span className="text-[8px] font-mono uppercase tracking-widest text-zinc-500">
+                    /api/og
+                  </span>
+                </div>
+
+                {/* Center Split: Eyebrow + Product Title on Left, Framed Device Image on Right */}
+                <div className="flex items-center justify-between gap-3 my-auto z-10">
+                  <div className="min-w-0 flex-1 pr-1">
+                    <div className="text-[8px] font-semibold uppercase tracking-[0.2em] text-[#f3aa18] mb-1 truncate">
+                      {(product.categories?.[0]?.name || 'EXACOAT').replace(/\s+Skins?$/i, '')}
+                    </div>
+                    <div className="text-sm sm:text-base font-bold text-white leading-tight line-clamp-2 tracking-tight">
+                      {product.name}
+                    </div>
+                  </div>
+
+                  {googleImageUrl && (
+                    <div className="w-20 sm:w-24 aspect-[360/460] rounded-lg overflow-hidden border border-white/15 shadow-2xl bg-zinc-900 shrink-0">
+                      <img
+                        src={googleImageUrl}
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Social Platform Link Preview Footer */}
+              <div className="px-3 py-2 bg-zinc-50 dark:bg-zinc-900/80 border-t border-zinc-200/80 dark:border-zinc-800/80 space-y-0.5">
+                <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">
+                  exacoat.com
+                </div>
+                <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                  {cleanRedundantSeoTitle(seoTitle || buildCanonicalSeoTitle(product.name), product.name)}
+                </div>
+              </div>
             </div>
           </div>
         </div>

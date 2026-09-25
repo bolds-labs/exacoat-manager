@@ -1574,6 +1574,140 @@ function applySyntheticDirectionalShading(
 }
 
 /**
+ * Filters genuine visual skin layers (excluding hardware chassis/body layers)
+ * and orders base/primary layers (no extra price, e.g. Back) before optional accent layers.
+ */
+export function isBaseSkinLayer(layer: {
+  id?: string;
+  name?: string;
+  group?: string;
+  extra_price?: number;
+  is_required?: boolean;
+  default_selected?: boolean;
+}): boolean {
+  const price = Number(layer.extra_price) || 0;
+  const name = (layer.name || '').toLowerCase().trim();
+  const id = (layer.id || '').toLowerCase().trim();
+  const group = (layer.group || '').toLowerCase().trim();
+
+  const isAccentOrAddon =
+    group === 'accent' ||
+    group === 'addon' ||
+    group === 'protection' ||
+    name.includes('accent') ||
+    id.includes('accent') ||
+    name.includes('camera') ||
+    name.includes('lens') ||
+    name.includes('temper') ||
+    name.includes('screen');
+
+  return price <= 0 && !isAccentOrAddon;
+}
+
+export function filterGenuineSkinLayers<
+  T extends {
+    id: string;
+    name?: string;
+    group?: string;
+    extra_price?: number;
+    is_non_visual?: boolean;
+    is_required?: boolean;
+    default_selected?: boolean;
+  }
+>(layers: T[] = []): T[] {
+  const filtered = (layers || []).filter((l) => {
+    if (l.is_non_visual) return false;
+    const lName = (l.name || '').toLowerCase().trim();
+    const lId = (l.id || '').toLowerCase().trim();
+    if (lName === 'device' || lId === 'device') return false;
+    if (lName.includes('device-body') || lName.includes('device_body') || lName.includes('device body')) return false;
+    if (lName.includes('chassis') || lName.includes('hardware')) return false;
+    if ((l.group as string) === 'device' || (l.group as string) === 'hardware') return false;
+    return true;
+  });
+
+  const scoreLayer = (l: T): number => {
+    const name = (l.name || '').toLowerCase().trim();
+    const id = (l.id || '').toLowerCase().trim();
+    const base = isBaseSkinLayer(l);
+    const hasBackKeyword = /\b(back|base|rear|body|full|main|top)\b/i.test(`${name} ${id}`);
+    if (base && hasBackKeyword) return 100;
+    if (base && (l.group === 'primary' || l.is_required || l.default_selected)) return 90;
+    if (base) return 80;
+    if ((Number(l.extra_price) || 0) <= 0) return 60;
+    if (hasBackKeyword && !name.includes('accent')) return 40;
+    return 10;
+  };
+
+  return [...filtered].sort((a, b) => scoreLayer(b) - scoreLayer(a));
+}
+
+/**
+ * Returns the single primary base skin layer ID (the one without extra price, e.g. Back skin)
+ * as the default and only active layer.
+ */
+export function getDefaultBaseSkinLayerIds(
+  layers: Array<{
+    id: string;
+    name?: string;
+    group?: string;
+    extra_price?: number;
+    is_non_visual?: boolean;
+    is_required?: boolean;
+    default_selected?: boolean;
+  }> = []
+): string[] {
+  const ordered = filterGenuineSkinLayers(layers);
+  if (ordered.length === 0) return [];
+  return [ordered[0].id];
+}
+
+/**
+ * Resolves initial active layer IDs for a device profile:
+ * Defaults strictly to the single base skin layer (without price, e.g. Back skin).
+ * Also auto-heals previously saved settings if they only contained an accent/priced layer.
+ */
+export function resolveInitialActiveLayerIds(
+  layers: Array<{
+    id: string;
+    name?: string;
+    group?: string;
+    extra_price?: number;
+    is_non_visual?: boolean;
+    is_required?: boolean;
+    default_selected?: boolean;
+  }> = [],
+  savedLayerIds?: string[]
+): string[] {
+  const genuine = filterGenuineSkinLayers(layers);
+  if (genuine.length === 0) return [];
+
+  const defaultBaseIds = [genuine[0].id];
+  if (!Array.isArray(savedLayerIds) || savedLayerIds.length === 0) {
+    return defaultBaseIds;
+  }
+
+  const validSaved = savedLayerIds.filter((id) => genuine.some((g) => g.id === id));
+  if (validSaved.length === 0) {
+    return defaultBaseIds;
+  }
+
+  // If the device has at least one base skin layer (free, non-accent) and the saved list
+  // ONLY contains accent/priced layers (caused by old genuineLayers[0] indexing), reset to base skin only
+  const hasAnyBaseLayerInProfile = genuine.some((g) => isBaseSkinLayer(g));
+  const savedHasBaseLayer = validSaved.some((id) => {
+    const found = genuine.find((g) => g.id === id);
+    return found ? isBaseSkinLayer(found) : false;
+  });
+
+  if (hasAnyBaseLayerInProfile && !savedHasBaseLayer) {
+    return defaultBaseIds;
+  }
+
+  return validSaved;
+}
+
+/**
  * Composites the phone hardware with genuine skin layers (filtering out device chassis)
  */
 async function renderDeviceComposite(
@@ -1630,19 +1764,15 @@ async function renderDeviceComposite(
 
   // 3. Filter genuine skin layers:
   // Strictly EXCLUDE device body, chassis, and hardware layers so they never act as an alpha mask!
-  const skinLayers = (profile.layers || []).filter((l) => {
-    if (l.is_non_visual) return false;
-    const lName = (l.name || '').toLowerCase().trim();
-    const lId = (l.id || '').toLowerCase().trim();
-    if (lName === 'device' || lId === 'device') return false;
-    if (lName.includes('device-body') || lName.includes('device_body') || lName.includes('device body')) return false;
-    if (lName.includes('chassis') || lName.includes('hardware')) return false;
-    if ((l.group as string) === 'device' || (l.group as string) === 'hardware') return false;
-    if (config.activeLayerIds && config.activeLayerIds.length > 0) {
-      if (!config.activeLayerIds.includes(l.id)) return false;
-    }
-    return true;
-  });
+  // Default strictly to the base skin layer (e.g. Back skin without price) when activeLayerIds is empty.
+  const effectiveActiveLayerIds =
+    config.activeLayerIds && config.activeLayerIds.length > 0
+      ? config.activeLayerIds
+      : getDefaultBaseSkinLayerIds(profile.layers || []);
+
+  const skinLayers = filterGenuineSkinLayers(profile.layers || []).filter((l) =>
+    effectiveActiveLayerIds.includes(l.id)
+  );
 
   const sortedLayers = [...skinLayers].sort((a, b) => (a.z_index || 1) - (b.z_index || 1));
 

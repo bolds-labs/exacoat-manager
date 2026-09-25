@@ -19,6 +19,10 @@ import {
   renderMarketplaceImageToCanvas,
   generateMarketplaceImageBlob,
   batchGenerateMarketplaceZip,
+  filterGenuineSkinLayers,
+  isBaseSkinLayer,
+  getDefaultBaseSkinLayerIds,
+  resolveInitialActiveLayerIds,
 } from '../../lib/marketplaceCanvasRenderer';
 import { useToast } from '../../context/ToastContext';
 import {
@@ -270,19 +274,10 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     };
   }, [isOpen, onClose]);
 
-  // Filter genuine skin layers (strictly exclude device chassis / hardware body)
+  // Filter genuine skin layers (strictly exclude device chassis / hardware body, base layer ordered first)
   const availableSkinLayers = useMemo(() => {
     if (!profile?.layers) return [];
-    return profile.layers.filter((l) => {
-      if (l.is_non_visual) return false;
-      const n = (l.name || '').toLowerCase().trim();
-      const id = (l.id || '').toLowerCase().trim();
-      if (n === 'device' || id === 'device') return false;
-      if (n.includes('device-body') || n.includes('device_body') || n.includes('device body')) return false;
-      if (n.includes('chassis') || n.includes('hardware')) return false;
-      if ((l.group as string) === 'device' || (l.group as string) === 'hardware') return false;
-      return true;
-    });
+    return filterGenuineSkinLayers(profile.layers);
   }, [profile]);
 
   // Initialize fields when profile changes
@@ -385,33 +380,12 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     setVariantOffsetX(savedMp?.variant_offset_x ?? defVariantX);
     setVariantOffsetY(savedMp?.variant_offset_y ?? defVariantY);
 
-    // Initialize active skin layer IDs: restore saved layers or activate first genuine skin layer
-    const initialLayers = new Set<string>();
-    const genuineSkinLayers = (profile.layers || []).filter((l) => {
-      if (l.is_non_visual) return false;
-      const n = (l.name || '').toLowerCase().trim();
-      const id = (l.id || '').toLowerCase().trim();
-      if (n === 'device' || id === 'device') return false;
-      if (n.includes('device-body') || n.includes('device_body') || n.includes('device body')) return false;
-      if (n.includes('chassis') || n.includes('hardware')) return false;
-      if ((l.group as string) === 'device' || (l.group as string) === 'hardware') return false;
-      return true;
-    });
-
-    if (
-      Array.isArray(savedMp?.active_layer_ids) &&
-      savedMp.active_layer_ids.length > 0 &&
-      genuineSkinLayers.some((gl) => savedMp.active_layer_ids!.includes(gl.id))
-    ) {
-      savedMp.active_layer_ids.forEach((lid) => {
-        if (genuineSkinLayers.some((gl) => gl.id === lid)) {
-          initialLayers.add(lid);
-        }
-      });
-    } else if (genuineSkinLayers.length > 0) {
-      initialLayers.add(genuineSkinLayers[0].id);
-    }
-    setActiveLayerIds(initialLayers);
+    // Initialize active skin layer IDs: default strictly to base skin (without price, e.g. Back skin)
+    const resolvedLayerIds = resolveInitialActiveLayerIds(
+      profile.layers || [],
+      savedMp?.active_layer_ids
+    );
+    setActiveLayerIds(new Set(resolvedLayerIds));
 
     // Load custom background and bg style from storage if previously saved
     try {
@@ -1397,19 +1371,30 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                 {availableSkinLayers.length > 0 && (
                   <div className="p-3 rounded-xl bg-zinc-800/80 border border-zinc-700/80 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-zinc-300">Active Skin Layers in Hero Shot</span>
-                      <span className="text-[10px] text-zinc-400">Toggle parts</span>
+                      <span className="text-xs font-bold text-zinc-300">Active Skin Layers</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const baseIds = getDefaultBaseSkinLayerIds(profile?.layers || []);
+                          setActiveLayerIds(new Set(baseIds));
+                        }}
+                        className="text-[10px] font-semibold text-emerald-400 hover:text-emerald-300 transition cursor-pointer"
+                      >
+                        Base Skin Only (Default)
+                      </button>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {availableSkinLayers.map((layer) => {
                         const isChecked = activeLayerIds.has(layer.id);
+                        const isBase = isBaseSkinLayer(layer);
+                        const extraPrice = Number(layer.extra_price) || 0;
                         return (
                           <button
                             key={layer.id}
                             type="button"
                             onClick={() => toggleLayerId(layer.id)}
                             className={clsx(
-                              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition',
+                              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer',
                               isChecked
                                 ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
                                 : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-zinc-200'
@@ -1417,6 +1402,20 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                           >
                             {isChecked ? <Check className="w-3.5 h-3.5" /> : <div className="w-3.5 h-3.5" />}
                             <span>{layer.name}</span>
+                            <span
+                              className={clsx(
+                                'px-1.5 py-0.5 rounded text-[9px] font-bold',
+                                isBase
+                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                  : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                              )}
+                            >
+                              {isBase
+                                ? 'Base'
+                                : extraPrice > 0
+                                ? `+Rp ${(extraPrice / 1000).toFixed(0)}k`
+                                : 'Addon'}
+                            </span>
                           </button>
                         );
                       })}

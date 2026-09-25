@@ -81,6 +81,103 @@ const SORT_OPTIONS: SortItemConfig[] = [
   { value: 'price_asc', label: 'Price: Low to High' },
 ];
 
+const WP_STATUS_CONFIG: Record<
+  string,
+  { label: string; dot: string; badge: string }
+> = {
+  publish: {
+    label: 'Published',
+    dot: 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]',
+    badge:
+      'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25 hover:bg-emerald-500/15',
+  },
+  draft: {
+    label: 'Draft',
+    dot: 'bg-amber-400',
+    badge:
+      'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25 hover:bg-amber-500/15',
+  },
+  private: {
+    label: 'Private',
+    dot: 'bg-zinc-400',
+    badge:
+      'bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border-zinc-500/25 hover:bg-zinc-500/15',
+  },
+};
+
+const WpStatusDropdown: React.FC<{
+  status: string;
+  onChange: (newStatus: string) => void;
+}> = ({ status, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const current = WP_STATUS_CONFIG[status] || WP_STATUS_CONFIG.draft;
+
+  useEffect(() => {
+    if (!open) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={clsx(
+          'h-6 px-2.5 rounded-full border text-[11px] font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none',
+          current.badge
+        )}
+      >
+        <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', current.dot)} />
+        <span>{current.label}</span>
+        <ChevronDown
+          className={clsx(
+            'w-3 h-3 opacity-60 transition-transform duration-150',
+            open && 'rotate-180'
+          )}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 mt-1.5 w-32 rounded-xl bg-white dark:bg-[#161616] border border-zinc-200 dark:border-white/10 shadow-xl py-1 z-50 text-xs">
+          {(['publish', 'draft', 'private'] as const).map((st) => {
+            const cfg = WP_STATUS_CONFIG[st];
+            const isSelected = status === st;
+            return (
+              <button
+                key={st}
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  if (st !== status) onChange(st);
+                }}
+                className={clsx(
+                  'w-full px-3 py-1.5 text-left flex items-center justify-between transition cursor-pointer text-[11px]',
+                  isSelected
+                    ? 'bg-zinc-100 dark:bg-white/[0.06] text-zinc-900 dark:text-white font-semibold'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/[0.04] hover:text-zinc-900 dark:hover:text-zinc-200'
+                )}
+              >
+                <span className="flex items-center gap-2">
+                  <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', cfg.dot)} />
+                  <span>{cfg.label}</span>
+                </span>
+                {isSelected && <Check className="w-3 h-3 text-[#f3aa18]" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const ProductsPage: React.FC = () => {
   const { showToast } = useToast();
 
@@ -151,11 +248,13 @@ export const ProductsPage: React.FC = () => {
     name: string;
     slug?: string;
     price?: number;
+    categoryName?: string;
   } | null>(null);
   const [duplicateWpName, setDuplicateWpName] = useState('');
   const [duplicateWpSlug, setDuplicateWpSlug] = useState('');
   const [duplicateWpPrice, setDuplicateWpPrice] = useState(0);
   const [duplicateWpCopyConfig, setDuplicateWpCopyConfig] = useState(true);
+  const [duplicateWpAutoSeo, setDuplicateWpAutoSeo] = useState(true);
   const [isDuplicatingWp, setIsDuplicatingWp] = useState(false);
 
   // Shopee Duplicator Modal State

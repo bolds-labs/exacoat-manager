@@ -22,6 +22,10 @@ import {
   generateMarketplaceImageBlob,
   renderMarketplaceImageToCanvas,
   formatDeviceHeadline,
+  filterGenuineSkinLayers,
+  isBaseSkinLayer,
+  getDefaultBaseSkinLayerIds,
+  resolveInitialActiveLayerIds,
 } from '../../lib/marketplaceCanvasRenderer';
 import { useToast } from '../../context/ToastContext';
 import {
@@ -268,29 +272,11 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
           setPencilCutout(savedMp.pencil_cutout);
         }
 
-        const genuineLayers = (prof.layers || []).filter((l) => {
-          if (l.is_non_visual) return false;
-          const n = (l.name || '').toLowerCase().trim();
-          const id = (l.id || '').toLowerCase().trim();
-          if (n === 'device' || id === 'device') return false;
-          if (n.includes('device-body') || n.includes('device_body') || n.includes('device body')) return false;
-          if (n.includes('chassis') || n.includes('hardware')) return false;
-          return true;
-        });
-
-        if (
-          Array.isArray(savedMp?.active_layer_ids) &&
-          savedMp.active_layer_ids.length > 0 &&
-          genuineLayers.some((gl) => savedMp.active_layer_ids!.includes(gl.id))
-        ) {
-          setActiveLayerIds(
-            savedMp.active_layer_ids.filter((lid) => genuineLayers.some((gl) => gl.id === lid))
-          );
-        } else if (genuineLayers.length > 0) {
-          setActiveLayerIds([genuineLayers[0].id]);
-        } else {
-          setActiveLayerIds([]);
-        }
+        const resolvedLayerIds = resolveInitialActiveLayerIds(
+          prof.layers || [],
+          savedMp?.active_layer_ids
+        );
+        setActiveLayerIds(resolvedLayerIds);
       } else {
         showToast('error', 'Profile Load Error', res.error || 'Failed to load device profile details');
       }
@@ -994,6 +980,72 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                       </button>
                     </div>
                   </div>
+
+                  {/* Active Skin Layers (e.g. Back [Base], Accents, etc.) */}
+                  {deviceProfile && filterGenuineSkinLayers(deviceProfile.layers || []).length > 0 && (
+                    <div className="pt-3 border-t border-zinc-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-zinc-300">
+                          Active Skin Layers (Default: Base Skin Only)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const baseIds = getDefaultBaseSkinLayerIds(deviceProfile.layers || []);
+                            setActiveLayerIds(baseIds);
+                          }}
+                          className="text-[10px] font-semibold text-emerald-400 hover:text-emerald-300 transition cursor-pointer"
+                        >
+                          Base Skin Only
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {filterGenuineSkinLayers(deviceProfile.layers || []).map((layer) => {
+                          const isChecked = activeLayerIds.includes(layer.id);
+                          const isBase = isBaseSkinLayer(layer);
+                          const extraPrice = Number(layer.extra_price) || 0;
+                          return (
+                            <button
+                              key={layer.id}
+                              type="button"
+                              onClick={() => {
+                                setActiveLayerIds((prev) => {
+                                  if (prev.includes(layer.id)) {
+                                    if (prev.length <= 1) return prev;
+                                    return prev.filter((id) => id !== layer.id);
+                                  }
+                                  return [...prev, layer.id];
+                                });
+                              }}
+                              className={clsx(
+                                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer',
+                                isChecked
+                                  ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                                  : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                              )}
+                            >
+                              {isChecked ? <Check className="w-3.5 h-3.5" /> : <div className="w-3.5 h-3.5" />}
+                              <span>{layer.name}</span>
+                              <span
+                                className={clsx(
+                                  'px-1.5 py-0.5 rounded text-[9px] font-bold',
+                                  isBase
+                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                    : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                                )}
+                              >
+                                {isBase
+                                  ? 'Base'
+                                  : extraPrice > 0
+                                  ? `+Rp ${(extraPrice / 1000).toFixed(0)}k`
+                                  : 'Addon'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Per-Device Cover & Variant Position Controls (Synced with Marketplace Image Generator) */}
                   <div className="pt-3 border-t border-zinc-800 space-y-3">

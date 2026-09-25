@@ -3725,12 +3725,15 @@ export async function duplicateProductDirect(params: {
   new_slug?: string;
   new_price?: number;
   copy_configurator?: boolean;
+  auto_generate_seo?: boolean;
+  category_name?: string;
 }): Promise<{
   success: boolean;
   productId?: number;
   name?: string;
   slug?: string;
   price?: number;
+  seoGenerated?: boolean;
   message?: string;
   error?: string;
 }> {
@@ -3750,13 +3753,48 @@ export async function duplicateProductDirect(params: {
       }),
     });
     const data = await res.json();
-    if (res.ok && data?.success) {
+    if (res.ok && data?.success && data.product_id) {
+      const newProductId = Number(data.product_id);
+      const targetName = (data.name || params.new_name || '').replace(/\s*\(Copy\)$/i, '').trim() || params.new_name;
+      const cleanDevice = normalizeDeviceName(targetName) || targetName;
+      let seoGenerated = false;
+
+      if (params.auto_generate_seo !== false) {
+        try {
+          const aiRes = await generateProductSeoAndDescriptionAi(
+            cleanDevice,
+            params.category_name || 'Skins'
+          );
+          if (aiRes.success && aiRes.data) {
+            const seoSave = await updateProductSeoDirect(newProductId, {
+              short_description: aiRes.data.short_description || '',
+              seo_title: aiRes.data.seo_title || `${cleanDevice} Skin & Wrap | Exacoat`,
+              seo_description: aiRes.data.seo_description || '',
+              focus_keyword: aiRes.data.focus_keyword || `${cleanDevice.toLowerCase()} skin`,
+            });
+            seoGenerated = seoSave.success;
+          }
+        } catch {}
+      }
+
+      if (!seoGenerated) {
+        try {
+          await updateProductSeoDirect(newProductId, {
+            short_description: '',
+            seo_title: `${cleanDevice} Skin & Wrap | Exacoat`,
+            seo_description: `Protect your ${cleanDevice} with precision-cut textured wraps. Zero-bulk scratch defense, confident grip, and residue-free removal.`,
+            focus_keyword: `${cleanDevice.toLowerCase()} skin`,
+          });
+        } catch {}
+      }
+
       return {
         success: true,
-        productId: data.product_id,
+        productId: newProductId,
         name: data.name,
         slug: data.slug,
         price: data.price,
+        seoGenerated,
         message: data.message,
       };
     }
