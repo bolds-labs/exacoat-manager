@@ -73,6 +73,10 @@ class Exacoat_Store_Enhancements {
 
 		// 22. Shortlink Redirects (/cs, /wa, /whatsapp -> WhatsApp Customer Support)
 		add_action( 'template_redirect', [ __CLASS__, 'handle_shortlink_redirects' ], 1 );
+
+		// 23. Refine REST API product search to match post_title & SKU instead of broad post_content
+		add_filter( 'posts_search', [ __CLASS__, 'refine_rest_product_search' ], 20, 2 );
+		add_filter( 'posts_clauses', [ __CLASS__, 'refine_rest_product_search_orderby' ], 20, 2 );
 	}
 
 	/**
@@ -1448,6 +1452,94 @@ class Exacoat_Store_Enhancements {
 		wp_dequeue_script( 'prettyPhoto-init' );
 		wp_dequeue_script( 'fancybox' );
 		wp_dequeue_script( 'enable-lightbox' );
+	}
+
+	/**
+	 * Refine WooCommerce REST API product search to match post_title, ID, or SKU.
+	 * Prevents broad boiler-plate description text (e.g. "pro", "skin", "3M") from
+	 * matching unrelated catalog items when operators perform targeted model searches.
+	 */
+	public static function refine_rest_product_search( $search, $wp_query ) {
+		if ( empty( $search ) ) {
+			return $search;
+		}
+
+		$post_type = $wp_query->get( 'post_type' );
+		$is_product_query = ( $post_type === 'product' || ( is_array( $post_type ) && in_array( 'product', $post_type, true ) ) );
+
+		if ( ! $is_product_query ) {
+			return $search;
+		}
+
+		$search_query = trim( (string) $wp_query->get( 's' ) );
+		if ( empty( $search_query ) ) {
+			return $search;
+		}
+
+		$is_rest = ( defined( 'REST_REQUEST' ) && REST_REQUEST );
+		if ( ! $is_rest && ! isset( $_SERVER['HTTP_X_EXACOAT_CLIENT'] ) ) {
+			return $search;
+		}
+
+		global $wpdb;
+
+		// Numeric search: allow exact post ID match or title match
+		if ( is_numeric( $search_query ) ) {
+			$numeric_id = (int) $search_query;
+			return " AND ({$wpdb->posts}.ID = {$numeric_id} OR {$wpdb->posts}.post_title LIKE '%" . $wpdb->esc_like( $search_query ) . "%') ";
+		}
+
+		// Tokenize search string by whitespace
+		$tokens = preg_split( '/\s+/', $search_query, -1, PREG_SPLIT_NO_EMPTY );
+		if ( empty( $tokens ) ) {
+			return $search;
+		}
+
+		$title_conditions = [];
+		foreach ( $tokens as $token ) {
+			$escaped_token = $wpdb->esc_like( $token );
+			$title_conditions[] = "{$wpdb->posts}.post_title LIKE '%{$escaped_token}%'";
+		}
+
+		// All tokens must be present in post_title (e.g. '17' AND 'pro')
+		$all_tokens_sql = implode( ' AND ', $title_conditions );
+		$exact_phrase = $wpdb->esc_like( $search_query );
+
+		return " AND (({$all_tokens_sql}) OR ({$wpdb->posts}.post_title LIKE '%{$exact_phrase}%')) ";
+	}
+
+	/**
+	 * Rank exact phrase matches and start-of-title matches higher during product search
+	 */
+	public static function refine_rest_product_search_orderby( $clauses, $wp_query ) {
+		$search_query = trim( (string) $wp_query->get( 's' ) );
+		$post_type = $wp_query->get( 'post_type' );
+		$is_product_query = ( $post_type === 'product' || ( is_array( $post_type ) && in_array( 'product', $post_type, true ) ) );
+
+		if ( empty( $search_query ) || ! $is_product_query ) {
+			return $clauses;
+		}
+
+		$is_rest = ( defined( 'REST_REQUEST' ) && REST_REQUEST );
+		if ( ! $is_rest && ! isset( $_SERVER['HTTP_X_EXACOAT_CLIENT'] ) ) {
+			return $clauses;
+		}
+
+		global $wpdb;
+		$escaped = $wpdb->esc_like( $search_query );
+		$order_case = "CASE 
+			WHEN {$wpdb->posts}.post_title LIKE '{$escaped}%' THEN 1 
+			WHEN {$wpdb->posts}.post_title LIKE '%{$escaped}%' THEN 2 
+			ELSE 3 
+		END ASC";
+
+		if ( ! empty( $clauses['orderby'] ) ) {
+			$clauses['orderby'] = "{$order_case}, " . $clauses['orderby'];
+		} else {
+			$clauses['orderby'] = "{$order_case}, {$wpdb->posts}.post_date DESC";
+		}
+
+		return $clauses;
 	}
 }
 

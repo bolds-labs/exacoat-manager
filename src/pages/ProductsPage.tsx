@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Product,
   fetchProductsDirect,
   updateProductDirect,
   deleteProductDirect,
+  duplicateProductDirect,
   fetchShopeeProductsDirect,
   setShopeeProductStatusDirect,
   deleteShopeeProductDirect,
@@ -16,6 +18,10 @@ import {
 import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '../lib/formatters';
 import { Modal } from '../components/ui/Modal';
+
+const formatIDR = (val: number | string | null | undefined): string => {
+  return formatCurrency(val, 'IDR');
+};
 import { ShopeeProductDuplicatorModal } from '../components/orders/ShopeeProductDuplicatorModal';
 import { ProductImageManagerModal } from '../components/products/ProductImageManagerModal';
 import {
@@ -121,6 +127,19 @@ export const ProductsPage: React.FC = () => {
   // Modal States
   const [selectedProductForImages, setSelectedProductForImages] = useState<Product | null>(null);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+
+  // Webstore (WooCommerce) Duplicator Modal State
+  const [duplicateWpModal, setDuplicateWpModal] = useState<{
+    productId: number;
+    name: string;
+    slug?: string;
+    price?: number;
+  } | null>(null);
+  const [duplicateWpName, setDuplicateWpName] = useState('');
+  const [duplicateWpSlug, setDuplicateWpSlug] = useState('');
+  const [duplicateWpPrice, setDuplicateWpPrice] = useState(0);
+  const [duplicateWpCopyConfig, setDuplicateWpCopyConfig] = useState(true);
+  const [isDuplicatingWp, setIsDuplicatingWp] = useState(false);
 
   // Shopee Duplicator Modal State
   const [isShopeeDuplicatorOpen, setIsShopeeDuplicatorOpen] = useState(false);
@@ -288,6 +307,57 @@ export const ProductsPage: React.FC = () => {
     setTiktokPageToken('');
   }, [debouncedSearch, statusFilter]);
 
+  // Webstore: Open Duplicate Modal
+  const handleOpenWpDuplicate = (product: Product) => {
+    const rawPrice = parseFloat(product.regular_price || product.price || '0');
+    setDuplicateWpModal({
+      productId: product.id,
+      name: product.name,
+      slug: product.slug,
+      price: isNaN(rawPrice) ? 0 : rawPrice,
+    });
+    setDuplicateWpName(`${product.name} (Copy)`);
+    const initialSlug = (product.slug || product.name || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+    setDuplicateWpSlug(`${initialSlug}-copy`);
+    setDuplicateWpPrice(isNaN(rawPrice) ? 0 : rawPrice);
+    setDuplicateWpCopyConfig(true);
+  };
+
+  // Webstore: Execute Duplicate
+  const handleExecuteWpDuplicate = async () => {
+    if (!duplicateWpModal || !duplicateWpName.trim()) return;
+    setIsDuplicatingWp(true);
+    try {
+      const res = await duplicateProductDirect({
+        source_product_id: duplicateWpModal.productId,
+        new_name: duplicateWpName.trim(),
+        new_slug: duplicateWpSlug.trim(),
+        new_price: duplicateWpPrice,
+        copy_configurator: duplicateWpCopyConfig,
+      });
+
+      if (res.success && res.productId) {
+        showToast(
+          'success',
+          'Product Duplicated',
+          `Created "${res.name || duplicateWpName}" with ID #${res.productId} in draft status.`
+        );
+        setDuplicateWpModal(null);
+        // Refresh catalog to display new draft product
+        loadWordPressProducts(1, debouncedSearch, statusFilter);
+      } else {
+        showToast('error', 'Duplication Failed', res.error || 'Failed to duplicate product.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Duplication Error', err.message || 'Network error duplicating product.');
+    } finally {
+      setIsDuplicatingWp(false);
+    }
+  };
+
   // WordPress: Toggle Status (publish / draft / private)
   const handleToggleWpStatus = async (product: Product, newStatus: string) => {
     try {
@@ -452,8 +522,37 @@ export const ProductsPage: React.FC = () => {
 
   // Sorted WordPress Products
   const sortedWpProducts = useMemo(() => {
-    const list = [...wpProducts];
+    let list = [...wpProducts];
+    const rawSearch = debouncedSearch.trim().toLowerCase();
+    const tokens = rawSearch.split(/\s+/).filter(Boolean);
+
+    // If searching, filter out any products where title/SKU/ID does not contain all query tokens
+    if (tokens.length > 0) {
+      list = list.filter((p) => {
+        const titleLower = (p.name || '').toLowerCase();
+        const skuLower = (p.sku || '').toLowerCase();
+        const idStr = String(p.id);
+
+        if (idStr === rawSearch || skuLower.includes(rawSearch)) {
+          return true;
+        }
+
+        // All search tokens must appear in product title
+        return tokens.every((token) => titleLower.includes(token));
+      });
+    }
+
     list.sort((a, b) => {
+      // Prioritize exact phrase matches in title when searching
+      if (rawSearch) {
+        const aTitle = (a.name || '').toLowerCase();
+        const bTitle = (b.name || '').toLowerCase();
+        const aExact = aTitle.includes(rawSearch);
+        const bExact = bTitle.includes(rawSearch);
+        if (aExact && !bExact) return -1;
+        if (!aExact && bExact) return 1;
+      }
+
       if (sortOption === 'title_asc') return a.name.localeCompare(b.name);
       if (sortOption === 'title_desc') return b.name.localeCompare(a.name);
       const priceA = parseFloat(a.price || a.regular_price || '0');
@@ -464,7 +563,7 @@ export const ProductsPage: React.FC = () => {
       return b.id - a.id;
     });
     return list;
-  }, [wpProducts, sortOption]);
+  }, [wpProducts, sortOption, debouncedSearch]);
 
   // Sorted Shopee Listings
   const sortedShopeeItems = useMemo(() => {
@@ -524,21 +623,6 @@ export const ProductsPage: React.FC = () => {
           <p className="text-xs sm:text-sm text-zinc-400 mt-1">
             Real multi-channel product catalog across Exacoat Webstore, Shopee, and TikTok Shop.
           </p>
-        </div>
-
-        {/* Global Action: Open Duplicator */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setDuplicatorInitialIdOrUrl(undefined);
-              setIsShopeeDuplicatorOpen(true);
-            }}
-            className="min-h-[44px] px-4 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-2 transition cursor-pointer"
-          >
-            <Copy className="w-4 h-4 text-amber-400" />
-            <span>Duplikasi Produk (Shopee Draft)</span>
-          </button>
         </div>
       </div>
 
@@ -859,10 +943,10 @@ export const ProductsPage: React.FC = () => {
                 const featuredImg = p.images && p.images[0] ? p.images[0].src : null;
                 const galleryCount = p.images ? p.images.length : 0;
                 const formattedPrice = p.regular_price
-                  ? formatCurrency(parseFloat(p.regular_price))
+                  ? formatIDR(parseFloat(p.regular_price))
                   : p.price
-                  ? formatCurrency(parseFloat(p.price))
-                  : 'Rp0';
+                  ? formatIDR(parseFloat(p.price))
+                  : 'Rp 0';
 
                 return (
                   <div
@@ -952,10 +1036,20 @@ export const ProductsPage: React.FC = () => {
                             setSelectedProductForImages(p);
                             setIsImageModalOpen(true);
                           }}
-                          className="min-h-[36px] px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-amber-400 text-xs font-medium flex items-center gap-1.5 border border-zinc-800 transition cursor-pointer"
+                          className="min-h-[44px] px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-amber-400 text-xs font-medium flex items-center gap-1.5 border border-zinc-800 transition cursor-pointer"
                         >
                           <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
                           <span>Images</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenWpDuplicate(p)}
+                          className="min-h-[44px] px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-amber-400 text-xs font-medium flex items-center gap-1.5 border border-zinc-800 transition cursor-pointer"
+                          title="Duplicate product & configurator profile"
+                        >
+                          <Copy className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Duplicate</span>
                         </button>
 
                         {p.permalink && (
@@ -963,7 +1057,7 @@ export const ProductsPage: React.FC = () => {
                             href={p.permalink}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="min-h-[36px] px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs font-medium flex items-center gap-1 border border-zinc-800 transition cursor-pointer"
+                            className="min-h-[44px] px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs font-medium flex items-center gap-1 border border-zinc-800 transition cursor-pointer"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
                           </a>
@@ -1007,10 +1101,10 @@ export const ProductsPage: React.FC = () => {
                     {sortedWpProducts.map((p) => {
                       const featuredImg = p.images && p.images[0] ? p.images[0].src : null;
                       const formattedPrice = p.regular_price
-                        ? formatCurrency(parseFloat(p.regular_price))
+                        ? formatIDR(parseFloat(p.regular_price))
                         : p.price
-                        ? formatCurrency(parseFloat(p.price))
-                        : 'Rp0';
+                        ? formatIDR(parseFloat(p.price))
+                        : 'Rp 0';
 
                       return (
                         <tr key={p.id} className="hover:bg-zinc-900/40 transition">
@@ -1070,16 +1164,27 @@ export const ProductsPage: React.FC = () => {
                                   setSelectedProductForImages(p);
                                   setIsImageModalOpen(true);
                                 }}
-                                className="min-h-[36px] px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-amber-400 text-xs font-medium border border-zinc-800 transition cursor-pointer"
+                                className="min-h-[44px] px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-amber-400 text-xs font-medium border border-zinc-800 transition cursor-pointer"
                               >
                                 Images
                               </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleOpenWpDuplicate(p)}
+                                className="min-h-[44px] px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-amber-400 text-xs font-medium border border-zinc-800 transition cursor-pointer flex items-center gap-1.5"
+                                title="Duplicate product & configurator profile"
+                              >
+                                <Copy className="w-3.5 h-3.5 text-amber-400" />
+                                <span>Duplicate</span>
+                              </button>
+
                               {p.permalink && (
                                 <a
                                   href={p.permalink}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="min-h-[36px] p-2 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 border border-zinc-800 transition cursor-pointer"
+                                  className="min-h-[44px] p-2 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 border border-zinc-800 transition cursor-pointer flex items-center justify-center"
                                   title="View on store"
                                 >
                                   <ExternalLink className="w-3.5 h-3.5" />
@@ -1180,7 +1285,7 @@ export const ProductsPage: React.FC = () => {
               {sortedShopeeItems.map((item) => {
                 const img = item.image?.image_url_list?.[0];
                 const price = getShopeeItemPrice(item);
-                const formattedPrice = formatCurrency(price);
+                const formattedPrice = formatIDR(price);
                 const isUnlisted = item.item_status === 'UNLIST';
 
                 return (
@@ -1296,7 +1401,7 @@ export const ProductsPage: React.FC = () => {
                     {sortedShopeeItems.map((item) => {
                       const img = item.image?.image_url_list?.[0];
                       const price = getShopeeItemPrice(item);
-                      const formattedPrice = formatCurrency(price);
+                      const formattedPrice = formatIDR(price);
                       const isUnlisted = item.item_status === 'UNLIST';
 
                       return (
@@ -1448,7 +1553,7 @@ export const ProductsPage: React.FC = () => {
               {sortedTikTokItems.map((item) => {
                 const img = item.main_images?.[0];
                 const sku = item.skus?.[0];
-                const price = sku ? formatCurrency(parseFloat(sku.price || '0')) : 'Rp0';
+                const price = sku ? formatIDR(parseFloat(sku.price || '0')) : 'Rp 0';
                 const isActive = item.status === 'ACTIVATE';
 
                 return (
@@ -1556,7 +1661,7 @@ export const ProductsPage: React.FC = () => {
                     {sortedTikTokItems.map((item) => {
                       const img = item.main_images?.[0];
                       const sku = item.skus?.[0];
-                      const price = sku ? formatCurrency(parseFloat(sku.price || '0')) : 'Rp0';
+                      const price = sku ? formatIDR(parseFloat(sku.price || '0')) : 'Rp 0';
                       const isActive = item.status === 'ACTIVATE';
 
                       return (
@@ -1651,6 +1756,146 @@ export const ProductsPage: React.FC = () => {
           );
         }}
       />
+
+      {/* Webstore (WooCommerce) Product Duplicator Dialog */}
+      {duplicateWpModal &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            onClick={() => setDuplicateWpModal(null)}
+          >
+            <div
+              className="w-full max-w-lg rounded-2xl bg-zinc-950 border border-zinc-800 p-6 shadow-2xl space-y-5 cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                    <Copy className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold tracking-wide uppercase text-zinc-100">
+                      Duplicate Webstore Product
+                    </h3>
+                    <p className="text-xs text-zinc-400 mt-0.5 truncate max-w-xs">
+                      Source: {duplicateWpModal.name} (#{duplicateWpModal.productId})
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDuplicateWpModal(null)}
+                  className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer"
+                  title="Close dialog"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                    New Product Name
+                  </label>
+                  <input
+                    type="text"
+                    value={duplicateWpName}
+                    onChange={(e) => {
+                      setDuplicateWpName(e.target.value);
+                      setDuplicateWpSlug(
+                        e.target.value
+                          .toLowerCase()
+                          .replace(/[^a-z0-9]+/g, '-')
+                          .replace(/(^-|-$)/g, '')
+                      );
+                    }}
+                    autoFocus
+                    className="w-full px-3.5 py-2.5 text-xs font-sans rounded-xl bg-zinc-900 border border-zinc-700/80 text-white focus:outline-none focus:border-amber-400"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                      New Product Slug
+                    </label>
+                    <input
+                      type="text"
+                      value={duplicateWpSlug}
+                      onChange={(e) => setDuplicateWpSlug(e.target.value)}
+                      className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-900 border border-zinc-700/80 text-white focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                      Base Price (IDR)
+                    </label>
+                    <input
+                      type="number"
+                      step="5000"
+                      value={duplicateWpPrice}
+                      onChange={(e) => setDuplicateWpPrice(Number(e.target.value) || 0)}
+                      className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-900 border border-zinc-700/80 text-white focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                </div>
+
+                <label className="flex items-start gap-3 p-3 rounded-xl bg-zinc-900/60 border border-zinc-800 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={duplicateWpCopyConfig}
+                    onChange={(e) => setDuplicateWpCopyConfig(e.target.checked)}
+                    className="w-4 h-4 rounded text-amber-500 focus:ring-0 focus:outline-none accent-amber-500 mt-0.5 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-semibold text-zinc-200 block">
+                      Copy Full Configurator Setup
+                    </span>
+                    <span className="text-[11px] text-zinc-400 leading-snug block mt-0.5">
+                      Duplicates viewing angles, composable skin layers, finish restrictions, and texture image mappings.
+                    </span>
+                  </div>
+                </label>
+
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-2.5">
+                  <span className="text-[11px] font-sans text-amber-200 leading-relaxed">
+                    <strong className="text-amber-300 font-semibold">Status: Draft</strong>. The duplicated product is created in Draft status. Featured image, gallery, descriptions, menu order, categories, and tags are preserved.
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-zinc-800 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDuplicateWpModal(null)}
+                  className="min-h-[44px] px-4 py-2 text-xs font-sans rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteWpDuplicate}
+                  disabled={isDuplicatingWp || !duplicateWpName.trim()}
+                  className="min-h-[44px] px-5 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-amber-500 hover:bg-amber-400 text-black transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isDuplicatingWp ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Duplicating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Duplicate Product</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
 
       {/* Shopee Duplicator Modal */}
       <ShopeeProductDuplicatorModal
