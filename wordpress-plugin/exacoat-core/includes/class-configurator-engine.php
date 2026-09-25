@@ -3552,9 +3552,26 @@ class Exacoat_Configurator_Engine {
 		if ( is_admin() && ! defined( 'DOING_AJAX' ) ) return;
 		if ( did_action( 'woocommerce_before_calculate_totals' ) >= 2 ) return;
 
+		$active_currency = class_exists( 'Exacoat_Checkout_Engine' )
+			? Exacoat_Checkout_Engine::get_active_currency()
+			: ( function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'IDR' );
+
 		foreach ( $cart->get_cart() as $cart_item_key => $cart_item ) {
 			if ( isset( $cart_item['exacoat_custom_price'] ) && floatval( $cart_item['exacoat_custom_price'] ) > 0 ) {
-				$cart_item['data']->set_price( floatval( $cart_item['exacoat_custom_price'] ) );
+				$base_idr_price = floatval( $cart_item['exacoat_custom_price'] );
+				if ( ! empty( $active_currency ) && 'IDR' !== $active_currency ) {
+					$converted = apply_filters( 'wc_aelia_cs_convert', $base_idr_price, 'IDR', $active_currency );
+					if ( $converted > 0 && (float) $converted !== (float) $base_idr_price ) {
+						$final_price = round( (float) $converted, 2 );
+					} elseif ( class_exists( 'Exacoat_Store_Enhancements' ) ) {
+						$final_price = Exacoat_Store_Enhancements::calculate_price_for_currency( $base_idr_price, $active_currency );
+					} else {
+						$final_price = $base_idr_price;
+					}
+				} else {
+					$final_price = $base_idr_price;
+				}
+				$cart_item['data']->set_price( $final_price );
 			}
 		}
 	}

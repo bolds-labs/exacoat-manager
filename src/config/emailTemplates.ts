@@ -12,6 +12,73 @@ export interface EmailTemplateItem {
 
 export const EMAIL_TEMPLATES_CATALOG: { category: string; items: EmailTemplateItem[] }[] = [
   {
+    category: '🛒 Abandoned Cart Recovery',
+    items: [
+      {
+        key: 'customer_cart_abandoned_1',
+        name: 'Abandoned Cart (1-Hour Reminder)',
+        category: '🛒 Abandoned Cart Recovery',
+        badge: 'Cart Saved',
+        badgeVariant: 'amber',
+        subject: 'Something was left in your bag...',
+        trigger: 'Dispatched 1 hour after customer leaves checkout with unpurchased items.',
+        payload: '{ "event": "customer_cart_abandoned_1", "recipient_email": "customer@gmail.com", "customer_first_name": "Alex" }',
+        defaults: {
+          customer_first_name: 'Alex',
+          customer_email: 'alex@example.com',
+          cart_token: 'mock_cart_token_98234',
+          restore_url: 'https://exacoat.com/checkout/?restore_cart=mock_cart_token_98234',
+          unsubscribe_url: 'https://exacoat.com/cart/?unsubscribe_cart=mock_cart_token_98234',
+          items: [
+            {
+              name: 'iPhone 16 Pro Skins',
+              image_url: 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
+              quantity: 1,
+              price: 'Rp 149.000',
+              meta: 'Coverage: Model Cut\nTexture: Black Camo',
+            },
+          ],
+          item_count: 1,
+          subtotal: 'Rp 149.000',
+          total: 'Rp 149.000',
+          currency: 'IDR',
+          sequence: '1',
+        },
+      },
+      {
+        key: 'customer_cart_abandoned_2',
+        name: 'Abandoned Cart (24-Hour Urgency & Guarantee)',
+        category: '🛒 Abandoned Cart Recovery',
+        badge: 'Expiring Soon',
+        badgeVariant: 'rose',
+        subject: 'Before your cart clears...',
+        trigger: 'Dispatched 24 hours after abandonment if order is not completed. Features precision fit & 100% Free Installation Guarantee.',
+        payload: '{ "event": "customer_cart_abandoned_2", "recipient_email": "customer@gmail.com", "customer_first_name": "Alex" }',
+        defaults: {
+          customer_first_name: 'Alex',
+          customer_email: 'alex@example.com',
+          cart_token: 'mock_cart_token_98234',
+          restore_url: 'https://exacoat.com/checkout/?restore_cart=mock_cart_token_98234',
+          unsubscribe_url: 'https://exacoat.com/cart/?unsubscribe_cart=mock_cart_token_98234',
+          items: [
+            {
+              name: 'iPhone 16 Pro Skins',
+              image_url: 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
+              quantity: 1,
+              price: 'Rp 149.000',
+              meta: 'Coverage: Model Cut\nTexture: Black Camo',
+            },
+          ],
+          item_count: 1,
+          subtotal: 'Rp 149.000',
+          total: 'Rp 149.000',
+          currency: 'IDR',
+          sequence: '2',
+        },
+      },
+    ],
+  },
+  {
     category: '📦 Orders & Fulfillment',
     items: [
       {

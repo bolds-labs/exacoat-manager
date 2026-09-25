@@ -443,27 +443,27 @@ class Exacoat_Email_Engine {
 			'customer_cart_abandoned_1' => [
 				'category'       => 'Marketing / Cart Recovery',
 				'label'          => 'Abandoned Cart Reminder (1 Hour)',
-				'subject'        => 'We saved your Exacoat cart',
-				'preheader'      => 'Your selected skins and configurations are waiting for you.',
+				'subject'        => 'Something was left in your bag...',
+				'preheader'      => 'We saved your items and configuration before your cart clears.',
 				'badge'          => 'Cart Saved',
 				'icon'           => 'security',
-				'title'          => 'Did you leave something behind?',
-				'body_primary'   => 'We noticed you left items in your cart. Your custom device selections and configurations have been saved so you can pick up right where you left off.',
-				'body_secondary' => 'Your device configuration is reserved for a limited time.',
+				'title'          => 'Still on your mind?',
+				'body_primary'   => 'We noticed you left your items behind. We’ve kept your selections and device configuration saved so you can pick up right where you left off.',
+				'body_secondary' => 'Your items are reserved in your cart for a limited time.',
 				'cta_text'       => 'Return to Checkout',
 				'type'           => 'abandoned_cart',
 				'defaults'       => self::get_mock_abandoned_cart_defaults( '1' ),
 			],
 			'customer_cart_abandoned_2' => [
 				'category'       => 'Marketing / Cart Recovery',
-				'label'          => 'Abandoned Cart Follow-Up (24 Hours)',
-				'subject'        => 'Still thinking about your custom skin?',
-				'preheader'      => 'Precision-fit protection backed by our Free Installation Guarantee.',
-				'badge'          => 'Installation Guarantee',
+				'label'          => 'Abandoned Cart Urgency & Guarantee (24 Hours)',
+				'subject'        => 'Before your cart clears...',
+				'preheader'      => 'Your reserved order is expiring soon. Protected by our Free Installation Guarantee.',
+				'badge'          => 'Expiring Soon',
 				'icon'           => 'document_verified',
-				'title'          => 'Crafted for a flawless fit',
-				'body_primary'   => 'Your saved skins are still waiting. Every Exacoat skin is precision-cut to within 0.01mm using genuine cast vinyl materials designed for clean installation and residue-free removal.',
-				'body_secondary' => 'Every order includes our Free Installation Guarantee. If you make an error while applying your skin, our support team will send you a replacement piece.',
+				'title'          => 'Ready to protect your device?',
+				'body_primary'   => 'Your selected items are still reserved, but your cart will clear soon. Whether you are protecting your device with our precision fit skins, tempered screen guards, or cases, every item is crafted using premium materials designed for daily protection and clean, residue-free removal.',
+				'body_secondary' => 'Every order is covered by our Free Installation Guarantee. If you run into any trouble during application, our team will send you a replacement piece free of charge.',
 				'cta_text'       => 'Complete Your Order',
 				'type'           => 'abandoned_cart',
 				'defaults'       => self::get_mock_abandoned_cart_defaults( '2' ),
@@ -2345,7 +2345,7 @@ class Exacoat_Email_Engine {
 		$items_rows = '';
 		if ( is_array( $items ) && ! empty( $items ) ) {
 			foreach ( $items as $item ) {
-				$name      = esc_html( $item['name'] ?? 'Exacoat Skin' );
+				$name      = esc_html( $item['name'] ?? 'Exacoat Device Protection' );
 				$img       = esc_url( $item['image_url'] ?? 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg' );
 				$qty       = (int) ( $item['quantity'] ?? 1 );
 				$price     = esc_html( $item['price'] ?? $item['subtotal'] ?? '' );
@@ -2397,17 +2397,17 @@ class Exacoat_Email_Engine {
 						<table width="100%" cellpadding="0" cellspacing="0">
 							<tr>
 								<td style="padding-bottom:12px;" valign="top">
-									<p style="margin:0;font-size:13px;line-height:1.5;color:#3f3f46;"><strong style="color:#18181b;">0.01mm Precision Fit:</strong> Engineered with micro-tolerance cutouts to match your device body, buttons, and camera contours.</p>
+									<p style="margin:0;font-size:13px;line-height:1.5;color:#3f3f46;"><strong style="color:#18181b;">Precision Fit:</strong> Engineered to match your device contours, buttons, and cutouts flawlessly.</p>
 								</td>
 							</tr>
 							<tr>
 								<td style="padding-bottom:12px;" valign="top">
-									<p style="margin:0;font-size:13px;line-height:1.5;color:#3f3f46;"><strong style="color:#18181b;">Residue-Free Removal:</strong> Made exclusively from authentic cast vinyl. Peels off clean whenever you choose to remove it.</p>
+									<p style="margin:0;font-size:13px;line-height:1.5;color:#3f3f46;"><strong style="color:#18181b;">Premium Materials:</strong> Designed for daily protection with authentic materials that leave zero sticky residue upon removal.</p>
 								</td>
 							</tr>
 							<tr>
 								<td valign="top">
-									<p style="margin:0;font-size:13px;line-height:1.5;color:#3f3f46;"><strong style="color:#18181b;">Free Installation Guarantee:</strong> If you misalign or stretch a piece during application, reach out to our team and we will send a replacement.</p>
+									<p style="margin:0;font-size:13px;line-height:1.5;color:#3f3f46;"><strong style="color:#18181b;">Free Installation Guarantee:</strong> If you misalign or have trouble applying your protection, reach out and our team will send you a replacement piece.</p>
 								</td>
 							</tr>
 						</table>
