@@ -435,6 +435,7 @@ export const ProductsPage: React.FC = () => {
       name: product.name,
       slug: product.slug,
       price: isNaN(rawPrice) ? 0 : rawPrice,
+      categoryName: product.categories?.[0]?.name || 'Skins',
     });
     setDuplicateWpName(`${product.name} (Copy)`);
     const initialSlug = (product.slug || product.name || '')
@@ -444,6 +445,7 @@ export const ProductsPage: React.FC = () => {
     setDuplicateWpSlug(`${initialSlug}-copy`);
     setDuplicateWpPrice(isNaN(rawPrice) ? 0 : rawPrice);
     setDuplicateWpCopyConfig(true);
+    setDuplicateWpAutoSeo(true);
   };
 
   // Webstore: Execute Duplicate
@@ -457,13 +459,19 @@ export const ProductsPage: React.FC = () => {
         new_slug: duplicateWpSlug.trim(),
         new_price: duplicateWpPrice,
         copy_configurator: duplicateWpCopyConfig,
+        auto_generate_seo: duplicateWpAutoSeo,
+        category_name: duplicateWpModal.categoryName || 'Skins',
       });
 
       if (res.success && res.productId) {
         showToast(
           'success',
           'Product Duplicated',
-          `Created "${res.name || duplicateWpName}" with ID #${res.productId} in draft status.`
+          `Created "${res.name || duplicateWpName}" (#${res.productId}) in draft.${
+            res.seoGenerated
+              ? ' Auto-generated AI SEO & storefront copy.'
+              : ' Updated canonical SEO metadata.'
+          }`
         );
         setDuplicateWpModal(null);
         // Refresh catalog to display new draft product
@@ -803,7 +811,7 @@ export const ProductsPage: React.FC = () => {
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             {/* Channel Switcher Pills */}
-            <div className="p-1 rounded-2xl bg-neutral-900/80 border border-white/10 w-fit flex items-center gap-2">
+            <div className="p-1 rounded-xl bg-neutral-900/80 border border-white/10 w-fit flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => {
@@ -811,17 +819,17 @@ export const ProductsPage: React.FC = () => {
                   setStatusFilter('all');
                 }}
                 className={clsx(
-                  'min-h-[44px] px-3.5 sm:px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer',
+                  'h-8 px-3 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer',
                   activeChannel === 'wordpress'
-                    ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+                    ? 'bg-amber-500 text-neutral-950 font-bold shadow-xs'
                     : 'text-neutral-400 hover:text-white hover:bg-white/5'
                 )}
               >
-                <Globe className="w-4 h-4 shrink-0" />
+                <Globe className="w-3.5 h-3.5 shrink-0" />
                 <span>Exacoat Webstore</span>
                 <span
                   className={clsx(
-                    'px-2 py-0.5 rounded-full text-[10px] font-mono',
+                    'px-1.5 py-0.2 rounded-full text-[10px] font-mono',
                     activeChannel === 'wordpress'
                       ? 'bg-black/20 text-neutral-950 font-bold'
                       : 'bg-white/10 text-neutral-400'
@@ -838,17 +846,17 @@ export const ProductsPage: React.FC = () => {
                   setStatusFilter('all');
                 }}
                 className={clsx(
-                  'min-h-[44px] px-3.5 sm:px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer',
+                  'h-8 px-3 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer',
                   activeChannel === 'shopee'
-                    ? 'bg-orange-500 text-white font-bold shadow-sm'
+                    ? 'bg-orange-500 text-white font-bold shadow-xs'
                     : 'text-neutral-400 hover:text-white hover:bg-white/5'
                 )}
               >
-                <ShoppingBag className="w-4 h-4 shrink-0" />
+                <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
                 <span>Shopee Indonesia</span>
                 <span
                   className={clsx(
-                    'px-2 py-0.5 rounded-full text-[10px] font-mono',
+                    'px-1.5 py-0.2 rounded-full text-[10px] font-mono',
                     activeChannel === 'shopee'
                       ? 'bg-black/20 text-white font-bold'
                       : 'bg-white/10 text-neutral-400'
@@ -865,17 +873,17 @@ export const ProductsPage: React.FC = () => {
                   setStatusFilter('all');
                 }}
                 className={clsx(
-                  'min-h-[44px] px-3.5 sm:px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer',
+                  'h-8 px-3 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer',
                   activeChannel === 'tiktok'
-                    ? 'bg-rose-500 text-white font-bold shadow-sm'
+                    ? 'bg-rose-500 text-white font-bold shadow-xs'
                     : 'text-neutral-400 hover:text-white hover:bg-white/5'
                 )}
               >
-                <Video className="w-4 h-4 shrink-0" />
+                <Video className="w-3.5 h-3.5 shrink-0" />
                 <span>TikTok Shop</span>
                 <span
                   className={clsx(
-                    'px-2 py-0.5 rounded-full text-[10px] font-mono',
+                    'px-1.5 py-0.2 rounded-full text-[10px] font-mono',
                     activeChannel === 'tiktok'
                       ? 'bg-black/20 text-white font-bold'
                       : 'bg-white/10 text-neutral-400'
@@ -890,22 +898,22 @@ export const ProductsPage: React.FC = () => {
       />
 
       {/* Control Bar: Search, Status Filters & View Controls */}
-      <GlassCard className="p-3 sm:p-4 rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] space-y-3 overflow-visible relative z-20">
+      <GlassCard className="p-3 sm:p-3.5 rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] space-y-2.5 overflow-visible relative z-20">
         {/* Row 1: Status Filter Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 custom-scrollbar">
           {filterOptions.map((tab) => (
             <button
               key={tab.value}
               type="button"
               onClick={() => setStatusFilter(tab.value)}
               className={clsx(
-                'min-h-[44px] px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer border flex items-center gap-2',
+                'h-8 px-3 rounded-lg text-xs font-medium whitespace-nowrap transition-all cursor-pointer border flex items-center gap-2',
                 statusFilter === tab.value
-                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 border-zinc-900 dark:border-white shadow-xs'
+                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 border-zinc-900 dark:border-white font-semibold shadow-xs'
                   : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-transparent'
               )}
             >
-              <span className={clsx('w-2 h-2 rounded-full shrink-0', tab.dot)} />
+              <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', tab.dot)} />
               <span>{tab.label}</span>
             </button>
           ))}
@@ -915,13 +923,13 @@ export const ProductsPage: React.FC = () => {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-zinc-100 dark:border-white/5">
           {/* Search Input */}
           <div className="relative flex-1 sm:max-w-md">
-            <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder={`Search ${activeChannel === 'wordpress' ? 'WooCommerce' : activeChannel === 'shopee' ? 'Shopee' : 'TikTok'} products by name, ID, or SKU...`}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full min-h-[44px] pl-9 pr-8 py-2 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-xs text-zinc-900 dark:text-white placeholder-zinc-500 focus:outline-none focus:border-[#f3aa18]"
+              className="w-full h-9 pl-8.5 pr-8 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-xs text-zinc-900 dark:text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
             />
             {searchQuery && (
               <button
@@ -942,9 +950,9 @@ export const ProductsPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsSortDropdownOpen(!isSortDropdownOpen)}
-                className="min-h-[44px] px-3.5 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-[#141414] dark:hover:bg-white/[0.06] text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-white/[0.08] text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"
+                className="h-9 px-3 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-[#141414] dark:hover:bg-white/[0.06] text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-white/[0.08] text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer"
               >
-                <ArrowUpDown className="w-3.5 h-3.5 text-[#f3aa18]" />
+                <ArrowUpDown className="w-3.5 h-3.5 text-zinc-400" />
                 <span className="truncate max-w-[130px]">{activeSortLabel}</span>
                 <ChevronDown
                   className={clsx(
@@ -955,7 +963,7 @@ export const ProductsPage: React.FC = () => {
               </button>
 
               {isSortDropdownOpen && (
-                <div className="absolute right-0 mt-1.5 w-52 rounded-xl bg-white dark:bg-[#141414] border border-zinc-200 dark:border-white/10 shadow-xl py-1.5 z-50 text-xs">
+                <div className="absolute right-0 mt-1.5 w-48 rounded-xl bg-white dark:bg-[#161616] border border-zinc-200 dark:border-white/10 shadow-xl py-1 z-50 text-xs">
                   {SORT_OPTIONS.map((opt) => (
                     <button
                       key={opt.value}
@@ -965,10 +973,10 @@ export const ProductsPage: React.FC = () => {
                         setIsSortDropdownOpen(false);
                       }}
                       className={clsx(
-                        'min-h-[40px] w-full px-3.5 py-2 text-left flex items-center justify-between transition cursor-pointer',
+                        'w-full px-3 py-2 text-left flex items-center justify-between transition cursor-pointer',
                         sortOption === opt.value
-                          ? 'bg-amber-500/10 text-[#f3aa18] font-bold'
-                          : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5'
+                          ? 'bg-zinc-100 dark:bg-white/[0.06] text-zinc-900 dark:text-white font-semibold'
+                          : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/[0.04]'
                       )}
                     >
                       <span>{opt.label}</span>
@@ -980,32 +988,32 @@ export const ProductsPage: React.FC = () => {
             </div>
 
             {/* View Mode Toggle: Grid vs Table */}
-            <div className="p-1 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] flex items-center gap-1">
+            <div className="p-0.5 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] flex items-center gap-0.5 h-9">
               <button
                 type="button"
                 onClick={() => handleToggleViewMode('grid')}
                 className={clsx(
-                  'min-h-[36px] min-w-[36px] p-1.5 rounded-lg transition cursor-pointer flex items-center justify-center',
+                  'h-7 w-7 rounded-lg transition cursor-pointer flex items-center justify-center',
                   viewMode === 'grid'
-                    ? 'bg-white dark:bg-white/10 text-[#f3aa18] shadow-xs'
+                    ? 'bg-white dark:bg-white/10 text-zinc-900 dark:text-white shadow-xs'
                     : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white'
                 )}
                 title="Grid view"
               >
-                <LayoutGrid className="w-4 h-4" />
+                <LayoutGrid className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
                 onClick={() => handleToggleViewMode('table')}
                 className={clsx(
-                  'min-h-[36px] min-w-[36px] p-1.5 rounded-lg transition cursor-pointer flex items-center justify-center',
+                  'h-7 w-7 rounded-lg transition cursor-pointer flex items-center justify-center',
                   viewMode === 'table'
-                    ? 'bg-white dark:bg-white/10 text-[#f3aa18] shadow-xs'
+                    ? 'bg-white dark:bg-white/10 text-zinc-900 dark:text-white shadow-xs'
                     : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white'
                 )}
                 title="Table view"
               >
-                <List className="w-4 h-4" />
+                <List className="w-3.5 h-3.5" />
               </button>
             </div>
 
@@ -1014,13 +1022,13 @@ export const ProductsPage: React.FC = () => {
               type="button"
               onClick={handleRefreshCurrent}
               disabled={isCurrentlyLoading}
-              className="min-h-[44px] px-3.5 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-[#141414] dark:hover:bg-white/[0.06] text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-white/[0.08] text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
+              className="h-9 px-3 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-[#141414] dark:hover:bg-white/[0.06] text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-white/[0.08] text-xs font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
               title="Refresh catalog"
             >
               <RefreshCw
                 className={clsx(
-                  'w-3.5 h-3.5 text-[#f3aa18]',
-                  isCurrentlyLoading && 'animate-spin'
+                  'w-3.5 h-3.5 text-zinc-400',
+                  isCurrentlyLoading && 'animate-spin text-[#f3aa18]'
                 )}
               />
               <span className="hidden sm:inline">Refresh</span>
@@ -1031,7 +1039,7 @@ export const ProductsPage: React.FC = () => {
 
       {/* Active Search Filter Banner */}
       {debouncedSearch && (
-        <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300">
+        <div className="flex items-center justify-between px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300">
           <div className="flex items-center gap-2">
             <Search className="w-3.5 h-3.5 text-amber-400" />
             <span>
@@ -1084,20 +1092,20 @@ export const ProductsPage: React.FC = () => {
           ) : (
             <>
               {/* Webstore SEO Optimization Action Bar */}
-              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-[#121212] border border-zinc-200 dark:border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-amber-400/10 text-[#f3aa18]">
-                    <Wand2 className="w-4 h-4" />
+                  <div className="w-8 h-8 rounded-lg bg-zinc-200/70 dark:bg-zinc-800/80 border border-zinc-300/50 dark:border-white/[0.08] flex items-center justify-center text-zinc-600 dark:text-zinc-300 shrink-0">
+                    <Globe className="w-4 h-4" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                      <span>Webstore SEO & Copy Optimization</span>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 font-normal">
+                    <h4 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                      <span>Webstore SEO &amp; Copy Optimization</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-zinc-200/80 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-normal">
                         {wpTotal} Products
                       </span>
                     </h4>
-                    <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
-                      Normalize device titles, resolve boilerplate placeholders, strip HTML tags, or batch AI rewrite across your catalog.
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                      Normalize device titles, resolve boilerplate placeholders, strip HTML tags, or batch rewrite across your catalog.
                     </p>
                   </div>
                 </div>
@@ -1105,319 +1113,284 @@ export const ProductsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsBatchSeoModalOpen(true)}
-                  className="min-h-[44px] px-4 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold transition shadow-xs cursor-pointer flex items-center justify-center gap-2 shrink-0"
+                  className="h-8 px-3.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-white border border-zinc-700/60 text-xs font-medium transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
                 >
-                  <Sparkles className="w-4 h-4" />
+                  <Wand2 className="w-3.5 h-3.5 text-[#f3aa18]" />
                   <span>Batch SEO Optimizer</span>
                 </button>
               </div>
 
               {viewMode === 'grid' ? (
                 /* GRID VIEW */
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {sortedWpProducts.map((p) => {
-                const featuredImg = p.images && p.images[0] ? p.images[0].src : null;
-                const galleryCount = p.images ? p.images.length : 0;
-                const formattedPrice = p.regular_price
-                  ? formatIDR(parseFloat(p.regular_price))
-                  : p.price
-                  ? formatIDR(parseFloat(p.price))
-                  : 'Rp 0';
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {sortedWpProducts.map((p) => {
+                    const featuredImg = p.images && p.images[0] ? p.images[0].src : null;
+                    const galleryCount = p.images ? p.images.length : 0;
+                    const formattedPrice = p.regular_price
+                      ? formatIDR(parseFloat(p.regular_price))
+                      : p.price
+                      ? formatIDR(parseFloat(p.price))
+                      : 'Rp 0';
 
-                return (
-                  <GlassCard
-                    key={p.id}
-                    hoverEffect={true}
-                    className="p-4 rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] flex flex-col justify-between space-y-3.5 group transition-all"
-                  >
-                    <div className="space-y-3">
-                      <div className="flex items-start gap-3">
-                        <div className="w-16 h-16 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] overflow-hidden shrink-0 flex items-center justify-center relative group/img">
-                          {featuredImg ? (
-                            <img src={featuredImg} alt={p.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <ImageIcon className="w-6 h-6 text-zinc-400" />
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedProductForImages(p);
-                              setIsImageModalOpen(true);
-                            }}
-                            className="absolute inset-0 bg-black/70 opacity-0 group-hover/img:opacity-100 flex items-center justify-center transition text-[#f3aa18] cursor-pointer"
-                            title="Edit Images"
-                          >
-                            <ImageIcon className="w-5 h-5" />
-                          </button>
-                        </div>
-
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="text-[10px] font-mono text-zinc-400">#{p.id}</span>
-                            <select
-                              value={p.status}
-                              onChange={(e) => handleToggleWpStatus(p, e.target.value)}
-                              className={clsx(
-                                'text-[10px] font-semibold px-2 py-0.5 rounded-md border focus:outline-none cursor-pointer font-mono',
-                                p.status === 'publish'
-                                  ? 'bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border-emerald-500/20'
-                                  : p.status === 'draft'
-                                  ? 'bg-amber-500/10 text-amber-500 dark:text-amber-400 border-amber-500/20'
-                                  : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-white/[0.08]'
-                              )}
-                            >
-                              <option value="publish" className="bg-white dark:bg-[#141414] text-zinc-900 dark:text-zinc-100">
-                                Published
-                              </option>
-                              <option value="draft" className="bg-white dark:bg-[#141414] text-zinc-900 dark:text-zinc-100">
-                                Draft
-                              </option>
-                              <option value="private" className="bg-white dark:bg-[#141414] text-zinc-900 dark:text-zinc-100">
-                                Private
-                              </option>
-                            </select>
-                          </div>
-
-                          <h3 className="text-xs font-bold text-zinc-900 dark:text-white line-clamp-2 leading-snug group-hover:text-[#f3aa18] transition-colors">
-                            {p.name}
-                          </h3>
-
-                          <div className="text-xs font-mono font-bold text-[#f3aa18] tabular-nums">
-                            {formattedPrice}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
-                        <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-white/[0.04] border border-zinc-200 dark:border-white/[0.06] font-mono">
-                          {galleryCount} image(s)
-                        </span>
-                        {p.categories && p.categories[0] && (
-                          <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-white/[0.04] border border-zinc-200 dark:border-white/[0.06] truncate max-w-[140px]">
-                            {p.categories[0].name}
-                          </span>
-                        )}
-                        {p.is_configurable && (
-                          <span className="px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/20 font-semibold">
-                            Configurable
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="pt-3 border-t border-zinc-100 dark:border-white/5 flex items-center justify-between gap-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedProductForImages(p);
-                            setIsImageModalOpen(true);
-                          }}
-                          className="min-h-[44px] px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-800 dark:text-neutral-200 border border-zinc-300 dark:border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                        >
-                          <ImageIcon className="w-3.5 h-3.5 text-[#f3aa18]" />
-                          <span>Images</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedProductForSeo(p);
-                            setIsSeoModalOpen(true);
-                          }}
-                          className="min-h-[44px] px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-800 dark:text-neutral-200 border border-zinc-300 dark:border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                          title="Manage SEO metadata & short description with AI"
-                        >
-                          <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                          <span>SEO & Copy</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleOpenWpDuplicate(p)}
-                          className="min-h-[44px] px-3.5 py-1.5 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-                          title="Duplicate product & configurator profile"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Duplicate</span>
-                        </button>
-
-                        {p.permalink && (
-                          <a
-                            href={p.permalink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="min-h-[44px] min-w-[44px] p-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-600 hover:text-zinc-900 dark:text-neutral-400 dark:hover:text-white border border-zinc-300 dark:border-white/10 flex items-center justify-center transition-colors cursor-pointer"
-                            title="View product on live store"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
-                        )}
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setProductToDelete({
-                            id: p.id,
-                            name: p.name,
-                            channel: 'wordpress',
-                          })
-                        }
-                        className="min-h-[44px] min-w-[44px] p-2 rounded-xl text-zinc-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer flex items-center justify-center"
-                        title="Move to trash"
+                    return (
+                      <GlassCard
+                        key={p.id}
+                        hoverEffect={true}
+                        className="p-4 rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] flex flex-col justify-between space-y-3.5 group transition-all overflow-visible"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </GlassCard>
-                );
-              })}
-            </div>
-          ) : (
-            /* TABLE VIEW */
-            <GlassCard className="rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] overflow-hidden shadow-xs">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="border-b border-zinc-200 dark:border-white/[0.06] bg-zinc-50 dark:bg-[#0d0d0d]/80 text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider text-[10px]">
-                    <tr>
-                      <th className="py-3 px-4">Product</th>
-                      <th className="py-3 px-4">ID / SKU</th>
-                      <th className="py-3 px-4">Price</th>
-                      <th className="py-3 px-4">Status</th>
-                      <th className="py-3 px-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-100 dark:divide-white/[0.04]">
-                    {sortedWpProducts.map((p) => {
-                      const featuredImg = p.images && p.images[0] ? p.images[0].src : null;
-                      const formattedPrice = p.regular_price
-                        ? formatIDR(parseFloat(p.regular_price))
-                        : p.price
-                        ? formatIDR(parseFloat(p.price))
-                        : 'Rp 0';
-
-                      return (
-                        <tr key={p.id} className="hover:bg-zinc-50/80 dark:hover:bg-white/[0.02] transition-colors">
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-lg bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] overflow-hidden shrink-0 flex items-center justify-center">
-                                {featuredImg ? (
-                                  <img src={featuredImg} alt="" className="w-full h-full object-cover" />
-                                ) : (
-                                  <ImageIcon className="w-4 h-4 text-zinc-400" />
-                                )}
-                              </div>
-                              <div className="min-w-0">
-                                <div className="font-semibold text-zinc-900 dark:text-white line-clamp-1">{p.name}</div>
-                                <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                                  {p.categories?.[0]?.name || 'Uncategorized'} | {p.images?.length || 0} image(s)
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 font-mono text-zinc-500 dark:text-zinc-400">
-                            #{p.id}
-                            {p.sku && <div className="text-[10px] text-zinc-400 dark:text-zinc-500">{p.sku}</div>}
-                          </td>
-                          <td className="py-3 px-4 font-mono font-bold text-[#f3aa18]">
-                            {formattedPrice}
-                          </td>
-                          <td className="py-3 px-4">
-                            <select
-                              value={p.status}
-                              onChange={(e) => handleToggleWpStatus(p, e.target.value)}
-                              className={clsx(
-                                'text-[10px] font-semibold px-2.5 py-1 rounded-md border focus:outline-none cursor-pointer font-mono',
-                                p.status === 'publish'
-                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                                  : p.status === 'draft'
-                                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
-                                  : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-white/[0.08]'
+                        <div className="space-y-3">
+                          <div className="flex items-start gap-3">
+                            <div className="w-14 h-14 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] overflow-hidden shrink-0 flex items-center justify-center relative group/img">
+                              {featuredImg ? (
+                                <img src={featuredImg} alt={p.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <ImageIcon className="w-5 h-5 text-zinc-400" />
                               )}
-                            >
-                              <option value="publish" className="bg-white dark:bg-[#141414] text-zinc-900 dark:text-zinc-100">
-                                Published
-                              </option>
-                              <option value="draft" className="bg-white dark:bg-[#141414] text-zinc-900 dark:text-zinc-100">
-                                Draft
-                              </option>
-                              <option value="private" className="bg-white dark:bg-[#141414] text-zinc-900 dark:text-zinc-100">
-                                Private
-                              </option>
-                            </select>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
                               <button
                                 type="button"
                                 onClick={() => {
                                   setSelectedProductForImages(p);
                                   setIsImageModalOpen(true);
                                 }}
-                                className="min-h-[44px] px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-700 dark:text-zinc-200 text-xs font-semibold border border-zinc-200 dark:border-white/10 transition-colors cursor-pointer"
+                                className="absolute inset-0 bg-black/70 opacity-0 group-hover/img:opacity-100 flex items-center justify-center transition text-[#f3aa18] cursor-pointer"
+                                title="Edit Images"
                               >
-                                Images
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedProductForSeo(p);
-                                  setIsSeoModalOpen(true);
-                                }}
-                                className="min-h-[44px] px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-700 dark:text-zinc-200 text-xs font-semibold border border-zinc-200 dark:border-white/10 transition-colors cursor-pointer flex items-center gap-1.5"
-                                title="Manage SEO metadata & short description with AI"
-                              >
-                                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                                <span>SEO & Copy</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => handleOpenWpDuplicate(p)}
-                                className="min-h-[44px] px-3 py-1.5 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
-                                title="Duplicate product & configurator profile"
-                              >
-                                <Copy className="w-3.5 h-3.5" />
-                                <span>Duplicate</span>
-                              </button>
-
-                              {p.permalink && (
-                                <a
-                                  href={p.permalink}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="min-h-[44px] min-w-[44px] p-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-600 hover:text-zinc-900 dark:text-neutral-400 dark:hover:text-white border border-zinc-200 dark:border-white/10 transition-colors cursor-pointer flex items-center justify-center"
-                                  title="View on store"
-                                >
-                                  <ExternalLink className="w-3.5 h-3.5" />
-                                </a>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setProductToDelete({
-                                    id: p.id,
-                                    name: p.name,
-                                    channel: 'wordpress',
-                                  })
-                                }
-                                className="min-h-[44px] min-w-[44px] p-2 rounded-xl text-zinc-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer flex items-center justify-center"
-                                title="Move to trash"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <ImageIcon className="w-4 h-4" />
                               </button>
                             </div>
-                          </td>
+
+                            <div className="flex-1 min-w-0 space-y-1">
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-[10px] font-mono text-zinc-400">#{p.id}</span>
+                                <WpStatusDropdown
+                                  status={p.status}
+                                  onChange={(newStatus) => handleToggleWpStatus(p, newStatus)}
+                                />
+                              </div>
+
+                              <h3 className="text-xs font-semibold text-zinc-900 dark:text-white line-clamp-1 leading-snug group-hover:text-[#f3aa18] transition-colors">
+                                {p.name}
+                              </h3>
+
+                              <div className="text-xs font-mono font-semibold text-[#f3aa18] tabular-nums">
+                                {formattedPrice}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                            <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-white/[0.04] border border-zinc-200 dark:border-white/[0.06] font-mono">
+                              {galleryCount} image(s)
+                            </span>
+                            {p.categories && p.categories[0] && (
+                              <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-white/[0.04] border border-zinc-200 dark:border-white/[0.06] truncate max-w-[140px]">
+                                {p.categories[0].name}
+                              </span>
+                            )}
+                            {p.is_configurable && (
+                              <span className="px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/20 font-medium">
+                                Configurable
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="pt-2.5 border-t border-zinc-100 dark:border-white/5 flex items-center justify-between gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedProductForImages(p);
+                                setIsImageModalOpen(true);
+                              }}
+                              className="h-8 px-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 text-zinc-700 dark:text-zinc-200 border border-zinc-200/80 dark:border-white/[0.08] text-[11px] font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                            >
+                              <ImageIcon className="w-3.5 h-3.5 text-zinc-400" />
+                              <span>Images</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedProductForSeo(p);
+                                setIsSeoModalOpen(true);
+                              }}
+                              className="h-8 px-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 text-zinc-700 dark:text-zinc-200 border border-zinc-200/80 dark:border-white/[0.08] text-[11px] font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                              title="Manage SEO metadata & short description"
+                            >
+                              <Globe className="w-3.5 h-3.5 text-zinc-400" />
+                              <span>SEO</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleOpenWpDuplicate(p)}
+                              className="h-8 px-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 text-zinc-700 dark:text-zinc-200 border border-zinc-200/80 dark:border-white/[0.08] text-[11px] font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                              title="Duplicate product & configurator profile"
+                            >
+                              <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                              <span>Duplicate</span>
+                            </button>
+
+                            {p.permalink && (
+                              <a
+                                href={p.permalink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="h-8 w-8 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white border border-zinc-200/80 dark:border-white/[0.08] flex items-center justify-center transition-colors cursor-pointer"
+                                title="View product on live store"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setProductToDelete({
+                                id: p.id,
+                                name: p.name,
+                                channel: 'wordpress',
+                              })
+                            }
+                            className="h-8 w-8 rounded-lg text-zinc-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer flex items-center justify-center"
+                            title="Move to trash"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </GlassCard>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* TABLE VIEW */
+                <GlassCard className="rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] overflow-visible shadow-xs">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="border-b border-zinc-200 dark:border-white/[0.06] bg-zinc-50 dark:bg-[#0d0d0d]/80 text-zinc-500 dark:text-zinc-400 font-semibold uppercase tracking-wider text-[10px]">
+                        <tr>
+                          <th className="py-2.5 px-4">Product</th>
+                          <th className="py-2.5 px-4">ID / SKU</th>
+                          <th className="py-2.5 px-4">Price</th>
+                          <th className="py-2.5 px-4">Status</th>
+                          <th className="py-2.5 px-4 text-right">Actions</th>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </GlassCard>
-          )}
+                      </thead>
+                      <tbody className="divide-y divide-zinc-100 dark:divide-white/[0.04]">
+                        {sortedWpProducts.map((p) => {
+                          const featuredImg = p.images && p.images[0] ? p.images[0].src : null;
+                          const formattedPrice = p.regular_price
+                            ? formatIDR(parseFloat(p.regular_price))
+                            : p.price
+                            ? formatIDR(parseFloat(p.price))
+                            : 'Rp 0';
+
+                          return (
+                            <tr key={p.id} className="hover:bg-zinc-50/80 dark:hover:bg-white/[0.02] transition-colors">
+                              <td className="py-2.5 px-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-9 h-9 rounded-lg bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] overflow-hidden shrink-0 flex items-center justify-center">
+                                    {featuredImg ? (
+                                      <img src={featuredImg} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                      <ImageIcon className="w-4 h-4 text-zinc-400" />
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="font-semibold text-zinc-900 dark:text-white line-clamp-1">{p.name}</div>
+                                    <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                                      {p.categories?.[0]?.name || 'Uncategorized'} | {p.images?.length || 0} image(s)
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-4 font-mono text-zinc-500 dark:text-zinc-400">
+                                #{p.id}
+                                {p.sku && <div className="text-[10px] text-zinc-400 dark:text-zinc-500">{p.sku}</div>}
+                              </td>
+                              <td className="py-2.5 px-4 font-mono font-semibold text-[#f3aa18]">
+                                {formattedPrice}
+                              </td>
+                              <td className="py-2.5 px-4">
+                                <WpStatusDropdown
+                                  status={p.status}
+                                  onChange={(newStatus) => handleToggleWpStatus(p, newStatus)}
+                                />
+                              </td>
+                              <td className="py-2.5 px-4 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedProductForImages(p);
+                                      setIsImageModalOpen(true);
+                                    }}
+                                    className="h-8 px-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 text-zinc-700 dark:text-zinc-200 text-[11px] font-medium border border-zinc-200/80 dark:border-white/[0.08] transition-colors cursor-pointer flex items-center gap-1.5"
+                                  >
+                                    <ImageIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                    <span>Images</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedProductForSeo(p);
+                                      setIsSeoModalOpen(true);
+                                    }}
+                                    className="h-8 px-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 text-zinc-700 dark:text-zinc-200 text-[11px] font-medium border border-zinc-200/80 dark:border-white/[0.08] transition-colors cursor-pointer flex items-center gap-1.5"
+                                    title="Manage SEO metadata & short description"
+                                  >
+                                    <Globe className="w-3.5 h-3.5 text-zinc-400" />
+                                    <span>SEO</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenWpDuplicate(p)}
+                                    className="h-8 px-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 text-zinc-700 dark:text-zinc-200 text-[11px] font-medium border border-zinc-200/80 dark:border-white/[0.08] transition-colors cursor-pointer flex items-center gap-1.5"
+                                    title="Duplicate product & configurator profile"
+                                  >
+                                    <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                                    <span>Duplicate</span>
+                                  </button>
+
+                                  {p.permalink && (
+                                    <a
+                                      href={p.permalink}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="h-8 w-8 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white border border-zinc-200/80 dark:border-white/[0.08] transition-colors cursor-pointer flex items-center justify-center"
+                                      title="View on store"
+                                    >
+                                      <ExternalLink className="w-3.5 h-3.5" />
+                                    </a>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setProductToDelete({
+                                        id: p.id,
+                                        name: p.name,
+                                        channel: 'wordpress',
+                                      })
+                                    }
+                                    className="h-8 w-8 rounded-lg text-zinc-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer flex items-center justify-center"
+                                    title="Move to trash"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </GlassCard>
+              )}
 
           {/* WordPress Pagination */}
           {wpMaxPages > 1 && (
@@ -2009,7 +1982,7 @@ export const ProductsPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setDuplicateWpModal(null)}
-              className="min-h-[44px] px-4 py-2 text-xs font-semibold rounded-xl text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/[0.06] transition-colors cursor-pointer"
+              className="h-9 px-4 text-xs font-medium rounded-xl text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/[0.06] transition-colors cursor-pointer"
             >
               Cancel
             </button>
@@ -2017,12 +1990,12 @@ export const ProductsPage: React.FC = () => {
               type="button"
               onClick={handleExecuteWpDuplicate}
               disabled={isDuplicatingWp || !duplicateWpName.trim()}
-              className="min-h-[44px] px-5 py-2 text-xs font-bold uppercase tracking-wider rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-2 shadow-xs"
+              className="h-9 px-4 text-xs font-semibold rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-2 shadow-xs"
             >
               {isDuplicatingWp ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Duplicating...</span>
+                  <span>{duplicateWpAutoSeo ? 'Duplicating & Generating SEO...' : 'Duplicating...'}</span>
                 </>
               ) : (
                 <>
@@ -2052,7 +2025,7 @@ export const ProductsPage: React.FC = () => {
                 );
               }}
               autoFocus
-              className="w-full min-h-[44px] px-3.5 py-2.5 text-xs rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-zinc-900 dark:text-white focus:outline-none focus:border-[#f3aa18]"
+              className="w-full h-9 px-3.5 text-xs rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-zinc-900 dark:text-white focus:outline-none focus:border-[#f3aa18]"
             />
           </div>
 
@@ -2065,7 +2038,7 @@ export const ProductsPage: React.FC = () => {
                 type="text"
                 value={duplicateWpSlug}
                 onChange={(e) => setDuplicateWpSlug(e.target.value)}
-                className="w-full min-h-[44px] px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-zinc-900 dark:text-white focus:outline-none focus:border-[#f3aa18]"
+                className="w-full h-9 px-3.5 text-xs font-mono rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-zinc-900 dark:text-white focus:outline-none focus:border-[#f3aa18]"
               />
             </div>
 
@@ -2078,31 +2051,50 @@ export const ProductsPage: React.FC = () => {
                 step="5000"
                 value={duplicateWpPrice}
                 onChange={(e) => setDuplicateWpPrice(Number(e.target.value) || 0)}
-                className="w-full min-h-[44px] px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-zinc-900 dark:text-white focus:outline-none focus:border-[#f3aa18]"
+                className="w-full h-9 px-3.5 text-xs font-mono rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-zinc-900 dark:text-white focus:outline-none focus:border-[#f3aa18]"
               />
             </div>
           </div>
 
-          <label className="flex items-start gap-3 p-3.5 rounded-xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200 dark:border-white/[0.06] cursor-pointer">
-            <input
-              type="checkbox"
-              checked={duplicateWpCopyConfig}
-              onChange={(e) => setDuplicateWpCopyConfig(e.target.checked)}
-              className="w-4 h-4 rounded text-amber-500 focus:ring-0 focus:outline-none accent-amber-500 mt-0.5 cursor-pointer"
-            />
-            <div>
-              <span className="text-xs font-semibold text-zinc-900 dark:text-white block">
-                Copy Full Configurator Setup
-              </span>
-              <span className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-snug block mt-0.5">
-                Duplicates viewing angles, composable skin layers, finish restrictions, and texture image mappings.
-              </span>
-            </div>
-          </label>
+          <div className="space-y-2">
+            <label className="flex items-start gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200 dark:border-white/[0.06] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={duplicateWpCopyConfig}
+                onChange={(e) => setDuplicateWpCopyConfig(e.target.checked)}
+                className="w-4 h-4 rounded text-amber-500 focus:ring-0 focus:outline-none accent-amber-500 mt-0.5 cursor-pointer"
+              />
+              <div>
+                <span className="text-xs font-semibold text-zinc-900 dark:text-white block">
+                  Copy Full Configurator Setup
+                </span>
+                <span className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-snug block mt-0.5">
+                  Duplicates viewing angles, composable skin layers, finish restrictions, and texture image mappings.
+                </span>
+              </div>
+            </label>
 
-          <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-2.5">
+            <label className="flex items-start gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200 dark:border-white/[0.06] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={duplicateWpAutoSeo}
+                onChange={(e) => setDuplicateWpAutoSeo(e.target.checked)}
+                className="w-4 h-4 rounded text-amber-500 focus:ring-0 focus:outline-none accent-amber-500 mt-0.5 cursor-pointer"
+              />
+              <div>
+                <span className="text-xs font-semibold text-zinc-900 dark:text-white block">
+                  Auto-Generate AI SEO &amp; Storefront Copy
+                </span>
+                <span className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-snug block mt-0.5">
+                  Automatically writes a fresh SEO title, Google search snippet, focus keyword, and witty device-specific short description for the new device.
+                </span>
+              </div>
+            </label>
+          </div>
+
+          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-2.5">
             <span className="text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">
-              <strong className="text-[#f3aa18] font-semibold">Status: Draft</strong>. The duplicated product is created in Draft status. Featured image, gallery, descriptions, menu order, categories, and tags are preserved.
+              <strong className="text-[#f3aa18] font-semibold">Status: Draft</strong>. The duplicated product is created in Draft status. Featured image, gallery, menu order, categories, and tags are preserved.
             </span>
           </div>
         </div>
