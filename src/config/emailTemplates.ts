@@ -47,12 +47,12 @@ export const EMAIL_TEMPLATES_CATALOG: { category: string; items: EmailTemplateIt
       },
       {
         key: 'customer_cart_abandoned_2',
-        name: 'Abandoned Cart (24-Hour Urgency & Guarantee)',
+        name: 'Abandoned Cart (24-Hour Final Reminder)',
         category: '🛒 Abandoned Cart Recovery',
         badge: 'Expiring Soon',
         badgeVariant: 'rose',
         subject: 'Before your cart clears...',
-        trigger: 'Dispatched 24 hours after abandonment if order is not completed. Features precision fit & 100% Free Installation Guarantee.',
+        trigger: 'Dispatched 24 hours after abandonment before the cart reservation expires.',
         payload: '{ "event": "customer_cart_abandoned_2", "recipient_email": "customer@gmail.com", "customer_first_name": "Alex" }',
         defaults: {
           customer_first_name: 'Alex',

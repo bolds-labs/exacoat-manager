@@ -20,6 +20,8 @@ export function renderEmailHtmlLocally(event: string, customData: Record<string,
     return renderReviewRewardEmail(customData);
   } else if (event === 'customer_cashback_earned' || event === 'customer_store_credit_reminder' || event === 'customer_store_credit_pre_expiry') {
     return renderStoreCreditEmail(event, customData);
+  } else if (event.startsWith('customer_cart_abandoned_')) {
+    return renderAbandonedCartEmail(event, customData);
   } else if (event.startsWith('customer_order_')) {
     return renderCustomerOrderEmail(event, customData);
   } else {
@@ -947,6 +949,225 @@ function renderStoreCreditEmail(event: string, data: Record<string, any>): Rende
                         Have questions about your order or store credit? Reach our team at <a href="mailto:support@exacoat.com" style="color:#111111;text-decoration:underline;font-weight:500;">support@exacoat.com</a>
                       </p>
                       <p style="margin:0;font-size:11px;color:#a1a1aa;letter-spacing:0.2px;">&copy; Exacoat</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return { subject, html, isLightMode: true };
+}
+
+function renderAbandonedCartEmail(event: string, data: Record<string, any>): RenderedEmail {
+  const isSecondEmail = event === 'customer_cart_abandoned_2' || String(data.sequence) === '2';
+  const custName = escapeHtml(data.customer_first_name || data.display_name || 'there');
+  const restoreUrl = escapeHtml(data.restore_url || 'https://exacoat.com/checkout/?restore_cart=mock_cart_token_98234');
+  const unsubscribeUrl = escapeHtml(data.unsubscribe_url || 'https://exacoat.com/cart/?unsubscribe_cart=mock_cart_token_98234');
+
+  const badgeText = escapeHtml(
+    data.badge_text || (isSecondEmail ? 'Expiring Soon' : 'Cart Saved')
+  );
+  const badgeStyle = isSecondEmail
+    ? 'background:#fff1f2;color:#e11d48;border:1px solid #ffe4e6;'
+    : 'background:#fff8eb;color:#d97706;border:1px solid #fef3c7;';
+
+  const subject = escapeHtml(
+    data.subject || (isSecondEmail ? 'Before your cart clears...' : 'Something was left in your bag...')
+  );
+  const title = escapeHtml(
+    data.title || (isSecondEmail ? 'Ready to complete your order?' : 'Still on your mind?')
+  );
+  const bodyPrimary = escapeHtml(
+    data.body_primary ||
+      (isSecondEmail
+        ? 'Your selected items are still reserved, but your cart will clear soon. If you are still deciding, your setup is ready to go whenever you are.'
+        : 'We noticed you left your items behind. We kept your selections and device configuration saved so you can pick up right where you left off.')
+  );
+  const bodySecondary = escapeHtml(
+    data.body_secondary ||
+      (isSecondEmail
+        ? 'Once the timer expires, reserved items return to public inventory.'
+        : 'Your items are reserved in your bag for a limited time.')
+  );
+  const ctaText = escapeHtml(
+    data.cta_text || (isSecondEmail ? 'Complete Your Order' : 'Return to Bag')
+  );
+
+  const rawItems = Array.isArray(data.items) && data.items.length > 0 ? data.items : [
+    {
+      name: 'iPhone 16 Pro Skins',
+      image_url: 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
+      quantity: 1,
+      price: 'Rp 149.000',
+      meta: 'Coverage: Model Cut\nTexture: Black Camo',
+    },
+  ];
+
+  const itemsRows = rawItems.map((item: any) => {
+    const rawName = item.name || item.title || 'Device Protection';
+    const cleanName = escapeHtml(rawName.replace(/\s*-\s*(Custom\s+)?(Skin|Wrap|Decal|Cover|Screen\s*Guard).*$/i, '').trim() || rawName);
+
+    const specs: string[] = [];
+    if (item.meta) {
+      const metaStr = String(item.meta);
+      const parts = metaStr.split(/\s*(?:&bull;|•|<br\s*\/?>|\r?\n|\|)\s*/i).filter(Boolean);
+      parts.forEach((p) => {
+        const clean = p.replace(/&bull;|•/g, '').trim();
+        if (clean && !clean.toLowerCase().startsWith('image_url:')) {
+          specs.push(escapeHtml(clean));
+        }
+      });
+    }
+
+    const specsHtml = specs.length > 0
+      ? `<p style="margin:4px 0 0;font-size:12px;color:#71717a;line-height:1.4;">${specs.join('<br>')}</p>`
+      : '';
+
+    const iImg = escapeHtml(item.image_url || item.image || 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg');
+    const iQty = item.quantity || item.qty || 1;
+    const iPrice = escapeHtml(item.price || item.total || item.subtotal || 'Rp 149.000');
+
+    return `
+    <tr>
+      <td style="padding:16px 0;border-bottom:1px solid #f4f4f5;" valign="middle">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td width="72" valign="middle" style="width:72px;">
+              <img src="${iImg}" alt="${cleanName}" width="64" height="64" style="width:64px;height:64px;object-fit:cover;border-radius:12px;border:1px solid #e4e4e7;display:block;">
+            </td>
+            <td valign="middle" style="padding-left:14px;">
+              <p style="margin:0;font-size:14px;font-weight:700;color:#18181b;letter-spacing:-0.2px;">${cleanName}</p>
+              ${specsHtml}
+              <p style="margin:4px 0 0;font-size:12px;font-weight:600;color:#a1a1aa;">Qty: ${iQty}</p>
+            </td>
+            <td align="right" valign="middle" style="white-space:nowrap;padding-left:12px;">
+              <span style="font-size:14px;font-weight:700;color:#18181b;">${iPrice}</span>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const subtotal = escapeHtml(data.subtotal || data.total || 'Rp 149.000');
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100% !important;
+      background-color: #f7f7f7;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    table { border-collapse: collapse; }
+    img { border: 0; display: block; }
+    @media only screen and (max-width: 620px) {
+      .container-table { width: 100% !important; border-radius: 0 !important; }
+      .mobile-padding { padding-left: 24px !important; padding-right: 24px !important; }
+      .mobile-btn { width: 100% !important; box-sizing: border-box !important; text-align: center !important; }
+    }
+  </style>
+</head>
+<body bgcolor="#f7f7f7" style="margin:0;padding:0;background-color:#f7f7f7;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f7f7" style="background-color:#f7f7f7;padding:44px 16px;">
+    <tr>
+      <td align="center">
+        <!-- Main Card -->
+        <table class="container-table" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #e5e5e5;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.04);">
+          <tbody>
+            <!-- Top Header (Logo + Badge) -->
+            <tr>
+              <td style="padding:28px 40px 22px;border-bottom:1px solid #f0f0f0;" class="mobile-padding">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td valign="middle">
+                      ${BRAND_LOGO_HTML}
+                    </td>
+                    <td align="right" valign="middle">
+                      <span style="display:inline-block;padding:5px 13px;${badgeStyle}font-size:11px;font-weight:700;border-radius:999px;letter-spacing:0.3px;text-transform:uppercase;">${badgeText}</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Message Headline & Body -->
+            <tr>
+              <td style="padding:36px 40px 32px;" class="mobile-padding">
+                <h1 style="margin:0 0 20px;font-size:26px;font-weight:800;color:#111111;letter-spacing:-0.6px;line-height:1.25;">${title}</h1>
+                <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:#18181b;">Hi ${custName},</p>
+                <p style="margin:0 0 16px;font-size:14.5px;line-height:1.7;color:#3f3f46;">${bodyPrimary}</p>
+                ${bodySecondary ? `<p style="margin:0 0 24px;font-size:14.5px;line-height:1.7;color:#52525b;">${bodySecondary}</p>` : ''}
+
+                <!-- Primary Action Button -->
+                <div style="margin:24px 0 32px;">
+                  <a href="${restoreUrl}" target="_blank" rel="noopener noreferrer" class="mobile-btn" style="display:inline-block;padding:14px 32px;background:#111111;color:#ffffff;font-size:14px;font-weight:700;border-radius:12px;text-decoration:none;letter-spacing:0.2px;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+                    ${ctaText} &rarr;
+                  </a>
+                </div>
+
+                <!-- Items In Cart Section -->
+                <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #f0f0f2;padding-top:16px;">
+                  <tr>
+                    <td style="padding:12px 0 8px;">
+                      <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#71717a;">Items in Your Cart</p>
+                    </td>
+                  </tr>
+                  ${itemsRows}
+                </table>
+
+                <!-- Subtotal Breakdown -->
+                <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;">
+                  <tr>
+                    <td style="padding:10px 0;font-size:14px;font-weight:600;color:#3f3f46;">Subtotal</td>
+                    <td align="right" style="padding:10px 0;font-size:15px;font-weight:700;color:#111111;">${subtotal}</td>
+                  </tr>
+                </table>
+
+                <!-- Secondary Link -->
+                <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:28px;">
+                  <tr>
+                    <td align="center">
+                      <a href="${restoreUrl}" target="_blank" rel="noopener noreferrer" style="font-size:13.5px;font-weight:600;color:#18181b;text-decoration:underline;">
+                        Ready to proceed? Continue to checkout &rarr;
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- Spacer -->
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td height="36" style="height:36px;font-size:0;line-height:0;">&nbsp;</td>
+                  </tr>
+                </table>
+
+                <!-- Support & Help -->
+                <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #f0f0f0;text-align:center;">
+                  <tr>
+                    <td align="center" style="padding-top:28px;">
+                      <p style="margin:0 0 10px;font-size:12px;line-height:1.65;color:#71717a;">
+                        Have questions about your order or device compatibility? Reach our team at <a href="mailto:support@exacoat.com" style="color:#111111;text-decoration:underline;font-weight:500;">support@exacoat.com</a>
+                      </p>
+                      <p style="margin:0 0 10px;font-size:11.5px;color:#a1a1aa;">
+                        <a href="${unsubscribeUrl}" target="_blank" rel="noopener noreferrer" style="color:#71717a;text-decoration:underline;">Unsubscribe from cart reminders</a>
+                      </p>
+                      <p style="margin:0;font-size:11px;color:#a1a1aa;letter-spacing:0.2px;">&copy; Exacoat &bull; Ruby Commercial TB-12, Summarecon Bekasi, Bekasi Utara, West Java 17142</p>
                     </td>
                   </tr>
                 </table>

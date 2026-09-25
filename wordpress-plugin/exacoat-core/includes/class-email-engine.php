@@ -456,14 +456,14 @@ class Exacoat_Email_Engine {
 			],
 			'customer_cart_abandoned_2' => [
 				'category'       => 'Marketing / Cart Recovery',
-				'label'          => 'Abandoned Cart Urgency & Guarantee (24 Hours)',
+				'label'          => 'Abandoned Cart Urgency (24 Hours)',
 				'subject'        => 'Before your cart clears...',
-				'preheader'      => 'Your reserved order is expiring soon. Protected by our Free Installation Guarantee.',
+				'preheader'      => 'Your reserved order is expiring soon. Complete your checkout before it clears.',
 				'badge'          => 'Expiring Soon',
 				'icon'           => 'document_verified',
-				'title'          => 'Ready to protect your device?',
-				'body_primary'   => 'Your selected items are still reserved, but your cart will clear soon. Whether you are protecting your device with our precision fit skins, tempered screen guards, or cases, every item is crafted using premium materials designed for daily protection and clean, residue-free removal.',
-				'body_secondary' => 'Every order is covered by our Free Installation Guarantee. If you run into any trouble during application, our team will send you a replacement piece free of charge.',
+				'title'          => 'Ready to complete your order?',
+				'body_primary'   => 'Your selected items are still reserved, but your cart will clear soon. If you are still deciding, your setup is ready to go whenever you are.',
+				'body_secondary' => 'Once the timer expires, reserved items return to public inventory.',
 				'cta_text'       => 'Complete Your Order',
 				'type'           => 'abandoned_cart',
 				'defaults'       => self::get_mock_abandoned_cart_defaults( '2' ),
@@ -2353,7 +2353,9 @@ class Exacoat_Email_Engine {
 				$meta_html = '';
 				if ( ! empty( $meta_raw ) ) {
 					$lines = is_array( $meta_raw ) ? $meta_raw : explode( "\n", (string) $meta_raw );
-					$clean_lines = array_filter( array_map( 'trim', $lines ) );
+					$clean_lines = array_filter( array_map( 'trim', $lines ), function( $l ) {
+						return ! empty( $l ) && stripos( $l, 'image_url:' ) === false;
+					} );
 					if ( ! empty( $clean_lines ) ) {
 						$meta_html = '<div style="margin-top:4px;">' . implode( '<br>', array_map( function( $l ) {
 							return '<span style="font-size:12px;color:#71717a;line-height:1.4;">' . esc_html( $l ) . '</span>';
@@ -2385,36 +2387,6 @@ class Exacoat_Email_Engine {
 		}
 
 		$subtotal = esc_html( $data['subtotal'] ?? $data['total'] ?? '' );
-
-		// Trust & Guarantee Box for Email 2
-		$trust_box_html = '';
-		if ( $is_second_email ) {
-			$trust_box_html = '
-			<table width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #e4e4e7;border-radius:14px;margin:28px 0;">
-				<tr>
-					<td style="padding:22px 24px;">
-						<p style="margin:0 0 14px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#18181b;">Why Choose Exacoat</p>
-						<table width="100%" cellpadding="0" cellspacing="0">
-							<tr>
-								<td style="padding-bottom:12px;" valign="top">
-									<p style="margin:0;font-size:13px;line-height:1.5;color:#3f3f46;"><strong style="color:#18181b;">Precision Fit:</strong> Engineered to match your device contours, buttons, and cutouts flawlessly.</p>
-								</td>
-							</tr>
-							<tr>
-								<td style="padding-bottom:12px;" valign="top">
-									<p style="margin:0;font-size:13px;line-height:1.5;color:#3f3f46;"><strong style="color:#18181b;">Premium Materials:</strong> Designed for daily protection with authentic materials that leave zero sticky residue upon removal.</p>
-								</td>
-							</tr>
-							<tr>
-								<td valign="top">
-									<p style="margin:0;font-size:13px;line-height:1.5;color:#3f3f46;"><strong style="color:#18181b;">Free Installation Guarantee:</strong> If you misalign or have trouble applying your protection, reach out and our team will send you a replacement piece.</p>
-								</td>
-							</tr>
-						</table>
-					</td>
-				</tr>
-			</table>';
-		}
 
 		$logo_html = self::get_brand_logo_html();
 		$preheader_html = $preheader ? '<div style="display:none;font-size:1px;color:#f4f4f5;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">' . esc_html( $preheader ) . '</div>' : '';
@@ -2498,8 +2470,6 @@ class Exacoat_Email_Engine {
                   </tr>
                 </table>
 
-                {$trust_box_html}
-
                 <!-- Secondary Action Button -->
                 <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-top:24px;\">
                   <tr>
@@ -2517,7 +2487,7 @@ class Exacoat_Email_Engine {
             <tr>
               <td style=\"padding:24px 36px 28px;background:#fafafa;border-top:1px solid #f0f0f2;text-align:center;\" class=\"mobile-padding\">
                 <p style=\"margin:0 0 10px;font-size:12px;line-height:1.65;color:#71717a;\">
-                  Have questions about your device fit or custom skin? Reply directly to this email or reach us at <a href=\"mailto:support@exacoat.com\" style=\"color:#111111;text-decoration:underline;font-weight:500;\">support@exacoat.com</a>.
+                  Have questions about your order or device compatibility? Reply directly to this email or reach us at <a href=\"mailto:support@exacoat.com\" style=\"color:#111111;text-decoration:underline;font-weight:500;\">support@exacoat.com</a>.
                 </p>
                 <p style=\"margin:0 0 12px;font-size:11.5px;color:#a1a1aa;\">
                   <a href=\"{$unsubscribe_url}\" style=\"color:#71717a;text-decoration:underline;\">Unsubscribe from cart reminders</a>
