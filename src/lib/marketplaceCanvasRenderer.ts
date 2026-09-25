@@ -491,6 +491,51 @@ function drawBrandTagline(
 }
 
 /**
+ * Draws the subtle centered Device Name (same 25px font size as '#1 Brand Skin di Indonesia')
+ * and plain subtle coverage text (e.g. 'Model 360' or 'Model Cut') directly below it without any pill border.
+ */
+function drawVariantDeviceSubheader(
+  ctx: CanvasRenderingContext2D,
+  deviceTitleText: string,
+  coverageSubText: string,
+  x: number = 50,
+  y: number = 274,
+  w: number = 460
+) {
+  const cleanDeviceTitle = deviceTitleText.replace(/\s*\n\s*/g, ' ').replace(/\s+/g, ' ').trim();
+  const cleanSubText = coverageSubText.trim();
+  if (!cleanDeviceTitle && !cleanSubText) return;
+
+  ctx.save();
+  const centerX = x + w / 2;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  let currentY = y;
+
+  if (cleanDeviceTitle) {
+    let fontSize = 25;
+    ctx.font = `700 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
+    const maxW = w - 16;
+    while (ctx.measureText(cleanDeviceTitle).width > maxW && fontSize > 16) {
+      fontSize -= 1;
+      ctx.font = `700 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
+    }
+    ctx.fillStyle = '#18181b';
+    ctx.fillText(cleanDeviceTitle, centerX, currentY);
+    currentY += 32;
+  }
+
+  if (cleanSubText) {
+    ctx.font = '500 20px "Plus Jakarta Sans", sans-serif';
+    ctx.fillStyle = 'rgba(24, 24, 27, 0.62)';
+    ctx.fillText(cleanSubText, centerX, currentY);
+  }
+
+  ctx.restore();
+}
+
+/**
  * Draws the Tokopedia Official Store Badge under the #1 Brand Skin di Indonesia tagline
  * Source: /assets/brand/tokopedia-official-store-badge.png (natural aspect ratio ~2.97)
  */
@@ -2208,44 +2253,20 @@ export async function renderMarketplaceImageToCanvas(
 
   if (isVariantLayout) {
     // Variant Layout:
-    // 1) Directly under '#1 Brand Skin di Indonesia' (y=254), show the Device Name that is set (same text content as Cover)
-    //    and do NOT show the Official Store badge/card on variants.
-    const variantCardsOpts = {
-      ...(config.variantLeftCards || {}),
-      showOriginal3M: false,
-    };
-
-    const activeLeftCards =
-      (variantCardsOpts.showMaterialOrigin !== false ? 1 : 0) +
-      (variantCardsOpts.showWarranty !== false ? 1 : 0) +
-      (variantCardsOpts.showTexturePhoto !== false ? 1 : 0);
-    const estStackHeight =
-      (variantCardsOpts.showMaterialOrigin !== false ? 114 : 0) +
-      (variantCardsOpts.showWarranty !== false ? 114 : 0) +
-      (variantCardsOpts.showTexturePhoto !== false ? 318 : 0) +
-      Math.max(0, activeLeftCards - 1) * 16;
-    const stackTopY = 1450 - estStackHeight;
-    const headlineStartY = config.showBrandTagline !== false ? 280 : 212;
-    const maxHeadlineBlockH = Math.max(220, stackTopY - headlineStartY - 28);
-
-    drawLeftHeadlineBlock(
+    // 1) Directly under '#1 Brand Skin di Indonesia' (y=276), show the centered Device Name at 25px (matching '#1 Brand')
+    //    and subtle plain text below it for 'Model 360' / 'Model Cut' (no pill border, and no Official Store image).
+    const subheaderY = config.showBrandTagline !== false ? 276 : 216;
+    drawVariantDeviceSubheader(
       ctx,
-      config.subBadgeText || '',
       effectiveHeadline,
-      config.headlineFont || 'Chakra Petch',
+      config.subBadgeText || '',
       50,
-      headlineStartY,
-      config.headlineHighlightColor || '#d2d2d2',
-      {
-        maxWidth: 490,
-        maxBlockHeight: maxHeadlineBlockH,
-        initialFontSize: 124,
-        badgeHeight: 56,
-      }
+      subheaderY,
+      460
     );
 
-    // 2) Stacked trust cards (3M Material, Installation Warranty, Textured Surface macro photo) below the device name
-    await drawLeftStackedFeatureCards(ctx, variantCardsOpts, 50, stackTopY, 460);
+    // 2) Stacked trust cards and Textured Surface macro preview photo on left column
+    await drawLeftStackedFeatureCards(ctx, config.variantLeftCards || {}, 50, 340, 460);
     // Bottom feature cards omitted on variant images, leaving the phone body clean and visible!
   } else {
     // Cover Layout: Sub-badge & Big Bold Headline (displays the Product / Device Name with highlight outline)
