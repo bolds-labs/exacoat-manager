@@ -329,7 +329,7 @@ export const BatchSeoModal: React.FC<BatchSeoModalProps> = ({
             <span className="text-[11px] font-semibold text-emerald-500">Target Standard</span>
             <div className="mt-1 flex items-baseline gap-2">
               <span className="text-sm font-semibold text-emerald-300">
-                Canonical 3M Formula
+                Canonical Brand Formula
               </span>
             </div>
             <p className="text-[10px] text-zinc-400 mt-0.5">
@@ -474,7 +474,7 @@ export const BatchSeoModal: React.FC<BatchSeoModalProps> = ({
                 <span>AI Device Differentiation Batch Writer</span>
               </p>
               <p className="text-zinc-500 dark:text-zinc-400">
-                Generates distinct, device-tailored copy for each product using Exacoat brand voice (authentic 3M material, precision fit, tactile texture, zero em dashes).
+                Generates distinct, device-tailored copy for each product using Exacoat brand voice (lifestyle-first brand copy, precision fit, confident grip, zero em dashes).
               </p>
 
               <div className="pt-2 flex items-center gap-3">

@@ -1261,26 +1261,41 @@ class Exacoat_Core {
 				$is_gemini = ( stripos( $provider, 'gemini' ) !== false );
 				$start = microtime( true );
 
-				$system_instruction = "You are an expert e-commerce copywriter and SEO specialist for Exacoat (exacoat.com).\n"
-					. "Exacoat designs precision-engineered vinyl skins and protective wraps made of authentic 3M materials for smartphones, laptops, gaming consoles, and accessories.\n\n"
+				$system_instruction = "You are a premier consumer tech copywriter and brand voice specialist for Exacoat (exacoat.com).\n"
+					. "Exacoat crafts precision-cut device wraps and skins designed to elevate everyday carry with tactile textures and real scratch protection.\n\n"
 					. "Target Product:\n"
 					. "- Device Name: \"{$clean_name}\"\n"
 					. "- Category: \"{$category}\"\n\n"
-					. "Brand Voice and Tone Rules:\n"
-					. "- Confident, clean, understated, and authentic.\n"
-					. "- Ground descriptions in real physical attributes: authentic 3M textured vinyl, 0.2mm ultra-slim profile, scratch defense without added bulk, and clean precision fit.\n"
+					. "Brand Voice and Copywriting Rules:\n"
+					. "- Lifestyle-first, sleek, understated, and tactile. Write like a modern luxury tech studio.\n"
+					. "- Focus on daily carry, confident grip, pocket-friendly minimalist feel, and keeping the device looking pristine every day.\n"
+					. "- STRICTLY NEVER say '3M' or name manufacturer brands. Say 'premium textured skin', 'matte finish', 'tactile wrap', etc.\n"
+					. "- Do NOT be explanatory, dry, or technical. Avoid spec-sheet jargon: NEVER say '0.2mm ultra-slim profile', 'adhesive backing', and do not sound like an installation instruction manual.\n"
 					. "- Strictly NO exclamation marks.\n"
-					. "- Strictly NO fake technical jargon or exaggerated marketing claims (avoid words like 'revolutionary', 'ultimate armor', 'game-changing').\n"
-					. "- Strictly NO em dashes of any kind (do not use long dashes or double hyphens). Use commas, periods, or parentheses instead.\n"
-					. "- Distinct device-specific phrasing: reference camera contours, grip, or edges for phones; top lid, palm rest, or trackpad for laptops.\n\n"
+					. "- Strictly NO em dashes of any kind (do not use long dashes '—' or double hyphens '--'). Use commas, periods, or parentheses instead.\n"
+					. "- Strictly NO cheap marketing hype ('revolutionary', 'game-changer', 'ultimate armor', 'unrivaled protection').\n"
+					. "- Tailor the phrasing naturally to the device: camera contours and grip for phones; palm rest comfort and desk presence for laptops.\n\n"
 					. "Output Requirement:\n"
 					. "Return ONLY a valid JSON object with the following four keys (no markdown formatting, no conversational text):\n"
 					. "{\n"
 					. "  \"seo_title\": \"{$clean_name} Skin & Wrap | Exacoat\",\n"
-					. "  \"seo_description\": \"A natural search meta description between 120 and 155 characters describing authentic 3M textured wraps with zero bulk scratch defense.\",\n"
+					. "  \"seo_description\": \"Natural Google search snippet (120 to 155 chars) focusing on everyday scratch defense, confident grip, and clean fit. Zero em dashes and never mention 3M.\",\n"
 					. "  \"focus_keyword\": \"{$clean_name} skin\",\n"
-					. "  \"short_description\": \"2 to 3 concise sentences (45 to 65 words) highlighting precision fit, tactile texture, and everyday scratch protection.\"\n"
+					. "  \"short_description\": \"2 to 3 concise, lifestyle-oriented sentences (35 to 55 words) that read like an editorial storefront overview. Elevate everyday carry without bulk.\"\n"
 					. "}";
+
+				$sanitize_seo_fields = function( array $data ): array {
+					foreach ( [ 'seo_title', 'seo_description', 'short_description', 'focus_keyword' ] as $k ) {
+						if ( isset( $data[ $k ] ) && is_string( $data[ $k ] ) ) {
+							$val = preg_replace( '/!+/', '.', $data[ $k ] );
+							$val = preg_replace( '/[—–]|--/', ', ', $val );
+							$val = preg_replace( '/\b3M\b/i', 'premium', $val );
+							$val = preg_replace( '/\s*0\.2\s*mm\s*/i', ' ', $val );
+							$data[ $k ] = trim( preg_replace( '/\s{2,}/', ' ', $val ) );
+						}
+					}
+					return $data;
+				};
 
 				if ( $is_gemini ) {
 					$api_key = defined( 'EXACOAT_GEMINI_API_KEY' ) ? EXACOAT_GEMINI_API_KEY : ( defined( 'AM_GEMINI_API_KEY' ) ? AM_GEMINI_API_KEY : ( defined( 'GEMINI_API_KEY' ) ? GEMINI_API_KEY : ( getenv( 'EXACOAT_GEMINI_API_KEY' ) ?: ( getenv( 'AM_GEMINI_API_KEY' ) ?: ( $settings['gemini_api_key'] ?? '' ) ) ) ) );
@@ -1323,6 +1338,7 @@ class Exacoat_Core {
 					}
 
 					if ( is_array( $parsed ) && ! empty( $parsed['seo_title'] ) ) {
+						$parsed = $sanitize_seo_fields( $parsed );
 						return rest_ensure_response( [
 							'success'    => true,
 							'data'       => $parsed,
@@ -1391,6 +1407,7 @@ class Exacoat_Core {
 					$parsed = json_decode( trim( $text ), true );
 
 					if ( is_array( $parsed ) && ! empty( $parsed['seo_title'] ) ) {
+						$parsed = $sanitize_seo_fields( $parsed );
 						return rest_ensure_response( [
 							'success'    => true,
 							'data'       => $parsed,

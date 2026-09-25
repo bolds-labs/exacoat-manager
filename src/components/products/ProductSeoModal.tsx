@@ -465,7 +465,7 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
               {cleanSeoCopy(
                 seoDesc ||
                   shortDesc ||
-                  `Protect your ${cleanDevice} with precision-engineered authentic 3M textured skins. Scratch defense without bulk, laser-measured fit, and residue-free removal.`,
+                  `Protect your ${cleanDevice} with precision-engineered textured wraps. Real scratch defense without bulk, laser-measured fit, and clean residue-free removal.`,
                 {
                   deviceName: product.name,
                   productSlug: product.slug,
@@ -534,7 +534,7 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
             rows={3}
             value={shortDesc}
             onChange={(e) => setShortDesc(e.target.value)}
-            placeholder="Precision-cut 3M textured vinyl skin providing scratch defense with zero added bulk..."
+            placeholder="Precision-cut wrap designed to elevate your everyday carry. Scratch defense without bulk, tactile grip, and a seamless edge-to-edge fit..."
             className="w-full bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 focus:ring-1 focus:ring-zinc-400/20 leading-relaxed"
           />
           <p className="text-[10px] text-zinc-500">
@@ -618,7 +618,7 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
             rows={2}
             value={seoDesc}
             onChange={(e) => setSeoDesc(e.target.value)}
-            placeholder="Protect your device with precision-engineered 3M textured skins. Scratch defense without bulk, laser-measured fit, and residue-free removal."
+            placeholder="Elevate your device with precision-engineered textured skins. Everyday scratch defense without bulk, laser-measured fit, and residue-free removal."
             className="w-full bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 focus:ring-1 focus:ring-zinc-400/20 leading-relaxed"
           />
           <p className="text-[10px] text-zinc-500">
