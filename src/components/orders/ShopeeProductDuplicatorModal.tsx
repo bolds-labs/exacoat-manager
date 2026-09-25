@@ -41,12 +41,14 @@ interface ShopeeProductDuplicatorModalProps {
 const DEFAULT_SAMPLE_URL =
   'https://shopee.co.id/-EXACOAT-iPhone-17-Pro-Max-Premium-3M-Skin-Garskin-Model-360-i.102088236.25597461368';
 
+const EMPTY_PRELOADED_IMAGES: Array<{ file?: File; base64?: string; name: string; previewUrl: string }> = [];
+
 export const ShopeeProductDuplicatorModal: React.FC<ShopeeProductDuplicatorModalProps> = ({
   isOpen,
   onClose,
   initialUrlOrId = DEFAULT_SAMPLE_URL,
   initialTargetDevice = 'iPhone 18 Pro Max',
-  preloadedImages = [],
+  preloadedImages = EMPTY_PRELOADED_IMAGES,
 }) => {
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -85,6 +87,8 @@ export const ShopeeProductDuplicatorModal: React.FC<ShopeeProductDuplicatorModal
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const sourceInputRef = useRef<string>(sourceInput);
   sourceInputRef.current = sourceInput;
+  const prevOpenRef = useRef<boolean>(false);
+  const loadedInputRef = useRef<string | null>(null);
 
   // Fetch product preview from Shopee
   const handleFetchPreview = useCallback(
@@ -126,36 +130,49 @@ export const ShopeeProductDuplicatorModal: React.FC<ShopeeProductDuplicatorModal
     [showToast]
   );
 
-  // Sync initial inputs on open
+  const handleFetchPreviewRef = useRef(handleFetchPreview);
+  handleFetchPreviewRef.current = handleFetchPreview;
+
+  // Sync initial inputs on open (strictly once per modal session)
   useEffect(() => {
-    if (!isOpen) return;
-
-    const initial = initialUrlOrId || DEFAULT_SAMPLE_URL;
-    setSourceInput(initial);
-    setTargetDevice(initialTargetDevice);
-    setDuplicateResult(null);
-    setDuplicationStep('idle');
-    setErrorMessage(null);
-    setPreviewError(null);
-
-    // Ingest preloaded images from marketplace generator if supplied
-    if (preloadedImages.length > 0) {
-      setCustomImages(
-        preloadedImages.map((img, idx) => ({
-          id: `preload_${Date.now()}_${idx}`,
-          url: img.previewUrl,
-          name: img.name,
-          file: img.file,
-          base64: img.base64,
-        }))
-      );
-      setImageMode('custom');
+    if (!isOpen) {
+      prevOpenRef.current = false;
+      loadedInputRef.current = null;
+      return;
     }
 
-    if (initial) {
-      handleFetchPreview(initial);
+    const initial = (initialUrlOrId || DEFAULT_SAMPLE_URL).trim();
+    const isFirstOpen = !prevOpenRef.current;
+    prevOpenRef.current = true;
+
+    if (isFirstOpen || loadedInputRef.current !== initial) {
+      loadedInputRef.current = initial;
+      setSourceInput(initial);
+      setTargetDevice(initialTargetDevice);
+      setDuplicateResult(null);
+      setDuplicationStep('idle');
+      setErrorMessage(null);
+      setPreviewError(null);
+
+      // Ingest preloaded images from marketplace generator if supplied
+      if (preloadedImages && preloadedImages.length > 0) {
+        setCustomImages(
+          preloadedImages.map((img, idx) => ({
+            id: `preload_${Date.now()}_${idx}`,
+            url: img.previewUrl,
+            name: img.name,
+            file: img.file,
+            base64: img.base64,
+          }))
+        );
+        setImageMode('custom');
+      }
+
+      if (initial) {
+        handleFetchPreviewRef.current(initial);
+      }
     }
-  }, [isOpen, initialUrlOrId, initialTargetDevice, preloadedImages, handleFetchPreview]);
+  }, [isOpen, initialUrlOrId, initialTargetDevice, preloadedImages]);
 
   // Auto-calculated computed title
   const computedTitle = useMemo(() => {
@@ -226,6 +243,8 @@ export const ShopeeProductDuplicatorModal: React.FC<ShopeeProductDuplicatorModal
     setErrorMessage(null);
     setDuplicationStep('uploading_images');
 
+    let stepTimer: NodeJS.Timeout | null = null;
+
     try {
       const uploadedShopeeImageIds: string[] = [];
 
@@ -250,8 +269,11 @@ export const ShopeeProductDuplicatorModal: React.FC<ShopeeProductDuplicatorModal
         }
       }
 
-      // Step 2: Create base product in UNLIST (draft) status
+      // Step 2: Create base product in UNLIST (draft) status and init variations
       setDuplicationStep('creating_draft');
+      stepTimer = setTimeout(() => {
+        setDuplicationStep('init_variations');
+      }, 3500);
 
       const payload = {
         source_item_id: preview.item_id,
@@ -262,15 +284,21 @@ export const ShopeeProductDuplicatorModal: React.FC<ShopeeProductDuplicatorModal
         custom_image_ids: uploadedShopeeImageIds.length > 0 ? uploadedShopeeImageIds : undefined,
       };
 
-      const result = await duplicateShopeeProductDirect(payload);
+      let result: ShopeeDuplicateResult;
+      try {
+        result = await duplicateShopeeProductDirect(payload);
+      } finally {
+        if (stepTimer) clearTimeout(stepTimer);
+      }
 
       if (result.success && result.new_item_id) {
         setDuplicationStep('done');
         setDuplicateResult(result);
+        const count = result.models_initialized || preview.models?.length || 0;
         showToast(
           'success',
           'Shopee Draft Created',
-          `New listing #${result.new_item_id} created in unlisted status. Check your Seller Centre to inspect.`
+          `New listing #${result.new_item_id} created in unlisted status with ${count} variations.`
         );
       } else {
         setDuplicationStep('error');
@@ -279,6 +307,7 @@ export const ShopeeProductDuplicatorModal: React.FC<ShopeeProductDuplicatorModal
         showToast('error', 'Duplication Failed', err);
       }
     } catch (err: any) {
+      if (stepTimer) clearTimeout(stepTimer);
       setDuplicationStep('error');
       const errText = err.message || 'Failed to complete Shopee listing duplication.';
       setErrorMessage(errText);
@@ -321,26 +350,55 @@ export const ShopeeProductDuplicatorModal: React.FC<ShopeeProductDuplicatorModal
           disabled={isDuplicating}
           className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition disabled:opacity-40 cursor-pointer"
         >
-          Cancel
+          {duplicationStep === 'done' ? 'Close' : 'Cancel'}
         </button>
-        <button
-          type="button"
-          onClick={handleDuplicateProduct}
-          disabled={isDuplicating || !preview || !targetDevice.trim()}
-          className="min-h-[44px] inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold text-zinc-950 bg-amber-400 hover:bg-amber-300 transition shadow-lg shadow-amber-400/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-        >
-          {isDuplicating ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Duplicating to Draft...</span>
-            </>
+        {duplicationStep === 'done' ? (
+          duplicateResult?.seller_centre_url ? (
+            <a
+              href={duplicateResult.seller_centre_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="min-h-[44px] inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold text-zinc-950 bg-emerald-400 hover:bg-emerald-300 transition shadow-lg shadow-emerald-400/10 cursor-pointer"
+            >
+              <ExternalLink className="w-4 h-4" />
+              <span>Open in Seller Centre</span>
+            </a>
           ) : (
-            <>
-              <Copy className="w-4 h-4" />
-              <span>Duplicate to Shopee (Draft)</span>
-            </>
-          )}
-        </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="min-h-[44px] inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold text-zinc-950 bg-emerald-400 hover:bg-emerald-300 transition shadow-lg shadow-emerald-400/10 cursor-pointer"
+            >
+              <Check className="w-4 h-4" />
+              <span>Done</span>
+            </button>
+          )
+        ) : (
+          <button
+            type="button"
+            onClick={handleDuplicateProduct}
+            disabled={isDuplicating || !preview || !targetDevice.trim()}
+            className="min-h-[44px] inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold text-zinc-950 bg-amber-400 hover:bg-amber-300 transition shadow-lg shadow-amber-400/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            {isDuplicating ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>
+                  {duplicationStep === 'uploading_images'
+                    ? 'Uploading Images...'
+                    : duplicationStep === 'init_variations'
+                    ? 'Initializing Variations...'
+                    : 'Creating Draft...'}
+                </span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-4 h-4" />
+                <span>Duplicate to Shopee (Draft)</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -669,21 +727,37 @@ export const ShopeeProductDuplicatorModal: React.FC<ShopeeProductDuplicatorModal
               <div className="space-y-1 flex-1">
                 <p className="font-semibold text-emerald-200">Shopee Draft Created Successfully</p>
                 <p className="text-[11px] text-emerald-300/90">
-                  New listing #{duplicateResult.new_item_id} prepared in unlisted draft status with {duplicateResult.models_initialized || 0} variations.
+                  New listing #{duplicateResult.new_item_id} prepared in unlisted draft status with {duplicateResult.models_initialized || preview?.models?.length || 0} variations.
                 </p>
               </div>
             </div>
-            {duplicateResult.seller_centre_url && (
-              <a
-                href={duplicateResult.seller_centre_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-medium transition cursor-pointer"
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              {duplicateResult.seller_centre_url && (
+                <a
+                  href={duplicateResult.seller_centre_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="min-h-[44px] inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-medium transition cursor-pointer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Open in Shopee Seller Centre (Belum Ditampilkan)</span>
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setDuplicateResult(null);
+                  setDuplicationStep('idle');
+                  setTargetDevice('');
+                  setCustomTitle('');
+                  setIsEditingTitle(false);
+                }}
+                className="min-h-[44px] inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-xs font-medium transition cursor-pointer"
               >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Open in Shopee Seller Centre (Belum Ditampilkan)</span>
-              </a>
-            )}
+                <Plus className="w-3.5 h-3.5" />
+                <span>Duplicate Another Device Model</span>
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -2318,6 +2318,7 @@ class Exacoat_Shopee_Client {
 	 * REST Endpoint: Duplicate Shopee product into draft (UNLIST) status
 	 */
 	public static function rest_duplicate_product( \WP_REST_Request $request ): \WP_REST_Response {
+		@set_time_limit( 90 );
 		$body = $request->get_json_params() ?: [];
 
 		$source_input = trim( (string) ( $body['source_item_id'] ?? $body['source_url'] ?? '' ) );
@@ -2384,7 +2385,7 @@ class Exacoat_Shopee_Client {
 		// Cap image count to 9 (Shopee maximum)
 		$image_ids = array_slice( $image_ids, 0, 9 );
 
-		// Fetch source models to extract base pricing
+		// Fetch source models to extract base pricing and variation structures
 		$model_res = self::call_shop_api( '/api/v2/product/get_model_list', 'GET', [
 			'item_id' => $source_item_id,
 		]);
@@ -2405,11 +2406,53 @@ class Exacoat_Shopee_Client {
 			$base_price = 149000;
 		}
 
-		// 2. Create Base Product Listing with UNLIST (draft) status
+		// 2. Fetch enabled logistics channels for the shop (mandatory in Shopee add_item)
+		$logistic_info = [];
+		$channel_res = self::call_shop_api( '/api/v2/logistics/get_channel_list', 'GET' );
+		if ( ! empty( $channel_res['response']['logistics_channel_list'] ) ) {
+			foreach ( $channel_res['response']['logistics_channel_list'] as $ch ) {
+				if ( ! empty( $ch['enabled'] ) && ! empty( $ch['logistics_channel_id'] ) ) {
+					$logistic_info[] = [
+						'logistic_id' => (int) $ch['logistics_channel_id'],
+						'enabled'     => true,
+					];
+				}
+			}
+		}
+
+		if ( empty( $logistic_info ) ) {
+			// Fallback: standard Indonesian Shopee logistics channel IDs
+			$logistic_info = [
+				[ 'logistic_id' => 80001, 'enabled' => true ],
+				[ 'logistic_id' => 80002, 'enabled' => true ],
+			];
+		}
+
+		// Brand object formatting
+		$brand = [
+			'brand_id'            => (int) ( $src['brand']['brand_id'] ?? 0 ),
+			'original_brand_name' => (string) ( $src['brand']['original_brand_name'] ?? 'NoBrand' ),
+		];
+		if ( empty( $brand['original_brand_name'] ) ) {
+			$brand['original_brand_name'] = 'NoBrand';
+		}
+
+		// Weight and Dimension formatting
+		$weight = (float) ( $src['weight'] ?? 0.05 );
+		if ( $weight <= 0 ) {
+			$weight = 0.05;
+		}
+
+		$dimension = $src['dimension'] ?? [ 'package_height' => 1, 'package_length' => 20, 'package_width' => 15 ];
+		if ( empty( $dimension['package_height'] ) ) $dimension['package_height'] = 1;
+		if ( empty( $dimension['package_length'] ) ) $dimension['package_length'] = 20;
+		if ( empty( $dimension['package_width'] ) ) $dimension['package_width'] = 15;
+
+		// 3. Create Base Product Listing with UNLIST (draft) status
 		$add_payload = [
 			'original_price' => $base_price,
 			'description'    => $new_desc,
-			'weight'         => (float) ( $src['weight'] ?? 0.05 ),
+			'weight'         => $weight,
 			'item_name'      => $new_title,
 			'item_status'    => 'UNLIST', // Ensures item is saved as unlisted draft
 			'normal_stock'   => 100,
@@ -2417,9 +2460,9 @@ class Exacoat_Shopee_Client {
 			'image'          => [
 				'image_id_list' => $image_ids,
 			],
-			'brand'          => $src['brand'] ?? [ 'brand_id' => 0, 'original_brand_name' => 'Exacoat' ],
-			'logistic_info'  => $src['logistic_info'] ?? [],
-			'dimension'      => $src['dimension'] ?? [ 'package_height' => 1, 'package_length' => 20, 'package_width' => 15 ],
+			'brand'          => $brand,
+			'logistic_info'  => $logistic_info,
+			'dimension'      => $dimension,
 			'condition'      => 'NEW',
 		];
 
@@ -2430,25 +2473,38 @@ class Exacoat_Shopee_Client {
 		$create_res = self::call_shop_api( '/api/v2/product/add_item', 'POST', [], $add_payload );
 
 		if ( ! $create_res['success'] || empty( $create_res['response']['item_id'] ) ) {
+			$error_txt = $create_res['message'] ?? $create_res['error'] ?? 'Shopee add_item request failed.';
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log( 'error', 'shopee_duplicate', 'add_item failed: ' . $error_txt, [
+					'payload' => $add_payload,
+					'res'     => $create_res,
+				]);
+			}
 			return new \WP_REST_Response([
 				'success' => false,
-				'error'   => $create_res['error'] ?? 'Shopee add_item request failed.',
-				'message' => $create_res['message'] ?? 'Unable to create product draft.',
+				'error'   => $error_txt,
+				'message' => $error_txt,
 				'raw'     => $create_res['raw'] ?? null,
 			], 400 );
 		}
 
 		$new_item_id = (int) $create_res['response']['item_id'];
 
-		// 3. Initialize Tier Variations & Models if source has them
+		// 4. Initialize Tier Variations & Models if source product has them
 		$models_initialized = 0;
+		$variation_error = null;
+
 		if ( ! empty( $source_tier_variation ) && ! empty( $source_models ) ) {
-			// Wait 3 seconds for Shopee indexing before calling init_tier_variation
-			sleep( 3 );
+			// Wait 4 seconds for Shopee indexing before calling init_tier_variation
+			sleep( 4 );
 
 			$transformed_models = [];
 			foreach ( $source_models as $m ) {
 				$m_price = (float) ( $m['price_info'][0]['original_price'] ?? $base_price );
+				if ( $m_price <= 0 ) {
+					$m_price = $base_price;
+				}
+
 				$m_stock = (int) ( $m['stock_info_v2']['summary_info']['total_available_stock'] ?? 50 );
 				if ( $m_stock <= 0 ) {
 					$m_stock = 50;
@@ -2460,38 +2516,71 @@ class Exacoat_Shopee_Client {
 				}
 
 				$transformed_models[] = [
-					'tier_index'     => $m['tier_index'] ?? [ 0 ],
+					'tier_index'     => array_values( array_map( 'intval', (array) ( $m['tier_index'] ?? [ 0 ] ) ) ),
 					'normal_stock'   => $m_stock,
 					'original_price' => $m_price,
 					'model_sku'      => $m_sku,
 				];
 			}
 
-			// Clean tier variation options
+			// Clean tier variation options with proper option_list key
 			$clean_tier_variation = [];
-			foreach ( $source_tier_variation as $tv ) {
+			foreach ( $source_tier_variation as $tier_idx => $tv ) {
+				$raw_opts = $tv['option_list'] ?? $tv['options'] ?? [];
 				$opts = [];
-				foreach ( ( $tv['options'] ?? [] ) as $opt_entry ) {
-					$opts[] = [
-						'option' => is_array( $opt_entry ) ? ( $opt_entry['option'] ?? '' ) : (string) $opt_entry,
+				foreach ( $raw_opts as $opt_entry ) {
+					$opt_name = is_array( $opt_entry ) ? ( $opt_entry['option'] ?? '' ) : (string) $opt_entry;
+					if ( empty( $opt_name ) ) {
+						continue;
+					}
+					$clean_opt = [
+						'option' => (string) $opt_name,
+					];
+					// Variant images are only allowed on the first tier (index 0) in Shopee Open Platform
+					if ( $tier_idx === 0 && ! empty( $opt_entry['image']['image_id'] ) ) {
+						$clean_opt['image'] = [
+							'image_id' => (string) $opt_entry['image']['image_id'],
+						];
+					}
+					$opts[] = $clean_opt;
+				}
+
+				if ( ! empty( $opts ) ) {
+					$clean_tier_variation[] = [
+						'name'        => (string) ( $tv['name'] ?? 'Varian' ),
+						'option_list' => $opts,
 					];
 				}
-				$clean_tier_variation[] = [
-					'name'    => $tv['name'] ?? 'Varian',
-					'options' => $opts,
-				];
 			}
 
-			$init_res = self::call_shop_api( '/api/v2/product/init_tier_variation', 'POST', [], [
-				'item_id'        => $new_item_id,
-				'tier_variation' => $clean_tier_variation,
-				'model'          => $transformed_models,
-			]);
+			if ( ! empty( $clean_tier_variation ) && ! empty( $transformed_models ) ) {
+				$init_res = self::call_shop_api( '/api/v2/product/init_tier_variation', 'POST', [], [
+					'item_id'        => $new_item_id,
+					'tier_variation' => $clean_tier_variation,
+					'model'          => $transformed_models,
+				]);
 
-			if ( $init_res['success'] ) {
-				$models_initialized = count( $transformed_models );
-			} elseif ( class_exists( 'Exacoat_Logger' ) ) {
-				Exacoat_Logger::log( 'error', 'shopee_duplicate', 'Failed to init tier variation on draft item', $init_res );
+				if ( ! $init_res['success'] ) {
+					// Retry once after 3 seconds in case Shopee data propagation was lagging
+					sleep( 3 );
+					$init_res = self::call_shop_api( '/api/v2/product/init_tier_variation', 'POST', [], [
+						'item_id'        => $new_item_id,
+						'tier_variation' => $clean_tier_variation,
+						'model'          => $transformed_models,
+					]);
+				}
+
+				if ( $init_res['success'] ) {
+					$models_initialized = count( $transformed_models );
+				} else {
+					$variation_error = $init_res['message'] ?? $init_res['error'] ?? 'Variation initialization warning';
+					if ( class_exists( 'Exacoat_Logger' ) ) {
+						Exacoat_Logger::log( 'error', 'shopee_duplicate', 'Failed to init tier variation on draft item', [
+							'item_id' => $new_item_id,
+							'res'     => $init_res,
+						]);
+					}
+				}
 			}
 		}
 
@@ -2499,7 +2588,7 @@ class Exacoat_Shopee_Client {
 			Exacoat_Logger::log(
 				'info',
 				'shopee_duplicate',
-				sprintf( 'Successfully duplicated Shopee listing %s -> %s (Draft ID %d)', $source_device, $target_device, $new_item_id )
+				sprintf( 'Successfully duplicated Shopee listing %s -> %s (Draft ID %d, Variations %d)', $source_device, $target_device, $new_item_id, $models_initialized )
 			);
 		}
 
