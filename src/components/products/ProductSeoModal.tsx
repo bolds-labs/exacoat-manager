@@ -562,13 +562,16 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
                   </span>
                 </div>
 
-                {/* Center Split: Eyebrow + Product Title on Left, Framed Device Image on Right */}
-                <div className="flex items-center justify-between gap-3 my-auto z-10">
-                  <div className="min-w-0 flex-1 pr-1">
-                    <div className="text-[8px] font-semibold uppercase tracking-[0.2em] text-[#f3aa18] mb-1 truncate">
+                {/* Bottom-Aligned Left Text + Framed Device Image on Right */}
+                <div className="flex items-end justify-between gap-3 flex-1 pt-2 z-10">
+                  <div
+                    className="min-w-0 flex-1 pr-1 self-end pb-0.5"
+                    style={{ fontFamily: "'Chakra Petch', sans-serif" }}
+                  >
+                    <div className="text-[9px] font-semibold uppercase tracking-[0.2em] text-[#f3aa18] mb-1 truncate">
                       {(product.categories?.[0]?.name || 'EXACOAT').replace(/\s+Skins?$/i, '')}
                     </div>
-                    <div className="text-sm sm:text-base font-bold text-white leading-tight line-clamp-2 tracking-tight">
+                    <div className="text-base sm:text-lg font-bold text-white leading-[1.08] line-clamp-2 tracking-tight">
                       {product.name}
                     </div>
                   </div>
