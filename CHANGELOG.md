@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.54] - 2026-09-25
+
+### Strict Free Shipping Carrier Protection & Multi-Zone Wildcard Matching
+- **Courier-Safe Free Shipping Discount**:
+  - Enforced strict carrier protection in `Exacoat_Store_Enhancements::apply_zone_tiered_shipping_discount()`: premium express carriers (`DHL`, `FedEx`, `UPS`, `Cargo`, `Trucking`, `Same Day`, `Instant`) can never be discounted to 0 unless `filter_text` explicitly targets them.
+  - Eliminated legacy flat rate fallback leakage that allowed FedEx to become free whenever `filter_text` was set to `goorita`.
+  - Added wildcard country matching (`*`, `ALL`, or `default`) so unconfigured international destinations cleanly inherit the Rest of World zone tier.
+  - Added defensive non-empty fallbacks for `filter_text` (`reg` for ID, `goorita` for US, `pos` for ROW) preventing empty filter bypasses.
+  - Stopped mutating `$rate->label` with redundant `(Free Shipping)` text suffix.
+  - Exposed `free_shipping_filter_text` and `filter_text` in `/checkout/config` REST endpoint.
+
 ## [0.1.49] - 2026-09-24
 
 ### Configurator Studio 1500x1500px Marketplace Product Image Generator & Batch Exporter

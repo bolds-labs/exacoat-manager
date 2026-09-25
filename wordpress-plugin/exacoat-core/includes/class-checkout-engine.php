@@ -282,12 +282,16 @@ class Exacoat_Checkout_Engine {
 				? Exacoat_Store_Enhancements::get_shipping_config()
 				: Artmatter_Store_Enhancements::get_shipping_config();
 			$zones           = $shipping_config['zones'] ?? [];
-			$matched_zone    = null;
+			$matched_zone  = null;
+			$fallback_zone = null;
 
 			foreach ( $zones as $k => $z ) {
 				$c_list = array_map( 'trim', explode( ',', strtoupper( $z['countries'] ?? '' ) ) );
 				if ( in_array( $country, $c_list, true ) ) {
 					$matched_zone = $z;
+				}
+				if ( ! $fallback_zone && ( in_array( '*', $c_list, true ) || in_array( 'ALL', $c_list, true ) || 'default' === $k ) ) {
+					$fallback_zone = $z;
 				}
 
 				$z_curr = strtoupper( trim( $z['currency'] ?? '' ) );
@@ -303,16 +307,17 @@ class Exacoat_Checkout_Engine {
 				}
 
 				$shipping_zones[] = [
-					'key'       => $k,
-					'name'      => $z['name'] ?? '',
-					'countries' => $z['countries'] ?? '',
-					'currency'  => $z_curr,
-					'free'      => $z_free,
+					'key'         => $k,
+					'name'        => $z['name'] ?? '',
+					'countries'   => $z['countries'] ?? '',
+					'currency'    => $z_curr,
+					'free'        => $z_free,
+					'filter_text' => $z['filter_text'] ?? '',
 				];
 			}
 
-			if ( ! $matched_zone && isset( $zones['default'] ) ) {
-				$matched_zone = $zones['default'];
+			if ( ! $matched_zone ) {
+				$matched_zone = $fallback_zone ?: ( $zones['default'] ?? null );
 			}
 
 			$currencies = class_exists( 'Exacoat_Store_Enhancements' )
@@ -381,13 +386,14 @@ class Exacoat_Checkout_Engine {
 		}
 
 		return rest_ensure_response( [
-			'countries'               => WC()->countries->get_allowed_countries(),
-			'states'                  => is_array( $states ) ? $states : [],
-			'country'                 => $country,
-			'currency'                => $active_currency,
-			'free_shipping_threshold' => round( $free_shipping_threshold, 2 ),
-			'thresholds_by_currency'  => $thresholds_by_currency,
-			'shipping_zones'          => $shipping_zones,
+			'countries'                 => WC()->countries->get_allowed_countries(),
+			'states'                    => is_array( $states ) ? $states : [],
+			'country'                   => $country,
+			'currency'                  => $active_currency,
+			'free_shipping_threshold'   => round( $free_shipping_threshold, 2 ),
+			'free_shipping_filter_text' => $matched_zone['filter_text'] ?? ( 'ID' === $country ? 'reg' : ( 'US' === $country ? 'goorita' : 'pos' ) ),
+			'thresholds_by_currency'    => $thresholds_by_currency,
+			'shipping_zones'            => $shipping_zones,
 		] );
 	}
 

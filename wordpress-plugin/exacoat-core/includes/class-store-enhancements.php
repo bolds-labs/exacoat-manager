@@ -673,21 +673,21 @@ class Exacoat_Store_Enhancements {
 				'countries'   => 'ID',
 				'currency'    => 'IDR',
 				'free'        => 300000,
-				'filter_text' => '',
+				'filter_text' => 'reg',
 			],
 			'united_states' => [
 				'name'        => 'United States',
 				'countries'   => 'US',
 				'currency'    => 'USD',
 				'free'        => 30,
-				'filter_text' => '',
+				'filter_text' => 'goorita',
 			],
 			'default' => [
 				'name'        => 'Default (Rest of World)',
 				'countries'   => '*',
 				'currency'    => 'USD',
 				'free'        => 50,
-				'filter_text' => '',
+				'filter_text' => 'pos',
 			],
 		];
 
@@ -774,8 +774,9 @@ class Exacoat_Store_Enhancements {
 			}
 		}
 
-		// Match destination country
-		$matched_zone = null;
+		// Match destination country (supports specific ISO codes, comma-separated lists, and wildcard * / ALL)
+		$matched_zone  = null;
+		$fallback_zone = null;
 		foreach ( $zones as $z_key => $zone ) {
 			if ( empty( $zone['countries'] ) ) continue;
 			$c_list = array_map( 'trim', explode( ',', strtoupper( $zone['countries'] ) ) );
@@ -783,11 +784,14 @@ class Exacoat_Store_Enhancements {
 				$matched_zone = $zone;
 				break;
 			}
+			if ( ! $fallback_zone && ( in_array( '*', $c_list, true ) || in_array( 'ALL', $c_list, true ) || 'default' === $z_key ) ) {
+				$fallback_zone = $zone;
+			}
 		}
 
-		// Fallback to default
-		if ( ! $matched_zone && isset( $zones['default'] ) ) {
-			$matched_zone = $zones['default'];
+		// Fallback to wildcard or default zone if country did not match a specific zone
+		if ( ! $matched_zone ) {
+			$matched_zone = $fallback_zone ?: ( $zones['default'] ?? null );
 		}
 
 		if ( ! $matched_zone ) {
@@ -831,6 +835,17 @@ class Exacoat_Store_Enhancements {
 		$is_free_qualified = ( $effective_threshold > 0 && $cart_total >= $effective_threshold );
 		$filter_text       = trim( strtolower( (string) ( $matched_zone['filter_text'] ?? '' ) ) );
 
+		// Defensive fallback for filter_text if left blank in zone settings
+		if ( empty( $filter_text ) ) {
+			if ( 'ID' === $country ) {
+				$filter_text = 'reg';
+			} elseif ( 'US' === $country ) {
+				$filter_text = 'goorita';
+			} else {
+				$filter_text = 'pos';
+			}
+		}
+
 		foreach ( $rates as $rate_id => $rate ) {
 			$is_biteship = ( strpos( $rate->id, 'biteship_shipping' ) !== false || ( isset( $rate->method_id ) && 'biteship_shipping' === $rate->method_id ) );
 
@@ -850,21 +865,44 @@ class Exacoat_Store_Enhancements {
 				if ( ! $matched_method ) continue;
 			}
 
-			// Filter text check (e.g. 'goorita')
+			$rate_label   = strtolower( (string) $rate->label );
+			$rate_id_s    = strtolower( (string) $rate->id );
+			$is_flat_rate = ( isset( $rate->method_id ) && 'flat_rate' === $rate->method_id ) || ( strpos( $rate_id_s, 'flat_rate' ) !== false );
+
+			// Guard against expensive express/freight carriers (DHL, FedEx, UPS, Cargo, Trucking, Same Day, Instant)
+			// These must NEVER receive free shipping unless filter_text explicitly targets them
+			$is_premium_express = (
+				strpos( $rate_label, 'dhl' ) !== false ||
+				strpos( $rate_label, 'fedex' ) !== false ||
+				strpos( $rate_label, 'ups' ) !== false ||
+				strpos( $rate_label, 'cargo' ) !== false ||
+				strpos( $rate_label, 'trucking' ) !== false ||
+				strpos( $rate_label, 'same day' ) !== false ||
+				strpos( $rate_label, 'instant' ) !== false ||
+				strpos( $rate_id_s, 'dhl' ) !== false ||
+				strpos( $rate_id_s, 'fedex' ) !== false ||
+				strpos( $rate_id_s, 'cargo' ) !== false
+			);
+
+			$filter_specifically_wants_premium = (
+				( strpos( $filter_text, 'dhl' ) !== false && ( strpos( $rate_label, 'dhl' ) !== false || strpos( $rate_id_s, 'dhl' ) !== false ) ) ||
+				( strpos( $filter_text, 'fedex' ) !== false && ( strpos( $rate_label, 'fedex' ) !== false || strpos( $rate_id_s, 'fedex' ) !== false ) ) ||
+				( strpos( $filter_text, 'ups' ) !== false && ( strpos( $rate_label, 'ups' ) !== false || strpos( $rate_id_s, 'ups' ) !== false ) )
+			);
+
+			if ( $is_premium_express && ! $filter_specifically_wants_premium ) {
+				// Premium carrier can never be discounted to free unless explicitly configured
+				continue;
+			}
+
+			// Filter text check (e.g. 'pos', 'goorita', 'reg')
+			$matches_text = false;
 			if ( ! empty( $filter_text ) ) {
-				$rate_label   = strtolower( (string) $rate->label );
-				$rate_id_s    = strtolower( (string) $rate->id );
-				$is_flat_rate = ( isset( $rate->method_id ) && 'flat_rate' === $rate->method_id ) || ( strpos( $rate_id_s, 'flat_rate' ) !== false );
 				$matches_text = ( strpos( $rate_label, $filter_text ) !== false || strpos( $rate_id_s, $filter_text ) !== false );
+			}
 
-				// If zone filter is 'goorita', also match any standard international flat_rate method unless it is DHL
-				if ( ! $matches_text && 'goorita' === $filter_text && $is_flat_rate && false === strpos( $rate_label, 'dhl' ) && false === strpos( $rate_id_s, 'dhl' ) ) {
-					$matches_text = true;
-				}
-
-				if ( ! $matches_text ) {
-					continue;
-				}
+			if ( ! $matches_text ) {
+				continue;
 			}
 
 			// 100% Free Shipping Rule
@@ -888,9 +926,6 @@ class Exacoat_Store_Enhancements {
 					$rate->add_meta_data( 'is_free_shipping', '1', true );
 				}
 				$rate->cost = 0;
-				if ( strpos( $rate->label, 'Free Shipping' ) === false ) {
-					$rate->label .= ' (Free Shipping)';
-				}
 			}
 		}
 
