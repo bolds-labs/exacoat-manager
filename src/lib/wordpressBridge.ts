@@ -5,7 +5,8 @@
  */
 
 import { getEnv, getWordPressBaseUrl, getWcCredentials } from './env';
-import { CreateReviewPayload, Order, OrderItem, OrderTracking, DeviceConfiguratorProfile, ConfiguratorProfileSummary, DeviceFamily, AdminUser, ExacoatRole } from '../types';
+import { CreateReviewPayload, Order, OrderItem, OrderTracking, DeviceConfiguratorProfile, MarketplaceDeviceImageSettings, ConfiguratorProfileSummary, DeviceFamily, AdminUser, ExacoatRole } from '../types';
+export type { MarketplaceDeviceImageSettings };
 import { renderEmailHtmlLocally } from './emailRenderer';
 import { extractItemSpecs } from './orderItems';
 import { normalizeDeviceName } from './seoUtils';
@@ -3181,21 +3182,27 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
       const numId = typeof idOrSlug === 'number' ? idOrSlug : parseInt(String(idOrSlug), 10);
       const safeProductId = Number(data.profile.product_id) || (Number.isFinite(numId) ? numId : 0);
 
+      const resolvedProfile: DeviceConfiguratorProfile = {
+        ...data.profile,
+        product_id: safeProductId || Number((data.profile as any).id) || 0,
+        base_price: Number(data.profile.base_price) || 0,
+        device_name: data.profile.device_name || '',
+        device_slug: data.profile.device_slug || '',
+        category: data.profile.category || 'General',
+        currency: data.profile.currency || 'IDR',
+        layers: cleanLayers,
+        variants: cleanVariants,
+        presets: sanitizedPresets,
+        configurator_version: data.profile.configurator_version || 'v1',
+      };
+      const mergedMpSettings = getSavedMarketplaceDeviceSettings(resolvedProfile);
+      if (mergedMpSettings) {
+        resolvedProfile.marketplace_image_settings = mergedMpSettings;
+      }
+
       return {
         success: true,
-        profile: {
-          ...data.profile,
-          product_id: safeProductId || Number((data.profile as any).id) || 0,
-          base_price: Number(data.profile.base_price) || 0,
-          device_name: data.profile.device_name || '',
-          device_slug: data.profile.device_slug || '',
-          category: data.profile.category || 'General',
-          currency: data.profile.currency || 'IDR',
-          layers: cleanLayers,
-          variants: cleanVariants,
-          presets: sanitizedPresets,
-          configurator_version: data.profile.configurator_version || 'v1',
-        },
+        profile: resolvedProfile,
         finishes: data.finishes || [],
       };
     }
@@ -3222,20 +3229,25 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
             return !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage');
           });
           const finishesRes = await fetchGlobalFinishesDirect();
+          const resolvedFallback: DeviceConfiguratorProfile = {
+            ...parsedModern,
+            product_id: p.id,
+            device_name: p.name,
+            device_slug: p.slug,
+            category: (p.categories || [])[0]?.name || 'General',
+            base_price: Number(parsedModern.base_price) || Number(p.price) || 0,
+            currency: 'IDR',
+            layers: cleanLayers,
+            variants: cleanVariants,
+            configurator_version: parsedModern.configurator_version || 'v1',
+          };
+          const mergedMpSettings = getSavedMarketplaceDeviceSettings(resolvedFallback);
+          if (mergedMpSettings) {
+            resolvedFallback.marketplace_image_settings = mergedMpSettings;
+          }
           return {
             success: true,
-            profile: {
-              ...parsedModern,
-              product_id: p.id,
-              device_name: p.name,
-              device_slug: p.slug,
-              category: (p.categories || [])[0]?.name || 'General',
-              base_price: Number(parsedModern.base_price) || Number(p.price) || 0,
-              currency: 'IDR',
-              layers: cleanLayers,
-              variants: cleanVariants,
-              configurator_version: parsedModern.configurator_version || 'v1',
-            },
+            profile: resolvedFallback,
             finishes: finishesRes.finishes || []
           };
         }
@@ -3529,6 +3541,108 @@ export async function saveProductConfiguratorProfileDirect(profile: Partial<Devi
   } catch (err: any) {
     return { success: false, error: err.message };
   }
+}
+
+const MARKETPLACE_DEVICE_SETTINGS_STORAGE_KEY = 'exacoat_device_marketplace_settings_v1';
+
+export function getSavedMarketplaceDeviceSettings(
+  profile?: Partial<DeviceConfiguratorProfile> | null
+): MarketplaceDeviceImageSettings | null {
+  if (!profile) return null;
+
+  let localEntry: MarketplaceDeviceImageSettings | null = null;
+  try {
+    const raw = localStorage.getItem(MARKETPLACE_DEVICE_SETTINGS_STORAGE_KEY);
+    if (raw) {
+      const map = JSON.parse(raw) as Record<string, MarketplaceDeviceImageSettings>;
+      const pidKey = profile.product_id ? `id:${profile.product_id}` : '';
+      const slugKey = profile.device_slug ? `slug:${profile.device_slug.toLowerCase().trim()}` : '';
+      const nameKey = profile.device_name ? `name:${profile.device_name.toLowerCase().trim()}` : '';
+      localEntry =
+        (pidKey && map[pidKey]) ||
+        (slugKey && map[slugKey]) ||
+        (nameKey && map[nameKey]) ||
+        null;
+    }
+  } catch {}
+
+  const serverEntry = profile.marketplace_image_settings || null;
+  if (localEntry && serverEntry) {
+    // Prefer whichever has a newer timestamp, or merge with localEntry taking precedence for recent edits
+    return {
+      ...serverEntry,
+      ...localEntry,
+    };
+  }
+  return localEntry || serverEntry || null;
+}
+
+export async function saveMarketplaceDeviceSettingsDirect(
+  profile: Partial<DeviceConfiguratorProfile>,
+  settings: MarketplaceDeviceImageSettings
+): Promise<{
+  success: boolean;
+  settings: MarketplaceDeviceImageSettings;
+  error?: string;
+}> {
+  const stamped: MarketplaceDeviceImageSettings = {
+    ...settings,
+    updated_at: new Date().toISOString(),
+  };
+
+  // 1. Always persist immediately in localStorage under product_id, device_slug, and device_name
+  try {
+    const raw = localStorage.getItem(MARKETPLACE_DEVICE_SETTINGS_STORAGE_KEY);
+    const map: Record<string, MarketplaceDeviceImageSettings> = raw ? JSON.parse(raw) : {};
+    if (profile.product_id) {
+      map[`id:${profile.product_id}`] = stamped;
+    }
+    if (profile.device_slug) {
+      map[`slug:${profile.device_slug.toLowerCase().trim()}`] = stamped;
+    }
+    if (profile.device_name) {
+      map[`name:${profile.device_name.toLowerCase().trim()}`] = stamped;
+    }
+    localStorage.setItem(MARKETPLACE_DEVICE_SETTINGS_STORAGE_KEY, JSON.stringify(map));
+  } catch {}
+
+  // 2. Persist to WordPress product meta via dedicated endpoint (with fallback to profile save)
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/configurator/save-marketplace-settings`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        product_id: profile.product_id,
+        device_slug: profile.device_slug,
+        settings: stamped,
+      }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        settings: data.marketplace_image_settings || stamped,
+      };
+    }
+  } catch {}
+
+  // 3. Fallback: if remote plugin hasn't been updated with /save-marketplace-settings yet, save via /configurator/save if full profile is present
+  if (profile.product_id && Array.isArray(profile.views) && Array.isArray(profile.layers)) {
+    try {
+      await saveProductConfiguratorProfileDirect({
+        ...profile,
+        marketplace_image_settings: stamped,
+      });
+    } catch {}
+  }
+
+  return {
+    success: true,
+    settings: stamped,
+  };
 }
 
 export async function runBatchConfiguratorMigrationDirect(): Promise<{
@@ -5837,6 +5951,9 @@ export interface ProductSeoData {
   seo_title: string;
   seo_description: string;
   focus_keyword: string;
+  google_image_url?: string;
+  featured_image_url?: string;
+  is_gallery_image?: boolean;
 }
 
 export interface ProductSeoGeneratedData {
@@ -5874,6 +5991,8 @@ export async function fetchProductSeoDirect(
         }
         return '';
       };
+      const imgs = Array.isArray(prod?.images) ? prod.images : [];
+      const hasGallery = imgs.length > 1 && Boolean(imgs[1]?.src);
       return {
         success: true,
         data: {
@@ -5884,6 +6003,9 @@ export async function fetchProductSeoDirect(
           seo_title: getMeta(['_yoast_wpseo_title', 'rank_math_title']),
           seo_description: getMeta(['_yoast_wpseo_metadesc', 'rank_math_description']),
           focus_keyword: getMeta(['_yoast_wpseo_focuskw', 'rank_math_focus_keyword']),
+          google_image_url: hasGallery ? imgs[1].src : imgs[0]?.src || '',
+          featured_image_url: imgs[0]?.src || '',
+          is_gallery_image: hasGallery,
         },
       };
     }
@@ -5984,37 +6106,32 @@ export async function generateProductSeoAndDescriptionAi(
 
   const cleanDevice = normalizeDeviceName(productName) || productName;
 
-  const systemPrompt = `You are the lead copywriter and brand voice specialist for Exacoat (exacoat.com).
-Exacoat crafts precision-cut device skins and wraps that solve the everyday physical flaws of modern hardware with tactile grip, zero-bulk scratch defense, and clean personality.
+  const systemPrompt = `You are the lead creative copywriter for Exacoat (exacoat.com), an industrial-design studio that crafts precision-cut device wraps and skins.
 
 Target Product:
 - Device Name: "${cleanDevice}"
 - Category: "${categoryName}"
 
-Brand Voice & Copywriting Rules:
-- Witty, sharp, observational, and lifestyle-first. Write like a clever industrial design studio with dry humor, never like a dry spec sheet or instruction manual.
-- Call out the specific real-world hardware weakness of "${cleanDevice}":
-  * iPhone Pro / Pro Max: notorious fingerprint magnet rails and glass, slippery frosted backs that slide off couch cushions, oversized camera bumps catching table grit, and looking identical to every other phone on the table.
-  * Standard / Air / Plus iPhones: smudge-prone glass, slippery edges, and camera rings that chip the first time they share a pocket with keys.
-  * MacBook Air / Pro: anodized aluminum (especially dark finishes) that looks immaculate in the keynote and collects every palm smudge five minutes out of the box, backpack zipper scratches on the lid, and looking like five other laptops at the coffee shop.
-  * iPad & Magic Keyboard: soft-touch keyboard covers that scuff and stain on café tables, and bare aluminum backs that scratch the second you set them down.
-  * Samsung Galaxy / Fold / Flip: slick matte glass that feels like wet soap in one hand, sharp corners, or narrow rails vulnerable to pocket grit.
-  * Gaming Consoles & Handhelds: glossy plastic that scratches just from dusting it, or slick handheld grips during long sessions.
-  * Accessories (AirPods, Chargers, Pencils): glossy white plastic that scuffs in your pocket on day one and gets mixed up with everyone else's.
-- Example tone for short_description: "Fresh out of the box, the ${cleanDevice} is part flagship hardware, part fingerprint magnet, and far too eager to slide off the couch. Wrap it in a tactile finish that locks in your grip, shrugs off pocket keys, and keeps the factory glass underneath untouched."
-- STRICTLY NEVER say "3M" or name manufacturer brands.
-- Do NOT be technical or explanatory: NEVER say "0.2mm", "ultra-slim profile", "vinyl film", or "adhesive backing".
+Creative Philosophy & Voice:
+- Write with dry, effortless, design-studio wit. The tone is refined, observant, and self-aware: clever enough to make a hardware enthusiast smirk, yet composed and thoroughly premium.
+- Capture the everyday irony of owning "${cleanDevice}": hardware engineers spend years shaving fractions of a millimeter off a chassis, balancing weight distribution, and perfecting finishes, only for owners to face a flawed choice. Either bury all that engineering inside a thick plastic case that ruins the silhouette and pocket feel, or carry it bare and let smudges, desk grit, pocket keys, or a slick surface win within a week.
+- Think fresh about "${cleanDevice}" specifically (its actual physical proportions, chassis weight, camera plateau geometry, how its surface finish behaves in real hands, or how bulky cases spoil its design). Weave a sharp, original observation into the opening, then pivot naturally to how an Exacoat wrap keeps the exact factory silhouette while adding confident grip and everyday scratch defense.
+- Every product must get completely original phrasing. Do not recycle stock jokes or repetitive formulas across devices.
+
+Strict Guardrails:
+- Never mention vinyl manufacturer brand names.
+- Never sound like a technical spec sheet or installation manual (avoid millimeter thickness measurements, adhesive terminology, or mechanical jargon).
 - Strictly NO exclamation marks.
 - Strictly NO em dashes of any kind (do not use long dashes "—" or double hyphens "--"). Use commas or periods instead.
-- Strictly NO generic AI marketing words ("elevate", "revolutionary", "unleash", "game-changer", "ultimate armor", "unparalleled", "seamless").
+- Strictly NO generic AI hype words ("elevate", "revolutionary", "unleash", "game-changer", "ultimate armor", "unparalleled", "seamless").
 
 Output format:
 Return ONLY a valid JSON object with the following four keys (no markdown formatting, no conversational text):
 {
   "seo_title": "${cleanDevice} Skin & Wrap | Exacoat",
-  "seo_description": "Witty, natural Google search snippet (120 to 155 chars) calling out smudges or scratches and how Exacoat wraps add grip and zero-bulk protection. Zero em dashes, never mention 3M.",
+  "seo_description": "Witty, refined Google search snippet (120 to 155 chars) contrasting bulky cases or bare-device flaws with Exacoat's zero-bulk grip and scratch defense. Zero em dashes.",
   "focus_keyword": "${cleanDevice.toLowerCase()} skin",
-  "short_description": "2 to 3 witty, lifestyle-first sentences (35 to 55 words) poking fun at the ${cleanDevice}'s real-world weakness (fingerprints, slipperiness, scratches) and solving it with tactile grip and clean style."
+  "short_description": "2 to 3 sharp, witty, lifestyle-first sentences (35 to 55 words) tailored specifically to the real-world experience of carrying and protecting the ${cleanDevice} without case bulk."
 }`;
 
   const cleanField = (str?: string) => {
@@ -6023,8 +6140,6 @@ Return ONLY a valid JSON object with the following four keys (no markdown format
       .replace(/!+/g, '.')
       .replace(/[—–]/g, ', ')
       .replace(/--/g, ', ')
-      .replace(/\b3M\b/gi, 'premium')
-      .replace(/\s*0\.2\s*mm\s*/gi, ' ')
       .replace(/\s{2,}/g, ' ')
       .trim();
   };

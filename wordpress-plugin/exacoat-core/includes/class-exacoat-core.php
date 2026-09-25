@@ -1166,15 +1166,25 @@ class Exacoat_Core {
 				$yoast_kw    = get_post_meta( $product_id, '_yoast_wpseo_focuskw', true );
 				$rm_kw       = get_post_meta( $product_id, 'rank_math_focus_keyword', true );
 
+				$thumb_id           = (int) get_post_thumbnail_id( $product_id );
+				$featured_image_url = $thumb_id ? (string) wp_get_attachment_image_url( $thumb_id, 'large' ) : '';
+				$gallery_raw        = (string) get_post_meta( $product_id, '_product_image_gallery', true );
+				$gallery_ids        = array_values( array_filter( array_map( 'intval', explode( ',', $gallery_raw ) ) ) );
+				$first_gallery_url  = ! empty( $gallery_ids ) ? (string) wp_get_attachment_image_url( $gallery_ids[0], 'large' ) : '';
+				$google_image_url   = $first_gallery_url ?: $featured_image_url;
+
 				return rest_ensure_response( [
-					'success'           => true,
-					'product_id'        => $product_id,
-					'name'              => $post->post_title,
-					'slug'              => $post->post_name,
-					'short_description' => (string) $short_desc,
-					'seo_title'         => (string) ( $yoast_title ?: ( $rm_title ?: '' ) ),
-					'seo_description'   => (string) ( $yoast_desc ?: ( $rm_desc ?: '' ) ),
-					'focus_keyword'     => (string) ( $yoast_kw ?: ( $rm_kw ?: '' ) ),
+					'success'            => true,
+					'product_id'         => $product_id,
+					'name'               => $post->post_title,
+					'slug'               => $post->post_name,
+					'short_description'  => (string) $short_desc,
+					'seo_title'          => (string) ( $yoast_title ?: ( $rm_title ?: '' ) ),
+					'seo_description'    => (string) ( $yoast_desc ?: ( $rm_desc ?: '' ) ),
+					'focus_keyword'      => (string) ( $yoast_kw ?: ( $rm_kw ?: '' ) ),
+					'google_image_url'   => $google_image_url,
+					'featured_image_url' => $featured_image_url,
+					'is_gallery_image'   => ! empty( $first_gallery_url ),
 				] );
 			},
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
@@ -1261,34 +1271,28 @@ class Exacoat_Core {
 				$is_gemini = ( stripos( $provider, 'gemini' ) !== false );
 				$start = microtime( true );
 
-				$system_instruction = "You are the lead copywriter and brand voice specialist for Exacoat (exacoat.com).\n"
-					. "Exacoat crafts precision-cut device skins and wraps that solve the everyday physical flaws of modern hardware with tactile grip, zero-bulk scratch defense, and clean personality.\n\n"
+				$system_instruction = "You are the lead creative copywriter for Exacoat (exacoat.com), an industrial-design studio that crafts precision-cut device wraps and skins.\n\n"
 					. "Target Product:\n"
 					. "- Device Name: \"{$clean_name}\"\n"
 					. "- Category: \"{$category}\"\n\n"
-					. "Brand Voice and Copywriting Rules:\n"
-					. "- Witty, sharp, observational, and lifestyle-first. Write like a clever industrial design studio with dry humor, never like a dry spec sheet or instruction manual.\n"
-					. "- Call out the specific real-world hardware weakness of \"{$clean_name}\":\n"
-					. "  * iPhone Pro / Pro Max: notorious fingerprint magnet rails and glass, slippery frosted backs that slide off couch cushions, oversized camera bumps catching table grit, and looking identical to every other phone on the table.\n"
-					. "  * Standard / Air / Plus iPhones: smudge-prone glass, slippery edges, and camera rings that chip the first time they share a pocket with keys.\n"
-					. "  * MacBook Air / Pro: anodized aluminum (especially dark finishes) that looks immaculate in the keynote and collects every palm smudge five minutes out of the box, backpack zipper scratches on the lid, and looking like five other laptops at the coffee shop.\n"
-					. "  * iPad & Magic Keyboard: soft-touch keyboard covers that scuff and stain on café tables, and bare aluminum backs that scratch the second you set them down.\n"
-					. "  * Samsung Galaxy / Fold / Flip: slick matte glass that feels like wet soap in one hand, sharp corners, or narrow rails vulnerable to pocket grit.\n"
-					. "  * Gaming Consoles & Handhelds: glossy plastic that scratches just from dusting it, or slick handheld grips during long sessions.\n"
-					. "  * Accessories (AirPods, Chargers, Pencils): glossy white plastic that scuffs in your pocket on day one and gets mixed up with everyone else's.\n"
-					. "- Example tone for short_description: \"Fresh out of the box, the {$clean_name} is part flagship hardware, part fingerprint magnet, and far too eager to slide off the couch. Wrap it in a tactile finish that locks in your grip, shrugs off pocket keys, and keeps the factory glass underneath untouched.\"\n"
-					. "- STRICTLY NEVER say '3M' or name manufacturer brands.\n"
-					. "- Do NOT be technical or explanatory: NEVER say '0.2mm', 'ultra-slim profile', 'vinyl film', or 'adhesive backing'.\n"
+					. "Creative Philosophy & Voice:\n"
+					. "- Write with dry, effortless, design-studio wit. The tone is refined, observant, and self-aware: clever enough to make a hardware enthusiast smirk, yet composed and thoroughly premium.\n"
+					. "- Capture the everyday irony of owning \"{$clean_name}\": hardware engineers spend years shaving fractions of a millimeter off a chassis, balancing weight distribution, and perfecting finishes, only for owners to face a flawed choice. Either bury all that engineering inside a thick plastic case that ruins the silhouette and pocket feel, or carry it bare and let smudges, desk grit, pocket keys, or a slick surface win within a week.\n"
+					. "- Think fresh about \"{$clean_name}\" specifically (its actual physical proportions, chassis weight, camera plateau geometry, how its surface finish behaves in real hands, or how bulky cases spoil its design). Weave a sharp, original observation into the opening, then pivot naturally to how an Exacoat wrap keeps the exact factory silhouette while adding confident grip and everyday scratch defense.\n"
+					. "- Every product must get completely original phrasing. Do not recycle stock jokes or repetitive formulas across devices.\n\n"
+					. "Strict Guardrails:\n"
+					. "- Never mention vinyl manufacturer brand names.\n"
+					. "- Never sound like a technical spec sheet or installation manual (avoid millimeter thickness measurements, adhesive terminology, or mechanical jargon).\n"
 					. "- Strictly NO exclamation marks.\n"
 					. "- Strictly NO em dashes of any kind (do not use long dashes '—' or double hyphens '--'). Use commas or periods instead.\n"
-					. "- Strictly NO generic AI marketing words ('elevate', 'revolutionary', 'unleash', 'game-changer', 'ultimate armor', 'unparalleled', 'seamless').\n\n"
+					. "- Strictly NO generic AI hype words ('elevate', 'revolutionary', 'unleash', 'game-changer', 'ultimate armor', 'unparalleled', 'seamless').\n\n"
 					. "Output Requirement:\n"
 					. "Return ONLY a valid JSON object with the following four keys (no markdown formatting, no conversational text):\n"
 					. "{\n"
 					. "  \"seo_title\": \"{$clean_name} Skin & Wrap | Exacoat\",\n"
-					. "  \"seo_description\": \"Witty, natural Google search snippet (120 to 155 chars) calling out smudges or scratches and how Exacoat wraps add grip and zero-bulk protection. Zero em dashes, never mention 3M.\",\n"
+					. "  \"seo_description\": \"Witty, refined Google search snippet (120 to 155 chars) contrasting bulky cases or bare-device flaws with Exacoat's zero-bulk grip and scratch defense. Zero em dashes.\",\n"
 					. "  \"focus_keyword\": \"{$clean_name} skin\",\n"
-					. "  \"short_description\": \"2 to 3 witty, lifestyle-first sentences (35 to 55 words) poking fun at the {$clean_name}'s real-world weakness (fingerprints, slipperiness, scratches) and solving it with tactile grip and clean style.\"\n"
+					. "  \"short_description\": \"2 to 3 sharp, witty, lifestyle-first sentences (35 to 55 words) tailored specifically to the real-world experience of carrying and protecting the {$clean_name} without case bulk.\"\n"
 					. "}";
 
 				$sanitize_seo_fields = function( array $data ): array {
@@ -1296,8 +1300,6 @@ class Exacoat_Core {
 						if ( isset( $data[ $k ] ) && is_string( $data[ $k ] ) ) {
 							$val = preg_replace( '/!+/', '.', $data[ $k ] );
 							$val = preg_replace( '/[—–]|--/', ', ', $val );
-							$val = preg_replace( '/\b3M\b/i', 'premium', $val );
-							$val = preg_replace( '/\s*0\.2\s*mm\s*/i', ' ', $val );
 							$data[ $k ] = trim( preg_replace( '/\s{2,}/', ' ', $val ) );
 						}
 					}

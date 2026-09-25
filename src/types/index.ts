@@ -584,6 +584,24 @@ export interface DeviceCoverageAndCutouts {
 
 import type { ConfiguratorPreset } from '../lib/wordpressBridge';
 
+export interface MarketplaceDeviceImageSettings {
+  cover_scale: number;
+  cover_offset_x: number;
+  cover_offset_y: number;
+  variant_scale: number;
+  variant_offset_x: number;
+  variant_offset_y: number;
+  headline_text?: string;
+  primary_skin_id?: string;
+  primary_top_right_text?: string;
+  selected_view_id?: string;
+  active_color_id?: string;
+  active_layer_ids?: string[];
+  logo_cutout?: boolean;
+  pencil_cutout?: boolean;
+  updated_at?: string;
+}
+
 export interface DeviceConfiguratorProfile {
   product_id: number;
   device_slug: string;
@@ -602,6 +620,7 @@ export interface DeviceConfiguratorProfile {
   variants?: ConfiguratorVariant[];
   coverage_and_cutouts?: DeviceCoverageAndCutouts;
   presets?: ConfiguratorPreset[];
+  marketplace_image_settings?: MarketplaceDeviceImageSettings;
   status?: 'publish' | 'draft' | string;
   updated_at?: string;
 }

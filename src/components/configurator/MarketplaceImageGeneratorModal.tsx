@@ -2,7 +2,11 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { lockBodyScroll } from '../../lib/bodyScrollLock';
 import type { DeviceConfiguratorProfile } from '../../types';
-import type { GlobalFinish } from '../../lib/wordpressBridge';
+import {
+  type GlobalFinish,
+  getSavedMarketplaceDeviceSettings,
+  saveMarketplaceDeviceSettingsDirect,
+} from '../../lib/wordpressBridge';
 import {
   MarketplaceFeatureCard,
   MarketplaceImageConfig,
@@ -22,6 +26,7 @@ import {
   Download,
   FolderArchive,
   Bookmark,
+  Save,
   Sparkles,
   RefreshCw,
   Upload,
@@ -202,16 +207,46 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     'https://staging.exacoat.com/wp-content/uploads/Marketplace-Product-Background-Plain.png'
   );
 
-  // Device & Swatches State (Default zoom 100% for cover: X = 0px, Y = 110px)
+  // Device & Swatches State (Independent Cover & Variant Positions, save-able per device)
   const [activeColorId, setActiveColorId] = useState<string>('');
   const [coverage, setCoverage] = useState<'model_360' | 'model_cut'>('model_360');
   const [logoCutout, setLogoCutout] = useState<boolean>(true);
   const [pencilCutout, setPencilCutout] = useState<boolean>(true);
   const [showCoverageSection, setShowCoverageSection] = useState<boolean>(false);
   const [selectedViewId, setSelectedViewId] = useState<string>('');
-  const [deviceScale, setDeviceScale] = useState<number>(1.0);
-  const [deviceOffsetX, setDeviceOffsetX] = useState<number>(0);
-  const [deviceOffsetY, setDeviceOffsetY] = useState<number>(110);
+
+  // Independent Cover (Featured Image) Position State
+  const [coverScale, setCoverScale] = useState<number>(1.0);
+  const [coverOffsetX, setCoverOffsetX] = useState<number>(0);
+  const [coverOffsetY, setCoverOffsetY] = useState<number>(110);
+
+  // Independent Variants Position State
+  const [variantScale, setVariantScale] = useState<number>(0.75);
+  const [variantOffsetX, setVariantOffsetX] = useState<number>(0);
+  const [variantOffsetY, setVariantOffsetY] = useState<number>(80);
+
+  // Per-Device Position Saving State
+  const [isSavingDevicePosition, setIsSavingDevicePosition] = useState<boolean>(false);
+  const [hasSavedDevicePosition, setHasSavedDevicePosition] = useState<boolean>(false);
+
+  // Derived active device position based on layoutMode ('cover' vs 'variant')
+  const deviceScale = layoutMode === 'cover' ? coverScale : variantScale;
+  const deviceOffsetX = layoutMode === 'cover' ? coverOffsetX : variantOffsetX;
+  const deviceOffsetY = layoutMode === 'cover' ? coverOffsetY : variantOffsetY;
+
+  const setDeviceScale = (val: number) => {
+    if (layoutMode === 'cover') setCoverScale(val);
+    else setVariantScale(val);
+  };
+  const setDeviceOffsetX = (val: number) => {
+    if (layoutMode === 'cover') setCoverOffsetX(val);
+    else setVariantOffsetX(val);
+  };
+  const setDeviceOffsetY = (val: number) => {
+    if (layoutMode === 'cover') setCoverOffsetY(val);
+    else setVariantOffsetY(val);
+  };
+
   const [activeLayerIds, setActiveLayerIds] = useState<Set<string>>(new Set());
 
   // Batch Generation State
@@ -258,15 +293,23 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     setTopRightText('');
     setDeviceNameText(profile.device_name);
 
-    // Default view
-    const defaultView = profile.views.find((v) => v.is_default) || profile.views[0];
+    const savedMp = getSavedMarketplaceDeviceSettings(profile);
+    setHasSavedDevicePosition(Boolean(savedMp));
+
+    // Default view (or saved view if valid)
+    const defaultView =
+      (savedMp?.selected_view_id && profile.views.find((v) => v.id === savedMp.selected_view_id)) ||
+      profile.views.find((v) => v.is_default) ||
+      profile.views[0];
     if (defaultView) {
       setSelectedViewId(defaultView.id);
     }
 
-    // Default color
+    // Default color (or saved color if valid)
     if (profile.device_colors && profile.device_colors.length > 0) {
-      setActiveColorId(profile.device_colors[0].id);
+      const matchedColor =
+        savedMp?.active_color_id && profile.device_colors.find((c) => c.id === savedMp.active_color_id);
+      setActiveColorId(matchedColor ? matchedColor.id : profile.device_colors[0].id);
     }
 
     // Sub-badge and headline initialization based on actual device capabilities
@@ -275,7 +318,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     if (isArk) {
       setSubBadgeText('x2 pcs');
       setShowSubBadge(true);
-      setHeadlineText('Ark\nInvisible\nSkin');
+      setHeadlineText(savedMp?.headline_text || 'Ark\nInvisible\nSkin');
       setAutoHeadlineWithFinish(false);
       setFeatureCards(DEFAULT_FEATURE_CARDS_CLEAR);
     } else {
@@ -292,9 +335,22 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
         setSubBadgeText(profile.family === 'laptop' ? 'Top & Inside' : 'Precision Fit');
         setShowSubBadge(false);
       }
-      setAutoHeadlineWithFinish(true);
-      setHeadlineText(formatDeviceHeadline(profile.device_name));
+      const defaultFormattedHeadline = formatDeviceHeadline(profile.device_name);
+      if (savedMp?.headline_text && savedMp.headline_text.trim()) {
+        setHeadlineText(savedMp.headline_text);
+        setAutoHeadlineWithFinish(savedMp.headline_text.trim() === defaultFormattedHeadline.trim());
+      } else {
+        setAutoHeadlineWithFinish(true);
+        setHeadlineText(defaultFormattedHeadline);
+      }
       setFeatureCards(DEFAULT_FEATURE_CARDS_OFFICIAL);
+    }
+
+    if (savedMp?.primary_skin_id) {
+      setPrimarySkinId(savedMp.primary_skin_id);
+    }
+    if (savedMp?.primary_top_right_text) {
+      setPrimaryTopRightText(savedMp.primary_top_right_text);
     }
 
     // Default coverage mode strictly reflecting device profile
@@ -308,21 +364,28 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
       setCoverage('model_360');
     }
 
-    setLogoCutout(hasLogoCutoutSupport);
-    setPencilCutout(hasPencilCutoutSupport);
+    setLogoCutout(savedMp?.logo_cutout !== undefined ? savedMp.logo_cutout : hasLogoCutoutSupport);
+    setPencilCutout(savedMp?.pencil_cutout !== undefined ? savedMp.pencil_cutout : hasPencilCutoutSupport);
 
-    // Reset device offsets based on layout mode (variant: 75% zoom, X = 75px, Y = 80px; cover: 100% zoom, Y = 110px)
-    if (layoutMode === 'cover') {
-      setDeviceScale(1.0);
-      setDeviceOffsetX(0);
-      setDeviceOffsetY(110);
-    } else {
-      setDeviceScale(0.75);
-      setDeviceOffsetX(0);
-      setDeviceOffsetY(80);
-    }
+    // Initialize Cover and Variant positions from saved settings (or family defaults)
+    const isLaptop = profile.family === 'laptop';
+    const defCoverScale = 1.0;
+    const defCoverX = isLaptop ? 140 : 0;
+    const defCoverY = isLaptop ? -55 : 110;
 
-    // Initialize active skin layer IDs: strictly activate ONLY the first genuine skin layer
+    const defVariantScale = 0.75;
+    const defVariantX = isLaptop ? 140 : 0;
+    const defVariantY = isLaptop ? -20 : 80;
+
+    setCoverScale(savedMp?.cover_scale ?? defCoverScale);
+    setCoverOffsetX(savedMp?.cover_offset_x ?? defCoverX);
+    setCoverOffsetY(savedMp?.cover_offset_y ?? defCoverY);
+
+    setVariantScale(savedMp?.variant_scale ?? defVariantScale);
+    setVariantOffsetX(savedMp?.variant_offset_x ?? defVariantX);
+    setVariantOffsetY(savedMp?.variant_offset_y ?? defVariantY);
+
+    // Initialize active skin layer IDs: restore saved layers or activate first genuine skin layer
     const initialLayers = new Set<string>();
     const genuineSkinLayers = (profile.layers || []).filter((l) => {
       if (l.is_non_visual) return false;
@@ -335,7 +398,17 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
       return true;
     });
 
-    if (genuineSkinLayers.length > 0) {
+    if (
+      Array.isArray(savedMp?.active_layer_ids) &&
+      savedMp.active_layer_ids.length > 0 &&
+      genuineSkinLayers.some((gl) => savedMp.active_layer_ids!.includes(gl.id))
+    ) {
+      savedMp.active_layer_ids.forEach((lid) => {
+        if (genuineSkinLayers.some((gl) => gl.id === lid)) {
+          initialLayers.add(lid);
+        }
+      });
+    } else if (genuineSkinLayers.length > 0) {
       initialLayers.add(genuineSkinLayers[0].id);
     }
     setActiveLayerIds(initialLayers);
@@ -702,12 +775,12 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
           primaryFinish: chosenPrimary,
           primaryTopRightText: primaryTopRightText || '20+ SKINS SELECTION',
           variantsLayoutMode: batchVariantsLayoutMode,
-          variantScale: layoutMode === 'variant' ? deviceScale : undefined,
-          variantOffsetX: layoutMode === 'variant' ? deviceOffsetX : undefined,
-          variantOffsetY: layoutMode === 'variant' ? deviceOffsetY : undefined,
-          coverScale: layoutMode === 'cover' ? deviceScale : undefined,
-          coverOffsetX: layoutMode === 'cover' ? deviceOffsetX : undefined,
-          coverOffsetY: layoutMode === 'cover' ? deviceOffsetY : undefined,
+          variantScale,
+          variantOffsetX,
+          variantOffsetY,
+          coverScale,
+          coverOffsetX,
+          coverOffsetY,
           coverageMode: hasCoverageOptions ? batchCoverageMode : 'current',
         },
         (current, total, finishName) => {
@@ -738,14 +811,56 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     }
   };
 
-  // Save current selection and background as default in localStorage
-  const handleSaveDefaults = () => {
+  // Save current device's Cover & Variant positions and copy settings to product profile
+  const handleSaveDevicePosition = async () => {
+    if (!profile) return;
+    setIsSavingDevicePosition(true);
+    try {
+      const res = await saveMarketplaceDeviceSettingsDirect(profile, {
+        cover_scale: coverScale,
+        cover_offset_x: coverOffsetX,
+        cover_offset_y: coverOffsetY,
+        variant_scale: variantScale,
+        variant_offset_x: variantOffsetX,
+        variant_offset_y: variantOffsetY,
+        headline_text: effectiveHeadline,
+        primary_skin_id: primarySkinId || activeRenderFinish?.id || 'swarm',
+        primary_top_right_text: primaryTopRightText || '20+ SKINS SELECTION',
+        selected_view_id: selectedViewId,
+        active_color_id: activeColorId,
+        active_layer_ids: Array.from(activeLayerIds),
+        logo_cutout: logoCutout,
+        pencil_cutout: pencilCutout,
+      });
+      if (res.success) {
+        setHasSavedDevicePosition(true);
+        showToast(
+          'success',
+          'Device Position Saved',
+          `Saved Cover & Variant positions for ${profile.device_name}. Synced with Shopee Image Injector.`
+        );
+      } else {
+        showToast('error', 'Save Failed', res.error || 'Could not save device position settings');
+      }
+    } catch (err: any) {
+      showToast('error', 'Save Failed', err.message || 'Could not save device position settings');
+    } finally {
+      setIsSavingDevicePosition(false);
+    }
+  };
+
+  // Save current selection and background as default in localStorage, plus current device position
+  const handleSaveDefaults = async () => {
     try {
       const list = Array.from(selectedFinishIds);
       localStorage.setItem(STORAGE_DEFAULT_SKINS_KEY, JSON.stringify(list));
       localStorage.setItem(STORAGE_CUSTOM_BG_KEY, customBgUrl || '');
       localStorage.setItem('exacoat_marketplace_bg_type', bgType);
-      showToast('success', 'Defaults Saved', `Saved ${list.length} finishes and background settings as default.`);
+      if (profile) {
+        await handleSaveDevicePosition();
+      } else {
+        showToast('success', 'Defaults Saved', `Saved ${list.length} finishes and background settings as default.`);
+      }
     } catch {
       showToast('error', 'Save Failed', 'Could not save defaults to browser storage');
     }

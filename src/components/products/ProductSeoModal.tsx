@@ -80,6 +80,8 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
   };
 
   const cleanDevice = product ? normalizeDeviceName(product.name) : '';
+  const [googleImageUrl, setGoogleImageUrl] = useState<string>('');
+  const [isGalleryImage, setIsGalleryImage] = useState<boolean>(false);
 
   // Load SEO Metadata when product is opened
   useEffect(() => {
@@ -90,6 +92,11 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
 
     // Initial fallback from product object
     setShortDesc(product.short_description || '');
+
+    const prodImgs = Array.isArray(product.images) ? product.images : [];
+    const initialHasGallery = prodImgs.length > 1 && Boolean(prodImgs[1]?.src);
+    setGoogleImageUrl(initialHasGallery ? prodImgs[1].src : prodImgs[0]?.src || '');
+    setIsGalleryImage(initialHasGallery);
 
     // Extract existing metadata if present on product
     const metaList = Array.isArray(product.meta_data) ? product.meta_data : [];
@@ -127,6 +134,12 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
           }
           if (res.data.focus_keyword) {
             setFocusKeyword(cleanRedundantSeoTitle(res.data.focus_keyword, product.name));
+          }
+          if (res.data.google_image_url) {
+            setGoogleImageUrl(res.data.google_image_url);
+          }
+          if (res.data.is_gallery_image !== undefined) {
+            setIsGalleryImage(Boolean(res.data.is_gallery_image));
           }
         }
       })
@@ -438,40 +451,83 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
         )}
 
         {/* Google SERP Snippet Preview */}
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <div className="flex items-center justify-between text-xs text-zinc-500">
             <span className="font-medium flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300">
               <Globe className="w-3.5 h-3.5 text-blue-500" />
               Google Search Snippet Preview
             </span>
             <span className="text-[10px] font-mono text-zinc-400">
-              SERP Simulation
+              {isGalleryImage ? 'SERP Thumbnail: Gallery Image #1' : 'SERP Thumbnail: Primary Image'}
             </span>
           </div>
-          <div className="p-3.5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 space-y-1 shadow-xs">
-            <div className="flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-              <span className="font-medium text-zinc-700 dark:text-zinc-300">exacoat.com</span>
-              <span>›</span>
-              <span>products</span>
-              <span>›</span>
-              <span className="font-mono text-zinc-500 dark:text-zinc-400 truncate max-w-[200px]">
-                {product.slug || 'product-slug'}
+          <div className="p-3.5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-xs flex items-start justify-between gap-4">
+            <div className="space-y-1 min-w-0 flex-1">
+              <div className="flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">exacoat.com</span>
+                <span>›</span>
+                <span>product</span>
+                <span>›</span>
+                <span className="font-mono text-zinc-500 dark:text-zinc-400 truncate max-w-[200px]">
+                  {product.slug || 'product-slug'}
+                </span>
+              </div>
+              <div className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer line-clamp-1">
+                {cleanRedundantSeoTitle(seoTitle || buildCanonicalSeoTitle(product.name), product.name)}
+              </div>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">
+                {cleanSeoCopy(
+                  seoDesc ||
+                    shortDesc ||
+                    `Protect your ${cleanDevice} with precision-engineered textured wraps. Real scratch defense without bulk, laser-measured fit, and clean residue-free removal.`,
+                  {
+                    deviceName: product.name,
+                    productSlug: product.slug,
+                  }
+                )}
+              </p>
+            </div>
+
+            {googleImageUrl && (
+              <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 shrink-0">
+                <img
+                  src={googleImageUrl}
+                  alt={`${cleanDevice} Google Search Thumbnail`}
+                  className="w-full h-full object-cover"
+                />
+                <span
+                  className={clsx(
+                    'absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold backdrop-blur-md border',
+                    isGalleryImage
+                      ? 'bg-emerald-950/85 text-emerald-300 border-emerald-500/40'
+                      : 'bg-zinc-900/85 text-zinc-300 border-zinc-700'
+                  )}
+                >
+                  {isGalleryImage ? 'Gallery #1' : 'Cutout #0'}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Image Routing Verification Bar (Google Search vs Dynamic OG) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+            <div className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/80 dark:border-zinc-800/80 flex items-center justify-between gap-2">
+              <span className="text-zinc-500 dark:text-zinc-400">Google Search Image:</span>
+              <span
+                className={clsx(
+                  'font-mono font-medium',
+                  isGalleryImage ? 'text-emerald-500' : 'text-amber-400'
+                )}
+              >
+                {isGalleryImage ? 'Gallery Photo (images[1])' : 'Fallback (images[0])'}
               </span>
             </div>
-            <div className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer line-clamp-1">
-              {cleanRedundantSeoTitle(seoTitle || buildCanonicalSeoTitle(product.name), product.name)}
+            <div className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/80 dark:border-zinc-800/80 flex items-center justify-between gap-2">
+              <span className="text-zinc-500 dark:text-zinc-400">Social / OG Card:</span>
+              <span className="font-mono font-medium text-blue-400 truncate max-w-[190px]">
+                /api/og?kind=product&amp;slug={product.slug || '...'}
+              </span>
             </div>
-            <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">
-              {cleanSeoCopy(
-                seoDesc ||
-                  shortDesc ||
-                  `Protect your ${cleanDevice} with precision-engineered textured wraps. Real scratch defense without bulk, laser-measured fit, and clean residue-free removal.`,
-                {
-                  deviceName: product.name,
-                  productSlug: product.slug,
-                }
-              )}
-            </p>
           </div>
         </div>
 

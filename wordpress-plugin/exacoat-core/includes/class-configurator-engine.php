@@ -703,6 +703,13 @@ class Exacoat_Configurator_Engine {
 			'permission_callback' => [ __CLASS__, 'verify_permission' ],
 		] );
 
+		// 6b. POST /configurator/save-marketplace-settings: Save per-device cover & variant image generator position settings
+		$register( '/configurator/save-marketplace-settings', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_save_marketplace_settings' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+		] );
+
 		// 7. POST /configurator/batch-migrate: Convert all MKL products to modern profile
 		$register( '/configurator/batch-migrate', [
 			'methods'             => 'POST',
@@ -2805,6 +2812,17 @@ class Exacoat_Configurator_Engine {
 			if ( empty( $profile['currency'] ) ) {
 				$profile['currency'] = get_woocommerce_currency();
 			}
+			if ( empty( $profile['marketplace_image_settings'] ) ) {
+				$saved_mp_settings = get_post_meta( $product_id, '_exacoat_marketplace_image_settings', true );
+				if ( is_string( $saved_mp_settings ) && ! empty( $saved_mp_settings ) ) {
+					$decoded_mp = json_decode( $saved_mp_settings, true );
+					if ( is_array( $decoded_mp ) ) {
+						$profile['marketplace_image_settings'] = $decoded_mp;
+					}
+				} elseif ( is_array( $saved_mp_settings ) ) {
+					$profile['marketplace_image_settings'] = $saved_mp_settings;
+				}
+			}
 		}
 
 		return rest_ensure_response( [
@@ -2815,6 +2833,61 @@ class Exacoat_Configurator_Engine {
 			'group_settings' => self::get_finish_group_settings(),
 			'presets'        => self::get_configurator_presets(),
 			'surcharge_tiers'=> self::get_surcharge_tiers(),
+		] );
+	}
+
+	/**
+	 * REST Endpoint to save per-device marketplace image generator position & settings
+	 */
+	public static function rest_save_marketplace_settings( WP_REST_Request $request ): WP_REST_Response {
+		$params = $request->get_json_params() ?: $request->get_params();
+		$product_id = (int) ( $params['product_id'] ?? $params['id'] ?? $request->get_param( 'product_id' ) ?? 0 );
+
+		if ( ! $product_id && ! empty( $params['device_slug'] ) ) {
+			$slug = sanitize_title( (string) $params['device_slug'] );
+			$post = get_page_by_path( $slug, OBJECT, 'product' );
+			if ( $post ) {
+				$product_id = (int) $post->ID;
+			}
+		}
+
+		if ( ! $product_id || ! get_post( $product_id ) ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => 'Valid product_id is required' ], 400 );
+		}
+
+		$raw_settings = is_array( $params['settings'] ?? null ) ? $params['settings'] : ( is_array( $params['marketplace_image_settings'] ?? null ) ? $params['marketplace_image_settings'] : [] );
+
+		$clean_settings = [
+			'cover_scale'            => isset( $raw_settings['cover_scale'] ) ? (float) $raw_settings['cover_scale'] : 1.0,
+			'cover_offset_x'         => isset( $raw_settings['cover_offset_x'] ) ? (int) $raw_settings['cover_offset_x'] : 0,
+			'cover_offset_y'         => isset( $raw_settings['cover_offset_y'] ) ? (int) $raw_settings['cover_offset_y'] : 110,
+			'variant_scale'          => isset( $raw_settings['variant_scale'] ) ? (float) $raw_settings['variant_scale'] : 0.75,
+			'variant_offset_x'       => isset( $raw_settings['variant_offset_x'] ) ? (int) $raw_settings['variant_offset_x'] : 0,
+			'variant_offset_y'       => isset( $raw_settings['variant_offset_y'] ) ? (int) $raw_settings['variant_offset_y'] : 80,
+			'headline_text'          => isset( $raw_settings['headline_text'] ) ? sanitize_textarea_field( (string) $raw_settings['headline_text'] ) : '',
+			'primary_skin_id'        => isset( $raw_settings['primary_skin_id'] ) ? sanitize_text_field( (string) $raw_settings['primary_skin_id'] ) : '',
+			'primary_top_right_text' => isset( $raw_settings['primary_top_right_text'] ) ? sanitize_text_field( (string) $raw_settings['primary_top_right_text'] ) : '20+ SKINS SELECTION',
+			'selected_view_id'       => isset( $raw_settings['selected_view_id'] ) ? sanitize_text_field( (string) $raw_settings['selected_view_id'] ) : '',
+			'active_color_id'        => isset( $raw_settings['active_color_id'] ) ? sanitize_text_field( (string) $raw_settings['active_color_id'] ) : '',
+			'active_layer_ids'       => is_array( $raw_settings['active_layer_ids'] ?? null ) ? array_values( array_map( 'sanitize_text_field', $raw_settings['active_layer_ids'] ) ) : [],
+			'logo_cutout'            => isset( $raw_settings['logo_cutout'] ) ? (bool) $raw_settings['logo_cutout'] : true,
+			'pencil_cutout'          => isset( $raw_settings['pencil_cutout'] ) ? (bool) $raw_settings['pencil_cutout'] : true,
+			'updated_at'             => current_time( 'mysql' ),
+		];
+
+		update_post_meta( $product_id, '_exacoat_marketplace_image_settings', wp_slash( wp_json_encode( $clean_settings, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
+
+		$existing_raw = get_post_meta( $product_id, self::PROFILE_META_KEY, true );
+		$existing_profile = self::parse_meta_json( $existing_raw );
+		if ( is_array( $existing_profile ) && ! empty( $existing_profile ) ) {
+			$existing_profile['marketplace_image_settings'] = $clean_settings;
+			update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $existing_profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
+		}
+
+		return rest_ensure_response( [
+			'success'                    => true,
+			'product_id'                 => $product_id,
+			'marketplace_image_settings' => $clean_settings,
 		] );
 	}
 
@@ -2886,6 +2959,21 @@ class Exacoat_Configurator_Engine {
 			unset( $p );
 		}
 
+		$existing_mp_settings = null;
+		if ( ! empty( $params['marketplace_image_settings'] ) && is_array( $params['marketplace_image_settings'] ) ) {
+			$existing_mp_settings = $params['marketplace_image_settings'];
+		} else {
+			$saved_mp_raw = get_post_meta( $product_id, '_exacoat_marketplace_image_settings', true );
+			if ( is_string( $saved_mp_raw ) && ! empty( $saved_mp_raw ) ) {
+				$decoded = json_decode( $saved_mp_raw, true );
+				if ( is_array( $decoded ) ) {
+					$existing_mp_settings = $decoded;
+				}
+			} elseif ( is_array( $saved_mp_raw ) ) {
+				$existing_mp_settings = $saved_mp_raw;
+			}
+		}
+
 		$profile = [
 			'product_id'           => $product_id,
 			'device_slug'          => $dev_slug,
@@ -2903,6 +2991,7 @@ class Exacoat_Configurator_Engine {
 			'variants'             => self::sanitize_variants( $params['variants'] ?? [], $params['family'] ?? 'phone', $dev_name, $dev_slug ),
 			'coverage_and_cutouts' => $raw_coverage,
 			'presets'              => $raw_presets,
+			'marketplace_image_settings' => $existing_mp_settings,
 			'updated_at'           => current_time( 'mysql' ),
 		];
 
