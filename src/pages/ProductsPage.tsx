@@ -24,6 +24,7 @@ const formatIDR = (val: number | string | null | undefined): string => {
   return formatCurrency(val, 'IDR');
 };
 import { ShopeeProductDuplicatorModal } from '../components/orders/ShopeeProductDuplicatorModal';
+import { ShopeeImageInjectorModal } from '../components/orders/ShopeeImageInjectorModal';
 import { ProductImageManagerModal } from '../components/products/ProductImageManagerModal';
 import { ProductSeoModal } from '../components/products/ProductSeoModal';
 import { BatchSeoModal } from '../components/products/BatchSeoModal';
@@ -160,6 +161,10 @@ export const ProductsPage: React.FC = () => {
   // Shopee Duplicator Modal State
   const [isShopeeDuplicatorOpen, setIsShopeeDuplicatorOpen] = useState(false);
   const [duplicatorInitialIdOrUrl, setDuplicatorInitialIdOrUrl] = useState<string | undefined>(undefined);
+
+  // Shopee Image Injector Modal State
+  const [isShopeeImageInjectorOpen, setIsShopeeImageInjectorOpen] = useState(false);
+  const [imageInjectorTargetItem, setImageInjectorTargetItem] = useState<ShopeeListingItem | null>(null);
 
   // Delete Confirmation Modal State
   const [productToDelete, setProductToDelete] = useState<{
@@ -496,6 +501,12 @@ export const ProductsPage: React.FC = () => {
   const handleOpenShopeeDuplicator = (item: ShopeeListingItem) => {
     setDuplicatorInitialIdOrUrl(String(item.item_id));
     setIsShopeeDuplicatorOpen(true);
+  };
+
+  // Open Image Injector for a specific Shopee listing
+  const handleOpenShopeeImageInjector = (item: ShopeeListingItem) => {
+    setImageInjectorTargetItem(item);
+    setIsShopeeImageInjectorOpen(true);
   };
 
   // Helper to extract reliable price for Shopee items
@@ -1462,6 +1473,16 @@ export const ProductsPage: React.FC = () => {
                           <Copy className="w-3.5 h-3.5" />
                           <span>Duplikasi</span>
                         </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenShopeeImageInjector(item)}
+                          className="min-h-[44px] px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-500 dark:text-amber-400 border border-amber-500/30 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                          title="Auto-inject gambar cover dan variasi dari image generator"
+                        >
+                          <ImageIcon className="w-3.5 h-3.5" />
+                          <span>Inject Gambar</span>
+                        </button>
                       </div>
 
                       {item.seller_centre_url && (
@@ -1559,6 +1580,15 @@ export const ProductsPage: React.FC = () => {
                               >
                                 <Copy className="w-3.5 h-3.5" />
                                 <span>Duplikasi</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenShopeeImageInjector(item)}
+                                className="min-h-[44px] px-3.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-500 dark:text-amber-400 border border-amber-500/30 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
+                                title="Auto-inject gambar cover dan variasi dari image generator"
+                              >
+                                <ImageIcon className="w-3.5 h-3.5" />
+                                <span>Inject Gambar</span>
                               </button>
                               {item.seller_centre_url && (
                                 <a
@@ -1987,6 +2017,19 @@ export const ProductsPage: React.FC = () => {
           setDuplicatorInitialIdOrUrl(undefined);
         }}
         initialUrlOrId={duplicatorInitialIdOrUrl}
+      />
+
+      {/* Shopee Image Injector Modal */}
+      <ShopeeImageInjectorModal
+        isOpen={isShopeeImageInjectorOpen}
+        onClose={() => {
+          setIsShopeeImageInjectorOpen(false);
+          setImageInjectorTargetItem(null);
+        }}
+        item={imageInjectorTargetItem}
+        onSuccess={() => {
+          loadShopeeProducts();
+        }}
       />
 
       {/* Webstore Product SEO & Short Description Modal */}

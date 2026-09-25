@@ -5491,6 +5491,7 @@ export interface ShopeeTierOption {
 export interface ShopeeTierVariation {
   name: string;
   options: ShopeeTierOption[];
+  option_list?: any[];
 }
 
 export interface ShopeeProductModel {
@@ -5525,6 +5526,7 @@ export interface ShopeeProductPreview {
   tier_variation: ShopeeTierVariation[];
   models: ShopeeProductModel[];
   inferred_device?: string;
+  seller_centre_url?: string;
   error?: string;
   message?: string;
 }
@@ -5554,10 +5556,10 @@ export interface ShopeeDuplicateResult {
 }
 
 export async function fetchShopeeProductPreviewDirect(
-  itemIdOrUrl: string
+  itemIdOrUrl: number | string
 ): Promise<ShopeeProductPreview> {
   const base = getWordPressBaseUrl();
-  const url = `${base}/wp-json/exacoat-core/v1/shopee/product-preview?url=${encodeURIComponent(itemIdOrUrl)}`;
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/product-preview?url=${encodeURIComponent(String(itemIdOrUrl))}`;
 
   try {
     const res = await authenticatedFetch(url, {
@@ -5675,6 +5677,69 @@ export async function duplicateShopeeProductDirect(
     };
   } catch (err: any) {
     return { success: false, error: err.message };
+  }
+}
+
+export interface ShopeeInjectVariantImageItem {
+  option: string;
+  image_id: string;
+}
+
+export interface ShopeeInjectImagesPayload {
+  item_id: number;
+  cover_image_id?: string;
+  variant_images?: ShopeeInjectVariantImageItem[];
+}
+
+export interface ShopeeInjectImagesResult {
+  success: boolean;
+  item_id: number;
+  cover_updated: boolean;
+  gallery_preserved_count: number;
+  variants_updated: number;
+  seller_centre_url?: string;
+  errors?: string[];
+  message?: string;
+  error?: string;
+}
+
+export async function injectShopeeProductImagesDirect(
+  payload: ShopeeInjectImagesPayload
+): Promise<ShopeeInjectImagesResult> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/product/inject-images`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return data as ShopeeInjectImagesResult;
+    }
+    return {
+      success: false,
+      item_id: payload.item_id,
+      cover_updated: Boolean(data?.cover_updated),
+      gallery_preserved_count: Number(data?.gallery_preserved_count) || 0,
+      variants_updated: Number(data?.variants_updated) || 0,
+      errors: Array.isArray(data?.errors) ? data.errors : [],
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      item_id: payload.item_id,
+      cover_updated: false,
+      gallery_preserved_count: 0,
+      variants_updated: 0,
+      error: err.message,
+    };
   }
 }
 

@@ -5,7 +5,9 @@ import {
   duplicateShopeeProductDirect,
   ShopeeProductPreview,
   ShopeeDuplicateResult,
+  ShopeeListingItem,
 } from '../../lib/wordpressBridge';
+import { ShopeeImageInjectorModal } from './ShopeeImageInjectorModal';
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency } from '../../lib/formatters';
 import { Modal } from '../ui/Modal';
@@ -84,6 +86,7 @@ export const ShopeeProductDuplicatorModal: React.FC<ShopeeProductDuplicatorModal
     'idle' | 'uploading_images' | 'creating_draft' | 'init_variations' | 'done' | 'error'
   >('idle');
   const [duplicateResult, setDuplicateResult] = useState<ShopeeDuplicateResult | null>(null);
+  const [isInjectorOpen, setIsInjectorOpen] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const sourceInputRef = useRef<string>(sourceInput);
   sourceInputRef.current = sourceInput;
@@ -735,6 +738,14 @@ export const ShopeeProductDuplicatorModal: React.FC<ShopeeProductDuplicatorModal
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setIsInjectorOpen(true)}
+                className="min-h-[44px] inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#f3aa18] hover:bg-[#e09b15] text-zinc-950 font-bold text-xs transition cursor-pointer shadow-xs"
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>Auto-Inject Product Images</span>
+              </button>
               {duplicateResult.seller_centre_url && (
                 <a
                   href={duplicateResult.seller_centre_url}
@@ -764,6 +775,19 @@ export const ShopeeProductDuplicatorModal: React.FC<ShopeeProductDuplicatorModal
           </div>
         )}
       </div>
+
+      {duplicateResult && duplicateResult.new_item_id && (
+        <ShopeeImageInjectorModal
+          isOpen={isInjectorOpen}
+          onClose={() => setIsInjectorOpen(false)}
+          item={{
+            item_id: duplicateResult.new_item_id,
+            item_name: customTitle || computedTitle || `${targetDevice} Premium 3M Skin`,
+            item_status: 'UNLIST',
+            seller_centre_url: duplicateResult.seller_centre_url,
+          }}
+        />
+      )}
     </Modal>
   );
 };
