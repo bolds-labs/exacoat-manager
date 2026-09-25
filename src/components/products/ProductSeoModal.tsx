@@ -18,8 +18,18 @@ import {
   HelpCircle,
   FileText,
   Key,
+  AlertTriangle,
+  Wand2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import {
+  normalizeDeviceName,
+  buildCanonicalSeoTitle,
+  cleanRedundantSeoTitle,
+  buildCanonicalFocusKeyword,
+  cleanSeoCopy,
+  hasBoilerplateTokens,
+} from '../../lib/seoUtils';
 
 interface ProductSeoModalProps {
   isOpen: boolean;
@@ -69,6 +79,8 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
     );
   };
 
+  const cleanDevice = product ? normalizeDeviceName(product.name) : '';
+
   // Load SEO Metadata when product is opened
   useEffect(() => {
     if (!product || !isOpen) return;
@@ -89,9 +101,15 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
       return '';
     };
 
-    setSeoTitle(getMeta(['_yoast_wpseo_title', 'rank_math_title']) || `${product.name} Skin & Wrap | Exacoat`);
+    const initialTitle = getMeta(['_yoast_wpseo_title', 'rank_math_title']);
+    setSeoTitle(cleanRedundantSeoTitle(initialTitle, product.name));
     setSeoDesc(getMeta(['_yoast_wpseo_metadesc', 'rank_math_description']));
-    setFocusKeyword(getMeta(['_yoast_wpseo_focuskw', 'rank_math_focus_keyword']) || `${product.name} skin`);
+    const initialKw = getMeta(['_yoast_wpseo_focuskw', 'rank_math_focus_keyword']);
+    setFocusKeyword(
+      initialKw
+        ? cleanRedundantSeoTitle(initialKw, product.name)
+        : buildCanonicalFocusKeyword(product.name)
+    );
 
     // Fetch latest fresh metadata from backend
     fetchProductSeoDirect(product.id)
@@ -102,13 +120,13 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
             setShortDesc(res.data.short_description);
           }
           if (res.data.seo_title) {
-            setSeoTitle(res.data.seo_title);
+            setSeoTitle(cleanRedundantSeoTitle(res.data.seo_title, product.name));
           }
           if (res.data.seo_description) {
             setSeoDesc(res.data.seo_description);
           }
           if (res.data.focus_keyword) {
-            setFocusKeyword(res.data.focus_keyword);
+            setFocusKeyword(cleanRedundantSeoTitle(res.data.focus_keyword, product.name));
           }
         }
       })
@@ -121,6 +139,45 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
     };
   }, [product, isOpen]);
 
+  // Check if boilerplate template tokens or HTML exist in copy
+  const isBoilerplateDetected = Boolean(
+    product &&
+      (hasBoilerplateTokens(shortDesc) ||
+        hasBoilerplateTokens(seoDesc) ||
+        /\bskins?\s+skin\b/i.test(seoTitle) ||
+        /\[product_name\]/i.test(shortDesc) ||
+        /\[geturl\]/i.test(shortDesc))
+  );
+
+  const handleResolveBoilerplate = () => {
+    if (!product) return;
+    const cleanDev = normalizeDeviceName(product.name);
+    const cleanedShort = cleanSeoCopy(shortDesc, {
+      deviceName: product.name,
+      productSlug: product.slug,
+    });
+    const cleanedDesc = cleanSeoCopy(seoDesc || shortDesc, {
+      deviceName: product.name,
+      productSlug: product.slug,
+    });
+    const cleanedTitle = cleanRedundantSeoTitle(
+      seoTitle || buildCanonicalSeoTitle(product.name),
+      product.name
+    );
+    const cleanedKw = buildCanonicalFocusKeyword(product.name);
+
+    setShortDesc(cleanedShort);
+    setSeoDesc(cleanedDesc);
+    setSeoTitle(cleanedTitle);
+    setFocusKeyword(cleanedKw);
+
+    showToast(
+      'success',
+      'Template Cleaned',
+      `Resolved [product_name] to "${cleanDev}", stripped HTML tags, and removed em dashes.`
+    );
+  };
+
   // AI Generation (All Fields)
   const handleGenerateAllWithAi = async () => {
     if (!product) return;
@@ -128,7 +185,7 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
     setActiveGeneratingField('all');
 
     const categoryName = product.categories?.[0]?.name || 'Skins';
-    const res = await generateProductSeoAndDescriptionAi(product.name, categoryName, {
+    const res = await generateProductSeoAndDescriptionAi(cleanDevice, categoryName, {
       provider: selectedProvider,
       model: selectedModel,
     });
@@ -137,9 +194,9 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
     setActiveGeneratingField(null);
 
     if (res.success && res.data) {
-      if (res.data.seo_title) setSeoTitle(res.data.seo_title);
+      if (res.data.seo_title) setSeoTitle(cleanRedundantSeoTitle(res.data.seo_title, product.name));
       if (res.data.seo_description) setSeoDesc(res.data.seo_description);
-      if (res.data.focus_keyword) setFocusKeyword(res.data.focus_keyword);
+      if (res.data.focus_keyword) setFocusKeyword(cleanRedundantSeoTitle(res.data.focus_keyword, product.name));
       if (res.data.short_description) setShortDesc(res.data.short_description);
 
       setAiModelUsed(res.model_used || selectedModel);
@@ -161,7 +218,7 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
     setActiveGeneratingField(field);
 
     const categoryName = product.categories?.[0]?.name || 'Skins';
-    const res = await generateProductSeoAndDescriptionAi(product.name, categoryName, {
+    const res = await generateProductSeoAndDescriptionAi(cleanDevice, categoryName, {
       provider: selectedProvider,
       model: selectedModel,
     });
@@ -172,7 +229,7 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
       if (field === 'short_desc' && res.data.short_description) {
         setShortDesc(res.data.short_description);
       } else if (field === 'seo_title' && res.data.seo_title) {
-        setSeoTitle(res.data.seo_title);
+        setSeoTitle(cleanRedundantSeoTitle(res.data.seo_title, product.name));
       } else if (field === 'seo_desc' && res.data.seo_description) {
         setSeoDesc(res.data.seo_description);
       }
@@ -377,11 +434,16 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
 
         {/* Google SERP Snippet Preview */}
         <div className="space-y-2">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-            <Globe className="w-3.5 h-3.5 text-blue-400" />
-            <span>Google Search Results Preview (SERP)</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+              <Globe className="w-3.5 h-3.5 text-blue-400" />
+              <span>Google Search Results Preview (SERP)</span>
+            </div>
+            <span className="text-[10px] text-zinc-400 font-mono">
+              Live Google snippet simulation
+            </span>
           </div>
-          <div className="p-4 rounded-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 space-y-1 shadow-xs">
+          <div className="p-4 rounded-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 space-y-1.5 shadow-xs">
             <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
               <span className="font-semibold text-zinc-700 dark:text-zinc-300">exacoat.com</span>
               <span>›</span>
@@ -390,15 +452,46 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
               <span className="font-mono">{product.slug || 'product-slug'}</span>
             </div>
             <h3 className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer line-clamp-1">
-              {seoTitle || `${product.name} Skin & Wrap | Exacoat`}
+              {cleanRedundantSeoTitle(seoTitle || buildCanonicalSeoTitle(product.name), product.name)}
             </h3>
             <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">
-              {seoDesc ||
-                shortDesc ||
-                `Protect your ${product.name} with precision-engineered authentic 3M textured skins. Scratch defense without added bulk, laser-measured fit, and residue-free removal.`}
+              {cleanSeoCopy(
+                seoDesc ||
+                  shortDesc ||
+                  `Protect your ${cleanDevice} with precision-engineered authentic 3M textured skins. Scratch defense without bulk, laser-measured fit, and residue-free removal.`,
+                {
+                  deviceName: product.name,
+                  productSlug: product.slug,
+                }
+              )}
             </p>
           </div>
         </div>
+
+        {/* Boilerplate Template Warning & 1-Click Resolver */}
+        {isBoilerplateDetected && (
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-200">
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-amber-300">
+                  Boilerplate Template Tokens Detected
+                </p>
+                <p className="text-[11px] text-amber-200/80 mt-0.5">
+                  This product contains raw HTML tags or template placeholders like <code className="text-amber-300">[product_name]</code> or <code className="text-amber-300">[geturl]</code>.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleResolveBoilerplate}
+              className="min-h-[44px] px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-neutral-950 font-bold text-xs transition cursor-pointer shrink-0 shadow-xs flex items-center justify-center gap-1.5"
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+              <span>Resolve & Clean Template</span>
+            </button>
+          </div>
+        )}
 
         {/* Field 1: Short Description */}
         <div className="space-y-2">

@@ -8,6 +8,7 @@ import { getEnv, getWordPressBaseUrl, getWcCredentials } from './env';
 import { CreateReviewPayload, Order, OrderItem, OrderTracking, DeviceConfiguratorProfile, ConfiguratorProfileSummary, DeviceFamily, AdminUser, ExacoatRole } from '../types';
 import { renderEmailHtmlLocally } from './emailRenderer';
 import { extractItemSpecs } from './orderItems';
+import { normalizeDeviceName } from './seoUtils';
 
 
 // ==========================================
@@ -5891,11 +5892,13 @@ export async function generateProductSeoAndDescriptionAi(
       ? cached.gemini_model || 'gemini-2.5-flash'
       : cached.openai_model || 'gpt-4o-mini');
 
+  const cleanDevice = normalizeDeviceName(productName) || productName;
+
   const systemPrompt = `You are an expert e-commerce copywriter and SEO specialist for Exacoat (exacoat.com).
 Exacoat designs precision-engineered vinyl skins and protective wraps made of authentic 3M materials for smartphones, laptops, gaming handhelds, and accessories.
 
 Target Product:
-- Device Name: "${productName}"
+- Device Name: "${cleanDevice}"
 - Category: "${categoryName}"
 
 Brand Voice & Rules:
@@ -5909,9 +5912,9 @@ Brand Voice & Rules:
 Output format:
 Return ONLY a valid JSON object with the following four keys (no markdown formatting, no conversational text):
 {
-  "seo_title": "${productName} Skin & Wrap | Exacoat",
+  "seo_title": "${cleanDevice} Skin & Wrap | Exacoat",
   "seo_description": "A natural search meta description between 120 and 155 characters describing authentic 3M textured wraps with zero bulk scratch defense.",
-  "focus_keyword": "${productName} skin",
+  "focus_keyword": "${cleanDevice.toLowerCase()} skin",
   "short_description": "2 to 3 concise sentences (45 to 65 words) highlighting precision fit, tactile texture, and everyday scratch protection."
 }`;
 
@@ -5943,9 +5946,9 @@ Return ONLY a valid JSON object with the following four keys (no markdown format
 
     if (parsed && (parsed.seo_title || parsed.seo_description || parsed.short_description)) {
       return {
-        seo_title: cleanField(parsed.seo_title) || `${productName} Skin & Wrap | Exacoat`,
+        seo_title: cleanField(parsed.seo_title) || `${cleanDevice} Skin & Wrap | Exacoat`,
         seo_description: cleanField(parsed.seo_description),
-        focus_keyword: cleanField(parsed.focus_keyword) || `${productName.toLowerCase()} skin`,
+        focus_keyword: cleanField(parsed.focus_keyword) || `${cleanDevice.toLowerCase()} skin`,
         short_description: cleanField(parsed.short_description),
       };
     }
@@ -5953,9 +5956,9 @@ Return ONLY a valid JSON object with the following four keys (no markdown format
     if (clean.length > 25) {
       const sanitized = cleanField(clean);
       return {
-        seo_title: `${productName} Skin & Wrap | Exacoat`,
+        seo_title: `${cleanDevice} Skin & Wrap | Exacoat`,
         seo_description: sanitized.slice(0, 155).replace(/[\r\n]+/g, ' ').trim(),
-        focus_keyword: `${productName.toLowerCase()} skin`,
+        focus_keyword: `${cleanDevice.toLowerCase()} skin`,
         short_description: sanitized,
       };
     }
@@ -5971,7 +5974,7 @@ Return ONLY a valid JSON object with the following four keys (no markdown format
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
-        name: productName,
+        name: cleanDevice,
         category: categoryName,
         provider,
         model,
@@ -6005,7 +6008,7 @@ Return ONLY a valid JSON object with the following four keys (no markdown format
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
-        name: `${productName} (${categoryName})`,
+        name: `${cleanDevice} (${categoryName})`,
         provider,
         prompt: systemPrompt,
         model,

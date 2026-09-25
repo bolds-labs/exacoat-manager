@@ -26,6 +26,7 @@ const formatIDR = (val: number | string | null | undefined): string => {
 import { ShopeeProductDuplicatorModal } from '../components/orders/ShopeeProductDuplicatorModal';
 import { ProductImageManagerModal } from '../components/products/ProductImageManagerModal';
 import { ProductSeoModal } from '../components/products/ProductSeoModal';
+import { BatchSeoModal } from '../components/products/BatchSeoModal';
 import {
   Package,
   Globe,
@@ -43,6 +44,7 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  Wand2,
   Image as ImageIcon,
   Check,
   ChevronDown,
@@ -134,6 +136,7 @@ export const ProductsPage: React.FC = () => {
   // Webstore SEO & Short Description Modal State
   const [selectedProductForSeo, setSelectedProductForSeo] = useState<Product | null>(null);
   const [isSeoModalOpen, setIsSeoModalOpen] = useState(false);
+  const [isBatchSeoModalOpen, setIsBatchSeoModalOpen] = useState(false);
 
   const handleProductSeoUpdated = (updatedProduct: Product) => {
     setWpProducts((prev) =>
@@ -968,8 +971,39 @@ export const ProductsPage: React.FC = () => {
                 Try searching for another device or reset the status filter.
               </p>
             </div>
-          ) : viewMode === 'grid' ? (
-            /* GRID VIEW */
+          ) : (
+            <>
+              {/* Webstore SEO Optimization Action Bar */}
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-amber-400/10 text-[#f3aa18]">
+                    <Wand2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                      <span>Webstore SEO & Copy Optimization</span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 font-normal">
+                        {wpTotal} Products
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                      Normalize device titles, resolve boilerplate placeholders, strip HTML tags, or batch AI rewrite across your catalog.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsBatchSeoModalOpen(true)}
+                  className="min-h-[44px] px-4 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold transition shadow-xs cursor-pointer flex items-center justify-center gap-2 shrink-0"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Batch SEO Optimizer</span>
+                </button>
+              </div>
+
+              {viewMode === 'grid' ? (
+                /* GRID VIEW */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {sortedWpProducts.map((p) => {
                 const featuredImg = p.images && p.images[0] ? p.images[0].src : null;
@@ -1301,6 +1335,8 @@ export const ProductsPage: React.FC = () => {
               </div>
             </GlassCard>
           )}
+        </>
+        )}
         </div>
       )}
 
@@ -1962,6 +1998,16 @@ export const ProductsPage: React.FC = () => {
         }}
         product={selectedProductForSeo}
         onUpdated={handleProductSeoUpdated}
+      />
+
+      {/* Batch Webstore SEO & Copy Optimizer Modal */}
+      <BatchSeoModal
+        isOpen={isBatchSeoModalOpen}
+        onClose={() => setIsBatchSeoModalOpen(false)}
+        products={wpProducts}
+        onProductsUpdated={(updated) => {
+          setWpProducts(updated);
+        }}
       />
 
       {/* Delete Confirmation Modal */}

@@ -1231,6 +1231,11 @@ class Exacoat_Core {
 					return rest_ensure_response( [ 'success' => false, 'message' => 'Product or device name is required.' ] );
 				}
 
+				$clean_name = trim( preg_replace( '/\s+(skins?|wraps?|skin & wrap|skins & wraps)$/i', '', $name ) );
+				if ( empty( $clean_name ) ) {
+					$clean_name = $name;
+				}
+
 				$settings = Exacoat_Core::get_settings();
 				$is_gemini = ( stripos( $provider, 'gemini' ) !== false );
 				$start = microtime( true );
@@ -1238,7 +1243,7 @@ class Exacoat_Core {
 				$system_instruction = "You are an expert e-commerce copywriter and SEO specialist for Exacoat (exacoat.com).\n"
 					. "Exacoat designs precision-engineered vinyl skins and protective wraps made of authentic 3M materials for smartphones, laptops, gaming consoles, and accessories.\n\n"
 					. "Target Product:\n"
-					. "- Device Name: \"{$name}\"\n"
+					. "- Device Name: \"{$clean_name}\"\n"
 					. "- Category: \"{$category}\"\n\n"
 					. "Brand Voice and Tone Rules:\n"
 					. "- Confident, clean, understated, and authentic.\n"
@@ -1250,9 +1255,9 @@ class Exacoat_Core {
 					. "Output Requirement:\n"
 					. "Return ONLY a valid JSON object with the following four keys (no markdown formatting, no conversational text):\n"
 					. "{\n"
-					. "  \"seo_title\": \"{$name} Skin & Wrap | Exacoat\",\n"
+					. "  \"seo_title\": \"{$clean_name} Skin & Wrap | Exacoat\",\n"
 					. "  \"seo_description\": \"A natural search meta description between 120 and 155 characters describing authentic 3M textured wraps with zero bulk scratch defense.\",\n"
-					. "  \"focus_keyword\": \"{$name} skin\",\n"
+					. "  \"focus_keyword\": \"{$clean_name} skin\",\n"
 					. "  \"short_description\": \"2 to 3 concise sentences (45 to 65 words) highlighting precision fit, tactile texture, and everyday scratch protection.\"\n"
 					. "}";
 
