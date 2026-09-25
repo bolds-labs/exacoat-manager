@@ -300,6 +300,9 @@ export const ShopeeProductDuplicatorModal: React.FC<ShopeeProductDuplicatorModal
           'Shopee Draft Created',
           `New listing #${result.new_item_id} created in unlisted status with ${count} variations.`
         );
+        if (result.warning) {
+          showToast('warning', 'Variation Notice', result.warning);
+        }
       } else {
         setDuplicationStep('error');
         const err = result.error || 'Failed to create duplicate listing on Shopee.';

@@ -2448,6 +2448,75 @@ class Exacoat_Shopee_Client {
 		if ( empty( $dimension['package_length'] ) ) $dimension['package_length'] = 20;
 		if ( empty( $dimension['package_width'] ) ) $dimension['package_width'] = 15;
 
+		// Resolve location_id from source product or models (mandatory for multi-warehouse shops)
+		$detected_location_id = '';
+		if ( ! empty( $src['stock_info_v2']['seller_stock'] ) && is_array( $src['stock_info_v2']['seller_stock'] ) ) {
+			foreach ( $src['stock_info_v2']['seller_stock'] as $ss ) {
+				if ( ! empty( $ss['location_id'] ) && $ss['location_id'] !== '-' ) {
+					$detected_location_id = (string) $ss['location_id'];
+					break;
+				}
+			}
+		}
+		if ( empty( $detected_location_id ) && ! empty( $source_models ) ) {
+			foreach ( $source_models as $sm ) {
+				if ( ! empty( $sm['stock_info_v2']['seller_stock'] ) && is_array( $sm['stock_info_v2']['seller_stock'] ) ) {
+					foreach ( $sm['stock_info_v2']['seller_stock'] as $ss ) {
+						if ( ! empty( $ss['location_id'] ) && $ss['location_id'] !== '-' ) {
+							$detected_location_id = (string) $ss['location_id'];
+							break 2;
+						}
+					}
+				}
+			}
+		}
+		if ( empty( $detected_location_id ) ) {
+			$wh_res = self::call_shop_api( '/api/v2/shop/get_warehouse_detail', 'GET' );
+			if ( ! empty( $wh_res['response'] ) ) {
+				$wh_data = $wh_res['response'];
+				$wh_candidates = [];
+				if ( ! empty( $wh_data['warehouse_list'] ) && is_array( $wh_data['warehouse_list'] ) ) {
+					$wh_candidates = $wh_data['warehouse_list'];
+				} elseif ( ! empty( $wh_data['warehouse_detail_list'] ) && is_array( $wh_data['warehouse_detail_list'] ) ) {
+					$wh_candidates = $wh_data['warehouse_detail_list'];
+				} elseif ( is_array( $wh_data ) && isset( $wh_data[0] ) ) {
+					$wh_candidates = $wh_data;
+				}
+				foreach ( $wh_candidates as $wh ) {
+					if ( ! empty( $wh['location_id'] ) && $wh['location_id'] !== '-' ) {
+						$detected_location_id = (string) $wh['location_id'];
+						break;
+					}
+				}
+			}
+		}
+
+		// Format seller_stock for base product add_item (mandatory in Shopee Open Platform V2)
+		$base_seller_stock = [];
+		if ( ! empty( $src['stock_info_v2']['seller_stock'] ) && is_array( $src['stock_info_v2']['seller_stock'] ) ) {
+			foreach ( $src['stock_info_v2']['seller_stock'] as $stk ) {
+				$qty = (int) ( $stk['stock'] ?? 0 );
+				if ( $qty <= 0 ) {
+					$qty = 100;
+				}
+				$entry = [ 'stock' => $qty ];
+				if ( ! empty( $stk['location_id'] ) && $stk['location_id'] !== '-' ) {
+					$entry['location_id'] = (string) $stk['location_id'];
+				} elseif ( ! empty( $detected_location_id ) ) {
+					$entry['location_id'] = $detected_location_id;
+				}
+				$base_seller_stock[] = $entry;
+			}
+		}
+
+		if ( empty( $base_seller_stock ) ) {
+			$entry = [ 'stock' => 100 ];
+			if ( ! empty( $detected_location_id ) ) {
+				$entry['location_id'] = $detected_location_id;
+			}
+			$base_seller_stock[] = $entry;
+		}
+
 		// 3. Create Base Product Listing with UNLIST (draft) status
 		$add_payload = [
 			'original_price' => $base_price,
@@ -2455,7 +2524,7 @@ class Exacoat_Shopee_Client {
 			'weight'         => $weight,
 			'item_name'      => $new_title,
 			'item_status'    => 'UNLIST', // Ensures item is saved as unlisted draft
-			'normal_stock'   => 100,
+			'seller_stock'   => $base_seller_stock,
 			'category_id'    => (int) ( $src['category_id'] ?? 0 ),
 			'image'          => [
 				'image_id_list' => $image_ids,
@@ -2495,8 +2564,8 @@ class Exacoat_Shopee_Client {
 		$variation_error = null;
 
 		if ( ! empty( $source_tier_variation ) && ! empty( $source_models ) ) {
-			// Wait 4 seconds for Shopee indexing before calling init_tier_variation
-			sleep( 4 );
+			// Wait 5 seconds for Shopee indexing before calling init_tier_variation
+			sleep( 5 );
 
 			$transformed_models = [];
 			foreach ( $source_models as $m ) {
@@ -2515,9 +2584,34 @@ class Exacoat_Shopee_Client {
 					$m_sku = str_ireplace( $source_device, $target_device, $m_sku );
 				}
 
+				$m_seller_stock = [];
+				if ( ! empty( $m['stock_info_v2']['seller_stock'] ) && is_array( $m['stock_info_v2']['seller_stock'] ) ) {
+					foreach ( $m['stock_info_v2']['seller_stock'] as $stk ) {
+						$qty = (int) ( $stk['stock'] ?? 0 );
+						if ( $qty <= 0 ) {
+							$qty = $m_stock;
+						}
+						$entry = [ 'stock' => $qty ];
+						if ( ! empty( $stk['location_id'] ) && $stk['location_id'] !== '-' ) {
+							$entry['location_id'] = (string) $stk['location_id'];
+						} elseif ( ! empty( $detected_location_id ) ) {
+							$entry['location_id'] = $detected_location_id;
+						}
+						$m_seller_stock[] = $entry;
+					}
+				}
+
+				if ( empty( $m_seller_stock ) ) {
+					$entry = [ 'stock' => $m_stock ];
+					if ( ! empty( $detected_location_id ) ) {
+						$entry['location_id'] = $detected_location_id;
+					}
+					$m_seller_stock[] = $entry;
+				}
+
 				$transformed_models[] = [
 					'tier_index'     => array_values( array_map( 'intval', (array) ( $m['tier_index'] ?? [ 0 ] ) ) ),
-					'normal_stock'   => $m_stock,
+					'seller_stock'   => $m_seller_stock,
 					'original_price' => $m_price,
 					'model_sku'      => $m_sku,
 				];
@@ -2602,6 +2696,7 @@ class Exacoat_Shopee_Client {
 			'models_initialized' => $models_initialized,
 			'source_item_id'     => $source_item_id,
 			'target_device'      => $target_device,
+			'warning'            => $variation_error,
 		], 200 );
 	}
 

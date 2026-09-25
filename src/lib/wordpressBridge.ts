@@ -5522,6 +5522,7 @@ export interface ShopeeDuplicateResult {
   models_initialized?: number;
   source_item_id?: number;
   target_device?: string;
+  warning?: string;
   error?: string;
   message?: string;
 }
