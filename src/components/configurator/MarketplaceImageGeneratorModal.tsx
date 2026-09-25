@@ -210,6 +210,8 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [selectedFinishIds, setSelectedFinishIds] = useState<Set<string>>(new Set());
   const [isGeneratingBatch, setIsGeneratingBatch] = useState<boolean>(false);
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; finishName: string } | null>(null);
+  const [batchSkinFilter, setBatchSkinFilter] = useState<'all' | 'storefront' | 'marketplace'>('all');
+  const [batchSkinSearch, setBatchSkinSearch] = useState<string>('');
 
   // Close on Escape key and lock body scroll
   useEffect(() => {
@@ -764,6 +766,30 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     setSelectedFinishIds(new Set());
   };
 
+  // Select marketplace-only finishes (where is_active === false)
+  const handleSelectMarketplaceOnlyFinishes = () => {
+    const mpFinishes = finishes.filter((f) => f.is_active === false).map((f) => f.id || f.slug);
+    if (mpFinishes.length === 0) {
+      showToast('info', 'No Marketplace Exclusives', 'All finishes are currently active on the storefront.');
+      return;
+    }
+    setSelectedFinishIds(new Set(mpFinishes));
+    showToast('info', 'Marketplace Skins Selected', `Selected ${mpFinishes.length} marketplace-only finish(es).`);
+  };
+
+  // Filtered batch finishes for the batch tab list
+  const displayedBatchFinishes = useMemo(() => {
+    return finishes.filter((f) => {
+      const q = batchSkinSearch.toLowerCase().trim();
+      if (q && !f.name.toLowerCase().includes(q) && !(f.slug || '').toLowerCase().includes(q)) {
+        return false;
+      }
+      if (batchSkinFilter === 'storefront') return f.is_active !== false;
+      if (batchSkinFilter === 'marketplace') return f.is_active === false;
+      return true;
+    });
+  }, [finishes, batchSkinFilter, batchSkinSearch]);
+
   // Custom Background file upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1047,6 +1073,11 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                         }}
                       />
                       <span className="truncate max-w-[110px]">{f.name}</span>
+                      {f.is_active === false && (
+                        <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          MP
+                        </span>
+                      )}
                       {isPrimary && (
                         <Star className="w-3 h-3 text-[#f3aa18] fill-[#f3aa18]" />
                       )}
@@ -2432,20 +2463,31 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                   </span>
                   <div className="flex items-center gap-1">
                     <button
+                      type="button"
                       onClick={handleSelectPopularFinishes}
-                      className="px-2 py-0.5 rounded text-[11px] font-bold bg-[#f3aa18]/20 text-[#f3aa18] hover:bg-[#f3aa18]/30 transition"
+                      className="px-2 py-0.5 rounded text-[11px] font-bold bg-[#f3aa18]/20 text-[#f3aa18] hover:bg-[#f3aa18]/30 transition cursor-pointer"
                     >
                       Popular (13)
                     </button>
                     <button
+                      type="button"
+                      onClick={handleSelectMarketplaceOnlyFinishes}
+                      className="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 transition cursor-pointer border border-amber-500/30"
+                      title="Select marketplace-only finishes (hidden from storefront)"
+                    >
+                      MP Only
+                    </button>
+                    <button
+                      type="button"
                       onClick={handleSelectAllFinishes}
-                      className="px-2 py-0.5 rounded text-[11px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition"
+                      className="px-2 py-0.5 rounded text-[11px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition cursor-pointer"
                     >
                       All
                     </button>
                     <button
+                      type="button"
                       onClick={handleClearSelection}
-                      className="px-2 py-0.5 rounded text-[11px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition"
+                      className="px-2 py-0.5 rounded text-[11px] font-bold bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition cursor-pointer"
                     >
                       Clear
                     </button>
@@ -2548,8 +2590,58 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                   </div>
                 </div>
 
+                {/* Filter and Search Bar for Batch Finish List */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center bg-zinc-950/80 p-0.5 rounded-lg border border-zinc-800 text-[11px] font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => setBatchSkinFilter('all')}
+                      className={clsx(
+                        'px-2 py-0.5 rounded-md transition cursor-pointer',
+                        batchSkinFilter === 'all'
+                          ? 'bg-zinc-800 text-white'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      )}
+                    >
+                      All ({finishes.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBatchSkinFilter('storefront')}
+                      className={clsx(
+                        'px-2 py-0.5 rounded-md transition cursor-pointer',
+                        batchSkinFilter === 'storefront'
+                          ? 'bg-zinc-800 text-white'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      )}
+                    >
+                      Storefront ({finishes.filter((f) => f.is_active !== false).length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBatchSkinFilter('marketplace')}
+                      className={clsx(
+                        'px-2 py-0.5 rounded-md transition cursor-pointer',
+                        batchSkinFilter === 'marketplace'
+                          ? 'bg-amber-500/20 text-amber-300'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      )}
+                    >
+                      MP Only ({finishes.filter((f) => f.is_active === false).length})
+                    </button>
+                  </div>
+
+                  <input
+                    type="text"
+                    value={batchSkinSearch}
+                    onChange={(e) => setBatchSkinSearch(e.target.value)}
+                    placeholder="Search skins..."
+                    className="flex-1 min-w-0 px-2.5 py-1 text-xs bg-zinc-950/80 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60"
+                  />
+                </div>
+
                 <div className="flex-1 overflow-y-auto space-y-1 pr-1 scrollbar-thin border border-zinc-800 rounded-xl p-2 bg-zinc-950/60">
-                  {finishes.map((f) => {
+                  {displayedBatchFinishes.map((f) => {
                     const fid = f.id || f.slug;
                     const isChecked = selectedFinishIds.has(fid);
                     return (
@@ -2574,6 +2666,11 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                           />
                           <span className="text-xs">{f.name}</span>
                           {f.group && <span className="text-[10px] text-zinc-500">({f.group})</span>}
+                          {f.is_active === false && (
+                            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                              Marketplace Only
+                            </span>
+                          )}
                         </div>
 
                         {isChecked ? (
@@ -2584,6 +2681,11 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                       </div>
                     );
                   })}
+                  {displayedBatchFinishes.length === 0 && (
+                    <div className="p-6 text-center text-xs text-zinc-500">
+                      No skins match the current filter or search.
+                    </div>
+                  )}
                 </div>
 
                 {isGeneratingBatch && batchProgress && (

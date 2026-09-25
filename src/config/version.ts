@@ -7,4 +7,4 @@ export const APP_VERSION = '0.1.50';
 export const PLUGIN_VERSION = '0.1.50';
 export const PLUGIN_ZIP_NAME = `exacoat-core-v${PLUGIN_VERSION}.zip`;
 export const PLUGIN_LATEST_ZIP_NAME = 'exacoat-core.zip';
-export const APP_BUILD_DATE = '2026-09-24';
+export const APP_BUILD_DATE = '2026-09-25';

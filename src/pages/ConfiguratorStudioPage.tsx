@@ -886,6 +886,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     is_custom_per_device: boolean;
     badge_text: string;
     badge_color: string;
+    is_active: boolean;
   }>({
     name: '',
     slug: '',
@@ -896,6 +897,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     is_custom_per_device: false,
     badge_text: '',
     badge_color: '#f3aa18',
+    is_active: true,
   });
 
   // WordPress Media Library Picker state
@@ -4163,7 +4165,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
         texture_url: newFinishForm.texture_url.trim() || newFinishForm.thumbnail.trim(),
         extra_price: Number(newFinishForm.extra_price) || 0,
         in_stock: true,
-        is_active: true,
+        is_active: newFinishForm.is_active !== false,
         order: finishes.length,
         class_name: `cfg-${slug}`,
         is_custom_per_device: Boolean(newFinishForm.is_custom_per_device),
@@ -4189,6 +4191,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
           is_custom_per_device: false,
           badge_text: '',
           badge_color: '#f3aa18',
+          is_active: true,
         });
       } else {
         showToast('error', 'Creation Failed', res.error || 'Could not create finish.');
@@ -5870,6 +5873,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         is_custom_per_device: false,
                         badge_text: '',
                         badge_color: '#f3aa18',
+                        is_active: true,
                       });
                       setShowAddNewFinishModal(true);
                     }}
@@ -7306,6 +7310,51 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     </span>
                   </div>
                 </label>
+
+                {/* Visibility & Purpose: Storefront vs Marketplace Only */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider block">
+                    Visibility & Purpose
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNewFinishForm((prev) => ({ ...prev, is_active: true }))}
+                      className={clsx(
+                        'p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col gap-1',
+                        newFinishForm.is_active
+                          ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
+                          : 'bg-zinc-900/60 border-white/5 text-zinc-400 hover:border-white/15 hover:text-zinc-200'
+                      )}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-xs">
+                        <span className={clsx('w-1.5 h-1.5 rounded-full', newFinishForm.is_active ? 'bg-emerald-400' : 'bg-zinc-500')} />
+                        Storefront + Marketplace
+                      </div>
+                      <span className="text-[10px] text-zinc-400 leading-tight">
+                        Active on web configurator and marketplace generator
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewFinishForm((prev) => ({ ...prev, is_active: false }))}
+                      className={clsx(
+                        'p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col gap-1',
+                        !newFinishForm.is_active
+                          ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
+                          : 'bg-zinc-900/60 border-white/5 text-zinc-400 hover:border-white/15 hover:text-zinc-200'
+                      )}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-xs">
+                        <span className={clsx('w-1.5 h-1.5 rounded-full', !newFinishForm.is_active ? 'bg-amber-400' : 'bg-zinc-500')} />
+                        Marketplace Only
+                      </div>
+                      <span className="text-[10px] text-zinc-400 leading-tight">
+                        Hidden from storefront, available for variant image exports
+                      </span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div className="pt-3 border-t border-white/10 flex items-center justify-end gap-2.5">
