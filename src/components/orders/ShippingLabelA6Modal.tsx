@@ -14,6 +14,7 @@ import { clsx } from 'clsx';
 import { useToast } from '../../context/ToastContext';
 import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
 import { formatItemSpecsSummary, formatSeparatedItemSpecs, cleanItemTitle } from '../../lib/orderItems';
+import { resolveOrderCourier } from '../../lib/orderUtils';
 
 interface ShippingLabelA6ModalProps {
   order?: Order | null;
@@ -134,7 +135,11 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
   // Sync state whenever active order changes
   useEffect(() => {
     if (activeOrder) {
-      setCourierName(activeOrder.tracking?.courier || 'JNE Express');
+      const resolved = resolveOrderCourier(activeOrder);
+      const displayCourier = (activeOrder.tracking?.courier && activeOrder.tracking.courier !== 'JNE Express')
+        ? activeOrder.tracking.courier
+        : (resolved.rawMatch || (resolved.serviceName ? `${resolved.courierName} - ${resolved.serviceName}` : resolved.courierName));
+      setCourierName(displayCourier);
       const rawTrack = String(activeOrder.tracking?.tracking_number || '').trim();
       setTrackingNo(rawTrack && !rawTrack.startsWith('field_') ? rawTrack : '');
       setPreviewPageIndex(0);
@@ -187,7 +192,9 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
       shp.country || 'ID',
     ].filter(Boolean);
 
-    const cCourier = (ord.id === activeOrder.id ? courierName : (ord.tracking?.courier || courierName)) || 'JNE Express';
+    const ordResolved = resolveOrderCourier(ord);
+    const ordFallbackCourier = ordResolved.rawMatch || (ordResolved.serviceName ? `${ordResolved.courierName} - ${ordResolved.serviceName}` : ordResolved.courierName);
+    const cCourier = (ord.id === activeOrder.id ? courierName : (ord.tracking?.courier && ord.tracking.courier !== 'JNE Express' ? ord.tracking.courier : ordFallbackCourier)) || 'JNE Express';
     const rawTrk = (ord.id === activeOrder.id ? trackingNo : (ord.tracking?.tracking_number || ''));
     const validTrk = rawTrk && !rawTrk.startsWith('field_') ? rawTrk : '';
 

@@ -6,7 +6,7 @@ import { Printer, CheckCircle2, ClipboardCheck, Package } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
 import { extractItemSpecs, formatSeparatedItemSpecs, cleanItemTitle } from '../../lib/orderItems';
-import { isStorePickupOrder } from '../../lib/orderUtils';
+import { isStorePickupOrder, resolveOrderCourier } from '../../lib/orderUtils';
 
 interface PackingSlipModalProps {
   order: Order | null;
@@ -54,12 +54,12 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
         shipping.country || billing.country || 'Indonesia',
       ].filter(Boolean);
 
+  const resolvedCourier = resolveOrderCourier(order);
   const courierName = isPickup
     ? 'Store Pickup (Summarecon Bekasi)'
-    : order.tracking?.courier ||
-      (order as any).shipping_lines?.[0]?.method_title ||
-      order.shipping_method_name ||
-      'Standard Courier';
+    : (order.tracking?.courier && order.tracking.courier !== 'JNE Express')
+      ? order.tracking.courier
+      : (resolvedCourier.rawMatch || (resolvedCourier.serviceName ? `${resolvedCourier.courierName} - ${resolvedCourier.serviceName}` : resolvedCourier.courierName));
   const trackingNumber = isPickup
     ? 'STORE-PICKUP'
     : order.tracking?.tracking_number && !order.tracking.tracking_number.startsWith('field_')

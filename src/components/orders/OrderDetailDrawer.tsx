@@ -56,7 +56,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { extractItemSpecs } from '../../lib/orderItems';
-import { isStorePickupOrder, toggleLocalStorePickupOrder } from '../../lib/orderUtils';
+import { isStorePickupOrder, toggleLocalStorePickupOrder, resolveOrderCourier } from '../../lib/orderUtils';
 import { getWpBaseUrl } from '../../lib/wordpressBridge';
 import { formatGooritaShipmentText, openGooritaWhatsApp } from '../../lib/exportManager';
 import { 
@@ -243,26 +243,39 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         }
       }
 
+      const resolvedCourier = resolveOrderCourier(order);
+
       if (order.tracking) {
         const rawTrack = String(order.tracking.tracking_number || '').trim();
         const validTrack = rawTrack.startsWith('field_') ? '' : rawTrack;
         const carrierId = order.tracking.carrier_id || '';
-        const isPreset = COURIER_PRESETS.some(p => p.value === carrierId && p.value !== 'custom');
+
+        // If carrier_id was empty or defaulted to generic jne, prioritize specific courier from note or method
+        const effectiveCarrierId = (resolvedCourier.courierId && resolvedCourier.courierId !== 'jne')
+          ? resolvedCourier.courierId
+          : (carrierId || resolvedCourier.courierId);
+
+        const isPreset = COURIER_PRESETS.some(p => p.value === effectiveCarrierId && p.value !== 'custom');
         
         if (isPreset) {
-          setCourier(carrierId);
+          setCourier(effectiveCarrierId);
           setCustomCourierName('');
           setCustomTrackingUrl('');
         } else {
           setCourier('custom');
-          setCustomCourierName(order.tracking.courier || '');
+          setCustomCourierName(resolvedCourier.courierName || order.tracking.courier || '');
           setCustomTrackingUrl(order.tracking.tracking_url || '');
         }
 
         setTrackingNumber(validTrack);
       } else {
-        setCourier('jne');
-        setCustomCourierName('');
+        if (resolvedCourier.isCustom) {
+          setCourier('custom');
+          setCustomCourierName(resolvedCourier.courierName);
+        } else {
+          setCourier(resolvedCourier.courierId);
+          setCustomCourierName('');
+        }
         setCustomTrackingUrl('');
         setTrackingNumber('');
       }
@@ -1161,17 +1174,19 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                           </div>
 
                           {/* Item Customization Specs / Attributes */}
-                          {itemSpecs.length > 0 && (
+                          {itemSpecs.filter((sp) => !/^(image_url|image|composite_url|thumbnail_url)$/i.test(sp.label) && !/^https?:\/\//i.test(sp.value)).length > 0 && (
                             <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                              {itemSpecs.map((sp, sIdx) => (
-                                <span 
-                                  key={sIdx}
-                                  className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/[0.05] text-neutral-300 border border-white/[0.08]"
-                                >
-                                  <span className="text-neutral-400">{sp.label}: </span>
-                                  <span className="text-white font-semibold">{sp.value}</span>
-                                </span>
-                              ))}
+                              {itemSpecs
+                                .filter((sp) => !/^(image_url|image|composite_url|thumbnail_url)$/i.test(sp.label) && !/^https?:\/\//i.test(sp.value))
+                                .map((sp, sIdx) => (
+                                  <span 
+                                    key={sIdx}
+                                    className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/[0.05] text-neutral-300 border border-white/[0.08]"
+                                  >
+                                    <span className="text-neutral-400">{sp.label}: </span>
+                                    <span className="text-white font-semibold">{sp.value}</span>
+                                  </span>
+                                ))}
                             </div>
                           )}
 
@@ -1296,9 +1311,22 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
           <form onSubmit={handleSaveTracking} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block font-sans">
-                  Courier
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block font-sans">
+                    Courier
+                  </label>
+                  {(() => {
+                    const resolved = resolveOrderCourier(order);
+                    if (resolved.serviceName || (resolved.rawMatch && resolved.courierId !== 'jne')) {
+                      return (
+                        <span className="text-[10px] font-mono text-amber-300 font-semibold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                          {resolved.serviceName ? `Service: ${resolved.serviceName}` : resolved.rawMatch}
+                        </span>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
                 <Select value={courier} onValueChange={setCourier}>
                   <SelectTrigger className="w-full h-10 px-3.5 rounded-xl bg-[#141414] border-white/[0.08] text-xs text-white">
                     <SelectValue placeholder="Select Courier" />
@@ -2545,7 +2573,18 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] uppercase font-mono tracking-wider text-neutral-400">Courier</span>
-                  <span className="text-xs font-semibold text-white uppercase">{order.tracking?.courier || courier}</span>
+                  <span className="text-xs font-semibold text-white uppercase">
+                    {(() => {
+                      const res = resolveOrderCourier(order);
+                      if (order.tracking?.courier && order.tracking.courier !== 'JNE Express') {
+                        return order.tracking.courier;
+                      }
+                      if (res.rawMatch && res.courierId !== 'jne') {
+                        return res.rawMatch;
+                      }
+                      return COURIER_PRESETS.find((p) => p.value === courier)?.label || order.tracking?.courier || courier;
+                    })()}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="text-sm font-mono font-bold text-[#f3aa18]">

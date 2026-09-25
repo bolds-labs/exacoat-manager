@@ -22,6 +22,16 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
     // Skip internal WooCommerce or WordPress keys starting with underscore
     if (cleanLabel.startsWith('_')) return;
 
+    // Skip image urls, composite previews, and thumbnails
+    if (/^(image_url|image|composite_url|composite_image|thumbnail_url|rendered_preview|configurator_image)$/i.test(cleanLabel)) {
+      return;
+    }
+
+    // Skip any value that is an absolute web or image URL
+    if (/^https?:\/\//i.test(cleanVal)) {
+      return;
+    }
+
     // Skip legacy poster keys
     if (/^(artwork_orientation|artwork_feelform|print_finish|feelform_mode|orientation|finish_type)$/i.test(cleanLabel)) {
       return;

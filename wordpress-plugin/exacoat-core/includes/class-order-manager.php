@@ -1074,29 +1074,78 @@ class Exacoat_Order_Manager {
 				?: $carrier_val ) ) );
 		}
 
+		// Intelligent courier detection from Customer Note, Shipping Method, or Shipping Lines
+		$detected_carrier = '';
+		$search_texts = [];
+		$cust_note = (string) $order->get_customer_note();
+		if ( ! empty( $cust_note ) ) {
+			$search_texts[] = $cust_note;
+		}
+		$ship_method = (string) $order->get_shipping_method();
+		if ( ! empty( $ship_method ) ) {
+			$search_texts[] = $ship_method;
+		}
+		foreach ( $order->get_items( 'shipping' ) as $s_item ) {
+			$search_texts[] = (string) $s_item->get_method_title() . ' ' . (string) $s_item->get_method_id();
+		}
+
+		foreach ( $search_texts as $st ) {
+			$st_lower = strtolower( $st );
+			if ( str_contains( $st_lower, 'sicepat' ) ) {
+				$detected_carrier = 'sicepat';
+				break;
+			} elseif ( str_contains( $st_lower, 'j&t' ) || str_contains( $st_lower, 'jnt' ) ) {
+				$detected_carrier = 'jnt';
+				break;
+			} elseif ( str_contains( $st_lower, 'pos indonesia' ) || preg_match( '/\bpos\b/', $st_lower ) ) {
+				$detected_carrier = 'pos';
+				break;
+			} elseif ( str_contains( $st_lower, 'lion' ) ) {
+				$detected_carrier = 'lion';
+				break;
+			} elseif ( str_contains( $st_lower, 'goorita' ) ) {
+				$detected_carrier = 'goorita';
+				break;
+			} elseif ( str_contains( $st_lower, 'dhl' ) ) {
+				$detected_carrier = 'dhl';
+				break;
+			} elseif ( str_contains( $st_lower, 'fedex' ) ) {
+				$detected_carrier = 'fedex';
+				break;
+			} elseif ( str_contains( $st_lower, 'jne' ) ) {
+				$detected_carrier = 'jne';
+				break;
+			}
+		}
+
+		// If carrier_val was empty or was defaulted to generic jne without tracking, use detected carrier
+		if ( ! empty( $detected_carrier ) && ( empty( $carrier_val ) || 'jne' === strtolower( (string) $carrier_val ) ) ) {
+			$carrier_val = $detected_carrier;
+		}
+
+		$carrier_labels = [
+			'jne'                 => 'JNE Express',
+			'sicepat'             => 'SiCepat',
+			'pos'                 => 'POS Indonesia',
+			'goorita'             => 'Goorita Send USA',
+			'dhl'                 => 'DHL Express',
+			'fedex'               => 'FedEx International',
+			'biteship'            => 'Biteship',
+			'lion'                => 'Lion Parcel',
+			'jnt'                 => 'J&T Express',
+		];
+		$carrier_key = strtolower( trim( (string) $carrier_val ) );
+		$carrier_display = $carrier_labels[ $carrier_key ] ?? ( ! empty( $carrier_val ) ? ucfirst( (string) $carrier_val ) : 'Express Courier' );
+
 		$tracking = null;
 		if ( ! empty( $tracking_code ) ) {
-			$carrier_key = strtolower( trim( (string) $carrier_val ) );
-			$carrier_labels = [
-				'jne'                 => 'JNE Express',
-				'sicepat'             => 'SiCepat',
-				'pos'                 => 'POS Indonesia',
-				'goorita'             => 'Goorita Send USA',
-				'dhl'                 => 'DHL Express',
-				'fedex'               => 'FedEx International',
-				'biteship'            => 'Biteship',
-				'lion'                => 'Lion Parcel',
-				'jnt'                 => 'J&T Express',
-			];
-			$carrier_display = $carrier_labels[ $carrier_key ] ?? ( ! empty( $carrier_val ) ? ucfirst( (string) $carrier_val ) : 'Express Courier' );
-
 			$tracking_url = class_exists( 'Artmatter_Shipping_Tracker' )
 				? Artmatter_Shipping_Tracker::get_carrier_tracking_url( $carrier_key, $tracking_code )
 				: '';
 
 			$tracking = [
 				'courier'         => $carrier_display,
-				'carrier_id'      => $carrier_key ?: 'jne',
+				'carrier_id'      => $carrier_key ?: ( $detected_carrier ?: 'jne' ),
 				'tracking_number' => (string) $tracking_code,
 				'tracking_url'    => $tracking_url,
 				'shipped_at'      => null,
@@ -1110,8 +1159,17 @@ class Exacoat_Order_Manager {
 			$product_id = $item->get_product_id();
 			$product    = $item->get_product();
 
+			// Custom configured skin preview thumbnail or master product image
+			$custom_img = $item->get_meta( '_configured_image_url' )
+				?: ( $item->get_meta( '_configurator_image' )
+				?: ( $item->get_meta( 'mkl_pc_thumbnail_url' )
+				?: ( $item->get_meta( '_thumbnail_url' )
+				?: ( $item->get_meta( 'image_url' ) ?: '' ) ) ) );
+
 			$img_url = '';
-			if ( $product ) {
+			if ( ! empty( $custom_img ) ) {
+				$img_url = $custom_img;
+			} elseif ( $product ) {
 				$img_id = $product->get_image_id();
 				if ( $img_id ) {
 					$img_url = wp_get_attachment_image_url( $img_id, 'medium' ) ?: '';
@@ -1186,11 +1244,20 @@ class Exacoat_Order_Manager {
 			$formatted_meta = [];
 			if ( method_exists( $item, 'get_formatted_meta_data' ) ) {
 				foreach ( $item->get_formatted_meta_data() as $m ) {
+					$m_key = strtolower( trim( (string) $m->key ) );
+					$m_val = trim( wp_strip_all_tags( (string) $m->display_value ) );
+					// Skip internal keys, image URLs, and image preview links
+					if ( in_array( $m_key, [ 'image_url', 'image', 'composite_url', 'composite_image', '_configured_image_url', 'thumbnail_url' ], true ) ) {
+						continue;
+					}
+					if ( str_starts_with( $m_val, 'http://' ) || str_starts_with( $m_val, 'https://' ) ) {
+						continue;
+					}
 					$formatted_meta[] = [
 						'key'           => $m->key,
 						'label'         => $m->display_key,
-						'value'         => wp_strip_all_tags( $m->display_value ),
-						'display_value' => wp_strip_all_tags( $m->display_value ),
+						'value'         => $m_val,
+						'display_value' => $m_val,
 					];
 				}
 			}
@@ -1416,6 +1483,8 @@ class Exacoat_Order_Manager {
 			'items'                      => $items_data,
 			'item_count'                 => count( $items_data ),
 			'tracking'                   => is_array( $tracking ) ? $tracking : null,
+			'detected_courier'           => $detected_carrier ?: $carrier_key ?: 'jne',
+			'shipping_courier_name'      => $carrier_display,
 			'notes'                      => $notes_data,
 			'total_commission'           => round( $total_commissions, 2 ),
 			'total_commission_usd'       => round( $total_commissions, 2 ),
