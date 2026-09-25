@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import {
   Product,
   fetchProductsDirect,
@@ -18,6 +17,8 @@ import {
 import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '../lib/formatters';
 import { Modal } from '../components/ui/Modal';
+import { PageHeroHeader } from '../components/ui/PageHeroHeader';
+import { GlassCard } from '../components/ui/GlassCard';
 
 const formatIDR = (val: number | string | null | undefined): string => {
   return formatCurrency(val, 'IDR');
@@ -567,8 +568,32 @@ export const ProductsPage: React.FC = () => {
 
   // Sorted Shopee Listings
   const sortedShopeeItems = useMemo(() => {
-    const list = [...shopeeItems];
+    let list = [...shopeeItems];
+    const rawSearch = debouncedSearch.trim().toLowerCase();
+    const tokens = rawSearch.split(/\s+/).filter(Boolean);
+
+    // If searching, filter out any Shopee items where title or ID does not contain all query tokens
+    if (tokens.length > 0) {
+      list = list.filter((item) => {
+        const titleLower = (item.item_name || '').toLowerCase();
+        const idStr = String(item.item_id);
+        if (idStr === rawSearch || idStr.includes(rawSearch)) {
+          return true;
+        }
+        return tokens.every((token) => titleLower.includes(token));
+      });
+    }
+
     list.sort((a, b) => {
+      if (rawSearch) {
+        const aTitle = (a.item_name || '').toLowerCase();
+        const bTitle = (b.item_name || '').toLowerCase();
+        const aExact = aTitle.includes(rawSearch);
+        const bExact = bTitle.includes(rawSearch);
+        if (aExact && !bExact) return -1;
+        if (!aExact && bExact) return 1;
+      }
+
       if (sortOption === 'title_asc') return a.item_name.localeCompare(b.item_name);
       if (sortOption === 'title_desc') return b.item_name.localeCompare(a.item_name);
       const priceA = getShopeeItemPrice(a);
@@ -581,12 +606,36 @@ export const ProductsPage: React.FC = () => {
       return updateB - updateA;
     });
     return list;
-  }, [shopeeItems, sortOption]);
+  }, [shopeeItems, sortOption, debouncedSearch]);
 
   // Sorted TikTok Listings
   const sortedTikTokItems = useMemo(() => {
-    const list = [...tiktokItems];
+    let list = [...tiktokItems];
+    const rawSearch = debouncedSearch.trim().toLowerCase();
+    const tokens = rawSearch.split(/\s+/).filter(Boolean);
+
+    // If searching, filter out any TikTok items where title or ID does not contain all query tokens
+    if (tokens.length > 0) {
+      list = list.filter((item) => {
+        const titleLower = (item.title || '').toLowerCase();
+        const idStr = String(item.id);
+        if (idStr === rawSearch || idStr.includes(rawSearch)) {
+          return true;
+        }
+        return tokens.every((token) => titleLower.includes(token));
+      });
+    }
+
     list.sort((a, b) => {
+      if (rawSearch) {
+        const aTitle = (a.title || '').toLowerCase();
+        const bTitle = (b.title || '').toLowerCase();
+        const aExact = aTitle.includes(rawSearch);
+        const bExact = bTitle.includes(rawSearch);
+        if (aExact && !bExact) return -1;
+        if (!aExact && bExact) return 1;
+      }
+
       if (sortOption === 'title_asc') return a.title.localeCompare(b.title);
       if (sortOption === 'title_desc') return b.title.localeCompare(a.title);
       const priceA = parseFloat(a.skus?.[0]?.price || '0');
@@ -599,7 +648,7 @@ export const ProductsPage: React.FC = () => {
       return updateB - updateA;
     });
     return list;
-  }, [tiktokItems, sortOption]);
+  }, [tiktokItems, sortOption, debouncedSearch]);
 
   const activeSortLabel =
     SORT_OPTIONS.find((s) => s.value === sortOption)?.label || 'Recently Updated';
@@ -607,286 +656,257 @@ export const ProductsPage: React.FC = () => {
   const activeStatusLabel =
     filterOptions.find((f) => f.value === statusFilter)?.label || 'All Listings';
 
+  const isCurrentlyLoading =
+    activeChannel === 'wordpress'
+      ? isLoadingWp
+      : activeChannel === 'shopee'
+      ? isLoadingShopee
+      : isLoadingTiktok;
+
+  const handleRefreshCurrent = () => {
+    if (activeChannel === 'wordpress') loadWordPressProducts(wpPage, debouncedSearch, statusFilter);
+    if (activeChannel === 'shopee') loadShopeeProducts(shopeeOffset, debouncedSearch, statusFilter);
+    if (activeChannel === 'tiktok') loadTikTokProducts(tiktokPageToken, debouncedSearch, statusFilter);
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12 font-sans">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-              <Package className="w-5 h-5" />
+      {/* Top Banner & Multi-Channel Switcher */}
+      <PageHeroHeader
+        title="Products Hub"
+        subtitle="Multi-channel catalog management across Exacoat Webstore, Shopee Indonesia, and TikTok Shop."
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Channel Switcher Pills */}
+            <div className="p-1 rounded-2xl bg-neutral-900/80 border border-white/10 w-fit flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveChannel('wordpress');
+                  setStatusFilter('all');
+                }}
+                className={clsx(
+                  'min-h-[44px] px-3.5 sm:px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer',
+                  activeChannel === 'wordpress'
+                    ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+                    : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                )}
+              >
+                <Globe className="w-4 h-4 shrink-0" />
+                <span>Exacoat Webstore</span>
+                <span
+                  className={clsx(
+                    'px-2 py-0.5 rounded-full text-[10px] font-mono',
+                    activeChannel === 'wordpress'
+                      ? 'bg-black/20 text-neutral-950 font-bold'
+                      : 'bg-white/10 text-neutral-400'
+                  )}
+                >
+                  {wpTotal}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveChannel('shopee');
+                  setStatusFilter('all');
+                }}
+                className={clsx(
+                  'min-h-[44px] px-3.5 sm:px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer',
+                  activeChannel === 'shopee'
+                    ? 'bg-orange-500 text-white font-bold shadow-sm'
+                    : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                )}
+              >
+                <ShoppingBag className="w-4 h-4 shrink-0" />
+                <span>Shopee Indonesia</span>
+                <span
+                  className={clsx(
+                    'px-2 py-0.5 rounded-full text-[10px] font-mono',
+                    activeChannel === 'shopee'
+                      ? 'bg-black/20 text-white font-bold'
+                      : 'bg-white/10 text-neutral-400'
+                  )}
+                >
+                  {shopeeTotal}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveChannel('tiktok');
+                  setStatusFilter('all');
+                }}
+                className={clsx(
+                  'min-h-[44px] px-3.5 sm:px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer',
+                  activeChannel === 'tiktok'
+                    ? 'bg-rose-500 text-white font-bold shadow-sm'
+                    : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                )}
+              >
+                <Video className="w-4 h-4 shrink-0" />
+                <span>TikTok Shop</span>
+                <span
+                  className={clsx(
+                    'px-2 py-0.5 rounded-full text-[10px] font-mono',
+                    activeChannel === 'tiktok'
+                      ? 'bg-black/20 text-white font-bold'
+                      : 'bg-white/10 text-neutral-400'
+                  )}
+                >
+                  {tiktokTotal}
+                </span>
+              </button>
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-100">
-              Products Hub
-            </h1>
           </div>
-          <p className="text-xs sm:text-sm text-zinc-400 mt-1">
-            Real multi-channel product catalog across Exacoat Webstore, Shopee, and TikTok Shop.
-          </p>
-        </div>
-      </div>
+        }
+      />
 
-      {/* Channel Switcher Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800 pb-3">
-        <button
-          type="button"
-          onClick={() => {
-            setActiveChannel('wordpress');
-            setStatusFilter('all');
-          }}
-          className={clsx(
-            'min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition cursor-pointer',
-            activeChannel === 'wordpress'
-              ? 'bg-amber-400 text-zinc-950 shadow-md shadow-amber-400/10 font-bold'
-              : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
-          )}
-        >
-          <Globe className="w-4 h-4" />
-          <span>Exacoat Webstore</span>
-          <span
-            className={clsx(
-              'px-2 py-0.5 rounded-full text-[10px] font-mono',
-              activeChannel === 'wordpress' ? 'bg-zinc-950/20 text-zinc-950' : 'bg-zinc-800 text-zinc-400'
-            )}
-          >
-            {wpTotal}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setActiveChannel('shopee');
-            setStatusFilter('all');
-          }}
-          className={clsx(
-            'min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition cursor-pointer',
-            activeChannel === 'shopee'
-              ? 'bg-amber-400 text-zinc-950 shadow-md shadow-amber-400/10 font-bold'
-              : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
-          )}
-        >
-          <ShoppingBag className="w-4 h-4" />
-          <span>Shopee Official</span>
-          <span
-            className={clsx(
-              'px-2 py-0.5 rounded-full text-[10px] font-mono',
-              activeChannel === 'shopee' ? 'bg-zinc-950/20 text-zinc-950' : 'bg-zinc-800 text-zinc-400'
-            )}
-          >
-            {shopeeTotal}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setActiveChannel('tiktok');
-            setStatusFilter('all');
-          }}
-          className={clsx(
-            'min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition cursor-pointer',
-            activeChannel === 'tiktok'
-              ? 'bg-amber-400 text-zinc-950 shadow-md shadow-amber-400/10 font-bold'
-              : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
-          )}
-        >
-          <Video className="w-4 h-4" />
-          <span>TikTok Shop</span>
-          <span
-            className={clsx(
-              'px-2 py-0.5 rounded-full text-[10px] font-mono',
-              activeChannel === 'tiktok' ? 'bg-zinc-950/20 text-zinc-950' : 'bg-zinc-800 text-zinc-400'
-            )}
-          >
-            {tiktokTotal}
-          </span>
-        </button>
-      </div>
-
-      {/* Modern Filter, Search, Sort & View Mode Bar */}
-      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-zinc-950/60 p-3 rounded-2xl border border-zinc-800/80 backdrop-blur-md">
-        {/* Search Bar with instant clear button */}
-        <div className="relative flex-1 max-w-lg">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={`Search ${activeChannel === 'wordpress' ? 'WooCommerce' : activeChannel === 'shopee' ? 'Shopee' : 'TikTok'} products by name, ID, or SKU...`}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-9 py-2 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/40"
-          />
-          {searchQuery && (
+      {/* Control Bar: Search, Status Filters & View Controls */}
+      <GlassCard className="p-3 sm:p-4 rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] space-y-3 overflow-visible relative z-20">
+        {/* Row 1: Status Filter Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+          {filterOptions.map((tab) => (
             <button
+              key={tab.value}
               type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-zinc-200 rounded-md transition"
-              title="Clear search"
+              onClick={() => setStatusFilter(tab.value)}
+              className={clsx(
+                'min-h-[44px] px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer border flex items-center gap-2',
+                statusFilter === tab.value
+                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 border-zinc-900 dark:border-white shadow-xs'
+                  : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-transparent'
+              )}
             >
-              <X className="w-3.5 h-3.5" />
+              <span className={clsx('w-2 h-2 rounded-full shrink-0', tab.dot)} />
+              <span>{tab.label}</span>
             </button>
-          )}
+          ))}
         </div>
 
-        {/* Right Controls: Prettier Status Dropdown, Prettier Sort Dropdown, View Toggle, Refresh */}
-        <div className="flex flex-wrap items-center gap-2.5 justify-end">
-          {/* Prettier Status Filter Dropdown */}
-          <div ref={statusDropdownRef} className="relative">
-            <button
-              type="button"
-              onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
-              className="min-h-[40px] px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 hover:border-zinc-700 text-xs font-medium text-zinc-200 flex items-center gap-2 transition cursor-pointer"
-            >
-              <Filter className="w-3.5 h-3.5 text-zinc-400" />
-              <span className="truncate max-w-[120px]">{activeStatusLabel}</span>
-              <ChevronDown
-                className={clsx(
-                  'w-3.5 h-3.5 text-zinc-400 transition-transform duration-200',
-                  isStatusDropdownOpen && 'rotate-180'
-                )}
-              />
-            </button>
-
-            {isStatusDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-48 rounded-xl bg-zinc-900/95 border border-zinc-800 shadow-xl backdrop-blur-xl py-1.5 z-40 divide-y divide-zinc-800/60">
-                <div className="px-3 py-1.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
-                  Filter by Status
-                </div>
-                <div className="py-1">
-                  {filterOptions.map((opt) => {
-                    const isSelected = statusFilter === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => {
-                          setStatusFilter(opt.value);
-                          setIsStatusDropdownOpen(false);
-                        }}
-                        className={clsx(
-                          'w-full px-3 py-2 text-xs flex items-center justify-between text-left transition hover:bg-zinc-800/60 cursor-pointer',
-                          isSelected ? 'text-amber-400 font-semibold' : 'text-zinc-300'
-                        )}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className={clsx('w-2 h-2 rounded-full', opt.dot)} />
-                          <span>{opt.label}</span>
-                        </div>
-                        {isSelected && <Check className="w-3.5 h-3.5 text-amber-400" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Prettier Sorting Dropdown */}
-          <div ref={sortDropdownRef} className="relative">
-            <button
-              type="button"
-              onClick={() => setIsSortDropdownOpen(!isSortDropdownOpen)}
-              className="min-h-[40px] px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 hover:border-zinc-700 text-xs font-medium text-zinc-200 flex items-center gap-2 transition cursor-pointer"
-            >
-              <ArrowUpDown className="w-3.5 h-3.5 text-amber-400" />
-              <span className="truncate max-w-[140px]">{activeSortLabel}</span>
-              <ChevronDown
-                className={clsx(
-                  'w-3.5 h-3.5 text-zinc-400 transition-transform duration-200',
-                  isSortDropdownOpen && 'rotate-180'
-                )}
-              />
-            </button>
-
-            {isSortDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-56 rounded-xl bg-zinc-900/95 border border-zinc-800 shadow-xl backdrop-blur-xl py-1.5 z-40 divide-y divide-zinc-800/60">
-                <div className="px-3 py-1.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
-                  Sort Items
-                </div>
-                <div className="py-1">
-                  {SORT_OPTIONS.map((opt) => {
-                    const isSelected = sortOption === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => {
-                          setSortOption(opt.value);
-                          setIsSortDropdownOpen(false);
-                        }}
-                        className={clsx(
-                          'w-full px-3 py-2 text-xs flex items-center justify-between text-left transition hover:bg-zinc-800/60 cursor-pointer',
-                          isSelected ? 'text-amber-400 font-semibold' : 'text-zinc-300'
-                        )}
-                      >
-                        <span>{opt.label}</span>
-                        {isSelected && <Check className="w-3.5 h-3.5 text-amber-400" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Table vs Grid View Toggle Switch */}
-          <div className="flex items-center bg-zinc-900 p-0.5 rounded-xl border border-zinc-800">
-            <button
-              type="button"
-              onClick={() => handleToggleViewMode('grid')}
-              className={clsx(
-                'min-h-[36px] px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer',
-                viewMode === 'grid'
-                  ? 'bg-amber-400 text-zinc-950 font-semibold shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              )}
-              title="Grid View"
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Grid</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleToggleViewMode('table')}
-              className={clsx(
-                'min-h-[36px] px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer',
-                viewMode === 'table'
-                  ? 'bg-amber-400 text-zinc-950 font-semibold shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              )}
-              title="Table View"
-            >
-              <List className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Table</span>
-            </button>
-          </div>
-
-          {/* Refresh Button */}
-          <button
-            type="button"
-            onClick={() => {
-              if (activeChannel === 'wordpress') loadWordPressProducts(wpPage, debouncedSearch, statusFilter);
-              if (activeChannel === 'shopee') loadShopeeProducts(shopeeOffset, debouncedSearch, statusFilter);
-              if (activeChannel === 'tiktok') loadTikTokProducts(tiktokPageToken, debouncedSearch, statusFilter);
-            }}
-            disabled={isLoadingWp || isLoadingShopee || isLoadingTiktok}
-            className="min-h-[40px] px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-medium flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
-            title="Refresh Catalog Data"
-          >
-            <RefreshCw
-              className={clsx(
-                'w-3.5 h-3.5 text-zinc-400',
-                (isLoadingWp || isLoadingShopee || isLoadingTiktok) && 'animate-spin text-amber-400'
-              )}
+        {/* Row 2: Search Input and View Controls */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-zinc-100 dark:border-white/5">
+          {/* Search Input */}
+          <div className="relative flex-1 sm:max-w-md">
+            <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              placeholder={`Search ${activeChannel === 'wordpress' ? 'WooCommerce' : activeChannel === 'shopee' ? 'Shopee' : 'TikTok'} products by name, ID, or SKU...`}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full min-h-[44px] pl-9 pr-8 py-2 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-xs text-zinc-900 dark:text-white placeholder-zinc-500 focus:outline-none focus:border-[#f3aa18]"
             />
-            <span className="hidden sm:inline">Refresh</span>
-          </button>
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-zinc-200 rounded-md transition cursor-pointer"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Right Controls: Sort Dropdown, View Toggle, Refresh */}
+          <div className="flex items-center gap-2 justify-end flex-wrap">
+            {/* Sort Selector */}
+            <div ref={sortDropdownRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setIsSortDropdownOpen(!isSortDropdownOpen)}
+                className="min-h-[44px] px-3.5 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-[#141414] dark:hover:bg-white/[0.06] text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-white/[0.08] text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"
+              >
+                <ArrowUpDown className="w-3.5 h-3.5 text-[#f3aa18]" />
+                <span className="truncate max-w-[130px]">{activeSortLabel}</span>
+                <ChevronDown
+                  className={clsx(
+                    'w-3.5 h-3.5 text-zinc-400 transition-transform duration-200',
+                    isSortDropdownOpen && 'rotate-180'
+                  )}
+                />
+              </button>
+
+              {isSortDropdownOpen && (
+                <div className="absolute right-0 mt-1.5 w-52 rounded-xl bg-white dark:bg-[#141414] border border-zinc-200 dark:border-white/10 shadow-xl py-1.5 z-50 text-xs">
+                  {SORT_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        setSortOption(opt.value);
+                        setIsSortDropdownOpen(false);
+                      }}
+                      className={clsx(
+                        'min-h-[40px] w-full px-3.5 py-2 text-left flex items-center justify-between transition cursor-pointer',
+                        sortOption === opt.value
+                          ? 'bg-amber-500/10 text-[#f3aa18] font-bold'
+                          : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5'
+                      )}
+                    >
+                      <span>{opt.label}</span>
+                      {sortOption === opt.value && <Check className="w-3.5 h-3.5 text-[#f3aa18]" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* View Mode Toggle: Grid vs Table */}
+            <div className="p-1 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => handleToggleViewMode('grid')}
+                className={clsx(
+                  'min-h-[36px] min-w-[36px] p-1.5 rounded-lg transition cursor-pointer flex items-center justify-center',
+                  viewMode === 'grid'
+                    ? 'bg-white dark:bg-white/10 text-[#f3aa18] shadow-xs'
+                    : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white'
+                )}
+                title="Grid view"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleToggleViewMode('table')}
+                className={clsx(
+                  'min-h-[36px] min-w-[36px] p-1.5 rounded-lg transition cursor-pointer flex items-center justify-center',
+                  viewMode === 'table'
+                    ? 'bg-white dark:bg-white/10 text-[#f3aa18] shadow-xs'
+                    : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white'
+                )}
+                title="Table view"
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Refresh Button */}
+            <button
+              type="button"
+              onClick={handleRefreshCurrent}
+              disabled={isCurrentlyLoading}
+              className="min-h-[44px] px-3.5 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-[#141414] dark:hover:bg-white/[0.06] text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-white/[0.08] text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
+              title="Refresh catalog"
+            >
+              <RefreshCw
+                className={clsx(
+                  'w-3.5 h-3.5 text-[#f3aa18]',
+                  isCurrentlyLoading && 'animate-spin'
+                )}
+              />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+          </div>
         </div>
-      </div>
+      </GlassCard>
 
       {/* Active Search Filter Banner */}
       {debouncedSearch && (
-        <div className="flex items-center justify-between px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300">
+        <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300">
           <div className="flex items-center gap-2">
             <Search className="w-3.5 h-3.5 text-amber-400" />
             <span>
@@ -896,7 +916,7 @@ export const ProductsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setSearchQuery('')}
-            className="text-[11px] text-amber-400 hover:text-amber-200 underline cursor-pointer"
+            className="text-xs text-amber-400 hover:text-amber-200 underline cursor-pointer"
           >
             Clear Filter
           </button>
@@ -949,17 +969,18 @@ export const ProductsPage: React.FC = () => {
                   : 'Rp 0';
 
                 return (
-                  <div
+                  <GlassCard
                     key={p.id}
-                    className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800/80 hover:border-zinc-700/80 transition flex flex-col justify-between space-y-4 shadow-sm"
+                    hoverEffect={true}
+                    className="p-4 rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] flex flex-col justify-between space-y-3.5 group transition-all"
                   >
                     <div className="space-y-3">
                       <div className="flex items-start gap-3">
-                        <div className="w-16 h-16 rounded-xl bg-zinc-900 border border-zinc-800 overflow-hidden shrink-0 flex items-center justify-center relative group">
+                        <div className="w-16 h-16 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] overflow-hidden shrink-0 flex items-center justify-center relative group/img">
                           {featuredImg ? (
                             <img src={featuredImg} alt={p.name} className="w-full h-full object-cover" />
                           ) : (
-                            <ImageIcon className="w-6 h-6 text-zinc-600" />
+                            <ImageIcon className="w-6 h-6 text-zinc-400" />
                           )}
                           <button
                             type="button"
@@ -967,7 +988,7 @@ export const ProductsPage: React.FC = () => {
                               setSelectedProductForImages(p);
                               setIsImageModalOpen(true);
                             }}
-                            className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex items-center justify-center transition text-amber-400"
+                            className="absolute inset-0 bg-black/70 opacity-0 group-hover/img:opacity-100 flex items-center justify-center transition text-[#f3aa18] cursor-pointer"
                             title="Edit Images"
                           >
                             <ImageIcon className="w-5 h-5" />
@@ -976,59 +997,59 @@ export const ProductsPage: React.FC = () => {
 
                         <div className="flex-1 min-w-0 space-y-1">
                           <div className="flex items-center justify-between gap-1">
-                            <span className="text-[10px] font-mono text-zinc-500">ID #{p.id}</span>
+                            <span className="text-[10px] font-mono text-zinc-400">#{p.id}</span>
                             <select
                               value={p.status}
                               onChange={(e) => handleToggleWpStatus(p, e.target.value)}
                               className={clsx(
-                                'text-[10px] font-semibold px-2 py-0.5 rounded-full border focus:outline-none cursor-pointer',
+                                'text-[10px] font-semibold px-2 py-0.5 rounded-md border focus:outline-none cursor-pointer font-mono',
                                 p.status === 'publish'
-                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                  ? 'bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border-emerald-500/20'
                                   : p.status === 'draft'
-                                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                                  : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                                  ? 'bg-amber-500/10 text-amber-500 dark:text-amber-400 border-amber-500/20'
+                                  : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-white/[0.08]'
                               )}
                             >
-                              <option value="publish" className="bg-zinc-900 text-zinc-100">
+                              <option value="publish" className="bg-white dark:bg-[#141414] text-zinc-900 dark:text-zinc-100">
                                 Published
                               </option>
-                              <option value="draft" className="bg-zinc-900 text-zinc-100">
+                              <option value="draft" className="bg-white dark:bg-[#141414] text-zinc-900 dark:text-zinc-100">
                                 Draft
                               </option>
-                              <option value="private" className="bg-zinc-900 text-zinc-100">
+                              <option value="private" className="bg-white dark:bg-[#141414] text-zinc-900 dark:text-zinc-100">
                                 Private
                               </option>
                             </select>
                           </div>
 
-                          <h3 className="text-xs font-semibold text-zinc-100 line-clamp-2 leading-tight">
+                          <h3 className="text-xs font-bold text-zinc-900 dark:text-white line-clamp-2 leading-snug group-hover:text-[#f3aa18] transition-colors">
                             {p.name}
                           </h3>
 
-                          <div className="text-[11px] font-mono font-medium text-amber-400">
+                          <div className="text-xs font-mono font-bold text-[#f3aa18] tabular-nums">
                             {formattedPrice}
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-400">
-                        <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800">
+                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                        <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-white/[0.04] border border-zinc-200 dark:border-white/[0.06] font-mono">
                           {galleryCount} image(s)
                         </span>
                         {p.categories && p.categories[0] && (
-                          <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 truncate max-w-[140px]">
+                          <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-white/[0.04] border border-zinc-200 dark:border-white/[0.06] truncate max-w-[140px]">
                             {p.categories[0].name}
                           </span>
                         )}
                         {p.is_configurable && (
-                          <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                          <span className="px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/20 font-semibold">
                             Configurable
                           </span>
                         )}
                       </div>
                     </div>
 
-                    <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between gap-1.5">
+                    <div className="pt-3 border-t border-zinc-100 dark:border-white/5 flex items-center justify-between gap-1.5">
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
@@ -1036,19 +1057,19 @@ export const ProductsPage: React.FC = () => {
                             setSelectedProductForImages(p);
                             setIsImageModalOpen(true);
                           }}
-                          className="min-h-[44px] px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-amber-400 text-xs font-medium flex items-center gap-1.5 border border-zinc-800 transition cursor-pointer"
+                          className="min-h-[44px] px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-800 dark:text-neutral-200 border border-zinc-300 dark:border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                         >
-                          <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
+                          <ImageIcon className="w-3.5 h-3.5 text-[#f3aa18]" />
                           <span>Images</span>
                         </button>
 
                         <button
                           type="button"
                           onClick={() => handleOpenWpDuplicate(p)}
-                          className="min-h-[44px] px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-amber-400 text-xs font-medium flex items-center gap-1.5 border border-zinc-800 transition cursor-pointer"
+                          className="min-h-[44px] px-3.5 py-1.5 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
                           title="Duplicate product & configurator profile"
                         >
-                          <Copy className="w-3.5 h-3.5 text-amber-400" />
+                          <Copy className="w-3.5 h-3.5" />
                           <span>Duplicate</span>
                         </button>
 
@@ -1057,7 +1078,8 @@ export const ProductsPage: React.FC = () => {
                             href={p.permalink}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="min-h-[44px] px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs font-medium flex items-center gap-1 border border-zinc-800 transition cursor-pointer"
+                            className="min-h-[44px] min-w-[44px] p-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-600 hover:text-zinc-900 dark:text-neutral-400 dark:hover:text-white border border-zinc-300 dark:border-white/10 flex items-center justify-center transition-colors cursor-pointer"
+                            title="View product on live store"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
                           </a>
@@ -1073,31 +1095,31 @@ export const ProductsPage: React.FC = () => {
                             channel: 'wordpress',
                           })
                         }
-                        className="min-h-[36px] p-2 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                        className="min-h-[44px] min-w-[44px] p-2 rounded-xl text-zinc-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer flex items-center justify-center"
                         title="Move to trash"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                  </div>
+                  </GlassCard>
                 );
               })}
             </div>
           ) : (
             /* TABLE VIEW */
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 overflow-hidden shadow-sm">
+            <GlassCard className="rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] overflow-hidden shadow-xs">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-zinc-900/80 text-zinc-400 border-b border-zinc-800">
+                  <thead className="border-b border-zinc-200 dark:border-white/[0.06] bg-zinc-50 dark:bg-[#0d0d0d]/80 text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider text-[10px]">
                     <tr>
-                      <th className="py-3 px-4 font-semibold">Product</th>
-                      <th className="py-3 px-4 font-semibold">ID / SKU</th>
-                      <th className="py-3 px-4 font-semibold">Price</th>
-                      <th className="py-3 px-4 font-semibold">Status</th>
-                      <th className="py-3 px-4 font-semibold text-right">Actions</th>
+                      <th className="py-3 px-4">Product</th>
+                      <th className="py-3 px-4">ID / SKU</th>
+                      <th className="py-3 px-4">Price</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-800/60">
+                  <tbody className="divide-y divide-zinc-100 dark:divide-white/[0.04]">
                     {sortedWpProducts.map((p) => {
                       const featuredImg = p.images && p.images[0] ? p.images[0].src : null;
                       const formattedPrice = p.regular_price
@@ -1107,29 +1129,29 @@ export const ProductsPage: React.FC = () => {
                         : 'Rp 0';
 
                       return (
-                        <tr key={p.id} className="hover:bg-zinc-900/40 transition">
+                        <tr key={p.id} className="hover:bg-zinc-50/80 dark:hover:bg-white/[0.02] transition-colors">
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-lg bg-zinc-900 border border-zinc-800 overflow-hidden shrink-0 flex items-center justify-center">
+                              <div className="w-10 h-10 rounded-lg bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] overflow-hidden shrink-0 flex items-center justify-center">
                                 {featuredImg ? (
                                   <img src={featuredImg} alt="" className="w-full h-full object-cover" />
                                 ) : (
-                                  <ImageIcon className="w-4 h-4 text-zinc-600" />
+                                  <ImageIcon className="w-4 h-4 text-zinc-400" />
                                 )}
                               </div>
                               <div className="min-w-0">
-                                <div className="font-semibold text-zinc-200 line-clamp-1">{p.name}</div>
-                                <div className="text-[11px] text-zinc-500">
+                                <div className="font-semibold text-zinc-900 dark:text-white line-clamp-1">{p.name}</div>
+                                <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
                                   {p.categories?.[0]?.name || 'Uncategorized'} | {p.images?.length || 0} image(s)
                                 </div>
                               </div>
                             </div>
                           </td>
-                          <td className="py-3 px-4 font-mono text-zinc-400">
+                          <td className="py-3 px-4 font-mono text-zinc-500 dark:text-zinc-400">
                             #{p.id}
-                            {p.sku && <div className="text-[10px] text-zinc-500">{p.sku}</div>}
+                            {p.sku && <div className="text-[10px] text-zinc-400 dark:text-zinc-500">{p.sku}</div>}
                           </td>
-                          <td className="py-3 px-4 font-mono font-medium text-amber-400">
+                          <td className="py-3 px-4 font-mono font-bold text-[#f3aa18]">
                             {formattedPrice}
                           </td>
                           <td className="py-3 px-4">
@@ -1137,21 +1159,21 @@ export const ProductsPage: React.FC = () => {
                               value={p.status}
                               onChange={(e) => handleToggleWpStatus(p, e.target.value)}
                               className={clsx(
-                                'text-[10px] font-semibold px-2.5 py-1 rounded-full border focus:outline-none cursor-pointer',
+                                'text-[10px] font-semibold px-2.5 py-1 rounded-md border focus:outline-none cursor-pointer font-mono',
                                 p.status === 'publish'
-                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                                   : p.status === 'draft'
-                                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                                  : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                                  : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-white/[0.08]'
                               )}
                             >
-                              <option value="publish" className="bg-zinc-900 text-zinc-100">
+                              <option value="publish" className="bg-white dark:bg-[#141414] text-zinc-900 dark:text-zinc-100">
                                 Published
                               </option>
-                              <option value="draft" className="bg-zinc-900 text-zinc-100">
+                              <option value="draft" className="bg-white dark:bg-[#141414] text-zinc-900 dark:text-zinc-100">
                                 Draft
                               </option>
-                              <option value="private" className="bg-zinc-900 text-zinc-100">
+                              <option value="private" className="bg-white dark:bg-[#141414] text-zinc-900 dark:text-zinc-100">
                                 Private
                               </option>
                             </select>
@@ -1164,7 +1186,7 @@ export const ProductsPage: React.FC = () => {
                                   setSelectedProductForImages(p);
                                   setIsImageModalOpen(true);
                                 }}
-                                className="min-h-[44px] px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-amber-400 text-xs font-medium border border-zinc-800 transition cursor-pointer"
+                                className="min-h-[44px] px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-700 dark:text-zinc-200 text-xs font-semibold border border-zinc-200 dark:border-white/10 transition-colors cursor-pointer"
                               >
                                 Images
                               </button>
@@ -1172,10 +1194,10 @@ export const ProductsPage: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => handleOpenWpDuplicate(p)}
-                                className="min-h-[44px] px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-amber-400 text-xs font-medium border border-zinc-800 transition cursor-pointer flex items-center gap-1.5"
+                                className="min-h-[44px] px-3 py-1.5 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
                                 title="Duplicate product & configurator profile"
                               >
-                                <Copy className="w-3.5 h-3.5 text-amber-400" />
+                                <Copy className="w-3.5 h-3.5" />
                                 <span>Duplicate</span>
                               </button>
 
@@ -1184,7 +1206,7 @@ export const ProductsPage: React.FC = () => {
                                   href={p.permalink}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="min-h-[44px] p-2 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 border border-zinc-800 transition cursor-pointer flex items-center justify-center"
+                                  className="min-h-[44px] min-w-[44px] p-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-600 hover:text-zinc-900 dark:text-neutral-400 dark:hover:text-white border border-zinc-200 dark:border-white/10 transition-colors cursor-pointer flex items-center justify-center"
                                   title="View on store"
                                 >
                                   <ExternalLink className="w-3.5 h-3.5" />
@@ -1199,7 +1221,7 @@ export const ProductsPage: React.FC = () => {
                                     channel: 'wordpress',
                                   })
                                 }
-                                className="min-h-[36px] p-2 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                                className="min-h-[44px] min-w-[44px] p-2 rounded-xl text-zinc-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer flex items-center justify-center"
                                 title="Move to trash"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -1212,13 +1234,13 @@ export const ProductsPage: React.FC = () => {
                   </tbody>
                 </table>
               </div>
-            </div>
+            </GlassCard>
           )}
 
           {/* WordPress Pagination */}
           {wpMaxPages > 1 && (
-            <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/40 border border-zinc-800">
-              <span className="text-xs text-zinc-400">
+            <GlassCard className="flex items-center justify-between p-3.5 rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111]">
+              <span className="text-xs text-zinc-600 dark:text-zinc-400">
                 Page {wpPage} of {wpMaxPages} ({wpTotal} total items)
               </span>
               <div className="flex items-center gap-2">
@@ -1226,7 +1248,7 @@ export const ProductsPage: React.FC = () => {
                   type="button"
                   onClick={() => setWpPage((prev) => Math.max(1, prev - 1))}
                   disabled={wpPage <= 1 || isLoadingWp}
-                  className="min-h-[36px] px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 disabled:opacity-40 cursor-pointer"
+                  className="min-h-[44px] px-3.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-[#141414] dark:hover:bg-white/[0.06] border border-zinc-200 dark:border-white/[0.08] text-xs font-semibold text-zinc-700 dark:text-zinc-300 disabled:opacity-40 transition-colors cursor-pointer flex items-center justify-center"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
@@ -1234,12 +1256,12 @@ export const ProductsPage: React.FC = () => {
                   type="button"
                   onClick={() => setWpPage((prev) => Math.min(wpMaxPages, prev + 1))}
                   disabled={wpPage >= wpMaxPages || isLoadingWp}
-                  className="min-h-[36px] px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 disabled:opacity-40 cursor-pointer"
+                  className="min-h-[44px] px-3.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-[#141414] dark:hover:bg-white/[0.06] border border-zinc-200 dark:border-white/[0.08] text-xs font-semibold text-zinc-700 dark:text-zinc-300 disabled:opacity-40 transition-colors cursor-pointer flex items-center justify-center"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
-            </div>
+            </GlassCard>
           )}
         </div>
       )}
@@ -1250,35 +1272,35 @@ export const ProductsPage: React.FC = () => {
       {activeChannel === 'shopee' && (
         <div className="space-y-4">
           {isLoadingShopee ? (
-            <div className="p-16 rounded-2xl bg-zinc-950/40 border border-zinc-800/80 flex flex-col items-center justify-center gap-3">
-              <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
-              <p className="text-xs text-zinc-400">Loading Shopee Open Platform listings...</p>
-            </div>
+            <GlassCard className="p-16 rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] flex flex-col items-center justify-center gap-3">
+              <Loader2 className="w-8 h-8 text-[#f3aa18] animate-spin" />
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 font-medium">Loading Shopee Open Platform listings...</p>
+            </GlassCard>
           ) : shopeeError ? (
-            <div className="p-6 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-start gap-3">
+            <div className="p-4 sm:p-5 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-              <div>
+              <div className="space-y-1">
                 <p className="font-semibold text-rose-200">Unable to load Shopee listings</p>
-                <p className="mt-1 text-[11px] text-rose-300/80">{shopeeError}</p>
+                <p className="text-[11px] text-rose-300/80">{shopeeError}</p>
                 <button
                   type="button"
                   onClick={() => loadShopeeProducts()}
-                  className="mt-3 px-3 py-1.5 rounded-lg bg-rose-500/20 text-rose-200 font-medium text-xs hover:bg-rose-500/30 transition cursor-pointer"
+                  className="mt-2 min-h-[40px] px-3.5 py-1.5 rounded-xl bg-rose-500/20 text-rose-200 font-semibold text-xs hover:bg-rose-500/30 transition-colors cursor-pointer"
                 >
                   Retry Load
                 </button>
               </div>
             </div>
           ) : sortedShopeeItems.length === 0 ? (
-            <div className="p-16 rounded-2xl border border-dashed border-zinc-800 text-center space-y-2">
-              <ShoppingBag className="w-8 h-8 text-zinc-600 mx-auto" />
-              <p className="text-sm font-medium text-zinc-300">No Shopee listings found</p>
-              <p className="text-xs text-zinc-500">
+            <GlassCard className="p-16 rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] text-center space-y-2">
+              <ShoppingBag className="w-8 h-8 text-zinc-400 mx-auto" />
+              <p className="text-sm font-semibold text-zinc-900 dark:text-white">No Shopee listings found</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
                 {debouncedSearch
                   ? `No Shopee products matched "${debouncedSearch}". Check item ID or keywords.`
                   : 'No items returned for the current status filter.'}
               </p>
-            </div>
+            </GlassCard>
           ) : viewMode === 'grid' ? (
             /* GRID VIEW */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1289,80 +1311,81 @@ export const ProductsPage: React.FC = () => {
                 const isUnlisted = item.item_status === 'UNLIST';
 
                 return (
-                  <div
+                  <GlassCard
                     key={item.item_id}
-                    className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800/80 hover:border-zinc-700/80 transition flex flex-col justify-between space-y-4 shadow-sm"
+                    hoverEffect={true}
+                    className="p-4 rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] flex flex-col justify-between space-y-4 shadow-xs group"
                   >
                     <div className="space-y-3">
                       <div className="flex items-start gap-3">
-                        <div className="w-16 h-16 rounded-xl bg-zinc-900 border border-zinc-800 overflow-hidden shrink-0 flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] overflow-hidden shrink-0 flex items-center justify-center">
                           {img ? (
                             <img src={img} alt={item.item_name} className="w-full h-full object-cover" />
                           ) : (
-                            <ShoppingBag className="w-6 h-6 text-zinc-600" />
+                            <ShoppingBag className="w-6 h-6 text-zinc-400" />
                           )}
                         </div>
 
                         <div className="flex-1 min-w-0 space-y-1">
                           <div className="flex items-center justify-between gap-1">
-                            <span className="text-[10px] font-mono text-zinc-500">ID #{item.item_id}</span>
+                            <span className="text-[10px] font-mono text-zinc-400">ID #{item.item_id}</span>
                             <span
                               className={clsx(
-                                'text-[10px] font-semibold px-2 py-0.5 rounded-full border',
+                                'text-[10px] font-semibold px-2 py-0.5 rounded-md border font-mono',
                                 isUnlisted
-                                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                                  : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                               )}
                             >
                               {isUnlisted ? 'UNLIST (Draft)' : 'NORMAL (Live)'}
                             </span>
                           </div>
 
-                          <h3 className="text-xs font-semibold text-zinc-100 line-clamp-2 leading-tight">
+                          <h3 className="text-xs font-bold text-zinc-900 dark:text-white line-clamp-2 leading-snug group-hover:text-[#f3aa18] transition-colors">
                             {item.item_name}
                           </h3>
 
-                          <div className="text-[11px] font-mono font-medium text-amber-400">
+                          <div className="text-xs font-mono font-bold text-[#f3aa18] tabular-nums">
                             {formattedPrice}
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-400">
+                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
                         {item.brand && (
-                          <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800">
+                          <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-white/[0.04] border border-zinc-200 dark:border-white/[0.06] font-mono">
                             {item.brand.original_brand_name}
                           </span>
                         )}
-                        <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800">
+                        <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-white/[0.04] border border-zinc-200 dark:border-white/[0.06] font-mono">
                           Cat #{item.category_id}
                         </span>
                       </div>
                     </div>
 
-                    <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between gap-1.5">
+                    <div className="pt-3 border-t border-zinc-100 dark:border-white/5 flex items-center justify-between gap-1.5">
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
                           onClick={() => handleToggleShopeeStatus(item)}
                           className={clsx(
-                            'min-h-[36px] px-2.5 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer',
+                            'min-h-[44px] px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer',
                             isUnlisted
-                              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
-                              : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800'
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
+                              : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-white/10'
                           )}
                           title={isUnlisted ? 'Tampilkan Listing ke Publik' : 'Arsipkan ke Status Draft (UNLIST)'}
                         >
-                          {isUnlisted ? 'Tampilkan' : 'Arsipkan (Draft)'}
+                          {isUnlisted ? 'Tampilkan' : 'Arsipkan'}
                         </button>
 
                         <button
                           type="button"
                           onClick={() => handleOpenShopeeDuplicator(item)}
-                          className="min-h-[36px] px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                          className="min-h-[44px] px-3.5 py-1.5 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
                           title="Duplikasi listing Shopee ini ke device baru"
                         >
-                          <Copy className="w-3.5 h-3.5 text-amber-400" />
+                          <Copy className="w-3.5 h-3.5" />
                           <span>Duplikasi</span>
                         </button>
                       </div>
@@ -1372,32 +1395,32 @@ export const ProductsPage: React.FC = () => {
                           href={item.seller_centre_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="min-h-[36px] p-2 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 border border-zinc-800 transition cursor-pointer"
+                          className="min-h-[44px] min-w-[44px] p-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-600 hover:text-zinc-900 dark:text-neutral-400 dark:hover:text-white border border-zinc-200 dark:border-white/10 flex items-center justify-center transition-colors cursor-pointer"
                           title="Open in Shopee Seller Centre"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
                         </a>
                       )}
                     </div>
-                  </div>
+                  </GlassCard>
                 );
               })}
             </div>
           ) : (
             /* TABLE VIEW */
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 overflow-hidden shadow-sm">
+            <GlassCard className="rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] overflow-hidden shadow-xs">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-zinc-900/80 text-zinc-400 border-b border-zinc-800">
+                  <thead className="border-b border-zinc-200 dark:border-white/[0.06] bg-zinc-50 dark:bg-[#0d0d0d]/80 text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider text-[10px]">
                     <tr>
-                      <th className="py-3 px-4 font-semibold">Shopee Product</th>
-                      <th className="py-3 px-4 font-semibold">Item ID</th>
-                      <th className="py-3 px-4 font-semibold">Price</th>
-                      <th className="py-3 px-4 font-semibold">Status</th>
-                      <th className="py-3 px-4 font-semibold text-right">Actions</th>
+                      <th className="py-3 px-4">Shopee Product</th>
+                      <th className="py-3 px-4">Item ID</th>
+                      <th className="py-3 px-4">Price</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-800/60">
+                  <tbody className="divide-y divide-zinc-100 dark:divide-white/[0.04]">
                     {sortedShopeeItems.map((item) => {
                       const img = item.image?.image_url_list?.[0];
                       const price = getShopeeItemPrice(item);
@@ -1405,37 +1428,37 @@ export const ProductsPage: React.FC = () => {
                       const isUnlisted = item.item_status === 'UNLIST';
 
                       return (
-                        <tr key={item.item_id} className="hover:bg-zinc-900/40 transition">
+                        <tr key={item.item_id} className="hover:bg-zinc-50/80 dark:hover:bg-white/[0.02] transition-colors">
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-lg bg-zinc-900 border border-zinc-800 overflow-hidden shrink-0 flex items-center justify-center">
+                              <div className="w-10 h-10 rounded-lg bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] overflow-hidden shrink-0 flex items-center justify-center">
                                 {img ? (
                                   <img src={img} alt="" className="w-full h-full object-cover" />
                                 ) : (
-                                  <ShoppingBag className="w-4 h-4 text-zinc-600" />
+                                  <ShoppingBag className="w-4 h-4 text-zinc-400" />
                                 )}
                               </div>
                               <div className="min-w-0">
-                                <div className="font-semibold text-zinc-200 line-clamp-1">{item.item_name}</div>
-                                <div className="text-[11px] text-zinc-500">
+                                <div className="font-semibold text-zinc-900 dark:text-white line-clamp-1">{item.item_name}</div>
+                                <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
                                   {item.brand?.original_brand_name || 'Exacoat'} | Cat #{item.category_id}
                                 </div>
                               </div>
                             </div>
                           </td>
-                          <td className="py-3 px-4 font-mono text-zinc-400">
+                          <td className="py-3 px-4 font-mono text-zinc-500 dark:text-zinc-400">
                             #{item.item_id}
                           </td>
-                          <td className="py-3 px-4 font-mono font-medium text-amber-400">
+                          <td className="py-3 px-4 font-mono font-bold text-[#f3aa18]">
                             {formattedPrice}
                           </td>
                           <td className="py-3 px-4">
                             <span
                               className={clsx(
-                                'text-[10px] font-semibold px-2.5 py-1 rounded-full border',
+                                'text-[10px] font-semibold px-2.5 py-1 rounded-md border font-mono',
                                 isUnlisted
-                                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                                  : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                               )}
                             >
                               {isUnlisted ? 'UNLIST (Draft)' : 'NORMAL (Live)'}
@@ -1447,10 +1470,10 @@ export const ProductsPage: React.FC = () => {
                                 type="button"
                                 onClick={() => handleToggleShopeeStatus(item)}
                                 className={clsx(
-                                  'min-h-[36px] px-2.5 py-1 rounded-lg text-xs font-medium border transition cursor-pointer',
+                                  'min-h-[44px] px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer',
                                   isUnlisted
-                                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
-                                    : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800'
+                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
+                                    : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-white/10'
                                 )}
                               >
                                 {isUnlisted ? 'Tampilkan' : 'Arsipkan'}
@@ -1458,9 +1481,9 @@ export const ProductsPage: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => handleOpenShopeeDuplicator(item)}
-                                className="min-h-[36px] px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                                className="min-h-[44px] px-3.5 py-1.5 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
                               >
-                                <Copy className="w-3.5 h-3.5 text-amber-400" />
+                                <Copy className="w-3.5 h-3.5" />
                                 <span>Duplikasi</span>
                               </button>
                               {item.seller_centre_url && (
@@ -1468,7 +1491,7 @@ export const ProductsPage: React.FC = () => {
                                   href={item.seller_centre_url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="min-h-[36px] p-2 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 border border-zinc-800 transition cursor-pointer"
+                                  className="min-h-[44px] min-w-[44px] p-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-600 hover:text-zinc-900 dark:text-neutral-400 dark:hover:text-white border border-zinc-200 dark:border-white/10 transition-colors cursor-pointer flex items-center justify-center"
                                   title="Open in Seller Centre"
                                 >
                                   <ExternalLink className="w-3.5 h-3.5" />
@@ -1482,12 +1505,12 @@ export const ProductsPage: React.FC = () => {
                   </tbody>
                 </table>
               </div>
-            </div>
+            </GlassCard>
           )}
 
           {/* Shopee Offset Navigation */}
-          <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/40 border border-zinc-800">
-            <span className="text-xs text-zinc-400">
+          <GlassCard className="flex items-center justify-between p-3.5 rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111]">
+            <span className="text-xs text-zinc-600 dark:text-zinc-400">
               Showing offset {shopeeOffset} ({shopeeTotal} total listings)
             </span>
             <div className="flex items-center gap-2">
@@ -1495,7 +1518,7 @@ export const ProductsPage: React.FC = () => {
                 type="button"
                 onClick={() => setShopeeOffset((prev) => Math.max(0, prev - 24))}
                 disabled={shopeeOffset === 0 || isLoadingShopee}
-                className="min-h-[36px] px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 disabled:opacity-40 cursor-pointer"
+                className="min-h-[44px] px-3.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-[#141414] dark:hover:bg-white/[0.06] border border-zinc-200 dark:border-white/[0.08] text-xs font-semibold text-zinc-700 dark:text-zinc-300 disabled:opacity-40 transition-colors cursor-pointer flex items-center justify-center"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -1503,12 +1526,12 @@ export const ProductsPage: React.FC = () => {
                 type="button"
                 onClick={() => setShopeeOffset((prev) => prev + 24)}
                 disabled={!shopeeHasNext || isLoadingShopee}
-                className="min-h-[36px] px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 disabled:opacity-40 cursor-pointer"
+                className="min-h-[44px] px-3.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-[#141414] dark:hover:bg-white/[0.06] border border-zinc-200 dark:border-white/[0.08] text-xs font-semibold text-zinc-700 dark:text-zinc-300 disabled:opacity-40 transition-colors cursor-pointer flex items-center justify-center"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
-          </div>
+          </GlassCard>
         </div>
       )}
 
@@ -1518,35 +1541,35 @@ export const ProductsPage: React.FC = () => {
       {activeChannel === 'tiktok' && (
         <div className="space-y-4">
           {isLoadingTiktok ? (
-            <div className="p-16 rounded-2xl bg-zinc-950/40 border border-zinc-800/80 flex flex-col items-center justify-center gap-3">
-              <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
-              <p className="text-xs text-zinc-400">Loading TikTok Shop Open Platform listings...</p>
-            </div>
+            <GlassCard className="p-16 rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] flex flex-col items-center justify-center gap-3">
+              <Loader2 className="w-8 h-8 text-[#f3aa18] animate-spin" />
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 font-medium">Loading TikTok Shop listings...</p>
+            </GlassCard>
           ) : tiktokError ? (
-            <div className="p-6 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-start gap-3">
+            <div className="p-4 sm:p-5 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-              <div>
+              <div className="space-y-1">
                 <p className="font-semibold text-rose-200">Unable to load TikTok Shop listings</p>
-                <p className="mt-1 text-[11px] text-rose-300/80">{tiktokError}</p>
+                <p className="text-[11px] text-rose-300/80">{tiktokError}</p>
                 <button
                   type="button"
                   onClick={() => loadTikTokProducts()}
-                  className="mt-3 px-3 py-1.5 rounded-lg bg-rose-500/20 text-rose-200 font-medium text-xs hover:bg-rose-500/30 transition cursor-pointer"
+                  className="mt-2 min-h-[40px] px-3.5 py-1.5 rounded-xl bg-rose-500/20 text-rose-200 font-semibold text-xs hover:bg-rose-500/30 transition-colors cursor-pointer"
                 >
                   Retry Load
                 </button>
               </div>
             </div>
           ) : sortedTikTokItems.length === 0 ? (
-            <div className="p-16 rounded-2xl border border-dashed border-zinc-800 text-center space-y-2">
-              <Video className="w-8 h-8 text-zinc-600 mx-auto" />
-              <p className="text-sm font-medium text-zinc-300">No TikTok Shop listings found</p>
-              <p className="text-xs text-zinc-500">
+            <GlassCard className="p-16 rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] text-center space-y-2">
+              <Video className="w-8 h-8 text-zinc-400 mx-auto" />
+              <p className="text-sm font-semibold text-zinc-900 dark:text-white">No TikTok Shop listings found</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
                 {debouncedSearch
                   ? `No TikTok products matched "${debouncedSearch}".`
                   : 'No items returned for the current status filter.'}
               </p>
-            </div>
+            </GlassCard>
           ) : viewMode === 'grid' ? (
             /* GRID VIEW */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1557,68 +1580,69 @@ export const ProductsPage: React.FC = () => {
                 const isActive = item.status === 'ACTIVATE';
 
                 return (
-                  <div
+                  <GlassCard
                     key={item.id}
-                    className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800/80 hover:border-zinc-700/80 transition flex flex-col justify-between space-y-4 shadow-sm"
+                    hoverEffect={true}
+                    className="p-4 rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] flex flex-col justify-between space-y-4 shadow-xs group"
                   >
                     <div className="space-y-3">
                       <div className="flex items-start gap-3">
-                        <div className="w-16 h-16 rounded-xl bg-zinc-900 border border-zinc-800 overflow-hidden shrink-0 flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] overflow-hidden shrink-0 flex items-center justify-center">
                           {img ? (
                             <img src={img} alt={item.title} className="w-full h-full object-cover" />
                           ) : (
-                            <Video className="w-6 h-6 text-zinc-600" />
+                            <Video className="w-6 h-6 text-zinc-400" />
                           )}
                         </div>
 
                         <div className="flex-1 min-w-0 space-y-1">
                           <div className="flex items-center justify-between gap-1">
-                            <span className="text-[10px] font-mono text-zinc-500 truncate max-w-[100px]">
+                            <span className="text-[10px] font-mono text-zinc-400 truncate max-w-[100px]">
                               #{item.id}
                             </span>
                             <span
                               className={clsx(
-                                'text-[10px] font-semibold px-2 py-0.5 rounded-full border',
+                                'text-[10px] font-semibold px-2 py-0.5 rounded-md border font-mono',
                                 isActive
-                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                  : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                                  : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-white/[0.08]'
                               )}
                             >
                               {item.status}
                             </span>
                           </div>
 
-                          <h3 className="text-xs font-semibold text-zinc-100 line-clamp-2 leading-tight">
+                          <h3 className="text-xs font-bold text-zinc-900 dark:text-white line-clamp-2 leading-snug group-hover:text-[#f3aa18] transition-colors">
                             {item.title}
                           </h3>
 
-                          <div className="text-[11px] font-mono font-medium text-amber-400">
+                          <div className="text-xs font-mono font-bold text-[#f3aa18] tabular-nums">
                             {price}
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-400">
-                        <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800">
+                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                        <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-white/[0.04] border border-zinc-200 dark:border-white/[0.06] font-mono">
                           {item.skus?.length || 0} SKU(s)
                         </span>
                         {sku?.available_stock !== undefined && (
-                          <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800">
+                          <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-white/[0.04] border border-zinc-200 dark:border-white/[0.06] font-mono">
                             Stock: {sku.available_stock}
                           </span>
                         )}
                       </div>
                     </div>
 
-                    <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between gap-1.5">
+                    <div className="pt-3 border-t border-zinc-100 dark:border-white/5 flex items-center justify-between gap-1.5">
                       <button
                         type="button"
                         onClick={() => handleToggleTikTokStatus(item)}
                         className={clsx(
-                          'min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer',
+                          'min-h-[44px] px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer',
                           isActive
-                            ? 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800'
-                            : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
+                            ? 'bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-white/10'
+                            : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
                         )}
                       >
                         {isActive ? 'Deactivate' : 'Activate'}
@@ -1633,31 +1657,31 @@ export const ProductsPage: React.FC = () => {
                             channel: 'tiktok',
                           })
                         }
-                        className="min-h-[36px] p-2 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                        className="min-h-[44px] min-w-[44px] p-2 rounded-xl text-zinc-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer flex items-center justify-center"
                         title="Deactivate / Remove product"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                  </div>
+                  </GlassCard>
                 );
               })}
             </div>
           ) : (
             /* TABLE VIEW */
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 overflow-hidden shadow-sm">
+            <GlassCard className="rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] overflow-hidden shadow-xs">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-zinc-900/80 text-zinc-400 border-b border-zinc-800">
+                  <thead className="border-b border-zinc-200 dark:border-white/[0.06] bg-zinc-50 dark:bg-[#0d0d0d]/80 text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider text-[10px]">
                     <tr>
-                      <th className="py-3 px-4 font-semibold">TikTok Product</th>
-                      <th className="py-3 px-4 font-semibold">Product ID</th>
-                      <th className="py-3 px-4 font-semibold">Price</th>
-                      <th className="py-3 px-4 font-semibold">Status</th>
-                      <th className="py-3 px-4 font-semibold text-right">Actions</th>
+                      <th className="py-3 px-4">TikTok Product</th>
+                      <th className="py-3 px-4">Product ID</th>
+                      <th className="py-3 px-4">Price</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-800/60">
+                  <tbody className="divide-y divide-zinc-100 dark:divide-white/[0.04]">
                     {sortedTikTokItems.map((item) => {
                       const img = item.main_images?.[0];
                       const sku = item.skus?.[0];
@@ -1665,37 +1689,37 @@ export const ProductsPage: React.FC = () => {
                       const isActive = item.status === 'ACTIVATE';
 
                       return (
-                        <tr key={item.id} className="hover:bg-zinc-900/40 transition">
+                        <tr key={item.id} className="hover:bg-zinc-50/80 dark:hover:bg-white/[0.02] transition-colors">
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-lg bg-zinc-900 border border-zinc-800 overflow-hidden shrink-0 flex items-center justify-center">
+                              <div className="w-10 h-10 rounded-lg bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] overflow-hidden shrink-0 flex items-center justify-center">
                                 {img ? (
                                   <img src={img} alt="" className="w-full h-full object-cover" />
                                 ) : (
-                                  <Video className="w-4 h-4 text-zinc-600" />
+                                  <Video className="w-4 h-4 text-zinc-400" />
                                 )}
                               </div>
                               <div className="min-w-0">
-                                <div className="font-semibold text-zinc-200 line-clamp-1">{item.title}</div>
-                                <div className="text-[11px] text-zinc-500">
+                                <div className="font-semibold text-zinc-900 dark:text-white line-clamp-1">{item.title}</div>
+                                <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
                                   {item.skus?.length || 0} variant(s)
                                 </div>
                               </div>
                             </div>
                           </td>
-                          <td className="py-3 px-4 font-mono text-zinc-400">
+                          <td className="py-3 px-4 font-mono text-zinc-500 dark:text-zinc-400">
                             #{item.id}
                           </td>
-                          <td className="py-3 px-4 font-mono font-medium text-amber-400">
+                          <td className="py-3 px-4 font-mono font-bold text-[#f3aa18]">
                             {price}
                           </td>
                           <td className="py-3 px-4">
                             <span
                               className={clsx(
-                                'text-[10px] font-semibold px-2.5 py-1 rounded-full border',
+                                'text-[10px] font-semibold px-2.5 py-1 rounded-md border font-mono',
                                 isActive
-                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                  : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                                  : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-white/[0.08]'
                               )}
                             >
                               {item.status}
@@ -1707,10 +1731,10 @@ export const ProductsPage: React.FC = () => {
                                 type="button"
                                 onClick={() => handleToggleTikTokStatus(item)}
                                 className={clsx(
-                                  'min-h-[36px] px-3 py-1 rounded-lg text-xs font-medium border transition cursor-pointer',
+                                  'min-h-[44px] px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer',
                                   isActive
-                                    ? 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800'
-                                    : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
+                                    ? 'bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-white/10'
+                                    : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
                                 )}
                               >
                                 {isActive ? 'Deactivate' : 'Activate'}
@@ -1724,7 +1748,7 @@ export const ProductsPage: React.FC = () => {
                                     channel: 'tiktok',
                                   })
                                 }
-                                className="min-h-[36px] p-2 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                                className="min-h-[44px] min-w-[44px] p-2 rounded-xl text-zinc-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer flex items-center justify-center"
                                 title="Deactivate"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -1737,7 +1761,7 @@ export const ProductsPage: React.FC = () => {
                   </tbody>
                 </table>
               </div>
-            </div>
+            </GlassCard>
           )}
         </div>
       )}
@@ -1758,144 +1782,128 @@ export const ProductsPage: React.FC = () => {
       />
 
       {/* Webstore (WooCommerce) Product Duplicator Dialog */}
-      {duplicateWpModal &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-            onClick={() => setDuplicateWpModal(null)}
-          >
-            <div
-              className="w-full max-w-lg rounded-2xl bg-zinc-950 border border-zinc-800 p-6 shadow-2xl space-y-5 cursor-default"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-                    <Copy className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold tracking-wide uppercase text-zinc-100">
-                      Duplicate Webstore Product
-                    </h3>
-                    <p className="text-xs text-zinc-400 mt-0.5 truncate max-w-xs">
-                      Source: {duplicateWpModal.name} (#{duplicateWpModal.productId})
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setDuplicateWpModal(null)}
-                  className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer"
-                  title="Close dialog"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                    New Product Name
-                  </label>
-                  <input
-                    type="text"
-                    value={duplicateWpName}
-                    onChange={(e) => {
-                      setDuplicateWpName(e.target.value);
-                      setDuplicateWpSlug(
-                        e.target.value
-                          .toLowerCase()
-                          .replace(/[^a-z0-9]+/g, '-')
-                          .replace(/(^-|-$)/g, '')
-                      );
-                    }}
-                    autoFocus
-                    className="w-full px-3.5 py-2.5 text-xs font-sans rounded-xl bg-zinc-900 border border-zinc-700/80 text-white focus:outline-none focus:border-amber-400"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                      New Product Slug
-                    </label>
-                    <input
-                      type="text"
-                      value={duplicateWpSlug}
-                      onChange={(e) => setDuplicateWpSlug(e.target.value)}
-                      className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-900 border border-zinc-700/80 text-white focus:outline-none focus:border-amber-400"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                      Base Price (IDR)
-                    </label>
-                    <input
-                      type="number"
-                      step="5000"
-                      value={duplicateWpPrice}
-                      onChange={(e) => setDuplicateWpPrice(Number(e.target.value) || 0)}
-                      className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-900 border border-zinc-700/80 text-white focus:outline-none focus:border-amber-400"
-                    />
-                  </div>
-                </div>
-
-                <label className="flex items-start gap-3 p-3 rounded-xl bg-zinc-900/60 border border-zinc-800 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={duplicateWpCopyConfig}
-                    onChange={(e) => setDuplicateWpCopyConfig(e.target.checked)}
-                    className="w-4 h-4 rounded text-amber-500 focus:ring-0 focus:outline-none accent-amber-500 mt-0.5 cursor-pointer"
-                  />
-                  <div>
-                    <span className="text-xs font-semibold text-zinc-200 block">
-                      Copy Full Configurator Setup
-                    </span>
-                    <span className="text-[11px] text-zinc-400 leading-snug block mt-0.5">
-                      Duplicates viewing angles, composable skin layers, finish restrictions, and texture image mappings.
-                    </span>
-                  </div>
-                </label>
-
-                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-2.5">
-                  <span className="text-[11px] font-sans text-amber-200 leading-relaxed">
-                    <strong className="text-amber-300 font-semibold">Status: Draft</strong>. The duplicated product is created in Draft status. Featured image, gallery, descriptions, menu order, categories, and tags are preserved.
-                  </span>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-zinc-800 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setDuplicateWpModal(null)}
-                  className="min-h-[44px] px-4 py-2 text-xs font-sans rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleExecuteWpDuplicate}
-                  disabled={isDuplicatingWp || !duplicateWpName.trim()}
-                  className="min-h-[44px] px-5 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-amber-500 hover:bg-amber-400 text-black transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-2"
-                >
-                  {isDuplicatingWp ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Duplicating...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Duplicate Product</span>
-                    </>
-                  )}
-                </button>
-              </div>
+      <Modal
+        isOpen={Boolean(duplicateWpModal)}
+        onClose={() => setDuplicateWpModal(null)}
+        maxWidth="lg"
+        title={
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-[#f3aa18] shrink-0">
+              <Copy className="w-5 h-5" />
             </div>
-          </div>,
-          document.body
-        )}
+            <div>
+              <h3 className="text-base font-semibold text-zinc-900 dark:text-white">
+                Duplicate Webstore Product
+              </h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 truncate max-w-xs">
+                Source: {duplicateWpModal?.name} (#{duplicateWpModal?.productId})
+              </p>
+            </div>
+          </div>
+        }
+        footer={
+          <div className="flex items-center justify-end gap-2 w-full">
+            <button
+              type="button"
+              onClick={() => setDuplicateWpModal(null)}
+              className="min-h-[44px] px-4 py-2 text-xs font-semibold rounded-xl text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/[0.06] transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleExecuteWpDuplicate}
+              disabled={isDuplicatingWp || !duplicateWpName.trim()}
+              className="min-h-[44px] px-5 py-2 text-xs font-bold uppercase tracking-wider rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-2 shadow-xs"
+            >
+              {isDuplicatingWp ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Duplicating...</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Duplicate Product</span>
+                </>
+              )}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
+              New Product Name
+            </label>
+            <input
+              type="text"
+              value={duplicateWpName}
+              onChange={(e) => {
+                setDuplicateWpName(e.target.value);
+                setDuplicateWpSlug(
+                  e.target.value
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/(^-|-$)/g, '')
+                );
+              }}
+              autoFocus
+              className="w-full min-h-[44px] px-3.5 py-2.5 text-xs rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-zinc-900 dark:text-white focus:outline-none focus:border-[#f3aa18]"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                New Product Slug
+              </label>
+              <input
+                type="text"
+                value={duplicateWpSlug}
+                onChange={(e) => setDuplicateWpSlug(e.target.value)}
+                className="w-full min-h-[44px] px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-zinc-900 dark:text-white focus:outline-none focus:border-[#f3aa18]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                Base Price (IDR)
+              </label>
+              <input
+                type="number"
+                step="5000"
+                value={duplicateWpPrice}
+                onChange={(e) => setDuplicateWpPrice(Number(e.target.value) || 0)}
+                className="w-full min-h-[44px] px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-zinc-900 dark:text-white focus:outline-none focus:border-[#f3aa18]"
+              />
+            </div>
+          </div>
+
+          <label className="flex items-start gap-3 p-3.5 rounded-xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200 dark:border-white/[0.06] cursor-pointer">
+            <input
+              type="checkbox"
+              checked={duplicateWpCopyConfig}
+              onChange={(e) => setDuplicateWpCopyConfig(e.target.checked)}
+              className="w-4 h-4 rounded text-amber-500 focus:ring-0 focus:outline-none accent-amber-500 mt-0.5 cursor-pointer"
+            />
+            <div>
+              <span className="text-xs font-semibold text-zinc-900 dark:text-white block">
+                Copy Full Configurator Setup
+              </span>
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-snug block mt-0.5">
+                Duplicates viewing angles, composable skin layers, finish restrictions, and texture image mappings.
+              </span>
+            </div>
+          </label>
+
+          <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-2.5">
+            <span className="text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">
+              <strong className="text-[#f3aa18] font-semibold">Status: Draft</strong>. The duplicated product is created in Draft status. Featured image, gallery, descriptions, menu order, categories, and tags are preserved.
+            </span>
+          </div>
+        </div>
+      </Modal>
 
       {/* Shopee Duplicator Modal */}
       <ShopeeProductDuplicatorModal

@@ -83,11 +83,13 @@ export const ShopeeProductDuplicatorModal: React.FC<ShopeeProductDuplicatorModal
   >('idle');
   const [duplicateResult, setDuplicateResult] = useState<ShopeeDuplicateResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const sourceInputRef = useRef<string>(sourceInput);
+  sourceInputRef.current = sourceInput;
 
   // Fetch product preview from Shopee
   const handleFetchPreview = useCallback(
     async (inputOverride?: string) => {
-      const targetInput = (inputOverride !== undefined ? inputOverride : sourceInput).trim();
+      const targetInput = (inputOverride !== undefined ? inputOverride : sourceInputRef.current).trim();
       if (!targetInput) {
         showToast('error', 'Input Required', 'Please enter a Shopee Item ID or product page URL.');
         return;
@@ -121,14 +123,15 @@ export const ShopeeProductDuplicatorModal: React.FC<ShopeeProductDuplicatorModal
         setIsLoadingPreview(false);
       }
     },
-    [sourceInput, showToast]
+    [showToast]
   );
 
   // Sync initial inputs on open
   useEffect(() => {
     if (!isOpen) return;
 
-    setSourceInput(initialUrlOrId);
+    const initial = initialUrlOrId || DEFAULT_SAMPLE_URL;
+    setSourceInput(initial);
     setTargetDevice(initialTargetDevice);
     setDuplicateResult(null);
     setDuplicationStep('idle');
@@ -149,8 +152,8 @@ export const ShopeeProductDuplicatorModal: React.FC<ShopeeProductDuplicatorModal
       setImageMode('custom');
     }
 
-    if (initialUrlOrId) {
-      handleFetchPreview(initialUrlOrId);
+    if (initial) {
+      handleFetchPreview(initial);
     }
   }, [isOpen, initialUrlOrId, initialTargetDevice, preloadedImages, handleFetchPreview]);
 

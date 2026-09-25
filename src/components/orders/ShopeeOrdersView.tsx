@@ -682,16 +682,6 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
 
           <button
             type="button"
-            onClick={() => setIsDuplicatorOpen(true)}
-            className="px-3.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer"
-            title="Duplikasi listing Shopee ke status draft UNLIST dengan device name baru"
-          >
-            <Copy className="w-3.5 h-3.5 text-amber-400" />
-            <span>Duplikasi Produk (Draft)</span>
-          </button>
-
-          <button
-            type="button"
             onClick={() => setIsSettingsOpen(true)}
             className="px-3.5 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-white/10 text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer"
           >
