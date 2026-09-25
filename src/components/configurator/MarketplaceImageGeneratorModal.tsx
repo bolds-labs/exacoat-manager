@@ -41,8 +41,10 @@ import {
   Store,
   ChevronDown,
   ChevronUp,
+  Copy,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { ShopeeProductDuplicatorModal } from '../orders/ShopeeProductDuplicatorModal';
 
 interface MarketplaceImageGeneratorModalProps {
   isOpen: boolean;
@@ -146,6 +148,10 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [activePreviewFinishId, setActivePreviewFinishId] = useState<string>('');
   const [isRenderingPreview, setIsRenderingPreview] = useState(false);
   const [isDownloadingSingle, setIsDownloadingSingle] = useState(false);
+  const [isShopeeDuplicatorOpen, setIsShopeeDuplicatorOpen] = useState(false);
+  const [shopeePreloadedImages, setShopeePreloadedImages] = useState<
+    Array<{ file?: File; base64?: string; name: string; previewUrl: string }>
+  >([]);
 
   // Template State (Layout & Copy)
   // Top right pill now shows Skin Name (e.g. CARBON FIBER BLACK)
@@ -638,6 +644,30 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     }
   };
 
+  // Export active visual to Shopee Duplicator
+  const handleSendToShopeeDuplicator = () => {
+    if (!canvasRef.current || !profile) {
+      showToast('error', 'Canvas Not Ready', 'Please wait for the preview canvas to render.');
+      return;
+    }
+    try {
+      const dataUrl = canvasRef.current.toDataURL('image/jpeg', 0.95);
+      const filename = `${profile.device_slug || 'device'}-shopee-cover.jpg`;
+      setShopeePreloadedImages([
+        {
+          base64: dataUrl,
+          name: filename,
+          previewUrl: dataUrl,
+        },
+      ]);
+      setIsShopeeDuplicatorOpen(true);
+      showToast('success', 'Visual Exported', 'Cover image loaded into Shopee Duplicator.');
+    } catch (err) {
+      console.error('[Marketplace Generator] Canvas export failed:', err);
+      setIsShopeeDuplicatorOpen(true);
+    }
+  };
+
   // Batch Export as ZIP
   const handleBatchGenerateZip = async () => {
     const baseConfig = buildRenderConfig();
@@ -865,6 +895,16 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
               : isPrimaryCoverMode
               ? 'Download Cover (20+ Skins)'
               : 'Download Current Skin (JPG)'}
+          </button>
+
+          <button
+            onClick={handleSendToShopeeDuplicator}
+            disabled={!profile}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition disabled:opacity-50"
+            title="Duplicate Shopee listing to draft with this generated visual"
+          >
+            <Copy className="w-4 h-4 text-amber-400" />
+            <span className="hidden sm:inline">Shopee Draft</span>
           </button>
 
           <button
@@ -2717,6 +2757,14 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
           </div>
         </div>
       )}
+
+      {/* Shopee Product Duplicator Modal Integration */}
+      <ShopeeProductDuplicatorModal
+        isOpen={isShopeeDuplicatorOpen}
+        onClose={() => setIsShopeeDuplicatorOpen(false)}
+        initialTargetDevice={profile?.device_name || 'iPhone 18 Pro Max'}
+        preloadedImages={shopeePreloadedImages}
+      />
     </div>,
     document.body
   );

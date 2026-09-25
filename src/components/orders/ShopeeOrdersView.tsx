@@ -19,6 +19,7 @@ import { ShopeeOrderDetailModal } from './ShopeeOrderDetailModal';
 import { FilterSelect } from '../ui/FilterSelect';
 import { ShipCountdownBadge } from './ShipCountdownBadge';
 import { MarketplaceSyncButton } from './MarketplaceSyncButton';
+import { ShopeeProductDuplicatorModal } from './ShopeeProductDuplicatorModal';
 import { downloadCsv } from '../../lib/csvExport';
 import {
   Store,
@@ -66,6 +67,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isDuplicatorOpen, setIsDuplicatorOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<StatusTab>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -677,6 +679,16 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
             syncDays={syncDays}
             onSyncDaysChange={setSyncDays}
           />
+
+          <button
+            type="button"
+            onClick={() => setIsDuplicatorOpen(true)}
+            className="px-3.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer"
+            title="Duplikasi listing Shopee ke status draft UNLIST dengan device name baru"
+          >
+            <Copy className="w-3.5 h-3.5 text-amber-400" />
+            <span>Duplikasi Produk (Draft)</span>
+          </button>
 
           <button
             type="button"
@@ -1380,6 +1392,12 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
         }}
         order={selectedArrangeOrder}
         onShipmentArranged={handleShipmentArranged}
+      />
+
+      {/* Shopee Product Duplicator Modal */}
+      <ShopeeProductDuplicatorModal
+        isOpen={isDuplicatorOpen}
+        onClose={() => setIsDuplicatorOpen(false)}
       />
     </div>
   );

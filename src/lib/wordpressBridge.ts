@@ -5450,5 +5450,202 @@ export async function fetchTikTokTrackingInfoDirect(
   }
 }
 
+export interface ShopeeProductImage {
+  image_id: string;
+  image_url: string;
+}
 
+export interface ShopeeTierOption {
+  option: string;
+  image_id?: string;
+  image_url?: string;
+}
 
+export interface ShopeeTierVariation {
+  name: string;
+  options: ShopeeTierOption[];
+}
+
+export interface ShopeeProductModel {
+  model_id: number;
+  tier_index: number[];
+  model_sku?: string;
+  original_price: number;
+  current_price: number;
+  normal_stock: number;
+}
+
+export interface ShopeeProductPreview {
+  success: boolean;
+  item_id: number;
+  item_name: string;
+  description: string;
+  category_id: number;
+  brand?: {
+    brand_id: number;
+    original_brand_name: string;
+  };
+  item_status: string;
+  weight: number;
+  dimension?: {
+    package_height: number;
+    package_length: number;
+    package_width: number;
+  };
+  logistic_info?: any[];
+  attribute_list?: any[];
+  images: ShopeeProductImage[];
+  tier_variation: ShopeeTierVariation[];
+  models: ShopeeProductModel[];
+  inferred_device?: string;
+  error?: string;
+  message?: string;
+}
+
+export interface ShopeeDuplicatePayload {
+  source_item_id: number;
+  source_device: string;
+  target_device: string;
+  custom_item_name?: string;
+  custom_description?: string;
+  custom_image_ids?: string[];
+}
+
+export interface ShopeeDuplicateResult {
+  success: boolean;
+  new_item_id?: number;
+  item_name?: string;
+  item_status?: string;
+  status_label?: string;
+  seller_centre_url?: string;
+  models_initialized?: number;
+  source_item_id?: number;
+  target_device?: string;
+  error?: string;
+  message?: string;
+}
+
+export async function fetchShopeeProductPreviewDirect(
+  itemIdOrUrl: string
+): Promise<ShopeeProductPreview> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/product-preview?url=${encodeURIComponent(itemIdOrUrl)}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return data as ShopeeProductPreview;
+    }
+    return {
+      success: false,
+      item_id: 0,
+      item_name: '',
+      description: '',
+      category_id: 0,
+      item_status: 'ERROR',
+      weight: 0,
+      images: [],
+      tier_variation: [],
+      models: [],
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      item_id: 0,
+      item_name: '',
+      description: '',
+      category_id: 0,
+      item_status: 'ERROR',
+      weight: 0,
+      images: [],
+      tier_variation: [],
+      models: [],
+      error: err.message,
+    };
+  }
+}
+
+export async function uploadShopeeMediaImageDirect(params: {
+  file?: File;
+  base64?: string;
+  filename?: string;
+}): Promise<{
+  success: boolean;
+  image_id?: string;
+  image_url?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/upload-image`;
+
+  try {
+    let body: any;
+    let headers: Record<string, string> = { Accept: 'application/json' };
+
+    if (params.base64) {
+      headers['Content-Type'] = 'application/json';
+      body = JSON.stringify({
+        image_data: params.base64,
+        filename: params.filename || 'product.jpg',
+      });
+    } else if (params.file) {
+      const formData = new FormData();
+      formData.append('image', params.file);
+      body = formData;
+    } else {
+      return { success: false, error: 'No image file or base64 data provided.' };
+    }
+
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers,
+      body,
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        image_id: data.image_id,
+        image_url: data.image_url,
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function duplicateShopeeProductDirect(
+  payload: ShopeeDuplicatePayload
+): Promise<ShopeeDuplicateResult> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/duplicate-product`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return data as ShopeeDuplicateResult;
+    }
+    return {
+      success: false,
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}

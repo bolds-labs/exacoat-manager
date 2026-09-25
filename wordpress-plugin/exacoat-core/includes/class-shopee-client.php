@@ -1303,6 +1303,27 @@ class Exacoat_Shopee_Client {
 			'callback'            => [ __CLASS__, 'rest_toggle_order_print' ],
 			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
 		]);
+
+		// 13. GET /shopee/product-preview
+		register_rest_route( $ns, '/shopee/product-preview', [
+			'methods'             => 'GET',
+			'callback'            => [ __CLASS__, 'rest_product_preview' ],
+			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+		]);
+
+		// 14. POST /shopee/upload-image
+		register_rest_route( $ns, '/shopee/upload-image', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_upload_image' ],
+			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+		]);
+
+		// 15. POST /shopee/duplicate-product
+		register_rest_route( $ns, '/shopee/duplicate-product', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_duplicate_product' ],
+			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+		]);
 	}
 
 	public static function check_admin_permission( ?\WP_REST_Request $request = null ): bool {
@@ -2026,7 +2047,455 @@ class Exacoat_Shopee_Client {
 			'is_printed' => $is_printed,
 		]);
 	}
+
+	/**
+	 * Parse Shopee item ID from plain ID or product page URL
+	 */
+	public static function parse_shopee_item_id( string $input ): int {
+		$clean = trim( $input );
+		if ( is_numeric( $clean ) ) {
+			return (int) $clean;
+		}
+
+		// Match standard Shopee URL pattern: ...-i.{shop_id}.{item_id}
+		if ( preg_match( '/-i\.\d+\.(\d+)/', $clean, $matches ) ) {
+			return (int) $matches[1];
+		}
+
+		// Match secondary format: .../{shop_id}/{item_id} or .{item_id}?
+		if ( preg_match( '/\.(\d{8,14})(?:[?&#]|$)/', $clean, $matches ) ) {
+			return (int) $matches[1];
+		}
+
+		return 0;
+	}
+
+	/**
+	 * REST Endpoint: Preview a Shopee product and its models
+	 */
+	public static function rest_product_preview( \WP_REST_Request $request ): \WP_REST_Response {
+		$input = trim( (string) ( $request->get_param( 'item_id' ) ?? $request->get_param( 'url' ) ?? '' ) );
+		$item_id = self::parse_shopee_item_id( $input );
+
+		if ( empty( $item_id ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => 'A valid Shopee Item ID or Product URL is required.',
+			], 400 );
+		}
+
+		// 1. Fetch base info
+		$base_res = self::call_shop_api( '/api/v2/product/get_item_base_info', 'GET', [
+			'item_id_list' => (string) $item_id,
+		]);
+
+		if ( ! $base_res['success'] ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => $base_res['error'] ?? 'Failed to retrieve item base info from Shopee.',
+				'message' => $base_res['message'] ?? '',
+				'raw'     => $base_res['raw'] ?? null,
+			], 400 );
+		}
+
+		$item_list = $base_res['response']['item_list'] ?? [];
+		if ( empty( $item_list[0] ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => "Shopee product #{$item_id} was not found in connected shop.",
+			], 404 );
+		}
+
+		$source = $item_list[0];
+
+		// 2. Fetch models and variations if product has models
+		$models = [];
+		$tier_variation = [];
+		if ( ! empty( $source['has_model'] ) ) {
+			$model_res = self::call_shop_api( '/api/v2/product/get_model_list', 'GET', [
+				'item_id' => $item_id,
+			]);
+
+			if ( $model_res['success'] && ! empty( $model_res['response'] ) ) {
+				$tier_variation = $model_res['response']['tier_variation'] ?? [];
+				$raw_models = $model_res['response']['model'] ?? [];
+				foreach ( $raw_models as $m ) {
+					$models[] = [
+						'model_id'       => $m['model_id'] ?? 0,
+						'tier_index'     => $m['tier_index'] ?? [],
+						'model_sku'      => $m['model_sku'] ?? '',
+						'original_price' => (float) ( $m['price_info'][0]['original_price'] ?? $source['original_price'] ?? 0 ),
+						'current_price'  => (float) ( $m['price_info'][0]['current_price'] ?? $source['original_price'] ?? 0 ),
+						'normal_stock'   => (int) ( $m['stock_info_v2']['summary_info']['total_available_stock'] ?? 0 ),
+					];
+				}
+			}
+		}
+
+		// Format images
+		$images = [];
+		$img_ids = $source['image']['image_id_list'] ?? [];
+		$img_urls = $source['image']['image_url_list'] ?? [];
+		foreach ( $img_ids as $idx => $id ) {
+			$images[] = [
+				'image_id'  => $id,
+				'image_url' => $img_urls[ $idx ] ?? '',
+			];
+		}
+
+		// Infer device name from title
+		$item_name = (string) ( $source['item_name'] ?? '' );
+		$inferred_device = '';
+		if ( preg_match( '/(iPhone\s+\d+(?:\s*(?:Pro\s*Max|Pro|Plus|Mini))?|iPad\s+[A-Za-z0-9\s]+|MacBook\s+[A-Za-z0-9\s]+|Galaxy\s+[A-Za-z0-9\s]+)/i', $item_name, $dev_matches ) ) {
+			$inferred_device = trim( $dev_matches[1] );
+		}
+
+		return new \WP_REST_Response([
+			'success'         => true,
+			'item_id'         => (int) $source['item_id'],
+			'item_name'       => $item_name,
+			'description'     => (string) ( $source['description'] ?? '' ),
+			'category_id'     => (int) ( $source['category_id'] ?? 0 ),
+			'brand'           => $source['brand'] ?? [ 'brand_id' => 0, 'original_brand_name' => 'Exacoat' ],
+			'item_status'     => (string) ( $source['item_status'] ?? 'NORMAL' ),
+			'weight'          => (float) ( $source['weight'] ?? 0.05 ),
+			'dimension'       => $source['dimension'] ?? [ 'package_height' => 1, 'package_length' => 20, 'package_width' => 15 ],
+			'logistic_info'   => $source['logistic_info'] ?? [],
+			'attribute_list'  => $source['attribute_list'] ?? [],
+			'images'          => $images,
+			'tier_variation'  => $tier_variation,
+			'models'          => $models,
+			'inferred_device' => $inferred_device,
+		], 200 );
+	}
+
+	/**
+	 * Upload an image buffer to Shopee Media Space API
+	 */
+	public static function upload_media_image( string $image_bytes, string $filename = 'product.jpg' ): array {
+		$token_res = self::ensure_valid_token();
+		if ( ! $token_res['success'] ) {
+			return $token_res;
+		}
+
+		$access_token = $token_res['access_token'];
+		$shop_id      = (int) $token_res['shop_id'];
+		$partner_id   = self::get_active_partner_id();
+		$partner_key  = self::get_active_partner_key();
+		$base_url     = self::get_base_url();
+
+		$path = '/api/v2/media_space/upload_image';
+		$timestamp = time();
+		$sign = self::sign_shop( $path, $timestamp, $partner_id, $partner_key, $access_token, $shop_id );
+
+		$query = http_build_query([
+			'partner_id'   => $partner_id,
+			'timestamp'    => $timestamp,
+			'access_token' => $access_token,
+			'shop_id'      => $shop_id,
+			'sign'         => $sign,
+		]);
+		$url = "{$base_url}{$path}?{$query}";
+
+		$boundary = wp_generate_uuid4();
+		$mime_type = 'image/jpeg';
+		if ( str_ends_with( strtolower( $filename ), '.png' ) ) {
+			$mime_type = 'image/png';
+		}
+
+		$payload = '';
+		// Field: scene
+		$payload .= "--{$boundary}\r\n";
+		$payload .= "Content-Disposition: form-data; name=\"scene\"\r\n\r\n";
+		$payload .= "normal\r\n";
+
+		// Field: image file
+		$payload .= "--{$boundary}\r\n";
+		$payload .= "Content-Disposition: form-data; name=\"image\"; filename=\"{$filename}\"\r\n";
+		$payload .= "Content-Type: {$mime_type}\r\n\r\n";
+		$payload .= $image_bytes . "\r\n";
+		$payload .= "--{$boundary}--\r\n";
+
+		$res = wp_remote_post( $url, [
+			'headers' => [
+				'Content-Type' => "multipart/form-data; boundary={$boundary}",
+			],
+			'body'    => $payload,
+			'timeout' => 45,
+		]);
+
+		if ( is_wp_error( $res ) ) {
+			return [
+				'success' => false,
+				'error'   => $res->get_error_message(),
+			];
+		}
+
+		$data = json_decode( wp_remote_retrieve_body( $res ), true );
+		if ( ! empty( $data['error'] ) ) {
+			return [
+				'success' => false,
+				'error'   => $data['error'],
+				'message' => $data['message'] ?? 'Failed to upload image to Shopee media space.',
+			];
+		}
+
+		$info = $data['response']['image_info'] ?? [];
+		if ( empty( $info['image_id'] ) ) {
+			return [
+				'success' => false,
+				'error'   => 'Shopee media space did not return an image ID.',
+			];
+		}
+
+		$first_url = $info['image_url_list'][0]['image_url'] ?? '';
+
+		return [
+			'success'   => true,
+			'image_id'  => $info['image_id'],
+			'image_url' => $first_url,
+		];
+	}
+
+	/**
+	 * REST Endpoint: Upload an image to Shopee Media Space
+	 */
+	public static function rest_upload_image( \WP_REST_Request $request ): \WP_REST_Response {
+		$filename = 'product.jpg';
+		$image_bytes = '';
+
+		// Check for base64 payload
+		$body = $request->get_json_params() ?: [];
+		if ( ! empty( $body['image_data'] ) ) {
+			$raw_b64 = (string) $body['image_data'];
+			if ( preg_match( '/^data:image\/(\w+);base64,/', $raw_b64, $m ) ) {
+				$filename = 'product.' . ( $m[1] === 'png' ? 'png' : 'jpg' );
+				$raw_b64 = substr( $raw_b64, strpos( $raw_b64, ',' ) + 1 );
+			}
+			$image_bytes = base64_decode( $raw_b64 );
+		} elseif ( ! empty( $_FILES['image']['tmp_name'] ) && is_uploaded_file( $_FILES['image']['tmp_name'] ) ) {
+			$filename = sanitize_file_name( $_FILES['image']['name'] ?? 'product.jpg' );
+			$image_bytes = file_get_contents( $_FILES['image']['tmp_name'] );
+		}
+
+		if ( empty( $image_bytes ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => 'No image data or file provided for upload.',
+			], 400 );
+		}
+
+		$upload_res = self::upload_media_image( $image_bytes, $filename );
+		if ( ! $upload_res['success'] ) {
+			return new \WP_REST_Response( $upload_res, 400 );
+		}
+
+		return new \WP_REST_Response( $upload_res, 200 );
+	}
+
+	/**
+	 * REST Endpoint: Duplicate Shopee product into draft (UNLIST) status
+	 */
+	public static function rest_duplicate_product( \WP_REST_Request $request ): \WP_REST_Response {
+		$body = $request->get_json_params() ?: [];
+
+		$source_input = trim( (string) ( $body['source_item_id'] ?? $body['source_url'] ?? '' ) );
+		$source_item_id = self::parse_shopee_item_id( $source_input );
+		$source_device = trim( (string) ( $body['source_device'] ?? '' ) );
+		$target_device = trim( (string) ( $body['target_device'] ?? '' ) );
+
+		if ( empty( $source_item_id ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => 'A valid source Shopee Item ID or Product URL is required.',
+			], 400 );
+		}
+
+		if ( empty( $target_device ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => 'Target device name is required (e.g. iPhone 18 Pro Max).',
+			], 400 );
+		}
+
+		// 1. Fetch source product base info
+		$base_res = self::call_shop_api( '/api/v2/product/get_item_base_info', 'GET', [
+			'item_id_list' => (string) $source_item_id,
+		]);
+
+		if ( ! $base_res['success'] || empty( $base_res['response']['item_list'][0] ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => 'Could not fetch source product details from Shopee.',
+				'message' => $base_res['message'] ?? '',
+			], 400 );
+		}
+
+		$src = $base_res['response']['item_list'][0];
+
+		// Auto-detect source device if not specified
+		if ( empty( $source_device ) ) {
+			if ( preg_match( '/(iPhone\s+\d+(?:\s*(?:Pro\s*Max|Pro|Plus|Mini))?|iPad\s+[A-Za-z0-9\s]+|MacBook\s+[A-Za-z0-9\s]+|Galaxy\s+[A-Za-z0-9\s]+)/i', $src['item_name'], $m ) ) {
+				$source_device = trim( $m[1] );
+			}
+		}
+
+		// Compute new item title and description with device name substitution
+		$raw_title = $src['item_name'];
+		$new_title = ! empty( $body['custom_item_name'] )
+			? trim( (string) $body['custom_item_name'] )
+			: ( ! empty( $source_device ) ? str_ireplace( $source_device, $target_device, $raw_title ) : "{$raw_title} ({$target_device})" );
+
+		$raw_desc = (string) ( $src['description'] ?? '' );
+		$new_desc = ! empty( $body['custom_description'] )
+			? trim( (string) $body['custom_description'] )
+			: ( ! empty( $source_device ) ? str_ireplace( $source_device, $target_device, $raw_desc ) : $raw_desc );
+
+		// Prepare images: custom image IDs or source image IDs
+		$image_ids = [];
+		if ( ! empty( $body['custom_image_ids'] ) && is_array( $body['custom_image_ids'] ) ) {
+			$image_ids = array_values( array_filter( array_map( 'strval', $body['custom_image_ids'] ) ) );
+		}
+		if ( empty( $image_ids ) && ! empty( $src['image']['image_id_list'] ) ) {
+			$image_ids = $src['image']['image_id_list'];
+		}
+
+		// Cap image count to 9 (Shopee maximum)
+		$image_ids = array_slice( $image_ids, 0, 9 );
+
+		// Fetch source models to extract base pricing
+		$model_res = self::call_shop_api( '/api/v2/product/get_model_list', 'GET', [
+			'item_id' => $source_item_id,
+		]);
+
+		$source_tier_variation = [];
+		$source_models = [];
+		$base_price = (float) ( $src['original_price'] ?? 149000 );
+
+		if ( $model_res['success'] && ! empty( $model_res['response'] ) ) {
+			$source_tier_variation = $model_res['response']['tier_variation'] ?? [];
+			$source_models = $model_res['response']['model'] ?? [];
+			if ( ! empty( $source_models[0]['price_info'][0]['original_price'] ) ) {
+				$base_price = (float) $source_models[0]['price_info'][0]['original_price'];
+			}
+		}
+
+		if ( $base_price <= 0 ) {
+			$base_price = 149000;
+		}
+
+		// 2. Create Base Product Listing with UNLIST (draft) status
+		$add_payload = [
+			'original_price' => $base_price,
+			'description'    => $new_desc,
+			'weight'         => (float) ( $src['weight'] ?? 0.05 ),
+			'item_name'      => $new_title,
+			'item_status'    => 'UNLIST', // Ensures item is saved as unlisted draft
+			'normal_stock'   => 100,
+			'category_id'    => (int) ( $src['category_id'] ?? 0 ),
+			'image'          => [
+				'image_id_list' => $image_ids,
+			],
+			'brand'          => $src['brand'] ?? [ 'brand_id' => 0, 'original_brand_name' => 'Exacoat' ],
+			'logistic_info'  => $src['logistic_info'] ?? [],
+			'dimension'      => $src['dimension'] ?? [ 'package_height' => 1, 'package_length' => 20, 'package_width' => 15 ],
+			'condition'      => 'NEW',
+		];
+
+		if ( ! empty( $src['attribute_list'] ) ) {
+			$add_payload['attribute_list'] = $src['attribute_list'];
+		}
+
+		$create_res = self::call_shop_api( '/api/v2/product/add_item', 'POST', [], $add_payload );
+
+		if ( ! $create_res['success'] || empty( $create_res['response']['item_id'] ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => $create_res['error'] ?? 'Shopee add_item request failed.',
+				'message' => $create_res['message'] ?? 'Unable to create product draft.',
+				'raw'     => $create_res['raw'] ?? null,
+			], 400 );
+		}
+
+		$new_item_id = (int) $create_res['response']['item_id'];
+
+		// 3. Initialize Tier Variations & Models if source has them
+		$models_initialized = 0;
+		if ( ! empty( $source_tier_variation ) && ! empty( $source_models ) ) {
+			// Wait 3 seconds for Shopee indexing before calling init_tier_variation
+			sleep( 3 );
+
+			$transformed_models = [];
+			foreach ( $source_models as $m ) {
+				$m_price = (float) ( $m['price_info'][0]['original_price'] ?? $base_price );
+				$m_stock = (int) ( $m['stock_info_v2']['summary_info']['total_available_stock'] ?? 50 );
+				if ( $m_stock <= 0 ) {
+					$m_stock = 50;
+				}
+
+				$m_sku = (string) ( $m['model_sku'] ?? '' );
+				if ( ! empty( $m_sku ) && ! empty( $source_device ) ) {
+					$m_sku = str_ireplace( $source_device, $target_device, $m_sku );
+				}
+
+				$transformed_models[] = [
+					'tier_index'     => $m['tier_index'] ?? [ 0 ],
+					'normal_stock'   => $m_stock,
+					'original_price' => $m_price,
+					'model_sku'      => $m_sku,
+				];
+			}
+
+			// Clean tier variation options
+			$clean_tier_variation = [];
+			foreach ( $source_tier_variation as $tv ) {
+				$opts = [];
+				foreach ( ( $tv['options'] ?? [] ) as $opt_entry ) {
+					$opts[] = [
+						'option' => is_array( $opt_entry ) ? ( $opt_entry['option'] ?? '' ) : (string) $opt_entry,
+					];
+				}
+				$clean_tier_variation[] = [
+					'name'    => $tv['name'] ?? 'Varian',
+					'options' => $opts,
+				];
+			}
+
+			$init_res = self::call_shop_api( '/api/v2/product/init_tier_variation', 'POST', [], [
+				'item_id'        => $new_item_id,
+				'tier_variation' => $clean_tier_variation,
+				'model'          => $transformed_models,
+			]);
+
+			if ( $init_res['success'] ) {
+				$models_initialized = count( $transformed_models );
+			} elseif ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log( 'error', 'shopee_duplicate', 'Failed to init tier variation on draft item', $init_res );
+			}
+		}
+
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log(
+				'info',
+				'shopee_duplicate',
+				sprintf( 'Successfully duplicated Shopee listing %s -> %s (Draft ID %d)', $source_device, $target_device, $new_item_id )
+			);
+		}
+
+		return new \WP_REST_Response([
+			'success'            => true,
+			'new_item_id'        => $new_item_id,
+			'item_name'          => $new_title,
+			'item_status'        => 'UNLIST',
+			'status_label'       => 'Belum Ditampilkan (Draft)',
+			'seller_centre_url'  => "https://seller.shopee.co.id/portal/product/{$new_item_id}",
+			'models_initialized' => $models_initialized,
+			'source_item_id'     => $source_item_id,
+			'target_device'      => $target_device,
+		], 200 );
+	}
 }
 
 }
+
 
