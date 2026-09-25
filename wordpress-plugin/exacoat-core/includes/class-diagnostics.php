@@ -103,8 +103,8 @@ class Exacoat_Diagnostics {
 		);
 
 		// 2b. Cloudflare Cache API & Edge Purge
-		$cf_zone = defined( 'AM_CLOUDFLARE_ZONE_ID' ) ? AM_CLOUDFLARE_ZONE_ID : ( getenv( 'AM_CLOUDFLARE_ZONE_ID' ) ?: Exacoat_Core::get_setting( 'cloudflare_zone_id', '' ) );
-		$cf_token = defined( 'AM_CLOUDFLARE_API_TOKEN' ) ? AM_CLOUDFLARE_API_TOKEN : ( getenv( 'AM_CLOUDFLARE_API_TOKEN' ) ?: Exacoat_Core::get_setting( 'cloudflare_api_token', '' ) );
+		$cf_zone = defined( 'EXA_CLOUDFLARE_ZONE_ID' ) ? EXA_CLOUDFLARE_ZONE_ID : ( defined( 'EXACOAT_CLOUDFLARE_ZONE_ID' ) ? EXACOAT_CLOUDFLARE_ZONE_ID : ( defined( 'AM_CLOUDFLARE_ZONE_ID' ) ? AM_CLOUDFLARE_ZONE_ID : ( defined( 'CLOUDFLARE_ZONE_ID' ) ? CLOUDFLARE_ZONE_ID : ( getenv( 'EXA_CLOUDFLARE_ZONE_ID' ) ?: ( getenv( 'EXACOAT_CLOUDFLARE_ZONE_ID' ) ?: ( getenv( 'AM_CLOUDFLARE_ZONE_ID' ) ?: Exacoat_Core::get_setting( 'cloudflare_zone_id', '' ) ) ) ) ) ) );
+		$cf_token = defined( 'EXA_CLOUDFLARE_API_TOKEN' ) ? EXA_CLOUDFLARE_API_TOKEN : ( defined( 'EXACOAT_CLOUDFLARE_API_TOKEN' ) ? EXACOAT_CLOUDFLARE_API_TOKEN : ( defined( 'AM_CLOUDFLARE_API_TOKEN' ) ? AM_CLOUDFLARE_API_TOKEN : ( defined( 'CLOUDFLARE_API_TOKEN' ) ? CLOUDFLARE_API_TOKEN : ( getenv( 'EXA_CLOUDFLARE_API_TOKEN' ) ?: ( getenv( 'EXACOAT_CLOUDFLARE_API_TOKEN' ) ?: ( getenv( 'AM_CLOUDFLARE_API_TOKEN' ) ?: Exacoat_Core::get_setting( 'cloudflare_api_token', '' ) ) ) ) ) ) );
 		$cf_configured = ! empty( $cf_zone ) && ! empty( $cf_token );
 		$results['cloudflare_cache'] = [
 			'service' => 'Cloudflare Cache & Edge API',
@@ -537,8 +537,41 @@ class Exacoat_Diagnostics {
 	}
 
 	public static function test_cloudflare_cache( string $zone_id = '', string $api_token = '' ): array {
-		$zone_id   = ! empty( $zone_id ) ? trim( $zone_id ) : ( defined( 'EXACOAT_CLOUDFLARE_ZONE_ID' ) ? EXACOAT_CLOUDFLARE_ZONE_ID : ( getenv( 'EXACOAT_CLOUDFLARE_ZONE_ID' ) ?: ( defined( 'AM_CLOUDFLARE_ZONE_ID' ) ? AM_CLOUDFLARE_ZONE_ID : ( getenv( 'AM_CLOUDFLARE_ZONE_ID' ) ?: Exacoat_Core::get_setting( 'cloudflare_zone_id', '' ) ) ) ) );
-		$api_token = ! empty( $api_token ) ? trim( $api_token ) : ( defined( 'EXACOAT_CLOUDFLARE_API_TOKEN' ) ? EXACOAT_CLOUDFLARE_API_TOKEN : ( getenv( 'EXACOAT_CLOUDFLARE_API_TOKEN' ) ?: ( defined( 'AM_CLOUDFLARE_API_TOKEN' ) ? AM_CLOUDFLARE_API_TOKEN : ( getenv( 'AM_CLOUDFLARE_API_TOKEN' ) ?: Exacoat_Core::get_setting( 'cloudflare_api_token', '' ) ) ) ) );
+		if ( empty( $zone_id ) ) {
+			foreach ( [ 'EXA_CLOUDFLARE_ZONE_ID', 'EXACOAT_CLOUDFLARE_ZONE_ID', 'AM_CLOUDFLARE_ZONE_ID', 'CLOUDFLARE_ZONE_ID' ] as $const_name ) {
+				if ( defined( $const_name ) && constant( $const_name ) ) {
+					$zone_id = (string) constant( $const_name );
+					break;
+				}
+				$env_val = getenv( $const_name );
+				if ( ! empty( $env_val ) ) {
+					$zone_id = (string) $env_val;
+					break;
+				}
+			}
+			if ( empty( $zone_id ) && class_exists( 'Exacoat_Core' ) ) {
+				$zone_id = (string) Exacoat_Core::get_setting( 'cloudflare_zone_id', '' );
+			}
+		}
+		$zone_id = trim( (string) $zone_id );
+
+		if ( empty( $api_token ) ) {
+			foreach ( [ 'EXA_CLOUDFLARE_API_TOKEN', 'EXACOAT_CLOUDFLARE_API_TOKEN', 'AM_CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_API_TOKEN' ] as $const_name ) {
+				if ( defined( $const_name ) && constant( $const_name ) ) {
+					$api_token = (string) constant( $const_name );
+					break;
+				}
+				$env_val = getenv( $const_name );
+				if ( ! empty( $env_val ) ) {
+					$api_token = (string) $env_val;
+					break;
+				}
+			}
+			if ( empty( $api_token ) && class_exists( 'Exacoat_Core' ) ) {
+				$api_token = (string) Exacoat_Core::get_setting( 'cloudflare_api_token', '' );
+			}
+		}
+		$api_token = trim( (string) $api_token );
 
 		if ( empty( $zone_id ) || empty( $api_token ) ) {
 			return [

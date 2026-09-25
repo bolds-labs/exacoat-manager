@@ -948,7 +948,24 @@ export async function saveShippingSettingsDirect(payload: Partial<ShippingSettin
   }
 }
 
-export async function purgeCloudflareCacheDirect(zoneId?: string, target = 'all'): Promise<{ success: boolean; message?: string; error?: string }> {
+export async function purgeCloudflareCacheDirect(
+  targetOrOptions: 'manager' | 'storefront' | 'all' | { target?: 'manager' | 'storefront' | 'all'; zone_id?: string } = 'all',
+  zoneId?: string
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  let target: 'manager' | 'storefront' | 'all' = 'all';
+  let zId = zoneId;
+
+  if (typeof targetOrOptions === 'object' && targetOrOptions !== null) {
+    target = targetOrOptions.target || 'all';
+    zId = targetOrOptions.zone_id || zId;
+  } else if (typeof targetOrOptions === 'string') {
+    if (targetOrOptions === 'manager' || targetOrOptions === 'storefront' || targetOrOptions === 'all') {
+      target = targetOrOptions;
+    } else {
+      zId = targetOrOptions;
+    }
+  }
+
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/cache/cloudflare/purge`;
 
@@ -956,7 +973,7 @@ export async function purgeCloudflareCacheDirect(zoneId?: string, target = 'all'
     const res = await authenticatedFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ zone_id: zoneId, target }),
+      body: JSON.stringify({ target, zone_id: zId }),
     });
     return await res.json();
   } catch (err: any) {
@@ -964,15 +981,33 @@ export async function purgeCloudflareCacheDirect(zoneId?: string, target = 'all'
   }
 }
 
-export async function testCloudflareCacheDirect(token?: string): Promise<{ success: boolean; zone_name?: string; latencyMs?: number; latency_ms?: number; message?: string; error?: string }> {
+export async function testCloudflareCacheDirect(
+  tokenOrOptions?: string | { zone_id?: string; token?: string; cloudflare_zone_id?: string; cloudflare_api_token?: string }
+): Promise<{ success: boolean; zone_name?: string; latencyMs?: number; latency_ms?: number; message?: string; error?: string }> {
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/diagnostics/test-cloudflare`;
+
+  let zoneId = '';
+  let token = '';
+
+  if (typeof tokenOrOptions === 'string') {
+    token = tokenOrOptions;
+  } else if (typeof tokenOrOptions === 'object' && tokenOrOptions !== null) {
+    zoneId = tokenOrOptions.zone_id || tokenOrOptions.cloudflare_zone_id || '';
+    token = tokenOrOptions.token || tokenOrOptions.cloudflare_api_token || '';
+  }
 
   try {
     const res = await authenticatedFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({
+        token,
+        api_token: token,
+        cloudflare_api_token: token,
+        zone_id: zoneId,
+        cloudflare_zone_id: zoneId,
+      }),
     });
     const data = await res.json();
     return {

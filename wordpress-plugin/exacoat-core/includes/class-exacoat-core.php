@@ -624,14 +624,34 @@ class Exacoat_Core {
 	}
 
 	public function rest_purge_cloudflare_cache( WP_REST_Request $request ): WP_REST_Response {
-		$zone_id = defined( 'EXA_CLOUDFLARE_ZONE_ID' ) ? EXA_CLOUDFLARE_ZONE_ID : ( defined( 'AM_CLOUDFLARE_ZONE_ID' ) ? AM_CLOUDFLARE_ZONE_ID : ( getenv( 'EXA_CLOUDFLARE_ZONE_ID' ) ?: self::get_setting( 'cloudflare_zone_id', '' ) ) );
-		$api_token = defined( 'EXA_CLOUDFLARE_API_TOKEN' ) ? EXA_CLOUDFLARE_API_TOKEN : ( defined( 'AM_CLOUDFLARE_API_TOKEN' ) ? AM_CLOUDFLARE_API_TOKEN : ( getenv( 'EXA_CLOUDFLARE_API_TOKEN' ) ?: self::get_setting( 'cloudflare_api_token', '' ) ) );
+		$params = $request->get_json_params() ?: $request->get_params();
+
+		// Detect target with defensive handling for legacy parameter order
+		$target = sanitize_text_field( $params['target'] ?? '' );
+		if ( empty( $target ) || 'all' === $target ) {
+			if ( ! empty( $params['zone_id'] ) && in_array( $params['zone_id'], [ 'manager', 'storefront', 'all' ], true ) ) {
+				$target = $params['zone_id'];
+			} else {
+				$target = 'all';
+			}
+		}
+
+		$zone_id_param = ! empty( $params['zone_id'] ) && ! in_array( $params['zone_id'], [ 'manager', 'storefront', 'all' ], true )
+			? sanitize_text_field( $params['zone_id'] )
+			: '';
+
+		$zone_id = ! empty( $zone_id_param )
+			? $zone_id_param
+			: ( defined( 'EXA_CLOUDFLARE_ZONE_ID' ) ? EXA_CLOUDFLARE_ZONE_ID : ( defined( 'EXACOAT_CLOUDFLARE_ZONE_ID' ) ? EXACOAT_CLOUDFLARE_ZONE_ID : ( defined( 'AM_CLOUDFLARE_ZONE_ID' ) ? AM_CLOUDFLARE_ZONE_ID : ( defined( 'CLOUDFLARE_ZONE_ID' ) ? CLOUDFLARE_ZONE_ID : ( getenv( 'EXA_CLOUDFLARE_ZONE_ID' ) ?: ( getenv( 'EXACOAT_CLOUDFLARE_ZONE_ID' ) ?: ( getenv( 'AM_CLOUDFLARE_ZONE_ID' ) ?: self::get_setting( 'cloudflare_zone_id', '' ) ) ) ) ) ) ) );
+
+		$api_token_param = sanitize_text_field( $params['cloudflare_api_token'] ?? $params['api_token'] ?? '' );
+		$api_token = ! empty( $api_token_param )
+			? $api_token_param
+			: ( defined( 'EXA_CLOUDFLARE_API_TOKEN' ) ? EXA_CLOUDFLARE_API_TOKEN : ( defined( 'EXACOAT_CLOUDFLARE_API_TOKEN' ) ? EXACOAT_CLOUDFLARE_API_TOKEN : ( defined( 'AM_CLOUDFLARE_API_TOKEN' ) ? AM_CLOUDFLARE_API_TOKEN : ( defined( 'CLOUDFLARE_API_TOKEN' ) ? CLOUDFLARE_API_TOKEN : ( getenv( 'EXA_CLOUDFLARE_API_TOKEN' ) ?: ( getenv( 'EXACOAT_CLOUDFLARE_API_TOKEN' ) ?: ( getenv( 'AM_CLOUDFLARE_API_TOKEN' ) ?: self::get_setting( 'cloudflare_api_token', '' ) ) ) ) ) ) ) );
+
 		if ( empty( $zone_id ) || empty( $api_token ) ) {
 			return new WP_REST_Response( [ 'success' => false, 'error' => 'Cloudflare cache credentials are not configured.' ], 400 );
 		}
-
-		$params = $request->get_json_params() ?: $request->get_params();
-		$target = sanitize_text_field( $params['target'] ?? 'all' );
 
 		if ( 'manager' === $target ) {
 			$purge_payload = [
@@ -964,8 +984,8 @@ class Exacoat_Core {
 			'methods'             => [ 'GET', 'POST' ],
 			'callback'            => function( WP_REST_Request $request ) {
 				$params    = $request->get_json_params() ?: $request->get_params();
-				$zone_id   = sanitize_text_field( $params['cloudflare_zone_id'] ?? '' );
-				$api_token = sanitize_text_field( $params['cloudflare_api_token'] ?? '' );
+				$zone_id   = sanitize_text_field( $params['cloudflare_zone_id'] ?? $params['zone_id'] ?? '' );
+				$api_token = sanitize_text_field( $params['cloudflare_api_token'] ?? $params['api_token'] ?? $params['token'] ?? '' );
 				$diag      = class_exists( 'Exacoat_Diagnostics' ) ? 'Exacoat_Diagnostics' : ( class_exists( 'Artmatter_Diagnostics' ) ? 'Artmatter_Diagnostics' : false );
 				return rest_ensure_response( $diag ? $diag::test_cloudflare_cache( $zone_id, $api_token ) : [ 'success' => true ] );
 			},
@@ -1693,8 +1713,8 @@ class Exacoat_Core {
 			'r2_bucket'             => defined( 'AM_R2_BUCKET' ) ? AM_R2_BUCKET : getenv( 'AM_R2_BUCKET' ),
 			'r2_access_key'         => defined( 'AM_R2_ACCESS_KEY' ) ? AM_R2_ACCESS_KEY : getenv( 'AM_R2_ACCESS_KEY' ),
 			'r2_secret_key'         => defined( 'AM_R2_SECRET_KEY' ) ? AM_R2_SECRET_KEY : getenv( 'AM_R2_SECRET_KEY' ),
-			'cloudflare_zone_id'    => defined( 'EXA_CLOUDFLARE_ZONE_ID' ) ? EXA_CLOUDFLARE_ZONE_ID : ( defined( 'AM_CLOUDFLARE_ZONE_ID' ) ? AM_CLOUDFLARE_ZONE_ID : getenv( 'EXA_CLOUDFLARE_ZONE_ID' ) ),
-			'cloudflare_api_token'  => defined( 'EXA_CLOUDFLARE_API_TOKEN' ) ? EXA_CLOUDFLARE_API_TOKEN : ( defined( 'AM_CLOUDFLARE_API_TOKEN' ) ? AM_CLOUDFLARE_API_TOKEN : getenv( 'EXA_CLOUDFLARE_API_TOKEN' ) ),
+			'cloudflare_zone_id'    => defined( 'EXA_CLOUDFLARE_ZONE_ID' ) ? EXA_CLOUDFLARE_ZONE_ID : ( defined( 'EXACOAT_CLOUDFLARE_ZONE_ID' ) ? EXACOAT_CLOUDFLARE_ZONE_ID : ( defined( 'AM_CLOUDFLARE_ZONE_ID' ) ? AM_CLOUDFLARE_ZONE_ID : ( defined( 'CLOUDFLARE_ZONE_ID' ) ? CLOUDFLARE_ZONE_ID : ( getenv( 'EXA_CLOUDFLARE_ZONE_ID' ) ?: ( getenv( 'EXACOAT_CLOUDFLARE_ZONE_ID' ) ?: getenv( 'AM_CLOUDFLARE_ZONE_ID' ) ) ) ) ) ),
+			'cloudflare_api_token'  => defined( 'EXA_CLOUDFLARE_API_TOKEN' ) ? EXA_CLOUDFLARE_API_TOKEN : ( defined( 'EXACOAT_CLOUDFLARE_API_TOKEN' ) ? EXACOAT_CLOUDFLARE_API_TOKEN : ( defined( 'AM_CLOUDFLARE_API_TOKEN' ) ? AM_CLOUDFLARE_API_TOKEN : ( defined( 'CLOUDFLARE_API_TOKEN' ) ? CLOUDFLARE_API_TOKEN : ( getenv( 'EXA_CLOUDFLARE_API_TOKEN' ) ?: ( getenv( 'EXACOAT_CLOUDFLARE_API_TOKEN' ) ?: getenv( 'AM_CLOUDFLARE_API_TOKEN' ) ) ) ) ) ),
 			'drime_access_token'     => defined( 'AM_DRIME_ACCESS_TOKEN' ) ? AM_DRIME_ACCESS_TOKEN : getenv( 'AM_DRIME_ACCESS_TOKEN' ),
 			'drime_workspace_id'     => defined( 'AM_DRIME_WORKSPACE_ID' ) ? AM_DRIME_WORKSPACE_ID : getenv( 'AM_DRIME_WORKSPACE_ID' ),
 			'drime_parent_folder_id' => defined( 'AM_DRIME_PARENT_FOLDER_ID' ) ? AM_DRIME_PARENT_FOLDER_ID : getenv( 'AM_DRIME_PARENT_FOLDER_ID' ),

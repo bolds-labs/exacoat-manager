@@ -201,7 +201,10 @@ export const SettingsPanel: React.FC = () => {
   const handleTestCloudflare = async () => {
     setIsTestingCloudflare(true);
     setCloudflareTestResult(null);
-    const res = await testCloudflareCacheDirect();
+    const res = await testCloudflareCacheDirect({
+      zone_id: wpSettings.cloudflare_zone_id,
+      token: wpSettings.cloudflare_api_token,
+    });
     setIsTestingCloudflare(false);
     setCloudflareTestResult(res);
 
@@ -214,11 +217,12 @@ export const SettingsPanel: React.FC = () => {
 
   const handlePurgeCloudflareCache = async (scope: 'manager' | 'all' = 'manager') => {
     setIsPurgingCloudflareCache(true);
-    const res = await purgeCloudflareCacheDirect(scope);
+    const res = await purgeCloudflareCacheDirect(scope, wpSettings.cloudflare_zone_id);
     setIsPurgingCloudflareCache(false);
 
     if (res.success) {
-      showToast('success', 'Cache Purged', res.message || `Purged ${scope} cache successfully.`);
+      const scopeLabel = scope === 'manager' ? 'Manager Workstation' : 'Entire Network';
+      showToast('success', 'Cache Purged', res.message || `${scopeLabel} cache cleared successfully.`);
     } else {
       showToast('error', 'Purge Failed', res.message || 'Could not purge Cloudflare edge cache');
     }
