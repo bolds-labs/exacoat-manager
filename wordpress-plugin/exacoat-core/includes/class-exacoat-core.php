@@ -1123,6 +1123,237 @@ class Exacoat_Core {
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 
+		// Product SEO & Short Description Read Endpoint
+		$register( '/product/seo', [
+			'methods'             => 'GET',
+			'callback'            => function( WP_REST_Request $request ) {
+				$product_id = (int) $request->get_param( 'product_id' );
+				if ( empty( $product_id ) ) {
+					return rest_ensure_response( [ 'success' => false, 'message' => 'Product ID is required.' ] );
+				}
+
+				$post = get_post( $product_id );
+				if ( ! $post ) {
+					return rest_ensure_response( [ 'success' => false, 'message' => 'Product not found.' ] );
+				}
+
+				$short_desc  = $post->post_excerpt;
+				$yoast_title = get_post_meta( $product_id, '_yoast_wpseo_title', true );
+				$rm_title    = get_post_meta( $product_id, 'rank_math_title', true );
+				$yoast_desc  = get_post_meta( $product_id, '_yoast_wpseo_metadesc', true );
+				$rm_desc     = get_post_meta( $product_id, 'rank_math_description', true );
+				$yoast_kw    = get_post_meta( $product_id, '_yoast_wpseo_focuskw', true );
+				$rm_kw       = get_post_meta( $product_id, 'rank_math_focus_keyword', true );
+
+				return rest_ensure_response( [
+					'success'           => true,
+					'product_id'        => $product_id,
+					'name'              => $post->post_title,
+					'slug'              => $post->post_name,
+					'short_description' => (string) $short_desc,
+					'seo_title'         => (string) ( $yoast_title ?: ( $rm_title ?: '' ) ),
+					'seo_description'   => (string) ( $yoast_desc ?: ( $rm_desc ?: '' ) ),
+					'focus_keyword'     => (string) ( $yoast_kw ?: ( $rm_kw ?: '' ) ),
+				] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		// Product SEO & Short Description Update Endpoint
+		$register( '/product/seo', [
+			'methods'             => 'POST',
+			'callback'            => function( WP_REST_Request $request ) {
+				$params     = $request->get_json_params() ?: $request->get_params();
+				$product_id = (int) ( $params['product_id'] ?? 0 );
+				if ( empty( $product_id ) ) {
+					return rest_ensure_response( [ 'success' => false, 'message' => 'Product ID is required.' ] );
+				}
+
+				$post = get_post( $product_id );
+				if ( ! $post ) {
+					return rest_ensure_response( [ 'success' => false, 'message' => 'Product not found.' ] );
+				}
+
+				$short_desc = (string) ( $params['short_description'] ?? '' );
+				$seo_title  = sanitize_text_field( (string) ( $params['seo_title'] ?? '' ) );
+				$seo_desc   = sanitize_textarea_field( (string) ( $params['seo_description'] ?? '' ) );
+				$focus_kw   = sanitize_text_field( (string) ( $params['focus_keyword'] ?? '' ) );
+
+				// Update post excerpt in wp_posts
+				wp_update_post( [
+					'ID'           => $product_id,
+					'post_excerpt' => $short_desc,
+				] );
+
+				// Update Yoast and Rank Math metadata
+				update_post_meta( $product_id, '_yoast_wpseo_title', $seo_title );
+				update_post_meta( $product_id, 'rank_math_title', $seo_title );
+
+				update_post_meta( $product_id, '_yoast_wpseo_metadesc', $seo_desc );
+				update_post_meta( $product_id, 'rank_math_description', $seo_desc );
+
+				update_post_meta( $product_id, '_yoast_wpseo_focuskw', $focus_kw );
+				update_post_meta( $product_id, 'rank_math_focus_keyword', $focus_kw );
+
+				// Trigger storefront revalidation if available
+				if ( class_exists( 'Exacoat_Configurator_Engine' ) && method_exists( 'Exacoat_Configurator_Engine', 'trigger_storefront_revalidation' ) ) {
+					Exacoat_Configurator_Engine::trigger_storefront_revalidation( [ 'slug' => $post->post_name ] );
+				}
+
+				if ( class_exists( 'Exacoat_Logger' ) ) {
+					Exacoat_Logger::log( 'info', 'seo_manager', sprintf( 'Updated SEO & Short description for product #%d (%s)', $product_id, $post->post_title ) );
+				}
+
+				return rest_ensure_response( [
+					'success'           => true,
+					'product_id'        => $product_id,
+					'short_description' => $short_desc,
+					'seo_title'         => $seo_title,
+					'seo_description'   => $seo_desc,
+					'focus_keyword'     => $focus_kw,
+					'message'           => 'Product SEO and Short Description saved successfully.',
+				] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		// Product AI SEO & Short Description Generator Endpoint
+		$register( '/product/generate-seo', [
+			'methods'             => 'POST',
+			'callback'            => function( WP_REST_Request $request ) {
+				$params   = $request->get_json_params() ?: $request->get_params();
+				$name     = sanitize_text_field( $params['name'] ?? '' );
+				$category = sanitize_text_field( $params['category'] ?? 'Skins' );
+				$provider = sanitize_text_field( $params['provider'] ?? 'gemini' );
+				$model    = sanitize_text_field( $params['model'] ?? '' );
+
+				if ( empty( $name ) ) {
+					return rest_ensure_response( [ 'success' => false, 'message' => 'Product or device name is required.' ] );
+				}
+
+				$settings = Exacoat_Core::get_settings();
+				$is_gemini = ( stripos( $provider, 'gemini' ) !== false );
+				$start = microtime( true );
+
+				$system_instruction = "You are an expert e-commerce copywriter and SEO specialist for Exacoat (exacoat.com).\n"
+					. "Exacoat designs precision-engineered vinyl skins and protective wraps made of authentic 3M materials for smartphones, laptops, gaming consoles, and accessories.\n\n"
+					. "Target Product:\n"
+					. "- Device Name: \"{$name}\"\n"
+					. "- Category: \"{$category}\"\n\n"
+					. "Brand Voice and Tone Rules:\n"
+					. "- Confident, clean, understated, and authentic.\n"
+					. "- Ground descriptions in real physical attributes: authentic 3M textured vinyl, 0.2mm ultra-slim profile, scratch defense without added bulk, and clean precision fit.\n"
+					. "- Strictly NO exclamation marks.\n"
+					. "- Strictly NO fake technical jargon or exaggerated marketing claims (avoid words like 'revolutionary', 'ultimate armor', 'game-changing').\n"
+					. "- Strictly NO em dashes of any kind (do not use long dashes or double hyphens). Use commas, periods, or parentheses instead.\n"
+					. "- Distinct device-specific phrasing: reference camera contours, grip, or edges for phones; top lid, palm rest, or trackpad for laptops.\n\n"
+					. "Output Requirement:\n"
+					. "Return ONLY a valid JSON object with the following four keys (no markdown formatting, no conversational text):\n"
+					. "{\n"
+					. "  \"seo_title\": \"{$name} Skin & Wrap | Exacoat\",\n"
+					. "  \"seo_description\": \"A natural search meta description between 120 and 155 characters describing authentic 3M textured wraps with zero bulk scratch defense.\",\n"
+					. "  \"focus_keyword\": \"{$name} skin\",\n"
+					. "  \"short_description\": \"2 to 3 concise sentences (45 to 65 words) highlighting precision fit, tactile texture, and everyday scratch protection.\"\n"
+					. "}";
+
+				if ( $is_gemini ) {
+					$api_key = defined( 'EXACOAT_GEMINI_API_KEY' ) ? EXACOAT_GEMINI_API_KEY : ( defined( 'AM_GEMINI_API_KEY' ) ? AM_GEMINI_API_KEY : ( defined( 'GEMINI_API_KEY' ) ? GEMINI_API_KEY : ( getenv( 'EXACOAT_GEMINI_API_KEY' ) ?: ( getenv( 'AM_GEMINI_API_KEY' ) ?: ( $settings['gemini_api_key'] ?? '' ) ) ) ) );
+					$gemini_model = $model ?: ( $settings['gemini_model'] ?? 'gemini-2.5-flash' );
+
+					if ( empty( $api_key ) ) {
+						return rest_ensure_response( [ 'success' => false, 'message' => 'Gemini API key not configured on server.' ] );
+					}
+
+					$url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode( $gemini_model ) . ':generateContent?key=' . rawurlencode( $api_key );
+					$resp = wp_remote_post( $url, [
+						'headers' => [ 'Content-Type' => 'application/json' ],
+						'body'    => wp_json_encode( [
+							'contents' => [
+								[
+									'role'  => 'user',
+									'parts' => [ [ 'text' => $system_instruction ] ],
+								],
+							],
+							'generationConfig' => [
+								'response_mime_type' => 'application/json',
+								'temperature'        => 0.7,
+							],
+						] ),
+						'timeout' => 30,
+					] );
+
+					$latency = round( ( microtime( true ) - $start ) * 1000 );
+					if ( is_wp_error( $resp ) ) {
+						return rest_ensure_response( [ 'success' => false, 'message' => $resp->get_error_message(), 'latency_ms' => $latency ] );
+					}
+
+					$body = json_decode( wp_remote_retrieve_body( $resp ), true );
+					$text = $body['candidates'][0]['content']['parts'][0]['text'] ?? '';
+					$parsed = json_decode( trim( $text ), true );
+
+					if ( ! is_array( $parsed ) || empty( $parsed['seo_title'] ) ) {
+						$clean_json = preg_replace( '/^```(?:json)?\s*|\s*```$/i', '', trim( $text ) );
+						$parsed = json_decode( $clean_json, true );
+					}
+
+					if ( is_array( $parsed ) && ! empty( $parsed['seo_title'] ) ) {
+						return rest_ensure_response( [
+							'success'    => true,
+							'data'       => $parsed,
+							'model_used' => $gemini_model,
+							'latency_ms' => $latency,
+						] );
+					}
+
+					return rest_ensure_response( [ 'success' => false, 'message' => 'Failed to parse AI output as JSON.', 'raw' => $text, 'latency_ms' => $latency ] );
+				} else {
+					$api_key = defined( 'EXACOAT_OPENAI_API_KEY' ) ? EXACOAT_OPENAI_API_KEY : ( defined( 'AM_OPENAI_API_KEY' ) ? AM_OPENAI_API_KEY : ( defined( 'OPENAI_API_KEY' ) ? OPENAI_API_KEY : ( getenv( 'EXACOAT_OPENAI_API_KEY' ) ?: ( getenv( 'AM_OPENAI_API_KEY' ) ?: ( $settings['openai_api_key'] ?? '' ) ) ) ) );
+					$openai_model = $model ?: ( $settings['openai_model'] ?? 'gpt-4o-mini' );
+
+					if ( empty( $api_key ) ) {
+						return rest_ensure_response( [ 'success' => false, 'message' => 'OpenAI API key not configured on server.' ] );
+					}
+
+					$resp = wp_remote_post( 'https://api.openai.com/v1/chat/completions', [
+						'headers' => [
+							'Content-Type'  => 'application/json',
+							'Authorization' => 'Bearer ' . $api_key,
+						],
+						'body'    => wp_json_encode( [
+							'model'           => $openai_model,
+							'messages'        => [
+								[ 'role' => 'user', 'content' => $system_instruction ],
+							],
+							'response_format' => [ 'type' => 'json_object' ],
+							'temperature'     => 0.7,
+						] ),
+						'timeout' => 30,
+					] );
+
+					$latency = round( ( microtime( true ) - $start ) * 1000 );
+					if ( is_wp_error( $resp ) ) {
+						return rest_ensure_response( [ 'success' => false, 'message' => $resp->get_error_message(), 'latency_ms' => $latency ] );
+					}
+
+					$body = json_decode( wp_remote_retrieve_body( $resp ), true );
+					$text = $body['choices'][0]['message']['content'] ?? '';
+					$parsed = json_decode( trim( $text ), true );
+
+					if ( is_array( $parsed ) && ! empty( $parsed['seo_title'] ) ) {
+						return rest_ensure_response( [
+							'success'    => true,
+							'data'       => $parsed,
+							'model_used' => $openai_model,
+							'latency_ms' => $latency,
+						] );
+					}
+
+					return rest_ensure_response( [ 'success' => false, 'message' => 'Failed to parse OpenAI JSON output.', 'raw' => $text, 'latency_ms' => $latency ] );
+				}
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
 		// Universal CORS-free Image Proxy
 		$handle_image_proxy = function( WP_REST_Request $request ) {
 			$product_id = (int) $request->get_param( 'product_id' );

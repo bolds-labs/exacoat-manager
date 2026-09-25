@@ -5711,6 +5711,7 @@ export async function updateProductDirect(
     description?: string;
     short_description?: string;
     images?: Array<{ id?: number; src?: string; alt?: string; name?: string }>;
+    meta_data?: Array<{ key: string; value: any }>;
   }
 ): Promise<{ success: boolean; product?: Product; error?: string }> {
   const base = getWordPressBaseUrl();
@@ -5734,6 +5735,283 @@ export async function updateProductDirect(
   } catch (err: any) {
     return { success: false, error: err.message };
   }
+}
+
+export interface ProductSeoData {
+  product_id: number;
+  name?: string;
+  slug?: string;
+  short_description: string;
+  seo_title: string;
+  seo_description: string;
+  focus_keyword: string;
+}
+
+export interface ProductSeoGeneratedData {
+  seo_title: string;
+  seo_description: string;
+  focus_keyword: string;
+  short_description: string;
+}
+
+export async function fetchProductSeoDirect(
+  productId: number
+): Promise<{ success: boolean; data?: ProductSeoData; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/product/seo?product_id=${productId}`;
+
+  try {
+    const res = await authenticatedFetch(url, { headers: { Accept: 'application/json' } });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, data };
+    }
+  } catch {}
+
+  // Fallback to reading product details via standard WC REST API
+  try {
+    const wcUrl = `${base}/wp-json/wc/v3/products/${productId}`;
+    const res = await authenticatedFetch(wcUrl, { headers: { Accept: 'application/json' } });
+    if (res.ok) {
+      const prod = await res.json();
+      const metaList = Array.isArray(prod?.meta_data) ? prod.meta_data : [];
+      const getMeta = (keys: string[]) => {
+        for (const k of keys) {
+          const m = metaList.find((entry: any) => entry.key === k);
+          if (m && typeof m.value === 'string' && m.value.trim()) return m.value.trim();
+        }
+        return '';
+      };
+      return {
+        success: true,
+        data: {
+          product_id: productId,
+          name: prod?.name || '',
+          slug: prod?.slug || '',
+          short_description: prod?.short_description || '',
+          seo_title: getMeta(['_yoast_wpseo_title', 'rank_math_title']),
+          seo_description: getMeta(['_yoast_wpseo_metadesc', 'rank_math_description']),
+          focus_keyword: getMeta(['_yoast_wpseo_focuskw', 'rank_math_focus_keyword']),
+        },
+      };
+    }
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+
+  return { success: false, error: 'Failed to fetch product SEO metadata.' };
+}
+
+export async function updateProductSeoDirect(
+  productId: number,
+  data: {
+    short_description: string;
+    seo_title: string;
+    seo_description: string;
+    focus_keyword: string;
+  }
+): Promise<{ success: boolean; data?: ProductSeoData; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/product/seo`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        product_id: productId,
+        short_description: data.short_description,
+        seo_title: data.seo_title,
+        seo_description: data.seo_description,
+        focus_keyword: data.focus_keyword,
+      }),
+    });
+    const respData = await res.json();
+    if (res.ok && respData?.success) {
+      return { success: true, data: respData };
+    }
+  } catch {}
+
+  // Fallback to updateProductDirect via WooCommerce REST API
+  try {
+    const wcRes = await updateProductDirect(productId, {
+      short_description: data.short_description,
+      meta_data: [
+        { key: '_yoast_wpseo_title', value: data.seo_title },
+        { key: '_yoast_wpseo_metadesc', value: data.seo_description },
+        { key: '_yoast_wpseo_focuskw', value: data.focus_keyword },
+        { key: 'rank_math_title', value: data.seo_title },
+        { key: 'rank_math_description', value: data.seo_description },
+        { key: 'rank_math_focus_keyword', value: data.focus_keyword },
+      ],
+    });
+    if (wcRes.success && wcRes.product) {
+      return {
+        success: true,
+        data: {
+          product_id: productId,
+          name: wcRes.product.name,
+          slug: wcRes.product.slug,
+          short_description: data.short_description,
+          seo_title: data.seo_title,
+          seo_description: data.seo_description,
+          focus_keyword: data.focus_keyword,
+        },
+      };
+    }
+    return { success: false, error: wcRes.error || 'Failed updating product SEO.' };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function generateProductSeoAndDescriptionAi(
+  productName: string,
+  categoryName = 'Skins',
+  options?: {
+    provider?: 'gemini' | 'openai';
+    model?: string;
+  }
+): Promise<{
+  success: boolean;
+  data?: ProductSeoGeneratedData;
+  model_used?: string;
+  latency_ms?: number;
+  message?: string;
+  error?: string;
+}> {
+  const start = performance.now();
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/product/generate-seo`;
+
+  const cached = getCachedPluginSettings();
+  const provider = options?.provider || cached.fandom_provider || cached.ai_provider || 'gemini';
+  const model = options?.model || (provider === 'gemini' ? (cached.gemini_model || 'gemini-2.5-flash') : (cached.openai_model || 'gpt-4o-mini'));
+
+  // 1. Try WordPress Backend Route
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        name: productName,
+        category: categoryName,
+        provider,
+        model,
+      }),
+    });
+    if (res.ok) {
+      const respData = await res.json();
+      if (respData.success && respData.data?.seo_title) {
+        return {
+          success: true,
+          data: respData.data,
+          model_used: respData.model_used || model,
+          latency_ms: respData.latency_ms || Math.round(performance.now() - start),
+          message: respData.message,
+        };
+      }
+    }
+  } catch {}
+
+  // 2. Direct client-side AI generation fallback
+  const isGemini = provider.toLowerCase().includes('gemini');
+  const systemPrompt = `You are an expert e-commerce copywriter and SEO specialist for Exacoat (exacoat.com).
+Exacoat designs precision-engineered vinyl skins and protective wraps made of authentic 3M materials for smartphones, laptops, gaming handhelds, and accessories.
+
+Target Product:
+- Device Name: "${productName}"
+- Category: "${categoryName}"
+
+Brand Voice & Rules:
+- Confident, clean, understated, and authentic.
+- Ground descriptions in real physical attributes: authentic 3M textured vinyl, 0.2mm ultra-slim profile, scratch defense without added bulk, and clean precision fit.
+- Strictly NO exclamation marks.
+- Strictly NO fake technical jargon or exaggerated marketing claims (avoid words like "revolutionary", "ultimate armor", "game-changing").
+- Strictly NO em dashes of any kind (do not use long dashes or double hyphens). Use commas, periods, or parentheses instead.
+- Each device must have distinct, customized phrasing referencing the specific device type (e.g. camera contours and tactile grip for phones; top lid, palm rest, or trackpad for laptops).
+
+Output format:
+Return ONLY a valid JSON object with the following four keys (no markdown formatting, no conversational text):
+{
+  "seo_title": "${productName} Skin & Wrap | Exacoat",
+  "seo_description": "A natural search meta description between 120 and 155 characters describing authentic 3M textured wraps with zero bulk scratch defense.",
+  "focus_keyword": "${productName} skin",
+  "short_description": "2 to 3 concise sentences (45 to 65 words) highlighting precision fit, tactile texture, and everyday scratch protection."
+}`;
+
+  if (isGemini) {
+    const geminiKey = cached.gemini_api_key || '';
+    const geminiModel = model || 'gemini-2.5-flash';
+    if (geminiKey) {
+      try {
+        const geminiUrl =
+          'https://generativelanguage.googleapis.com/v1beta/models/' +
+          encodeURIComponent(geminiModel) +
+          ':generateContent?key=' +
+          encodeURIComponent(geminiKey);
+
+        const res = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
+            generationConfig: { response_mime_type: 'application/json', temperature: 0.7 },
+          }),
+        });
+        const latency = Math.round(performance.now() - start);
+        if (res.ok) {
+          const jsonResp = await res.json();
+          const rawText = jsonResp.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          let parsed: any;
+          try {
+            parsed = JSON.parse(rawText.trim());
+          } catch {
+            const clean = rawText.replace(/^```(?:json)?\s*|\s*```$/gi, '').trim();
+            parsed = JSON.parse(clean);
+          }
+          if (parsed && parsed.seo_title) {
+            return { success: true, data: parsed, model_used: geminiModel, latency_ms: latency };
+          }
+        }
+      } catch (err: any) {
+        return { success: false, error: err.message };
+      }
+    }
+  } else {
+    const openAiKey = cached.openai_api_key || '';
+    const openAiModel = model || 'gpt-4o-mini';
+    if (openAiKey) {
+      try {
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + openAiKey,
+          },
+          body: JSON.stringify({
+            model: openAiModel,
+            messages: [{ role: 'user', content: systemPrompt }],
+            response_format: { type: 'json_object' },
+            temperature: 0.7,
+          }),
+        });
+        const latency = Math.round(performance.now() - start);
+        if (res.ok) {
+          const jsonResp = await res.json();
+          const rawText = jsonResp.choices?.[0]?.message?.content || '';
+          const parsed = JSON.parse(rawText.trim());
+          if (parsed && parsed.seo_title) {
+            return { success: true, data: parsed, model_used: openAiModel, latency_ms: latency };
+          }
+        }
+      } catch (err: any) {
+        return { success: false, error: err.message };
+      }
+    }
+  }
+
+  return { success: false, error: 'AI SEO generator unavailable. Check API keys in Settings.' };
 }
 
 export async function deleteProductDirect(

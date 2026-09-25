@@ -25,6 +25,7 @@ const formatIDR = (val: number | string | null | undefined): string => {
 };
 import { ShopeeProductDuplicatorModal } from '../components/orders/ShopeeProductDuplicatorModal';
 import { ProductImageManagerModal } from '../components/products/ProductImageManagerModal';
+import { ProductSeoModal } from '../components/products/ProductSeoModal';
 import {
   Package,
   Globe,
@@ -38,6 +39,7 @@ import {
   Layers,
   AlertCircle,
   CheckCircle2,
+  Sparkles,
   Loader2,
   ChevronLeft,
   ChevronRight,
@@ -128,6 +130,16 @@ export const ProductsPage: React.FC = () => {
   // Modal States
   const [selectedProductForImages, setSelectedProductForImages] = useState<Product | null>(null);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+
+  // Webstore SEO & Short Description Modal State
+  const [selectedProductForSeo, setSelectedProductForSeo] = useState<Product | null>(null);
+  const [isSeoModalOpen, setIsSeoModalOpen] = useState(false);
+
+  const handleProductSeoUpdated = (updatedProduct: Product) => {
+    setWpProducts((prev) =>
+      prev.map((p) => (p.id === updatedProduct.id ? { ...p, ...updatedProduct } : p))
+    );
+  };
 
   // Webstore (WooCommerce) Duplicator Modal State
   const [duplicateWpModal, setDuplicateWpModal] = useState<{
@@ -1065,6 +1077,19 @@ export const ProductsPage: React.FC = () => {
 
                         <button
                           type="button"
+                          onClick={() => {
+                            setSelectedProductForSeo(p);
+                            setIsSeoModalOpen(true);
+                          }}
+                          className="min-h-[44px] px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-800 dark:text-neutral-200 border border-zinc-300 dark:border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                          title="Manage SEO metadata & short description with AI"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                          <span>SEO & Copy</span>
+                        </button>
+
+                        <button
+                          type="button"
                           onClick={() => handleOpenWpDuplicate(p)}
                           className="min-h-[44px] px-3.5 py-1.5 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
                           title="Duplicate product & configurator profile"
@@ -1189,6 +1214,19 @@ export const ProductsPage: React.FC = () => {
                                 className="min-h-[44px] px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-700 dark:text-zinc-200 text-xs font-semibold border border-zinc-200 dark:border-white/10 transition-colors cursor-pointer"
                               >
                                 Images
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedProductForSeo(p);
+                                  setIsSeoModalOpen(true);
+                                }}
+                                className="min-h-[44px] px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-700 dark:text-zinc-200 text-xs font-semibold border border-zinc-200 dark:border-white/10 transition-colors cursor-pointer flex items-center gap-1.5"
+                                title="Manage SEO metadata & short description with AI"
+                              >
+                                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                                <span>SEO & Copy</span>
                               </button>
 
                               <button
@@ -1913,6 +1951,17 @@ export const ProductsPage: React.FC = () => {
           setDuplicatorInitialIdOrUrl(undefined);
         }}
         initialUrlOrId={duplicatorInitialIdOrUrl}
+      />
+
+      {/* Webstore Product SEO & Short Description Modal */}
+      <ProductSeoModal
+        isOpen={isSeoModalOpen}
+        onClose={() => {
+          setIsSeoModalOpen(false);
+          setSelectedProductForSeo(null);
+        }}
+        product={selectedProductForSeo}
+        onUpdated={handleProductSeoUpdated}
       />
 
       {/* Delete Confirmation Modal */}
