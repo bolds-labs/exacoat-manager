@@ -5800,6 +5800,7 @@ export async function fetchShopeeProductsDirect(params?: {
   offset?: number;
   page_size?: number;
   item_status?: string;
+  search?: string;
 }): Promise<{
   success: boolean;
   items: ShopeeListingItem[];
@@ -5812,7 +5813,8 @@ export async function fetchShopeeProductsDirect(params?: {
   const offset = params?.offset ?? 0;
   const pageSize = params?.page_size ?? 50;
   const status = params?.item_status ?? 'NORMAL';
-  const url = `${base}/wp-json/exacoat-core/v1/shopee/products?offset=${offset}&page_size=${pageSize}&item_status=${encodeURIComponent(status)}&_t=${Date.now()}`;
+  const searchParam = params?.search ? `&search=${encodeURIComponent(params.search.trim())}` : '';
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/products?offset=${offset}&page_size=${pageSize}&item_status=${encodeURIComponent(status)}${searchParam}&_t=${Date.now()}`;
 
   try {
     const res = await authenticatedFetch(url, {
@@ -5921,6 +5923,7 @@ export async function fetchTikTokProductsDirect(params?: {
   page_size?: number;
   page_token?: string;
   status?: string;
+  search?: string;
 }): Promise<{
   success: boolean;
   products: TikTokListingItem[];
@@ -5932,7 +5935,8 @@ export async function fetchTikTokProductsDirect(params?: {
   const pageSize = params?.page_size ?? 20;
   const tokenParam = params?.page_token ? `&page_token=${encodeURIComponent(params.page_token)}` : '';
   const statusParam = params?.status ? `&status=${encodeURIComponent(params.status)}` : '&status=ALL';
-  const url = `${base}/wp-json/exacoat-core/v1/tiktok/products?page_size=${pageSize}${tokenParam}${statusParam}&_t=${Date.now()}`;
+  const searchParam = params?.search ? `&search=${encodeURIComponent(params.search.trim())}` : '';
+  const url = `${base}/wp-json/exacoat-core/v1/tiktok/products?page_size=${pageSize}${tokenParam}${statusParam}${searchParam}&_t=${Date.now()}`;
 
   try {
     const res = await authenticatedFetch(url, {

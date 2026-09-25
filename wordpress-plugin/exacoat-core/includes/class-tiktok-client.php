@@ -1446,12 +1446,16 @@ class Exacoat_TikTok_Client {
 		$page_size = min( 100, max( 1, (int) ( $request->get_param( 'page_size' ) ?: 20 ) ) );
 		$page_token = sanitize_text_field( (string) ( $request->get_param( 'page_token' ) ?: '' ) );
 		$status = sanitize_text_field( (string) ( $request->get_param( 'status' ) ?: 'ALL' ) );
+		$search = trim( sanitize_text_field( (string) ( $request->get_param( 'search' ) ?: '' ) ) );
 
 		$body = [
 			'status' => $status,
 		];
 		if ( ! empty( $page_token ) ) {
 			$body['page_token'] = $page_token;
+		}
+		if ( ! empty( $search ) ) {
+			$body['search_words'] = $search;
 		}
 
 		$api_res = self::call_api( '/product/202309/products/search', 'POST', [ 'page_size' => $page_size ], $body );

@@ -2517,37 +2517,98 @@ class Exacoat_Shopee_Client {
 	}
 
 	/**
-	 * REST Endpoint: Fetch Shopee product listings with base info
+	 * REST Endpoint: Fetch Shopee product listings with base info and search
 	 */
 	public static function rest_get_products( \WP_REST_Request $request ): \WP_REST_Response {
 		$offset = max( 0, (int) ( $request->get_param( 'offset' ) ?: 0 ) );
 		$page_size = min( 100, max( 1, (int) ( $request->get_param( 'page_size' ) ?: 50 ) ) );
 		$status_param = sanitize_text_field( (string) ( $request->get_param( 'item_status' ) ?: 'NORMAL' ) );
+		$search = trim( sanitize_text_field( (string) ( $request->get_param( 'search' ) ?: '' ) ) );
 
-		// Shopee API accepts item_status query
-		$query_params = [
-			'offset'      => $offset,
-			'page_size'   => $page_size,
-			'item_status' => $status_param === 'ALL' ? 'NORMAL' : $status_param,
-		];
+		$item_ids = [];
+		$total = 0;
+		$has_next = false;
+		$next_offset = $offset;
 
-		$list_res = self::call_shop_api( '/api/v2/product/get_item_list', 'GET', $query_params );
-		if ( ! $list_res['success'] ) {
-			return new \WP_REST_Response([
-				'success' => false,
-				'error'   => $list_res['error'] ?? 'Failed to retrieve item list from Shopee.',
-				'message' => $list_res['message'] ?? '',
-				'items'   => [],
-				'total'   => 0,
-			], 400 );
+		// 1. Direct Shopee URL or Item ID Search
+		$direct_id = self::parse_shopee_item_id( $search );
+		if ( ! empty( $direct_id ) ) {
+			$item_ids = [ $direct_id ];
+			$total = 1;
+			$has_next = false;
+		} elseif ( ! empty( $search ) ) {
+			// 2. Keyword Search via Shopee v2.product.search_item
+			$search_res = self::call_shop_api( '/api/v2/product/search_item', 'GET', [
+				'item_name' => $search,
+				'page_size' => $page_size,
+				'offset'    => $offset,
+			]);
+
+			if ( $search_res['success'] && ! empty( $search_res['response']['item_id_list'] ) ) {
+				$item_ids = array_values( array_filter( array_map( 'intval', $search_res['response']['item_id_list'] ) ) );
+				$total = (int) ( $search_res['response']['total_count'] ?? count( $item_ids ) );
+				$next_offset = (int) ( $search_res['response']['next_offset'] ?? ( $offset + count( $item_ids ) ) );
+				$has_next = $next_offset < $total;
+			} else {
+				// If search_item is empty, query base list to filter by name
+				$query_params = [
+					'offset'      => 0,
+					'page_size'   => 100,
+					'item_status' => $status_param === 'ALL' ? 'NORMAL' : $status_param,
+				];
+				$fallback_list = self::call_shop_api( '/api/v2/product/get_item_list', 'GET', $query_params );
+				if ( ! empty( $fallback_list['response']['item'] ) ) {
+					$raw_ids = array_column( $fallback_list['response']['item'], 'item_id' );
+					if ( ! empty( $raw_ids ) ) {
+						// Filter through get_item_base_info in chunks
+						$search_lower = strtolower( $search );
+						$chunks = array_chunk( array_slice( $raw_ids, 0, 50 ), 50 );
+						foreach ( $chunks as $chunk ) {
+							$chunk_res = self::call_shop_api( '/api/v2/product/get_item_base_info', 'GET', [
+								'item_id_list' => implode( ',', $chunk ),
+							]);
+							if ( ! empty( $chunk_res['response']['item_list'] ) ) {
+								foreach ( $chunk_res['response']['item_list'] as $it ) {
+									if ( str_contains( strtolower( (string) ( $it['item_name'] ?? '' ) ), $search_lower ) ) {
+										$item_ids[] = (int) $it['item_id'];
+									}
+								}
+							}
+						}
+					}
+					$total = count( $item_ids );
+				}
+			}
+		} else {
+			// 3. Standard Item List
+			$query_params = [
+				'offset'      => $offset,
+				'page_size'   => $page_size,
+				'item_status' => $status_param === 'ALL' ? 'NORMAL' : $status_param,
+			];
+
+			$list_res = self::call_shop_api( '/api/v2/product/get_item_list', 'GET', $query_params );
+			if ( ! $list_res['success'] ) {
+				return new \WP_REST_Response([
+					'success' => false,
+					'error'   => $list_res['error'] ?? 'Failed to retrieve item list from Shopee.',
+					'message' => $list_res['message'] ?? '',
+					'items'   => [],
+					'total'   => 0,
+				], 400 );
+			}
+
+			$raw_items = $list_res['response']['item'] ?? [];
+			$total = (int) ( $list_res['response']['total_count'] ?? count( $raw_items ) );
+			$has_next = (bool) ( $list_res['response']['has_next_page'] ?? false );
+			$next_offset = (int) ( $list_res['response']['next_offset'] ?? ( $offset + count( $raw_items ) ) );
+
+			$item_ids = array_values( array_filter( array_map( function( $it ) {
+				return isset( $it['item_id'] ) ? (int) $it['item_id'] : 0;
+			}, $raw_items ) ) );
 		}
 
-		$raw_items = $list_res['response']['item'] ?? [];
-		$total = (int) ( $list_res['response']['total_count'] ?? count( $raw_items ) );
-		$has_next = (bool) ( $list_res['response']['has_next_page'] ?? false );
-		$next_offset = (int) ( $list_res['response']['next_offset'] ?? ( $offset + count( $raw_items ) ) );
-
-		if ( empty( $raw_items ) ) {
+		if ( empty( $item_ids ) ) {
 			return new \WP_REST_Response([
 				'success'       => true,
 				'items'         => [],
@@ -2557,11 +2618,7 @@ class Exacoat_Shopee_Client {
 			], 200 );
 		}
 
-		// Extract item IDs to fetch detailed base info (up to 50 at a time)
-		$item_ids = array_values( array_filter( array_map( function( $it ) {
-			return isset( $it['item_id'] ) ? (int) $it['item_id'] : 0;
-		}, $raw_items ) ) );
-
+		// Fetch detailed base info
 		$chunks = array_chunk( $item_ids, 50 );
 		$detailed_items = [];
 
@@ -2578,12 +2635,56 @@ class Exacoat_Shopee_Client {
 						$images = $item['image']['image_url_list'];
 					}
 
+					// Resolve real model price if item has variants
+					$original_price = (float) ( $item['price_info'][0]['original_price'] ?? 0 );
+					$current_price  = (float) ( $item['price_info'][0]['current_price'] ?? 0 );
+					$has_model      = ! empty( $item['has_model'] );
+
+					if ( ( $original_price <= 0 || $current_price <= 0 ) && $has_model ) {
+						$cache_key = '_shopee_price_' . $item_id;
+						$cached = get_transient( $cache_key );
+						if ( is_array( $cached ) && ! empty( $cached['original_price'] ) ) {
+							$original_price = (float) $cached['original_price'];
+							$current_price  = (float) $cached['current_price'];
+						} else {
+							$model_res = self::call_shop_api( '/api/v2/product/get_model_list', 'GET', [ 'item_id' => $item_id ] );
+							if ( $model_res['success'] && ! empty( $model_res['response']['model'][0]['price_info'][0] ) ) {
+								$first_model_price = $model_res['response']['model'][0]['price_info'][0];
+								$original_price = (float) ( $first_model_price['original_price'] ?? 149000 );
+								$current_price  = (float) ( $first_model_price['current_price'] ?? 149000 );
+								set_transient( $cache_key, [
+									'original_price' => $original_price,
+									'current_price'  => $current_price,
+								], 12 * HOUR_IN_SECONDS );
+							} else {
+								$original_price = 149000;
+								$current_price  = 149000;
+							}
+						}
+					}
+
+					if ( $original_price <= 0 ) {
+						$original_price = 149000;
+					}
+					if ( $current_price <= 0 ) {
+						$current_price = $original_price;
+					}
+
+					$price_info_resolved = [
+						[
+							'currency'       => 'IDR',
+							'original_price' => $original_price,
+							'current_price'  => $current_price,
+						]
+					];
+
 					$detailed_items[] = [
 						'item_id'           => $item_id,
 						'item_name'         => (string) ( $item['item_name'] ?? '' ),
 						'item_status'       => (string) ( $item['item_status'] ?? 'NORMAL' ),
 						'description'       => (string) ( $item['description'] ?? '' ),
-						'price_info'        => $item['price_info'] ?? [],
+						'has_model'         => $has_model,
+						'price_info'        => $price_info_resolved,
 						'stock_info_v2'     => $item['stock_info_v2'] ?? [],
 						'image'             => $item['image'] ?? [ 'image_url_list' => $images ],
 						'brand'             => $item['brand'] ?? [ 'brand_id' => 0, 'original_brand_name' => 'Exacoat' ],
