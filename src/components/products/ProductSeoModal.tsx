@@ -52,11 +52,22 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
 
   // Active AI Provider info
   const pluginSettings = getCachedPluginSettings();
-  const activeProvider = pluginSettings.fandom_provider || pluginSettings.ai_provider || 'gemini';
-  const activeModel =
-    activeProvider === 'gemini'
+  const initialProvider = (pluginSettings.fandom_provider || pluginSettings.ai_provider || 'gemini') as 'gemini' | 'openai';
+  const [selectedProvider, setSelectedProvider] = useState<'gemini' | 'openai'>(initialProvider);
+  const [selectedModel, setSelectedModel] = useState<string>(
+    initialProvider === 'gemini'
       ? pluginSettings.gemini_model || 'gemini-2.5-flash'
-      : pluginSettings.openai_model || 'gpt-4o-mini';
+      : pluginSettings.openai_model || 'gpt-4o-mini'
+  );
+
+  const handleProviderToggle = (newProvider: 'gemini' | 'openai') => {
+    setSelectedProvider(newProvider);
+    setSelectedModel(
+      newProvider === 'gemini'
+        ? pluginSettings.gemini_model || 'gemini-2.5-flash'
+        : pluginSettings.openai_model || 'gpt-4o-mini'
+    );
+  };
 
   // Load SEO Metadata when product is opened
   useEffect(() => {
@@ -118,8 +129,8 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
 
     const categoryName = product.categories?.[0]?.name || 'Skins';
     const res = await generateProductSeoAndDescriptionAi(product.name, categoryName, {
-      provider: activeProvider as 'gemini' | 'openai',
-      model: activeModel,
+      provider: selectedProvider,
+      model: selectedModel,
     });
 
     setIsGeneratingAi(false);
@@ -131,16 +142,16 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
       if (res.data.focus_keyword) setFocusKeyword(res.data.focus_keyword);
       if (res.data.short_description) setShortDesc(res.data.short_description);
 
-      setAiModelUsed(res.model_used || activeModel);
+      setAiModelUsed(res.model_used || selectedModel);
       setAiLatencyMs(res.latency_ms || 0);
 
       showToast(
         'success',
         'AI Generation Complete',
-        `Generated device-differentiated SEO and short description via ${res.model_used || activeModel} in ${res.latency_ms || 0}ms.`
+        `Generated device-differentiated SEO and short description via ${res.model_used || selectedModel} in ${res.latency_ms || 0}ms.`
       );
     } else {
-      showToast('error', 'AI Generation Failed', res.error || 'Could not generate copy. Check API keys.');
+      showToast('error', 'AI Generation Failed', res.error || 'Could not generate copy. Check API keys in Settings.');
     }
   };
 
@@ -151,8 +162,8 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
 
     const categoryName = product.categories?.[0]?.name || 'Skins';
     const res = await generateProductSeoAndDescriptionAi(product.name, categoryName, {
-      provider: activeProvider as 'gemini' | 'openai',
-      model: activeModel,
+      provider: selectedProvider,
+      model: selectedModel,
     });
 
     setActiveGeneratingField(null);
@@ -290,14 +301,14 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
 
         {/* AI Generator Control Bar */}
         <div className="p-3.5 rounded-2xl bg-[#f3aa18]/10 border border-[#f3aa18]/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="space-y-0.5">
+          <div className="space-y-1">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-[#f3aa18]" />
               <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
                 AI Differentiation Generator
               </span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
-                {activeModel}
+                {selectedModel}
               </span>
             </div>
             <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
@@ -305,24 +316,54 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handleGenerateAllWithAi}
-            disabled={isGeneratingAi || isSaving}
-            className="min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold transition shadow-xs disabled:opacity-50 cursor-pointer shrink-0"
-          >
-            {isGeneratingAi && activeGeneratingField === 'all' ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Generating Copy...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4" />
-                <span>Generate All with AI</span>
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Provider Switcher */}
+            <div className="flex items-center p-1 bg-white/70 dark:bg-zinc-900/80 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs">
+              <button
+                type="button"
+                onClick={() => handleProviderToggle('gemini')}
+                className={clsx(
+                  'min-h-[44px] px-3 py-1.5 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1',
+                  selectedProvider === 'gemini'
+                    ? 'bg-[#f3aa18] text-neutral-950 shadow-xs'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+                )}
+              >
+                <span>Gemini</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleProviderToggle('openai')}
+                className={clsx(
+                  'min-h-[44px] px-3 py-1.5 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1',
+                  selectedProvider === 'openai'
+                    ? 'bg-[#f3aa18] text-neutral-950 shadow-xs'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+                )}
+              >
+                <span>OpenAI</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGenerateAllWithAi}
+              disabled={isGeneratingAi || isSaving}
+              className="min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold transition shadow-xs disabled:opacity-50 cursor-pointer shrink-0"
+            >
+              {isGeneratingAi && activeGeneratingField === 'all' ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Generating Copy...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  <span>Generate All with AI</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {aiLatencyMs !== null && (
@@ -377,7 +418,7 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
                 type="button"
                 onClick={() => handleRegenerateSingleField('short_desc')}
                 disabled={isGeneratingAi || isSaving}
-                className="text-[11px] text-[#f3aa18] hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-40"
+                className="min-h-[44px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#f3aa18] bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 border border-[#f3aa18]/30 transition cursor-pointer disabled:opacity-40"
               >
                 {activeGeneratingField === 'short_desc' ? (
                   <Loader2 className="w-3 h-3 animate-spin" />
@@ -419,7 +460,7 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
                 type="button"
                 onClick={() => handleRegenerateSingleField('seo_title')}
                 disabled={isGeneratingAi || isSaving}
-                className="text-[11px] text-[#f3aa18] hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-40"
+                className="min-h-[44px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#f3aa18] bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 border border-[#f3aa18]/30 transition cursor-pointer disabled:opacity-40"
               >
                 {activeGeneratingField === 'seo_title' ? (
                   <Loader2 className="w-3 h-3 animate-spin" />
@@ -461,7 +502,7 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
                 type="button"
                 onClick={() => handleRegenerateSingleField('seo_desc')}
                 disabled={isGeneratingAi || isSaving}
-                className="text-[11px] text-[#f3aa18] hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-40"
+                className="min-h-[44px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#f3aa18] bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 border border-[#f3aa18]/30 transition cursor-pointer disabled:opacity-40"
               >
                 {activeGeneratingField === 'seo_desc' ? (
                   <Loader2 className="w-3 h-3 animate-spin" />

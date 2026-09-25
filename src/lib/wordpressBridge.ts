@@ -5883,40 +5883,14 @@ export async function generateProductSeoAndDescriptionAi(
 }> {
   const start = performance.now();
   const base = getWordPressBaseUrl();
-  const url = `${base}/wp-json/exacoat-core/v1/product/generate-seo`;
-
   const cached = getCachedPluginSettings();
   const provider = options?.provider || cached.fandom_provider || cached.ai_provider || 'gemini';
-  const model = options?.model || (provider === 'gemini' ? (cached.gemini_model || 'gemini-2.5-flash') : (cached.openai_model || 'gpt-4o-mini'));
+  const model =
+    options?.model ||
+    (provider === 'gemini'
+      ? cached.gemini_model || 'gemini-2.5-flash'
+      : cached.openai_model || 'gpt-4o-mini');
 
-  // 1. Try WordPress Backend Route
-  try {
-    const res = await authenticatedFetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        name: productName,
-        category: categoryName,
-        provider,
-        model,
-      }),
-    });
-    if (res.ok) {
-      const respData = await res.json();
-      if (respData.success && respData.data?.seo_title) {
-        return {
-          success: true,
-          data: respData.data,
-          model_used: respData.model_used || model,
-          latency_ms: respData.latency_ms || Math.round(performance.now() - start),
-          message: respData.message,
-        };
-      }
-    }
-  } catch {}
-
-  // 2. Direct client-side AI generation fallback
-  const isGemini = provider.toLowerCase().includes('gemini');
   const systemPrompt = `You are an expert e-commerce copywriter and SEO specialist for Exacoat (exacoat.com).
 Exacoat designs precision-engineered vinyl skins and protective wraps made of authentic 3M materials for smartphones, laptops, gaming handhelds, and accessories.
 
@@ -5941,6 +5915,126 @@ Return ONLY a valid JSON object with the following four keys (no markdown format
   "short_description": "2 to 3 concise sentences (45 to 65 words) highlighting precision fit, tactile texture, and everyday scratch protection."
 }`;
 
+  const cleanField = (str?: string) => {
+    if (!str || typeof str !== 'string') return '';
+    return str
+      .replace(/!+/g, '.')
+      .replace(/[—–]/g, ', ')
+      .replace(/--/g, ', ')
+      .trim();
+  };
+
+  const parseAiJson = (rawText: string): ProductSeoGeneratedData | null => {
+    if (!rawText || !rawText.trim()) return null;
+    let clean = rawText.replace(/^```(?:json)?\s*|\s*```$/gi, '').trim();
+    clean = clean.replace(/[—–]/g, ', ').replace(/--/g, ', ');
+
+    let parsed: any = null;
+    try {
+      parsed = JSON.parse(clean);
+    } catch {
+      const match = clean.match(/\{[\s\S]*\}/);
+      if (match) {
+        try {
+          parsed = JSON.parse(match[0]);
+        } catch {}
+      }
+    }
+
+    if (parsed && (parsed.seo_title || parsed.seo_description || parsed.short_description)) {
+      return {
+        seo_title: cleanField(parsed.seo_title) || `${productName} Skin & Wrap | Exacoat`,
+        seo_description: cleanField(parsed.seo_description),
+        focus_keyword: cleanField(parsed.focus_keyword) || `${productName.toLowerCase()} skin`,
+        short_description: cleanField(parsed.short_description),
+      };
+    }
+
+    if (clean.length > 25) {
+      const sanitized = cleanField(clean);
+      return {
+        seo_title: `${productName} Skin & Wrap | Exacoat`,
+        seo_description: sanitized.slice(0, 155).replace(/[\r\n]+/g, ' ').trim(),
+        focus_keyword: `${productName.toLowerCase()} skin`,
+        short_description: sanitized,
+      };
+    }
+
+    return null;
+  };
+
+  let lastServerError = '';
+
+  // 1. Try dedicated WordPress Backend Route (/product/generate-seo)
+  try {
+    const res = await authenticatedFetch(`${base}/wp-json/exacoat-core/v1/product/generate-seo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        name: productName,
+        category: categoryName,
+        provider,
+        model,
+      }),
+    });
+    if (res.ok) {
+      const respData = await res.json();
+      if (respData.success && respData.data?.seo_title) {
+        return {
+          success: true,
+          data: {
+            seo_title: cleanField(respData.data.seo_title),
+            seo_description: cleanField(respData.data.seo_description),
+            focus_keyword: cleanField(respData.data.focus_keyword),
+            short_description: cleanField(respData.data.short_description),
+          },
+          model_used: respData.model_used || model,
+          latency_ms: respData.latency_ms || Math.round(performance.now() - start),
+          message: respData.message,
+        };
+      } else if (!respData.success && respData.message) {
+        lastServerError = respData.message;
+      }
+    }
+  } catch {}
+
+  // 2. Fallback to existing live WordPress AI endpoint (/fandom/generate)
+  // This endpoint is already deployed and running on the live WordPress server with server-side API keys
+  try {
+    const res = await authenticatedFetch(`${base}/wp-json/exacoat-core/v1/fandom/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        name: `${productName} (${categoryName})`,
+        provider,
+        prompt: systemPrompt,
+        model,
+      }),
+    });
+    if (res.ok) {
+      const fandomData = await res.json();
+      if (fandomData.success && (fandomData.text || fandomData.description)) {
+        const parsed = parseAiJson(fandomData.text || fandomData.description || '');
+        if (parsed) {
+          return {
+            success: true,
+            data: parsed,
+            model_used: fandomData.model_used || model,
+            latency_ms: fandomData.latency_ms || Math.round(performance.now() - start),
+            message: fandomData.message,
+          };
+        }
+      } else if (!fandomData.success && fandomData.message) {
+        lastServerError = fandomData.message;
+      }
+    }
+  } catch (err: any) {
+    if (err?.message) lastServerError = err.message;
+  }
+
+  // 3. Fallback to direct client-side AI API if keys exist in client cache
+  const isGemini = provider.toLowerCase().includes('gemini');
+
   if (isGemini) {
     const geminiKey = cached.gemini_api_key || '';
     const geminiModel = model || 'gemini-2.5-flash';
@@ -5964,19 +6058,16 @@ Return ONLY a valid JSON object with the following four keys (no markdown format
         if (res.ok) {
           const jsonResp = await res.json();
           const rawText = jsonResp.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          let parsed: any;
-          try {
-            parsed = JSON.parse(rawText.trim());
-          } catch {
-            const clean = rawText.replace(/^```(?:json)?\s*|\s*```$/gi, '').trim();
-            parsed = JSON.parse(clean);
-          }
-          if (parsed && parsed.seo_title) {
+          const parsed = parseAiJson(rawText);
+          if (parsed) {
             return { success: true, data: parsed, model_used: geminiModel, latency_ms: latency };
           }
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          lastServerError = errData?.error?.message || `Gemini API HTTP ${res.status}`;
         }
       } catch (err: any) {
-        return { success: false, error: err.message };
+        lastServerError = err.message;
       }
     }
   } else {
@@ -6001,18 +6092,24 @@ Return ONLY a valid JSON object with the following four keys (no markdown format
         if (res.ok) {
           const jsonResp = await res.json();
           const rawText = jsonResp.choices?.[0]?.message?.content || '';
-          const parsed = JSON.parse(rawText.trim());
-          if (parsed && parsed.seo_title) {
+          const parsed = parseAiJson(rawText);
+          if (parsed) {
             return { success: true, data: parsed, model_used: openAiModel, latency_ms: latency };
           }
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          lastServerError = errData?.error?.message || `OpenAI API HTTP ${res.status}`;
         }
       } catch (err: any) {
-        return { success: false, error: err.message };
+        lastServerError = err.message;
       }
     }
   }
 
-  return { success: false, error: 'AI SEO generator unavailable. Check API keys in Settings.' };
+  return {
+    success: false,
+    error: lastServerError || 'AI SEO generator unavailable. Check API keys in Settings or AI Tools.',
+  };
 }
 
 export async function deleteProductDirect(
