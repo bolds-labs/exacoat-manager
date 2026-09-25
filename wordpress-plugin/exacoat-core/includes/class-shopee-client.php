@@ -1324,6 +1324,27 @@ class Exacoat_Shopee_Client {
 			'callback'            => [ __CLASS__, 'rest_duplicate_product' ],
 			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
 		]);
+
+		// 16. GET /shopee/products
+		register_rest_route( $ns, '/shopee/products', [
+			'methods'             => 'GET',
+			'callback'            => [ __CLASS__, 'rest_get_products' ],
+			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+		]);
+
+		// 17. POST /shopee/product/set-status
+		register_rest_route( $ns, '/shopee/product/set-status', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_set_product_status' ],
+			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+		]);
+
+		// 18. POST /shopee/product/delete
+		register_rest_route( $ns, '/shopee/product/delete', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_delete_product' ],
+			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+		]);
 	}
 
 	public static function check_admin_permission( ?\WP_REST_Request $request = null ): bool {
@@ -2492,6 +2513,172 @@ class Exacoat_Shopee_Client {
 			'models_initialized' => $models_initialized,
 			'source_item_id'     => $source_item_id,
 			'target_device'      => $target_device,
+		], 200 );
+	}
+
+	/**
+	 * REST Endpoint: Fetch Shopee product listings with base info
+	 */
+	public static function rest_get_products( \WP_REST_Request $request ): \WP_REST_Response {
+		$offset = max( 0, (int) ( $request->get_param( 'offset' ) ?: 0 ) );
+		$page_size = min( 100, max( 1, (int) ( $request->get_param( 'page_size' ) ?: 50 ) ) );
+		$status_param = sanitize_text_field( (string) ( $request->get_param( 'item_status' ) ?: 'NORMAL' ) );
+
+		// Shopee API accepts item_status query
+		$query_params = [
+			'offset'      => $offset,
+			'page_size'   => $page_size,
+			'item_status' => $status_param === 'ALL' ? 'NORMAL' : $status_param,
+		];
+
+		$list_res = self::call_shop_api( '/api/v2/product/get_item_list', 'GET', $query_params );
+		if ( ! $list_res['success'] ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => $list_res['error'] ?? 'Failed to retrieve item list from Shopee.',
+				'message' => $list_res['message'] ?? '',
+				'items'   => [],
+				'total'   => 0,
+			], 400 );
+		}
+
+		$raw_items = $list_res['response']['item'] ?? [];
+		$total = (int) ( $list_res['response']['total_count'] ?? count( $raw_items ) );
+		$has_next = (bool) ( $list_res['response']['has_next_page'] ?? false );
+		$next_offset = (int) ( $list_res['response']['next_offset'] ?? ( $offset + count( $raw_items ) ) );
+
+		if ( empty( $raw_items ) ) {
+			return new \WP_REST_Response([
+				'success'       => true,
+				'items'         => [],
+				'total'         => $total,
+				'has_next_page' => false,
+				'next_offset'   => $offset,
+			], 200 );
+		}
+
+		// Extract item IDs to fetch detailed base info (up to 50 at a time)
+		$item_ids = array_values( array_filter( array_map( function( $it ) {
+			return isset( $it['item_id'] ) ? (int) $it['item_id'] : 0;
+		}, $raw_items ) ) );
+
+		$chunks = array_chunk( $item_ids, 50 );
+		$detailed_items = [];
+
+		foreach ( $chunks as $chunk ) {
+			$base_res = self::call_shop_api( '/api/v2/product/get_item_base_info', 'GET', [
+				'item_id_list' => implode( ',', $chunk ),
+			]);
+
+			if ( $base_res['success'] && ! empty( $base_res['response']['item_list'] ) ) {
+				foreach ( $base_res['response']['item_list'] as $item ) {
+					$item_id = (int) ( $item['item_id'] ?? 0 );
+					$images = [];
+					if ( ! empty( $item['image']['image_url_list'] ) && is_array( $item['image']['image_url_list'] ) ) {
+						$images = $item['image']['image_url_list'];
+					}
+
+					$detailed_items[] = [
+						'item_id'           => $item_id,
+						'item_name'         => (string) ( $item['item_name'] ?? '' ),
+						'item_status'       => (string) ( $item['item_status'] ?? 'NORMAL' ),
+						'description'       => (string) ( $item['description'] ?? '' ),
+						'price_info'        => $item['price_info'] ?? [],
+						'stock_info_v2'     => $item['stock_info_v2'] ?? [],
+						'image'             => $item['image'] ?? [ 'image_url_list' => $images ],
+						'brand'             => $item['brand'] ?? [ 'brand_id' => 0, 'original_brand_name' => 'Exacoat' ],
+						'category_id'       => (int) ( $item['category_id'] ?? 0 ),
+						'create_time'       => (int) ( $item['create_time'] ?? 0 ),
+						'update_time'       => (int) ( $item['update_time'] ?? 0 ),
+						'seller_centre_url' => "https://seller.shopee.co.id/portal/product/{$item_id}",
+					];
+				}
+			}
+		}
+
+		return new \WP_REST_Response([
+			'success'       => true,
+			'items'         => $detailed_items,
+			'total'         => $total,
+			'has_next_page' => $has_next,
+			'next_offset'   => $next_offset,
+		], 200 );
+	}
+
+	/**
+	 * REST Endpoint: Set Shopee product status (NORMAL vs UNLIST)
+	 */
+	public static function rest_set_product_status( \WP_REST_Request $request ): \WP_REST_Response {
+		$body = $request->get_json_params() ?: [];
+		$item_id = (int) ( $body['item_id'] ?? 0 );
+		$unlist = ! empty( $body['unlist'] ); // true = unlist (draft), false = normal (publish)
+
+		if ( empty( $item_id ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => 'A valid Shopee Item ID is required.',
+			], 400 );
+		}
+
+		$payload = [
+			'item_list' => [
+				[
+					'item_id' => $item_id,
+					'unlist'  => $unlist,
+				],
+			],
+		];
+
+		$res = self::call_shop_api( '/api/v2/product/unlist_item', 'POST', [], $payload );
+		if ( ! $res['success'] ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => $res['error'] ?? 'Failed to update item status on Shopee.',
+				'message' => $res['message'] ?? '',
+			], 400 );
+		}
+
+		$new_status = $unlist ? 'UNLIST' : 'NORMAL';
+		return new \WP_REST_Response([
+			'success'     => true,
+			'item_id'     => $item_id,
+			'unlist'      => $unlist,
+			'item_status' => $new_status,
+			'message'     => $unlist ? 'Product moved to unlisted draft.' : 'Product published live.',
+		], 200 );
+	}
+
+	/**
+	 * REST Endpoint: Delete Shopee product
+	 */
+	public static function rest_delete_product( \WP_REST_Request $request ): \WP_REST_Response {
+		$body = $request->get_json_params() ?: [];
+		$item_id = (int) ( $body['item_id'] ?? 0 );
+
+		if ( empty( $item_id ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => 'A valid Shopee Item ID is required.',
+			], 400 );
+		}
+
+		$payload = [
+			'item_id' => $item_id,
+		];
+
+		$res = self::call_shop_api( '/api/v2/product/delete_item', 'POST', [], $payload );
+		if ( ! $res['success'] ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => $res['error'] ?? 'Failed to delete product on Shopee.',
+				'message' => $res['message'] ?? '',
+			], 400 );
+		}
+
+		return new \WP_REST_Response([
+			'success' => true,
+			'item_id' => $item_id,
+			'message' => 'Product listing removed successfully from Shopee.',
 		], 200 );
 	}
 }

@@ -805,6 +805,13 @@ class Exacoat_Configurator_Engine {
 			'callback'            => [ __CLASS__, 'rest_upload_composite' ],
 			'permission_callback' => '__return_true',
 		] );
+
+		// 20. POST /media/upload: Upload image file to WordPress Media Library
+		$register( '/media/upload', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_upload_media' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+		] );
 	}
 
 
@@ -1807,6 +1814,43 @@ class Exacoat_Configurator_Engine {
 		$response->header( 'Access-Control-Allow-Methods', 'POST, GET, OPTIONS' );
 
 		return $response;
+	}
+
+	/**
+	 * REST Endpoint: Upload image file to WordPress Media Library
+	 */
+	public static function rest_upload_media( WP_REST_Request $request ): WP_REST_Response {
+		require_once ABSPATH . 'wp-admin/includes/image.php';
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/media.php';
+
+		$attachment_id = 0;
+		if ( ! empty( $_FILES['file'] ) ) {
+			$attachment_id = media_handle_upload( 'file', 0 );
+		} elseif ( ! empty( $_FILES['image'] ) ) {
+			$attachment_id = media_handle_upload( 'image', 0 );
+		}
+
+		if ( is_wp_error( $attachment_id ) ) {
+			return new WP_REST_Response( [
+				'success' => false,
+				'error'   => $attachment_id->get_error_message(),
+			], 400 );
+		}
+
+		if ( ! $attachment_id ) {
+			return new WP_REST_Response( [
+				'success' => false,
+				'error'   => 'No image file uploaded.',
+			], 400 );
+		}
+
+		$url = wp_get_attachment_url( $attachment_id );
+		return new WP_REST_Response( [
+			'success' => true,
+			'id'      => (int) $attachment_id,
+			'url'     => (string) $url,
+		], 200 );
 	}
 
 	/**

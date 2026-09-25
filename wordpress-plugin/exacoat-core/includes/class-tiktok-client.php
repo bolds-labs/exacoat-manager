@@ -965,6 +965,27 @@ class Exacoat_TikTok_Client {
 			'callback'            => [ __CLASS__, 'rest_get_tracking_info' ],
 			'permission_callback' => '__return_true',
 		]);
+
+		// 12. GET /tiktok/products
+		register_rest_route( $ns, '/tiktok/products', [
+			'methods'             => 'GET',
+			'callback'            => [ __CLASS__, 'rest_get_products' ],
+			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+		]);
+
+		// 13. POST /tiktok/product/set-status
+		register_rest_route( $ns, '/tiktok/product/set-status', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_set_product_status' ],
+			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+		]);
+
+		// 14. POST /tiktok/product/delete
+		register_rest_route( $ns, '/tiktok/product/delete', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_delete_product' ],
+			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+		]);
 	}
 
 	public static function rest_refresh_shops( \WP_REST_Request $request ): \WP_REST_Response {
@@ -1415,6 +1436,163 @@ class Exacoat_TikTok_Client {
 		return new \WP_REST_Response([
 			'code'    => 0,
 			'message' => 'success',
+		], 200 );
+	}
+
+	/**
+	 * REST Endpoint: Search and list TikTok Shop products
+	 */
+	public static function rest_get_products( \WP_REST_Request $request ): \WP_REST_Response {
+		$page_size = min( 100, max( 1, (int) ( $request->get_param( 'page_size' ) ?: 20 ) ) );
+		$page_token = sanitize_text_field( (string) ( $request->get_param( 'page_token' ) ?: '' ) );
+		$status = sanitize_text_field( (string) ( $request->get_param( 'status' ) ?: 'ALL' ) );
+
+		$body = [
+			'status' => $status,
+		];
+		if ( ! empty( $page_token ) ) {
+			$body['page_token'] = $page_token;
+		}
+
+		$api_res = self::call_api( '/product/202309/products/search', 'POST', [ 'page_size' => $page_size ], $body );
+
+		if ( ! $api_res['success'] ) {
+			return new \WP_REST_Response([
+				'success'  => false,
+				'error'    => $api_res['error'] ?? 'Failed to fetch TikTok Shop products.',
+				'code'     => $api_res['code'] ?? null,
+				'products' => [],
+				'total'    => 0,
+			], 400 );
+		}
+
+		$resp_data = $api_res['response'] ?? [];
+		$raw_products = $resp_data['products'] ?? [];
+		$total_count = (int) ( $resp_data['total_count'] ?? count( $raw_products ) );
+		$next_page_token = (string) ( $resp_data['next_page_token'] ?? '' );
+
+		$products = [];
+		foreach ( $raw_products as $p ) {
+			$product_id = (string) ( $p['id'] ?? '' );
+			$main_imgs = [];
+			if ( ! empty( $p['main_images'] ) && is_array( $p['main_images'] ) ) {
+				foreach ( $p['main_images'] as $img ) {
+					if ( ! empty( $img['url_list'][0] ) ) {
+						$main_imgs[] = $img['url_list'][0];
+					}
+				}
+			}
+
+			$skus = [];
+			if ( ! empty( $p['skus'] ) && is_array( $p['skus'] ) ) {
+				foreach ( $p['skus'] as $s ) {
+					$price_amount = (string) ( $s['price']['amount'] ?? '0' );
+					$currency = (string) ( $s['price']['currency'] ?? 'IDR' );
+					$stock = 0;
+					if ( ! empty( $s['stock_infos'][0]['available_stock'] ) ) {
+						$stock = (int) $s['stock_infos'][0]['available_stock'];
+					}
+
+					$skus[] = [
+						'id'              => (string) ( $s['id'] ?? '' ),
+						'seller_sku'      => (string) ( $s['seller_sku'] ?? '' ),
+						'price'           => $price_amount,
+						'currency'        => $currency,
+						'available_stock' => $stock,
+					];
+				}
+			}
+
+			$products[] = [
+				'id'              => $product_id,
+				'title'           => (string) ( $p['title'] ?? '' ),
+				'status'          => (string) ( $p['status'] ?? 'ACTIVATE' ),
+				'main_images'     => $main_imgs,
+				'skus'            => $skus,
+				'category_chains' => $p['category_chains'] ?? [],
+				'create_time'     => (int) ( $p['create_time'] ?? 0 ),
+				'update_time'     => (int) ( $p['update_time'] ?? 0 ),
+			];
+		}
+
+		return new \WP_REST_Response([
+			'success'         => true,
+			'products'        => $products,
+			'total_count'     => $total_count,
+			'next_page_token' => $next_page_token,
+		], 200 );
+	}
+
+	/**
+	 * REST Endpoint: Set TikTok Shop product status (ACTIVATE vs DEACTIVATE)
+	 */
+	public static function rest_set_product_status( \WP_REST_Request $request ): \WP_REST_Response {
+		$body = $request->get_json_params() ?: [];
+		$product_id = sanitize_text_field( (string) ( $body['product_id'] ?? '' ) );
+		$status = strtoupper( sanitize_text_field( (string) ( $body['status'] ?? '' ) ) );
+
+		if ( empty( $product_id ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => 'A valid TikTok Product ID is required.',
+			], 400 );
+		}
+
+		if ( ! in_array( $status, [ 'ACTIVATE', 'DEACTIVATE' ], true ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => 'Target status must be ACTIVATE or DEACTIVATE.',
+			], 400 );
+		}
+
+		$endpoint = $status === 'ACTIVATE'
+			? "/product/202309/products/{$product_id}/activate"
+			: "/product/202309/products/{$product_id}/deactivate";
+
+		$api_res = self::call_api( $endpoint, 'POST', [], [] );
+
+		if ( ! $api_res['success'] ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => $api_res['error'] ?? "Failed to set status to {$status} for TikTok product.",
+			], 400 );
+		}
+
+		return new \WP_REST_Response([
+			'success'    => true,
+			'product_id' => $product_id,
+			'status'     => $status,
+			'message'    => $status === 'ACTIVATE' ? 'TikTok product activated successfully.' : 'TikTok product deactivated successfully.',
+		], 200 );
+	}
+
+	/**
+	 * REST Endpoint: Delete / Deactivate TikTok product
+	 */
+	public static function rest_delete_product( \WP_REST_Request $request ): \WP_REST_Response {
+		$body = $request->get_json_params() ?: [];
+		$product_id = sanitize_text_field( (string) ( $body['product_id'] ?? '' ) );
+
+		if ( empty( $product_id ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => 'A valid TikTok Product ID is required.',
+			], 400 );
+		}
+
+		$api_res = self::call_api( "/product/202309/products/{$product_id}/deactivate", 'POST', [], [] );
+
+		if ( ! $api_res['success'] ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => $api_res['error'] ?? 'Failed to deactivate product on TikTok Shop.',
+			], 400 );
+		}
+
+		return new \WP_REST_Response([
+			'success'    => true,
+			'product_id' => $product_id,
+			'message'    => 'TikTok product deactivated and removed from active storefront.',
 		], 200 );
 	}
 }

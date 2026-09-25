@@ -2737,7 +2737,7 @@ export async function deleteWordPressStaffUserDirect(
   }
 }
 
-export async function fetchProductsDirect(params?: { search?: string; page?: number; per_page?: number; category?: string }): Promise<{
+export async function fetchProductsDirect(params?: { search?: string; page?: number; per_page?: number; category?: string; status?: string }): Promise<{
   success: boolean;
   products: Product[];
   total_products: number;
@@ -2749,6 +2749,7 @@ export async function fetchProductsDirect(params?: { search?: string; page?: num
   if (params?.search) url.searchParams.set('search', params.search);
   if (params?.page) url.searchParams.set('page', String(params.page));
   if (params?.category) url.searchParams.set('category', params.category);
+  if (params?.status) url.searchParams.set('status', params.status);
   url.searchParams.set('per_page', String(params?.per_page || 25));
   url.searchParams.set('_t', String(Date.now()));
 
@@ -5649,3 +5650,384 @@ export async function duplicateShopeeProductDirect(
     return { success: false, error: err.message };
   }
 }
+
+// ==========================================
+// Multi-Channel Product Hub Bridge APIs
+// ==========================================
+
+export interface ShopeeListingItem {
+  item_id: number;
+  item_name: string;
+  item_status: string; // 'NORMAL' | 'UNLIST' | 'BANNED' | 'DELETED'
+  description?: string;
+  price_info?: Array<{
+    currency?: string;
+    original_price?: number;
+    current_price?: number;
+  }>;
+  stock_info_v2?: {
+    summary_info?: {
+      total_available_stock?: number;
+    };
+  };
+  image?: {
+    image_url_list?: string[];
+    image_id_list?: string[];
+  };
+  brand?: {
+    brand_id: number;
+    original_brand_name: string;
+  };
+  category_id?: number;
+  create_time?: number;
+  update_time?: number;
+  seller_centre_url?: string;
+}
+
+export interface TikTokListingItem {
+  id: string;
+  title: string;
+  status: string; // 'ACTIVATE' | 'DEACTIVATE' | 'DRAFT' | 'PENDING' | 'FAILED' | 'FREEZE'
+  main_images?: string[];
+  skus?: Array<{
+    id: string;
+    seller_sku: string;
+    price: string;
+    currency: string;
+    available_stock: number;
+  }>;
+  category_chains?: any[];
+  create_time?: number;
+  update_time?: number;
+}
+
+export async function updateProductDirect(
+  id: number,
+  data: {
+    status?: string;
+    name?: string;
+    regular_price?: string;
+    sale_price?: string;
+    description?: string;
+    short_description?: string;
+    images?: Array<{ id?: number; src?: string; alt?: string; name?: string }>;
+  }
+): Promise<{ success: boolean; product?: Product; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/wc/v3/products/${id}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    const respData = await res.json();
+    if (res.ok && respData?.id) {
+      return { success: true, product: respData as Product };
+    }
+    return { success: false, error: respData?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function deleteProductDirect(
+  id: number,
+  force = false
+): Promise<{ success: boolean; id?: number; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/wc/v3/products/${id}?force=${force}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'DELETE',
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      return { success: true, id: data?.id || id };
+    }
+    return { success: false, error: data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function uploadWordPressMediaDirect(
+  file: File
+): Promise<{ success: boolean; id?: number; url?: string; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/media/upload`;
+
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+      },
+      body: formData,
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success && data?.url) {
+      return {
+        success: true,
+        id: data.id,
+        url: data.url,
+      };
+    }
+    return {
+      success: false,
+      error: data?.error || data?.message || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchShopeeProductsDirect(params?: {
+  offset?: number;
+  page_size?: number;
+  item_status?: string;
+}): Promise<{
+  success: boolean;
+  items: ShopeeListingItem[];
+  total: number;
+  has_next_page: boolean;
+  next_offset?: number;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const offset = params?.offset ?? 0;
+  const pageSize = params?.page_size ?? 50;
+  const status = params?.item_status ?? 'NORMAL';
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/products?offset=${offset}&page_size=${pageSize}&item_status=${encodeURIComponent(status)}&_t=${Date.now()}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        items: Array.isArray(data.items) ? data.items : [],
+        total: Number(data.total) || 0,
+        has_next_page: Boolean(data.has_next_page),
+        next_offset: data.next_offset,
+      };
+    }
+    return {
+      success: false,
+      items: [],
+      total: 0,
+      has_next_page: false,
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      items: [],
+      total: 0,
+      has_next_page: false,
+      error: err.message,
+    };
+  }
+}
+
+export async function setShopeeProductStatusDirect(
+  itemId: number,
+  unlist: boolean
+): Promise<{ success: boolean; item_id: number; unlist: boolean; item_status: string; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/product/set-status`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ item_id: itemId, unlist }),
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        item_id: data.item_id,
+        unlist: data.unlist,
+        item_status: data.item_status,
+      };
+    }
+    return {
+      success: false,
+      item_id: itemId,
+      unlist,
+      item_status: unlist ? 'UNLIST' : 'NORMAL',
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      item_id: itemId,
+      unlist,
+      item_status: unlist ? 'UNLIST' : 'NORMAL',
+      error: err.message,
+    };
+  }
+}
+
+export async function deleteShopeeProductDirect(
+  itemId: number
+): Promise<{ success: boolean; item_id: number; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/shopee/product/delete`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ item_id: itemId }),
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, item_id: data.item_id };
+    }
+    return { success: false, item_id: itemId, error: data?.message || data?.error || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, item_id: itemId, error: err.message };
+  }
+}
+
+export async function fetchTikTokProductsDirect(params?: {
+  page_size?: number;
+  page_token?: string;
+  status?: string;
+}): Promise<{
+  success: boolean;
+  products: TikTokListingItem[];
+  total_count: number;
+  next_page_token?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const pageSize = params?.page_size ?? 20;
+  const tokenParam = params?.page_token ? `&page_token=${encodeURIComponent(params.page_token)}` : '';
+  const statusParam = params?.status ? `&status=${encodeURIComponent(params.status)}` : '&status=ALL';
+  const url = `${base}/wp-json/exacoat-core/v1/tiktok/products?page_size=${pageSize}${tokenParam}${statusParam}&_t=${Date.now()}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        products: Array.isArray(data.products) ? data.products : [],
+        total_count: Number(data.total_count) || 0,
+        next_page_token: data.next_page_token,
+      };
+    }
+    return {
+      success: false,
+      products: [],
+      total_count: 0,
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      products: [],
+      total_count: 0,
+      error: err.message,
+    };
+  }
+}
+
+export async function setTikTokProductStatusDirect(
+  productId: string,
+  status: 'ACTIVATE' | 'DEACTIVATE'
+): Promise<{ success: boolean; product_id: string; status: string; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/tiktok/product/set-status`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ product_id: productId, status }),
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        product_id: data.product_id,
+        status: data.status,
+      };
+    }
+    return {
+      success: false,
+      product_id: productId,
+      status,
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      product_id: productId,
+      status,
+      error: err.message,
+    };
+  }
+}
+
+export async function deleteTikTokProductDirect(
+  productId: string
+): Promise<{ success: boolean; product_id: string; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/tiktok/product/delete`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ product_id: productId }),
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, product_id: data.product_id };
+    }
+    return { success: false, product_id: productId, error: data?.message || data?.error || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, product_id: productId, error: err.message };
+  }
+}
+

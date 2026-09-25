@@ -31,6 +31,7 @@ import { ExacoatLogo } from '../ui/ExacoatLogo';
 export type NavItemKey = 
   | 'dashboard'
   | 'orders'
+  | 'products'
   | 'rma'
   | 'warranty'
   | 'export'
@@ -134,6 +135,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             { key: 'tracking_pool', label: 'Tracking Pool', icon: Package },
           ]
         },
+        { key: 'products', label: 'Products', icon: Package },
         { key: 'configurator', label: 'Configurator Studio', icon: Sliders },
         { key: 'materials', label: 'Materials & Stock', icon: Layers },
         { key: 'reviews', label: 'Reviews', icon: Star, badge: pendingReviewCount > 0 ? pendingReviewCount : undefined, badgeVariant: 'amber' },
@@ -179,6 +181,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             { key: 'tracking_pool', label: 'Tracking Pool', icon: Package },
           ]
         },
+        { key: 'products', label: 'Products', icon: Package },
       ]
     }
   ];

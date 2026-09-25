@@ -25,6 +25,7 @@ const SettingsPage = React.lazy(() => import('./pages/SettingsPage').then(m => (
 const RmaClaimsPage = React.lazy(() => import('./pages/RmaClaimsPage').then(m => ({ default: m.RmaClaimsPage })));
 const ExportShipmentsPage = React.lazy(() => import('./pages/ExportShipmentsPage').then(m => ({ default: m.ExportShipmentsPage })));
 const TrackingPoolPage = React.lazy(() => import('./pages/TrackingPoolPage').then(m => ({ default: m.TrackingPoolPage })));
+const ProductsPage = React.lazy(() => import('./pages/ProductsPage').then(m => ({ default: m.ProductsPage })));
 
 const getTabFromUrl = (): NavItemKey => {
   if (typeof window === 'undefined') return 'dashboard';
@@ -38,6 +39,11 @@ const getTabFromUrl = (): NavItemKey => {
     'orders': 'orders',
     'order': 'orders',
     'fulfillment': 'orders',
+    'products': 'products',
+    'product': 'products',
+    'catalog': 'products',
+    'shopee-products': 'products',
+    'tiktok-products': 'products',
     'configurator': 'configurator',
     'configurator-studio': 'configurator',
     'studio': 'configurator',
@@ -87,7 +93,7 @@ const getTabFromUrl = (): NavItemKey => {
 
 };
 
-const SHOP_MANAGER_ALLOWED_TABS: NavItemKey[] = ['orders', 'rma', 'warranty', 'export', 'tracking_pool'];
+const SHOP_MANAGER_ALLOWED_TABS: NavItemKey[] = ['orders', 'products', 'rma', 'warranty', 'export', 'tracking_pool'];
 
 export const App: React.FC = () => {
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -257,6 +263,8 @@ export const App: React.FC = () => {
         return <ExportShipmentsPage />;
       case 'tracking_pool':
         return <TrackingPoolPage />;
+      case 'products':
+        return <ProductsPage />;
       case 'configurator':
         return <ConfiguratorStudioPage />;
       case 'materials':
