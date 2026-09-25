@@ -3111,7 +3111,9 @@ export interface WpMediaItem {
   width?: number;
   height?: number;
   mime?: string;
+  mime_type?: string;
   date?: string;
+  file_size?: number;
 }
 
 export async function fetchWordPressMedia(params?: {

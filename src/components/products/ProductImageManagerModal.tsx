@@ -55,6 +55,7 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
   const [mediaItems, setMediaItems] = useState<WpMediaItem[]>([]);
   const [isLoadingMedia, setIsLoadingMedia] = useState(false);
   const [mediaSearch, setMediaSearch] = useState('');
+  const [optimizationMode, setOptimizationMode] = useState<'smart' | 'webp'>('smart');
 
   // Sync images when product changes or modal opens
   useEffect(() => {
@@ -118,15 +119,30 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
     setIsUploading(true);
     try {
       const uploadedEntries: ProductImageItem[] = [];
+      const uploadedWpItems: WpMediaItem[] = [];
+      let totalOrigBytes = 0;
+      let totalOptBytes = 0;
+
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const res = await uploadWordPressMediaDirect(file);
+        const res = await uploadWordPressMediaDirect(file, {
+          mode: optimizationMode,
+          pngColors: 128,
+          jpegQuality: 0.85,
+        });
         if (res.success && res.url) {
           uploadedEntries.push({
             id: res.id,
             src: res.url,
-            name: file.name,
+            name: res.item?.filename || file.name,
           });
+          if (res.item) {
+            uploadedWpItems.push(res.item);
+          }
+          if (res.optimization) {
+            totalOrigBytes += res.optimization.originalSize;
+            totalOptBytes += res.optimization.optimizedSize;
+          }
         } else {
           showToast('error', 'Upload Failed', res.error || `Failed to upload ${file.name}`);
         }
@@ -134,7 +150,22 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
 
       if (uploadedEntries.length > 0) {
         setImages((prev) => [...prev, ...uploadedEntries]);
-        showToast('success', 'Image Uploaded', `Uploaded ${uploadedEntries.length} image(s) to media library.`);
+        if (uploadedWpItems.length > 0) {
+          setMediaItems((prev) => [...uploadedWpItems, ...prev]);
+        }
+        const savedPct =
+          totalOrigBytes > 0 && totalOptBytes < totalOrigBytes
+            ? Math.round(((totalOrigBytes - totalOptBytes) / totalOrigBytes) * 100)
+            : 0;
+        const savingsSuffix =
+          savedPct > 0
+            ? ` (${optimizationMode === 'webp' ? 'WebP 85' : 'PNG 128c / JPG 85'}, saved ${savedPct}%)`
+            : ` (${optimizationMode === 'webp' ? 'WebP 85' : 'PNG 128c / JPG 85'})`;
+        showToast(
+          'success',
+          'Image Uploaded',
+          `Uploaded ${uploadedEntries.length} image(s) to gallery${savingsSuffix}.`
+        );
       }
     } catch (err: any) {
       showToast('error', 'Upload Error', err.message);
@@ -260,13 +291,44 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
         {/* Action Bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-zinc-950/60 border border-zinc-800">
           <div className="text-xs text-zinc-300">
-            Drag or click <Star className="w-3 h-3 inline text-amber-400 fill-amber-400" /> to set an image as the Featured Cover.
+            Click <Star className="w-3 h-3 inline text-amber-400 fill-amber-400" /> to set an image as the Featured Cover.
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Optimization Format Toggle */}
+            <div
+              className="flex items-center bg-zinc-900 p-0.5 rounded-xl border border-zinc-800"
+              title="Select upload compression mode: PNG 128-color + JPG 85 or direct WebP 85 (preserves alpha transparency)"
+            >
+              <button
+                type="button"
+                onClick={() => setOptimizationMode('smart')}
+                className={clsx(
+                  'h-8 px-2.5 rounded-lg text-[11px] transition-colors cursor-pointer flex items-center gap-1',
+                  optimizationMode === 'smart'
+                    ? 'bg-zinc-800 text-white font-semibold border border-white/10'
+                    : 'text-zinc-400 hover:text-white'
+                )}
+              >
+                <span>PNG 128c / JPG 85</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setOptimizationMode('webp')}
+                className={clsx(
+                  'h-8 px-2.5 rounded-lg text-[11px] transition-colors cursor-pointer flex items-center gap-1',
+                  optimizationMode === 'webp'
+                    ? 'bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30'
+                    : 'text-zinc-400 hover:text-white'
+                )}
+              >
+                <span>WebP 85 + Alpha</span>
+              </button>
+            </div>
+
             <button
               type="button"
               onClick={handleOpenMediaPicker}
-              className="min-h-[40px] px-3.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 border border-zinc-700/60 flex items-center gap-1.5 transition cursor-pointer"
+              className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 border border-zinc-700/60 flex items-center gap-1.5 transition cursor-pointer"
             >
               <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
               <span>Media Library</span>
@@ -275,7 +337,7 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
-              className="min-h-[40px] px-3.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-xs font-medium text-amber-300 border border-amber-500/30 flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+              className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-xs font-semibold text-amber-300 border border-amber-500/30 flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
             >
               {isUploading ? (
                 <>
@@ -293,7 +355,7 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
               ref={fileInputRef}
               type="file"
               multiple
-              accept="image/*"
+              accept="image/png,image/jpeg,image/jpg,image/webp"
               onChange={handleFileUpload}
               className="hidden"
             />
@@ -391,7 +453,7 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
               <div className="flex items-center gap-2">
                 <FolderOpen className="w-4 h-4 text-amber-400" />
                 <h3 className="text-xs font-semibold text-zinc-200">
-                  Select from WordPress Media Library
+                  Select or Upload to WordPress Media Library
                 </h3>
               </div>
               <button
@@ -403,9 +465,9 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
               </button>
             </div>
 
-            {/* Search Input */}
-            <div className="flex gap-2">
-              <div className="relative flex-1">
+            {/* Search & Direct Upload Input */}
+            <div className="flex flex-wrap gap-2">
+              <div className="relative flex-1 min-w-[200px]">
                 <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
                 <input
                   type="text"
@@ -424,9 +486,27 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
               <button
                 type="button"
                 onClick={() => loadMediaLibrary(mediaSearch)}
-                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 transition cursor-pointer"
+                className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 transition cursor-pointer"
               >
                 Search
+              </button>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Uploading...</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Upload Here</span>
+                  </>
+                )}
               </button>
             </div>
 
