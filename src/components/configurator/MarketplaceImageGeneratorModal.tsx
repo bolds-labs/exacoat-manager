@@ -512,14 +512,11 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     return currentView.shadow_png_url || currentView.shading_image_url || currentView.highlight_png_url || '';
   }, [currentView]);
 
-  // Effective Headline (Product / Device Name)
+  // Effective Headline (Product / Device Name) used across both Cover and Variant layouts
   const effectiveHeadline = useMemo(() => {
     const defaultTitle = formatDeviceHeadline(profile?.device_name || '');
-    if (autoHeadlineWithFinish) {
-      return defaultTitle;
-    }
     return headlineText.trim() ? headlineText : defaultTitle;
-  }, [autoHeadlineWithFinish, profile?.device_name, headlineText]);
+  }, [profile?.device_name, headlineText]);
 
   // Effective Top-Right Pill Text (Skin Name or '20+ SKINS SELECTION')
   const effectiveTopRightText = useMemo(() => {

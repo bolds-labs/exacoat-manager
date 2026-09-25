@@ -6421,14 +6421,46 @@ export async function deleteProductDirect(
 }
 
 export async function uploadWordPressMediaDirect(
-  file: File
-): Promise<{ success: boolean; id?: number; url?: string; error?: string }> {
+  file: File,
+  options?: {
+    mode?: 'smart' | 'webp' | 'original';
+    pngColors?: number;
+    jpegQuality?: number;
+  }
+): Promise<{
+  success: boolean;
+  id?: number;
+  url?: string;
+  webp_url?: string;
+  item?: WpMediaItem;
+  optimization?: {
+    originalSize: number;
+    optimizedSize: number;
+    savedBytes: number;
+    savedPercent: number;
+    formatLabel: string;
+    width: number;
+    height: number;
+  };
+  error?: string;
+}> {
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/media/upload`;
 
   try {
+    const { optimizeImageForUpload } = await import('./imageOptimizer');
+    const optimized = await optimizeImageForUpload(file, {
+      mode: options?.mode ?? 'smart',
+      pngColors: options?.pngColors ?? 128,
+      jpegQuality: options?.jpegQuality ?? 0.85,
+      webpQuality: 0.85,
+    });
+
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', optimized.file);
+    formData.append('png_colors', String(options?.pngColors ?? 128));
+    formData.append('jpeg_quality', String(Math.round((options?.jpegQuality ?? 0.85) * 100)));
+    formData.append('generate_webp', '1');
 
     const res = await authenticatedFetch(url, {
       method: 'POST',
@@ -6440,10 +6472,35 @@ export async function uploadWordPressMediaDirect(
 
     const data = await res.json();
     if (res.ok && data?.success && data?.url) {
+      const uploadedUrl = String(data.url);
+      const item: WpMediaItem = {
+        id: Number(data.id || Date.now()),
+        title: String(data.title || optimized.file.name.replace(/\.[^/.]+$/, '')),
+        filename: String(data.filename || optimized.file.name),
+        url: uploadedUrl,
+        thumbnail_url: String(data.thumbnail_url || uploadedUrl),
+        width: Number(data.width || optimized.width || 0),
+        height: Number(data.height || optimized.height || 0),
+        mime_type: String(data.mime_type || optimized.file.type || 'image/png'),
+        date: String(data.date || new Date().toISOString()),
+        file_size: Number(data.file_size || optimized.optimizedSize),
+      };
+
       return {
         success: true,
-        id: data.id,
-        url: data.url,
+        id: item.id,
+        url: uploadedUrl,
+        webp_url: data.webp_url ? String(data.webp_url) : undefined,
+        item,
+        optimization: {
+          originalSize: optimized.originalSize,
+          optimizedSize: item.file_size || optimized.optimizedSize,
+          savedBytes: optimized.savedBytes,
+          savedPercent: optimized.savedPercent,
+          formatLabel: optimized.formatLabel,
+          width: item.width || 0,
+          height: item.height || 0,
+        },
       };
     }
     return {

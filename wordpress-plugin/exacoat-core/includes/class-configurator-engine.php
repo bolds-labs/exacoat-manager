@@ -1825,11 +1825,24 @@ class Exacoat_Configurator_Engine {
 
 	/**
 	 * REST Endpoint: Upload image file to WordPress Media Library
+	 * Enforces lossless/near-lossless optimization:
+	 * - PNG: 128-color palette quantization with alpha preservation + compression level 9
+	 * - JPEG: Quality 85
+	 * - WebP: Generates 85-quality WebP companion (preserving alpha for PNGs)
 	 */
 	public static function rest_upload_media( WP_REST_Request $request ): WP_REST_Response {
 		require_once ABSPATH . 'wp-admin/includes/image.php';
 		require_once ABSPATH . 'wp-admin/includes/file.php';
 		require_once ABSPATH . 'wp-admin/includes/media.php';
+
+		$png_colors   = max( 16, min( 256, (int) ( $request->get_param( 'png_colors' ) ?: 128 ) ) );
+		$jpeg_quality = max( 50, min( 100, (int) ( $request->get_param( 'jpeg_quality' ) ?: 85 ) ) );
+
+		$quality_cb = static function () use ( $jpeg_quality ) {
+			return $jpeg_quality;
+		};
+		add_filter( 'jpeg_quality', $quality_cb, 999 );
+		add_filter( 'wp_editor_set_quality', $quality_cb, 999 );
 
 		$attachment_id = 0;
 		if ( ! empty( $_FILES['file'] ) ) {
@@ -1837,6 +1850,9 @@ class Exacoat_Configurator_Engine {
 		} elseif ( ! empty( $_FILES['image'] ) ) {
 			$attachment_id = media_handle_upload( 'image', 0 );
 		}
+
+		remove_filter( 'jpeg_quality', $quality_cb, 999 );
+		remove_filter( 'wp_editor_set_quality', $quality_cb, 999 );
 
 		if ( is_wp_error( $attachment_id ) ) {
 			return new WP_REST_Response( [
@@ -1852,11 +1868,94 @@ class Exacoat_Configurator_Engine {
 			], 400 );
 		}
 
-		$url = wp_get_attachment_url( $attachment_id );
+		$file_path = get_attached_file( $attachment_id );
+		$mime_type = (string) get_post_mime_type( $attachment_id );
+		$webp_url  = '';
+
+		if ( $file_path && file_exists( $file_path ) && function_exists( 'imagecreatetruecolor' ) ) {
+			$orig_size = @filesize( $file_path );
+			$im        = null;
+
+			if ( 'image/png' === $mime_type && function_exists( 'imagecreatefrompng' ) ) {
+				$im = @imagecreatefrompng( $file_path );
+				if ( $im ) {
+					imageAlphaBlending( $im, false );
+					imagesavealpha( $im, true );
+					if ( imageistruecolor( $im ) && function_exists( 'imagetruecolortopalette' ) ) {
+						$w = imagesx( $im );
+						$h = imagesy( $im );
+						// Preserve full alpha channel while quantizing RGB colors to 128
+						$palette_im = imagecreatetruecolor( $w, $h );
+						imagealphablending( $palette_im, false );
+						imagesavealpha( $palette_im, true );
+						imagecopy( $palette_im, $im, 0, 0, 0, 0, $w, $h );
+						imagetruecolortopalette( $palette_im, true, $png_colors );
+						$tmp_png = $file_path . '.opt.png';
+						if ( @imagepng( $palette_im, $tmp_png, 9 ) ) {
+							$opt_size = @filesize( $tmp_png );
+							if ( $opt_size && $orig_size && $opt_size < $orig_size ) {
+								@rename( $tmp_png, $file_path );
+							} else {
+								@unlink( $tmp_png );
+							}
+						}
+						imagedestroy( $palette_im );
+					}
+				}
+			} elseif ( in_array( $mime_type, [ 'image/jpeg', 'image/jpg' ], true ) && function_exists( 'imagecreatefromjpeg' ) ) {
+				$im = @imagecreatefromjpeg( $file_path );
+				if ( $im ) {
+					$tmp_jpg = $file_path . '.opt.jpg';
+					if ( @imagejpeg( $im, $tmp_jpg, $jpeg_quality ) ) {
+						$opt_size = @filesize( $tmp_jpg );
+						if ( $opt_size && $orig_size && $opt_size < $orig_size ) {
+							@rename( $tmp_jpg, $file_path );
+						} else {
+							@unlink( $tmp_jpg );
+						}
+					}
+				}
+			}
+
+			// Generate WebP companion file (with full alpha transparency)
+			if ( $im && function_exists( 'imagewebp' ) ) {
+				if ( ! imageistruecolor( $im ) && function_exists( 'imagepalettetotruecolor' ) ) {
+					@imagepalettetotruecolor( $im );
+				}
+				imagealphablending( $im, true );
+				imagesavealpha( $im, true );
+				$webp_path = preg_replace( '/\.(png|jpe?g)$/i', '.webp', $file_path );
+				if ( $webp_path && $webp_path !== $file_path && @imagewebp( $im, $webp_path, $jpeg_quality ) ) {
+					$att_url  = (string) wp_get_attachment_url( $attachment_id );
+					$webp_url = (string) preg_replace( '/\.(png|jpe?g)$/i', '.webp', $att_url );
+				}
+			}
+
+			if ( $im ) {
+				imagedestroy( $im );
+			}
+		}
+
+		$url      = (string) wp_get_attachment_url( $attachment_id );
+		$metadata = wp_get_attachment_metadata( $attachment_id );
+		$thumb    = wp_get_attachment_image_url( $attachment_id, 'exacoat_thumb_sm' )
+			?: wp_get_attachment_image_url( $attachment_id, 'thumbnail' )
+			?: $url;
+		$post     = get_post( $attachment_id );
+
 		return new WP_REST_Response( [
-			'success' => true,
-			'id'      => (int) $attachment_id,
-			'url'     => (string) $url,
+			'success'       => true,
+			'id'            => (int) $attachment_id,
+			'url'           => $url,
+			'webp_url'      => $webp_url ?: ( str_ends_with( strtolower( $url ), '.webp' ) ? $url : '' ),
+			'thumbnail_url' => (string) $thumb,
+			'title'         => $post ? (string) $post->post_title : basename( $url ),
+			'filename'      => $file_path ? basename( $file_path ) : basename( $url ),
+			'width'         => isset( $metadata['width'] ) ? (int) $metadata['width'] : 0,
+			'height'        => isset( $metadata['height'] ) ? (int) $metadata['height'] : 0,
+			'mime_type'     => $mime_type,
+			'date'          => $post ? (string) $post->post_date : current_time( 'mysql' ),
+			'file_size'     => ( $file_path && file_exists( $file_path ) ) ? (int) @filesize( $file_path ) : 0,
 		], 200 );
 	}
 

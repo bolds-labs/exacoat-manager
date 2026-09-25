@@ -602,7 +602,13 @@ function drawLeftHeadlineBlock(
   fontFamily: string,
   x: number = 50,
   startY?: number,
-  highlightColor: string = '#d2d2d2'
+  highlightColor: string = '#d2d2d2',
+  options?: {
+    maxWidth?: number;
+    maxBlockHeight?: number;
+    initialFontSize?: number;
+    badgeHeight?: number;
+  }
 ) {
   ctx.save();
 
@@ -612,35 +618,49 @@ function drawLeftHeadlineBlock(
     .filter(Boolean);
 
   const hasSubBadge = Boolean(subBadgeText.trim());
-  const badgeH = 68;
-  const badgeGap = 22;
+  const badgeH = options?.badgeHeight ?? 68;
+  const badgeGap = options?.badgeHeight ? 18 : 22;
+  const maxW = options?.maxWidth ?? 720;
 
-  // Consistent headline font size (enlarged 25% to 158px & extra bold 900)
-  let fontSize = 158;
-  let lineHeight = 164;
+  // Consistent headline font size (158px on cover, 124px on variant header)
+  let fontSize = options?.initialFontSize ?? 158;
+  let lineHeight = Math.floor(fontSize * 1.04);
 
   ctx.font = `900 ${fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
   for (const line of lines) {
     const w = ctx.measureText(line).width;
-    if (w > 720) {
-      const ratio = 720 / w;
+    if (w > maxW) {
+      const ratio = maxW / w;
       fontSize = Math.floor(fontSize * ratio);
       lineHeight = Math.floor(fontSize * 1.05);
+      ctx.font = `900 ${fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
     }
   }
 
-  // Anchor block nicely from the bottom so it sits comfortably above bottom cards
-  const totalTextH = lines.length * lineHeight;
-  const totalBlockH = (hasSubBadge ? badgeH + badgeGap : 0) + totalTextH;
+  // Ensure total block height fits within maxBlockHeight if specified (e.g. above variant left stack)
+  let totalTextH = lines.length * lineHeight;
+  let totalBlockH = (hasSubBadge ? badgeH + badgeGap : 0) + totalTextH;
+
+  if (options?.maxBlockHeight && totalBlockH > options.maxBlockHeight && totalTextH > 0) {
+    const availForText = Math.max(80, options.maxBlockHeight - (hasSubBadge ? badgeH + badgeGap : 0));
+    const heightRatio = availForText / totalTextH;
+    fontSize = Math.max(44, Math.floor(fontSize * heightRatio));
+    lineHeight = Math.floor(fontSize * 1.05);
+    totalTextH = lines.length * lineHeight;
+    totalBlockH = (hasSubBadge ? badgeH + badgeGap : 0) + totalTextH;
+  }
+
+  // Anchor block nicely from the bottom on cover, or start directly under tagline on variants
   const targetBottomY = 1220;
   let currentY = startY ?? Math.max(650, targetBottomY - totalBlockH);
 
   // 1. Sub-badge pill (e.g. "Model Cut & 360")
   // Full-rounded capsule with transparent background (no background fill)
   if (hasSubBadge) {
-    ctx.font = '800 32px "Chakra Petch", sans-serif';
+    const badgeFontSize = options?.badgeHeight ? 28 : 32;
+    ctx.font = `800 ${badgeFontSize}px "Chakra Petch", sans-serif`;
     const textMetrics = ctx.measureText(subBadgeText);
-    const badgeW = textMetrics.width + 60;
+    const badgeW = textMetrics.width + (options?.badgeHeight ? 48 : 60);
     const badgeR = badgeH / 2; // Full rounded capsule!
 
     pathRoundedRect(ctx, x, currentY, badgeW, badgeH, badgeR);
@@ -2162,8 +2182,8 @@ export async function renderMarketplaceImageToCanvas(
     if (config.showBrandTagline !== false) {
       drawBrandTagline(ctx, config.brandTagline || '#1 Brand Skin di Indonesia', 50, 206, 460);
     }
-    // Tokopedia Official Store Badge under tagline (when channel is tokopedia)
-    if (config.marketplaceChannel === 'tokopedia') {
+    // Tokopedia Official Store Badge under tagline (ONLY on Cover layout, never on Variants)
+    if (!isVariantLayout && config.marketplaceChannel === 'tokopedia') {
       const badgeY = config.showBrandTagline !== false ? 284 : 206;
       await drawTokopediaBadge(
         ctx,
@@ -2183,15 +2203,52 @@ export async function renderMarketplaceImageToCanvas(
   drawTopRightPill(ctx, skinPillText, 540, 50, 910, 140, 54);
 
   // 5. Left Column Content & Bottom Feature Cards
+  const defaultDeviceTitle = formatDeviceHeadline(config.profile.device_name || config.deviceNameText || '');
+  const effectiveHeadline = config.headlineText?.trim() ? config.headlineText : defaultDeviceTitle;
+
   if (isVariantLayout) {
-    // Variant Layout: stacked trust cards and Textured Surface macro preview photo on left column
-    await drawLeftStackedFeatureCards(ctx, config.variantLeftCards || {}, 50, 272, 460);
+    // Variant Layout:
+    // 1) Directly under '#1 Brand Skin di Indonesia' (y=254), show the Device Name that is set (same text content as Cover)
+    //    and do NOT show the Official Store badge/card on variants.
+    const variantCardsOpts = {
+      ...(config.variantLeftCards || {}),
+      showOriginal3M: false,
+    };
+
+    const activeLeftCards =
+      (variantCardsOpts.showMaterialOrigin !== false ? 1 : 0) +
+      (variantCardsOpts.showWarranty !== false ? 1 : 0) +
+      (variantCardsOpts.showTexturePhoto !== false ? 1 : 0);
+    const estStackHeight =
+      (variantCardsOpts.showMaterialOrigin !== false ? 114 : 0) +
+      (variantCardsOpts.showWarranty !== false ? 114 : 0) +
+      (variantCardsOpts.showTexturePhoto !== false ? 318 : 0) +
+      Math.max(0, activeLeftCards - 1) * 16;
+    const stackTopY = 1450 - estStackHeight;
+    const headlineStartY = config.showBrandTagline !== false ? 280 : 212;
+    const maxHeadlineBlockH = Math.max(220, stackTopY - headlineStartY - 28);
+
+    drawLeftHeadlineBlock(
+      ctx,
+      config.subBadgeText || '',
+      effectiveHeadline,
+      config.headlineFont || 'Chakra Petch',
+      50,
+      headlineStartY,
+      config.headlineHighlightColor || '#d2d2d2',
+      {
+        maxWidth: 490,
+        maxBlockHeight: maxHeadlineBlockH,
+        initialFontSize: 124,
+        badgeHeight: 56,
+      }
+    );
+
+    // 2) Stacked trust cards (3M Material, Installation Warranty, Textured Surface macro photo) below the device name
+    await drawLeftStackedFeatureCards(ctx, variantCardsOpts, 50, stackTopY, 460);
     // Bottom feature cards omitted on variant images, leaving the phone body clean and visible!
   } else {
     // Cover Layout: Sub-badge & Big Bold Headline (displays the Product / Device Name with highlight outline)
-    const defaultDeviceTitle = formatDeviceHeadline(config.profile.device_name || config.deviceNameText || '');
-    const effectiveHeadline = config.headlineText?.trim() ? config.headlineText : defaultDeviceTitle;
-
     drawLeftHeadlineBlock(
       ctx,
       config.subBadgeText || '',
@@ -2398,6 +2455,10 @@ export async function batchGenerateMarketplaceZip(
     const covFolder = cov === 'model_cut' ? 'cut' : '360';
     const covSuffix = cov === 'model_cut' ? 'CUT' : '360';
 
+    const subBadge = baseConfig.subBadgeText === 'Model Cut & 360'
+      ? covLabel
+      : baseConfig.subBadgeText;
+
     // 1. Generate Primary Cover Image if requested
     if (includeCover) {
       progressCount++;
@@ -2406,9 +2467,6 @@ export async function batchGenerateMarketplaceZip(
       }
 
       const coverFinish = options?.primaryFinish || targetFinishes[0] || baseConfig.activeFinish;
-      const subBadge = baseConfig.subBadgeText === 'Model Cut & 360'
-        ? covLabel
-        : baseConfig.subBadgeText;
 
       const coverConfig: MarketplaceImageConfig = {
         ...baseConfig,
@@ -2452,6 +2510,7 @@ export async function batchGenerateMarketplaceZip(
         deviceScale: variantScale,
         deviceOffsetX: variantOffsetX,
         deviceOffsetY: variantOffsetY,
+        subBadgeText: subBadge,
         topRightText: finish.name.toUpperCase(),
         headlineText: baseConfig.headlineText
           ? baseConfig.headlineText

@@ -1,17 +1,17 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.67",
+  "version": "0.1.68",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.67.zip?v=0.1.67",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.68.zip?v=0.1.68",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-25T19:50:26.816Z",
+  "last_updated": "2026-09-25T20:22:45.777Z",
   "sections": {
     "description": "The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.",
-    "changelog": "### Version 0.1.67\n- Added 1500x1500px Marketplace Product Image Generator in Configurator Studio\n- Integrated offscreen HTML5 canvas compositor supporting custom backgrounds and Exacoat monogram studio light\n- Added multi-skin batch generation engine with JSZip packaging and customizable layout typography and swatches\n- Preserved natural copywriting and accurate fit feature cards"
+    "changelog": "### Version 0.1.68\n- Added 1500x1500px Marketplace Product Image Generator in Configurator Studio\n- Integrated offscreen HTML5 canvas compositor supporting custom backgrounds and Exacoat monogram studio light\n- Added multi-skin batch generation engine with JSZip packaging and customizable layout typography and swatches\n- Preserved natural copywriting and accurate fit feature cards"
   }
 }

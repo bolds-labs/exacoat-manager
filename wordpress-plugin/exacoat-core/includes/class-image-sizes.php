@@ -30,6 +30,10 @@ class Exacoat_Image_Sizes {
 		// Register image sizes early
 		add_action( 'init', [ __CLASS__, 'register' ], 5 );
 
+		// Enforce quality 85 across all JPEG and WebP derivative generations
+		add_filter( 'jpeg_quality', static fn() => 85, 20 );
+		add_filter( 'wp_editor_set_quality', static fn() => 85, 20 );
+
 		// Single-attachment media detail fields & instant regeneration
 		add_filter( 'attachment_fields_to_edit', [ __CLASS__, 'filter_attachment_fields' ], 10, 2 );
 		add_action( 'wp_ajax_exacoat_regenerate_single_thumbnail', [ __CLASS__, 'ajax_regenerate_single_thumbnail' ] );
