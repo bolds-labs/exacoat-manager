@@ -56,6 +56,11 @@ interface DetectedVariantOption {
   currentImageUrl?: string;
 }
 
+const STORAGE_CUSTOM_BG_KEY = 'exacoat_marketplace_custom_bg';
+const STORAGE_BG_TYPE_KEY = 'exacoat_marketplace_bg_type';
+const DEFAULT_MARKETPLACE_BG_URL =
+  'https://staging.exacoat.com/wp-content/uploads/Marketplace-Product-Background-Plain.png';
+
 export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> = ({
   isOpen,
   onClose,
@@ -81,6 +86,20 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
   // Configuration Settings
   const [coverage, setCoverage] = useState<'model_cut' | 'model_360'>('model_cut');
   const [logoCutout, setLogoCutout] = useState<boolean>(true);
+  const [bgType, setBgType] = useState<'studio_light' | 'custom'>(() => {
+    try {
+      const savedType = localStorage.getItem(STORAGE_BG_TYPE_KEY);
+      if (savedType === 'studio_light' || savedType === 'custom') return savedType;
+    } catch {}
+    return 'custom';
+  });
+  const [customBgUrl, setCustomBgUrl] = useState<string>(() => {
+    try {
+      const savedBg = localStorage.getItem(STORAGE_CUSTOM_BG_KEY);
+      if (savedBg && savedBg.trim()) return savedBg.trim();
+    } catch {}
+    return DEFAULT_MARKETPLACE_BG_URL;
+  });
 
   // Cover Image Settings
   const [updateCover, setUpdateCover] = useState<boolean>(true);
@@ -208,6 +227,21 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
     setInjectionResult(null);
     setInjectionError(null);
 
+    try {
+      const savedBg = localStorage.getItem(STORAGE_CUSTOM_BG_KEY);
+      const savedType = localStorage.getItem(STORAGE_BG_TYPE_KEY);
+      if (savedBg && savedBg.trim()) {
+        setCustomBgUrl(savedBg.trim());
+      } else {
+        setCustomBgUrl(DEFAULT_MARKETPLACE_BG_URL);
+      }
+      if (savedType === 'studio_light' || savedType === 'custom') {
+        setBgType(savedType);
+      } else {
+        setBgType('custom');
+      }
+    } catch {}
+
     const initData = async () => {
       try {
         const [previewRes, profilesRes, finishesRes] = await Promise.all([
@@ -327,7 +361,8 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
         profile: deviceProfile,
         activeFinish,
         allFinishes,
-        bgType: 'studio_light',
+        bgType,
+        customBgUrl: customBgUrl.trim() || DEFAULT_MARKETPLACE_BG_URL,
         showLogo: true,
         showBrandTagline: true,
         brandTagline: '#1 Brand Skin di Indonesia',
@@ -337,10 +372,19 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
             ? topRightBadgeText.trim().toUpperCase()
             : activeFinish.name.toUpperCase(),
         subBadgeText,
-        headlineText: headlineText.trim().toUpperCase(),
+        headlineText: headlineText.trim(),
         headlineFont: 'Chakra Petch',
         headlineHighlightColor: '#d2d2d2',
         featureCards: DEFAULT_FEATURE_CARDS_OFFICIAL,
+        marketplaceChannel: 'shopee',
+        variantLeftCards: {
+          showOriginal3M: true,
+          showMaterialOrigin: true,
+          showWarranty: true,
+          showTexturePhoto: true,
+          texturePhotoUrl: '/assets/brand/textured-skins-product-info.jpg',
+          warrantyTitle: 'Installation Warranty',
+        },
         showSkinsStack: false,
         skinsCountText: '20+',
         skinsLabelText: 'SKINS',
@@ -357,6 +401,8 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
     [
       deviceProfile,
       allFinishes,
+      bgType,
+      customBgUrl,
       topRightBadgeText,
       subBadgeText,
       headlineText,
@@ -858,14 +904,14 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="text-[11px] font-medium text-zinc-400 block mb-1">
-                            Headline Title
+                            Headline Title (Supports Multi-line)
                           </label>
-                          <input
-                            type="text"
+                          <textarea
+                            rows={2}
                             value={headlineText}
                             onChange={(e) => setHeadlineText(e.target.value)}
-                            placeholder="IPHONE 18 PRO MAX"
-                            className="w-full min-h-[44px] px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-xs text-zinc-200 focus:outline-none focus:border-[#f3aa18]"
+                            placeholder="iPhone 18&#10;Pro Max"
+                            className="w-full min-h-[56px] px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-xs text-zinc-200 focus:outline-none focus:border-[#f3aa18] resize-none leading-snug"
                           />
                         </div>
 
@@ -881,6 +927,83 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                             className="w-full min-h-[44px] px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-xs text-zinc-200 focus:outline-none focus:border-[#f3aa18]"
                           />
                         </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-zinc-800/80 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="text-[11px] font-medium text-zinc-400">
+                            Background Style
+                          </label>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setBgType('custom');
+                                try {
+                                  localStorage.setItem(STORAGE_BG_TYPE_KEY, 'custom');
+                                } catch {}
+                              }}
+                              className={`min-h-[32px] px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
+                                bgType === 'custom'
+                                  ? 'bg-[#f3aa18]/15 border border-[#f3aa18] text-[#f3aa18]'
+                                  : 'bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                              }`}
+                            >
+                              Plain / Custom URL
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setBgType('studio_light');
+                                try {
+                                  localStorage.setItem(STORAGE_BG_TYPE_KEY, 'studio_light');
+                                } catch {}
+                              }}
+                              className={`min-h-[32px] px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
+                                bgType === 'studio_light'
+                                  ? 'bg-[#f3aa18]/15 border border-[#f3aa18] text-[#f3aa18]'
+                                  : 'bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                              }`}
+                            >
+                              Studio Pattern
+                            </button>
+                          </div>
+                        </div>
+
+                        {bgType === 'custom' && (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={customBgUrl}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setCustomBgUrl(val);
+                                try {
+                                  localStorage.setItem(STORAGE_CUSTOM_BG_KEY, val);
+                                } catch {}
+                              }}
+                              placeholder={DEFAULT_MARKETPLACE_BG_URL}
+                              className="flex-1 min-h-[40px] px-3 py-1.5 rounded-xl bg-zinc-950 border border-zinc-700 text-[11px] text-zinc-300 font-mono focus:outline-none focus:border-[#f3aa18]"
+                            />
+                            {customBgUrl !== DEFAULT_MARKETPLACE_BG_URL && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCustomBgUrl(DEFAULT_MARKETPLACE_BG_URL);
+                                  try {
+                                    localStorage.setItem(
+                                      STORAGE_CUSTOM_BG_KEY,
+                                      DEFAULT_MARKETPLACE_BG_URL
+                                    );
+                                  } catch {}
+                                }}
+                                className="min-h-[40px] px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-[11px] font-semibold text-zinc-200 transition-colors shrink-0"
+                              >
+                                Reset Plain BG
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

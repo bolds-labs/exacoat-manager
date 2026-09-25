@@ -197,8 +197,10 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   );
 
   // Background State
-  const [bgType, setBgType] = useState<'studio_light' | 'custom'>('studio_light');
-  const [customBgUrl, setCustomBgUrl] = useState<string>('');
+  const [bgType, setBgType] = useState<'studio_light' | 'custom'>('custom');
+  const [customBgUrl, setCustomBgUrl] = useState<string>(
+    'https://staging.exacoat.com/wp-content/uploads/Marketplace-Product-Background-Plain.png'
+  );
 
   // Device & Swatches State (Default zoom 100% for cover: X = 0px, Y = 110px)
   const [activeColorId, setActiveColorId] = useState<string>('');
@@ -342,10 +344,16 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     try {
       const savedBg = localStorage.getItem(STORAGE_CUSTOM_BG_KEY);
       const savedBgType = localStorage.getItem('exacoat_marketplace_bg_type');
-      if (savedBg) {
-        setCustomBgUrl(savedBg);
+      if (savedBg && savedBg.trim()) {
+        setCustomBgUrl(savedBg.trim());
+      } else {
+        setCustomBgUrl(
+          'https://staging.exacoat.com/wp-content/uploads/Marketplace-Product-Background-Plain.png'
+        );
       }
-      if (savedBgType === 'custom' || (savedBg && !savedBgType)) {
+      if (savedBgType === 'studio_light') {
+        setBgType('studio_light');
+      } else {
         setBgType('custom');
       }
     } catch {}
