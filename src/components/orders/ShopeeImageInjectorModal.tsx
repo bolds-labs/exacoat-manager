@@ -9,6 +9,8 @@ import {
   fetchConfiguratorProfilesDirect,
   fetchProductConfiguratorProfileDirect,
   fetchGlobalFinishesDirect,
+  getSavedMarketplaceDeviceSettings,
+  saveMarketplaceDeviceSettingsDirect,
   DEFAULT_GLOBAL_FINISHES,
   GlobalFinish,
   ShopeeProductPreview,
@@ -38,6 +40,9 @@ import {
   Square,
   Smartphone,
   ChevronDown,
+  Save,
+  Star,
+  Sparkles,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -86,6 +91,23 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
   // Configuration Settings
   const [coverage, setCoverage] = useState<'model_cut' | 'model_360'>('model_cut');
   const [logoCutout, setLogoCutout] = useState<boolean>(true);
+  const [pencilCutout, setPencilCutout] = useState<boolean>(true);
+  const [selectedViewId, setSelectedViewId] = useState<string>('');
+  const [activeColorId, setActiveColorId] = useState<string>('');
+  const [activeLayerIds, setActiveLayerIds] = useState<string[]>([]);
+
+  // Per-Device Cover & Variant Position State (Synced with Marketplace Image Generator)
+  const [coverScale, setCoverScale] = useState<number>(1.0);
+  const [coverOffsetX, setCoverOffsetX] = useState<number>(0);
+  const [coverOffsetY, setCoverOffsetY] = useState<number>(110);
+
+  const [variantScale, setVariantScale] = useState<number>(0.75);
+  const [variantOffsetX, setVariantOffsetX] = useState<number>(0);
+  const [variantOffsetY, setVariantOffsetY] = useState<number>(80);
+
+  const [hasSavedDevicePosition, setHasSavedDevicePosition] = useState<boolean>(false);
+  const [isSavingDevicePosition, setIsSavingDevicePosition] = useState<boolean>(false);
+
   const [bgType, setBgType] = useState<'studio_light' | 'custom'>(() => {
     try {
       const savedType = localStorage.getItem(STORAGE_BG_TYPE_KEY);
@@ -190,14 +212,85 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
     return bestMatch;
   };
 
-  // Fetch full profile details whenever selectedProfileId changes
+  // Fetch full profile details whenever selectedProfileId changes and restore saved per-device positions
   const loadFullProfile = useCallback(async (profileId: number | string) => {
     if (!profileId) return;
     setIsLoadingProfile(true);
     try {
       const res = await fetchProductConfiguratorProfileDirect(profileId);
       if (res.success && res.profile) {
-        setDeviceProfile(res.profile);
+        const prof = res.profile;
+        setDeviceProfile(prof);
+
+        const savedMp = getSavedMarketplaceDeviceSettings(prof);
+        setHasSavedDevicePosition(Boolean(savedMp));
+
+        const isLaptop = prof.family === 'laptop';
+        setCoverScale(savedMp?.cover_scale ?? 1.0);
+        setCoverOffsetX(savedMp?.cover_offset_x ?? (isLaptop ? 140 : 0));
+        setCoverOffsetY(savedMp?.cover_offset_y ?? (isLaptop ? -55 : 110));
+
+        setVariantScale(savedMp?.variant_scale ?? 0.75);
+        setVariantOffsetX(savedMp?.variant_offset_x ?? (isLaptop ? 140 : 0));
+        setVariantOffsetY(savedMp?.variant_offset_y ?? (isLaptop ? -20 : 80));
+
+        if (savedMp?.headline_text && savedMp.headline_text.trim()) {
+          setHeadlineText(savedMp.headline_text);
+        } else if (prof.device_name) {
+          setHeadlineText(formatDeviceHeadline(prof.device_name));
+        }
+
+        if (savedMp?.primary_skin_id) {
+          setCoverFinishId(savedMp.primary_skin_id);
+        }
+        if (savedMp?.primary_top_right_text) {
+          setTopRightBadgeText(savedMp.primary_top_right_text);
+        }
+
+        const defView =
+          (savedMp?.selected_view_id && prof.views?.find((v) => v.id === savedMp.selected_view_id)) ||
+          prof.views?.find((v) => v.is_default) ||
+          prof.views?.[0];
+        setSelectedViewId(defView ? defView.id : '');
+
+        if (prof.device_colors && prof.device_colors.length > 0) {
+          const matchedCol =
+            savedMp?.active_color_id && prof.device_colors.find((c) => c.id === savedMp.active_color_id);
+          setActiveColorId(matchedCol ? matchedCol.id : prof.device_colors[0].id);
+        } else {
+          setActiveColorId('');
+        }
+
+        if (savedMp?.logo_cutout !== undefined) {
+          setLogoCutout(savedMp.logo_cutout);
+        }
+        if (savedMp?.pencil_cutout !== undefined) {
+          setPencilCutout(savedMp.pencil_cutout);
+        }
+
+        const genuineLayers = (prof.layers || []).filter((l) => {
+          if (l.is_non_visual) return false;
+          const n = (l.name || '').toLowerCase().trim();
+          const id = (l.id || '').toLowerCase().trim();
+          if (n === 'device' || id === 'device') return false;
+          if (n.includes('device-body') || n.includes('device_body') || n.includes('device body')) return false;
+          if (n.includes('chassis') || n.includes('hardware')) return false;
+          return true;
+        });
+
+        if (
+          Array.isArray(savedMp?.active_layer_ids) &&
+          savedMp.active_layer_ids.length > 0 &&
+          genuineLayers.some((gl) => savedMp.active_layer_ids!.includes(gl.id))
+        ) {
+          setActiveLayerIds(
+            savedMp.active_layer_ids.filter((lid) => genuineLayers.some((gl) => gl.id === lid))
+          );
+        } else if (genuineLayers.length > 0) {
+          setActiveLayerIds([genuineLayers[0].id]);
+        } else {
+          setActiveLayerIds([]);
+        }
       } else {
         showToast('error', 'Profile Load Error', res.error || 'Failed to load device profile details');
       }
@@ -349,6 +442,44 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
     setDetectedVariants((prev) => prev.map((v) => ({ ...v, selected: select })));
   };
 
+  // Save current Cover & Variant positions to the matched device profile
+  const handleSaveDevicePosition = async () => {
+    if (!deviceProfile) return;
+    setIsSavingDevicePosition(true);
+    try {
+      const res = await saveMarketplaceDeviceSettingsDirect(deviceProfile, {
+        cover_scale: coverScale,
+        cover_offset_x: coverOffsetX,
+        cover_offset_y: coverOffsetY,
+        variant_scale: variantScale,
+        variant_offset_x: variantOffsetX,
+        variant_offset_y: variantOffsetY,
+        headline_text: headlineText.trim(),
+        primary_skin_id: coverFinishId || 'swarm',
+        primary_top_right_text: topRightBadgeText || '20+ SKINS SELECTION',
+        selected_view_id: selectedViewId,
+        active_color_id: activeColorId,
+        active_layer_ids: activeLayerIds,
+        logo_cutout: logoCutout,
+        pencil_cutout: pencilCutout,
+      });
+      if (res.success) {
+        setHasSavedDevicePosition(true);
+        showToast(
+          'success',
+          'Position Saved to Product',
+          `Saved Cover & Variant positions for ${deviceProfile.device_name}.`
+        );
+      } else {
+        showToast('error', 'Save Failed', res.error || 'Could not save position settings');
+      }
+    } catch (err: any) {
+      showToast('error', 'Save Failed', err.message || 'Could not save position settings');
+    } finally {
+      setIsSavingDevicePosition(false);
+    }
+  };
+
   // Build active render configuration for canvas
   const buildRenderConfig = useCallback(
     (targetMode: 'cover' | 'variant', finishId: string): MarketplaceImageConfig | null => {
@@ -361,6 +492,9 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
         profile: deviceProfile,
         activeFinish,
         allFinishes,
+        activeColorId: activeColorId || undefined,
+        selectedViewId: selectedViewId || undefined,
+        activeLayerIds: activeLayerIds.length > 0 ? activeLayerIds : undefined,
         bgType,
         customBgUrl: customBgUrl.trim() || DEFAULT_MARKETPLACE_BG_URL,
         showLogo: true,
@@ -392,15 +526,18 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
         layoutMode: targetMode,
         coverage,
         logoCutout,
-        pencilCutout: true,
-        deviceScale: targetMode === 'cover' ? 1.0 : 0.75,
-        deviceOffsetX: 0,
-        deviceOffsetY: targetMode === 'cover' ? 110 : 80,
+        pencilCutout,
+        deviceScale: targetMode === 'cover' ? coverScale : variantScale,
+        deviceOffsetX: targetMode === 'cover' ? coverOffsetX : variantOffsetX,
+        deviceOffsetY: targetMode === 'cover' ? coverOffsetY : variantOffsetY,
       };
     },
     [
       deviceProfile,
       allFinishes,
+      activeColorId,
+      selectedViewId,
+      activeLayerIds,
       bgType,
       customBgUrl,
       topRightBadgeText,
@@ -408,6 +545,13 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
       headlineText,
       coverage,
       logoCutout,
+      pencilCutout,
+      coverScale,
+      coverOffsetX,
+      coverOffsetY,
+      variantScale,
+      variantOffsetX,
+      variantOffsetY,
     ]
   );
 
@@ -848,6 +992,144 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                           <Square className="w-4 h-4 text-zinc-600" />
                         )}
                       </button>
+                    </div>
+                  </div>
+
+                  {/* Per-Device Cover & Variant Position Controls (Synced with Marketplace Image Generator) */}
+                  <div className="pt-3 border-t border-zinc-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-zinc-200">
+                          Device & Variant Position
+                        </span>
+                        {hasSavedDevicePosition && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-semibold text-emerald-400">
+                            <Check className="w-3 h-3" />
+                            Synced from Product
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSaveDevicePosition}
+                        disabled={!deviceProfile || isSavingDevicePosition}
+                        className="inline-flex items-center gap-1.5 min-h-[34px] px-3 py-1 rounded-lg bg-[#f3aa18]/15 hover:bg-[#f3aa18]/25 border border-[#f3aa18]/40 text-[#f3aa18] text-[11px] font-bold transition disabled:opacity-50"
+                      >
+                        {isSavingDevicePosition ? (
+                          <RefreshCw className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Save className="w-3 h-3" />
+                        )}
+                        <span>{isSavingDevicePosition ? 'Saving...' : 'Save Position to Product'}</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-zinc-950 border border-zinc-800">
+                      <button
+                        type="button"
+                        onClick={() => setActivePreviewType('cover')}
+                        className={clsx(
+                          'flex flex-col items-start px-3 py-2 rounded-lg text-left transition',
+                          activePreviewType === 'cover'
+                            ? 'bg-[#f3aa18]/20 border border-[#f3aa18] text-[#f3aa18]'
+                            : 'border border-transparent text-zinc-400 hover:text-zinc-200'
+                        )}
+                      >
+                        <div className="flex items-center gap-1.5 text-[11px] font-bold">
+                          <Star className="w-3 h-3 shrink-0" />
+                          <span>Featured Cover</span>
+                        </div>
+                        <span className="text-[10px] font-mono opacity-80 mt-0.5">
+                          {Math.round(coverScale * 100)}% • X:{coverOffsetX} Y:{coverOffsetY}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActivePreviewType('variant')}
+                        className={clsx(
+                          'flex flex-col items-start px-3 py-2 rounded-lg text-left transition',
+                          activePreviewType === 'variant'
+                            ? 'bg-[#f3aa18]/20 border border-[#f3aa18] text-[#f3aa18]'
+                            : 'border border-transparent text-zinc-400 hover:text-zinc-200'
+                        )}
+                      >
+                        <div className="flex items-center gap-1.5 text-[11px] font-bold">
+                          <Sparkles className="w-3 h-3 shrink-0" />
+                          <span>Variants Position</span>
+                        </div>
+                        <span className="text-[10px] font-mono opacity-80 mt-0.5">
+                          {Math.round(variantScale * 100)}% • X:{variantOffsetX} Y:{variantOffsetY}
+                        </span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[11px] text-zinc-400">
+                          <span>{activePreviewType === 'cover' ? 'Cover Zoom' : 'Variant Zoom'}</span>
+                          <span className="font-mono text-zinc-200">
+                            {Math.round((activePreviewType === 'cover' ? coverScale : variantScale) * 100)}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.5"
+                          max="1.8"
+                          step="0.02"
+                          value={activePreviewType === 'cover' ? coverScale : variantScale}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            if (activePreviewType === 'cover') setCoverScale(val);
+                            else setVariantScale(val);
+                          }}
+                          className="w-full accent-[#f3aa18]"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[11px] text-zinc-400">
+                          <span>Horizontal X</span>
+                          <span className="font-mono text-zinc-200">
+                            {activePreviewType === 'cover' ? coverOffsetX : variantOffsetX}px
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="-400"
+                          max="400"
+                          step="5"
+                          value={activePreviewType === 'cover' ? coverOffsetX : variantOffsetX}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            if (activePreviewType === 'cover') setCoverOffsetX(val);
+                            else setVariantOffsetX(val);
+                          }}
+                          className="w-full accent-[#f3aa18]"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[11px] text-zinc-400">
+                          <span>Vertical Y</span>
+                          <span className="font-mono text-zinc-200">
+                            {activePreviewType === 'cover' ? coverOffsetY : variantOffsetY}px
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="-400"
+                          max="400"
+                          step="5"
+                          value={activePreviewType === 'cover' ? coverOffsetY : variantOffsetY}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            if (activePreviewType === 'cover') setCoverOffsetY(val);
+                            else setVariantOffsetY(val);
+                          }}
+                          className="w-full accent-[#f3aa18]"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>

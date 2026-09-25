@@ -992,14 +992,39 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={handleSaveDevicePosition}
+            disabled={!profile || isSavingDevicePosition}
+            className={clsx(
+              'inline-flex items-center gap-1.5 min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-bold border transition disabled:opacity-50',
+              hasSavedDevicePosition
+                ? 'bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/40 text-emerald-300'
+                : 'bg-zinc-800 hover:bg-zinc-700 border-[#f3aa18]/50 text-[#f3aa18]'
+            )}
+            title="Save Cover & Variant positions to this product for future skins & Shopee Image Injector"
+          >
+            {isSavingDevicePosition ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#f3aa18]" />
+            ) : (
+              <Save className="w-3.5 h-3.5" />
+            )}
+            <span className="hidden sm:inline">
+              {isSavingDevicePosition
+                ? 'Saving Position...'
+                : hasSavedDevicePosition
+                ? 'Position Saved to Product'
+                : 'Save Position to Product'}
+            </span>
+          </button>
+
           <button
             onClick={handleSaveDefaults}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-zinc-300 bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700 transition"
-            title="Save current skin list and placement settings as defaults"
+            className="inline-flex items-center gap-1.5 min-h-[40px] px-3 py-1.5 rounded-xl text-xs font-semibold text-zinc-300 bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700 transition"
+            title="Save current skin list, background, and device position"
           >
             <Bookmark className="w-3.5 h-3.5 text-[#f3aa18]" />
-            <span className="hidden md:inline">Save Defaults</span>
+            <span className="hidden xl:inline">Save Defaults</span>
           </button>
 
           <span className="text-xs text-zinc-400 hidden lg:inline font-mono">
@@ -1009,7 +1034,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
           <button
             onClick={handleDownloadSingleImage}
             disabled={isDownloadingSingle || !profile}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-zinc-100 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/80 transition disabled:opacity-50"
+            className="inline-flex items-center gap-2 min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold text-zinc-100 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/80 transition disabled:opacity-50"
             title="Render high-res 1500x1500px JPEG for active preview skin"
           >
             <Download className="w-4 h-4 text-[#f3aa18]" />
@@ -1023,7 +1048,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
           <button
             onClick={handleSendToShopeeDuplicator}
             disabled={!profile}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition disabled:opacity-50"
+            className="inline-flex items-center gap-2 min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-bold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition disabled:opacity-50"
             title="Duplicate Shopee listing to draft with this generated visual"
           >
             <Copy className="w-4 h-4 text-amber-400" />
@@ -1033,7 +1058,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
           <button
             onClick={handleBatchGenerateZip}
             disabled={isGeneratingBatch || selectedFinishIds.size === 0 || !profile}
-            className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-black text-zinc-950 bg-[#f3aa18] hover:bg-[#e09b15] shadow-lg shadow-[#f3aa18]/25 transition disabled:opacity-50"
+            className="inline-flex items-center gap-2 min-h-[40px] px-5 py-2 rounded-xl text-xs font-black text-zinc-950 bg-[#f3aa18] hover:bg-[#e09b15] shadow-lg shadow-[#f3aa18]/25 transition disabled:opacity-50"
           >
             {isGeneratingBatch ? (
               <>
@@ -1073,28 +1098,34 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => setIsPrimaryCoverMode(false)}
+                  onClick={() => {
+                    setIsPrimaryCoverMode(false);
+                    setLayoutMode('variant');
+                  }}
                   className={clsx(
                     'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition',
-                    !isPrimaryCoverMode
+                    !isPrimaryCoverMode && layoutMode === 'variant'
                       ? 'bg-[#f3aa18]/20 border border-[#f3aa18] text-[#f3aa18]'
                       : 'bg-zinc-900 border border-white/10 text-zinc-400 hover:text-zinc-200'
                   )}
-                  title="Preview active skin variant"
+                  title="Preview and adjust position for skin variants"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Variant ({currentPreviewFinish.name})</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsPrimaryCoverMode(true)}
+                  onClick={() => {
+                    setIsPrimaryCoverMode(true);
+                    setLayoutMode('cover');
+                  }}
                   className={clsx(
                     'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition',
-                    isPrimaryCoverMode
+                    isPrimaryCoverMode && layoutMode === 'cover'
                       ? 'bg-[#f3aa18] text-black font-extrabold shadow'
                       : 'bg-zinc-900 border border-white/10 text-zinc-400 hover:text-zinc-200'
                   )}
-                  title="Preview primary listing cover with '20+ SKINS SELECTION'"
+                  title="Preview and adjust position for primary listing cover ('20+ SKINS SELECTION')"
                 >
                   <Star className="w-3.5 h-3.5" />
                   <span>Cover (20+ Skins)</span>
@@ -1501,12 +1532,73 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                   )}
                 </div>
 
-                {/* Device Position & Scale Fine-Tuning */}
-                <div className="p-3 rounded-xl bg-zinc-800/80 border border-zinc-700/80 space-y-3">
+                {/* Device Position & Scale Fine-Tuning (Independent Cover & Variant Positions) */}
+                <div className="p-3.5 rounded-xl bg-zinc-800/80 border border-zinc-700/80 space-y-3">
+                  {/* Target Mode Switcher: Cover vs Variants Position */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-zinc-300">Device Placement Presets</span>
-                      <span className="text-[10px] text-zinc-400">1-click layout & zoom</span>
+                      <span className="text-xs font-bold text-zinc-200">
+                        Device & Variant Position (Per-Product)
+                      </span>
+                      {hasSavedDevicePosition && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-semibold text-emerald-400">
+                          <Check className="w-3 h-3" />
+                          Saved on Item
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-zinc-950/80 border border-zinc-800">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLayoutMode('cover');
+                          setIsPrimaryCoverMode(true);
+                        }}
+                        className={clsx(
+                          'flex flex-col items-start px-2.5 py-2 rounded-lg text-left transition',
+                          layoutMode === 'cover'
+                            ? 'bg-[#f3aa18]/20 border border-[#f3aa18] text-[#f3aa18]'
+                            : 'border border-transparent text-zinc-400 hover:text-zinc-200'
+                        )}
+                      >
+                        <div className="flex items-center gap-1.5 text-[11px] font-bold">
+                          <Star className="w-3 h-3 shrink-0" />
+                          <span>Featured Cover</span>
+                        </div>
+                        <span className="text-[10px] font-mono opacity-80 mt-0.5">
+                          {Math.round(coverScale * 100)}% • X:{coverOffsetX} Y:{coverOffsetY}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLayoutMode('variant');
+                          setIsPrimaryCoverMode(false);
+                        }}
+                        className={clsx(
+                          'flex flex-col items-start px-2.5 py-2 rounded-lg text-left transition',
+                          layoutMode === 'variant'
+                            ? 'bg-[#f3aa18]/20 border border-[#f3aa18] text-[#f3aa18]'
+                            : 'border border-transparent text-zinc-400 hover:text-zinc-200'
+                        )}
+                      >
+                        <div className="flex items-center gap-1.5 text-[11px] font-bold">
+                          <Sparkles className="w-3 h-3 shrink-0" />
+                          <span>Variants Position</span>
+                        </div>
+                        <span className="text-[10px] font-mono opacity-80 mt-0.5">
+                          {Math.round(variantScale * 100)}% • X:{variantOffsetX} Y:{variantOffsetY}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-zinc-400">Quick Placement Presets</span>
+                      <span className="text-[10px] text-zinc-500">1-click layout & zoom</span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-1.5">
@@ -1515,14 +1607,14 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                         onClick={() => {
                           setLayoutMode('cover');
                           setIsPrimaryCoverMode(true);
-                          setDeviceScale(1.0);
-                          setDeviceOffsetX(0);
-                          setDeviceOffsetY(110);
+                          setCoverScale(1.0);
+                          setCoverOffsetX(0);
+                          setCoverOffsetY(110);
                           setFeatureCards(DEFAULT_FEATURE_CARDS_OFFICIAL);
                         }}
                         className={clsx(
                           'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition text-left',
-                          layoutMode === 'cover' && deviceScale === 1.0 && deviceOffsetX === 0 && deviceOffsetY === 110
+                          layoutMode === 'cover' && coverScale === 1.0 && coverOffsetX === 0 && coverOffsetY === 110
                             ? 'bg-[#f3aa18]/25 border-[#f3aa18] text-[#f3aa18]'
                             : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
                         )}
@@ -1536,13 +1628,13 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                         onClick={() => {
                           setLayoutMode('variant');
                           setIsPrimaryCoverMode(false);
-                          setDeviceScale(0.75);
-                          setDeviceOffsetX(0);
-                          setDeviceOffsetY(80);
+                          setVariantScale(0.75);
+                          setVariantOffsetX(0);
+                          setVariantOffsetY(80);
                         }}
                         className={clsx(
                           'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition text-left',
-                          layoutMode === 'variant' && deviceScale === 0.75 && deviceOffsetX === 0 && deviceOffsetY === 80
+                          layoutMode === 'variant' && variantScale === 0.75 && variantOffsetX === 0 && variantOffsetY === 80
                             ? 'bg-[#f3aa18]/25 border-[#f3aa18] text-[#f3aa18]'
                             : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
                         )}
@@ -1556,14 +1648,14 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                         onClick={() => {
                           setLayoutMode('cover');
                           setIsPrimaryCoverMode(true);
-                          setDeviceScale(1.0);
-                          setDeviceOffsetX(140);
-                          setDeviceOffsetY(-55);
+                          setCoverScale(1.0);
+                          setCoverOffsetX(140);
+                          setCoverOffsetY(-55);
                           setFeatureCards(DEFAULT_FEATURE_CARDS_OFFICIAL);
                         }}
                         className={clsx(
                           'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition text-left',
-                          layoutMode === 'cover' && deviceScale === 1.0 && deviceOffsetX === 140 && deviceOffsetY === -55
+                          layoutMode === 'cover' && coverScale === 1.0 && coverOffsetX === 140 && coverOffsetY === -55
                             ? 'bg-[#f3aa18]/25 border-[#f3aa18] text-[#f3aa18]'
                             : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
                         )}
@@ -1577,13 +1669,13 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                         onClick={() => {
                           setLayoutMode('variant');
                           setIsPrimaryCoverMode(false);
-                          setDeviceScale(0.75);
-                          setDeviceOffsetX(140);
-                          setDeviceOffsetY(-20);
+                          setVariantScale(0.75);
+                          setVariantOffsetX(140);
+                          setVariantOffsetY(-20);
                         }}
                         className={clsx(
                           'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition text-left',
-                          layoutMode === 'variant' && deviceScale === 0.75 && deviceOffsetX === 140 && deviceOffsetY === -20
+                          layoutMode === 'variant' && variantScale === 0.75 && variantOffsetX === 140 && variantOffsetY === -20
                             ? 'bg-[#f3aa18]/25 border-[#f3aa18] text-[#f3aa18]'
                             : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
                         )}
@@ -1596,7 +1688,9 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
 
                   <div className="space-y-1">
                     <div className="flex justify-between text-[11px] text-zinc-400">
-                      <span>Scale / Zoom</span>
+                      <span>
+                        {layoutMode === 'cover' ? 'Featured Cover Zoom' : 'Variants Zoom'}
+                      </span>
                       <span className="font-mono text-zinc-200">{Math.round(deviceScale * 100)}%</span>
                     </div>
                     <input
@@ -1642,6 +1736,25 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                         className="w-full accent-[#f3aa18]"
                       />
                     </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-zinc-700/60 flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-zinc-400 leading-tight">
+                      Saves both Cover & Variant positions to <b>{profile.device_name}</b> and syncs with Shopee Inject Images.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleSaveDevicePosition}
+                      disabled={isSavingDevicePosition}
+                      className="inline-flex items-center gap-1.5 min-h-[38px] px-3 py-1.5 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-zinc-950 text-xs font-bold transition shrink-0 disabled:opacity-50"
+                    >
+                      {isSavingDevicePosition ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Save className="w-3.5 h-3.5" />
+                      )}
+                      <span>{isSavingDevicePosition ? 'Saving...' : 'Save Position'}</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1777,10 +1890,6 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                           onClick={() => {
                             setLayoutMode('cover');
                             setIsPrimaryCoverMode(true);
-                            setDeviceScale(1.0);
-                            setDeviceOffsetX(0);
-                            setDeviceOffsetY(110);
-                            setFeatureCards(DEFAULT_FEATURE_CARDS_OFFICIAL);
                           }}
                           className={clsx(
                             'p-2.5 rounded-xl border text-left transition space-y-1',
@@ -1803,9 +1912,6 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                           onClick={() => {
                             setLayoutMode('variant');
                             setIsPrimaryCoverMode(false);
-                            setDeviceScale(0.75);
-                            setDeviceOffsetX(0);
-                            setDeviceOffsetY(80);
                           }}
                           className={clsx(
                             'p-2.5 rounded-xl border text-left transition space-y-1',
