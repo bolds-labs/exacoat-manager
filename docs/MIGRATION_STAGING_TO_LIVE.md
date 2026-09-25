@@ -1,12 +1,12 @@
 # Migration Guide: Staging (staging.exacoat.com) to Production (exacoat.com)
 
-This document outlines the step-by-step procedure to migrate configurator data, global texture finishes, and app connections from the staging environment to the live production store.
+This document outlines the step-by-step procedure to migrate configurator data, global texture finishes, product SEO metadata, and app connections from the staging environment to the live production store.
 
 ---
 
 ## 1. System Overview & Architecture
 
-Configurator setups and materials are distributed across three distinct layers:
+Configurator setups, materials, and storefront metadata are distributed across four distinct layers:
 
 1. **WordPress Database (Staging vs Production):**
    - **Global Finishes & Materials:** Stored in `wp_options` under:
@@ -16,15 +16,21 @@ Configurator setups and materials are distributed across three distinct layers:
      - `exacoat_configurator_presets` (popular curated setups)
      - `exacoat_addon_schemas` (hardware/skin add-ons)
    - **Device Configurator Profiles:** Stored in `wp_postmeta` under meta key `_exacoat_configurator_profile` on each WooCommerce product (layers, mask PNGs, scales, offsets, camera plateau setups, 360 cuts).
-2. **Media Storage (`/wp-content/uploads/`):**
+2. **Product SEO & Storefront Copywriting Layer:**
+   - **WooCommerce Short Descriptions:** Stored in `wp_posts.post_excerpt` (storefront product overview).
+   - **Yoast SEO Metadata:** Stored in `wp_postmeta` under keys `_yoast_wpseo_title`, `_yoast_wpseo_metadesc`, `_yoast_wpseo_focuskw`.
+   - **Rank Math Metadata:** Stored in `wp_postmeta` under keys `rank_math_title`, `rank_math_description`, `rank_math_focus_keyword`.
+   - **Device Name Normalization:** Eliminates redundant titles like `iPhone 18 Pro Skins Skin & Wrap | Exacoat` by normalizing `iPhone 18 Pro Skins` to `iPhone 18 Pro Skin & Wrap | Exacoat`.
+   - **Boilerplate Resolution Engine:** Automatically strips raw HTML tags (`<a href="[geturl]">`, `<em>`), resolves `[product_name]` shortcodes, and replaces em dashes with clean punctuation.
+3. **Media Storage (`/wp-content/uploads/`):**
    - All uploaded texture image files, bump maps, normal maps, and device cut mask PNGs reside in WordPress uploads.
-3. **Exacoat Manager ERP (React / Vite):**
+4. **Exacoat Manager ERP (React / Vite):**
    - Connects to WordPress via REST API endpoints (`/wp-json/wc/v3` and `/wp-json/exacoat-core/v1`).
    - Resolves target URL via `localStorage`, `.env` (`VITE_WORDPRESS_URL`), and internal fallbacks.
 
 ---
 
-## 2. Four-Step Migration Procedure
+## 2. Five-Step Migration Procedure
 
 ### Step 1: Synchronize Media Uploads (`/wp-content/uploads/`)
 Before switching data or endpoints, ensure all assets referenced by the configurator exist on the production server:
@@ -60,7 +66,47 @@ If performing database-level export:
 
 ---
 
-### Step 3: Deploy Plugin and Configure Production API Keys
+### Step 3: Product SEO, Copywriting & Boilerplate Resolution (Batch SEO Optimizer)
+
+Most staging and imported products share an identical boilerplate template in WooCommerce:
+> *"Let's get one thing straight, your `<a href="[geturl]">[product_name]</a>` is cool... Wrap your `[product_name]` with Exacoat's premium skin, no added bulk..."*
+
+This creates duplicate content penalties, unparsed shortcodes in Google search previews, and redundant title text like `iPhone 18 Pro Skins Skin & Wrap | Exacoat`.
+
+To optimize your catalog before or after pushing to production, use the **Batch SEO Optimizer** inside Exacoat Manager:
+
+#### Method A: Direct Batch SEO Optimizer (Recommended)
+1. In Exacoat Manager, navigate to **Products Hub** (`/products`).
+2. Select the **Exacoat Webstore** tab.
+3. In the top amber banner, click **Batch SEO Optimizer**.
+4. **Tab 1: Quick Clean & Resolve All**:
+   - One click iterates through every product in the catalog.
+   - Resolves `[product_name]` into each device's clean name (e.g. `iPhone 18 Pro`, `MacBook Pro 16 M3`).
+   - Normalizes redundant titles to canonical `${cleanDevice} Skin & Wrap | Exacoat` (stripping redundant `Skins Skin & Wrap`).
+   - Sets canonical focus keywords (`${cleanDevice.toLowerCase()} skin`).
+   - Strips raw HTML tags, removes `[geturl]`, and replaces all em dashes with commas.
+   - Updates WooCommerce `post_excerpt`, Yoast SEO (`_yoast_wpseo_*`), and Rank Math (`rank_math_*`) simultaneously.
+5. **Tab 2: AI Batch Differentiation**:
+   - Optionally run AI generation (Google Gemini or OpenAI) to generate distinct, authentic 3M-focused copy tailored to each specific device model.
+
+#### Method B: JSON Snapshot Export & Import (Staging to Production Sync)
+If staging and production databases are maintained separately:
+1. On Staging Exacoat Manager:
+   - Open **Batch SEO Optimizer** -> **3. Staging to Production Migration** tab.
+   - Click **Export SEO Catalog (JSON)** to download `exacoat-seo-catalog-YYYY-MM-DD.json`.
+2. On Production Exacoat Manager:
+   - Switch your target environment to Production (`https://exacoat.com`).
+   - Open **Batch SEO Optimizer** -> **3. Staging to Production Migration** tab.
+   - Click **Import SEO Catalog (JSON)** and select the downloaded file.
+   - Exacoat Manager will match each product by SKU and slug, updating all SEO titles, descriptions, and keywords in seconds.
+
+#### Method C: Direct Database Migration (Automatic)
+If you migrate the entire database using WP Migrate DB, All-in-One WP Migration, or standard MySQL dump:
+- All updated SEO metadata in `wp_posts.post_excerpt` and `wp_postmeta` (`_yoast_wpseo_*`, `rank_math_*`) transfers automatically to production without manual export/import.
+
+---
+
+### Step 4: Deploy Plugin and Configure Production API Keys
 
 1. **Package Latest Plugin:**
    In `exacoat-manager`, run:
@@ -81,7 +127,7 @@ If performing database-level export:
 
 ---
 
-### Step 4: Update Exacoat Manager Configuration
+### Step 5: Update Exacoat Manager Configuration
 
 1. **Update `.env` file:**
    ```env
@@ -109,5 +155,7 @@ If performing database-level export:
 
 - [ ] **Materials Inventory:** Open Materials Stock page in Exacoat Manager. Verify all configured textures (concrete, camo, colors) appear with correct stock and active toggles.
 - [ ] **Configurator Studio:** Open a device in Configurator Studio. Check that 3D preview loads, masks render properly, and texture scaling is preserved.
+- [ ] **SEO & SERP Snippet Verification:** Open Products Hub -> Exacoat Webstore. Open the "SEO & Copy" modal on 2-3 devices (e.g. iPhone, MacBook). Verify that the Google search result preview renders clean device text without raw HTML tags, without `[product_name]` shortcodes, and without redundant "Skins Skin & Wrap" in the title.
+- [ ] **Catalog Uniformity:** In the Batch SEO Optimizer, verify that 0 products remain with boilerplate tokens or raw HTML.
 - [ ] **Orders & RMA:** Open Orders view. Verify live orders load without REST API authentication errors. Test opening Manual Warranty / Redeem modal.
 - [ ] **Image Proxy:** Test opening a product item preview or generating a composite thumbnail to confirm CORS and proxy headers function properly on `exacoat.com`.
