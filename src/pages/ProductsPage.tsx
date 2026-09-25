@@ -242,7 +242,7 @@ export const ProductsPage: React.FC = () => {
       setIsLoadingShopee(true);
       setShopeeError(null);
       try {
-        const queryStatus = status === 'all' ? 'NORMAL' : status;
+        const queryStatus = status === 'all' ? 'ALL' : status;
         const res = await fetchShopeeProductsDirect({
           offset,
           page_size: 24,

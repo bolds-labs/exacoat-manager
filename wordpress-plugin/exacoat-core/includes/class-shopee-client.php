@@ -2728,47 +2728,47 @@ class Exacoat_Shopee_Client {
 			$total = 1;
 			$has_next = false;
 		} elseif ( ! empty( $search ) ) {
-			// 2. Keyword Search via Shopee v2.product.search_item (POST request in Shopee Open API v2)
-			$search_body = [
-				'item_name' => $search,
-				'page_size' => $page_size,
-				'offset'    => $offset,
-			];
-			$search_res = self::call_shop_api( '/api/v2/product/search_item', 'POST', [], $search_body );
+			// 2. Keyword Search
+			// Search across UNLIST drafts and NORMAL live products unless explicitly filtered
+			$statuses_to_search = ( $status_param === 'UNLIST' )
+				? [ 'UNLIST' ]
+				: ( $status_param === 'BANNED' ? [ 'BANNED' ] : [ 'UNLIST', 'NORMAL' ] );
 
-			$raw_found_ids = [];
-			if ( $search_res['success'] && ! empty( $search_res['response'] ) ) {
-				$resp = $search_res['response'];
-				$raw_found_ids = $resp['item_id_list'] ?? $resp['item_list'] ?? $resp['item'] ?? [];
-				$total = (int) ( $resp['total_count'] ?? count( (array) $raw_found_ids ) );
-				$next_offset = (int) ( $resp['next_offset'] ?? ( $offset + count( (array) $raw_found_ids ) ) );
-				$has_next = $next_offset < $total;
-			}
+			$search_clean = preg_replace( '/[\[\]\/\-\(\)\,\.]+/u', ' ', strtolower( $search ) );
+			$search_tokens = array_values( array_filter( explode( ' ', $search_clean ), function( $t ) {
+				return strlen( trim( $t ) ) > 1;
+			} ) );
 
-			if ( ! empty( $raw_found_ids ) ) {
-				foreach ( (array) $raw_found_ids as $entry ) {
-					if ( is_array( $entry ) && isset( $entry['item_id'] ) ) {
-						$item_ids[] = (int) $entry['item_id'];
-					} elseif ( is_numeric( $entry ) ) {
-						$item_ids[] = (int) $entry;
+			// Try Shopee v2.product.search_item API first if searching live items
+			if ( in_array( 'NORMAL', $statuses_to_search, true ) && ! empty( $search_tokens ) ) {
+				$search_res = self::call_shop_api( '/api/v2/product/search_item', 'POST', [], [
+					'item_name' => implode( ' ', array_slice( $search_tokens, 0, 5 ) ),
+					'page_size' => $page_size,
+					'offset'    => 0,
+				] );
+				if ( $search_res['success'] && ! empty( $search_res['response'] ) ) {
+					$resp = $search_res['response'];
+					$raw_found_ids = $resp['item_id_list'] ?? $resp['item_list'] ?? $resp['item'] ?? [];
+					foreach ( (array) $raw_found_ids as $entry ) {
+						if ( is_array( $entry ) && isset( $entry['item_id'] ) ) {
+							$item_ids[] = (int) $entry['item_id'];
+						} elseif ( is_numeric( $entry ) ) {
+							$item_ids[] = (int) $entry;
+						}
 					}
 				}
-				$item_ids = array_values( array_unique( array_filter( $item_ids ) ) );
 			}
 
-			// If search_item is empty or unsupported, search catalog using get_item_list & get_item_base_info
-			if ( empty( $item_ids ) ) {
-				$search_lower = strtolower( $search );
-				$search_tokens = array_filter( explode( ' ', $search_lower ) );
-
-				// Fetch item IDs from get_item_list (up to 300 items across 3 pages)
-				$collected_ids = [];
-				for ( $p = 0; $p < 3; $p++ ) {
+			// Also fetch item IDs from get_item_list for UNLIST drafts (and NORMAL catalog if needed)
+			$collected_ids = [];
+			foreach ( $statuses_to_search as $st ) {
+				$max_pages = ( $st === 'UNLIST' ) ? 2 : ( empty( $item_ids ) ? 4 : 1 );
+				for ( $p = 0; $p < $max_pages; $p++ ) {
 					$list_res = self::call_shop_api( '/api/v2/product/get_item_list', 'GET', [
 						'offset'      => $p * 100,
 						'page_size'   => 100,
-						'item_status' => $status_param === 'ALL' ? 'NORMAL' : $status_param,
-					]);
+						'item_status' => $st,
+					] );
 					if ( empty( $list_res['response']['item'] ) ) {
 						break;
 					}
@@ -2781,61 +2781,97 @@ class Exacoat_Shopee_Client {
 						break;
 					}
 				}
+			}
 
-				if ( ! empty( $collected_ids ) ) {
-					// Inspect base info in 50-item batches
-					$chunks = array_chunk( $collected_ids, 50 );
-					foreach ( $chunks as $chunk ) {
-						$chunk_res = self::call_shop_api( '/api/v2/product/get_item_base_info', 'GET', [
-							'item_id_list' => implode( ',', $chunk ),
-						]);
-						if ( ! empty( $chunk_res['response']['item_list'] ) ) {
-							foreach ( $chunk_res['response']['item_list'] as $it ) {
-								$name_lower = strtolower( (string) ( $it['item_name'] ?? '' ) );
-								$matches = true;
-								foreach ( $search_tokens as $token ) {
-									if ( ! str_contains( $name_lower, $token ) ) {
-										$matches = false;
-										break;
-									}
+			$combined_candidate_ids = array_values( array_unique( array_merge( $item_ids, $collected_ids ) ) );
+			$matched_ids = [];
+
+			if ( ! empty( $combined_candidate_ids ) ) {
+				$chunks = array_chunk( $combined_candidate_ids, 50 );
+				foreach ( $chunks as $chunk ) {
+					$chunk_res = self::call_shop_api( '/api/v2/product/get_item_base_info', 'GET', [
+						'item_id_list' => implode( ',', $chunk ),
+					] );
+					if ( ! empty( $chunk_res['response']['item_list'] ) ) {
+						foreach ( $chunk_res['response']['item_list'] as $it ) {
+							$name_lower = strtolower( (string) ( $it['item_name'] ?? '' ) );
+							$matches = true;
+							foreach ( $search_tokens as $token ) {
+								if ( ! str_contains( $name_lower, $token ) ) {
+									$matches = false;
+									break;
 								}
-								if ( $matches ) {
-									$item_ids[] = (int) $it['item_id'];
-								}
+							}
+							if ( $matches ) {
+								$matched_ids[] = (int) $it['item_id'];
 							}
 						}
 					}
 				}
-				$total = count( $item_ids );
-				$has_next = false;
 			}
+
+			$item_ids = array_values( array_unique( $matched_ids ) );
+			$total = count( $item_ids );
+			$has_next = false;
 		} else {
 			// 3. Standard Item List
-			$query_params = [
-				'offset'      => $offset,
-				'page_size'   => $page_size,
-				'item_status' => $status_param === 'ALL' ? 'NORMAL' : $status_param,
-			];
+			if ( $status_param === 'ALL' ) {
+				$raw_items = [];
+				$total = 0;
+				if ( $offset === 0 ) {
+					$unlist_res = self::call_shop_api( '/api/v2/product/get_item_list', 'GET', [
+						'offset'      => 0,
+						'page_size'   => 50,
+						'item_status' => 'UNLIST',
+					] );
+					if ( ! empty( $unlist_res['response']['item'] ) ) {
+						$raw_items = array_merge( $raw_items, $unlist_res['response']['item'] );
+						$total += (int) ( $unlist_res['response']['total_count'] ?? count( $unlist_res['response']['item'] ) );
+					}
+				}
 
-			$list_res = self::call_shop_api( '/api/v2/product/get_item_list', 'GET', $query_params );
-			if ( ! $list_res['success'] ) {
-				return new \WP_REST_Response([
-					'success' => false,
-					'error'   => $list_res['error'] ?? 'Failed to retrieve item list from Shopee.',
-					'message' => $list_res['message'] ?? '',
-					'items'   => [],
-					'total'   => 0,
-				], 400 );
+				$normal_res = self::call_shop_api( '/api/v2/product/get_item_list', 'GET', [
+					'offset'      => $offset,
+					'page_size'   => $page_size,
+					'item_status' => 'NORMAL',
+				] );
+				if ( ! empty( $normal_res['response']['item'] ) ) {
+					$raw_items = array_merge( $raw_items, $normal_res['response']['item'] );
+					$total += (int) ( $normal_res['response']['total_count'] ?? count( $normal_res['response']['item'] ) );
+				}
+				$has_next = (bool) ( $normal_res['response']['has_next_page'] ?? false );
+				$next_offset = (int) ( $normal_res['response']['next_offset'] ?? ( $offset + count( $normal_res['response']['item'] ?? [] ) ) );
+
+				$item_ids = array_values( array_filter( array_map( function( $it ) {
+					return isset( $it['item_id'] ) ? (int) $it['item_id'] : 0;
+				}, $raw_items ) ) );
+			} else {
+				$query_params = [
+					'offset'      => $offset,
+					'page_size'   => $page_size,
+					'item_status' => $status_param,
+				];
+
+				$list_res = self::call_shop_api( '/api/v2/product/get_item_list', 'GET', $query_params );
+				if ( ! $list_res['success'] ) {
+					return new \WP_REST_Response([
+						'success' => false,
+						'error'   => $list_res['error'] ?? 'Failed to retrieve item list from Shopee.',
+						'message' => $list_res['message'] ?? '',
+						'items'   => [],
+						'total'   => 0,
+					], 400 );
+				}
+
+				$raw_items = $list_res['response']['item'] ?? [];
+				$total = (int) ( $list_res['response']['total_count'] ?? count( $raw_items ) );
+				$has_next = (bool) ( $list_res['response']['has_next_page'] ?? false );
+				$next_offset = (int) ( $list_res['response']['next_offset'] ?? ( $offset + count( $raw_items ) ) );
+
+				$item_ids = array_values( array_filter( array_map( function( $it ) {
+					return isset( $it['item_id'] ) ? (int) $it['item_id'] : 0;
+				}, $raw_items ) ) );
 			}
-
-			$raw_items = $list_res['response']['item'] ?? [];
-			$total = (int) ( $list_res['response']['total_count'] ?? count( $raw_items ) );
-			$has_next = (bool) ( $list_res['response']['has_next_page'] ?? false );
-			$next_offset = (int) ( $list_res['response']['next_offset'] ?? ( $offset + count( $raw_items ) ) );
-
-			$item_ids = array_values( array_filter( array_map( function( $it ) {
-				return isset( $it['item_id'] ) ? (int) $it['item_id'] : 0;
-			}, $raw_items ) ) );
 		}
 
 		if ( empty( $item_ids ) ) {

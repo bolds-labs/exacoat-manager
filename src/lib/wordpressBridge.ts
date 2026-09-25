@@ -5984,28 +5984,33 @@ export async function generateProductSeoAndDescriptionAi(
 
   const cleanDevice = normalizeDeviceName(productName) || productName;
 
-  const systemPrompt = `You are an expert e-commerce copywriter and SEO specialist for Exacoat (exacoat.com).
-Exacoat designs precision-engineered vinyl skins and protective wraps made of authentic 3M materials for smartphones, laptops, gaming handhelds, and accessories.
+  const systemPrompt = `You are a premier consumer tech copywriter and brand voice specialist for Exacoat (exacoat.com).
+Exacoat crafts precision-cut device wraps and skins designed to elevate everyday carry with tactile textures and real scratch protection.
 
 Target Product:
 - Device Name: "${cleanDevice}"
 - Category: "${categoryName}"
 
-Brand Voice & Rules:
-- Confident, clean, understated, and authentic.
-- Ground descriptions in real physical attributes: authentic 3M textured vinyl, 0.2mm ultra-slim profile, scratch defense without added bulk, and clean precision fit.
+Brand Voice & Copywriting Rules:
+- Lifestyle-first, sleek, understated, and tactile. Write like a modern luxury tech studio.
+- Focus on daily carry, confident grip, pocket-friendly minimalist feel, and keeping the device looking pristine every day.
+- STRICTLY NEVER say "3M" or name manufacturer brands. Say "premium textured skin", "matte finish", "tactile wrap", etc.
+- Do NOT be explanatory, dry, or technical. Avoid spec-sheet jargon: NEVER say "0.2mm ultra-slim profile", "adhesive backing", and do not sound like an installation instruction manual.
 - Strictly NO exclamation marks.
-- Strictly NO fake technical jargon or exaggerated marketing claims (avoid words like "revolutionary", "ultimate armor", "game-changing").
-- Strictly NO em dashes of any kind (do not use long dashes or double hyphens). Use commas, periods, or parentheses instead.
-- Each device must have distinct, customized phrasing referencing the specific device type (e.g. camera contours and tactile grip for phones; top lid, palm rest, or trackpad for laptops).
+- Strictly NO em dashes of any kind (do not use long dashes "—" or double hyphens "--"). Use commas, periods, or parentheses instead.
+- Strictly NO cheap marketing hype ("revolutionary", "game-changer", "ultimate armor", "unrivaled protection").
+- Tailor the phrasing naturally to the device:
+  * For phones: camera contours, natural hand feel, pocket carry, confident grip.
+  * For laptops: palm rest comfort, sleek top lid aesthetic, clean desk presence.
+  * For gaming handhelds or consoles: extended gaming grip, sweat resistance, sleek styling.
 
 Output format:
 Return ONLY a valid JSON object with the following four keys (no markdown formatting, no conversational text):
 {
   "seo_title": "${cleanDevice} Skin & Wrap | Exacoat",
-  "seo_description": "A natural search meta description between 120 and 155 characters describing authentic 3M textured wraps with zero bulk scratch defense.",
+  "seo_description": "Natural Google search snippet (120 to 155 chars) focusing on everyday scratch defense, confident grip, and clean fit. Zero em dashes and never mention 3M.",
   "focus_keyword": "${cleanDevice.toLowerCase()} skin",
-  "short_description": "2 to 3 concise sentences (45 to 65 words) highlighting precision fit, tactile texture, and everyday scratch protection."
+  "short_description": "2 to 3 concise, lifestyle-oriented sentences (35 to 55 words) that read like an editorial storefront overview. Elevate everyday carry without bulk."
 }`;
 
   const cleanField = (str?: string) => {
@@ -6014,6 +6019,9 @@ Return ONLY a valid JSON object with the following four keys (no markdown format
       .replace(/!+/g, '.')
       .replace(/[—–]/g, ', ')
       .replace(/--/g, ', ')
+      .replace(/\b3M\b/gi, 'premium')
+      .replace(/\s*0\.2\s*mm\s*/gi, ' ')
+      .replace(/\s{2,}/g, ' ')
       .trim();
   };
 
