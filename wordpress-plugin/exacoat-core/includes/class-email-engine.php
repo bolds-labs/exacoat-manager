@@ -438,12 +438,70 @@ class Exacoat_Email_Engine {
 					'shop_url'            => 'https://exacoat.com/shop/',
 				],
 			],
+
+			// 6. Abandoned Cart Recovery (2-Email Sequence)
+			'customer_cart_abandoned_1' => [
+				'category'       => 'Marketing / Cart Recovery',
+				'label'          => 'Abandoned Cart Reminder (1 Hour)',
+				'subject'        => 'We saved your Exacoat cart',
+				'preheader'      => 'Your selected skins and configurations are waiting for you.',
+				'badge'          => 'Cart Saved',
+				'icon'           => 'security',
+				'title'          => 'Did you leave something behind?',
+				'body_primary'   => 'We noticed you left items in your cart. Your custom device selections and configurations have been saved so you can pick up right where you left off.',
+				'body_secondary' => 'Your device configuration is reserved for a limited time.',
+				'cta_text'       => 'Return to Checkout',
+				'type'           => 'abandoned_cart',
+				'defaults'       => self::get_mock_abandoned_cart_defaults( '1' ),
+			],
+			'customer_cart_abandoned_2' => [
+				'category'       => 'Marketing / Cart Recovery',
+				'label'          => 'Abandoned Cart Follow-Up (24 Hours)',
+				'subject'        => 'Still thinking about your custom skin?',
+				'preheader'      => 'Precision-fit protection backed by our Free Installation Guarantee.',
+				'badge'          => 'Installation Guarantee',
+				'icon'           => 'document_verified',
+				'title'          => 'Crafted for a flawless fit',
+				'body_primary'   => 'Your saved skins are still waiting. Every Exacoat skin is precision-cut to within 0.01mm using genuine cast vinyl materials designed for clean installation and residue-free removal.',
+				'body_secondary' => 'Every order includes our Free Installation Guarantee. If you make an error while applying your skin, our support team will send you a replacement piece.',
+				'cta_text'       => 'Complete Your Order',
+				'type'           => 'abandoned_cart',
+				'defaults'       => self::get_mock_abandoned_cart_defaults( '2' ),
+			],
 		];
 	}
 
 	/**
 	 * Helper: Mock Order Defaults for Customer Order Email Previews
 	 */
+	/**
+	 * Helper: Mock Abandoned Cart Defaults for Email Previews
+	 */
+	public static function get_mock_abandoned_cart_defaults( string $sequence = '1' ): array {
+		$storefront_base = function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url() : home_url();
+		return [
+			'customer_first_name' => 'Alex',
+			'customer_email'      => 'alex@example.com',
+			'cart_token'          => 'mock_cart_token_98234',
+			'restore_url'         => trailingslashit( $storefront_base ) . 'checkout/?restore_cart=mock_cart_token_98234',
+			'unsubscribe_url'     => trailingslashit( $storefront_base ) . 'cart/?unsubscribe_cart=mock_cart_token_98234',
+			'items'               => [
+				[
+					'name'          => 'iPhone 16 Pro Skins',
+					'image_url'     => 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
+					'quantity'      => 1,
+					'price'         => 'Rp 149.000',
+					'meta'          => "Coverage: Model Cut\nTexture: Black Camo",
+				],
+			],
+			'item_count'          => 1,
+			'subtotal'            => 'Rp 149.000',
+			'total'               => 'Rp 149.000',
+			'currency'            => 'IDR',
+			'sequence'            => $sequence,
+		];
+	}
+
 	public static function get_mock_order_defaults( string $order_number = '14589', array $extra = [] ): array {
 		return array_merge( [
 			'order_number'         => $order_number,
@@ -529,6 +587,11 @@ class Exacoat_Email_Engine {
 		// Branch directly to Exacoat Perks Promo Code Reward Layout
 		if ( $event === 'customer_order_review_reward' || $type === 'review_reward' ) {
 			return self::render_review_reward_html( $event, $merged_data, $tmpl );
+		}
+
+		// Branch directly to Abandoned Cart Recovery Layout
+		if ( $type === 'abandoned_cart' || str_starts_with( $event, 'customer_cart_abandoned_' ) ) {
+			return self::render_abandoned_cart_html( $event, $merged_data, $tmpl );
 		}
 
 		// Branch directly to Light-Mode Customer Order Layout for customer orders
@@ -2218,6 +2281,250 @@ class Exacoat_Email_Engine {
                     </td>
                   </tr>
                 </table>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>";
+
+		return [
+			'subject'   => $subject,
+			'html'      => $html,
+			'tmpl_info' => $tmpl,
+		];
+	}
+
+	/**
+	 * Render High-Conversion, Responsive Abandoned Cart Transactional Email
+	 * Fully compatible with antislop principles: clean typography, high-contrast CTA,
+	 * genuine trust factors, and zero generic AI buzzwords.
+	 */
+	public static function render_abandoned_cart_html( string $event, array $data, array $tmpl ): array {
+		$replacements = [];
+		foreach ( $data as $k => $v ) {
+			if ( is_scalar( $v ) ) {
+				$val_str = (string) $v;
+				$replacements[ '{{' . $k . '}}' ] = $val_str;
+				$replacements[ '{' . $k . '}' ]   = $val_str;
+			}
+		}
+
+		$cust_name       = esc_html( $data['customer_first_name'] ?? 'there' );
+		$badge_text      = esc_html( $data['badge_text'] ?? $tmpl['badge'] ?? 'Cart Saved' );
+		$title           = esc_html( $data['title'] ?? $tmpl['title'] ?? 'Did you leave something behind?' );
+		$cta_text        = esc_html( $data['cta_text'] ?? $tmpl['cta_text'] ?? 'Return to Checkout' );
+		$restore_url     = esc_url( $data['restore_url'] ?? home_url( '/checkout/' ) );
+		$unsubscribe_url = esc_url( $data['unsubscribe_url'] ?? home_url( '/cart/' ) );
+		$is_second_email = ( $event === 'customer_cart_abandoned_2' || ( $data['sequence'] ?? '' ) === '2' );
+
+		$subject        = str_replace( array_keys( $replacements ), array_values( $replacements ), $tmpl['subject'] );
+		$title          = str_replace( array_keys( $replacements ), array_values( $replacements ), $title );
+		$body_primary   = str_replace( array_keys( $replacements ), array_values( $replacements ), $tmpl['body_primary'] ?? '' );
+		$body_secondary = str_replace( array_keys( $replacements ), array_values( $replacements ), $tmpl['body_secondary'] ?? '' );
+
+		// Clean up orphan tags
+		$tag_pattern    = '/\{\{[a-zA-Z0-9_-]+\}\}|\{[a-zA-Z0-9_-]+\}/';
+		$subject        = preg_replace( $tag_pattern, '', $subject );
+		$subject        = preg_replace( '/\s{2,}/', ' ', trim( $subject ) );
+		$title          = preg_replace( $tag_pattern, '', $title );
+		$body_primary   = preg_replace( $tag_pattern, '', $body_primary );
+		$body_secondary = preg_replace( $tag_pattern, '', $body_secondary );
+
+		$preheader = $tmpl['preheader'] ?? $data['preheader'] ?? '';
+		if ( ! empty( $preheader ) ) {
+			$preheader = str_replace( array_keys( $replacements ), array_values( $replacements ), $preheader );
+			$preheader = preg_replace( $tag_pattern, '', $preheader );
+		}
+
+		// Build Item Rows
+		$items      = $data['items'] ?? [];
+		$items_rows = '';
+		if ( is_array( $items ) && ! empty( $items ) ) {
+			foreach ( $items as $item ) {
+				$name      = esc_html( $item['name'] ?? 'Exacoat Skin' );
+				$img       = esc_url( $item['image_url'] ?? 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg' );
+				$qty       = (int) ( $item['quantity'] ?? 1 );
+				$price     = esc_html( $item['price'] ?? $item['subtotal'] ?? '' );
+				$meta_raw  = $item['meta'] ?? '';
+				$meta_html = '';
+				if ( ! empty( $meta_raw ) ) {
+					$lines = is_array( $meta_raw ) ? $meta_raw : explode( "\n", (string) $meta_raw );
+					$clean_lines = array_filter( array_map( 'trim', $lines ) );
+					if ( ! empty( $clean_lines ) ) {
+						$meta_html = '<div style="margin-top:4px;">' . implode( '<br>', array_map( function( $l ) {
+							return '<span style="font-size:12px;color:#71717a;line-height:1.4;">' . esc_html( $l ) . '</span>';
+						}, $clean_lines ) ) . '</div>';
+					}
+				}
+
+				$items_rows .= '
+				<tr>
+					<td style="padding:16px 0;border-bottom:1px solid #f4f4f5;" valign="middle">
+						<table width="100%" cellpadding="0" cellspacing="0">
+							<tr>
+								<td width="72" valign="middle" style="width:72px;">
+									<img src="' . $img . '" alt="' . $name . '" width="64" height="64" style="width:64px;height:64px;object-fit:cover;border-radius:10px;border:1px solid #e4e4e7;display:block;" />
+								</td>
+								<td valign="middle" style="padding-left:14px;">
+									<p style="margin:0;font-size:14px;font-weight:700;color:#18181b;letter-spacing:-0.2px;">' . $name . '</p>
+									' . $meta_html . '
+									<p style="margin:4px 0 0;font-size:12px;font-weight:600;color:#a1a1aa;">Qty: ' . $qty . '</p>
+								</td>
+								<td align="right" valign="middle" style="white-space:nowrap;padding-left:12px;">
+									<span style="font-size:14px;font-weight:700;color:#18181b;">' . $price . '</span>
+								</td>
+							</tr>
+						</table>
+					</td>
+				</tr>';
+			}
+		}
+
+		$subtotal = esc_html( $data['subtotal'] ?? $data['total'] ?? '' );
+
+		// Trust & Guarantee Box for Email 2
+		$trust_box_html = '';
+		if ( $is_second_email ) {
+			$trust_box_html = '
+			<table width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #e4e4e7;border-radius:14px;margin:28px 0;">
+				<tr>
+					<td style="padding:22px 24px;">
+						<p style="margin:0 0 14px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#18181b;">Why Choose Exacoat</p>
+						<table width="100%" cellpadding="0" cellspacing="0">
+							<tr>
+								<td style="padding-bottom:12px;" valign="top">
+									<p style="margin:0;font-size:13px;line-height:1.5;color:#3f3f46;"><strong style="color:#18181b;">0.01mm Precision Fit:</strong> Engineered with micro-tolerance cutouts to match your device body, buttons, and camera contours.</p>
+								</td>
+							</tr>
+							<tr>
+								<td style="padding-bottom:12px;" valign="top">
+									<p style="margin:0;font-size:13px;line-height:1.5;color:#3f3f46;"><strong style="color:#18181b;">Residue-Free Removal:</strong> Made exclusively from authentic cast vinyl. Peels off clean whenever you choose to remove it.</p>
+								</td>
+							</tr>
+							<tr>
+								<td valign="top">
+									<p style="margin:0;font-size:13px;line-height:1.5;color:#3f3f46;"><strong style="color:#18181b;">Free Installation Guarantee:</strong> If you misalign or stretch a piece during application, reach out to our team and we will send a replacement.</p>
+								</td>
+							</tr>
+						</table>
+					</td>
+				</tr>
+			</table>';
+		}
+
+		$logo_html = self::get_brand_logo_html();
+		$preheader_html = $preheader ? '<div style="display:none;font-size:1px;color:#f4f4f5;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">' . esc_html( $preheader ) . '</div>' : '';
+		$secondary_p = $body_secondary ? '<p style="margin:0 0 24px;font-size:14.5px;line-height:1.7;color:#52525b;">' . $body_secondary . '</p>' : '';
+
+		$html = "<!doctype html>
+<html lang=\"en\" xmlns:v=\"urn:schemas-microsoft-com:vml\" xmlns:o=\"urn:schemas-microsoft-com:office:office\">
+<head>
+  <meta charset=\"utf-8\">
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+  <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">
+  <title>" . esc_html( $subject ) . "</title>
+  <style>
+    body { margin:0; padding:0; width:100% !important; background-color:#f4f4f5; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
+    table { border-collapse:collapse; }
+    img { border:0; outline:none; text-decoration:none; display:block; }
+    @media only screen and (max-width:620px) {
+      .container-table { width:100% !important; border-radius:0 !important; border-left:none !important; border-right:none !important; }
+      .mobile-padding { padding:24px 20px !important; }
+      .mobile-btn { width:100% !important; box-sizing:border-box !important; text-align:center !important; }
+    }
+  </style>
+</head>
+<body style=\"margin:0;padding:40px 10px;background-color:#f4f4f5;\">
+  {$preheader_html}
+  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">
+    <tr>
+      <td align=\"center\">
+        <table class=\"container-table\" width=\"580\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:580px;background:#ffffff;border:1px solid #e4e4e7;border-radius:18px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.03);\">
+          <tbody>
+            <!-- Header -->
+            <tr>
+              <td style=\"padding:28px 36px 20px;border-bottom:1px solid #f0f0f2;\" class=\"mobile-padding\">
+                <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">
+                  <tr>
+                    <td valign=\"middle\">
+                      {$logo_html}
+                    </td>
+                    <td align=\"right\" valign=\"middle\">
+                      <span style=\"display:inline-block;padding:5px 12px;background:#f4f4f5;color:#3f3f46;font-size:11px;font-weight:600;border-radius:999px;border:1px solid #e4e4e7;letter-spacing:0.3px;\">{$badge_text}</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Main Content Area -->
+            <tr>
+              <td style=\"padding:36px 36px 28px;\" class=\"mobile-padding\">
+                <h1 style=\"margin:0 0 16px;font-size:24px;font-weight:700;color:#111111;letter-spacing:-0.5px;line-height:1.3;\">{$title}</h1>
+                <p style=\"margin:0 0 12px;font-size:15px;font-weight:600;color:#18181b;\">Hi {$cust_name},</p>
+                <p style=\"margin:0 0 14px;font-size:14.5px;line-height:1.7;color:#3f3f46;\">{$body_primary}</p>
+                {$secondary_p}
+
+                <!-- Primary Action Button -->
+                <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:20px 0 32px;\">
+                  <tr>
+                    <td>
+                      <a href=\"{$restore_url}\" target=\"_blank\" class=\"mobile-btn\" style=\"display:inline-block;padding:14px 32px;background:#111111;color:#ffffff;font-size:14px;font-weight:700;border-radius:12px;text-decoration:none;letter-spacing:0.2px;\">
+                        {$cta_text} &rarr;
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- Items In Cart Section -->
+                <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-top:1px solid #f0f0f2;padding-top:16px;\">
+                  <tr>
+                    <td style=\"padding:12px 0 8px;\">
+                      <p style=\"margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#71717a;\">Items in Your Cart</p>
+                    </td>
+                  </tr>
+                  {$items_rows}
+                </table>
+
+                <!-- Subtotal Breakdown -->
+                <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-top:16px;\">
+                  <tr>
+                    <td style=\"padding:10px 0;font-size:14px;font-weight:600;color:#3f3f46;\">Subtotal</td>
+                    <td align=\"right\" style=\"padding:10px 0;font-size:15px;font-weight:700;color:#111111;\">{$subtotal}</td>
+                  </tr>
+                </table>
+
+                {$trust_box_html}
+
+                <!-- Secondary Action Button -->
+                <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-top:24px;\">
+                  <tr>
+                    <td align=\"center\">
+                      <a href=\"{$restore_url}\" target=\"_blank\" style=\"font-size:13.5px;font-weight:600;color:#18181b;text-decoration:underline;\">
+                        Ready to proceed? Continue to checkout &rarr;
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style=\"padding:24px 36px 28px;background:#fafafa;border-top:1px solid #f0f0f2;text-align:center;\" class=\"mobile-padding\">
+                <p style=\"margin:0 0 10px;font-size:12px;line-height:1.65;color:#71717a;\">
+                  Have questions about your device fit or custom skin? Reply directly to this email or reach us at <a href=\"mailto:support@exacoat.com\" style=\"color:#111111;text-decoration:underline;font-weight:500;\">support@exacoat.com</a>.
+                </p>
+                <p style=\"margin:0 0 12px;font-size:11.5px;color:#a1a1aa;\">
+                  <a href=\"{$unsubscribe_url}\" style=\"color:#71717a;text-decoration:underline;\">Unsubscribe from cart reminders</a>
+                </p>
+                <p style=\"margin:0;font-size:11px;color:#a1a1aa;letter-spacing:0.2px;\">
+                  Exacoat &bull; Ruby Commercial TB-12, Summarecon Bekasi, Bekasi Utara, West Java 17142
+                </p>
               </td>
             </tr>
           </tbody>

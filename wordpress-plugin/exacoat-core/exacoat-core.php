@@ -327,6 +327,7 @@ require_once EXACOAT_CORE_PATH . 'includes/class-shopee-client.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-tiktok-client.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-webhook-dispatcher.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-store-credit-manager.php';
+require_once EXACOAT_CORE_PATH . 'includes/class-abandoned-cart.php';
 require_once EXACOAT_CORE_PATH . 'admin/class-admin-settings.php';
 require_once EXACOAT_CORE_PATH . 'admin/class-github-updater.php';
 
@@ -385,6 +386,11 @@ if ( class_exists( 'Exacoat_Review_Manager' ) ) {
 	Exacoat_Review_Manager::init();
 }
 
+// Initialize Abandoned Cart Recovery Engine
+if ( class_exists( 'Exacoat_Abandoned_Cart' ) ) {
+	Exacoat_Abandoned_Cart::init();
+}
+
 // Safe version tracking on admin_init
 add_action( 'admin_init', function () {
 	try {
@@ -420,6 +426,11 @@ register_activation_hook( __FILE__, function () {
 		// 2. Create Reviews table if not exists
 		if ( class_exists( 'Exacoat_Review_Manager' ) ) {
 			Exacoat_Review_Manager::create_tables();
+		}
+
+		// 3. Create Abandoned Carts table if not exists
+		if ( class_exists( 'Exacoat_Abandoned_Cart' ) ) {
+			Exacoat_Abandoned_Cart::create_tables();
 		}
 
 		// 3. Flush rewrite rules
