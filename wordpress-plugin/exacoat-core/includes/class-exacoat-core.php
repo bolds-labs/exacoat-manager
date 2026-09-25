@@ -1087,18 +1087,39 @@ class Exacoat_Core {
 					}
 					$messages[] = [ 'role' => 'user', 'content' => "Collection or series name: \"{$name}\"" ];
 
+					$is_reasoning_or_gpt5 = (bool) preg_match( '/^(o[0-9]|gpt-5)/i', preg_replace( '/^openai\//', '', $openai_model ) );
+					$body_args = [
+						'model'    => $openai_model,
+						'messages' => $messages,
+					];
+					if ( ! $is_reasoning_or_gpt5 ) {
+						$body_args['temperature'] = 0.7;
+					}
+
 					$resp = wp_remote_post( 'https://api.openai.com/v1/chat/completions', [
 						'headers' => [
 							'Content-Type'  => 'application/json',
 							'Authorization' => 'Bearer ' . $api_key,
 						],
-						'body'    => wp_json_encode( [
-							'model'       => $openai_model,
-							'messages'    => $messages,
-							'temperature' => 0.7,
-						] ),
+						'body'    => wp_json_encode( $body_args ),
 						'timeout' => 30,
 					] );
+
+					// Auto-retry without temperature if rejected due to model parameter restrictions
+					if ( ! is_wp_error( $resp ) ) {
+						$check_body = json_decode( wp_remote_retrieve_body( $resp ), true );
+						if ( isset( $check_body['error']['message'] ) && stripos( $check_body['error']['message'], 'temperature' ) !== false ) {
+							unset( $body_args['temperature'] );
+							$resp = wp_remote_post( 'https://api.openai.com/v1/chat/completions', [
+								'headers' => [
+									'Content-Type'  => 'application/json',
+									'Authorization' => 'Bearer ' . $api_key,
+								],
+								'body'    => wp_json_encode( $body_args ),
+								'timeout' => 30,
+							] );
+						}
+					}
 
 					$latency = round( ( microtime( true ) - $start ) * 1000 );
 					if ( is_wp_error( $resp ) ) {
@@ -1319,21 +1340,42 @@ class Exacoat_Core {
 						return rest_ensure_response( [ 'success' => false, 'message' => 'OpenAI API key not configured on server.' ] );
 					}
 
+					$is_reasoning_or_gpt5 = (bool) preg_match( '/^(o[0-9]|gpt-5)/i', preg_replace( '/^openai\//', '', $openai_model ) );
+					$body_args = [
+						'model'           => $openai_model,
+						'messages'        => [
+							[ 'role' => 'user', 'content' => $system_instruction ],
+						],
+						'response_format' => [ 'type' => 'json_object' ],
+					];
+					if ( ! $is_reasoning_or_gpt5 ) {
+						$body_args['temperature'] = 0.7;
+					}
+
 					$resp = wp_remote_post( 'https://api.openai.com/v1/chat/completions', [
 						'headers' => [
 							'Content-Type'  => 'application/json',
 							'Authorization' => 'Bearer ' . $api_key,
 						],
-						'body'    => wp_json_encode( [
-							'model'           => $openai_model,
-							'messages'        => [
-								[ 'role' => 'user', 'content' => $system_instruction ],
-							],
-							'response_format' => [ 'type' => 'json_object' ],
-							'temperature'     => 0.7,
-						] ),
+						'body'    => wp_json_encode( $body_args ),
 						'timeout' => 30,
 					] );
+
+					// Auto-retry without temperature if rejected due to model parameter restrictions
+					if ( ! is_wp_error( $resp ) ) {
+						$check_body = json_decode( wp_remote_retrieve_body( $resp ), true );
+						if ( isset( $check_body['error']['message'] ) && stripos( $check_body['error']['message'], 'temperature' ) !== false ) {
+							unset( $body_args['temperature'] );
+							$resp = wp_remote_post( 'https://api.openai.com/v1/chat/completions', [
+								'headers' => [
+									'Content-Type'  => 'application/json',
+									'Authorization' => 'Bearer ' . $api_key,
+								],
+								'body'    => wp_json_encode( $body_args ),
+								'timeout' => 30,
+							] );
+						}
+					}
 
 					$latency = round( ( microtime( true ) - $start ) * 1000 );
 					if ( is_wp_error( $resp ) ) {
@@ -1341,6 +1383,10 @@ class Exacoat_Core {
 					}
 
 					$body = json_decode( wp_remote_retrieve_body( $resp ), true );
+					if ( isset( $body['error']['message'] ) ) {
+						return rest_ensure_response( [ 'success' => false, 'message' => $body['error']['message'], 'latency_ms' => $latency ] );
+					}
+
 					$text = $body['choices'][0]['message']['content'] ?? '';
 					$parsed = json_decode( trim( $text ), true );
 

@@ -284,19 +284,19 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
 
   const modalHeader = (
     <div className="flex items-center gap-3">
-      <div className="w-10 h-10 rounded-xl bg-[#f3aa18]/10 border border-[#f3aa18]/20 flex items-center justify-center text-[#f3aa18] shrink-0">
-        <Sparkles className="w-5 h-5" />
+      <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-[#f3aa18] shrink-0">
+        <Sparkles className="w-4 h-4" />
       </div>
-      <div>
+      <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
             SEO & Short Description
           </h2>
-          <span className="px-2 py-0.5 text-[10px] font-mono rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+          <span className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700/60 shrink-0">
             #{product.id}
           </span>
         </div>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
           Manage Google search snippet and on-page storefront copy for {product.name}.
         </p>
       </div>
@@ -313,7 +313,7 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
           type="button"
           onClick={onClose}
           disabled={isSaving}
-          className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition disabled:opacity-40 cursor-pointer"
+          className="h-9 px-4 rounded-xl text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition disabled:opacity-40 cursor-pointer"
         >
           Cancel
         </button>
@@ -321,7 +321,7 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
           type="button"
           onClick={handleSave}
           disabled={isSaving || isLoading}
-          className="min-h-[44px] inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold text-neutral-950 bg-[#f3aa18] hover:bg-[#e09b15] transition shadow-md shadow-[#f3aa18]/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          className="h-9 inline-flex items-center gap-2 px-5 rounded-xl text-xs font-semibold text-neutral-950 bg-[#f3aa18] hover:bg-[#e09b15] active:bg-[#d89312] transition shadow-md shadow-[#f3aa18]/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
           {isSaving ? (
             <>
@@ -347,76 +347,81 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
       title={modalHeader}
       footer={modalFooter}
     >
-      <div className="space-y-6">
+      <div className="space-y-5">
         {/* Loading Spinner */}
         {isLoading && (
-          <div className="p-4 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center gap-2 text-xs text-zinc-500">
+          <div className="p-3.5 rounded-xl bg-zinc-100 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center gap-2 text-xs text-zinc-500">
             <Loader2 className="w-4 h-4 animate-spin text-[#f3aa18]" />
             <span>Loading current SEO metadata from WordPress...</span>
           </div>
         )}
 
-        {/* AI Generator Control Bar */}
-        <div className="p-3.5 rounded-2xl bg-[#f3aa18]/10 border border-[#f3aa18]/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-[#f3aa18]" />
-              <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-                AI Differentiation Generator
-              </span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
-                {selectedModel}
-              </span>
+        {/* AI Generator Control Bar - Sleek secondary utility card */}
+        <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-zinc-200/70 dark:bg-zinc-800 border border-zinc-300/50 dark:border-zinc-700/60 flex items-center justify-center shrink-0">
+              <Sparkles className="w-3.5 h-3.5 text-[#f3aa18]" />
             </div>
-            <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
-              Generates distinct, device-tailored copy using Exacoat brand voice and zero em dashes.
-            </p>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200">
+                  AI Copy Generator
+                </span>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-zinc-200/80 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-300/60 dark:border-zinc-700/50">
+                  {selectedModel}
+                </span>
+              </div>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                Generates distinct, device-tailored copy using Exacoat brand voice and zero em dashes.
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Provider Switcher */}
-            <div className="flex items-center p-1 bg-white/70 dark:bg-zinc-900/80 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs">
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+            {/* Compact Segmented Provider Switcher */}
+            <div className="flex items-center p-0.5 bg-zinc-200/70 dark:bg-zinc-800/80 rounded-lg border border-zinc-300/70 dark:border-zinc-700/60 text-xs">
               <button
                 type="button"
                 onClick={() => handleProviderToggle('gemini')}
                 className={clsx(
-                  'min-h-[44px] px-3 py-1.5 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1',
+                  'px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer',
                   selectedProvider === 'gemini'
-                    ? 'bg-[#f3aa18] text-neutral-950 shadow-xs'
-                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+                    ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-xs'
+                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
                 )}
               >
-                <span>Gemini</span>
+                Gemini
               </button>
               <button
                 type="button"
                 onClick={() => handleProviderToggle('openai')}
                 className={clsx(
-                  'min-h-[44px] px-3 py-1.5 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1',
+                  'px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer',
                   selectedProvider === 'openai'
-                    ? 'bg-[#f3aa18] text-neutral-950 shadow-xs'
-                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+                    ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-xs'
+                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
                 )}
               >
-                <span>OpenAI</span>
+                OpenAI
               </button>
             </div>
 
+            {/* Secondary subtle generate button */}
             <button
               type="button"
               onClick={handleGenerateAllWithAi}
               disabled={isGeneratingAi || isSaving}
-              className="min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold transition shadow-xs disabled:opacity-50 cursor-pointer shrink-0"
+              className="h-8 inline-flex items-center justify-center gap-1.5 px-3 rounded-lg bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-100 text-xs font-medium border border-zinc-700/80 dark:border-zinc-700 transition cursor-pointer disabled:opacity-50 shrink-0"
             >
               {isGeneratingAi && activeGeneratingField === 'all' ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Generating Copy...</span>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[#f3aa18]" />
+                  <span>Generating...</span>
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4" />
-                  <span>Generate All with AI</span>
+                  <Sparkles className="w-3.5 h-3.5 text-[#f3aa18]" />
+                  <span>Generate All</span>
                 </>
               )}
             </button>
@@ -424,7 +429,7 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
         </div>
 
         {aiLatencyMs !== null && (
-          <div className="text-[11px] text-emerald-500 flex items-center gap-1.5 -mt-3 pl-1 font-mono">
+          <div className="text-[11px] text-emerald-500 flex items-center gap-1.5 -mt-2 pl-1 font-mono">
             <Check className="w-3.5 h-3.5" />
             <span>
               Generated via {aiModelUsed} in {aiLatencyMs}ms. Review and adjust below before saving.
@@ -433,27 +438,29 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
         )}
 
         {/* Google SERP Snippet Preview */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-              <Globe className="w-3.5 h-3.5 text-blue-400" />
-              <span>Google Search Results Preview (SERP)</span>
-            </div>
-            <span className="text-[10px] text-zinc-400 font-mono">
-              Live Google snippet simulation
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-zinc-500">
+            <span className="font-medium flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300">
+              <Globe className="w-3.5 h-3.5 text-blue-500" />
+              Google Search Snippet Preview
+            </span>
+            <span className="text-[10px] font-mono text-zinc-400">
+              SERP Simulation
             </span>
           </div>
-          <div className="p-4 rounded-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 space-y-1.5 shadow-xs">
-            <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
-              <span className="font-semibold text-zinc-700 dark:text-zinc-300">exacoat.com</span>
+          <div className="p-3.5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 space-y-1 shadow-xs">
+            <div className="flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">exacoat.com</span>
               <span>›</span>
               <span>products</span>
               <span>›</span>
-              <span className="font-mono">{product.slug || 'product-slug'}</span>
+              <span className="font-mono text-zinc-500 dark:text-zinc-400 truncate max-w-[200px]">
+                {product.slug || 'product-slug'}
+              </span>
             </div>
-            <h3 className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer line-clamp-1">
+            <div className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer line-clamp-1">
               {cleanRedundantSeoTitle(seoTitle || buildCanonicalSeoTitle(product.name), product.name)}
-            </h3>
+            </div>
             <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">
               {cleanSeoCopy(
                 seoDesc ||
@@ -470,40 +477,40 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
 
         {/* Boilerplate Template Warning & 1-Click Resolver */}
         {isBoilerplateDetected && (
-          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-200">
-            <div className="flex items-start gap-2.5">
-              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+            <div className="flex items-start gap-2.5 min-w-0">
+              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
               <div>
-                <p className="font-semibold text-amber-300">
+                <p className="font-medium text-amber-800 dark:text-amber-300">
                   Boilerplate Template Tokens Detected
                 </p>
-                <p className="text-[11px] text-amber-200/80 mt-0.5">
-                  This product contains raw HTML tags or template placeholders like <code className="text-amber-300">[product_name]</code> or <code className="text-amber-300">[geturl]</code>.
+                <p className="text-[11px] text-amber-700/80 dark:text-amber-200/70 mt-0.5">
+                  Contains raw HTML tags or template placeholders like <code className="font-mono text-amber-600 dark:text-amber-300">[product_name]</code> or <code className="font-mono text-amber-600 dark:text-amber-300">[geturl]</code>.
                 </p>
               </div>
             </div>
             <button
               type="button"
               onClick={handleResolveBoilerplate}
-              className="min-h-[44px] px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-neutral-950 font-bold text-xs transition cursor-pointer shrink-0 shadow-xs flex items-center justify-center gap-1.5"
+              className="h-8 px-3 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 active:bg-amber-500/30 text-amber-800 dark:text-amber-300 border border-amber-500/30 text-xs font-medium transition cursor-pointer shrink-0 flex items-center justify-center gap-1.5"
             >
               <Wand2 className="w-3.5 h-3.5" />
-              <span>Resolve & Clean Template</span>
+              <span>Resolve Template</span>
             </button>
           </div>
         )}
 
         {/* Field 1: Short Description */}
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <label
               htmlFor="prod-short-desc"
-              className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5"
+              className="text-xs font-medium text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5"
             >
               <FileText className="w-3.5 h-3.5 text-[#f3aa18]" />
               <span>Short Description (On-Page Storefront Summary)</span>
             </label>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               <span className="text-[11px] text-zinc-500 font-mono">
                 {wordCount} words | {shortDesc.length} chars
               </span>
@@ -511,14 +518,14 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
                 type="button"
                 onClick={() => handleRegenerateSingleField('short_desc')}
                 disabled={isGeneratingAi || isSaving}
-                className="min-h-[44px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#f3aa18] bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 border border-[#f3aa18]/30 transition cursor-pointer disabled:opacity-40"
+                className="h-7 inline-flex items-center gap-1 px-2.5 rounded-md text-[11px] font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 border border-zinc-200 dark:border-zinc-700/60 transition cursor-pointer disabled:opacity-40"
               >
                 {activeGeneratingField === 'short_desc' ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <Loader2 className="w-3 h-3 animate-spin text-[#f3aa18]" />
                 ) : (
-                  <RotateCw className="w-3 h-3" />
+                  <RotateCw className="w-3 h-3 text-[#f3aa18]" />
                 )}
-                <span>AI Rewrite</span>
+                <span>Rewrite</span>
               </button>
             </div>
           </div>
@@ -528,7 +535,7 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
             value={shortDesc}
             onChange={(e) => setShortDesc(e.target.value)}
             placeholder="Precision-cut 3M textured vinyl skin providing scratch defense with zero added bulk..."
-            className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-[#f3aa18]/80 leading-relaxed"
+            className="w-full bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 focus:ring-1 focus:ring-zinc-400/20 leading-relaxed"
           />
           <p className="text-[10px] text-zinc-500">
             Displayed on the storefront product page adjacent to the device skin configurator.
@@ -536,16 +543,16 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
         </div>
 
         {/* Field 2: SEO Meta Title */}
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <label
               htmlFor="prod-seo-title"
-              className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5"
+              className="text-xs font-medium text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5"
             >
-              <Search className="w-3.5 h-3.5 text-blue-400" />
+              <Search className="w-3.5 h-3.5 text-blue-500" />
               <span>SEO Meta Title</span>
             </label>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               <span className={clsx('text-[11px] font-mono', getLengthIndicator(seoTitle.length, 40, 60))}>
                 {seoTitle.length}/60 chars (ideal: 45 to 60)
               </span>
@@ -553,14 +560,14 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
                 type="button"
                 onClick={() => handleRegenerateSingleField('seo_title')}
                 disabled={isGeneratingAi || isSaving}
-                className="min-h-[44px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#f3aa18] bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 border border-[#f3aa18]/30 transition cursor-pointer disabled:opacity-40"
+                className="h-7 inline-flex items-center gap-1 px-2.5 rounded-md text-[11px] font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 border border-zinc-200 dark:border-zinc-700/60 transition cursor-pointer disabled:opacity-40"
               >
                 {activeGeneratingField === 'seo_title' ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <Loader2 className="w-3 h-3 animate-spin text-[#f3aa18]" />
                 ) : (
-                  <RotateCw className="w-3 h-3" />
+                  <RotateCw className="w-3 h-3 text-[#f3aa18]" />
                 )}
-                <span>AI Rewrite</span>
+                <span>Rewrite</span>
               </button>
             </div>
           </div>
@@ -570,7 +577,7 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
             value={seoTitle}
             onChange={(e) => setSeoTitle(e.target.value)}
             placeholder="iPhone 16 Pro Max Skin & Wrap | Exacoat"
-            className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-[#f3aa18]/80 font-medium"
+            className="w-full bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 focus:ring-1 focus:ring-zinc-400/20 font-medium"
           />
           <p className="text-[10px] text-zinc-500">
             Primary title used in Google search results and browser tabs. Keep under 60 characters to prevent truncation.
@@ -578,16 +585,16 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
         </div>
 
         {/* Field 3: SEO Meta Description */}
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <label
               htmlFor="prod-seo-desc"
-              className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5"
+              className="text-xs font-medium text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5"
             >
-              <Search className="w-3.5 h-3.5 text-blue-400" />
+              <Search className="w-3.5 h-3.5 text-blue-500" />
               <span>SEO Meta Description</span>
             </label>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               <span className={clsx('text-[11px] font-mono', getLengthIndicator(seoDesc.length, 120, 155))}>
                 {seoDesc.length}/155 chars (ideal: 120 to 155)
               </span>
@@ -595,14 +602,14 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
                 type="button"
                 onClick={() => handleRegenerateSingleField('seo_desc')}
                 disabled={isGeneratingAi || isSaving}
-                className="min-h-[44px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#f3aa18] bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 border border-[#f3aa18]/30 transition cursor-pointer disabled:opacity-40"
+                className="h-7 inline-flex items-center gap-1 px-2.5 rounded-md text-[11px] font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 border border-zinc-200 dark:border-zinc-700/60 transition cursor-pointer disabled:opacity-40"
               >
                 {activeGeneratingField === 'seo_desc' ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <Loader2 className="w-3 h-3 animate-spin text-[#f3aa18]" />
                 ) : (
-                  <RotateCw className="w-3 h-3" />
+                  <RotateCw className="w-3 h-3 text-[#f3aa18]" />
                 )}
-                <span>AI Rewrite</span>
+                <span>Rewrite</span>
               </button>
             </div>
           </div>
@@ -612,7 +619,7 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
             value={seoDesc}
             onChange={(e) => setSeoDesc(e.target.value)}
             placeholder="Protect your device with precision-engineered 3M textured skins. Scratch defense without bulk, laser-measured fit, and residue-free removal."
-            className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-[#f3aa18]/80 leading-relaxed"
+            className="w-full bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 focus:ring-1 focus:ring-zinc-400/20 leading-relaxed"
           />
           <p className="text-[10px] text-zinc-500">
             Summary snippet displayed under the blue title link on Google. Keep between 120 and 155 characters.
@@ -620,12 +627,12 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
         </div>
 
         {/* Field 4: Focus Keyword */}
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <label
             htmlFor="prod-focus-kw"
-            className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5"
+            className="text-xs font-medium text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5"
           >
-            <Key className="w-3.5 h-3.5 text-amber-400" />
+            <Key className="w-3.5 h-3.5 text-amber-500" />
             <span>Focus Search Keyword</span>
           </label>
           <input
@@ -634,7 +641,7 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
             value={focusKeyword}
             onChange={(e) => setFocusKeyword(e.target.value)}
             placeholder="e.g. iPhone 16 Pro Max skin"
-            className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-[#f3aa18]/80"
+            className="w-full bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 focus:ring-1 focus:ring-zinc-400/20"
           />
           <p className="text-[10px] text-zinc-500">
             Target search query used by Yoast SEO and Rank Math content analysis algorithms.

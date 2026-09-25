@@ -1428,21 +1428,46 @@ export async function generateFandomDescriptionAi(
     const openAiModel = model || getCachedPluginSettings().openai_model || 'gpt-4o-mini';
     if (openAiKey) {
       try {
-        const res = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${openAiKey}`,
-          },
-          body: JSON.stringify({
+        const isReasoningOrGpt5 = /^(o[0-9]|gpt-5)/i.test(openAiModel.replace(/^openai\//, '').trim());
+        const getRequestBody = (withTemperature: boolean) => {
+          const body: Record<string, any> = {
             model: openAiModel,
             messages: [
               { role: 'system', content: prompt },
               { role: 'user', content: `Collection or theme name: "${fandomName}"` },
             ],
-            temperature: 0.7,
-          }),
+          };
+          if (withTemperature && !isReasoningOrGpt5) {
+            body.temperature = 0.7;
+          }
+          return JSON.stringify(body);
+        };
+
+        let res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${openAiKey}`,
+          },
+          body: getRequestBody(true),
         });
+
+        // If rejected due to temperature parameter with reasoning or new models, retry without temperature
+        if (!res.ok) {
+          const errClone = await res.clone().json().catch(() => ({}));
+          const errMsg = errClone?.error?.message || '';
+          if (/temperature/i.test(errMsg)) {
+            res = await fetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${openAiKey}`,
+              },
+              body: getRequestBody(false),
+            });
+          }
+        }
+
         const latency = Math.round(performance.now() - start);
         if (res.ok) {
           const data = await res.json();
@@ -6078,19 +6103,44 @@ Return ONLY a valid JSON object with the following four keys (no markdown format
     const openAiModel = model || 'gpt-4o-mini';
     if (openAiKey) {
       try {
-        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        const isReasoningOrGpt5 = /^(o[0-9]|gpt-5)/i.test(openAiModel.replace(/^openai\//, '').trim());
+        const getRequestBody = (withTemperature: boolean) => {
+          const body: Record<string, any> = {
+            model: openAiModel,
+            messages: [{ role: 'user', content: systemPrompt }],
+            response_format: { type: 'json_object' },
+          };
+          if (withTemperature && !isReasoningOrGpt5) {
+            body.temperature = 0.7;
+          }
+          return JSON.stringify(body);
+        };
+
+        let res = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: 'Bearer ' + openAiKey,
           },
-          body: JSON.stringify({
-            model: openAiModel,
-            messages: [{ role: 'user', content: systemPrompt }],
-            response_format: { type: 'json_object' },
-            temperature: 0.7,
-          }),
+          body: getRequestBody(true),
         });
+
+        // If rejected due to temperature parameter with reasoning or new models, retry without temperature
+        if (!res.ok) {
+          const errClone = await res.clone().json().catch(() => ({}));
+          const errMsg = errClone?.error?.message || '';
+          if (/temperature/i.test(errMsg)) {
+            res = await fetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: 'Bearer ' + openAiKey,
+              },
+              body: getRequestBody(false),
+            });
+          }
+        }
+
         const latency = Math.round(performance.now() - start);
         if (res.ok) {
           const jsonResp = await res.json();

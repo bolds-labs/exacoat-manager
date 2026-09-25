@@ -1345,6 +1345,13 @@ class Exacoat_Shopee_Client {
 			'callback'            => [ __CLASS__, 'rest_delete_product' ],
 			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
 		]);
+
+		// 19. POST /shopee/product/inject-images
+		register_rest_route( $ns, '/shopee/product/inject-images', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_inject_product_images' ],
+			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+		]);
 	}
 
 	public static function check_admin_permission( ?\WP_REST_Request $request = null ): bool {
@@ -3009,6 +3016,214 @@ class Exacoat_Shopee_Client {
 			'item_id' => $item_id,
 			'message' => 'Product listing removed successfully from Shopee.',
 		], 200 );
+	}
+
+	/**
+	 * REST Endpoint: Non-destructively inject cover image and variation pictures into Shopee listing
+	 */
+	public static function rest_inject_product_images( \WP_REST_Request $request ): \WP_REST_Response {
+		@set_time_limit( 120 );
+		$body = $request->get_json_params() ?: [];
+
+		$item_id = (int) ( $body['item_id'] ?? 0 );
+		$cover_image_id = trim( (string) ( $body['cover_image_id'] ?? '' ) );
+		$variant_images = (array) ( $body['variant_images'] ?? [] );
+
+		if ( empty( $item_id ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => 'A valid Shopee Item ID is required.',
+			], 400 );
+		}
+
+		if ( empty( $cover_image_id ) && empty( $variant_images ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => 'At least one cover_image_id or variant_images must be provided.',
+			], 400 );
+		}
+
+		$cover_updated = false;
+		$gallery_preserved_count = 0;
+		$variants_updated = 0;
+		$errors = [];
+
+		// 1. Fetch current item info to read existing images non-destructively
+		$base_res = self::call_shop_api( '/api/v2/product/get_item_base_info', 'GET', [
+			'item_id_list' => (string) $item_id,
+		]);
+
+		if ( ! $base_res['success'] || empty( $base_res['response']['item_list'][0] ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => 'Could not fetch current product info from Shopee API.',
+				'message' => $base_res['message'] ?? '',
+			], 400 );
+		}
+
+		$src = $base_res['response']['item_list'][0];
+		$existing_image_ids = $src['image']['image_id_list'] ?? [];
+
+		// 2. Non-destructively update primary cover image (index 0) while preserving existing gallery images (indices 1..8)
+		if ( ! empty( $cover_image_id ) ) {
+			$new_image_ids = [ $cover_image_id ];
+
+			// Preserve existing gallery images (skipping the old primary image at index 0)
+			if ( is_array( $existing_image_ids ) ) {
+				for ( $i = 1; $i < count( $existing_image_ids ); $i++ ) {
+					$existing_id = (string) $existing_image_ids[$i];
+					if ( ! empty( $existing_id ) && $existing_id !== $cover_image_id && ! in_array( $existing_id, $new_image_ids, true ) ) {
+						$new_image_ids[] = $existing_id;
+						$gallery_preserved_count++;
+					}
+				}
+			}
+
+			// Shopee allows maximum 9 images per product
+			$new_image_ids = array_slice( $new_image_ids, 0, 9 );
+
+			$update_item_res = self::call_shop_api( '/api/v2/product/update_item', 'POST', [], [
+				'item_id' => $item_id,
+				'image'   => [
+					'image_id_list' => $new_image_ids,
+				],
+			]);
+
+			if ( $update_item_res['success'] ) {
+				$cover_updated = true;
+			} else {
+				$err_msg = $update_item_res['message'] ?? $update_item_res['error'] ?? 'Failed to update cover image.';
+				$errors[] = 'Cover update: ' . $err_msg;
+				if ( class_exists( 'Exacoat_Logger' ) ) {
+					Exacoat_Logger::log( 'error', 'shopee_inject_images', 'update_item image failed: ' . $err_msg, [
+						'item_id' => $item_id,
+						'payload' => $new_image_ids,
+						'res'     => $update_item_res,
+					]);
+				}
+			}
+		}
+
+		// 3. Update variation pictures via /api/v2/product/update_tier_variation
+		if ( ! empty( $variant_images ) ) {
+			// Fetch model list to retrieve existing tier variation structure
+			$model_res = self::call_shop_api( '/api/v2/product/get_model_list', 'GET', [
+				'item_id' => $item_id,
+			]);
+
+			if ( $model_res['success'] && ! empty( $model_res['response']['tier_variation'] ) ) {
+				$tier_variations = $model_res['response']['tier_variation'];
+
+				// Build lookup map for incoming variant images (case-insensitive trimmed)
+				$var_map = [];
+				foreach ( $variant_images as $vi ) {
+					$opt_name = strtolower( trim( (string) ( $vi['option'] ?? '' ) ) );
+					$img_id = trim( (string) ( $vi['image_id'] ?? '' ) );
+					if ( ! empty( $opt_name ) && ! empty( $img_id ) ) {
+						$var_map[ $opt_name ] = $img_id;
+					}
+				}
+
+				// Build clean tier variation payload
+				$updated_tier_variation = [];
+				foreach ( $tier_variations as $tier_idx => $tv ) {
+					$raw_opts = $tv['option_list'] ?? $tv['options'] ?? [];
+					$opts = [];
+					foreach ( $raw_opts as $opt_entry ) {
+						$opt_name = is_array( $opt_entry ) ? ( $opt_entry['option'] ?? '' ) : (string) $opt_entry;
+						if ( empty( $opt_name ) ) {
+							continue;
+						}
+						$clean_opt = [
+							'option' => (string) $opt_name,
+						];
+
+						// Only the first tier (tier_idx 0) supports images in Shopee
+						if ( $tier_idx === 0 ) {
+							$lookup_key = strtolower( trim( $opt_name ) );
+							if ( isset( $var_map[ $lookup_key ] ) ) {
+								$clean_opt['image'] = [
+									'image_id' => $var_map[ $lookup_key ],
+								];
+								$variants_updated++;
+							} elseif ( ! empty( $opt_entry['image']['image_id'] ) ) {
+								// Preserve existing image if no replacement provided
+								$clean_opt['image'] = [
+									'image_id' => (string) $opt_entry['image']['image_id'],
+								];
+							}
+						}
+
+						$opts[] = $clean_opt;
+					}
+
+					if ( ! empty( $opts ) ) {
+						$updated_tier_variation[] = [
+							'name'        => (string) ( $tv['name'] ?? 'Varian' ),
+							'option_list' => $opts,
+						];
+					}
+				}
+
+				if ( ! empty( $updated_tier_variation ) && $variants_updated > 0 ) {
+					$update_var_res = self::call_shop_api( '/api/v2/product/update_tier_variation', 'POST', [], [
+						'item_id'        => $item_id,
+						'tier_variation' => $updated_tier_variation,
+					]);
+
+					if ( ! $update_var_res['success'] ) {
+						// Retry once after 2 seconds
+						sleep( 2 );
+						$update_var_res = self::call_shop_api( '/api/v2/product/update_tier_variation', 'POST', [], [
+							'item_id'        => $item_id,
+							'tier_variation' => $updated_tier_variation,
+						]);
+					}
+
+					if ( ! $update_var_res['success'] ) {
+						$err_msg = $update_var_res['message'] ?? $update_var_res['error'] ?? 'Failed to update tier variation images.';
+						$errors[] = 'Variation update: ' . $err_msg;
+						if ( class_exists( 'Exacoat_Logger' ) ) {
+							Exacoat_Logger::log( 'error', 'shopee_inject_images', 'update_tier_variation images failed: ' . $err_msg, [
+								'item_id' => $item_id,
+								'res'     => $update_var_res,
+							]);
+						}
+					}
+				}
+			} else {
+				$errors[] = 'No tier variations found on listing to update.';
+			}
+		}
+
+		$all_success = empty( $errors );
+
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log(
+				$all_success ? 'info' : 'warning',
+				'shopee_inject_images',
+				sprintf( 'Image injection on Shopee #%d: cover=%s, gallery_kept=%d, variants=%d, errors=%s',
+					$item_id,
+					$cover_updated ? 'yes' : 'no',
+					$gallery_preserved_count,
+					$variants_updated,
+					! empty( $errors ) ? implode( '; ', $errors ) : 'none'
+				)
+			);
+		}
+
+		return new \WP_REST_Response([
+			'success'                 => $all_success || $cover_updated || $variants_updated > 0,
+			'item_id'                 => $item_id,
+			'cover_updated'           => $cover_updated,
+			'gallery_preserved_count' => $gallery_preserved_count,
+			'variants_updated'        => $variants_updated,
+			'seller_centre_url'       => "https://seller.shopee.co.id/portal/product/{$item_id}",
+			'errors'                  => $errors,
+			'message'                 => $all_success
+				? sprintf( 'Successfully injected images: cover updated, %d variants updated, %d gallery images preserved.', $variants_updated, $gallery_preserved_count )
+				: implode( '; ', $errors ),
+		], $all_success ? 200 : 207 );
 	}
 }
 
