@@ -41,6 +41,14 @@ if ( ! defined( 'CLOUDFLARE_TURNSTILE_SECRET_KEY' ) ) {
 	define( 'CLOUDFLARE_TURNSTILE_SECRET_KEY', '0x4AAAAAAFEWy0Xbv1s9RUfqSE0O896viQY' );
 }
 
+// SliceWP REST API Credentials for historical migration
+if ( ! defined( 'EXACOAT_SLICEWP_CONSUMER_KEY' ) ) {
+	define( 'EXACOAT_SLICEWP_CONSUMER_KEY', 'ck_tzL8mw8a3BI1y2ypr2x7D6lnsmkkof' );
+}
+if ( ! defined( 'EXACOAT_SLICEWP_CONSUMER_SECRET' ) ) {
+	define( 'EXACOAT_SLICEWP_CONSUMER_SECRET', 'cs_fbqylIFi6Zi29Zmnmir8km2wv4mJRb' );
+}
+
 // Safety Fallbacks for legacy/forked constant references to prevent fatal undefined constant crashes
 if ( ! defined( 'ARTMATTER_CORE_VERSION' ) ) {
 	define( 'ARTMATTER_CORE_VERSION', EXACOAT_CORE_VERSION );
