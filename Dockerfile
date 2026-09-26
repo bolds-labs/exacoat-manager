@@ -40,10 +40,10 @@ COPY --from=build /app/dist /usr/share/nginx/html
 
 # Copy and setup entrypoint script for dynamic runtime env-config.js generation
 COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+RUN sed -i 's/\r$//' /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
 
-# Expose HTTP port for Traefik
-EXPOSE 80
+# Expose both HTTP ports (80 and 3000) for Dokploy and Traefik
+EXPOSE 80 3000
 
 # Execute dynamic runtime configuration generator before launching Nginx
 ENTRYPOINT ["/docker-entrypoint.sh"]
