@@ -244,9 +244,9 @@ class Exacoat_Affiliate_Manager {
 			update_option( 'exacoat_affiliate_db_version', '1.3.0' );
 
 			// One-time auto-recalculation and creator setups on plugin update
-			if ( ! get_option( 'exacoat_affiliate_recalc_v90', false ) ) {
+			if ( ! get_option( 'exacoat_affiliate_recalc_v96', false ) ) {
 				self::recalculate_all_balances();
-				update_option( 'exacoat_affiliate_recalc_v90', 1 );
+				update_option( 'exacoat_affiliate_recalc_v96', 1 );
 			}
 		} catch ( \Throwable $e ) {
 			if ( class_exists( 'Exacoat_Logger' ) ) {
@@ -1936,14 +1936,58 @@ class Exacoat_Affiliate_Manager {
 			OBJECT_K
 		);
 
-		$all_dates = array_unique( array_merge( array_keys( $daily_clicks ?: [] ), array_keys( $daily_commissions ?: [] ) ) );
+		// Query daily clicks from SliceWP visits table if available for legacy history
+		$slicewp_legacy_id = (int) get_user_meta( $user_id, '_slicewp_legacy_affiliate_id', true );
+		if ( ! $slicewp_legacy_id ) {
+			if ( 'edwinyg' === $affiliate->slug ) {
+				$slicewp_legacy_id = 1133;
+			} elseif ( 'ds' === $affiliate->slug ) {
+				$slicewp_legacy_id = 1135;
+			} elseif ( 'suns' === $affiliate->slug ) {
+				$slicewp_legacy_id = 1140;
+			} elseif ( 'putra' === $affiliate->slug ) {
+				$slicewp_legacy_id = 1141;
+			} elseif ( 'msbn' === $affiliate->slug ) {
+				$slicewp_legacy_id = 1142;
+			}
+		}
+
+		$s_visits_by_date = [];
+		if ( $slicewp_legacy_id > 0 ) {
+			$all_v_tables = $wpdb->get_col( "SHOW TABLES LIKE '%slicewp_visits%'" );
+			if ( ! empty( $all_v_tables ) ) {
+				$v_tbl = current( $all_v_tables );
+				$s_raw_v = $wpdb->get_results(
+					$wpdb->prepare(
+						"SELECT DATE(date_created) as stat_date, COUNT(*) as visit_count 
+						FROM {$v_tbl} 
+						WHERE affiliate_id = %d 
+						GROUP BY DATE(date_created)",
+						$slicewp_legacy_id
+					),
+					OBJECT_K
+				);
+				if ( ! empty( $s_raw_v ) ) {
+					$s_visits_by_date = $s_raw_v;
+				}
+			}
+		}
+
+		$all_dates = array_unique( array_merge( 
+			array_keys( $daily_clicks ?: [] ), 
+			array_keys( $daily_commissions ?: [] ),
+			array_keys( $s_visits_by_date ?: [] )
+		) );
 		sort( $all_dates );
 
 		$daily_stats = [];
 		foreach ( $all_dates as $d ) {
-			$v = isset( $daily_clicks[ $d ] ) ? (int) $daily_clicks[ $d ]->visit_count : 0;
-			$o = isset( $daily_commissions[ $d ] ) ? (int) $daily_commissions[ $d ]->order_count : 0;
-			$e = isset( $daily_commissions[ $d ] ) ? (float) $daily_commissions[ $d ]->total_earnings : 0.0;
+			$v1 = isset( $daily_clicks[ $d ] ) ? (int) $daily_clicks[ $d ]->visit_count : 0;
+			$v2 = isset( $s_visits_by_date[ $d ] ) ? (int) $s_visits_by_date[ $d ]->visit_count : 0;
+			$o  = isset( $daily_commissions[ $d ] ) ? (int) $daily_commissions[ $d ]->order_count : 0;
+			$e  = isset( $daily_commissions[ $d ] ) ? (float) $daily_commissions[ $d ]->total_earnings : 0.0;
+			// A sale cannot happen without at least 1 visit
+			$v  = max( $v1, $v2, $o );
 			$daily_stats[] = [
 				'date'     => $d,
 				'visits'   => $v,
@@ -2078,6 +2122,35 @@ class Exacoat_Affiliate_Manager {
 			$formats[]              = '%s';
 			$updates['slug_locked'] = 1;
 			$formats[]              = '%d';
+		}
+
+		if ( isset( $params['discount_rate'] ) && '' !== $params['discount_rate'] ) {
+			$raw_discount = round( (float) $params['discount_rate'], 2 );
+			$curr_comm    = ! empty( $affiliate->commission_rate ) ? (float) $affiliate->commission_rate : self::get_commission_rate();
+			$curr_disc    = ! empty( $affiliate->discount_rate ) ? (float) $affiliate->discount_rate : 10.00;
+			$total_pool   = max( 20.00, round( $curr_comm + $curr_disc, 2 ) );
+
+			// Clamp discount rate between 0 and total pool
+			$new_discount   = max( 0.00, min( $total_pool, $raw_discount ) );
+			$new_commission = max( 0.00, round( $total_pool - $new_discount, 2 ) );
+
+			$updates['discount_rate']   = $new_discount;
+			$formats[]                  = '%f';
+			$updates['commission_rate'] = $new_commission;
+			$formats[]                  = '%f';
+
+			// If affiliate has a legacy coupon code, update WooCommerce coupon amount to match
+			if ( ! empty( $affiliate->coupon_code ) && class_exists( 'WC_Coupon' ) ) {
+				try {
+					$c_obj = new \WC_Coupon( $affiliate->coupon_code );
+					if ( $c_obj && $c_obj->get_id() ) {
+						$c_obj->set_amount( $new_discount );
+						$c_obj->save();
+					}
+				} catch ( \Throwable $e ) {
+					// Graceful fallback
+				}
+			}
 		}
 
 		if ( empty( $updates ) ) {
@@ -3229,14 +3302,15 @@ class Exacoat_Affiliate_Manager {
 				$order_subtotal = self::convert_amount_to_idr( $order_subtotal, $comm_curr, $order ?: $order_id );
 				$rate           = ( $order_subtotal > 0 && $comm_amount > 0 ) ? round( ( $comm_amount / $order_subtotal ) * 100, 2 ) : self::get_commission_rate();
 
-				$raw_status = strtolower( trim( (string) ( $sc['status'] ?? 'unpaid' ) ) );
+				$raw_status  = strtolower( trim( (string) ( $sc['status'] ?? 'unpaid' ) ) );
+				$has_payment = ( ! empty( $sc['payment_id'] ) && (int) $sc['payment_id'] > 0 ) || ( ! empty( $sc['payout_id'] ) && (int) $sc['payout_id'] > 0 );
 				// Strictly exclude all SliceWP pending commissions and mistake order 521383
 				if ( 'pending' === $raw_status || $order_id === 521383 || (string) $order_num === '521383' ) {
 					continue;
 				}
 				if ( in_array( $raw_status, [ 'rejected', 'void', 'refunded', 'cancelled', 'trash' ], true ) ) {
 					$status = 'rejected';
-				} elseif ( 'paid' === $raw_status ) {
+				} elseif ( 'paid' === $raw_status || $has_payment ) {
 					$status = 'paid';
 				} else {
 					$status = 'unpaid';
@@ -3605,13 +3679,14 @@ class Exacoat_Affiliate_Manager {
 					$rate           = ( $order_subtotal > 0 && $comm_amount > 0 ) ? round( ( $comm_amount / $order_subtotal ) * 100, 2 ) : self::get_commission_rate();
 
 					$raw_status  = strtolower( trim( (string) ( $sc->status ?? 'unpaid' ) ) );
+					$has_payment = ( ! empty( $sc->payment_id ) && (int) $sc->payment_id > 0 ) || ( ! empty( $sc->payout_id ) && (int) $sc->payout_id > 0 );
 					// Strictly exclude all SliceWP pending commissions and mistake order 521383
 					if ( 'pending' === $raw_status || $order_id === 521383 || (string) $order_num === '521383' ) {
 						continue;
 					}
 					if ( in_array( $raw_status, [ 'rejected', 'void', 'refunded', 'cancelled', 'trash' ], true ) ) {
 						$status = 'rejected';
-					} elseif ( 'paid' === $raw_status ) {
+					} elseif ( 'paid' === $raw_status || $has_payment ) {
 						$status = 'paid';
 					} else {
 						$status = 'unpaid';
@@ -3700,12 +3775,19 @@ class Exacoat_Affiliate_Manager {
 					}
 				}
 
-				// Bulk insert recent visits into click log (up to 5,000 recent visits) using batch multi-row INSERT IGNORE
-				$recent_visits = $wpdb->get_results( "SELECT * FROM {$visits_table} ORDER BY id DESC LIMIT 5000" );
-				if ( ! empty( $recent_visits ) ) {
+				// Bulk insert ALL SliceWP visits into click log in fast chunks of 1,000 rows
+				$total_v = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$visits_table}" );
+				$chunk_size = 1000;
+				for ( $offset = 0; $offset < $total_v; $offset += $chunk_size ) {
+					$chunk_visits = $wpdb->get_results(
+						$wpdb->prepare( "SELECT affiliate_id, url, referrer, ip_address, date_created FROM {$visits_table} ORDER BY id ASC LIMIT %d OFFSET %d", $chunk_size, $offset )
+					);
+					if ( empty( $chunk_visits ) ) {
+						break;
+					}
 					$batch_values = [];
 					$batch_params = [];
-					foreach ( $recent_visits as $sv ) {
+					foreach ( $chunk_visits as $sv ) {
 						$slicewp_aff_id = (int) ( $sv->affiliate_id ?? 0 );
 						$exacoat_aff_id = $affiliate_id_map[ $slicewp_aff_id ] ?? 0;
 						if ( ! $exacoat_aff_id && $aff_table ) {
@@ -3829,13 +3911,40 @@ class Exacoat_Affiliate_Manager {
 							$comm_ids = array_filter( array_map( 'intval', explode( ',', (string) $sp->commission_ids ) ) );
 							if ( ! empty( $comm_ids ) ) {
 								$in_sql = implode( ',', $comm_ids );
-								$wpdb->query(
-									"UPDATE {$table_exacoat_commissions} 
-									 SET status = 'paid', payout_id = {$existing_payout_id} 
-									 WHERE affiliate_id = {$exacoat_aff_id} 
-									   AND status != 'rejected' 
-									   AND id IN ({$in_sql})"
-								);
+								// Look up order references from SliceWP commissions table
+								$order_ids = [];
+								if ( $comm_table ) {
+									$refs = $wpdb->get_col( "SELECT reference FROM {$comm_table} WHERE id IN ({$in_sql})" );
+									if ( ! empty( $refs ) ) {
+										$order_ids = array_filter( array_map( function( $ref ) {
+											return (int) preg_replace( '/[^0-9]/', '', (string) $ref );
+										}, $refs ) );
+									}
+								}
+								if ( ! empty( $order_ids ) ) {
+									$orders_in_sql = implode( ',', $order_ids );
+									$wpdb->query(
+										"UPDATE {$table_exacoat_commissions} 
+										 SET status = 'paid', payout_id = {$existing_payout_id} 
+										 WHERE affiliate_id = {$exacoat_aff_id} 
+										   AND status != 'rejected' 
+										   AND order_id IN ({$orders_in_sql})"
+									);
+								} else {
+									// Fallback: settle commissions created at or before payment date
+									$wpdb->query(
+										$wpdb->prepare(
+											"UPDATE {$table_exacoat_commissions} 
+											 SET status = 'paid', payout_id = %d 
+											 WHERE affiliate_id = %d 
+											   AND status = 'unpaid' 
+											   AND created_at <= %s",
+											$existing_payout_id,
+											$exacoat_aff_id,
+											$paid_at
+										)
+									);
+								}
 							}
 						}
 					}
@@ -3938,7 +4047,7 @@ class Exacoat_Affiliate_Manager {
 				}
 			}
 
-			// 0c. Sync true visit counts directly from SliceWP visits table
+			// 0c. Sync true visit counts directly from SliceWP visits table and backfill click log
 			$all_v_tables = $wpdb->get_col( "SHOW TABLES LIKE '%slicewp_visits%'" );
 			if ( ! empty( $all_v_tables ) ) {
 				$v_tbl = current( $all_v_tables );
@@ -3960,6 +4069,12 @@ class Exacoat_Affiliate_Manager {
 							$ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'edwinyg' LIMIT 1" );
 						} elseif ( ! $ex_id && 1135 === $s_id ) {
 							$ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'ds' LIMIT 1" );
+						} elseif ( ! $ex_id && 1140 === $s_id ) {
+							$ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'suns' LIMIT 1" );
+						} elseif ( ! $ex_id && 1141 === $s_id ) {
+							$ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'putra' LIMIT 1" );
+						} elseif ( ! $ex_id && 1142 === $s_id ) {
+							$ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'msbn' LIMIT 1" );
 						}
 						if ( $ex_id ) {
 							$wpdb->query(
@@ -3969,6 +4084,56 @@ class Exacoat_Affiliate_Manager {
 									$ex_id
 								)
 							);
+						}
+					}
+				}
+
+				// Check if click log needs backfill from SliceWP visits
+				$existing_clicks_count = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table_clicks}" );
+				$total_slicewp_visits  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$v_tbl}" );
+				if ( $existing_clicks_count < ( $total_slicewp_visits * 0.9 ) ) {
+					$chunk_size = 1000;
+					for ( $offset = 0; $offset < $total_slicewp_visits; $offset += $chunk_size ) {
+						$chunk_visits = $wpdb->get_results(
+							$wpdb->prepare( "SELECT affiliate_id, url, referrer, ip_address, date_created FROM {$v_tbl} ORDER BY id ASC LIMIT %d OFFSET %d", $chunk_size, $offset )
+						);
+						if ( empty( $chunk_visits ) ) break;
+						$batch_values = [];
+						$batch_params = [];
+						foreach ( $chunk_visits as $sv ) {
+							$s_id = (int) ( $sv->affiliate_id ?? 0 );
+							$ex_id = (int) $wpdb->get_var(
+								$wpdb->prepare(
+									"SELECT a.id FROM {$table_affiliates} a 
+									 INNER JOIN {$wpdb->usermeta} um ON a.user_id = um.user_id 
+									 WHERE um.meta_key = '_slicewp_legacy_affiliate_id' AND um.meta_value = %s LIMIT 1",
+									(string) $s_id
+								)
+							);
+							if ( ! $ex_id && 1133 === $s_id ) $ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'edwinyg' LIMIT 1" );
+							elseif ( ! $ex_id && 1135 === $s_id ) $ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'ds' LIMIT 1" );
+							elseif ( ! $ex_id && 1140 === $s_id ) $ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'suns' LIMIT 1" );
+							elseif ( ! $ex_id && 1141 === $s_id ) $ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'putra' LIMIT 1" );
+							elseif ( ! $ex_id && 1142 === $s_id ) $ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'msbn' LIMIT 1" );
+							if ( ! $ex_id ) continue;
+
+							$batch_values[] = '(%d, %s, %s, %s, %s)';
+							$batch_params[] = $ex_id;
+							$batch_params[] = $sv->url ?? '/';
+							$batch_params[] = $sv->referrer ?? '';
+							$batch_params[] = $sv->ip_address ?? '';
+							$batch_params[] = ! empty( $sv->date_created ) ? $sv->date_created : current_time( 'mysql' );
+
+							if ( count( $batch_values ) >= 250 ) {
+								$sql = "INSERT IGNORE INTO {$table_clicks} (affiliate_id, landing_url, referrer_url, ip_address, created_at) VALUES " . implode( ',', $batch_values );
+								$wpdb->query( $wpdb->prepare( $sql, ...$batch_params ) );
+								$batch_values = [];
+								$batch_params = [];
+							}
+						}
+						if ( ! empty( $batch_values ) ) {
+							$sql = "INSERT IGNORE INTO {$table_clicks} (affiliate_id, landing_url, referrer_url, ip_address, created_at) VALUES " . implode( ',', $batch_values );
+							$wpdb->query( $wpdb->prepare( $sql, ...$batch_params ) );
 						}
 					}
 				}
@@ -4358,7 +4523,7 @@ class Exacoat_Affiliate_Manager {
 			);
 		}
 
-		// Also check order 540964 if not present (amount 25515.00, order subtotal 102670.00, date 2026-04-12 11:32:02)
+		// Historical commission for order 540964 was already paid in past SliceWP payouts
 		$existing_comm2 = $wpdb->get_row(
 			$wpdb->prepare(
 				"SELECT id FROM {$table_commissions} WHERE order_id = 540964 OR order_number = '540964' LIMIT 1"
@@ -4376,7 +4541,7 @@ class Exacoat_Affiliate_Manager {
 					'commission_rate'   => 24.85,
 					'commission_amount' => 25515.00,
 					'coupon_code'       => 'ds10',
-					'status'            => 'unpaid',
+					'status'            => 'paid',
 					'created_at'        => '2026-04-12 11:32:02',
 				],
 				[ 'id' => (int) $existing_comm2->id ]
@@ -4392,12 +4557,26 @@ class Exacoat_Affiliate_Manager {
 					'commission_rate'   => 24.85,
 					'commission_amount' => 25515.00,
 					'coupon_code'       => 'ds10',
-					'status'            => 'unpaid',
+					'status'            => 'paid',
 					'customer_email'    => $user_email,
 					'created_at'        => '2026-04-12 11:32:02',
 				]
 			);
 		}
+
+		// Settle historical commissions prior to order 542238 so only recent balance is unpaid
+		$wpdb->query(
+			$wpdb->prepare(
+				"UPDATE {$table_commissions} 
+				 SET status = 'paid' 
+				 WHERE affiliate_id = %d 
+				   AND order_id != 542238 
+				   AND order_number != '542238' 
+				   AND status = 'unpaid' 
+				   AND created_at < '2026-09-01'",
+				$dimas_aff_id
+			)
+		);
 
 		// Populate true destination account for Dimas Sampurno
 		$dimas_dst = self::get_slicewp_payout_destination( 1135, $user_id );
@@ -5021,13 +5200,42 @@ class Exacoat_Affiliate_Manager {
 				$comm_ids = array_filter( array_map( 'intval', explode( ',', (string) $sp['commission_ids'] ) ) );
 				if ( ! empty( $comm_ids ) ) {
 					$in_sql = implode( ',', $comm_ids );
-					$wpdb->query(
-						"UPDATE {$table_commissions} 
-						 SET status = 'paid', payout_id = {$new_payout_id} 
-						 WHERE affiliate_id = {$exacoat_aff_id} 
-						   AND (status != 'rejected') 
-						   AND id IN ({$in_sql})"
-					);
+					// Look up order references from SliceWP commissions table
+					$comm_tbls = $wpdb->get_col( "SHOW TABLES LIKE '%slicewp_commissions%'" );
+					$order_ids = [];
+					if ( ! empty( $comm_tbls ) ) {
+						$c_tbl = current( $comm_tbls );
+						$refs  = $wpdb->get_col( "SELECT reference FROM {$c_tbl} WHERE id IN ({$in_sql})" );
+						if ( ! empty( $refs ) ) {
+							$order_ids = array_filter( array_map( function( $ref ) {
+								return (int) preg_replace( '/[^0-9]/', '', (string) $ref );
+							}, $refs ) );
+						}
+					}
+					if ( ! empty( $order_ids ) ) {
+						$orders_in_sql = implode( ',', $order_ids );
+						$wpdb->query(
+							"UPDATE {$table_commissions} 
+							 SET status = 'paid', payout_id = {$new_payout_id} 
+							 WHERE affiliate_id = {$exacoat_aff_id} 
+							   AND (status != 'rejected') 
+							   AND order_id IN ({$orders_in_sql})"
+						);
+					} else {
+						// Fallback: settle commissions created at or before payout date
+						$wpdb->query(
+							$wpdb->prepare(
+								"UPDATE {$table_commissions} 
+								 SET status = 'paid', payout_id = %d 
+								 WHERE affiliate_id = %d 
+								   AND status = 'unpaid' 
+								   AND created_at <= %s",
+								$new_payout_id,
+								$exacoat_aff_id,
+								$paid_at
+							)
+						);
+					}
 				}
 			}
 		}

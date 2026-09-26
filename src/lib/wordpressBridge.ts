@@ -6458,7 +6458,7 @@ Strict Guardrails:
 - Never mention 3M or vinyl brand names.
 - Never sound like a spec sheet or installation guide.
 - Strictly NO exclamation marks (!).
-- Strictly NO em dashes (—) or en dashes (–) or double hyphens (--). Use commas or periods.
+- Strictly NO em dashes (\u2014) or en dashes (\u2013) or double hyphens (--). Use commas or periods.
 - Strictly NO generic AI buzzwords ("elevate", "revolutionary", "game-changer", "ultimate armor", "unparalleled", "seamless").
 - Ensure proper punctuation and clean apostrophes (e.g. write "${cleanDevice}'s", never place commas or dashes before apostrophes).
 
@@ -6479,7 +6479,7 @@ Return ONLY a valid JSON object with the following four keys (no markdown format
       .replace(/\?s\b/g, "'s")
       .replace(/,\s*'s\b/g, "'s")
       .replace(/!+/g, '.')
-      .replace(/[—–]/g, ', ')
+      .replace(/[\u2013\u2014]/g, ', ')
       .replace(/--/g, ', ')
       .replace(/,\s*,+/g, ',')
       .replace(/\s+,/g, ',')
@@ -6491,7 +6491,7 @@ Return ONLY a valid JSON object with the following four keys (no markdown format
   const parseAiJson = (rawText: string): ProductSeoGeneratedData | null => {
     if (!rawText || !rawText.trim()) return null;
     let clean = rawText.replace(/^```(?:json)?\s*|\s*```$/gi, '').trim();
-    clean = clean.replace(/[—–]/g, ', ').replace(/--/g, ', ');
+    clean = clean.replace(/[\u2013\u2014]/g, ', ').replace(/--/g, ', ');
 
     let parsed: any = null;
     try {
@@ -7129,6 +7129,7 @@ export async function updateAffiliateSettings(payload: {
   bank_account_name?: string;
   display_name?: string;
   slug?: string;
+  discount_rate?: number;
 }): Promise<{ success: boolean; message?: string; error?: string }> {
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat/v1/affiliate/settings`;

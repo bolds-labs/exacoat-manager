@@ -5,7 +5,6 @@ import {
   Check, 
   ExternalLink, 
   Link2, 
-  Sparkles, 
   ShoppingBag, 
   Loader2, 
   ShieldCheck,

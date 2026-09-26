@@ -3,7 +3,6 @@ import {
   ShieldCheck, 
   Check, 
   ArrowRight, 
-  Sparkles, 
   AlertCircle,
   ExternalLink,
   User,

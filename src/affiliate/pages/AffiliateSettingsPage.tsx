@@ -10,7 +10,9 @@ import {
   ShieldCheck,
   CreditCard,
   AtSign,
-  Sparkles,
+  Sliders,
+  Percent,
+  Coins,
   ExternalLink
 } from 'lucide-react';
 import { AffiliateProfile, AffiliateBankName } from '../../types';
@@ -19,6 +21,7 @@ import { useToast } from '../../context/ToastContext';
 import { PageHeroHeader } from '../../components/ui/PageHeroHeader';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { Button } from '../../components/ui/Button';
+import { CustomSelect } from '../../components/ui/CustomSelect';
 import { clsx } from 'clsx';
 
 interface AffiliateSettingsPageProps {
@@ -33,6 +36,14 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
   const [displayName, setDisplayName] = useState(profile.display_name || '');
   const [isSavingDisplayName, setIsSavingDisplayName] = useState(false);
 
+  // Customer discount slider state
+  const currentDiscount = Number(profile.discount_rate) || 10;
+  const currentCommission = Number(profile.commission_rate) || 10;
+  const totalPool = Math.max(20, Math.round(currentDiscount + currentCommission));
+  const [discountRate, setDiscountRate] = useState<number>(currentDiscount);
+  const [isSavingDiscount, setIsSavingDiscount] = useState(false);
+  const creatorCommission = Math.max(0, Math.round((totalPool - discountRate) * 100) / 100);
+
   // Bank details form state
   const [bankName, setBankName] = useState<AffiliateBankName | ''>(profile.bank_name || '');
   const [accountNumber, setAccountNumber] = useState(profile.bank_account_number || '');
@@ -43,6 +54,26 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
   const [customSlug, setCustomSlug] = useState(profile.slug || '');
   const [isSavingSlug, setIsSavingSlug] = useState(false);
   const isSlugLocked = profile.slug_locked;
+
+  const handleSaveDiscount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingDiscount(true);
+    try {
+      const res = await updateAffiliateSettings({
+        discount_rate: discountRate,
+      });
+      if (res.success) {
+        showToast('success', 'Discount Saved', `Customer discount updated to ${discountRate}% (Creator commission: ${creatorCommission}%).`);
+        onRefresh();
+      } else {
+        showToast('error', 'Update Failed', res.error || 'Unable to update discount split.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message || 'Network error occurred.');
+    } finally {
+      setIsSavingDiscount(false);
+    }
+  };
 
   const handleSaveDisplayName = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,12 +180,160 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
         badge={{ label: 'PREFERENCES', variant: 'amber' }}
       />
 
-      {/* 1. Creator Display Details Card */}
+      {/* 1. Customer Discount & Commission Slider Card */}
+      <GlassCard className="p-6 sm:p-7 border border-white/[0.08] space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/[0.06]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 flex items-center justify-center shrink-0">
+              <Sliders className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-white font-['Chakra_Petch'] tracking-wide uppercase">
+                Customer Discount &amp; Commission Split
+              </h2>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Slide the percentage to balance customer savings against your earned payout commission.
+              </p>
+            </div>
+          </div>
+          <span className="self-start sm:self-auto text-[11px] font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-3 py-1 rounded-full border border-[#f3aa18]/25 font-mono">
+            Total Budget Pool: {totalPool}%
+          </span>
+        </div>
+
+        <form onSubmit={handleSaveDiscount} className="space-y-6">
+          {/* Split KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-4 rounded-xl bg-emerald-500/[0.06] border border-emerald-500/20 space-y-1">
+              <div className="flex items-center justify-between text-xs text-emerald-400 font-semibold">
+                <span className="flex items-center gap-1.5">
+                  <Percent className="w-3.5 h-3.5" />
+                  Customer Discount
+                </span>
+                <span className="font-mono text-base font-bold">{discountRate}% Off</span>
+              </div>
+              <p className="text-[11px] text-zinc-400">
+                Automatically deducted for shoppers entering via your referral link.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-amber-500/[0.06] border border-amber-500/20 space-y-1">
+              <div className="flex items-center justify-between text-xs text-[#f3aa18] font-semibold">
+                <span className="flex items-center gap-1.5">
+                  <Coins className="w-3.5 h-3.5" />
+                  Your Commission
+                </span>
+                <span className="font-mono text-base font-bold">{creatorCommission}% Cash</span>
+              </div>
+              <p className="text-[11px] text-zinc-400">
+                Disbursed to your registered Indonesian bank account after order maturity.
+              </p>
+            </div>
+          </div>
+
+          {/* Interactive Range Slider */}
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center justify-between text-xs text-zinc-300">
+              <span className="font-medium">Slide Customer Discount Percentage</span>
+              <span className="font-mono font-bold text-white bg-white/[0.08] px-2.5 py-0.5 rounded-lg border border-white/[0.1]">
+                {discountRate}% / {creatorCommission}%
+              </span>
+            </div>
+
+            <div className="relative pt-1">
+              <input
+                type="range"
+                min="0"
+                max={totalPool}
+                step="1"
+                value={discountRate}
+                onChange={(e) => setDiscountRate(Number(e.target.value))}
+                className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#f3aa18] focus:outline-none"
+              />
+              <div className="flex justify-between text-[10px] font-mono text-zinc-500 mt-2 px-0.5">
+                <span>0% Discount</span>
+                <span>{Math.round(totalPool / 2)}% / {Math.round(totalPool / 2)}%</span>
+                <span>{totalPool}% Discount</span>
+              </div>
+            </div>
+
+            {/* Visual Proportion Bar */}
+            <div className="w-full h-2 rounded-full overflow-hidden flex bg-zinc-800 border border-white/[0.06]">
+              <div
+                className="bg-emerald-500 h-full transition-all duration-150"
+                style={{ width: `${(discountRate / totalPool) * 100}%` }}
+                title={`Customer Discount: ${discountRate}%`}
+              />
+              <div
+                className="bg-[#f3aa18] h-full transition-all duration-150"
+                style={{ width: `${(creatorCommission / totalPool) * 100}%` }}
+                title={`Creator Commission: ${creatorCommission}%`}
+              />
+            </div>
+
+            {/* Quick Presets */}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <span className="text-[11px] text-zinc-500 font-mono">Presets:</span>
+              <button
+                type="button"
+                onClick={() => setDiscountRate(Math.round(totalPool / 2))}
+                className={clsx(
+                  'px-2.5 py-1 rounded-lg text-[11px] font-mono border transition-all cursor-pointer',
+                  discountRate === Math.round(totalPool / 2)
+                    ? 'bg-white/[0.12] text-white border-white/30'
+                    : 'bg-white/[0.03] text-zinc-400 border-white/[0.06] hover:bg-white/[0.08] hover:text-zinc-200'
+                )}
+              >
+                50 / 50 Balanced
+              </button>
+              <button
+                type="button"
+                onClick={() => setDiscountRate(totalPool >= 25 ? 10 : 5)}
+                className={clsx(
+                  'px-2.5 py-1 rounded-lg text-[11px] font-mono border transition-all cursor-pointer',
+                  discountRate === (totalPool >= 25 ? 10 : 5)
+                    ? 'bg-white/[0.12] text-white border-white/30'
+                    : 'bg-white/[0.03] text-zinc-400 border-white/[0.06] hover:bg-white/[0.08] hover:text-zinc-200'
+                )}
+              >
+                Higher Commission ({totalPool >= 25 ? '10% / 15%' : '5% / 15%'})
+              </button>
+              <button
+                type="button"
+                onClick={() => setDiscountRate(15)}
+                className={clsx(
+                  'px-2.5 py-1 rounded-lg text-[11px] font-mono border transition-all cursor-pointer',
+                  discountRate === 15
+                    ? 'bg-white/[0.12] text-white border-white/30'
+                    : 'bg-white/[0.03] text-zinc-400 border-white/[0.06] hover:bg-white/[0.08] hover:text-zinc-200'
+                )}
+              >
+                Higher Discount (15% / {totalPool - 15}%)
+              </button>
+            </div>
+          </div>
+
+          <div className="pt-2 flex justify-end border-t border-white/[0.06]">
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              disabled={isSavingDiscount || discountRate === currentDiscount}
+              isLoading={isSavingDiscount}
+              leftIcon={<Save className="w-3.5 h-3.5" />}
+            >
+              Save Discount Split
+            </Button>
+          </div>
+        </form>
+      </GlassCard>
+
+      {/* 2. Creator Display Details Card */}
       <GlassCard className="p-6 sm:p-7 border border-white/[0.08] space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/[0.06]">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/25 text-[#f3aa18] flex items-center justify-center shrink-0">
-              <Sparkles className="w-5 h-5" />
+              <User className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-sm font-bold text-white font-['Chakra_Petch'] tracking-wide uppercase">
@@ -204,7 +383,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
         </form>
       </GlassCard>
 
-      {/* 2. Indonesian Bank Settings Card */}
+      {/* 3. Indonesian Bank Settings Card */}
       <GlassCard className="p-6 sm:p-7 border border-white/[0.08] space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/[0.06]">
           <div className="flex items-center gap-3">
@@ -234,15 +413,15 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
                 <span>Destination Bank</span>
                 <span className="text-[#f3aa18]">*</span>
               </label>
-              <select
+              <CustomSelect
                 value={bankName}
-                onChange={(e) => setBankName(e.target.value as AffiliateBankName)}
-                className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all cursor-pointer"
-              >
-                <option value="" className="bg-[#121214] text-zinc-400">Select Destination Bank...</option>
-                <option value="BCA" className="bg-[#121214] text-white">Bank Central Asia (BCA)</option>
-                <option value="MANDIRI" className="bg-[#121214] text-white">Bank Mandiri</option>
-              </select>
+                onChange={(val) => setBankName(val as AffiliateBankName)}
+                placeholder="Select Destination Bank..."
+                options={[
+                  { value: 'BCA', label: 'Bank Central Asia (BCA)', subtitle: 'Fast Indonesian bank transfer' },
+                  { value: 'MANDIRI', label: 'Bank Mandiri', subtitle: 'Fast Indonesian bank transfer' },
+                ]}
+              />
             </div>
 
             {/* Account Number */}

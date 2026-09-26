@@ -20,7 +20,7 @@ import {
   Database,
   ArrowRight,
   TrendingUp,
-  Sparkles,
+  HelpCircle,
   Percent,
   Calendar,
   Save,
@@ -58,6 +58,7 @@ import {
 import { AffiliateCommission, AffiliatePayout, Order } from '../types';
 import { OrderDetailDrawer } from '../components/orders/OrderDetailDrawer';
 import { AffiliateDashboardPage } from '../affiliate/pages/AffiliateDashboardPage';
+import { CustomSelect } from '../components/ui/CustomSelect';
 import { useToast } from '../context/ToastContext';
 import { FilterSelect, FilterSelectOption } from '../components/ui/FilterSelect';
 import { GlassCard } from '../components/ui/GlassCard';
@@ -1836,7 +1837,7 @@ export const AffiliatesPage: React.FC = () => {
 
             <div className="p-4 rounded-xl bg-[#141414] border border-white/[0.06] text-xs text-neutral-300 space-y-2 leading-relaxed">
               <p className="font-semibold text-white flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-[#f3aa18]" />
+                <HelpCircle className="w-4 h-4 text-[#f3aa18]" />
                 Do I need to keep SliceWP plugin active?
               </p>
               <p>
@@ -2191,14 +2192,14 @@ export const AffiliatesPage: React.FC = () => {
                         <label className="block text-[11px] font-medium text-neutral-300 mb-1">
                           Status
                         </label>
-                        <select
+                        <CustomSelect
                           value={manualAdjStatus}
-                          onChange={(e) => setManualAdjStatus(e.target.value as 'unpaid' | 'paid')}
-                          className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[#f3aa18]/60"
-                        >
-                          <option value="unpaid">Unpaid (Ready)</option>
-                          <option value="paid">Paid (Settled)</option>
-                        </select>
+                          onChange={(val) => setManualAdjStatus(val as 'unpaid' | 'paid')}
+                          options={[
+                            { value: 'unpaid', label: 'Unpaid (Ready)', badge: 'Unpaid', badgeVariant: 'lime' },
+                            { value: 'paid', label: 'Paid (Settled)', badge: 'Paid', badgeVariant: 'zinc' },
+                          ]}
+                        />
                       </div>
                       <div>
                         <label className="block text-[11px] font-medium text-neutral-300 mb-1">
@@ -2283,19 +2284,19 @@ export const AffiliatesPage: React.FC = () => {
                 <label className="block text-xs font-medium text-neutral-300 mb-1.5">
                   Select Creator <span className="text-[#f3aa18]">*</span>
                 </label>
-                <select
-                  required
-                  value={manualCommAffiliateId}
-                  onChange={(e) => setManualCommAffiliateId(e.target.value)}
-                  className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
-                >
-                  <option value="" disabled>Select Affiliate Creator</option>
-                  {affiliates.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      @{a.slug} ({a.display_name || a.user_login}) {a.commission_rate ? `(${a.commission_rate}%)` : ''}
-                    </option>
-                  ))}
-                </select>
+                <CustomSelect
+                  value={String(manualCommAffiliateId || '')}
+                  onChange={(val) => setManualCommAffiliateId(val)}
+                  searchable
+                  placeholder="Select Affiliate Creator..."
+                  options={affiliates.map((a) => ({
+                    value: String(a.id),
+                    label: `@${a.slug} (${a.display_name || a.user_login})`,
+                    subtitle: a.email,
+                    badge: a.commission_rate ? `${a.commission_rate}%` : undefined,
+                    badgeVariant: 'amber',
+                  }))}
+                />
               </div>
 
               <div>
@@ -2323,14 +2324,14 @@ export const AffiliatesPage: React.FC = () => {
                   <label className="block text-xs font-medium text-neutral-300 mb-1.5">
                     Status
                   </label>
-                  <select
+                  <CustomSelect
                     value={manualCommStatus}
-                    onChange={(e) => setManualCommStatus(e.target.value as 'unpaid' | 'paid')}
-                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#f3aa18]/60"
-                  >
-                    <option value="unpaid">Ready for Payout (Unpaid)</option>
-                    <option value="paid">Already Settled (Paid)</option>
-                  </select>
+                    onChange={(val) => setManualCommStatus(val as 'unpaid' | 'paid')}
+                    options={[
+                      { value: 'unpaid', label: 'Ready for Payout (Unpaid)', badge: 'Unpaid', badgeVariant: 'lime' },
+                      { value: 'paid', label: 'Already Settled (Paid)', badge: 'Paid', badgeVariant: 'zinc' },
+                    ]}
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-neutral-300 mb-1.5">
@@ -2425,16 +2426,16 @@ export const AffiliatesPage: React.FC = () => {
                   <label className="block text-xs font-medium text-neutral-300 mb-1.5">
                     Status
                   </label>
-                  <select
+                  <CustomSelect
                     value={editCommStatus}
-                    onChange={(e) => setEditCommStatus(e.target.value)}
-                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#f3aa18]/60"
-                  >
-                    <option value="unpaid">Ready for Payout (Unpaid)</option>
-                    <option value="paid">Paid Out</option>
-                    <option value="pending">Pending Grace Period</option>
-                    <option value="rejected">Rejected / Cancelled</option>
-                  </select>
+                    onChange={(val) => setEditCommStatus(val)}
+                    options={[
+                      { value: 'unpaid', label: 'Ready for Payout (Unpaid)', badge: 'Unpaid', badgeVariant: 'lime' },
+                      { value: 'paid', label: 'Paid Out', badge: 'Paid', badgeVariant: 'zinc' },
+                      { value: 'pending', label: 'Pending Grace Period', badge: 'Pending', badgeVariant: 'amber' },
+                      { value: 'rejected', label: 'Rejected / Cancelled', badge: 'Void', badgeVariant: 'rose' },
+                    ]}
+                  />
                 </div>
               </div>
 

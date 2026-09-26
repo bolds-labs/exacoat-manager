@@ -15,7 +15,8 @@ import {
   ArrowRight,
   RefreshCw,
   Calendar,
-  Sparkles,
+  Link2,
+  Sliders,
   ChevronDown,
   Search,
   Filter,
@@ -33,6 +34,7 @@ import { useToast } from '../../context/ToastContext';
 import { PageHeroHeader } from '../../components/ui/PageHeroHeader';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { Button } from '../../components/ui/Button';
+import { CustomSelect } from '../../components/ui/CustomSelect';
 import { 
   AreaChart, 
   Area, 
@@ -362,7 +364,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
               variant="outline"
               size="default"
               onClick={() => onNavigateTab('links')}
-              leftIcon={<Sparkles className="w-3.5 h-3.5 text-[#f3aa18]" />}
+              leftIcon={<Link2 className="w-3.5 h-3.5 text-[#f3aa18]" />}
             >
               Get Product Links
             </Button>
@@ -443,25 +445,32 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
       </GlassCard>
 
       {/* Active Creator Direct Discount Card */}
-      <GlassCard className="p-4 sm:p-5 border border-amber-500/25 bg-gradient-to-r from-amber-500/[0.06] via-transparent to-transparent">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
+      <GlassCard className="p-4 sm:p-5 border border-white/[0.08] bg-white/[0.02]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 font-mono flex items-center gap-1">
                 <Percent className="w-3 h-3 text-emerald-400" />
-                DIRECT CREATOR DISCOUNT
+                CUSTOMER DISCOUNT: {profile.discount_rate || 10}% OFF
               </span>
-              <span className="text-xs font-bold text-white font-['Chakra_Petch'] uppercase tracking-wider">
-                {profile.discount_rate || 10}% Customer Discount Active
+              <span className="text-[11px] font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-2.5 py-0.5 rounded-full border border-[#f3aa18]/25 font-mono">
+                YOUR COMMISSION: {metrics.commission_rate || 10}% CASH
               </span>
             </div>
             <p className="text-xs text-zinc-300">
-              When customers enter via your referral link, their cart automatically receives a <strong className="text-white">{profile.discount_rate || 10}% creator discount</strong> from <strong className="text-[#f3aa18]">{profile.display_name || profile.username}</strong> without needing any coupon code.
+              When shoppers visit through your link, their cart automatically receives a <strong className="text-white">{profile.discount_rate || 10}% discount</strong> from <strong className="text-[#f3aa18]">{profile.display_name || profile.username}</strong> without entering any coupon code.
             </p>
           </div>
-          <div className="shrink-0 flex items-center gap-2 text-xs font-mono text-zinc-400 bg-[#0a0a0c] px-3 py-1.5 rounded-xl border border-white/[0.08]">
-            <span className="text-[#f3aa18]">Attribution:</span>
-            <span className="text-white">Direct Link</span>
+          <div className="shrink-0 flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onNavigateTab('settings')}
+              leftIcon={<Sliders className="w-3.5 h-3.5 text-[#f3aa18]" />}
+            >
+              Adjust Split Slider
+            </Button>
           </div>
         </div>
       </GlassCard>
@@ -793,20 +802,19 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
               />
             </div>
 
-            {/* Custom Styled Beautiful Dropdown */}
-            <div className="relative">
-              <select
+            {/* Beautiful Custom Dropdown */}
+            <div className="w-44">
+              <CustomSelect
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as CommissionFilterStatus)}
-                className="appearance-none bg-[#121214] border border-white/[0.1] rounded-xl pl-3 pr-8 py-1.5 text-xs font-semibold text-zinc-200 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 cursor-pointer transition-all"
-              >
-                <option value="all" className="bg-[#121214] text-white">All Statuses</option>
-                <option value="pending" className="bg-[#121214] text-white">Grace Period (7D)</option>
-                <option value="unpaid" className="bg-[#121214] text-white">Cleared (Unpaid)</option>
-                <option value="paid" className="bg-[#121214] text-white">Paid</option>
-                <option value="rejected" className="bg-[#121214] text-white">Rejected</option>
-              </select>
-              <ChevronDown className="w-3.5 h-3.5 text-zinc-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                onChange={(val) => setStatusFilter(val as CommissionFilterStatus)}
+                options={[
+                  { value: 'all', label: 'All Statuses' },
+                  { value: 'pending', label: 'Grace Period (7D)', badge: 'Pending', badgeVariant: 'amber' },
+                  { value: 'unpaid', label: 'Cleared (Unpaid)', badge: 'Cleared', badgeVariant: 'lime' },
+                  { value: 'paid', label: 'Paid Out', badge: 'Paid', badgeVariant: 'zinc' },
+                  { value: 'rejected', label: 'Rejected', badge: 'Void', badgeVariant: 'rose' },
+                ]}
+              />
             </div>
           </div>
         </div>
