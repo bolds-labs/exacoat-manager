@@ -81,7 +81,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       description: 'The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.',
-      changelog: `### Version ${version}\n- Added Customers Analytics Directory with lifetime value, AOV, repeat rate analytics, and customer profile drawer\n- Enhanced Order Details with clickable customer profiles, past order history navigation, and streamlined destination address controls\n- Added Affiliate & Creator Program Engine with commission tracking, payout management, and banking export integration`,
+      changelog: `### Version ${version}\n- Multi-source SliceWP REST API migration supporting creators, orders, commissions, and clicks\n- Universal ?x={slug} referral tracking with 30-day attribution window and backwards-compatible legacy link support\n- 7-day grace period rule for commission payouts after order delivery\n- Cloudflare Turnstile anti-spam bot protection on registration and creator portal endpoints`,
     },
   };
 
