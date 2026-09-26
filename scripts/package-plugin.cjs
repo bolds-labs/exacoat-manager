@@ -80,7 +80,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Connected promo coupon code ds10 to creator Dimas Sampurno (@ds) with automatic checkout attribution\n- Restored Dimas Sampurno historical commissions and unpaid balance\n- Ensured automated balance synchronization and creator profile updates\n- Maintained Edwin Yang (edwin15) configuration and active creator statuses`,
+      changelog: `### Version ${version}\n- Connected promo coupons suns10 (Suns Channel @suns), putra10 (Putra @putra), and msbn15 (MSBN @msbn) with checkout attribution\n- Restored Suns Channel historical commission ledger and unpaid balance\n- Automated creator profile setups, WooCommerce coupon post meta synchronization, and balance recalculation\n- Maintained Edwin Yang (edwin15) and Dimas Sampurno (ds10) active configurations`,
     },
   };
 

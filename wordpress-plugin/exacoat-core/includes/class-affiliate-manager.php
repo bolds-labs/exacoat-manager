@@ -208,10 +208,10 @@ class Exacoat_Affiliate_Manager {
 
 		update_option( 'exacoat_affiliate_db_version', '1.3.0' );
 
-		// One-time auto-recalculation, Edwin Yang, and Dimas Sampurno setup on plugin update
-		if ( ! get_option( 'exacoat_affiliate_recalc_v88', false ) ) {
+		// One-time auto-recalculation and creator setups on plugin update
+		if ( ! get_option( 'exacoat_affiliate_recalc_v89', false ) ) {
 			self::recalculate_all_balances();
-			update_option( 'exacoat_affiliate_recalc_v88', 1 );
+			update_option( 'exacoat_affiliate_recalc_v89', 1 );
 		}
 	}
 
@@ -2809,9 +2809,12 @@ class Exacoat_Affiliate_Manager {
 			 WHERE status = 'pending' AND (rejection_reason IS NULL OR rejection_reason = '')"
 		);
 
-		// 2. Ensure Edwin Yang and Dimas Sampurno setups, coupon assignments, and commissions
+		// 2. Ensure creator profiles, coupon assignments, and commissions
 		self::ensure_edwin_yang_setup();
 		self::ensure_dimas_sampurno_setup();
+		self::ensure_suns_channel_setup();
+		self::ensure_putra_setup();
+		self::ensure_msbn_setup();
 
 		// 3. Re-sum balances and order/click counts across all affiliates
 		$all_affiliates = $wpdb->get_results( "SELECT id FROM {$table_affiliates}" );
@@ -3143,6 +3146,308 @@ class Exacoat_Affiliate_Manager {
 					'created_at'        => '2026-04-12 11:32:02',
 				]
 			);
+		}
+	}
+
+	/**
+	 * Ensure Suns Channel account is active, configured with 15% rate and suns10 coupon, and commission history is intact.
+	 */
+	public static function ensure_suns_channel_setup(): void {
+		global $wpdb;
+		$table_affiliates  = $wpdb->prefix . 'exacoat_affiliates';
+		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
+
+		$user_id    = 52139;
+		$user       = get_userdata( $user_id );
+		$user_email = $user ? $user->user_email : '';
+
+		$aff = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT * FROM {$table_affiliates} WHERE user_id = %d OR slug = 'suns' LIMIT 1",
+				$user_id
+			)
+		);
+
+		$suns_aff_id = 0;
+		if ( $aff ) {
+			$suns_aff_id = (int) $aff->id;
+			$wpdb->update(
+				$table_affiliates,
+				[
+					'coupon_code'     => 'suns10',
+					'commission_rate' => ( ! empty( $aff->commission_rate ) && (float) $aff->commission_rate > 0 ) ? (float) $aff->commission_rate : 15.00,
+					'status'          => 'active',
+					'slug'            => 'suns',
+				],
+				[ 'id' => $suns_aff_id ]
+			);
+		} else {
+			$wpdb->insert(
+				$table_affiliates,
+				[
+					'user_id'           => $user_id,
+					'slug'              => 'suns',
+					'slug_locked'       => 1,
+					'status'            => 'active',
+					'affiliate_type'    => 'Migrated from SliceWP',
+					'promotion_channel' => 'YouTube & Creator Partner',
+					'coupon_code'       => 'suns10',
+					'commission_rate'   => 15.00,
+					'bank_name'         => 'BCA',
+					'created_at'        => '2022-08-14 05:45:39',
+				]
+			);
+			$suns_aff_id = (int) $wpdb->insert_id;
+		}
+
+		if ( $user && ( $user instanceof \WP_User ) ) {
+			$user->add_role( self::ROLE_AFFILIATE );
+		}
+
+		// Synchronize WooCommerce coupon suns10
+		if ( function_exists( 'wc_get_coupon_id_by_code' ) ) {
+			$coupon_id = wc_get_coupon_id_by_code( 'suns10' );
+			if ( $coupon_id > 0 ) {
+				update_post_meta( $coupon_id, '_exacoat_affiliate_id', $suns_aff_id );
+				update_post_meta( $coupon_id, '_exacoat_affiliate_slug', 'suns' );
+				if ( $user_email ) {
+					update_post_meta( $coupon_id, '_exacoat_affiliate_email', $user_email );
+				}
+			} elseif ( class_exists( 'WC_Coupon' ) ) {
+				try {
+					$new_coupon = new \WC_Coupon();
+					$new_coupon->set_code( 'suns10' );
+					$new_coupon->set_discount_type( 'percent' );
+					$new_coupon->set_amount( 10 );
+					$new_coupon->set_description( 'Affiliate discount coupon for Suns Channel (@suns)' );
+					$new_coupon->set_individual_use( true );
+					$new_coupon->update_meta_data( '_exacoat_affiliate_id', $suns_aff_id );
+					$new_coupon->update_meta_data( '_exacoat_affiliate_slug', 'suns' );
+					if ( $user_email ) {
+						$new_coupon->update_meta_data( '_exacoat_affiliate_email', $user_email );
+					}
+					$new_coupon->save();
+				} catch ( \Throwable $e ) {
+				}
+			}
+		}
+
+		// Historical unpaid commissions for Suns Channel
+		$historical_orders = [
+			[ 'id' => 507012, 'subtotal' => 519538.00, 'amt' => 74250.00, 'date' => '2023-12-27 13:02:37' ],
+			[ 'id' => 439955, 'subtotal' => 134153.00, 'amt' => 20115.00, 'date' => '2022-11-05 15:56:49' ],
+			[ 'id' => 439402, 'subtotal' => 304001.00, 'amt' => 44550.00, 'date' => '2022-10-28 07:48:39' ],
+			[ 'id' => 533651, 'subtotal' => 196011.00, 'amt' => 27540.00, 'date' => '2025-08-26 09:37:37' ],
+			[ 'id' => 523015, 'subtotal' => 152146.00, 'amt' => 22815.00, 'date' => '2025-01-02 08:39:06' ],
+		];
+
+		foreach ( $historical_orders as $ho ) {
+			$ex = $wpdb->get_row(
+				$wpdb->prepare(
+					"SELECT id FROM {$table_commissions} WHERE order_id = %d OR order_number = %s LIMIT 1",
+					$ho['id'],
+					(string) $ho['id']
+				)
+			);
+			if ( $ex ) {
+				$wpdb->update(
+					$table_commissions,
+					[
+						'affiliate_id'      => $suns_aff_id,
+						'order_id'          => $ho['id'],
+						'order_number'      => (string) $ho['id'],
+						'order_subtotal'    => $ho['subtotal'],
+						'commission_rate'   => 15.00,
+						'commission_amount' => $ho['amt'],
+						'coupon_code'       => 'suns10',
+						'status'            => 'unpaid',
+						'created_at'        => $ho['date'],
+					],
+					[ 'id' => (int) $ex->id ]
+				);
+			} else {
+				$wpdb->insert(
+					$table_commissions,
+					[
+						'affiliate_id'      => $suns_aff_id,
+						'order_id'          => $ho['id'],
+						'order_number'      => (string) $ho['id'],
+						'order_subtotal'    => $ho['subtotal'],
+						'commission_rate'   => 15.00,
+						'commission_amount' => $ho['amt'],
+						'coupon_code'       => 'suns10',
+						'status'            => 'unpaid',
+						'customer_email'    => $user_email,
+						'created_at'        => $ho['date'],
+					]
+				);
+			}
+		}
+	}
+
+	/**
+	 * Ensure Putra account is active, configured with 10% rate and putra10 coupon.
+	 */
+	public static function ensure_putra_setup(): void {
+		global $wpdb;
+		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
+
+		$user_id    = 53176;
+		$user       = get_userdata( $user_id );
+		$user_email = $user ? $user->user_email : '';
+
+		$aff = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT * FROM {$table_affiliates} WHERE user_id = %d OR slug = 'putra' LIMIT 1",
+				$user_id
+			)
+		);
+
+		$putra_aff_id = 0;
+		if ( $aff ) {
+			$putra_aff_id = (int) $aff->id;
+			$wpdb->update(
+				$table_affiliates,
+				[
+					'coupon_code'     => 'putra10',
+					'commission_rate' => ( ! empty( $aff->commission_rate ) && (float) $aff->commission_rate > 0 ) ? (float) $aff->commission_rate : 10.00,
+					'status'          => 'active',
+					'slug'            => 'putra',
+				],
+				[ 'id' => $putra_aff_id ]
+			);
+		} else {
+			$wpdb->insert(
+				$table_affiliates,
+				[
+					'user_id'           => $user_id,
+					'slug'              => 'putra',
+					'slug_locked'       => 1,
+					'status'            => 'active',
+					'affiliate_type'    => 'Migrated from SliceWP',
+					'promotion_channel' => 'Creator & Partner',
+					'coupon_code'       => 'putra10',
+					'commission_rate'   => 10.00,
+					'bank_name'         => 'BCA',
+					'created_at'        => '2022-04-14 07:06:19',
+				]
+			);
+			$putra_aff_id = (int) $wpdb->insert_id;
+		}
+
+		if ( $user && ( $user instanceof \WP_User ) ) {
+			$user->add_role( self::ROLE_AFFILIATE );
+		}
+
+		// Synchronize WooCommerce coupon putra10
+		if ( function_exists( 'wc_get_coupon_id_by_code' ) ) {
+			$coupon_id = wc_get_coupon_id_by_code( 'putra10' );
+			if ( $coupon_id > 0 ) {
+				update_post_meta( $coupon_id, '_exacoat_affiliate_id', $putra_aff_id );
+				update_post_meta( $coupon_id, '_exacoat_affiliate_slug', 'putra' );
+				if ( $user_email ) {
+					update_post_meta( $coupon_id, '_exacoat_affiliate_email', $user_email );
+				}
+			} elseif ( class_exists( 'WC_Coupon' ) ) {
+				try {
+					$new_coupon = new \WC_Coupon();
+					$new_coupon->set_code( 'putra10' );
+					$new_coupon->set_discount_type( 'percent' );
+					$new_coupon->set_amount( 10 );
+					$new_coupon->set_description( 'Affiliate discount coupon for Putra (@putra)' );
+					$new_coupon->set_individual_use( true );
+					$new_coupon->update_meta_data( '_exacoat_affiliate_id', $putra_aff_id );
+					$new_coupon->update_meta_data( '_exacoat_affiliate_slug', 'putra' );
+					if ( $user_email ) {
+						$new_coupon->update_meta_data( '_exacoat_affiliate_email', $user_email );
+					}
+					$new_coupon->save();
+				} catch ( \Throwable $e ) {
+				}
+			}
+		}
+	}
+
+	/**
+	 * Ensure MSBN account is active, configured with 15% rate and msbn15 coupon.
+	 */
+	public static function ensure_msbn_setup(): void {
+		global $wpdb;
+		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
+
+		$user_id    = 49098;
+		$user       = get_userdata( $user_id );
+		$user_email = $user ? $user->user_email : '';
+
+		$aff = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT * FROM {$table_affiliates} WHERE user_id = %d OR slug = 'msbn' LIMIT 1",
+				$user_id
+			)
+		);
+
+		$msbn_aff_id = 0;
+		if ( $aff ) {
+			$msbn_aff_id = (int) $aff->id;
+			$wpdb->update(
+				$table_affiliates,
+				[
+					'coupon_code'     => 'msbn15',
+					'commission_rate' => ( ! empty( $aff->commission_rate ) && (float) $aff->commission_rate > 0 ) ? (float) $aff->commission_rate : 15.00,
+					'status'          => 'active',
+					'slug'            => 'msbn',
+				],
+				[ 'id' => $msbn_aff_id ]
+			);
+		} else {
+			$wpdb->insert(
+				$table_affiliates,
+				[
+					'user_id'           => $user_id,
+					'slug'              => 'msbn',
+					'slug_locked'       => 1,
+					'status'            => 'active',
+					'affiliate_type'    => 'Migrated from SliceWP',
+					'promotion_channel' => 'Creator & Partner',
+					'coupon_code'       => 'msbn15',
+					'commission_rate'   => 15.00,
+					'bank_name'         => 'BCA',
+					'created_at'        => '2022-04-11 15:45:59',
+				]
+			);
+			$msbn_aff_id = (int) $wpdb->insert_id;
+		}
+
+		if ( $user && ( $user instanceof \WP_User ) ) {
+			$user->add_role( self::ROLE_AFFILIATE );
+		}
+
+		// Synchronize WooCommerce coupon msbn15
+		if ( function_exists( 'wc_get_coupon_id_by_code' ) ) {
+			$coupon_id = wc_get_coupon_id_by_code( 'msbn15' );
+			if ( $coupon_id > 0 ) {
+				update_post_meta( $coupon_id, '_exacoat_affiliate_id', $msbn_aff_id );
+				update_post_meta( $coupon_id, '_exacoat_affiliate_slug', 'msbn' );
+				if ( $user_email ) {
+					update_post_meta( $coupon_id, '_exacoat_affiliate_email', $user_email );
+				}
+			} elseif ( class_exists( 'WC_Coupon' ) ) {
+				try {
+					$new_coupon = new \WC_Coupon();
+					$new_coupon->set_code( 'msbn15' );
+					$new_coupon->set_discount_type( 'percent' );
+					$new_coupon->set_amount( 15 );
+					$new_coupon->set_description( 'Affiliate discount coupon for MSBN (@msbn)' );
+					$new_coupon->set_individual_use( true );
+					$new_coupon->update_meta_data( '_exacoat_affiliate_id', $msbn_aff_id );
+					$new_coupon->update_meta_data( '_exacoat_affiliate_slug', 'msbn' );
+					if ( $user_email ) {
+						$new_coupon->update_meta_data( '_exacoat_affiliate_email', $user_email );
+					}
+					$new_coupon->save();
+				} catch ( \Throwable $e ) {
+				}
+			}
 		}
 	}
 
