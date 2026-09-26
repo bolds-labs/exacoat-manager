@@ -565,15 +565,23 @@ export const AffiliatesPage: React.FC = () => {
                           {c.customer_email}
                         </td>
                         <td className="py-3 pr-4 text-right">
-                          <span className={clsx(
-                            'px-2 py-0.5 rounded text-[10px] font-medium border uppercase tracking-wider',
-                            c.status === 'paid' && 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-                            c.status === 'unpaid' && 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-                            c.status === 'pending' && 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-                            c.status === 'rejected' && 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                          )}>
-                            {c.status}
-                          </span>
+                          {c.status === 'pending' ? (
+                            <span 
+                              className="px-2 py-0.5 rounded text-[10px] font-medium border uppercase tracking-wider bg-amber-500/10 text-amber-400 border-amber-500/20"
+                              title={c.matures_at ? `Delivered: ${c.delivered_at}. Grace period matures: ${c.matures_at}` : 'Order awaiting delivery confirmation'}
+                            >
+                              {c.matures_at ? 'Grace Period' : 'Pending Delivery'}
+                            </span>
+                          ) : (
+                            <span className={clsx(
+                              'px-2 py-0.5 rounded text-[10px] font-medium border uppercase tracking-wider',
+                              c.status === 'paid' && 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+                              c.status === 'unpaid' && 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+                              c.status === 'rejected' && 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                            )}>
+                              {c.status}
+                            </span>
+                          )}
                         </td>
                       </tr>
                     ))

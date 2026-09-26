@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.81.zip?v=0.1.81",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-26T13:24:11.557Z",
+  "last_updated": "2026-09-26T13:31:27.757Z",
   "sections": {
     "description": "The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.",
     "changelog": "### Version 0.1.81\n- Added Customers Analytics Directory with lifetime value, AOV, repeat rate analytics, and customer profile drawer\n- Enhanced Order Details with clickable customer profiles, past order history navigation, and streamlined destination address controls\n- Added Affiliate & Creator Program Engine with commission tracking, payout management, and banking export integration"

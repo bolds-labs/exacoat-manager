@@ -59,7 +59,12 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
     }
   };
 
-  const getCommissionBadge = (status: string, reason?: string | null) => {
+  const getCommissionBadge = (
+    status: string, 
+    reason?: string | null, 
+    maturesAt?: string | null, 
+    deliveredAt?: string | null
+  ) => {
     switch (status) {
       case 'paid':
         return (
@@ -73,12 +78,29 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
             Cleared (Unpaid)
           </span>
         );
-      case 'pending':
+      case 'pending': {
+        if (maturesAt) {
+          const maturesDate = new Date(maturesAt);
+          const now = new Date();
+          const daysLeft = Math.max(0, Math.ceil((maturesDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+          return (
+            <span 
+              className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20"
+              title={`Delivered. 7-day grace period matures on ${maturesDate.toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' })}`}
+            >
+              Grace Period ({daysLeft > 0 ? `${daysLeft}d left` : 'clearing'})
+            </span>
+          );
+        }
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-            Pending Order
+          <span 
+            className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20"
+            title="Order is in fulfillment. Grace period begins once delivered."
+          >
+            Pending Delivery
           </span>
         );
+      }
       case 'rejected':
         return (
           <span 
@@ -329,7 +351,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
                       {formatIDR(comm.commission_amount)}
                     </td>
                     <td className="py-3 pr-2 text-right">
-                      {getCommissionBadge(comm.status, comm.rejection_reason)}
+                      {getCommissionBadge(comm.status, comm.rejection_reason, comm.matures_at, comm.delivered_at)}
                     </td>
                   </tr>
                 ))}

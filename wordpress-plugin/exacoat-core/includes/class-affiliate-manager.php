@@ -2,7 +2,8 @@
 /**
  * Exacoat Affiliate Engine
  * Manages affiliate registration, attribution tracking, 20% commission ledger,
- * BCA and Mandiri payout processing, and REST APIs for affiliate.exacoat.com and manager.exacoat.com.
+ * 7-day post-delivery grace period maturation, BCA and Mandiri payout processing,
+ * and REST APIs for affiliate.exacoat.com and manager.exacoat.com.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -13,11 +14,12 @@ if ( ! class_exists( 'Exacoat_Affiliate_Manager' ) ) {
 
 class Exacoat_Affiliate_Manager {
 
-	public const COOKIE_NAME      = 'exacoat_aff_ref';
-	public const COOKIE_DAYS      = 30;
-	public const COMMISSION_RATE  = 20.0;
-	public const MIN_PAYOUT_IDR   = 250000;
-	public const ROLE_AFFILIATE   = 'affiliate';
+	public const COOKIE_NAME        = 'exacoat_aff_ref';
+	public const COOKIE_DAYS        = 30;
+	public const COMMISSION_RATE    = 20.0;
+	public const MIN_PAYOUT_IDR     = 250000;
+	public const ROLE_AFFILIATE     = 'affiliate';
+	public const GRACE_PERIOD_DAYS  = 7;
 
 	public static function init(): void {
 		self::register_role();
@@ -29,11 +31,20 @@ class Exacoat_Affiliate_Manager {
 		// WooCommerce order integration hooks
 		add_action( 'woocommerce_checkout_order_processed', [ __CLASS__, 'attach_referral_to_order' ], 10, 3 );
 		add_action( 'woocommerce_order_status_processing', [ __CLASS__, 'handle_order_processing' ], 20, 1 );
-		add_action( 'woocommerce_order_status_completed', [ __CLASS__, 'handle_order_completed' ], 20, 1 );
+		add_action( 'woocommerce_order_status_completed', [ __CLASS__, 'handle_order_delivery_confirmed' ], 20, 1 );
+		add_action( 'woocommerce_order_status_delivered', [ __CLASS__, 'handle_order_delivery_confirmed' ], 20, 1 );
+		add_action( 'woocommerce_order_status_changed', [ __CLASS__, 'handle_order_status_transition' ], 20, 3 );
 		add_action( 'woocommerce_order_status_refunded', [ __CLASS__, 'handle_order_clawback' ], 20, 1 );
 		add_action( 'woocommerce_order_status_cancelled', [ __CLASS__, 'handle_order_clawback' ], 20, 1 );
 		add_action( 'woocommerce_order_status_failed', [ __CLASS__, 'handle_order_clawback' ], 20, 1 );
 		add_action( 'woocommerce_order_refunded', [ __CLASS__, 'handle_order_refund_event' ], 20, 2 );
+
+		// 7-day grace period maturation workers
+		add_action( 'exacoat_affiliate_mature_commission_action', [ __CLASS__, 'mature_single_commission' ], 10, 1 );
+		add_action( 'exacoat_affiliate_hourly_check', [ __CLASS__, 'process_matured_commissions' ] );
+		if ( ! wp_next_scheduled( 'exacoat_affiliate_hourly_check' ) ) {
+			wp_schedule_event( time(), 'hourly', 'exacoat_affiliate_hourly_check' );
+		}
 
 		// Register REST endpoints
 		add_action( 'rest_api_init', [ __CLASS__, 'register_rest_routes' ] );
@@ -62,11 +73,7 @@ class Exacoat_Affiliate_Manager {
 	public static function ensure_tables(): void {
 		global $wpdb;
 		$installed_ver = get_option( 'exacoat_affiliate_db_version', '0.0.0' );
-		$target_ver    = '1.0.0';
-
-		if ( version_compare( $installed_ver, $target_ver, '>=' ) ) {
-			return;
-		}
+		$target_ver    = '1.1.0';
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		$charset_collate = $wpdb->get_charset_collate();
@@ -107,6 +114,8 @@ class Exacoat_Affiliate_Manager {
 			commission_rate decimal(5,2) NOT NULL DEFAULT 20.00,
 			commission_amount decimal(14,2) NOT NULL DEFAULT 0.00,
 			status varchar(30) NOT NULL DEFAULT 'pending',
+			delivered_at datetime NULL,
+			matures_at datetime NULL,
 			rejection_reason varchar(255) NULL,
 			payout_id bigint(20) unsigned NULL,
 			customer_email varchar(100) NOT NULL DEFAULT '',
@@ -116,9 +125,16 @@ class Exacoat_Affiliate_Manager {
 			KEY affiliate_id (affiliate_id),
 			KEY order_id (order_id),
 			KEY status (status),
+			KEY matures_at (matures_at),
 			KEY payout_id (payout_id)
 		) {$charset_collate};";
 		dbDelta( $sql_commissions );
+
+		// Ensure columns exist on legacy tables
+		$col_check = $wpdb->get_results( "SHOW COLUMNS FROM {$table_commissions} LIKE 'matures_at'" );
+		if ( empty( $col_check ) ) {
+			$wpdb->query( "ALTER TABLE {$table_commissions} ADD COLUMN delivered_at datetime NULL AFTER status, ADD COLUMN matures_at datetime NULL AFTER delivered_at, ADD KEY matures_at (matures_at)" );
+		}
 
 		$table_payouts = $wpdb->prefix . 'exacoat_affiliate_payouts';
 		$sql_payouts   = "CREATE TABLE {$table_payouts} (
@@ -161,7 +177,6 @@ class Exacoat_Affiliate_Manager {
 			return;
 		}
 
-		// Increment clicks counter asynchronously or directly
 		global $wpdb;
 		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
 		$wpdb->query(
@@ -171,12 +186,10 @@ class Exacoat_Affiliate_Manager {
 			)
 		);
 
-		// Determine cookie domain for cross-subdomain support
 		$cookie_domain = self::get_cookie_domain();
 		$ttl           = time() + ( self::COOKIE_DAYS * DAY_IN_SECONDS );
 		$is_secure     = is_ssl();
 
-		// Credit last affiliate by setting or overwriting existing cookie
 		setcookie(
 			self::COOKIE_NAME,
 			$raw_slug,
@@ -223,14 +236,140 @@ class Exacoat_Affiliate_Manager {
 	}
 
 	/**
-	 * Mature commission to unpaid balance when order reaches completed status.
+	 * Intercept status transition to completed, delivered, or smb-picked.
 	 */
-	public static function handle_order_completed( $order_id ): void {
-		self::record_order_commission( (int) $order_id, 'unpaid' );
+	public static function handle_order_status_transition( $order_id, string $old_status, string $new_status ): void {
+		$clean = strtolower( str_replace( 'wc-', '', $new_status ) );
+		if ( in_array( $clean, [ 'completed', 'delivered', 'smb-picked' ], true ) ) {
+			self::handle_order_delivery_confirmed( $order_id );
+		}
 	}
 
 	/**
-	 * Calculate net 20% commission, prevent self referral, and record commission.
+	 * Order delivery confirmed: start 7-day grace period countdown before commission matures to unpaid.
+	 */
+	public static function handle_order_delivery_confirmed( $order_id ): void {
+		global $wpdb;
+		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
+
+		// Ensure commission record exists
+		self::record_order_commission( (int) $order_id, 'pending' );
+
+		$comm = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT id, affiliate_id, commission_amount, status, delivered_at, matures_at 
+				FROM {$table_commissions} 
+				WHERE order_id = %d AND status = 'pending' LIMIT 1",
+				(int) $order_id
+			)
+		);
+
+		if ( ! $comm ) {
+			return;
+		}
+
+		// Only stamp delivery and maturity if not already stamped
+		if ( empty( $comm->delivered_at ) || empty( $comm->matures_at ) ) {
+			$delivered_time = current_time( 'mysql' );
+			$matures_time   = gmdate( 'Y-m-d H:i:s', time() + ( self::GRACE_PERIOD_DAYS * DAY_IN_SECONDS ) );
+
+			$wpdb->update(
+				$table_commissions,
+				[
+					'delivered_at' => $delivered_time,
+					'matures_at'   => $matures_time,
+				],
+				[ 'id' => $comm->id ],
+				[ '%s', '%s' ],
+				[ '%d' ]
+			);
+
+			// Schedule single Action Scheduler worker if available
+			if ( function_exists( 'as_schedule_single_action' ) ) {
+				as_schedule_single_action(
+					time() + ( self::GRACE_PERIOD_DAYS * DAY_IN_SECONDS ),
+					'exacoat_affiliate_mature_commission_action',
+					[ 'commission_id' => (int) $comm->id ]
+				);
+			}
+		}
+	}
+
+	/**
+	 * Mature single commission from pending to unpaid once 7-day post-delivery grace period ends.
+	 */
+	public static function mature_single_commission( int $commission_id ): void {
+		global $wpdb;
+		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
+		$table_affiliates  = $wpdb->prefix . 'exacoat_affiliates';
+
+		$comm = $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$table_commissions} WHERE id = %d LIMIT 1", $commission_id )
+		);
+
+		if ( ! $comm || 'pending' !== $comm->status ) {
+			return;
+		}
+
+		// Verify 7-day grace period has actually passed
+		if ( ! empty( $comm->matures_at ) && strtotime( $comm->matures_at ) > time() ) {
+			return;
+		}
+
+		$wpdb->update(
+			$table_commissions,
+			[ 'status' => 'unpaid' ],
+			[ 'id' => $comm->id ]
+		);
+
+		$wpdb->query(
+			$wpdb->prepare(
+				"UPDATE {$table_affiliates} 
+				SET unpaid_balance = unpaid_balance + %f, 
+				    lifetime_earnings = lifetime_earnings + %f 
+				WHERE id = %d",
+				$comm->commission_amount,
+				$comm->commission_amount,
+				$comm->affiliate_id
+			)
+		);
+
+		$order = wc_get_order( $comm->order_id );
+		if ( $order instanceof WC_Order ) {
+			self::dispatch_commission_email( 'confirmed', (int) $comm->affiliate_id, $order, (float) $comm->commission_amount );
+		}
+	}
+
+	/**
+	 * Cron & On-Demand Worker: mature all pending commissions whose 7-day grace period has elapsed.
+	 */
+	public static function process_matured_commissions(): int {
+		global $wpdb;
+		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
+
+		$now = current_time( 'mysql' );
+		$matured_ids = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT id FROM {$table_commissions} 
+				WHERE status = 'pending' 
+				  AND matures_at IS NOT NULL 
+				  AND matures_at <= %s",
+				$now
+			)
+		);
+
+		$count = 0;
+		if ( ! empty( $matured_ids ) ) {
+			foreach ( $matured_ids as $cid ) {
+				self::mature_single_commission( (int) $cid );
+				$count++;
+			}
+		}
+		return $count;
+	}
+
+	/**
+	 * Calculate net 20% commission, prevent self referral, and record initial pending commission.
 	 */
 	public static function record_order_commission( int $order_id, string $target_status = 'pending' ): void {
 		$order = wc_get_order( $order_id );
@@ -238,7 +377,6 @@ class Exacoat_Affiliate_Manager {
 			return;
 		}
 
-		// Check if commission already recorded for this order
 		global $wpdb;
 		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
 		$table_affiliates  = $wpdb->prefix . 'exacoat_affiliates';
@@ -248,30 +386,9 @@ class Exacoat_Affiliate_Manager {
 		);
 
 		if ( $existing ) {
-			// If transitioning from pending to unpaid on order completion
-			if ( 'pending' === $existing->status && 'unpaid' === $target_status ) {
-				$wpdb->update(
-					$table_commissions,
-					[ 'status' => 'unpaid' ],
-					[ 'id' => $existing->id ]
-				);
-				$wpdb->query(
-					$wpdb->prepare(
-						"UPDATE {$table_affiliates} 
-						SET unpaid_balance = unpaid_balance + %f, 
-						    lifetime_earnings = lifetime_earnings + %f 
-						WHERE id = %d",
-						$existing->commission_amount,
-						$existing->commission_amount,
-						$existing->affiliate_id
-					)
-				);
-				self::dispatch_commission_email( 'confirmed', (int) $existing->affiliate_id, $order, (float) $existing->commission_amount );
-			}
 			return;
 		}
 
-		// Retrieve affiliate slug from order meta or fallback to cookie
 		$ref_slug = $order->get_meta( '_exacoat_affiliate_slug' );
 		if ( empty( $ref_slug ) && ! empty( $_COOKIE[ self::COOKIE_NAME ] ) ) {
 			$ref_slug = sanitize_title( wp_unslash( $_COOKIE[ self::COOKIE_NAME ] ) );
@@ -311,7 +428,7 @@ class Exacoat_Affiliate_Manager {
 			return;
 		}
 
-		$initial_status   = $is_self_referral ? 'rejected' : $target_status;
+		$initial_status   = $is_self_referral ? 'rejected' : 'pending';
 		$rejection_reason = $is_self_referral ? 'Self referral prohibited' : null;
 
 		$wpdb->insert(
@@ -324,11 +441,13 @@ class Exacoat_Affiliate_Manager {
 				'commission_rate'   => $commission_rate,
 				'commission_amount' => $commission_amt,
 				'status'            => $initial_status,
+				'delivered_at'      => null,
+				'matures_at'        => null,
 				'rejection_reason'  => $rejection_reason,
 				'customer_email'    => $customer_email,
 				'created_at'        => current_time( 'mysql' ),
 			],
-			[ '%d', '%d', '%s', '%f', '%f', '%f', '%s', '%s', '%s', '%s' ]
+			[ '%d', '%d', '%s', '%f', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s' ]
 		);
 
 		$commission_id = $wpdb->insert_id;
@@ -336,30 +455,16 @@ class Exacoat_Affiliate_Manager {
 		$order->update_meta_data( '_exacoat_affiliate_commission_id', (int) $commission_id );
 		$order->save();
 
-		// Update affiliate aggregate counters
+		// Record order count
 		if ( ! $is_self_referral ) {
-			$balance_increment  = ( 'unpaid' === $initial_status ) ? $commission_amt : 0.0;
-			$lifetime_increment = ( 'unpaid' === $initial_status ) ? $commission_amt : 0.0;
-
 			$wpdb->query(
 				$wpdb->prepare(
-					"UPDATE {$table_affiliates} 
-					SET total_orders = total_orders + 1,
-					    unpaid_balance = unpaid_balance + %f,
-					    lifetime_earnings = lifetime_earnings + %f
-					WHERE id = %d",
-					$balance_increment,
-					$lifetime_increment,
+					"UPDATE {$table_affiliates} SET total_orders = total_orders + 1 WHERE id = %d",
 					$affiliate->id
 				)
 			);
 
-			self::dispatch_commission_email(
-				( 'unpaid' === $initial_status ? 'confirmed' : 'recorded' ),
-				(int) $affiliate->id,
-				$order,
-				$commission_amt
-			);
+			self::dispatch_commission_email( 'recorded', (int) $affiliate->id, $order, $commission_amt );
 		}
 	}
 
@@ -389,12 +494,12 @@ class Exacoat_Affiliate_Manager {
 				$table_commissions,
 				[
 					'status'           => 'rejected',
-					'rejection_reason' => 'Order cancelled or refunded',
+					'rejection_reason' => 'Order cancelled or refunded during or after grace period',
 				],
 				[ 'id' => $comm->id ]
 			);
 
-			// Deduct from balance if previously counted in unpaid
+			// Deduct from balance only if previously matured into unpaid
 			if ( 'unpaid' === $comm->status ) {
 				$wpdb->query(
 					$wpdb->prepare(
@@ -548,7 +653,6 @@ class Exacoat_Affiliate_Manager {
 	public static function check_affiliate_auth( WP_REST_Request $request ): bool {
 		$user_id = get_current_user_id();
 		if ( ! $user_id ) {
-			// Fallback check: Authorization header or bearer token
 			$user_id = self::extract_authenticated_user_id( $request );
 		}
 		return $user_id > 0;
@@ -623,7 +727,6 @@ class Exacoat_Affiliate_Manager {
 			return new WP_Error( 'email_exists', 'This email address is already registered.', [ 'status' => 409 ] );
 		}
 
-		// Ensure slug candidate is unique
 		$candidate_slug = sanitize_title( $username );
 		if ( empty( $candidate_slug ) ) {
 			$candidate_slug = 'affiliate-' . wp_generate_password( 6, false, false );
@@ -639,7 +742,6 @@ class Exacoat_Affiliate_Manager {
 			$candidate_slug .= '-' . wp_generate_password( 4, false, false );
 		}
 
-		// Create WordPress user
 		$user_id = wp_create_user( $username, $password, $email );
 		if ( is_wp_error( $user_id ) ) {
 			return $user_id;
@@ -655,7 +757,6 @@ class Exacoat_Affiliate_Manager {
 			'nickname'   => $username,
 		] );
 
-		// Record in affiliate table with pending_approval status
 		$wpdb->insert(
 			$table_affiliates,
 			[
@@ -673,7 +774,6 @@ class Exacoat_Affiliate_Manager {
 
 		$affiliate_id = $wpdb->insert_id;
 
-		// Dispatch confirmation email to applicant
 		self::dispatch_applicant_email( 'received', $email, $first_name );
 
 		return rest_ensure_response( [
@@ -694,6 +794,9 @@ class Exacoat_Affiliate_Manager {
 			return new WP_Error( 'unauthorized', 'Authentication required.', [ 'status' => 401 ] );
 		}
 
+		// Ensure any commissions that have cleared the 7-day grace period mature now
+		self::process_matured_commissions();
+
 		$affiliate = self::get_affiliate_by_user_id( $user_id );
 		if ( ! $affiliate ) {
 			return new WP_Error( 'not_found', 'Affiliate profile not found.', [ 'status' => 404 ] );
@@ -704,10 +807,10 @@ class Exacoat_Affiliate_Manager {
 		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
 		$table_payouts     = $wpdb->prefix . 'exacoat_affiliate_payouts';
 
-		// Retrieve commissions
+		// Retrieve commissions with grace period delivery timestamps
 		$commissions = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT id, order_number, order_subtotal, commission_amount, status, rejection_reason, created_at 
+				"SELECT id, order_number, order_subtotal, commission_amount, status, delivered_at, matures_at, rejection_reason, created_at 
 				FROM {$table_commissions} 
 				WHERE affiliate_id = %d 
 				ORDER BY id DESC LIMIT 50",
@@ -753,6 +856,7 @@ class Exacoat_Affiliate_Manager {
 				'total_clicks'      => (int) $affiliate->total_clicks,
 				'total_orders'      => (int) $affiliate->total_orders,
 				'commission_rate'   => self::COMMISSION_RATE,
+				'grace_period_days' => self::GRACE_PERIOD_DAYS,
 				'min_payout_amount' => self::MIN_PAYOUT_IDR,
 				'can_request_payout'=> ( (float) $affiliate->unpaid_balance >= self::MIN_PAYOUT_IDR && in_array( $affiliate->bank_name, [ 'BCA', 'MANDIRI' ], true ) && ! empty( $affiliate->bank_account_number ) ),
 			],
@@ -782,7 +886,6 @@ class Exacoat_Affiliate_Manager {
 		$updates = [];
 		$formats = [];
 
-		// Bank Account Settings: strictly BCA or MANDIRI
 		if ( isset( $params['bank_name'] ) ) {
 			$raw_bank = strtoupper( trim( sanitize_text_field( $params['bank_name'] ) ) );
 			if ( ! in_array( $raw_bank, [ 'BCA', 'MANDIRI' ], true ) ) {
@@ -810,14 +913,12 @@ class Exacoat_Affiliate_Manager {
 			$formats[] = '%s';
 		}
 
-		// Slug Customization: permitted only if slug_locked is 0, then locked permanently
 		if ( ! empty( $params['slug'] ) && ! $affiliate->slug_locked ) {
 			$new_slug = sanitize_title( trim( $params['slug'] ) );
 			if ( strlen( $new_slug ) < 3 ) {
 				return new WP_Error( 'invalid_slug', 'Referral URL slug must be at least 3 characters.', [ 'status' => 400 ] );
 			}
 
-			// Verify slug uniqueness
 			$existing_slug_owner = $wpdb->get_var(
 				$wpdb->prepare( "SELECT id FROM {$table_affiliates} WHERE slug = %s AND id != %d LIMIT 1", $new_slug, $affiliate->id )
 			);
@@ -852,6 +953,9 @@ class Exacoat_Affiliate_Manager {
 			return new WP_Error( 'unauthorized', 'Authentication required.', [ 'status' => 401 ] );
 		}
 
+		// Mature any eligible commissions first
+		self::process_matured_commissions();
+
 		$affiliate = self::get_affiliate_by_user_id( $user_id );
 		if ( ! $affiliate || 'active' !== $affiliate->status ) {
 			return new WP_Error( 'forbidden', 'Only approved active affiliates can request payouts.', [ 'status' => 403 ] );
@@ -875,7 +979,6 @@ class Exacoat_Affiliate_Manager {
 		$table_affiliates  = $wpdb->prefix . 'exacoat_affiliates';
 		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
 
-		// Prevent multiple concurrent pending requests
 		$active_pending = $wpdb->get_var(
 			$wpdb->prepare( "SELECT id FROM {$table_payouts} WHERE affiliate_id = %d AND status = 'pending' LIMIT 1", $affiliate->id )
 		);
@@ -883,7 +986,6 @@ class Exacoat_Affiliate_Manager {
 			return new WP_Error( 'pending_request_exists', 'You already have an open payout request under review.', [ 'status' => 409 ] );
 		}
 
-		// Create payout request
 		$wpdb->insert(
 			$table_payouts,
 			[
@@ -900,7 +1002,6 @@ class Exacoat_Affiliate_Manager {
 
 		$payout_id = $wpdb->insert_id;
 
-		// Deduct from balance and tag unpaid commissions
 		$wpdb->query(
 			$wpdb->prepare(
 				"UPDATE {$table_affiliates} SET unpaid_balance = GREATEST(0.00, unpaid_balance - %f) WHERE id = %d",
@@ -969,6 +1070,8 @@ class Exacoat_Affiliate_Manager {
 	 * Admin Endpoint: List all affiliates with filters and metrics.
 	 */
 	public static function rest_admin_get_affiliates( WP_REST_Request $request ) {
+		self::process_matured_commissions();
+
 		global $wpdb;
 		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
 
@@ -1058,6 +1161,8 @@ class Exacoat_Affiliate_Manager {
 	 * Admin Endpoint: Commissions list for audit.
 	 */
 	public static function rest_admin_get_commissions( WP_REST_Request $request ) {
+		self::process_matured_commissions();
+
 		global $wpdb;
 		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
 		$table_affiliates  = $wpdb->prefix . 'exacoat_affiliates';
@@ -1097,6 +1202,8 @@ class Exacoat_Affiliate_Manager {
 	 * Admin Endpoint: Payout requests ledger.
 	 */
 	public static function rest_admin_get_payouts( WP_REST_Request $request ) {
+		self::process_matured_commissions();
+
 		global $wpdb;
 		$table_payouts    = $wpdb->prefix . 'exacoat_affiliate_payouts';
 		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
@@ -1166,7 +1273,6 @@ class Exacoat_Affiliate_Manager {
 				[ 'id' => $payout_id ]
 			);
 
-			// Mark linked commissions as paid
 			$wpdb->update(
 				$table_commissions,
 				[ 'status' => 'paid' ],
@@ -1192,7 +1298,6 @@ class Exacoat_Affiliate_Manager {
 				[ 'id' => $payout_id ]
 			);
 
-			// Refund balance back to affiliate
 			$wpdb->query(
 				$wpdb->prepare(
 					"UPDATE {$table_affiliates} SET unpaid_balance = unpaid_balance + %f WHERE id = %d",
@@ -1201,7 +1306,6 @@ class Exacoat_Affiliate_Manager {
 				)
 			);
 
-			// Unbind commissions so they can be included in future requests
 			$wpdb->query(
 				$wpdb->prepare(
 					"UPDATE {$table_commissions} SET payout_id = NULL WHERE payout_id = %d",
@@ -1243,7 +1347,6 @@ class Exacoat_Affiliate_Manager {
 		$csv_lines = [];
 
 		if ( 'BCA' === $bank ) {
-			// KlikBCA Bisnis Payroll CSV Format
 			$csv_lines[] = 'No,Rekening Tujuan,Nama Penerima,Nomor Referensi,Nominal,Berita';
 			$idx = 1;
 			foreach ( $payouts as $p ) {
@@ -1258,7 +1361,6 @@ class Exacoat_Affiliate_Manager {
 				);
 			}
 		} else {
-			// Mandiri Cash Management (MCM) Format
 			$csv_lines[] = 'Debit Account,Beneficiary Account,Beneficiary Name,Amount,Currency,Remark';
 			foreach ( $payouts as $p ) {
 				$csv_lines[] = sprintf(
@@ -1304,7 +1406,6 @@ class Exacoat_Affiliate_Manager {
 			$body    = "<p>Hi {$first_name},</p><p>Thank you for your interest in partnering with Exacoat. At this time, we are unable to accept your affiliate application.</p>{$reason}";
 		}
 
-		// Dispatch via Exacoat Native Email Engine
 		Exacoat_Email_Engine::send_email(
 			'customer_new_account',
 			$email,
@@ -1334,14 +1435,14 @@ class Exacoat_Affiliate_Manager {
 		$order_num        = $order->get_order_number();
 
 		if ( 'confirmed' === $type ) {
-			$subject = "Commission Confirmed: {$formatted_amount} from Order #{$order_num}";
-			$body    = "<p>Hi {$user->first_name},</p><p>Great news. Order #{$order_num} has been completed and your 20% commission of <strong>{$formatted_amount}</strong> has been added to your unpaid balance.</p>";
+			$subject = "Commission Cleared: {$formatted_amount} from Order #{$order_num}";
+			$body    = "<p>Hi {$user->first_name},</p><p>Order #{$order_num} has successfully cleared the 7-day post-delivery grace period. Your 20% commission of <strong>{$formatted_amount}</strong> is now available in your withdrawable balance.</p>";
 		} elseif ( 'recorded' === $type ) {
 			$subject = "New Referral Sale Recorded: Order #{$order_num}";
-			$body    = "<p>Hi {$user->first_name},</p><p>A customer just placed order #{$order_num} using your referral link. A commission of <strong>{$formatted_amount}</strong> is currently pending order fulfillment.</p>";
+			$body    = "<p>Hi {$user->first_name},</p><p>A customer just placed order #{$order_num} using your referral link. A commission of <strong>{$formatted_amount}</strong> is pending delivery and will mature to your balance after the 7-day post-delivery grace period.</p>";
 		} else {
 			$subject = "Commission Update: Order #{$order_num} Refunded";
-			$body    = "<p>Hi {$user->first_name},</p><p>Order #{$order_num} was refunded or cancelled by the customer. The associated commission of {$formatted_amount} has been adjusted accordingly.</p>";
+			$body    = "<p>Hi {$user->first_name},</p><p>Order #{$order_num} was refunded or cancelled. The associated commission of {$formatted_amount} has been cancelled accordingly.</p>";
 		}
 
 		if ( class_exists( 'Exacoat_Email_Engine' ) ) {

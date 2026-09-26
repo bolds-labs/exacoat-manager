@@ -690,6 +690,8 @@ export interface AffiliateCommission {
   commission_rate: number;
   commission_amount: number;
   status: AffiliateCommissionStatus;
+  delivered_at?: string | null;
+  matures_at?: string | null;
   rejection_reason?: string | null;
   payout_id?: number | null;
   customer_email?: string;
