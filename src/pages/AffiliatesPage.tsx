@@ -36,7 +36,9 @@ import {
   Plus,
   DollarSign,
   Settings,
-  Trash2
+  Trash2,
+  LayoutDashboard,
+  Link2
 } from 'lucide-react';
 import { 
   fetchAdminAffiliates, 
@@ -61,6 +63,9 @@ import {
 import { AffiliateCommission, AffiliatePayout, Order } from '../types';
 import { OrderDetailDrawer } from '../components/orders/OrderDetailDrawer';
 import { AffiliateDashboardPage } from '../affiliate/pages/AffiliateDashboardPage';
+import { AffiliateLinkGeneratorPage } from '../affiliate/pages/AffiliateLinkGeneratorPage';
+import { AffiliatePayoutsPage } from '../affiliate/pages/AffiliatePayoutsPage';
+import { AffiliateSettingsPage } from '../affiliate/pages/AffiliateSettingsPage';
 import { CustomSelect } from '../components/ui/CustomSelect';
 import { useToast } from '../context/ToastContext';
 import { FilterSelect, FilterSelectOption } from '../components/ui/FilterSelect';
@@ -154,6 +159,9 @@ export const AffiliatesPage: React.FC = () => {
   const [creatorSlugInput, setCreatorSlugInput] = useState('');
   const [creatorDisplayNameInput, setCreatorDisplayNameInput] = useState('');
   const [discountRateInput, setDiscountRateInput] = useState('');
+  const [creatorBankNameInput, setCreatorBankNameInput] = useState<string>('BCA');
+  const [creatorBankAccountNumberInput, setCreatorBankAccountNumberInput] = useState<string>('');
+  const [creatorBankAccountNameInput, setCreatorBankAccountNameInput] = useState<string>('');
   const [couponCodeInput, setCouponCodeInput] = useState('');
   const [commissionRateInput, setCommissionRateInput] = useState('');
   const [showManualAdj, setShowManualAdj] = useState(false);
@@ -187,6 +195,7 @@ export const AffiliatesPage: React.FC = () => {
 
   // See as Creator (Preview Creator Portal) State
   const [previewCreatorAffiliate, setPreviewCreatorAffiliate] = useState<any | null>(null);
+  const [creatorPreviewTab, setCreatorPreviewTab] = useState<'dashboard' | 'links' | 'payouts' | 'settings'>('dashboard');
   const [previewPortalData, setPreviewPortalData] = useState<{
     profile: any;
     metrics: any;
@@ -234,6 +243,7 @@ export const AffiliatesPage: React.FC = () => {
 
   const handleSeeAsCreator = async (aff: any) => {
     setPreviewCreatorAffiliate(aff);
+    setCreatorPreviewTab('dashboard');
     setIsLoadingCreatorPreview(true);
     setCreatorPreviewError(null);
     setPreviewPortalData(null);
@@ -271,6 +281,9 @@ export const AffiliatesPage: React.FC = () => {
     setCreatorSlugInput(aff.slug || '');
     setCreatorDisplayNameInput(aff.creator_display_name || aff.display_name || '');
     setDiscountRateInput(aff.discount_rate != null ? String(aff.discount_rate) : '0');
+    setCreatorBankNameInput((aff.bank_name as string) || 'BCA');
+    setCreatorBankAccountNumberInput(aff.bank_account_number || '');
+    setCreatorBankAccountNameInput(aff.bank_account_name || '');
     setCouponCodeInput(aff.coupon_code || '');
     setCommissionRateInput(aff.commission_rate ? String(aff.commission_rate) : '');
     setShowManualAdj(false);
@@ -292,6 +305,9 @@ export const AffiliatesPage: React.FC = () => {
         commission_rate: commissionRateInput.trim() ? parseFloat(commissionRateInput) : null,
         display_name: creatorDisplayNameInput.trim(),
         discount_rate: discountRateInput.trim() ? parseFloat(discountRateInput) : null,
+        bank_name: creatorBankNameInput,
+        bank_account_number: creatorBankAccountNumberInput.trim(),
+        bank_account_name: creatorBankAccountNameInput.trim(),
       });
 
       let manualMsg = '';
@@ -2101,7 +2117,7 @@ export const AffiliatesPage: React.FC = () => {
                     </span>
                     <input
                       type="text"
-                      placeholder="e.g. edwinyang"
+                      placeholder="your-referral-slug"
                       value={creatorSlugInput}
                       onChange={(e) => setCreatorSlugInput(e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, ''))}
                       className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl pl-8 pr-3.5 py-2.5 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
@@ -2122,7 +2138,7 @@ export const AffiliatesPage: React.FC = () => {
                     <User className="w-3.5 h-3.5 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="text"
-                      placeholder="e.g. Edwin Yang, Dimas Sampurno"
+                      placeholder="Your channel or creator name"
                       value={creatorDisplayNameInput}
                       onChange={(e) => setCreatorDisplayNameInput(e.target.value)}
                       className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
@@ -2225,6 +2241,70 @@ export const AffiliatesPage: React.FC = () => {
                   <p className="text-[11px] text-neutral-500">
                     Commission earned by creator on net subtotal of attributed customer orders.
                   </p>
+                </div>
+
+                {/* Bank Account Details (BCA / Mandiri) */}
+                <div className="pt-2 border-t border-white/[0.08] space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-3.5 h-3.5 text-amber-400" />
+                    <label className="text-xs font-medium text-neutral-300">
+                      Bank Account Details (BCA / Mandiri)
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCreatorBankNameInput('BCA')}
+                      className={clsx(
+                        'py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer text-center',
+                        creatorBankNameInput === 'BCA'
+                          ? 'bg-blue-600/20 text-blue-400 border-blue-500/40 shadow-sm'
+                          : 'bg-[#18181b] text-neutral-400 hover:text-white border-white/[0.08]'
+                      )}
+                    >
+                      BCA (Bank Central Asia)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCreatorBankNameInput('MANDIRI')}
+                      className={clsx(
+                        'py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer text-center',
+                        creatorBankNameInput === 'MANDIRI'
+                          ? 'bg-amber-600/20 text-amber-400 border-amber-500/40 shadow-sm'
+                          : 'bg-[#18181b] text-neutral-400 hover:text-white border-white/[0.08]'
+                      )}
+                    >
+                      Bank Mandiri
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[11px] font-medium text-neutral-400 mb-1">
+                        Bank Account Number
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 1234567890"
+                        value={creatorBankAccountNumberInput}
+                        onChange={(e) => setCreatorBankAccountNumberInput(e.target.value.replace(/[^0-9]/g, ''))}
+                        className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-neutral-400 mb-1">
+                        Account Holder Name
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Account holder name as registered in bank"
+                        value={creatorBankAccountNameInput}
+                        onChange={(e) => setCreatorBankAccountNameInput(e.target.value)}
+                        className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Manual Balance Adjustment Section */}
@@ -2732,6 +2812,65 @@ export const AffiliatesPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Creator Preview Tabs Bar */}
+              <div className="px-4 sm:px-6 py-2 border-b border-white/[0.08] bg-[#111114] flex items-center gap-1 sm:gap-2 overflow-x-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setCreatorPreviewTab('dashboard')}
+                  className={clsx(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap',
+                    creatorPreviewTab === 'dashboard'
+                      ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                      : 'text-neutral-400 hover:text-white hover:bg-white/[0.05]'
+                  )}
+                >
+                  <LayoutDashboard className="w-3.5 h-3.5" />
+                  <span>Dashboard</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCreatorPreviewTab('links')}
+                  className={clsx(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap',
+                    creatorPreviewTab === 'links'
+                      ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                      : 'text-neutral-400 hover:text-white hover:bg-white/[0.05]'
+                  )}
+                >
+                  <Link2 className="w-3.5 h-3.5" />
+                  <span>Referral Links</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCreatorPreviewTab('payouts')}
+                  className={clsx(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap',
+                    creatorPreviewTab === 'payouts'
+                      ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                      : 'text-neutral-400 hover:text-white hover:bg-white/[0.05]'
+                  )}
+                >
+                  <Wallet className="w-3.5 h-3.5" />
+                  <span>Payouts</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCreatorPreviewTab('settings')}
+                  className={clsx(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap',
+                    creatorPreviewTab === 'settings'
+                      ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                      : 'text-neutral-400 hover:text-white hover:bg-white/[0.05]'
+                  )}
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  <span>Settings & Bank</span>
+                </button>
+              </div>
+
               {/* Modal Body */}
               <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[#080808]">
                 {isLoadingCreatorPreview ? (
@@ -2755,16 +2894,37 @@ export const AffiliatesPage: React.FC = () => {
                     </button>
                   </div>
                 ) : previewPortalData ? (
-                  <AffiliateDashboardPage
-                    profile={previewPortalData.profile}
-                    metrics={previewPortalData.metrics}
-                    commissions={previewPortalData.commissions}
-                    clicks={previewPortalData.clicks}
-                    dailyStats={previewPortalData.daily_stats}
-                    payouts={previewPortalData.payouts}
-                    onRefresh={() => handleSeeAsCreator(previewCreatorAffiliate)}
-                    onNavigateTab={() => {}}
-                  />
+                  <>
+                    {creatorPreviewTab === 'dashboard' && (
+                      <AffiliateDashboardPage
+                        profile={previewPortalData.profile}
+                        metrics={previewPortalData.metrics}
+                        commissions={previewPortalData.commissions}
+                        clicks={previewPortalData.clicks}
+                        dailyStats={previewPortalData.daily_stats}
+                        payouts={previewPortalData.payouts}
+                        onRefresh={() => handleSeeAsCreator(previewCreatorAffiliate)}
+                        onNavigateTab={(tab) => setCreatorPreviewTab(tab as any)}
+                      />
+                    )}
+                    {creatorPreviewTab === 'links' && (
+                      <AffiliateLinkGeneratorPage profile={previewPortalData.profile} />
+                    )}
+                    {creatorPreviewTab === 'payouts' && (
+                      <AffiliatePayoutsPage
+                        profile={previewPortalData.profile}
+                        payouts={previewPortalData.payouts}
+                        onRefresh={() => handleSeeAsCreator(previewCreatorAffiliate)}
+                        onNavigateTab={(tab) => setCreatorPreviewTab(tab as any)}
+                      />
+                    )}
+                    {creatorPreviewTab === 'settings' && (
+                      <AffiliateSettingsPage
+                        profile={previewPortalData.profile}
+                        onRefresh={() => handleSeeAsCreator(previewCreatorAffiliate)}
+                      />
+                    )}
+                  </>
                 ) : null}
               </div>
             </div>

@@ -1626,11 +1626,18 @@ class Exacoat_Affiliate_Manager {
 	 * Permission check: verify affiliate is logged in.
 	 */
 	public static function check_affiliate_auth( WP_REST_Request $request ): bool {
+		if ( self::check_admin_auth( $request ) ) {
+			return true;
+		}
 		$user_id = get_current_user_id();
 		if ( ! $user_id ) {
 			$user_id = self::extract_authenticated_user_id( $request );
 		}
-		return $user_id > 0;
+		if ( $user_id > 0 ) {
+			wp_set_current_user( $user_id );
+			return true;
+		}
+		return false;
 	}
 
 	/**
@@ -1719,7 +1726,7 @@ class Exacoat_Affiliate_Manager {
 	}
 
 	/**
-	 * Extract user ID from application passwords or custom auth tokens.
+	 * Extract user ID from application passwords, WooCommerce consumer keys, or custom auth tokens.
 	 */
 	private static function extract_authenticated_user_id( WP_REST_Request $request ): int {
 		$auth_header = $request->get_header( 'authorization' ) ?: ( $_SERVER['HTTP_AUTHORIZATION'] ?? '' );
@@ -1727,6 +1734,18 @@ class Exacoat_Affiliate_Manager {
 			$decoded = base64_decode( $m[1] );
 			if ( strpos( $decoded, ':' ) !== false ) {
 				list( $u, $p ) = explode( ':', $decoded, 2 );
+
+				// Check if user is passing WC consumer key and secret via basic auth
+				if ( 0 === strpos( $u, 'ck_' ) && 0 === strpos( $p, 'cs_' ) ) {
+					global $wpdb;
+					$table_keys = $wpdb->prefix . 'woocommerce_api_keys';
+					$key_hash   = function_exists( 'wc_api_hash' ) ? wc_api_hash( $u ) : hash( 'sha256', $u );
+					$row        = $wpdb->get_row( $wpdb->prepare( "SELECT user_id, consumer_secret FROM {$table_keys} WHERE consumer_key = %s LIMIT 1", $key_hash ) );
+					if ( $row && hash_equals( (string) $row->consumer_secret, (string) $p ) ) {
+						return (int) $row->user_id;
+					}
+				}
+
 				$user = wp_authenticate_application_password( null, $u, $p );
 				if ( $user instanceof WP_User ) {
 					return (int) $user->ID;
@@ -1737,6 +1756,20 @@ class Exacoat_Affiliate_Manager {
 				}
 			}
 		}
+
+		// Also extract from query parameter or header WC consumer keys
+		$consumer_key    = (string) ( $request->get_param( 'consumer_key' ) ?: ( $request->get_header( 'X-WC-Consumer-Key' ) ?: '' ) );
+		$consumer_secret = (string) ( $request->get_param( 'consumer_secret' ) ?: ( $request->get_header( 'X-WC-Consumer-Secret' ) ?: '' ) );
+		if ( ! empty( $consumer_key ) && ! empty( $consumer_secret ) ) {
+			global $wpdb;
+			$table_keys = $wpdb->prefix . 'woocommerce_api_keys';
+			$key_hash   = function_exists( 'wc_api_hash' ) ? wc_api_hash( $consumer_key ) : hash( 'sha256', $consumer_key );
+			$row        = $wpdb->get_row( $wpdb->prepare( "SELECT user_id, consumer_secret FROM {$table_keys} WHERE consumer_key = %s LIMIT 1", $key_hash ) );
+			if ( $row && hash_equals( (string) $row->consumer_secret, (string) $consumer_secret ) ) {
+				return (int) $row->user_id;
+			}
+		}
+
 		return 0;
 	}
 
@@ -1889,8 +1922,13 @@ class Exacoat_Affiliate_Manager {
 	 */
 	public static function rest_get_portal_data( WP_REST_Request $request ) {
 		$user_id = get_current_user_id() ?: self::extract_authenticated_user_id( $request );
-		if ( ! $user_id ) {
+		$is_admin = self::check_admin_auth( $request ) || current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' );
+
+		if ( ! $user_id && ! $is_admin ) {
 			return new WP_Error( 'unauthorized', 'Authentication required.', [ 'status' => 401 ] );
+		}
+		if ( $user_id > 0 ) {
+			wp_set_current_user( $user_id );
 		}
 
 		// Ensure any commissions that have cleared the 7-day grace period mature now
@@ -1898,14 +1936,27 @@ class Exacoat_Affiliate_Manager {
 
 		// Support admin or shop manager previewing a creator dashboard by passing ?affiliate_id=X
 		$requested_aff_id = (int) $request->get_param( 'affiliate_id' );
-		if ( $requested_aff_id > 0 && ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) ) {
+		if ( $requested_aff_id > 0 && $is_admin ) {
 			$affiliate = self::get_affiliate_by_id( $requested_aff_id );
+			if ( ! $affiliate ) {
+				$affiliate = self::get_affiliate_by_user_id( $requested_aff_id );
+			}
 			if ( ! $affiliate ) {
 				return new WP_Error( 'not_found', 'Affiliate profile not found.', [ 'status' => 404 ] );
 			}
 			$user_id = (int) $affiliate->user_id;
 		} else {
 			$affiliate = self::get_affiliate_by_user_id( $user_id );
+			if ( ! $affiliate && $user_id > 0 ) {
+				$current_user = get_userdata( $user_id );
+				if ( $current_user && ! empty( $current_user->user_email ) ) {
+					global $wpdb;
+					$tbl = $wpdb->prefix . 'exacoat_affiliates';
+					$affiliate = $wpdb->get_row(
+						$wpdb->prepare( "SELECT * FROM {$tbl} WHERE email = %s LIMIT 1", $current_user->user_email )
+					);
+				}
+			}
 			if ( ! $affiliate ) {
 				return new WP_Error( 'not_found', 'Affiliate profile not found.', [ 'status' => 404 ] );
 			}
@@ -2104,29 +2155,36 @@ class Exacoat_Affiliate_Manager {
 	 */
 	public static function rest_update_settings( WP_REST_Request $request ) {
 		$user_id = get_current_user_id() ?: self::extract_authenticated_user_id( $request );
-		if ( ! $user_id ) {
+		$is_admin = self::check_admin_auth( $request ) || current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' );
+
+		if ( ! $user_id && ! $is_admin ) {
 			return new WP_Error( 'unauthorized', 'Authentication required.', [ 'status' => 401 ] );
+		}
+		if ( $user_id > 0 ) {
+			wp_set_current_user( $user_id );
 		}
 
 		$params = $request->get_json_params() ?: $request->get_params();
 		$param_aff_id = (int) ( $params['affiliate_id'] ?? $request->get_param( 'affiliate_id' ) ?? 0 );
 
 		$affiliate = null;
-		$is_admin = current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' );
 
 		if ( $param_aff_id > 0 ) {
 			$candidate = self::get_affiliate_by_id( $param_aff_id );
+			if ( ! $candidate ) {
+				$candidate = self::get_affiliate_by_user_id( $param_aff_id );
+			}
 			if ( $candidate && ( $is_admin || (int) $candidate->user_id === $user_id ) ) {
 				$affiliate = $candidate;
 			}
 		}
 
-		if ( ! $affiliate ) {
+		if ( ! $affiliate && $user_id > 0 ) {
 			$affiliate = self::get_affiliate_by_user_id( $user_id );
 		}
 
 		// Fallback lookup by user email if affiliate user_id is null or mismatched
-		if ( ! $affiliate ) {
+		if ( ! $affiliate && $user_id > 0 ) {
 			$current_user = get_userdata( $user_id );
 			if ( $current_user && ! empty( $current_user->user_email ) ) {
 				global $wpdb;
@@ -2245,8 +2303,13 @@ class Exacoat_Affiliate_Manager {
 	 */
 	public static function rest_request_payout( WP_REST_Request $request ) {
 		$user_id = get_current_user_id() ?: self::extract_authenticated_user_id( $request );
-		if ( ! $user_id ) {
+		$is_admin = self::check_admin_auth( $request ) || current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' );
+
+		if ( ! $user_id && ! $is_admin ) {
 			return new WP_Error( 'unauthorized', 'Authentication required.', [ 'status' => 401 ] );
+		}
+		if ( $user_id > 0 ) {
+			wp_set_current_user( $user_id );
 		}
 
 		// Mature any eligible commissions first
@@ -2255,18 +2318,20 @@ class Exacoat_Affiliate_Manager {
 		$affiliate = null;
 		$params = $request->get_json_params() ?: $request->get_params();
 		$param_affiliate_id = (int) ( $params['affiliate_id'] ?? $request->get_param( 'affiliate_id' ) ?? 0 );
-		$is_admin = current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' );
 
 		if ( $param_affiliate_id > 0 ) {
 			$candidate = self::get_affiliate_by_id( $param_affiliate_id );
+			if ( ! $candidate ) {
+				$candidate = self::get_affiliate_by_user_id( $param_affiliate_id );
+			}
 			if ( $candidate && ( $is_admin || (int) $candidate->user_id === $user_id ) ) {
 				$affiliate = $candidate;
 			}
 		}
-		if ( ! $affiliate ) {
+		if ( ! $affiliate && $user_id > 0 ) {
 			$affiliate = self::get_affiliate_by_user_id( $user_id );
 		}
-		if ( ! $affiliate ) {
+		if ( ! $affiliate && $user_id > 0 ) {
 			$current_user = get_userdata( $user_id );
 			if ( $current_user && ! empty( $current_user->user_email ) ) {
 				global $wpdb;
@@ -5533,6 +5598,20 @@ class Exacoat_Affiliate_Manager {
 		// Handle discount rate
 		if ( isset( $params['discount_rate'] ) && '' !== $params['discount_rate'] && null !== $params['discount_rate'] ) {
 			$update_data['discount_rate'] = round( (float) $params['discount_rate'], 2 );
+		}
+
+		// Handle bank details if provided
+		if ( isset( $params['bank_name'] ) ) {
+			$raw_bank = strtoupper( trim( sanitize_text_field( $params['bank_name'] ) ) );
+			if ( empty( $raw_bank ) || in_array( $raw_bank, [ 'BCA', 'MANDIRI' ], true ) ) {
+				$update_data['bank_name'] = $raw_bank;
+			}
+		}
+		if ( isset( $params['bank_account_number'] ) ) {
+			$update_data['bank_account_number'] = preg_replace( '/[^0-9]/', '', (string) $params['bank_account_number'] );
+		}
+		if ( isset( $params['bank_account_name'] ) ) {
+			$update_data['bank_account_name'] = sanitize_text_field( trim( (string) $params['bank_account_name'] ) );
 		}
 
 		$wpdb->update(

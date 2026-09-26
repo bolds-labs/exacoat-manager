@@ -7670,6 +7670,9 @@ export async function updateAdminAffiliateCommissionRate(payload: {
   display_name?: string;
   discount_rate?: number | null;
   coupon_code?: string;
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_account_name?: string;
 }): Promise<{ success: boolean; message?: string; affiliate?: any; error?: string }> {
   const base = getWordPressBaseUrl();
   const wcCreds = getWcCredentials();
