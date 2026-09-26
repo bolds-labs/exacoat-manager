@@ -8,12 +8,14 @@ import {
   Sparkles, 
   ShoppingBag, 
   Loader2, 
-  ArrowRight,
   ShieldCheck 
 } from 'lucide-react';
 import { AffiliateProfile } from '../../types';
 import { searchAffiliateProducts } from '../../lib/wordpressBridge';
 import { useToast } from '../../context/ToastContext';
+import { PageHeroHeader } from '../../components/ui/PageHeroHeader';
+import { GlassCard } from '../../components/ui/GlassCard';
+import { Button } from '../../components/ui/Button';
 import { clsx } from 'clsx';
 
 interface AffiliateLinkGeneratorPageProps {
@@ -123,91 +125,90 @@ export const AffiliateLinkGeneratorPage: React.FC<AffiliateLinkGeneratorPageProp
   };
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto">
-      {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-white tracking-tight">Product Links and Deep Link Generator</h1>
-        <p className="text-xs text-zinc-400 mt-1">
-          Generate direct product referral links that credit your account with 20% commission on every order.
-        </p>
-      </div>
+    <div className="space-y-6">
+      {/* Top Banner */}
+      <PageHeroHeader
+        title="Product Link Generator"
+        subtitle="Generate direct tracking links for any Exacoat skin, device, or collection to earn 20% on every verified purchase."
+      />
 
       {/* Custom URL Converter Card */}
-      <section className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4 shadow-sm">
+      <GlassCard className="p-6 space-y-4">
         <div className="flex items-center gap-2">
-          <Link2 className="w-4 h-4 text-amber-400" />
-          <h2 className="text-sm font-semibold text-white">Paste Any Exacoat Store URL</h2>
+          <div className="p-2 rounded-xl bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/20">
+            <Link2 className="w-4 h-4" />
+          </div>
+          <div>
+            <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400">Convert Any Exacoat Store URL</h2>
+            <p className="text-xs text-zinc-300 mt-0.5">
+              Paste any exacoat.com product, collection, or landing page link to attach your tracking slug.
+            </p>
+          </div>
         </div>
-        <p className="text-xs text-zinc-400">
-          Already browsing an item on exacoat.com? Paste the page link below to append your permanent affiliate tag.
-        </p>
 
-        <form onSubmit={handleGenerateCustomUrl} className="flex flex-col sm:flex-row gap-2">
+        <form onSubmit={handleGenerateCustomUrl} className="flex flex-col sm:flex-row gap-2.5">
           <input
             type="text"
             value={customUrlInput}
             onChange={(e) => setCustomUrlInput(e.target.value)}
             placeholder="https://exacoat.com/products/iphone-16-pro-max-skins"
-            className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+            className="h-11 flex-1 px-4 rounded-xl border border-white/[0.09] bg-white/[0.035] font-mono text-xs sm:text-sm text-white placeholder-zinc-500 outline-none transition-all hover:border-white/[0.16] focus:border-[#f3aa18]/70 focus:bg-white/[0.05] focus:ring-4 focus:ring-[#f3aa18]/[0.08]"
           />
-          <button
+          <Button
             type="submit"
-            className="px-5 py-2.5 rounded-xl text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-white transition-colors cursor-pointer"
+            variant="primary"
+            size="lg"
           >
             Generate Link
-          </button>
+          </Button>
         </form>
 
         {generatedCustomUrl && (
-          <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <span className="text-xs font-mono text-zinc-300 break-all select-all">
+          <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08] flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
+            <span className="text-xs font-mono text-[#f3aa18] break-all select-all pl-1">
               {generatedCustomUrl}
             </span>
             <div className="flex items-center gap-2 shrink-0">
-              <button
+              <Button
                 type="button"
+                variant={copiedKey === 'custom' ? 'success' : 'primary'}
+                size="sm"
                 onClick={handleCopyCustomUrl}
-                className={clsx(
-                  'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
-                  copiedKey === 'custom'
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-amber-500 hover:bg-amber-400 text-zinc-950'
-                )}
+                leftIcon={copiedKey === 'custom' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
               >
-                {copiedKey === 'custom' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedKey === 'custom' ? 'Copied' : 'Copy'}</span>
-              </button>
+                {copiedKey === 'custom' ? 'Copied' : 'Copy Link'}
+              </Button>
               <a
                 href={generatedCustomUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 transition-colors"
-                title="Open in new tab"
+                className="p-2 rounded-xl text-zinc-400 hover:text-white bg-[#141414] hover:bg-white/[0.06] border border-white/[0.08] transition-colors"
+                title="Test referral link in new tab"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>
           </div>
         )}
-      </section>
+      </GlassCard>
 
       {/* Product Catalog Finder */}
-      <section className="space-y-4">
+      <GlassCard className="p-6 space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold text-white">Find Products in Catalog</h2>
-            <p className="text-xs text-zinc-400 mt-0.5">
-              Search popular device skins, screen protectors, and accessories.
+            <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400">Search Store Catalog</h2>
+            <p className="text-xs text-zinc-300 mt-0.5">
+              Instant 1-click tracking links for device skins, screen protectors, and accessories.
             </p>
           </div>
-          <div className="relative w-full sm:w-72">
-            <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-3" />
+          <div className="relative w-full sm:w-80">
+            <Search className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3.5 pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search iPhone, MacBook, iPad..."
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              className="h-11 w-full pl-10 pr-4 rounded-xl border border-white/[0.09] bg-white/[0.035] font-sans text-xs sm:text-sm text-white placeholder-zinc-500 outline-none transition-all hover:border-white/[0.16] focus:border-[#f3aa18]/70 focus:bg-white/[0.05] focus:ring-4 focus:ring-[#f3aa18]/[0.08]"
             />
           </div>
         </div>
@@ -215,12 +216,12 @@ export const AffiliateLinkGeneratorPage: React.FC<AffiliateLinkGeneratorPageProp
         {/* Results Container */}
         {isLoading ? (
           <div className="py-16 text-center text-zinc-400 flex items-center justify-center gap-2">
-            <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
-            <span className="text-xs">Searching store catalog...</span>
+            <Loader2 className="w-4 h-4 animate-spin text-[#f3aa18]" />
+            <span className="text-xs font-mono">Searching store catalog...</span>
           </div>
         ) : products.length === 0 ? (
-          <div className="py-12 text-center rounded-2xl bg-zinc-900 border border-zinc-800 p-6 space-y-2">
-            <ShoppingBag className="w-8 h-8 text-zinc-400 mx-auto" />
+          <div className="py-12 text-center rounded-2xl bg-white/[0.02] border border-white/[0.06] p-6 space-y-2">
+            <ShoppingBag className="w-8 h-8 text-zinc-500 mx-auto" />
             <h3 className="text-sm font-semibold text-zinc-300">No products match your query</h3>
             <p className="text-xs text-zinc-400">
               Try searching for specific devices like iPhone, Galaxy, iPad, or MacBook.
@@ -231,25 +232,26 @@ export const AffiliateLinkGeneratorPage: React.FC<AffiliateLinkGeneratorPageProp
             {products.map((prod) => {
               const isCopied = copiedKey === String(prod.id);
               return (
-                <div
+                <GlassCard
                   key={prod.id}
-                  className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700/80 transition-colors flex flex-col justify-between gap-3 shadow-sm"
+                  hoverEffect={true}
+                  className="p-4 flex flex-col justify-between gap-3"
                 >
                   <div className="flex items-start gap-3">
                     {prod.image_url ? (
                       <img
                         src={prod.image_url}
                         alt={prod.name}
-                        className="w-12 h-12 rounded-lg object-cover bg-zinc-950 border border-zinc-800 shrink-0"
+                        className="w-12 h-12 rounded-xl object-cover bg-black border border-white/[0.08] shrink-0"
                         loading="lazy"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded-lg bg-zinc-950 border border-zinc-800 flex items-center justify-center text-zinc-400 shrink-0">
+                      <div className="w-12 h-12 rounded-xl bg-black border border-white/[0.08] flex items-center justify-center text-zinc-500 shrink-0">
                         <ShoppingBag className="w-5 h-5" />
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-xs font-semibold text-zinc-200 truncate leading-snug" title={prod.name}>
+                      <h3 className="text-xs font-semibold text-zinc-100 truncate leading-snug" title={prod.name}>
                         {prod.name}
                       </h3>
                       {prod.price > 0 && (
@@ -257,50 +259,46 @@ export const AffiliateLinkGeneratorPage: React.FC<AffiliateLinkGeneratorPageProp
                           {formatIDR(prod.price)}
                         </p>
                       )}
-                      <p className="text-[10px] text-emerald-400 font-medium mt-0.5">
-                        Earn 20% commission ({formatIDR(prod.price * 0.20)})
+                      <p className="text-[10px] text-emerald-400 font-medium mt-0.5 font-mono">
+                        Earn 20% ({formatIDR(prod.price * 0.20)})
                       </p>
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between gap-2">
+                  <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between gap-2">
                     <a
                       href={prod.permalink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[11px] text-zinc-400 hover:text-zinc-200 transition-colors inline-flex items-center gap-1"
+                      className="text-[11px] text-zinc-400 hover:text-white transition-colors inline-flex items-center gap-1"
                     >
                       <span>View</span>
                       <ExternalLink className="w-3 h-3" />
                     </a>
-                    <button
+                    <Button
                       type="button"
+                      variant={isCopied ? 'success' : 'secondary'}
+                      size="sm"
                       onClick={() => handleCopyProductLink(prod)}
-                      className={clsx(
-                        'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer',
-                        isCopied
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white'
-                      )}
+                      leftIcon={isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                     >
-                      {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{isCopied ? 'Copied' : 'Copy Link'}</span>
-                    </button>
+                      {isCopied ? 'Copied' : 'Copy Link'}
+                    </Button>
                   </div>
-                </div>
+                </GlassCard>
               );
             })}
           </div>
         )}
-      </section>
+      </GlassCard>
 
       {/* Attribution Info Card */}
-      <section className="p-4 rounded-xl bg-zinc-950 border border-zinc-850 flex items-center gap-3 text-xs text-zinc-400">
+      <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] flex items-center gap-3 text-xs text-zinc-400">
         <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
-        <p>
-          Every link generated here automatically encodes your unique referral slug. When your followers click, a 30-day tracking cookie is stored on their browser. If they purchase within 30 days, 20% of their product total is credited to your unpaid balance.
+        <p className="leading-relaxed">
+          Every link generated here automatically encodes your unique referral slug. When your followers click, a 30-day tracking cookie is stored on their browser. If they purchase within 30 days, 20% of their net product total is credited to your unpaid balance.
         </p>
-      </section>
+      </div>
     </div>
   );
 };

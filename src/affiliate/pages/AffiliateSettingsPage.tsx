@@ -3,17 +3,20 @@ import {
   Building2, 
   Lock, 
   Unlock, 
-  Check, 
   AlertCircle, 
-  ShieldCheck, 
   Save, 
-  Loader2, 
   User, 
-  Globe 
+  Globe,
+  ShieldCheck,
+  CreditCard,
+  AtSign
 } from 'lucide-react';
 import { AffiliateProfile, AffiliateBankName } from '../../types';
 import { updateAffiliateSettings } from '../../lib/wordpressBridge';
 import { useToast } from '../../context/ToastContext';
+import { PageHeroHeader } from '../../components/ui/PageHeroHeader';
+import { GlassCard } from '../../components/ui/GlassCard';
+import { Button } from '../../components/ui/Button';
 import { clsx } from 'clsx';
 
 interface AffiliateSettingsPageProps {
@@ -106,30 +109,31 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
   };
 
   return (
-    <div className="space-y-8 max-w-4xl mx-auto">
-      {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-white tracking-tight">Affiliate Settings</h1>
-        <p className="text-xs text-zinc-400 mt-1">
-          Configure your Indonesian payout destination and manage your referral slug.
-        </p>
-      </div>
+    <div className="space-y-6 max-w-5xl mx-auto pb-12">
+      {/* Page Header */}
+      <PageHeroHeader
+        title="Affiliate Settings"
+        subtitle="Configure your Indonesian bank payout destination and customize your branded referral slug."
+        badge={{ label: 'PREFERENCES', variant: 'amber' }}
+      />
 
       {/* 1. Indonesian Bank Settings Card */}
-      <section className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-6 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400">
+      <GlassCard className="p-6 sm:p-7 border border-white/[0.08] space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/[0.06]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#f3aa18]/10 border border-[#f3aa18]/25 text-[#f3aa18] flex items-center justify-center shrink-0">
               <Building2 className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-white">Bank Payout Destination</h2>
+              <h2 className="text-sm font-bold text-white font-['Chakra_Petch'] tracking-wide uppercase">
+                Bank Payout Destination
+              </h2>
               <p className="text-xs text-zinc-400 mt-0.5">
-                Payouts are exclusively processed via BCA and Bank Mandiri.
+                Earnings are disbursed directly via Indonesian bank transfer.
               </p>
             </div>
           </div>
-          <span className="text-[11px] font-semibold text-amber-400 bg-amber-400/10 px-2.5 py-1 rounded-full border border-amber-400/20">
+          <span className="self-start sm:self-auto text-[11px] font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-3 py-1 rounded-full border border-[#f3aa18]/25">
             BCA &amp; Mandiri Only
           </span>
         </div>
@@ -138,89 +142,100 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Bank Selector */}
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-300">
-                Destination Bank <span className="text-amber-400">*</span>
+              <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+                <CreditCard className="w-3.5 h-3.5 text-[#f3aa18]" />
+                <span>Destination Bank</span>
+                <span className="text-[#f3aa18]">*</span>
               </label>
               <select
                 value={bankName}
                 onChange={(e) => setBankName(e.target.value as AffiliateBankName)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all cursor-pointer"
               >
-                <option value="">Select a Bank...</option>
-                <option value="BCA">Bank Central Asia (BCA)</option>
-                <option value="MANDIRI">Bank Mandiri</option>
+                <option value="" className="bg-[#121214] text-zinc-400">Select Destination Bank...</option>
+                <option value="BCA" className="bg-[#121214] text-white">Bank Central Asia (BCA)</option>
+                <option value="MANDIRI" className="bg-[#121214] text-white">Bank Mandiri</option>
               </select>
             </div>
 
             {/* Account Number */}
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-300">
-                Account Number (Nomor Rekening) <span className="text-amber-400">*</span>
+              <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+                <CreditCard className="w-3.5 h-3.5 text-[#f3aa18]" />
+                <span>Account Number (Nomor Rekening)</span>
+                <span className="text-[#f3aa18]">*</span>
               </label>
               <input
                 type="text"
                 value={accountNumber}
                 onChange={(e) => setAccountNumber(e.target.value.replace(/[^0-9]/g, ''))}
                 placeholder="e.g. 5271234567"
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs font-mono text-zinc-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs font-mono text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
               />
             </div>
           </div>
 
           {/* Account Holder Name */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-300">
-              Account Holder Name (Nama Pemilik Rekening) <span className="text-amber-400">*</span>
+            <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 text-[#f3aa18]" />
+              <span>Account Holder Name (Nama Pemilik Rekening)</span>
+              <span className="text-[#f3aa18]">*</span>
             </label>
             <input
               type="text"
               value={accountName}
               onChange={(e) => setAccountName(e.target.value)}
               placeholder="e.g. Budi Santoso"
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
             />
             <p className="text-[11px] text-zinc-400">
-              Please ensure the holder name matches your bank book exactly to avoid failed transfers.
+              Please ensure the holder name matches your bank passbook exactly to prevent transfer reversals.
             </p>
           </div>
 
           <div className="pt-2 flex justify-end">
-            <button
+            <Button
               type="submit"
-              disabled={isSavingBank}
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-zinc-950 transition-colors cursor-pointer shadow-sm"
+              variant="primary"
+              size="md"
+              isLoading={isSavingBank}
+              leftIcon={<Save className="w-3.5 h-3.5" />}
             >
-              {isSavingBank ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-              <span>Save Bank Info</span>
-            </button>
+              Save Bank Info
+            </Button>
           </div>
         </form>
-      </section>
+      </GlassCard>
 
       {/* 2. Custom Referral Slug Card */}
-      <section className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-5 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+      <GlassCard className="p-6 sm:p-7 border border-white/[0.08] space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/[0.06]">
+          <div className="flex items-center gap-3">
             <div className={clsx(
-              'p-2 rounded-lg',
-              isSlugLocked ? 'bg-zinc-800 text-zinc-400' : 'bg-blue-500/10 text-blue-400'
+              'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border',
+              isSlugLocked 
+                ? 'bg-white/[0.03] text-zinc-400 border-white/[0.08]' 
+                : 'bg-blue-500/10 text-blue-400 border-blue-500/25'
             )}>
               {isSlugLocked ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />}
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-white">Custom Referral Slug</h2>
+              <h2 className="text-sm font-bold text-white font-['Chakra_Petch'] tracking-wide uppercase">
+                Custom Referral Slug
+              </h2>
               <p className="text-xs text-zinc-400 mt-0.5">
-                Your branded URL identifier at the end of referral links.
+                Your branded identifier attached to all referral destination links.
               </p>
             </div>
           </div>
           {isSlugLocked ? (
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-zinc-400 bg-zinc-800 px-3 py-1 rounded-full border border-zinc-700">
-              <Lock className="w-3 h-3" />
+            <span className="self-start sm:self-auto inline-flex items-center gap-1.5 text-[11px] font-semibold text-zinc-300 bg-white/[0.04] px-3 py-1 rounded-full border border-white/[0.08]">
+              <Lock className="w-3 h-3 text-[#f3aa18]" />
               Locked Permanently
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+            <span className="self-start sm:self-auto inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
               <Unlock className="w-3 h-3" />
               Customizable Once
             </span>
@@ -229,9 +244,11 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
 
         {isSlugLocked ? (
           <div className="space-y-3">
-            <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800/80 space-y-2">
-              <span className="text-xs text-zinc-400">Current Referral Base URL:</span>
-              <p className="text-xs font-mono text-amber-400 font-semibold select-all">
+            <div className="p-4 rounded-xl bg-[#09090b]/80 border border-white/[0.08] space-y-1.5">
+              <span className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider">
+                Current Referral Base URL
+              </span>
+              <p className="text-sm font-mono text-[#f3aa18] font-bold select-all break-all">
                 https://exacoat.com/?ref={profile.slug}
               </p>
             </div>
@@ -242,11 +259,12 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
         ) : (
           <form onSubmit={handleLockCustomSlug} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-300">
-                Customize Your Slug
+              <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+                <AtSign className="w-3.5 h-3.5 text-[#f3aa18]" />
+                <span>Customize Your Slug</span>
               </label>
               <div className="flex items-center">
-                <span className="bg-zinc-800 border border-r-0 border-zinc-700 rounded-l-xl px-3 py-2.5 text-xs text-zinc-400 font-mono">
+                <span className="bg-[#141416] border border-r-0 border-white/[0.1] rounded-l-xl px-3.5 py-2.5 text-xs text-zinc-400 font-mono select-none">
                   exacoat.com/?ref=
                 </span>
                 <input
@@ -254,54 +272,77 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
                   value={customSlug}
                   onChange={(e) => setCustomSlug(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
                   placeholder="your-brand-name"
-                  className="flex-1 bg-zinc-950 border border-zinc-700 rounded-r-xl px-3.5 py-2.5 text-xs font-mono text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                  className="flex-1 bg-[#0a0a0c]/80 border border-white/[0.1] rounded-r-xl px-4 py-2.5 text-xs font-mono text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
                 />
               </div>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-2.5 text-xs text-amber-300">
+            <div className="p-3.5 rounded-xl bg-[#f3aa18]/10 border border-[#f3aa18]/20 flex items-start gap-2.5 text-xs text-[#f3aa18]">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <p className="leading-relaxed">
-                <strong>Attention:</strong> You can customize this slug once. Once submitted, it will be permanently locked to ensure no shared links ever break.
+              <p className="leading-relaxed text-zinc-300">
+                <strong className="text-[#f3aa18]">Attention:</strong> You can customize this slug once. Once submitted, it will be permanently locked to ensure no shared links ever break.
               </p>
             </div>
 
             <div className="flex justify-end pt-1">
-              <button
+              <Button
                 type="submit"
+                variant="primary"
+                size="md"
                 disabled={isSavingSlug || customSlug === profile.slug}
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                isLoading={isSavingSlug}
+                leftIcon={<Lock className="w-3.5 h-3.5" />}
               >
-                {isSavingSlug ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
-                <span>Save and Lock Slug</span>
-              </button>
+                Save and Lock Slug
+              </Button>
             </div>
           </form>
         )}
-      </section>
+      </GlassCard>
 
       {/* 3. Account Profile Snapshot */}
-      <section className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
-        <h2 className="text-sm font-semibold text-white">Profile Details</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-          <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-850 space-y-1">
-            <span className="text-zinc-400">Account Username:</span>
-            <p className="font-mono text-zinc-200">{profile.username}</p>
+      <GlassCard className="p-6 sm:p-7 border border-white/[0.08] space-y-4">
+        <div className="flex items-center gap-3 pb-3 border-b border-white/[0.06]">
+          <div className="w-9 h-9 rounded-xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-center text-zinc-300">
+            <User className="w-4 h-4" />
           </div>
-          <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-850 space-y-1">
-            <span className="text-zinc-400">Email Address:</span>
-            <p className="font-mono text-zinc-200">{profile.email}</p>
-          </div>
-          <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-850 space-y-1">
-            <span className="text-zinc-400">Affiliate Category:</span>
-            <p className="text-zinc-200">{profile.affiliate_type || 'Content Creator'}</p>
-          </div>
-          <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-850 space-y-1">
-            <span className="text-zinc-400">Primary Channel:</span>
-            <p className="text-zinc-200 truncate">{profile.promotion_channel || 'Not specified'}</p>
+          <div>
+            <h2 className="text-sm font-bold text-white font-['Chakra_Petch'] tracking-wide uppercase">
+              Profile Details
+            </h2>
+            <p className="text-xs text-zinc-400">
+              Basic account metadata registered in the affiliate database.
+            </p>
           </div>
         </div>
-      </section>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
+          <div className="p-4 rounded-xl bg-[#09090b]/70 border border-white/[0.06] space-y-1">
+            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block">
+              Account Username
+            </span>
+            <p className="font-mono text-zinc-200 font-semibold">{profile.username}</p>
+          </div>
+          <div className="p-4 rounded-xl bg-[#09090b]/70 border border-white/[0.06] space-y-1">
+            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block">
+              Email Address
+            </span>
+            <p className="font-mono text-zinc-200 font-semibold">{profile.email}</p>
+          </div>
+          <div className="p-4 rounded-xl bg-[#09090b]/70 border border-white/[0.06] space-y-1">
+            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block">
+              Affiliate Category
+            </span>
+            <p className="text-zinc-200 font-medium">{profile.affiliate_type || 'Content Creator'}</p>
+          </div>
+          <div className="p-4 rounded-xl bg-[#09090b]/70 border border-white/[0.06] space-y-1">
+            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block">
+              Primary Channel
+            </span>
+            <p className="text-zinc-200 font-medium truncate">{profile.promotion_channel || 'Not specified'}</p>
+          </div>
+        </div>
+      </GlassCard>
     </div>
   );
 };

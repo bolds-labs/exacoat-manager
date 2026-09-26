@@ -8,14 +8,13 @@ import {
   CustomerAnalyticsSummary,
   CustomerFilterTab,
   CustomerSortOption,
-  buildUnifiedCustomers,
-  filterAndSortCustomers,
+  mapServerCustomerToUnified,
 } from '../lib/customerAnalyticsService';
 import {
   fetchCustomersDirect,
-  fetchOrdersDirect,
+  fetchCustomersSummaryDirect,
   fetchOrderDetailDirect,
-  Customer,
+  fetchCustomerDetailDirect,
 } from '../lib/wordpressBridge';
 import { Order } from '../types';
 import { formatCurrency, formatDateTime } from '../lib/formatters';
@@ -42,6 +41,7 @@ import {
   Award,
   Loader2,
   Calendar,
+  Clock,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -63,14 +63,29 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
   const { showToast } = useToast();
 
   const [datePreset, setDatePreset] = useState<CustomersDatePreset>('all');
-  const [wcCustomers, setWcCustomers] = useState<Customer[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [customers, setCustomers] = useState<UnifiedCustomer[]>([]);
+  const [totalCustomers, setTotalCustomers] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [summary, setSummary] = useState<CustomerAnalyticsSummary>({
+    totalCustomers: 0,
+    totalUsers: 0,
+    payingCustomers: 0,
+    repeatCustomers: 0,
+    repeatRate: 0,
+    totalRevenue: 0,
+    averageOrderValue: 0,
+    inactive2yrUsers: 0,
+    topCustomers: [],
+    highestSpender: null,
+  });
+
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeTab, setActiveTab] = useState<CustomerFilterTab>('all');
   const [sortBy, setSortBy] = useState<CustomerSortOption>('spent_desc');
 
@@ -86,22 +101,62 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
   const [drilldownOrder, setDrilldownOrder] = useState<Order | null>(null);
   const [isOrderDrawerOpen, setIsOrderDrawerOpen] = useState(false);
 
-  // 1. Load Data
-  const loadData = useCallback(async (quiet = false) => {
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim());
+      setCurrentPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // 1. Load Storewide Summary
+  const loadSummary = useCallback(async (refresh = false) => {
+    try {
+      const res = await fetchCustomersSummaryDirect(refresh);
+      if (res.success) {
+        const topList = (res.top_customers || []).map(mapServerCustomerToUnified);
+        setSummary({
+          totalCustomers: res.total_customers || 0,
+          totalUsers: res.total_users || res.total_customers || 0,
+          payingCustomers: res.paying_customers || 0,
+          repeatCustomers: res.repeat_customers || 0,
+          repeatRate: res.repeat_rate || 0,
+          totalRevenue: res.total_revenue || 0,
+          averageOrderValue: res.avg_order_value || 0,
+          inactive2yrUsers: res.inactive_2yr_users || 0,
+          topCustomers: topList,
+          highestSpender: topList.length > 0 ? topList[0] : null,
+        });
+      }
+    } catch (err: any) {
+      console.warn('Failed to load storewide customer summary:', err);
+    }
+  }, []);
+
+  // 2. Load Paginated Customers
+  const loadCustomers = useCallback(async (quiet = false) => {
     try {
       if (!quiet) setIsLoading(true);
       else setIsRefreshing(true);
 
-      const [customersRes, ordersRes] = await Promise.all([
-        fetchCustomersDirect({ per_page: 100 }),
-        fetchOrdersDirect({ per_page: 150 }),
-      ]);
+      const res = await fetchCustomersDirect({
+        page: currentPage,
+        per_page: pageSize,
+        search: debouncedSearch || undefined,
+        filter: activeTab,
+        sort_by: sortBy,
+      });
 
-      if (customersRes.success && Array.isArray(customersRes.customers)) {
-        setWcCustomers(customersRes.customers);
-      }
-      if (ordersRes.success && Array.isArray(ordersRes.orders)) {
-        setOrders(ordersRes.orders);
+      if (res.success && Array.isArray(res.customers)) {
+        const unified = res.customers.map(mapServerCustomerToUnified);
+        setCustomers(unified);
+        setTotalCustomers(res.total_customers || unified.length);
+        setTotalPages(res.max_pages || 1);
+      } else {
+        setCustomers([]);
+        setTotalCustomers(0);
+        setTotalPages(1);
       }
     } catch (err: any) {
       if (!quiet) {
@@ -111,48 +166,28 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [showToast]);
+  }, [currentPage, pageSize, debouncedSearch, activeTab, sortBy, showToast]);
+
+  // Initial and reactive load
+  useEffect(() => {
+    loadSummary();
+  }, [loadSummary]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadCustomers();
+  }, [loadCustomers]);
 
-  // Filter orders by date preset
-  const filteredOrders = useMemo(() => {
-    if (datePreset === 'all') return orders;
-
-    const now = new Date();
-    let startMs = 0;
-
-    if (datePreset === 'today') {
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      startMs = today.getTime();
-    } else if (datePreset === '7d') {
-      startMs = now.getTime() - 7 * 24 * 60 * 60 * 1000;
-    } else if (datePreset === '30d') {
-      startMs = now.getTime() - 30 * 24 * 60 * 60 * 1000;
-    } else if (datePreset === 'this_month') {
-      const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      startMs = firstOfMonth.getTime();
-    }
-
-    return orders.filter(o => {
-      if (!o.created_at) return true;
-      const t = new Date(o.created_at).getTime();
-      return isNaN(t) || t >= startMs;
-    });
-  }, [orders, datePreset]);
-
-  // Aggregate into unified customers and compute analytics summary
-  const { customers: unifiedCustomers, summary } = useMemo(() => {
-    return buildUnifiedCustomers(wcCustomers, filteredOrders);
-  }, [wcCustomers, filteredOrders]);
+  // Combined Refresh
+  const handleRefresh = async () => {
+    await Promise.all([
+      loadSummary(true),
+      loadCustomers(true),
+    ]);
+    showToast('success', 'Data Refreshed', 'Customer analytics and records updated.');
+  };
 
   // Auto-select initial customer from props or URL hash
   useEffect(() => {
-    if (!unifiedCustomers.length) return;
-
-    // Check prop or URL hash
     let targetId = initialCustomerId;
     let targetEmail = initialCustomerEmail;
 
@@ -165,41 +200,27 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
     }
 
     if (targetId && targetId > 0) {
-      const found = unifiedCustomers.find(c => c.id === targetId);
-      if (found) {
-        setSelectedCustomer(found);
-        setIsCustomerDrawerOpen(true);
-        return;
-      }
+      fetchCustomerDetailDirect(targetId).then(res => {
+        if (res.success && res.customer) {
+          setSelectedCustomer(mapServerCustomerToUnified(res.customer));
+          setIsCustomerDrawerOpen(true);
+        }
+      });
+      return;
     }
 
     if (targetEmail) {
-      const found = unifiedCustomers.find(
-        c => c.email.toLowerCase() === targetEmail!.toLowerCase()
-      );
-      if (found) {
-        setSelectedCustomer(found);
-        setIsCustomerDrawerOpen(true);
-      }
+      fetchCustomerDetailDirect(targetEmail).then(res => {
+        if (res.success && res.customer) {
+          setSelectedCustomer(mapServerCustomerToUnified(res.customer));
+          setIsCustomerDrawerOpen(true);
+        }
+      });
     }
-  }, [unifiedCustomers, initialCustomerId, initialCustomerEmail]);
+  }, [initialCustomerId, initialCustomerEmail]);
 
-  // Filtered and sorted customer list for the table
-  const filteredCustomers = useMemo(() => {
-    return filterAndSortCustomers(unifiedCustomers, {
-      search: searchQuery,
-      tab: activeTab,
-      sortBy,
-    });
-  }, [unifiedCustomers, searchQuery, activeTab, sortBy]);
-
-  // Paginated records
-  const paginatedCustomers = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredCustomers.slice(start, start + pageSize);
-  }, [filteredCustomers, currentPage, pageSize]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / pageSize));
+  // Paginated records match current page customers directly
+  const paginatedCustomers = customers;
 
   // Copy helper
   const handleCopy = (text: string, key: string, e: React.MouseEvent) => {
@@ -222,30 +243,24 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
   };
 
   const handleOpenOrderById = async (orderId: number) => {
-    const existing = orders.find(o => o.id === orderId);
-    if (existing) {
-      setDrilldownOrder(existing);
+    const res = await fetchOrderDetailDirect(orderId);
+    if (res.success && res.order) {
+      setDrilldownOrder(res.order);
       setIsOrderDrawerOpen(true);
     } else {
-      const res = await fetchOrderDetailDirect(orderId);
-      if (res.success && res.order) {
-        setDrilldownOrder(res.order);
-        setIsOrderDrawerOpen(true);
-      } else {
-        showToast('error', 'Order Not Found', `Could not open order #${orderId}`);
-      }
+      showToast('error', 'Order Not Found', `Could not open order #${orderId}`);
     }
   };
 
   // Export Customers to CSV
   const handleExportCsv = () => {
-    if (!filteredCustomers.length) {
+    if (!customers.length) {
       showToast('warning', 'No Customers', 'No customers to export with current filters.');
       return;
     }
 
     const headers = ['Customer ID', 'Name', 'Email', 'Phone', 'Role', 'City', 'Country', 'Orders Count', 'Total Spent (IDR)', 'Average Order Value (IDR)', 'First Order', 'Last Order'];
-    const rows = filteredCustomers.map(c => [
+    const rows = customers.map((c: UnifiedCustomer) => [
       c.id,
       `"${c.name.replace(/"/g, '""')}"`,
       `"${c.email.replace(/"/g, '""')}"`,
@@ -260,7 +275,7 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
       c.lastOrderDate || '',
     ]);
 
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const csvContent = [headers.join(','), ...rows.map((r: (string | number)[]) => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -270,7 +285,7 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
     link.click();
     document.body.removeChild(link);
 
-    showToast('success', 'Export Complete', `Exported ${filteredCustomers.length} customers to CSV.`);
+    showToast('success', 'Export Complete', `Exported ${customers.length} customers to CSV.`);
   };
 
   const getInitials = (name: string) => {
@@ -328,8 +343,8 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
             </button>
 
             <button
-              onClick={() => loadData(true)}
-              disabled={isLoading}
+              onClick={handleRefresh}
+              disabled={isLoading || isRefreshing}
               className="px-3.5 py-2 rounded-xl bg-[#141414] hover:bg-white/[0.06] text-neutral-300 hover:text-white border border-white/[0.08] text-xs font-semibold font-sans flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer shrink-0"
               title="Refresh customer metrics"
             >
@@ -342,11 +357,11 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
 
       {/* 2. Core Analytics KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Total Customers */}
+        {/* Card 1: Total Registered Users & Customers */}
         <GlassCard className="p-5 space-y-2 border border-white/[0.06] bg-[#111111]">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-neutral-400 font-mono">
-              Total Customers
+              Total Users & Accounts
             </span>
             <div className="w-8 h-8 rounded-lg bg-[#f3aa18]/10 border border-[#f3aa18]/20 flex items-center justify-center text-[#f3aa18]">
               <Users className="w-4 h-4" />
@@ -354,10 +369,10 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
           </div>
           <div className="space-y-1">
             <p className="text-2xl font-bold font-mono text-white">
-              {summary.totalCustomers.toLocaleString()}
+              {(summary.totalUsers || summary.totalCustomers).toLocaleString()}
             </p>
             <p className="text-[11px] font-sans text-neutral-400">
-              <span className="text-[#f3aa18] font-mono font-semibold">{summary.payingCustomers}</span> active buyers ({summary.totalCustomers > 0 ? Math.round((summary.payingCustomers / summary.totalCustomers) * 100) : 0}%)
+              <span className="text-[#f3aa18] font-mono font-semibold">{summary.payingCustomers.toLocaleString()}</span> paying buyers • <span className="text-amber-400 font-mono font-semibold">{summary.inactive2yrUsers?.toLocaleString() || 0}</span> inactive &gt; 2 yrs
             </p>
           </div>
         </GlassCard>
@@ -510,6 +525,7 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
                 { key: 'vip', label: 'VIP Spenders' },
                 { key: 'registered', label: 'Accounts' },
                 { key: 'guest', label: 'Guests' },
+                { key: 'inactive_2yr', label: 'Inactive (2+ Yrs)' },
               ] as { key: CustomerFilterTab; label: string }[]
             ).map(tab => (
               <button
@@ -540,7 +556,6 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
                 value={searchQuery}
                 onChange={e => {
                   setSearchQuery(e.target.value);
-                  setCurrentPage(1);
                 }}
                 placeholder="Search name, email, phone, city..."
                 className="w-full pl-8.5 pr-8 py-1.5 rounded-lg bg-[#141414] border border-white/[0.08] focus:border-[#f3aa18]/50 text-xs text-white placeholder-neutral-500 focus:outline-hidden transition-all"
@@ -570,6 +585,33 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
             </select>
           </div>
         </div>
+
+        {/* Inactive Accounts Cleanup Callout */}
+        {activeTab === 'inactive_2yr' && (
+          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400 shrink-0 mt-0.5">
+                <Clock className="w-4 h-4" />
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-xs font-bold text-white">
+                  Inactive Accounts Review ({summary.inactive2yrUsers?.toLocaleString() || totalCustomers.toLocaleString()} accounts)
+                </p>
+                <p className="text-[11px] text-neutral-300">
+                  Users registered more than 2 years ago with no orders or activity. Review below or export to CSV before performing maintenance cleanup.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold font-sans flex items-center justify-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export Inactive CSV</span>
+            </button>
+          </div>
+        )}
 
         {/* Customer Directory Table */}
         <div className="border border-white/[0.06] rounded-xl overflow-hidden bg-[#141414]">
@@ -760,10 +802,10 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
           </div>
 
           {/* Table Pagination Toolbar */}
-          {!isLoading && filteredCustomers.length > 0 && (
+          {!isLoading && customers.length > 0 && (
             <div className="p-3 bg-[#0e0e0e] border-t border-white/[0.06] flex items-center justify-between gap-3 flex-wrap text-xs font-mono">
               <div className="flex items-center gap-2 text-neutral-400">
-                <span>Showing {(currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, filteredCustomers.length)} of {filteredCustomers.length} customers</span>
+                <span>Showing {(currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, totalCustomers)} of {totalCustomers.toLocaleString()} customers</span>
                 <span className="text-neutral-600">•</span>
                 <select
                   value={pageSize}
@@ -825,7 +867,7 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
           setIsOrderDrawerOpen(false);
           setDrilldownOrder(null);
         }}
-        onOrderUpdated={() => loadData(true)}
+        onOrderUpdated={handleRefresh}
       />
     </div>
   );

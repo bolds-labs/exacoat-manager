@@ -19,6 +19,7 @@ export interface UnifiedCustomer {
   isPayingCustomer: boolean;
   isRepeatCustomer: boolean;
   isVip: boolean;
+  isInactive2yr?: boolean;
   avatarUrl?: string;
   billing?: any;
   shipping?: any;
@@ -27,16 +28,18 @@ export interface UnifiedCustomer {
 
 export interface CustomerAnalyticsSummary {
   totalCustomers: number;
+  totalUsers?: number;
   payingCustomers: number;
   repeatCustomers: number;
   repeatRate: number; // 0 to 100
   totalRevenue: number;
   averageOrderValue: number;
+  inactive2yrUsers?: number;
   topCustomers: UnifiedCustomer[];
   highestSpender: UnifiedCustomer | null;
 }
 
-export type CustomerFilterTab = 'all' | 'paying' | 'repeat' | 'vip' | 'registered' | 'guest';
+export type CustomerFilterTab = 'all' | 'paying' | 'repeat' | 'vip' | 'registered' | 'guest' | 'inactive_2yr';
 
 export type CustomerSortOption = 
   | 'spent_desc' 
@@ -267,6 +270,9 @@ export function filterAndSortCustomers(
       case 'guest':
         list = list.filter(c => c.isGuest || c.id === 0);
         break;
+      case 'inactive_2yr':
+        list = list.filter(c => c.isInactive2yr);
+        break;
     }
   }
 
@@ -295,4 +301,35 @@ export function filterAndSortCustomers(
   });
 
   return list;
+}
+
+/**
+ * Maps a customer record returned directly from /wp-json/exacoat-core/v1/customers
+ * into the standard UnifiedCustomer format.
+ */
+export function mapServerCustomerToUnified(c: any): UnifiedCustomer {
+  const spent = parseFloat(String(c.total_spent || '0')) || 0;
+  const count = parseInt(String(c.orders_count || '0'), 10) || 0;
+  const aov = parseFloat(String(c.avg_order_value || (count > 0 ? spent / count : 0))) || 0;
+
+  return {
+    id: c.id || c.customer_id || 0,
+    name: c.name || c.display_name || (c.email ? c.email.split('@')[0] : 'Customer'),
+    email: c.email || '',
+    phone: c.phone || '',
+    username: c.username || c.display_name || '',
+    role: c.role || (c.is_guest ? 'guest' : 'customer'),
+    city: c.city || '',
+    country: c.country || 'ID',
+    ordersCount: count,
+    totalSpent: spent,
+    avgOrderValue: aov,
+    firstOrderDate: c.date_created || null,
+    lastOrderDate: c.last_active || c.last_order_date || null,
+    isPayingCustomer: count > 0,
+    isRepeatCustomer: count >= 2,
+    isVip: spent >= 1000000,
+    isInactive2yr: Boolean(c.is_inactive_2yr),
+    isGuest: Boolean(c.is_guest || !c.id || c.id === 0),
+  };
 }

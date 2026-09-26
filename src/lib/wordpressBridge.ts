@@ -2658,16 +2658,48 @@ export async function fetchCustomersDirect(params?: {
   page?: number;
   per_page?: number;
   role?: string;
+  filter?: string;
+  sort_by?: string;
   orderby?: string;
   order?: 'asc' | 'desc';
 }): Promise<{
   success: boolean;
-  customers: Customer[];
+  customers: any[];
   total_customers: number;
   max_pages: number;
+  summary?: any;
   error?: string;
 }> {
   const base = getWordPressBaseUrl();
+
+  // 1. Try Exacoat Core optimized customer database engine
+  try {
+    const coreUrl = new URL(`${base}/wp-json/exacoat-core/v1/customers`, window.location.origin);
+    if (params?.search) coreUrl.searchParams.set('search', params.search);
+    if (params?.page) coreUrl.searchParams.set('page', String(params.page));
+    if (params?.per_page) coreUrl.searchParams.set('per_page', String(params.per_page));
+    if (params?.filter) coreUrl.searchParams.set('filter', params.filter);
+    if (params?.sort_by) coreUrl.searchParams.set('sort_by', params.sort_by);
+    coreUrl.searchParams.set('_t', String(Date.now()));
+
+    const coreRes = await authenticatedFetch(coreUrl.toString(), { headers: { Accept: 'application/json' } });
+    if (coreRes.ok) {
+      const coreData = await coreRes.json();
+      if (coreData && coreData.success && Array.isArray(coreData.customers)) {
+        return {
+          success: true,
+          customers: coreData.customers,
+          total_customers: Number(coreData.total_customers ?? coreData.customers.length),
+          max_pages: Number(coreData.max_pages ?? 1),
+          summary: coreData.summary,
+        };
+      }
+    }
+  } catch (coreErr) {
+    // Fall back to legacy WooCommerce endpoint if core route is unavailable
+  }
+
+  // 2. Fallback to WooCommerce v3 customers endpoint
   const url = new URL(`${base}/wp-json/wc/v3/customers`, window.location.origin);
   if (params?.search) url.searchParams.set('search', params.search);
   if (params?.page) url.searchParams.set('page', String(params.page));
@@ -2688,6 +2720,91 @@ export async function fetchCustomersDirect(params?: {
     return { success: true, customers: Array.isArray(data) ? data : [], total_customers: total, max_pages: pages };
   } catch (err: any) {
     return { success: false, customers: [], total_customers: 0, max_pages: 1, error: err.message };
+  }
+}
+
+export async function fetchCustomersSummaryDirect(refresh = false): Promise<{
+  success: boolean;
+  total_users: number;
+  total_customers: number;
+  paying_customers: number;
+  repeat_customers: number;
+  inactive_2yr_users: number;
+  total_revenue: number;
+  total_orders: number;
+  avg_order_value: number;
+  repeat_rate: number;
+  top_customers: any[];
+  storage_mode?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = new URL(`${base}/wp-json/exacoat-core/v1/customers/summary`, window.location.origin);
+  if (refresh) url.searchParams.set('refresh', '1');
+  url.searchParams.set('_t', String(Date.now()));
+
+  try {
+    const res = await authenticatedFetch(url.toString(), { headers: { Accept: 'application/json' } });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success) {
+        return data;
+      }
+    }
+    return {
+      success: false,
+      total_users: 0,
+      total_customers: 0,
+      paying_customers: 0,
+      repeat_customers: 0,
+      inactive_2yr_users: 0,
+      total_revenue: 0,
+      total_orders: 0,
+      avg_order_value: 0,
+      repeat_rate: 0,
+      top_customers: [],
+      error: 'Failed to load customer summary',
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      total_users: 0,
+      total_customers: 0,
+      paying_customers: 0,
+      repeat_customers: 0,
+      inactive_2yr_users: 0,
+      total_revenue: 0,
+      total_orders: 0,
+      avg_order_value: 0,
+      repeat_rate: 0,
+      top_customers: [],
+      error: err.message,
+    };
+  }
+}
+
+export async function fetchInactiveUsersPreviewDirect(years = 2): Promise<{
+  success: boolean;
+  years: number;
+  total_count: number;
+  cutoff_date: string;
+  sample: any[];
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = new URL(`${base}/wp-json/exacoat-core/v1/customers/inactive-preview`, window.location.origin);
+  url.searchParams.set('years', String(years));
+  url.searchParams.set('_t', String(Date.now()));
+
+  try {
+    const res = await authenticatedFetch(url.toString(), { headers: { Accept: 'application/json' } });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success) return data;
+    }
+    return { success: false, years, total_count: 0, cutoff_date: '', sample: [], error: 'Failed to fetch inactive preview' };
+  } catch (err: any) {
+    return { success: false, years, total_count: 0, cutoff_date: '', sample: [], error: err.message };
   }
 }
 

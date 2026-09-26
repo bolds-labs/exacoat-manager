@@ -17,11 +17,17 @@ import { APP_VERSION } from '../config/version';
 
 interface LoginPageProps {
   onGoToRegister?: () => void;
+  portalMode?: 'admin' | 'affiliate';
 }
 
-export const LoginPage: React.FC<LoginPageProps> = () => {
+export const LoginPage: React.FC<LoginPageProps> = ({ 
+  onGoToRegister, 
+  portalMode = 'admin' 
+}) => {
   const { login, resetPassword } = useAuth();
   const { showToast } = useToast();
+
+  const isAffiliateMode = portalMode === 'affiliate';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -99,18 +105,22 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
 
           <div className="flex items-center justify-center pt-1">
             <SectionPill dot dotColor="bg-[#f3aa18]" surface="dark">
-              OPERATIONS ERP
+              {isAffiliateMode ? 'CREATOR PORTAL' : 'OPERATIONS ERP'}
             </SectionPill>
           </div>
 
           <div className="pt-1">
             <h1 className="text-xl sm:text-2xl font-bold font-['Chakra_Petch'] text-white tracking-tight">
-              {isForgotPassword ? 'Reset Password' : 'Admin Sign In'}
+              {isForgotPassword ? 'Reset Password' : (isAffiliateMode ? 'Creator Sign In' : 'Admin Sign In')}
             </h1>
-            <p className="text-[12px] text-zinc-400 mt-1">
+            <p className="text-[12px] text-zinc-400 mt-1 leading-relaxed">
               {isForgotPassword
-                ? 'Enter your registered administrator email to receive a password reset link.'
-                : 'Sign in to access fulfillment, orders, and production workstation.'}
+                ? (isAffiliateMode 
+                    ? 'Enter your registered affiliate email to receive a password reset link.' 
+                    : 'Enter your registered administrator email to receive a password reset link.')
+                : (isAffiliateMode 
+                    ? 'Sign in to access your referral links, track earnings, and request payouts.' 
+                    : 'Sign in to access fulfillment, orders, and production workstation.')}
             </p>
           </div>
         </div>
@@ -223,7 +233,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@exacoat.com"
+                  placeholder={isAffiliateMode ? "creator@exacoat.com" : "admin@exacoat.com"}
                   className="h-11 w-full pl-10 pr-4 rounded-xl border border-white/[0.09] bg-white/[0.035] font-sans text-xs sm:text-sm text-white placeholder-zinc-500 outline-none transition-all hover:border-white/[0.16] focus:border-[#f3aa18]/70 focus:bg-white/[0.05] focus:ring-4 focus:ring-[#f3aa18]/[0.08]"
                 />
               </div>
@@ -292,7 +302,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                 </>
               ) : (
                 <>
-                  <span>Sign In to Workstation</span>
+                  <span>{isAffiliateMode ? 'Sign In to Creator Portal' : 'Sign In to Workstation'}</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
@@ -300,10 +310,26 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
           </form>
         )}
 
+        {/* Affiliate Apply Action */}
+        {isAffiliateMode && onGoToRegister && !isForgotPassword && (
+          <div className="pt-2 text-center border-t border-white/[0.06]">
+            <p className="text-xs text-zinc-400">
+              Want to earn commissions with Exacoat?{' '}
+              <button
+                type="button"
+                onClick={onGoToRegister}
+                className="font-semibold text-[#f3aa18] hover:text-[#ffbe3b] underline-offset-4 hover:underline cursor-pointer"
+              >
+                Apply now &rarr;
+              </button>
+            </p>
+          </div>
+        )}
+
         {/* Footer */}
         <div className="pt-3 border-t border-white/[0.06] text-center">
           <p className="text-[10px] sm:text-[11px] text-zinc-500 font-mono">
-            Exacoat Operations Platform v{APP_VERSION}
+            {isAffiliateMode ? `Exacoat Creator Platform v${APP_VERSION}` : `Exacoat Operations Platform v${APP_VERSION}`}
           </p>
         </div>
       </div>

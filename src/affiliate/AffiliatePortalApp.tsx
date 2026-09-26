@@ -81,24 +81,13 @@ export const AffiliatePortalApp: React.FC = () => {
     );
   }
 
-  // If not logged in, show Login page with option to switch to Register
+  // If not logged in, show Creator Login page with option to switch to Register
   if (!user) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col justify-center">
-        <LoginPage />
-        <div className="text-center pb-8 -mt-6">
-          <p className="text-xs text-zinc-400">
-            Want to become an Exacoat affiliate?{' '}
-            <button
-              type="button"
-              onClick={() => setViewMode('register')}
-              className="font-semibold text-amber-400 hover:text-amber-300 underline cursor-pointer"
-            >
-              Apply now &rarr;
-            </button>
-          </p>
-        </div>
-      </div>
+      <LoginPage 
+        portalMode="affiliate" 
+        onGoToRegister={() => setViewMode('register')} 
+      />
     );
   }
 

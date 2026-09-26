@@ -3,12 +3,18 @@ import {
   ShieldCheck, 
   Check, 
   ArrowRight, 
-  Loader2, 
   Sparkles, 
   AlertCircle,
-  ExternalLink 
+  ExternalLink,
+  User,
+  Mail,
+  Lock,
+  Globe,
+  FileText
 } from 'lucide-react';
 import { ExacoatLogo } from '../../components/ui/ExacoatLogo';
+import { SectionPill } from '../../components/ui/SectionPill';
+import { Button } from '../../components/ui/Button';
 import { registerAffiliateApplicant } from '../../lib/wordpressBridge';
 import { useToast } from '../../context/ToastContext';
 import { clsx } from 'clsx';
@@ -19,7 +25,7 @@ interface AffiliateRegisterPageProps {
 
 const AFFILIATE_TYPE_OPTIONS = [
   'Tech Reviewer / YouTube Creator',
-  'Instagram / TikTok Tech Influencer',
+  'Instagram / TikTok Influencer',
   'Tech Blogger / Media Publication',
   'Gadget Community / Forum Admin',
   'Designer / Digital Creator',
@@ -99,60 +105,97 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 selection:bg-amber-500/30 selection:text-amber-200">
-      <div className="sm:mx-auto sm:w-full sm:max-w-xl text-center space-y-3">
-        <a 
-          href="https://exacoat.com" 
-          target="_blank" 
-          rel="noopener noreferrer" 
-          className="inline-block p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded-md"
-        >
-          <ExacoatLogo className="h-8 w-auto mx-auto text-white" />
-        </a>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-          Exacoat Creator Affiliate Program
-        </h1>
-        <p className="text-xs sm:text-sm text-zinc-400 max-w-md mx-auto leading-relaxed">
-          Earn a <strong>20% net commission</strong> on every verified order. Benefit from a 30-day tracking cookie window and automated BCA and Mandiri payouts.
-        </p>
-      </div>
+    <div className="min-h-screen bg-[#060608] flex items-center justify-center p-4 sm:p-6 md:p-10 relative overflow-hidden select-none font-sans text-white">
+      {/* Ambient luxury lighting */}
+      <div 
+        aria-hidden="true" 
+        className="pointer-events-none fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-[960px] h-[520px] bg-[radial-gradient(circle_at_50%_0%,rgba(243,170,24,0.08)_0%,transparent_70%)] blur-[90px] -z-10" 
+      />
+      <div 
+        aria-hidden="true" 
+        className="pointer-events-none fixed bottom-10 left-1/2 -translate-x-1/2 w-[540px] h-[380px] bg-[#f3aa18]/[0.025] rounded-full blur-[140px] -z-10" 
+      />
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-xl">
+      {/* Main Container */}
+      <div className="w-full max-w-[620px] my-6">
         {submittedSuccess ? (
-          <div className="p-8 rounded-2xl bg-zinc-900 border border-zinc-800 text-center space-y-5 shadow-2xl">
-            <div className="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center">
-              <Check className="w-7 h-7" />
+          <div className="p-8 sm:p-10 rounded-3xl space-y-6 shadow-[0_32px_80px_-16px_rgba(0,0,0,0.95),0_0_0_1px_rgba(255,255,255,0.08)] bg-[#0c0c0e]/95 border border-white/[0.09] text-center backdrop-blur-2xl">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center shadow-lg shadow-emerald-500/10">
+              <Check className="w-8 h-8" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-lg font-bold text-white">Application Received</h2>
+              <h2 className="text-xl font-bold font-['Chakra_Petch'] text-white tracking-wide uppercase">
+                Application Received
+              </h2>
               <p className="text-xs text-zinc-400 leading-relaxed max-w-md mx-auto">
-                Thank you for applying to the Exacoat Creator Program. Our partnerships team will review your channel and promotional plan. You will receive an approval email shortly at <span className="font-mono text-zinc-200 font-medium">{email}</span>.
+                Thank you for applying to the Exacoat Creator Program. Our partnerships team will review your channel and promotional plan. You will receive an approval email shortly at <span className="font-mono text-zinc-200 font-semibold">{email}</span>.
               </p>
             </div>
-            <div className="pt-4 flex flex-col sm:flex-row gap-3">
-              <button
+            <div className="pt-4 flex flex-col sm:flex-row gap-3 justify-center">
+              <Button
                 type="button"
+                variant="primary"
+                size="md"
                 onClick={onNavigateToLogin}
-                className="flex-1 py-3 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-zinc-950 transition-colors"
               >
                 Sign In to Creator Portal
-              </button>
-              <a
-                href="https://exacoat.com"
-                className="flex-1 py-3 rounded-xl text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors inline-flex items-center justify-center gap-1.5"
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                asChild
               >
-                <span>Return to Store</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
+                <a
+                  href="https://exacoat.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2"
+                >
+                  <span>Return to Store</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </Button>
             </div>
           </div>
         ) : (
-          <div className="p-6 sm:p-8 rounded-2xl bg-zinc-900 border border-zinc-800 shadow-xl space-y-6">
-            <form onSubmit={handleSubmit} className="space-y-5 text-xs">
+          <div className="p-7 sm:p-10 rounded-3xl space-y-7 shadow-[0_32px_80px_-16px_rgba(0,0,0,0.95),0_0_0_1px_rgba(255,255,255,0.08)] bg-[#0c0c0e]/95 border border-white/[0.09] relative overflow-hidden backdrop-blur-2xl">
+            
+            {/* Header Branding */}
+            <div className="text-center space-y-3 pt-1">
+              <div className="flex justify-center">
+                <ExacoatLogo
+                  variant="white"
+                  width={160}
+                  height={28}
+                  className="h-6 sm:h-7 w-auto opacity-95 transition-opacity hover:opacity-100 drop-shadow-[0_2px_16px_rgba(243,170,24,0.18)]"
+                />
+              </div>
+
+              <div className="flex items-center justify-center pt-1">
+                <SectionPill dot dotColor="bg-[#f3aa18]" surface="dark">
+                  AFFILIATE PARTNER PROGRAM
+                </SectionPill>
+              </div>
+
+              <div className="pt-1">
+                <h1 className="text-xl sm:text-2xl font-bold font-['Chakra_Petch'] text-white tracking-tight">
+                  Creator Application
+                </h1>
+                <p className="text-xs text-zinc-400 mt-1 leading-relaxed max-w-md mx-auto">
+                  Earn a <strong className="text-white">20% net commission</strong> on verified customer orders with a 30-day cookie window and direct BCA and Mandiri bank transfers.
+                </p>
+              </div>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-4 text-xs">
               {/* Username */}
               <div className="space-y-1.5">
-                <label className="font-medium text-zinc-300">
-                  Username <span className="text-amber-400">*</span>
+                <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-[#f3aa18]" />
+                  <span>Username</span>
+                  <span className="text-[#f3aa18]">*</span>
                 </label>
                 <input
                   type="text"
@@ -160,18 +203,18 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
                   value={username}
                   onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
                   placeholder="e.g. techreviewid"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs font-mono text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                  className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs font-mono text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
                 />
                 <p className="text-[11px] text-zinc-400">
-                  This will form your initial referral link: exacoat.com/?ref={username || 'username'}
+                  Initial referral URL: <span className="font-mono text-[#f3aa18]">exacoat.com/?ref={username || 'username'}</span>
                 </p>
               </div>
 
               {/* First Name & Last Name */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="font-medium text-zinc-300">
-                    First Name <span className="text-amber-400">*</span>
+                  <label className="text-xs font-semibold text-zinc-300">
+                    First Name <span className="text-[#f3aa18]">*</span>
                   </label>
                   <input
                     type="text"
@@ -179,12 +222,12 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
                     placeholder="First Name"
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                    className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="font-medium text-zinc-300">
-                    Last Name <span className="text-amber-400">*</span>
+                  <label className="text-xs font-semibold text-zinc-300">
+                    Last Name <span className="text-[#f3aa18]">*</span>
                   </label>
                   <input
                     type="text"
@@ -192,15 +235,17 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     placeholder="Last Name"
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                    className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
                   />
                 </div>
               </div>
 
               {/* Email Address */}
               <div className="space-y-1.5">
-                <label className="font-medium text-zinc-300">
-                  Email Address <span className="text-amber-400">*</span>
+                <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-[#f3aa18]" />
+                  <span>Email Address</span>
+                  <span className="text-[#f3aa18]">*</span>
                 </label>
                 <input
                   type="email"
@@ -208,14 +253,16 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="creator@gmail.com"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                  className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
                 />
               </div>
 
               {/* Password */}
               <div className="space-y-1.5">
-                <label className="font-medium text-zinc-300">
-                  Password <span className="text-amber-400">*</span>
+                <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-[#f3aa18]" />
+                  <span>Password</span>
+                  <span className="text-[#f3aa18]">*</span>
                 </label>
                 <input
                   type="password"
@@ -223,14 +270,14 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Minimum 8 characters"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                  className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
                 />
               </div>
 
-              {/* What type of affiliate are you? (Checkboxes) */}
-              <div className="space-y-2 pt-2 border-t border-zinc-800/80">
-                <label className="font-semibold text-zinc-200 block">
-                  What type of affiliate are you? <span className="text-amber-400">*</span>
+              {/* What type of affiliate are you? */}
+              <div className="space-y-2 pt-2 border-t border-white/[0.07]">
+                <label className="text-xs font-semibold text-zinc-200 block">
+                  What type of affiliate are you? <span className="text-[#f3aa18]">*</span>
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {AFFILIATE_TYPE_OPTIONS.map((opt) => {
@@ -239,19 +286,19 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
                       <label
                         key={opt}
                         className={clsx(
-                          'flex items-start gap-2.5 p-3 rounded-xl border text-xs cursor-pointer transition-colors',
+                          'flex items-start gap-2.5 p-3 rounded-xl border text-xs cursor-pointer transition-all',
                           isChecked
-                            ? 'bg-amber-500/10 border-amber-500/30 text-amber-200'
-                            : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:border-zinc-700'
+                            ? 'bg-[#f3aa18]/10 border-[#f3aa18]/40 text-white'
+                            : 'bg-[#0a0a0c]/60 border-white/[0.08] text-zinc-400 hover:border-white/20 hover:text-zinc-200'
                         )}
                       >
                         <input
                           type="checkbox"
                           checked={isChecked}
                           onChange={() => toggleTypeOption(opt)}
-                          className="mt-0.5 rounded border-zinc-700 text-amber-500 focus:ring-amber-500"
+                          className="mt-0.5 rounded border-white/20 bg-black/40 text-[#f3aa18] focus:ring-[#f3aa18]"
                         />
-                        <span className="leading-tight">{opt}</span>
+                        <span className="leading-tight select-none">{opt}</span>
                       </label>
                     );
                   })}
@@ -260,8 +307,10 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
 
               {/* Your channel, username, or website */}
               <div className="space-y-1.5">
-                <label className="font-medium text-zinc-300">
-                  Your channel, username, or website <span className="text-amber-400">*</span>
+                <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-[#f3aa18]" />
+                  <span>Your Channel, Handle, or Website</span>
+                  <span className="text-[#f3aa18]">*</span>
                 </label>
                 <input
                   type="text"
@@ -269,62 +318,60 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
                   value={promotionChannel}
                   onChange={(e) => setPromotionChannel(e.target.value)}
                   placeholder="https://youtube.com/@channel or @tiktok_username"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                  className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
                 />
               </div>
 
               {/* How will you promote us? */}
               <div className="space-y-1.5">
-                <label className="font-medium text-zinc-300">
-                  How will you promote us? <span className="text-amber-400">*</span>
+                <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-[#f3aa18]" />
+                  <span>How will you promote Exacoat?</span>
+                  <span className="text-[#f3aa18]">*</span>
                 </label>
                 <textarea
                   rows={3}
                   required
                   value={promotionNotes}
                   onChange={(e) => setPromotionNotes(e.target.value)}
-                  placeholder="Describe your audience, product review formats, or where you will place your referral links..."
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                  placeholder="Describe your audience, review formats, or where you will share your referral links..."
+                  className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all resize-none"
                 />
               </div>
 
-              {/* Program Terms Disclaimer */}
-              <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800/80 text-[11px] text-zinc-400 space-y-1">
-                <div className="flex items-center gap-1.5 text-zinc-300 font-medium">
+              {/* Program Terms Summary */}
+              <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] text-[11px] text-zinc-400 space-y-1">
+                <div className="flex items-center gap-1.5 text-zinc-300 font-semibold">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Program Policy Summary</span>
+                  <span>Program Policy Highlights</span>
                 </div>
-                <p>
+                <p className="leading-relaxed">
                   Commissions are 20% on product subtotal (excluding shipping and taxes). Self referrals are strictly prohibited. Cancelled or refunded orders forfeit commission. Payout minimum is Rp 250.000 via BCA or Mandiri.
                 </p>
               </div>
 
               {/* Submit Button */}
               <div className="pt-2">
-                <button
+                <Button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="w-full py-3.5 rounded-xl text-xs sm:text-sm font-bold bg-amber-500 hover:bg-amber-400 text-zinc-950 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-amber-500/10"
+                  variant="primary"
+                  size="lg"
+                  className="w-full"
+                  isLoading={isSubmitting}
+                  rightIcon={<ArrowRight className="w-4 h-4" />}
                 >
-                  {isSubmitting ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <>
-                      <span>Submit Affiliate Application</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
+                  Submit Affiliate Application
+                </Button>
               </div>
             </form>
 
-            <div className="text-center pt-2 border-t border-zinc-800/80">
+            <div className="text-center pt-2 border-t border-white/[0.07]">
               <p className="text-xs text-zinc-400">
-                Already an approved affiliate?{' '}
+                Already an approved creator?{' '}
                 <button
                   type="button"
                   onClick={onNavigateToLogin}
-                  className="font-semibold text-amber-400 hover:text-amber-300 underline cursor-pointer"
+                  className="font-semibold text-[#f3aa18] hover:text-[#f8ba3a] underline underline-offset-4 cursor-pointer"
                 >
                   Sign in here
                 </button>

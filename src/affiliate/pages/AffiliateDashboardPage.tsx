@@ -11,10 +11,14 @@ import {
   Clock, 
   ShieldCheck, 
   AlertCircle,
-  X
+  X,
+  ArrowRight
 } from 'lucide-react';
 import { AffiliateProfile, AffiliateCommission } from '../../types';
 import { useToast } from '../../context/ToastContext';
+import { PageHeroHeader } from '../../components/ui/PageHeroHeader';
+import { GlassCard } from '../../components/ui/GlassCard';
+import { Button } from '../../components/ui/Button';
 import { clsx } from 'clsx';
 
 interface AffiliateDashboardPageProps {
@@ -68,13 +72,13 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
     switch (status) {
       case 'paid':
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
             Paid
           </span>
         );
       case 'unpaid':
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
             Cleared (Unpaid)
           </span>
         );
@@ -85,7 +89,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
           const daysLeft = Math.max(0, Math.ceil((maturesDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
           return (
             <span 
-              className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20"
+              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/25"
               title={`Delivered. 7-day grace period matures on ${maturesDate.toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' })}`}
             >
               Grace Period ({daysLeft > 0 ? `${daysLeft}d left` : 'clearing'})
@@ -94,7 +98,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
         }
         return (
           <span 
-            className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20"
+            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/25"
             title="Order is in fulfillment. Grace period begins once delivered."
           >
             Pending Delivery
@@ -104,7 +108,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
       case 'rejected':
         return (
           <span 
-            className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20"
+            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20"
             title={reason || 'Refunded or cancelled'}
           >
             Rejected
@@ -112,7 +116,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
         );
       default:
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-800 text-zinc-400 border border-zinc-700">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-white/[0.05] text-zinc-400 border border-white/[0.08]">
             {status}
           </span>
         );
@@ -120,43 +124,72 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {/* Page Hero Header */}
+      <PageHeroHeader
+        title="Creator Dashboard"
+        subtitle="Live tracking of your referral revenue, active links, and order conversion performance."
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => onNavigateTab('links')}
+              leftIcon={<ExternalLink className="w-3.5 h-3.5 text-zinc-400" />}
+            >
+              Product Links
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => onNavigateTab('payouts')}
+              leftIcon={<Wallet className="w-3.5 h-3.5" />}
+            >
+              Payouts
+            </Button>
+          </div>
+        }
+      />
+
       {/* Review Notice if Pending Approval */}
       {profile.status === 'pending_approval' && (
-        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-3">
-          <Clock className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+        <div className="p-4 rounded-2xl bg-[#f3aa18]/[0.08] border border-[#f3aa18]/25 flex items-start gap-3.5 shadow-xs">
+          <div className="p-2 rounded-xl bg-[#f3aa18]/15 text-[#f3aa18] shrink-0 mt-0.5">
+            <Clock className="w-4 h-4" />
+          </div>
           <div className="space-y-1">
-            <h3 className="text-sm font-semibold text-amber-300">Application Under Review</h3>
-            <p className="text-xs text-amber-200/80 leading-relaxed">
-              Our partnerships team is reviewing your profile and promotional channels. You can explore the portal and test link generation now, but commissions will activate as soon as your account is approved.
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[#f3aa18] font-mono">Application Under Review</h3>
+            <p className="text-xs text-zinc-300 leading-relaxed">
+              Our partnerships team is reviewing your profile and promotional channels. You can explore the portal and generate links now, and referral tracking will activate once approved.
             </p>
           </div>
         </div>
       )}
 
-      {/* Hero Referral Link Card */}
-      <section className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4 shadow-sm">
+      {/* Primary Referral Link Card */}
+      <GlassCard className="p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-white">Your Primary Referral Link</h2>
-            <p className="text-xs text-zinc-400 mt-0.5">
-              Share this link across social bios, video descriptions, or chat channels.
+            <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400">Primary Referral Link</h2>
+            <p className="text-xs text-zinc-300 mt-1">
+              Share your primary link across social bios, video descriptions, or chat channels.
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={() => setShowQrModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-800 hover:bg-zinc-750 text-zinc-300 hover:text-white border border-zinc-700/80 transition-colors cursor-pointer"
+              leftIcon={<QrCode className="w-3.5 h-3.5 text-zinc-400" />}
             >
-              <QrCode className="w-3.5 h-3.5 text-zinc-400" />
-              <span>QR Code</span>
-            </button>
+              QR Code
+            </Button>
             <a
               href={referralUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-800 hover:bg-zinc-750 text-zinc-300 hover:text-white border border-zinc-700/80 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#141414] hover:bg-white/[0.06] text-zinc-300 hover:text-white border border-white/[0.08] text-xs font-semibold transition-colors"
             >
               <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
               <span>Test Link</span>
@@ -165,59 +198,55 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
         </div>
 
         {/* Input and Copy button */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
           <div className="relative flex-1">
             <input
               type="text"
               readOnly
               value={referralUrl}
               onClick={(e) => (e.target as HTMLInputElement).select()}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-xs sm:text-sm font-mono text-zinc-200 select-all focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              className="h-11 w-full pl-4 pr-4 rounded-xl border border-white/[0.09] bg-white/[0.035] font-mono text-xs sm:text-sm text-white select-all outline-none transition-all hover:border-white/[0.16] focus:border-[#f3aa18]/70 focus:bg-white/[0.05] focus:ring-4 focus:ring-[#f3aa18]/[0.08]"
             />
           </div>
-          <button
+          <Button
             type="button"
+            variant={copiedLink ? 'success' : 'primary'}
+            size="lg"
             onClick={handleCopyLink}
-            className={clsx(
-              'inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer shadow-sm',
-              copiedLink
-                ? 'bg-emerald-600 text-white'
-                : 'bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold'
-            )}
+            leftIcon={copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
           >
-            {copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-            <span>{copiedLink ? 'Copied to Clipboard' : 'Copy Referral Link'}</span>
-          </button>
+            {copiedLink ? 'Copied to Clipboard' : 'Copy Referral Link'}
+          </Button>
         </div>
 
         {/* Attribution Guarantee */}
-        <div className="pt-2 border-t border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-zinc-400 gap-2">
+        <div className="pt-3 border-t border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between text-xs text-zinc-400 gap-2">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
             <span>30-Day Cookie Attribution Window (Last Affiliate Credited)</span>
           </div>
           <span className="text-zinc-400">
-            Commission Rate: <strong className="text-amber-400">20% Net</strong> (excluding shipping and tax)
+            Commission Rate: <strong className="text-[#f3aa18]">20% Net</strong> (excluding shipping and tax)
           </span>
         </div>
-      </section>
+      </GlassCard>
 
       {/* Stat Cards Grid */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Unpaid Balance */}
-        <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-2">
+        <GlassCard className="p-5 space-y-2.5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-zinc-400">Unpaid Balance</span>
-            <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400">
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400">Withdrawable Balance</span>
+            <div className="p-2 rounded-xl bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/20">
               <Wallet className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-white tracking-tight">
+          <div className="text-2xl sm:text-3xl font-bold font-['Chakra_Petch'] text-white tracking-tight">
             {formatIDR(metrics.unpaid_balance)}
           </div>
-          <div className="flex items-center justify-between pt-1">
-            <span className="text-[11px] text-zinc-400">
-              Min. Payout: {formatIDR(metrics.min_payout_amount)}
+          <div className="flex items-center justify-between pt-1 border-t border-white/[0.06]">
+            <span className="text-[11px] text-zinc-400 font-mono">
+              Min: {formatIDR(metrics.min_payout_amount)}
             </span>
             <button
               type="button"
@@ -225,119 +254,110 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
               className={clsx(
                 'text-[11px] font-semibold transition-colors cursor-pointer',
                 metrics.can_request_payout
-                  ? 'text-amber-400 hover:text-amber-300 underline'
-                  : 'text-zinc-400 hover:text-zinc-400'
+                  ? 'text-[#f3aa18] hover:text-[#ffbe3b] underline'
+                  : 'text-zinc-500 hover:text-zinc-400'
               )}
             >
-              Request Payout
+              Request Payout &rarr;
             </button>
           </div>
-        </div>
+        </GlassCard>
 
         {/* Lifetime Earnings */}
-        <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-2">
+        <GlassCard className="p-5 space-y-2.5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-zinc-400">Lifetime Earnings</span>
-            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400">Lifetime Earnings</span>
+            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-white tracking-tight">
+          <div className="text-2xl sm:text-3xl font-bold font-['Chakra_Petch'] text-emerald-400 tracking-tight">
             {formatIDR(metrics.lifetime_earnings)}
           </div>
-          <p className="text-[11px] text-zinc-400 pt-1">
+          <p className="text-[11px] text-zinc-400 pt-1 border-t border-white/[0.06]">
             Total verified commissions since enrollment
           </p>
-        </div>
+        </GlassCard>
 
         {/* Total Referred Orders */}
-        <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-2">
+        <GlassCard className="p-5 space-y-2.5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-zinc-400">Referred Orders</span>
-            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400">Referred Orders</span>
+            <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
               <ShoppingBag className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-white tracking-tight">
+          <div className="text-2xl sm:text-3xl font-bold font-['Chakra_Petch'] text-white tracking-tight">
             {metrics.total_orders.toLocaleString('id-ID')}
           </div>
-          <p className="text-[11px] text-zinc-400 pt-1">
-            Total completed customer checkouts
+          <p className="text-[11px] text-zinc-400 pt-1 border-t border-white/[0.06]">
+            Total customer checkout orders completed
           </p>
-        </div>
+        </GlassCard>
 
         {/* Total Clicks */}
-        <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-2">
+        <GlassCard className="p-5 space-y-2.5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-zinc-400">Link Clicks</span>
-            <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400">
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400">Link Clicks</span>
+            <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
               <MousePointerClick className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-white tracking-tight">
+          <div className="text-2xl sm:text-3xl font-bold font-['Chakra_Petch'] text-white tracking-tight">
             {metrics.total_clicks.toLocaleString('id-ID')}
           </div>
-          <p className="text-[11px] text-zinc-400 pt-1">
-            Total visitor clicks via your referral links
+          <p className="text-[11px] text-zinc-400 pt-1 border-t border-white/[0.06]">
+            Total clicks tracked via your referral URLs
           </p>
-        </div>
+        </GlassCard>
       </section>
 
       {/* Recent Referral Commissions Ledger */}
-      <section className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
+      <GlassCard className="p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base font-semibold text-white">Recent Referral Activity</h2>
+            <h2 className="text-sm font-semibold text-white">Recent Referral Activity</h2>
             <p className="text-xs text-zinc-400 mt-0.5">
-              Live log of orders credited to your affiliate link.
+              Live audit of orders placed by customers through your referral link.
             </p>
           </div>
           <button
             type="button"
-            onClick={() => onNavigateTab('links')}
-            className="text-xs font-semibold text-amber-400 hover:text-amber-300 transition-colors"
+            onClick={() => onNavigateTab('payouts')}
+            className="text-xs font-semibold text-[#f3aa18] hover:text-[#ffbe3b] transition-colors flex items-center gap-1 cursor-pointer"
           >
-            Create Product Link &rarr;
+            <span>View Payouts</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
 
         {commissions.length === 0 ? (
-          <div className="py-12 text-center rounded-xl bg-zinc-950/50 border border-zinc-800/60 p-6 space-y-3">
-            <div className="w-10 h-10 rounded-full bg-zinc-800 text-zinc-400 mx-auto flex items-center justify-center">
-              <ShoppingBag className="w-5 h-5" />
-            </div>
+          <div className="py-12 text-center rounded-2xl bg-white/[0.02] border border-white/[0.06] p-6 space-y-2">
+            <ShoppingBag className="w-8 h-8 text-zinc-500 mx-auto" />
             <h3 className="text-sm font-semibold text-zinc-300">No referral orders yet</h3>
             <p className="text-xs text-zinc-400 max-w-sm mx-auto">
-              Share your custom link on YouTube, Instagram, TikTok, or your website. When visitors purchase within 30 days, your commissions will appear here automatically.
+              Share your referral link on social platforms, videos, or chats. When customers order, your 20% commission appears here automatically.
             </p>
-            <button
-              type="button"
-              onClick={handleCopyLink}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              <span>Copy Primary Link</span>
-            </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-xl border border-white/[0.06]">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-zinc-800 text-zinc-400 font-medium">
-                  <th className="pb-3 pl-2">Order</th>
-                  <th className="pb-3">Date</th>
-                  <th className="pb-3">Eligible Subtotal</th>
-                  <th className="pb-3">Commission (20%)</th>
-                  <th className="pb-3 pr-2 text-right">Status</th>
+                <tr className="border-b border-white/[0.08] text-zinc-400 font-mono uppercase tracking-wider text-[11px] bg-white/[0.02]">
+                  <th className="py-3.5 pl-4">Order #</th>
+                  <th className="py-3.5">Date</th>
+                  <th className="py-3.5">Product Subtotal</th>
+                  <th className="py-3.5">Your 20% Commission</th>
+                  <th className="py-3.5 pr-4 text-right">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-850">
+              <tbody className="divide-y divide-white/[0.05]">
                 {commissions.map((comm) => (
-                  <tr key={comm.id} className="hover:bg-zinc-850/50 transition-colors">
-                    <td className="py-3 pl-2 font-mono text-zinc-200 font-medium">
+                  <tr key={comm.id} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="py-3 pl-4 font-mono font-semibold text-white">
                       #{comm.order_number}
                     </td>
-                    <td className="py-3 text-zinc-400">
+                    <td className="py-3 text-zinc-400 font-mono text-[11px]">
                       {new Date(comm.created_at).toLocaleDateString('id-ID', {
                         year: 'numeric',
                         month: 'short',
@@ -347,10 +367,10 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
                     <td className="py-3 text-zinc-300 font-mono">
                       {formatIDR(comm.order_subtotal)}
                     </td>
-                    <td className="py-3 font-mono font-semibold text-emerald-400">
+                    <td className="py-3 font-mono font-bold text-emerald-400">
                       {formatIDR(comm.commission_amount)}
                     </td>
-                    <td className="py-3 pr-2 text-right">
+                    <td className="py-3 pr-4 text-right">
                       {getCommissionBadge(comm.status, comm.rejection_reason, comm.matures_at, comm.delivered_at)}
                     </td>
                   </tr>
@@ -359,23 +379,23 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
             </table>
           </div>
         )}
-      </section>
+      </GlassCard>
 
       {/* QR Code Modal */}
       {showQrModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-sm w-full p-6 space-y-4 text-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="bg-[#0c0c0e] border border-white/[0.1] rounded-3xl max-w-sm w-full p-6 space-y-4 text-center shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-white">Your Referral QR Code</h3>
               <button
                 type="button"
                 onClick={() => setShowQrModal(false)}
-                className="p-1 rounded-md text-zinc-400 hover:text-white"
+                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="p-4 bg-white rounded-xl inline-block shadow-sm">
+            <div className="p-4 bg-white rounded-2xl inline-block shadow-sm">
               <img
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(referralUrl)}`}
                 alt="Affiliate QR Code"
@@ -386,13 +406,14 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
             <p className="text-xs text-zinc-400 font-mono break-all px-2">
               {referralUrl}
             </p>
-            <button
+            <Button
               type="button"
+              variant="primary"
+              className="w-full"
               onClick={handleCopyLink}
-              className="w-full py-2.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-zinc-950 transition-colors"
             >
               Copy Link URL
-            </button>
+            </Button>
           </div>
         </div>
       )}
