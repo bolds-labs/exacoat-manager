@@ -665,7 +665,10 @@ function drawLeftHeadlineBlock(
   const hasSubBadge = Boolean(subBadgeText.trim());
   const badgeH = options?.badgeHeight ?? 68;
   const badgeGap = options?.badgeHeight ? 18 : 22;
-  const maxW = options?.maxWidth ?? 720;
+  const canvasW = ctx.canvas?.width || 1500;
+  // Widened from 50% (720px) to 70% of canvas width (1050px on 1500px canvas) with multi-line support
+  const defaultMaxW = Math.floor(canvasW * 0.70);
+  const maxW = options?.maxWidth ?? defaultMaxW;
 
   // Consistent headline font size (158px on cover, 124px on variant header)
   let fontSize = options?.initialFontSize ?? 158;
