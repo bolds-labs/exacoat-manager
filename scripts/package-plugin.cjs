@@ -80,7 +80,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Connected promo coupons suns10 (Suns Channel @suns), putra10 (Putra @putra), and msbn15 (MSBN @msbn) with checkout attribution\n- Restored Suns Channel historical commission ledger and unpaid balance\n- Automated creator profile setups, WooCommerce coupon post meta synchronization, and balance recalculation\n- Maintained Edwin Yang (edwin15) and Dimas Sampurno (ds10) active configurations`,
+      changelog: `### Version ${version}\n- Fixed plugin update critical error by deferring table and role setup to WordPress init hook (priority 20)\n- Hardened WooCommerce coupon datastore queries with defensive exception handling\n- Verified creator promo coupons suns10, putra10, and msbn15 attribution\n- Restored Suns Channel historical commission ledger and unpaid balance\n- Maintained Edwin Yang (edwin15) and Dimas Sampurno (ds10) active configurations`,
     },
   };
 

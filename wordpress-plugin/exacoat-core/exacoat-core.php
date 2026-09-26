@@ -3,7 +3,7 @@
  * Plugin Name:       Exacoat Core Platform
  * Plugin URI:        https://exacoat.com
  * Description:       Proprietary e-commerce core engine, configurator manager, and ERP workstation integration for Exacoat.
- * Version:           0.1.89
+ * Version:           0.1.90
  * Author:            Exacoat
  * Author URI:        https://exacoat.com
  * License:           Proprietary
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'EXACOAT_CORE_VERSION' ) ) {
-	define( 'EXACOAT_CORE_VERSION', '0.1.89' );
+	define( 'EXACOAT_CORE_VERSION', '0.1.90' );
 }
 if ( ! defined( 'EXACOAT_CORE_FILE' ) ) {
 	define( 'EXACOAT_CORE_FILE', __FILE__ );
@@ -461,7 +461,12 @@ register_activation_hook( __FILE__, function () {
 			Exacoat_Abandoned_Cart::create_tables();
 		}
 
-		// 3. Flush rewrite rules
+		// 4. Initialize Affiliate tables and roles if available
+		if ( class_exists( 'Exacoat_Affiliate_Manager' ) ) {
+			Exacoat_Affiliate_Manager::on_init();
+		}
+
+		// 5. Flush rewrite rules
 		flush_rewrite_rules();
 	} catch ( \Throwable $e ) {
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {

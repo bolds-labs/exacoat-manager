@@ -42,8 +42,8 @@ class Exacoat_Affiliate_Manager {
 	}
 
 	public static function init(): void {
-		self::register_role();
-		self::ensure_tables();
+		// Defer table initialization and role registration until WordPress and WooCommerce are fully booted
+		add_action( 'init', [ __CLASS__, 'on_init' ], 20 );
 
 		// Cookie tracking across storefront requests
 		add_action( 'init', [ __CLASS__, 'capture_referral_cookie' ], 1 );
@@ -71,6 +71,20 @@ class Exacoat_Affiliate_Manager {
 	}
 
 	/**
+	 * Run on WordPress 'init' hook (priority 20) when plugins and datastores are ready.
+	 */
+	public static function on_init(): void {
+		try {
+			self::register_role();
+			self::ensure_tables();
+		} catch ( \Throwable $e ) {
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log( 'error', 'affiliate', 'Error in on_init: ' . $e->getMessage() );
+			}
+		}
+	}
+
+	/**
 	 * Register the custom WordPress user role for affiliates.
 	 */
 	public static function register_role(): void {
@@ -91,127 +105,133 @@ class Exacoat_Affiliate_Manager {
 	 * Database migration for affiliate records, commissions, and payout batches.
 	 */
 	public static function ensure_tables(): void {
-		global $wpdb;
-		$installed_ver = get_option( 'exacoat_affiliate_db_version', '0.0.0' );
-		$target_ver    = '1.3.0';
+		try {
+			global $wpdb;
+			$installed_ver = get_option( 'exacoat_affiliate_db_version', '0.0.0' );
+			$target_ver    = '1.3.0';
 
-		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-		$charset_collate = $wpdb->get_charset_collate();
+			require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+			$charset_collate = $wpdb->get_charset_collate();
 
-		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
-		$sql_affiliates   = "CREATE TABLE {$table_affiliates} (
-			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-			user_id bigint(20) unsigned NOT NULL,
-			slug varchar(60) NOT NULL,
-			slug_locked tinyint(1) NOT NULL DEFAULT 0,
-			status varchar(30) NOT NULL DEFAULT 'pending_approval',
-			affiliate_type varchar(100) NOT NULL DEFAULT '',
-			promotion_channel varchar(255) NOT NULL DEFAULT '',
-			promotion_notes text NULL,
-			bank_name varchar(20) NOT NULL DEFAULT '',
-			bank_account_number varchar(50) NOT NULL DEFAULT '',
-			bank_account_name varchar(100) NOT NULL DEFAULT '',
-			coupon_code varchar(100) NOT NULL DEFAULT '',
-			commission_rate decimal(5,2) NULL DEFAULT NULL,
-			lifetime_earnings decimal(14,2) NOT NULL DEFAULT 0.00,
-			unpaid_balance decimal(14,2) NOT NULL DEFAULT 0.00,
-			total_clicks bigint(20) unsigned NOT NULL DEFAULT 0,
-			total_orders bigint(20) unsigned NOT NULL DEFAULT 0,
-			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-			PRIMARY KEY  (id),
-			UNIQUE KEY user_id (user_id),
-			UNIQUE KEY slug (slug),
-			KEY status (status),
-			KEY coupon_code (coupon_code)
-		) {$charset_collate};";
-		dbDelta( $sql_affiliates );
+			$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
+			$sql_affiliates   = "CREATE TABLE {$table_affiliates} (
+				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+				user_id bigint(20) unsigned NOT NULL,
+				slug varchar(60) NOT NULL,
+				slug_locked tinyint(1) NOT NULL DEFAULT 0,
+				status varchar(30) NOT NULL DEFAULT 'pending_approval',
+				affiliate_type varchar(100) NOT NULL DEFAULT '',
+				promotion_channel varchar(255) NOT NULL DEFAULT '',
+				promotion_notes text NULL,
+				bank_name varchar(20) NOT NULL DEFAULT '',
+				bank_account_number varchar(50) NOT NULL DEFAULT '',
+				bank_account_name varchar(100) NOT NULL DEFAULT '',
+				coupon_code varchar(100) NOT NULL DEFAULT '',
+				commission_rate decimal(5,2) NULL DEFAULT NULL,
+				lifetime_earnings decimal(14,2) NOT NULL DEFAULT 0.00,
+				unpaid_balance decimal(14,2) NOT NULL DEFAULT 0.00,
+				total_clicks bigint(20) unsigned NOT NULL DEFAULT 0,
+				total_orders bigint(20) unsigned NOT NULL DEFAULT 0,
+				created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+				PRIMARY KEY  (id),
+				UNIQUE KEY user_id (user_id),
+				UNIQUE KEY slug (slug),
+				KEY status (status),
+				KEY coupon_code (coupon_code)
+			) {$charset_collate};";
+			dbDelta( $sql_affiliates );
 
-		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
-		$sql_commissions   = "CREATE TABLE {$table_commissions} (
-			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-			affiliate_id bigint(20) unsigned NOT NULL,
-			order_id bigint(20) unsigned NOT NULL,
-			order_number varchar(60) NOT NULL DEFAULT '',
-			order_subtotal decimal(14,2) NOT NULL DEFAULT 0.00,
-			commission_rate decimal(5,2) NOT NULL DEFAULT 20.00,
-			commission_amount decimal(14,2) NOT NULL DEFAULT 0.00,
-			coupon_code varchar(100) NOT NULL DEFAULT '',
-			status varchar(30) NOT NULL DEFAULT 'unpaid',
-			delivered_at datetime NULL,
-			matures_at datetime NULL,
-			rejection_reason varchar(255) NULL,
-			payout_id bigint(20) unsigned NULL,
-			customer_email varchar(100) NOT NULL DEFAULT '',
-			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-			PRIMARY KEY  (id),
-			KEY affiliate_id (affiliate_id),
-			KEY order_id (order_id),
-			KEY status (status),
-			KEY matures_at (matures_at),
-			KEY payout_id (payout_id),
-			KEY coupon_code (coupon_code)
-		) {$charset_collate};";
-		dbDelta( $sql_commissions );
+			$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
+			$sql_commissions   = "CREATE TABLE {$table_commissions} (
+				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+				affiliate_id bigint(20) unsigned NOT NULL,
+				order_id bigint(20) unsigned NOT NULL,
+				order_number varchar(60) NOT NULL DEFAULT '',
+				order_subtotal decimal(14,2) NOT NULL DEFAULT 0.00,
+				commission_rate decimal(5,2) NOT NULL DEFAULT 20.00,
+				commission_amount decimal(14,2) NOT NULL DEFAULT 0.00,
+				coupon_code varchar(100) NOT NULL DEFAULT '',
+				status varchar(30) NOT NULL DEFAULT 'unpaid',
+				delivered_at datetime NULL,
+				matures_at datetime NULL,
+				rejection_reason varchar(255) NULL,
+				payout_id bigint(20) unsigned NULL,
+				customer_email varchar(100) NOT NULL DEFAULT '',
+				created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+				PRIMARY KEY  (id),
+				KEY affiliate_id (affiliate_id),
+				KEY order_id (order_id),
+				KEY status (status),
+				KEY matures_at (matures_at),
+				KEY payout_id (payout_id),
+				KEY coupon_code (coupon_code)
+			) {$charset_collate};";
+			dbDelta( $sql_commissions );
 
-		// Ensure columns exist on legacy tables
-		$col_check_aff = $wpdb->get_results( "SHOW COLUMNS FROM {$table_affiliates} LIKE 'coupon_code'" );
-		if ( empty( $col_check_aff ) ) {
-			$wpdb->query( "ALTER TABLE {$table_affiliates} ADD COLUMN coupon_code varchar(100) NOT NULL DEFAULT '' AFTER bank_account_name, ADD COLUMN commission_rate decimal(5,2) NULL DEFAULT NULL AFTER coupon_code, ADD KEY coupon_code (coupon_code)" );
-		}
+			// Ensure columns exist on legacy tables
+			$col_check_aff = $wpdb->get_results( "SHOW COLUMNS FROM {$table_affiliates} LIKE 'coupon_code'" );
+			if ( empty( $col_check_aff ) ) {
+				$wpdb->query( "ALTER TABLE {$table_affiliates} ADD COLUMN coupon_code varchar(100) NOT NULL DEFAULT '' AFTER bank_account_name, ADD COLUMN commission_rate decimal(5,2) NULL DEFAULT NULL AFTER coupon_code, ADD KEY coupon_code (coupon_code)" );
+			}
 
-		$col_check_comm_matures = $wpdb->get_results( "SHOW COLUMNS FROM {$table_commissions} LIKE 'matures_at'" );
-		if ( empty( $col_check_comm_matures ) ) {
-			$wpdb->query( "ALTER TABLE {$table_commissions} ADD COLUMN delivered_at datetime NULL AFTER status, ADD COLUMN matures_at datetime NULL AFTER delivered_at, ADD KEY matures_at (matures_at)" );
-		}
+			$col_check_comm_matures = $wpdb->get_results( "SHOW COLUMNS FROM {$table_commissions} LIKE 'matures_at'" );
+			if ( empty( $col_check_comm_matures ) ) {
+				$wpdb->query( "ALTER TABLE {$table_commissions} ADD COLUMN delivered_at datetime NULL AFTER status, ADD COLUMN matures_at datetime NULL AFTER delivered_at, ADD KEY matures_at (matures_at)" );
+			}
 
-		$col_check_comm_coupon = $wpdb->get_results( "SHOW COLUMNS FROM {$table_commissions} LIKE 'coupon_code'" );
-		if ( empty( $col_check_comm_coupon ) ) {
-			$wpdb->query( "ALTER TABLE {$table_commissions} ADD COLUMN coupon_code varchar(100) NOT NULL DEFAULT '' AFTER commission_amount, ADD KEY coupon_code (coupon_code)" );
-		}
+			$col_check_comm_coupon = $wpdb->get_results( "SHOW COLUMNS FROM {$table_commissions} LIKE 'coupon_code'" );
+			if ( empty( $col_check_comm_coupon ) ) {
+				$wpdb->query( "ALTER TABLE {$table_commissions} ADD COLUMN coupon_code varchar(100) NOT NULL DEFAULT '' AFTER commission_amount, ADD KEY coupon_code (coupon_code)" );
+			}
 
-		$table_payouts = $wpdb->prefix . 'exacoat_affiliate_payouts';
-		$sql_payouts   = "CREATE TABLE {$table_payouts} (
-			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-			affiliate_id bigint(20) unsigned NOT NULL,
-			amount decimal(14,2) NOT NULL DEFAULT 0.00,
-			bank_name varchar(20) NOT NULL DEFAULT '',
-			bank_account_number varchar(50) NOT NULL DEFAULT '',
-			bank_account_name varchar(100) NOT NULL DEFAULT '',
-			status varchar(30) NOT NULL DEFAULT 'pending',
-			transfer_reference varchar(100) NULL,
-			admin_notes text NULL,
-			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			paid_at datetime NULL,
-			updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-			PRIMARY KEY  (id),
-			KEY affiliate_id (affiliate_id),
-			KEY status (status)
-		) {$charset_collate};";
-		dbDelta( $sql_payouts );
+			$table_payouts = $wpdb->prefix . 'exacoat_affiliate_payouts';
+			$sql_payouts   = "CREATE TABLE {$table_payouts} (
+				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+				affiliate_id bigint(20) unsigned NOT NULL,
+				amount decimal(14,2) NOT NULL DEFAULT 0.00,
+				bank_name varchar(20) NOT NULL DEFAULT '',
+				bank_account_number varchar(50) NOT NULL DEFAULT '',
+				bank_account_name varchar(100) NOT NULL DEFAULT '',
+				status varchar(30) NOT NULL DEFAULT 'pending',
+				transfer_reference varchar(100) NULL,
+				admin_notes text NULL,
+				created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				paid_at datetime NULL,
+				updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+				PRIMARY KEY  (id),
+				KEY affiliate_id (affiliate_id),
+				KEY status (status)
+			) {$charset_collate};";
+			dbDelta( $sql_payouts );
 
-		$table_clicks = $wpdb->prefix . 'exacoat_affiliate_clicks';
-		$sql_clicks   = "CREATE TABLE {$table_clicks} (
-			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-			affiliate_id bigint(20) unsigned NOT NULL,
-			landing_url varchar(255) NOT NULL DEFAULT '',
-			referrer_url varchar(255) NOT NULL DEFAULT '',
-			ip_address varchar(45) NOT NULL DEFAULT '',
-			user_agent varchar(255) NOT NULL DEFAULT '',
-			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			PRIMARY KEY  (id),
-			KEY affiliate_id (affiliate_id),
-			KEY created_at (created_at)
-		) {$charset_collate};";
-		dbDelta( $sql_clicks );
+			$table_clicks = $wpdb->prefix . 'exacoat_affiliate_clicks';
+			$sql_clicks   = "CREATE TABLE {$table_clicks} (
+				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+				affiliate_id bigint(20) unsigned NOT NULL,
+				landing_url varchar(255) NOT NULL DEFAULT '',
+				referrer_url varchar(255) NOT NULL DEFAULT '',
+				ip_address varchar(45) NOT NULL DEFAULT '',
+				user_agent varchar(255) NOT NULL DEFAULT '',
+				created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY  (id),
+				KEY affiliate_id (affiliate_id),
+				KEY created_at (created_at)
+			) {$charset_collate};";
+			dbDelta( $sql_clicks );
 
-		update_option( 'exacoat_affiliate_db_version', '1.3.0' );
+			update_option( 'exacoat_affiliate_db_version', '1.3.0' );
 
-		// One-time auto-recalculation and creator setups on plugin update
-		if ( ! get_option( 'exacoat_affiliate_recalc_v89', false ) ) {
-			self::recalculate_all_balances();
-			update_option( 'exacoat_affiliate_recalc_v89', 1 );
+			// One-time auto-recalculation and creator setups on plugin update
+			if ( ! get_option( 'exacoat_affiliate_recalc_v90', false ) ) {
+				self::recalculate_all_balances();
+				update_option( 'exacoat_affiliate_recalc_v90', 1 );
+			}
+		} catch ( \Throwable $e ) {
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log( 'error', 'affiliate', 'Error in ensure_tables: ' . $e->getMessage() );
+			}
 		}
 	}
 
@@ -727,18 +747,22 @@ class Exacoat_Affiliate_Manager {
 
 		// 2. Check WooCommerce coupon post meta (_exacoat_affiliate_id or _slicewp_affiliate_id)
 		if ( function_exists( 'wc_get_coupon_id_by_code' ) ) {
-			$coupon_id = wc_get_coupon_id_by_code( $clean );
-			if ( $coupon_id > 0 ) {
-				$aff_id = (int) get_post_meta( $coupon_id, '_exacoat_affiliate_id', true );
-				if ( ! $aff_id ) {
-					$aff_id = (int) get_post_meta( $coupon_id, '_slicewp_affiliate_id', true );
-				}
-				if ( $aff_id > 0 ) {
-					$aff = self::get_affiliate_by_id( $aff_id );
-					if ( $aff && 'active' === $aff->status ) {
-						return $aff;
+			try {
+				$coupon_id = wc_get_coupon_id_by_code( $clean );
+				if ( $coupon_id > 0 ) {
+					$aff_id = (int) get_post_meta( $coupon_id, '_exacoat_affiliate_id', true );
+					if ( ! $aff_id ) {
+						$aff_id = (int) get_post_meta( $coupon_id, '_slicewp_affiliate_id', true );
+					}
+					if ( $aff_id > 0 ) {
+						$aff = self::get_affiliate_by_id( $aff_id );
+						if ( $aff && 'active' === $aff->status ) {
+							return $aff;
+						}
 					}
 				}
+			} catch ( \Throwable $e ) {
+				// WooCommerce datastore might not be initialized yet
 			}
 		}
 
@@ -2797,78 +2821,89 @@ class Exacoat_Affiliate_Manager {
 	 * Mark all pending commissions as unpaid, ensure Edwin Yang setup, and recalculate balances.
 	 */
 	public static function recalculate_all_balances(): array {
-		global $wpdb;
-		$table_affiliates  = $wpdb->prefix . 'exacoat_affiliates';
-		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
-		$table_clicks      = $wpdb->prefix . 'exacoat_affiliate_clicks';
+		try {
+			global $wpdb;
+			$table_affiliates  = $wpdb->prefix . 'exacoat_affiliates';
+			$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
+			$table_clicks      = $wpdb->prefix . 'exacoat_affiliate_clicks';
 
-		// 1. Mark all pending commissions as unpaid (unless explicitly rejected or void)
-		$wpdb->query(
-			"UPDATE {$table_commissions} 
-			 SET status = 'unpaid' 
-			 WHERE status = 'pending' AND (rejection_reason IS NULL OR rejection_reason = '')"
-		);
-
-		// 2. Ensure creator profiles, coupon assignments, and commissions
-		self::ensure_edwin_yang_setup();
-		self::ensure_dimas_sampurno_setup();
-		self::ensure_suns_channel_setup();
-		self::ensure_putra_setup();
-		self::ensure_msbn_setup();
-
-		// 3. Re-sum balances and order/click counts across all affiliates
-		$all_affiliates = $wpdb->get_results( "SELECT id FROM {$table_affiliates}" );
-		$count = 0;
-
-		foreach ( $all_affiliates as $aff ) {
-			$aff_id = (int) $aff->id;
-
-			$unpaid = (float) $wpdb->get_var(
-				$wpdb->prepare(
-					"SELECT COALESCE(SUM(commission_amount), 0.00) FROM {$table_commissions} WHERE affiliate_id = %d AND status = 'unpaid'",
-					$aff_id
-				)
+			// 1. Mark all pending commissions as unpaid (unless explicitly rejected or void)
+			$wpdb->query(
+				"UPDATE {$table_commissions} 
+				 SET status = 'unpaid' 
+				 WHERE status = 'pending' AND (rejection_reason IS NULL OR rejection_reason = '')"
 			);
 
-			$paid = (float) $wpdb->get_var(
-				$wpdb->prepare(
-					"SELECT COALESCE(SUM(commission_amount), 0.00) FROM {$table_commissions} WHERE affiliate_id = %d AND status = 'paid'",
-					$aff_id
-				)
-			);
+			// 2. Ensure creator profiles, coupon assignments, and commissions
+			self::ensure_edwin_yang_setup();
+			self::ensure_dimas_sampurno_setup();
+			self::ensure_suns_channel_setup();
+			self::ensure_putra_setup();
+			self::ensure_msbn_setup();
 
-			$total_orders = (int) $wpdb->get_var(
-				$wpdb->prepare(
-					"SELECT COUNT(DISTINCT order_id) FROM {$table_commissions} WHERE affiliate_id = %d AND status != 'rejected'",
-					$aff_id
-				)
-			);
+			// 3. Re-sum balances and order/click counts across all affiliates
+			$all_affiliates = $wpdb->get_results( "SELECT id FROM {$table_affiliates}" );
+			$count = 0;
 
-			$total_clicks = (int) $wpdb->get_var(
-				$wpdb->prepare(
-					"SELECT COUNT(*) FROM {$table_clicks} WHERE affiliate_id = %d",
-					$aff_id
-				)
-			);
+			foreach ( $all_affiliates as $aff ) {
+				$aff_id = (int) $aff->id;
 
-			$wpdb->update(
-				$table_affiliates,
-				[
-					'unpaid_balance'    => $unpaid,
-					'lifetime_earnings' => $unpaid + $paid,
-					'total_orders'      => $total_orders,
-					'total_clicks'      => max( $total_clicks, (int) $total_orders ),
-				],
-				[ 'id' => $aff_id ]
-			);
-			$count++;
+				$unpaid = (float) $wpdb->get_var(
+					$wpdb->prepare(
+						"SELECT COALESCE(SUM(commission_amount), 0.00) FROM {$table_commissions} WHERE affiliate_id = %d AND status = 'unpaid'",
+						$aff_id
+					)
+				);
+
+				$paid = (float) $wpdb->get_var(
+					$wpdb->prepare(
+						"SELECT COALESCE(SUM(commission_amount), 0.00) FROM {$table_commissions} WHERE affiliate_id = %d AND status = 'paid'",
+						$aff_id
+					)
+				);
+
+				$total_orders = (int) $wpdb->get_var(
+					$wpdb->prepare(
+						"SELECT COUNT(DISTINCT order_id) FROM {$table_commissions} WHERE affiliate_id = %d AND status != 'rejected'",
+						$aff_id
+					)
+				);
+
+				$total_clicks = (int) $wpdb->get_var(
+					$wpdb->prepare(
+						"SELECT COUNT(*) FROM {$table_clicks} WHERE affiliate_id = %d",
+						$aff_id
+					)
+				);
+
+				$wpdb->update(
+					$table_affiliates,
+					[
+						'unpaid_balance'    => $unpaid,
+						'lifetime_earnings' => $unpaid + $paid,
+						'total_orders'      => $total_orders,
+						'total_clicks'      => max( $total_clicks, (int) $total_orders ),
+					],
+					[ 'id' => $aff_id ]
+				);
+				$count++;
+			}
+
+			return [
+				'success'              => true,
+				'affiliates_processed' => $count,
+				'message'              => 'All pending commissions marked as unpaid and creator balances recalculated successfully.',
+			];
+		} catch ( \Throwable $e ) {
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log( 'error', 'affiliate', 'Error in recalculate_all_balances: ' . $e->getMessage() );
+			}
+			return [
+				'success'              => false,
+				'affiliates_processed' => 0,
+				'message'              => 'Recalculation error: ' . $e->getMessage(),
+			];
 		}
-
-		return [
-			'success'              => true,
-			'affiliates_processed' => $count,
-			'message'              => 'All pending commissions marked as unpaid and creator balances recalculated successfully.',
-		];
 	}
 
 	/**
@@ -2929,11 +2964,15 @@ class Exacoat_Affiliate_Manager {
 
 		// Synchronize WooCommerce coupon edwin15 if available
 		if ( function_exists( 'wc_get_coupon_id_by_code' ) ) {
-			$coupon_id = wc_get_coupon_id_by_code( 'edwin15' );
-			if ( $coupon_id > 0 ) {
-				update_post_meta( $coupon_id, '_exacoat_affiliate_id', $edwin_aff_id );
-				update_post_meta( $coupon_id, '_exacoat_affiliate_slug', 'edwinyg' );
-				update_post_meta( $coupon_id, '_exacoat_affiliate_email', 'edwinyang10@gmail.com' );
+			try {
+				$coupon_id = wc_get_coupon_id_by_code( 'edwin15' );
+				if ( $coupon_id > 0 ) {
+					update_post_meta( $coupon_id, '_exacoat_affiliate_id', $edwin_aff_id );
+					update_post_meta( $coupon_id, '_exacoat_affiliate_slug', 'edwinyg' );
+					update_post_meta( $coupon_id, '_exacoat_affiliate_email', 'edwinyang10@gmail.com' );
+				}
+			} catch ( \Throwable $e ) {
+				// WooCommerce datastore might not be initialized yet
 			}
 		}
 
@@ -3039,30 +3078,34 @@ class Exacoat_Affiliate_Manager {
 
 		// Synchronize WooCommerce coupon ds10 if available
 		if ( function_exists( 'wc_get_coupon_id_by_code' ) ) {
-			$coupon_id = wc_get_coupon_id_by_code( 'ds10' );
-			if ( $coupon_id > 0 ) {
-				update_post_meta( $coupon_id, '_exacoat_affiliate_id', $dimas_aff_id );
-				update_post_meta( $coupon_id, '_exacoat_affiliate_slug', 'ds' );
-				if ( $user_email ) {
-					update_post_meta( $coupon_id, '_exacoat_affiliate_email', $user_email );
-				}
-			} elseif ( class_exists( 'WC_Coupon' ) ) {
-				try {
-					$new_coupon = new \WC_Coupon();
-					$new_coupon->set_code( 'ds10' );
-					$new_coupon->set_discount_type( 'percent' );
-					$new_coupon->set_amount( 10 );
-					$new_coupon->set_description( 'Affiliate discount coupon for Dimas Sampurno (@ds)' );
-					$new_coupon->set_individual_use( true );
-					$new_coupon->update_meta_data( '_exacoat_affiliate_id', $dimas_aff_id );
-					$new_coupon->update_meta_data( '_exacoat_affiliate_slug', 'ds' );
+			try {
+				$coupon_id = wc_get_coupon_id_by_code( 'ds10' );
+				if ( $coupon_id > 0 ) {
+					update_post_meta( $coupon_id, '_exacoat_affiliate_id', $dimas_aff_id );
+					update_post_meta( $coupon_id, '_exacoat_affiliate_slug', 'ds' );
 					if ( $user_email ) {
-						$new_coupon->update_meta_data( '_exacoat_affiliate_email', $user_email );
+						update_post_meta( $coupon_id, '_exacoat_affiliate_email', $user_email );
 					}
-					$new_coupon->save();
-				} catch ( \Throwable $e ) {
-					// Graceful fallback if coupon creation fails
+				} elseif ( class_exists( 'WC_Coupon' ) ) {
+					try {
+						$new_coupon = new \WC_Coupon();
+						$new_coupon->set_code( 'ds10' );
+						$new_coupon->set_discount_type( 'percent' );
+						$new_coupon->set_amount( 10 );
+						$new_coupon->set_description( 'Affiliate discount coupon for Dimas Sampurno (@ds)' );
+						$new_coupon->set_individual_use( true );
+						$new_coupon->update_meta_data( '_exacoat_affiliate_id', $dimas_aff_id );
+						$new_coupon->update_meta_data( '_exacoat_affiliate_slug', 'ds' );
+						if ( $user_email ) {
+							$new_coupon->update_meta_data( '_exacoat_affiliate_email', $user_email );
+						}
+						$new_coupon->save();
+					} catch ( \Throwable $e ) {
+						// Graceful fallback if coupon creation fails
+					}
 				}
+			} catch ( \Throwable $e ) {
+				// WooCommerce datastore might not be initialized yet
 			}
 		}
 
@@ -3206,29 +3249,33 @@ class Exacoat_Affiliate_Manager {
 
 		// Synchronize WooCommerce coupon suns10
 		if ( function_exists( 'wc_get_coupon_id_by_code' ) ) {
-			$coupon_id = wc_get_coupon_id_by_code( 'suns10' );
-			if ( $coupon_id > 0 ) {
-				update_post_meta( $coupon_id, '_exacoat_affiliate_id', $suns_aff_id );
-				update_post_meta( $coupon_id, '_exacoat_affiliate_slug', 'suns' );
-				if ( $user_email ) {
-					update_post_meta( $coupon_id, '_exacoat_affiliate_email', $user_email );
-				}
-			} elseif ( class_exists( 'WC_Coupon' ) ) {
-				try {
-					$new_coupon = new \WC_Coupon();
-					$new_coupon->set_code( 'suns10' );
-					$new_coupon->set_discount_type( 'percent' );
-					$new_coupon->set_amount( 10 );
-					$new_coupon->set_description( 'Affiliate discount coupon for Suns Channel (@suns)' );
-					$new_coupon->set_individual_use( true );
-					$new_coupon->update_meta_data( '_exacoat_affiliate_id', $suns_aff_id );
-					$new_coupon->update_meta_data( '_exacoat_affiliate_slug', 'suns' );
+			try {
+				$coupon_id = wc_get_coupon_id_by_code( 'suns10' );
+				if ( $coupon_id > 0 ) {
+					update_post_meta( $coupon_id, '_exacoat_affiliate_id', $suns_aff_id );
+					update_post_meta( $coupon_id, '_exacoat_affiliate_slug', 'suns' );
 					if ( $user_email ) {
-						$new_coupon->update_meta_data( '_exacoat_affiliate_email', $user_email );
+						update_post_meta( $coupon_id, '_exacoat_affiliate_email', $user_email );
 					}
-					$new_coupon->save();
-				} catch ( \Throwable $e ) {
+				} elseif ( class_exists( 'WC_Coupon' ) ) {
+					try {
+						$new_coupon = new \WC_Coupon();
+						$new_coupon->set_code( 'suns10' );
+						$new_coupon->set_discount_type( 'percent' );
+						$new_coupon->set_amount( 10 );
+						$new_coupon->set_description( 'Affiliate discount coupon for Suns Channel (@suns)' );
+						$new_coupon->set_individual_use( true );
+						$new_coupon->update_meta_data( '_exacoat_affiliate_id', $suns_aff_id );
+						$new_coupon->update_meta_data( '_exacoat_affiliate_slug', 'suns' );
+						if ( $user_email ) {
+							$new_coupon->update_meta_data( '_exacoat_affiliate_email', $user_email );
+						}
+						$new_coupon->save();
+					} catch ( \Throwable $e ) {
+					}
 				}
+			} catch ( \Throwable $e ) {
+				// WooCommerce datastore might not be initialized yet
 			}
 		}
 
@@ -3341,29 +3388,33 @@ class Exacoat_Affiliate_Manager {
 
 		// Synchronize WooCommerce coupon putra10
 		if ( function_exists( 'wc_get_coupon_id_by_code' ) ) {
-			$coupon_id = wc_get_coupon_id_by_code( 'putra10' );
-			if ( $coupon_id > 0 ) {
-				update_post_meta( $coupon_id, '_exacoat_affiliate_id', $putra_aff_id );
-				update_post_meta( $coupon_id, '_exacoat_affiliate_slug', 'putra' );
-				if ( $user_email ) {
-					update_post_meta( $coupon_id, '_exacoat_affiliate_email', $user_email );
-				}
-			} elseif ( class_exists( 'WC_Coupon' ) ) {
-				try {
-					$new_coupon = new \WC_Coupon();
-					$new_coupon->set_code( 'putra10' );
-					$new_coupon->set_discount_type( 'percent' );
-					$new_coupon->set_amount( 10 );
-					$new_coupon->set_description( 'Affiliate discount coupon for Putra (@putra)' );
-					$new_coupon->set_individual_use( true );
-					$new_coupon->update_meta_data( '_exacoat_affiliate_id', $putra_aff_id );
-					$new_coupon->update_meta_data( '_exacoat_affiliate_slug', 'putra' );
+			try {
+				$coupon_id = wc_get_coupon_id_by_code( 'putra10' );
+				if ( $coupon_id > 0 ) {
+					update_post_meta( $coupon_id, '_exacoat_affiliate_id', $putra_aff_id );
+					update_post_meta( $coupon_id, '_exacoat_affiliate_slug', 'putra' );
 					if ( $user_email ) {
-						$new_coupon->update_meta_data( '_exacoat_affiliate_email', $user_email );
+						update_post_meta( $coupon_id, '_exacoat_affiliate_email', $user_email );
 					}
-					$new_coupon->save();
-				} catch ( \Throwable $e ) {
+				} elseif ( class_exists( 'WC_Coupon' ) ) {
+					try {
+						$new_coupon = new \WC_Coupon();
+						$new_coupon->set_code( 'putra10' );
+						$new_coupon->set_discount_type( 'percent' );
+						$new_coupon->set_amount( 10 );
+						$new_coupon->set_description( 'Affiliate discount coupon for Putra (@putra)' );
+						$new_coupon->set_individual_use( true );
+						$new_coupon->update_meta_data( '_exacoat_affiliate_id', $putra_aff_id );
+						$new_coupon->update_meta_data( '_exacoat_affiliate_slug', 'putra' );
+						if ( $user_email ) {
+							$new_coupon->update_meta_data( '_exacoat_affiliate_email', $user_email );
+						}
+						$new_coupon->save();
+					} catch ( \Throwable $e ) {
+					}
 				}
+			} catch ( \Throwable $e ) {
+				// WooCommerce datastore might not be initialized yet
 			}
 		}
 	}
@@ -3424,29 +3475,33 @@ class Exacoat_Affiliate_Manager {
 
 		// Synchronize WooCommerce coupon msbn15
 		if ( function_exists( 'wc_get_coupon_id_by_code' ) ) {
-			$coupon_id = wc_get_coupon_id_by_code( 'msbn15' );
-			if ( $coupon_id > 0 ) {
-				update_post_meta( $coupon_id, '_exacoat_affiliate_id', $msbn_aff_id );
-				update_post_meta( $coupon_id, '_exacoat_affiliate_slug', 'msbn' );
-				if ( $user_email ) {
-					update_post_meta( $coupon_id, '_exacoat_affiliate_email', $user_email );
-				}
-			} elseif ( class_exists( 'WC_Coupon' ) ) {
-				try {
-					$new_coupon = new \WC_Coupon();
-					$new_coupon->set_code( 'msbn15' );
-					$new_coupon->set_discount_type( 'percent' );
-					$new_coupon->set_amount( 15 );
-					$new_coupon->set_description( 'Affiliate discount coupon for MSBN (@msbn)' );
-					$new_coupon->set_individual_use( true );
-					$new_coupon->update_meta_data( '_exacoat_affiliate_id', $msbn_aff_id );
-					$new_coupon->update_meta_data( '_exacoat_affiliate_slug', 'msbn' );
+			try {
+				$coupon_id = wc_get_coupon_id_by_code( 'msbn15' );
+				if ( $coupon_id > 0 ) {
+					update_post_meta( $coupon_id, '_exacoat_affiliate_id', $msbn_aff_id );
+					update_post_meta( $coupon_id, '_exacoat_affiliate_slug', 'msbn' );
 					if ( $user_email ) {
-						$new_coupon->update_meta_data( '_exacoat_affiliate_email', $user_email );
+						update_post_meta( $coupon_id, '_exacoat_affiliate_email', $user_email );
 					}
-					$new_coupon->save();
-				} catch ( \Throwable $e ) {
+				} elseif ( class_exists( 'WC_Coupon' ) ) {
+					try {
+						$new_coupon = new \WC_Coupon();
+						$new_coupon->set_code( 'msbn15' );
+						$new_coupon->set_discount_type( 'percent' );
+						$new_coupon->set_amount( 15 );
+						$new_coupon->set_description( 'Affiliate discount coupon for MSBN (@msbn)' );
+						$new_coupon->set_individual_use( true );
+						$new_coupon->update_meta_data( '_exacoat_affiliate_id', $msbn_aff_id );
+						$new_coupon->update_meta_data( '_exacoat_affiliate_slug', 'msbn' );
+						if ( $user_email ) {
+							$new_coupon->update_meta_data( '_exacoat_affiliate_email', $user_email );
+						}
+						$new_coupon->save();
+					} catch ( \Throwable $e ) {
+					}
 				}
+			} catch ( \Throwable $e ) {
+				// WooCommerce datastore might not be initialized yet
 			}
 		}
 	}
@@ -3488,33 +3543,37 @@ class Exacoat_Affiliate_Manager {
 
 		// Synchronize with WooCommerce coupon if coupon code is non-empty
 		if ( ! empty( $coupon_code ) && function_exists( 'wc_get_coupon_id_by_code' ) ) {
-			$coupon_id = wc_get_coupon_id_by_code( $coupon_code );
-			$aff_user  = get_userdata( $affiliate->user_id );
-			$user_email = $aff_user ? $aff_user->user_email : '';
+			try {
+				$coupon_id = wc_get_coupon_id_by_code( $coupon_code );
+				$aff_user  = get_userdata( $affiliate->user_id );
+				$user_email = $aff_user ? $aff_user->user_email : '';
 
-			if ( $coupon_id > 0 ) {
-				update_post_meta( $coupon_id, '_exacoat_affiliate_id', $affiliate_id );
-				update_post_meta( $coupon_id, '_exacoat_affiliate_slug', $affiliate->slug );
-				if ( $user_email ) {
-					update_post_meta( $coupon_id, '_exacoat_affiliate_email', $user_email );
-				}
-			} elseif ( class_exists( 'WC_Coupon' ) ) {
-				try {
-					$new_coupon = new WC_Coupon();
-					$new_coupon->set_code( $coupon_code );
-					$new_coupon->set_discount_type( 'percent' );
-					$new_coupon->set_amount( 10 );
-					$new_coupon->set_description( 'Affiliate discount coupon for @' . $affiliate->slug );
-					$new_coupon->set_individual_use( true );
-					$new_coupon->update_meta_data( '_exacoat_affiliate_id', $affiliate_id );
-					$new_coupon->update_meta_data( '_exacoat_affiliate_slug', $affiliate->slug );
+				if ( $coupon_id > 0 ) {
+					update_post_meta( $coupon_id, '_exacoat_affiliate_id', $affiliate_id );
+					update_post_meta( $coupon_id, '_exacoat_affiliate_slug', $affiliate->slug );
 					if ( $user_email ) {
-						$new_coupon->update_meta_data( '_exacoat_affiliate_email', $user_email );
+						update_post_meta( $coupon_id, '_exacoat_affiliate_email', $user_email );
 					}
-					$new_coupon->save();
-				} catch ( \Throwable $e ) {
-					// Graceful fallback if coupon creation fails
+				} elseif ( class_exists( 'WC_Coupon' ) ) {
+					try {
+						$new_coupon = new WC_Coupon();
+						$new_coupon->set_code( $coupon_code );
+						$new_coupon->set_discount_type( 'percent' );
+						$new_coupon->set_amount( 10 );
+						$new_coupon->set_description( 'Affiliate discount coupon for @' . $affiliate->slug );
+						$new_coupon->set_individual_use( true );
+						$new_coupon->update_meta_data( '_exacoat_affiliate_id', $affiliate_id );
+						$new_coupon->update_meta_data( '_exacoat_affiliate_slug', $affiliate->slug );
+						if ( $user_email ) {
+							$new_coupon->update_meta_data( '_exacoat_affiliate_email', $user_email );
+						}
+						$new_coupon->save();
+					} catch ( \Throwable $e ) {
+						// Graceful fallback if coupon creation fails
+					}
 				}
+			} catch ( \Throwable $e ) {
+				// WooCommerce datastore might not be initialized yet
 			}
 		}
 
