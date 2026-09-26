@@ -6219,40 +6219,49 @@ export async function generateProductSeoAndDescriptionAi(
 
   const cleanDevice = normalizeDeviceName(productName) || productName;
 
-  const systemPrompt = `You are the lead creative copywriter for Exacoat (exacoat.com), an industrial-design studio that crafts precision-cut device wraps and skins.
+  const systemPrompt = `You are the lead copywriter for Exacoat (exacoat.com), crafting premium precision-cut device skins and wraps.
 
-Target Product:
-- Device Name: "${cleanDevice}"
-- Category: "${categoryName}"
+Target Device: "${cleanDevice}"
+Category: "${categoryName}"
 
-Creative Philosophy & Voice:
-- Write with dry, effortless, design-studio wit. The tone is refined, observant, and self-aware: clever enough to make a hardware enthusiast smirk, yet composed and thoroughly premium.
-- Capture the everyday irony of owning "${cleanDevice}": hardware engineers spend years shaving fractions of a millimeter off a chassis, balancing weight distribution, and perfecting finishes, only for owners to face a flawed choice. Either bury all that engineering inside a thick plastic case that ruins the silhouette and pocket feel, or carry it bare and let smudges, desk grit, pocket keys, or a slick surface win within a week.
-- Think fresh about "${cleanDevice}" specifically (its actual physical proportions, chassis weight, camera plateau geometry, how its surface finish behaves in real hands, or how bulky cases spoil its design). Weave a sharp, original observation into the opening, then pivot naturally to how an Exacoat wrap keeps the exact factory silhouette while adding confident grip and everyday scratch defense.
-- Every product must get completely original phrasing. Do not recycle stock jokes or repetitive formulas across devices.
+Tone & Creative Voice:
+- Sharp, witty, and conversational. Sound like a knowledgeable tech friend who appreciates great design, not an academic design critic or marketing brochure.
+- Keep the language punchy, natural, and grounded. Strictly avoid pretentious or overly dramatic words. Do NOT use phrases like "unbroken lid", "abstract finish", "communal desk", "factory silhouette", "assured grip", "tactile sanctuary", or "geometry".
+- Focus on real-world situations owners actually face: coffee shop tables, backpack zippers, keys in a bag, slippery aluminum, greasy fingerprint smudges, or ugly bulky plastic clip-on cases that ruin the feel.
+- The core contrast: You want to keep your ${cleanDevice} sleek and light, but leaving it bare invites scratches. Bulky cases ruin the feel. Exacoat gives you real scratch protection and texture without adding bulk.
+- Make it witty and clever enough to make an enthusiast smile, while keeping it clean and easy to read.
 
 Strict Guardrails:
-- Never mention vinyl manufacturer brand names.
-- Never sound like a technical spec sheet or installation manual (avoid millimeter thickness measurements, adhesive terminology, or mechanical jargon).
-- Strictly NO exclamation marks.
-- Strictly NO em dashes of any kind (do not use long dashes "—" or double hyphens "--"). Use commas or periods instead.
-- Strictly NO generic AI hype words ("elevate", "revolutionary", "unleash", "game-changer", "ultimate armor", "unparalleled", "seamless").
+- Plain, sharp English. No purple prose, no pompous vocabulary.
+- Never mention 3M or vinyl brand names.
+- Never sound like a spec sheet or installation guide.
+- Strictly NO exclamation marks (!).
+- Strictly NO em dashes (—) or en dashes (–) or double hyphens (--). Use commas or periods.
+- Strictly NO generic AI buzzwords ("elevate", "revolutionary", "game-changer", "ultimate armor", "unparalleled", "seamless").
+- Ensure proper punctuation and clean apostrophes (e.g. write "${cleanDevice}'s", never place commas or dashes before apostrophes).
 
 Output format:
 Return ONLY a valid JSON object with the following four keys (no markdown formatting, no conversational text):
 {
   "seo_title": "${cleanDevice} Skin & Wrap | Exacoat",
-  "seo_description": "Witty, refined Google search snippet (120 to 155 chars) contrasting bulky cases or bare-device flaws with Exacoat's zero-bulk grip and scratch defense. Zero em dashes.",
+  "seo_description": "Clean, witty Google search snippet (120 to 155 chars) highlighting slim scratch protection and grip without case bulk. Zero em dashes.",
   "focus_keyword": "${cleanDevice.toLowerCase()} skin",
-  "short_description": "2 to 3 sharp, witty, lifestyle-first sentences (35 to 55 words) tailored specifically to the real-world experience of carrying and protecting the ${cleanDevice} without case bulk."
+  "short_description": "2 to 3 sharp, witty, conversational sentences (35 to 55 words) about protecting the ${cleanDevice} without ruining how slim and great it feels in hand."
 }`;
 
   const cleanField = (str?: string) => {
     if (!str || typeof str !== 'string') return '';
     return str
+      .replace(/[’‘‛]/g, "'")
+      .replace(/[“”„‟]/g, '"')
+      .replace(/\?s\b/g, "'s")
+      .replace(/,\s*'s\b/g, "'s")
       .replace(/!+/g, '.')
       .replace(/[—–]/g, ', ')
       .replace(/--/g, ', ')
+      .replace(/,\s*,+/g, ',')
+      .replace(/\s+,/g, ',')
+      .replace(/\s+\./g, '.')
       .replace(/\s{2,}/g, ' ')
       .trim();
   };

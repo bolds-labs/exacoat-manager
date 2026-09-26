@@ -568,7 +568,7 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
                     className="min-w-0 flex-1 pr-1 self-end pb-0.5"
                     style={{ fontFamily: "'Chakra Petch', sans-serif" }}
                   >
-                    <div className="text-[9px] font-semibold uppercase tracking-[0.2em] text-[#f3aa18] mb-1 truncate">
+                    <div className="text-[9px] font-semibold uppercase tracking-[0.2em] text-[#f3aa18] mb-0.5 leading-none truncate">
                       {(product.categories?.[0]?.name || 'EXACOAT').replace(/\s+Skins?$/i, '')}
                     </div>
                     <div className="text-base sm:text-lg font-bold text-white leading-[1.08] line-clamp-2 tracking-tight">

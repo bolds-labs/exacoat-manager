@@ -20,8 +20,11 @@ import {
   FolderOpen,
   ArrowUpLeft,
   X,
+  Crop,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { ImageCropModal } from '../ui/ImageCropModal';
+import { dataUrlToFile } from '../../lib/imageCropUtils';
 
 interface ProductImageItem {
   id?: number;
@@ -45,17 +48,28 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
 }) => {
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cropGalleryInputRef = useRef<HTMLInputElement>(null);
 
   const [images, setImages] = useState<ProductImageItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  // Gallery Cropping Queue State (3:4 1500x2000)
+  const [cropQueue, setCropQueue] = useState<File[]>([]);
+  const [cropIndex, setCropIndex] = useState(0);
+  const [currentCropObjectUrl, setCurrentCropObjectUrl] = useState('');
+  const [isCropModalOpen, setIsCropModalOpen] = useState(false);
+  const accumulatedCroppedFiles = useRef<File[]>([]);
+
+  // Existing image re-crop state
+  const [singleCropTarget, setSingleCropTarget] = useState<{ img: ProductImageItem; index: number } | null>(null);
 
   // WordPress Media Library Drawer/Selector State
   const [isMediaPickerOpen, setIsMediaPickerOpen] = useState(false);
   const [mediaItems, setMediaItems] = useState<WpMediaItem[]>([]);
   const [isLoadingMedia, setIsLoadingMedia] = useState(false);
   const [mediaSearch, setMediaSearch] = useState('');
-  const [optimizationMode, setOptimizationMode] = useState<'smart' | 'webp'>('smart');
+  const optimizationMode = 'smart';
 
   // Sync images when product changes or modal opens
   useEffect(() => {
@@ -72,6 +86,15 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
     );
     setIsMediaPickerOpen(false);
   }, [product, isOpen]);
+
+  // Clean up object URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (currentCropObjectUrl) {
+        URL.revokeObjectURL(currentCropObjectUrl);
+      }
+    };
+  }, [currentCropObjectUrl]);
 
   // Load WordPress Media Library
   const loadMediaLibrary = async (searchQuery = '') => {
@@ -111,10 +134,9 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
     setImages((prev) => prev.filter((_, idx) => idx !== index));
   };
 
-  // Handle direct file upload to WordPress Media Library
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  // Helper to upload a batch of files to WordPress Media and append to active images
+  const uploadFilesToGallery = async (filesToUpload: File[], isCroppedGallery = false) => {
+    if (!filesToUpload || filesToUpload.length === 0) return;
 
     setIsUploading(true);
     try {
@@ -123,12 +145,12 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
       let totalOrigBytes = 0;
       let totalOptBytes = 0;
 
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+      for (let i = 0; i < filesToUpload.length; i++) {
+        const file = filesToUpload[i];
         const res = await uploadWordPressMediaDirect(file, {
           mode: optimizationMode,
           pngColors: 128,
-          jpegQuality: 0.85,
+          jpegQuality: 0.88,
         });
         if (res.success && res.url) {
           uploadedEntries.push({
@@ -157,21 +179,164 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
           totalOrigBytes > 0 && totalOptBytes < totalOrigBytes
             ? Math.round(((totalOrigBytes - totalOptBytes) / totalOrigBytes) * 100)
             : 0;
-        const savingsSuffix =
-          savedPct > 0
-            ? ` (${optimizationMode === 'webp' ? 'WebP 85' : 'PNG 128c / JPG 85'}, saved ${savedPct}%)`
-            : ` (${optimizationMode === 'webp' ? 'WebP 85' : 'PNG 128c / JPG 85'})`;
-        showToast(
-          'success',
-          'Image Uploaded',
-          `Uploaded ${uploadedEntries.length} image(s) to gallery${savingsSuffix}.`
-        );
+        const savingsSuffix = savedPct > 0 ? ` (Optimized, saved ${savedPct}%)` : '';
+
+        const titleText = isCroppedGallery ? '3:4 Gallery Uploaded' : 'Image Uploaded';
+        const msgText = isCroppedGallery
+          ? `Uploaded ${uploadedEntries.length} 3:4 (1500×2000) image(s) to gallery${savingsSuffix}.`
+          : `Uploaded ${uploadedEntries.length} image(s) to gallery${savingsSuffix}.`;
+
+        showToast('success', titleText, msgText);
       }
     } catch (err: any) {
       showToast('error', 'Upload Error', err.message);
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+      if (cropGalleryInputRef.current) cropGalleryInputRef.current.value = '';
+    }
+  };
+
+  // Direct uncropped file upload handler
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    await uploadFilesToGallery(Array.from(files), false);
+  };
+
+  // 3:4 Gallery Upload: User selects files to crop & resize into 3:4 1500x2000
+  const handleCropGallerySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const fileList = Array.from(files);
+    accumulatedCroppedFiles.current = [];
+    setCropQueue(fileList);
+    setCropIndex(0);
+    const objectUrl = URL.createObjectURL(fileList[0]);
+    setCurrentCropObjectUrl(objectUrl);
+    setIsCropModalOpen(true);
+  };
+
+  // Step to next image in crop queue, or finalize batch upload
+  const handleCropModalComplete = (croppedDataUrl: string) => {
+    if (cropQueue.length === 0) return;
+
+    const currentFile = cropQueue[cropIndex];
+    const baseName = currentFile.name.replace(/\.[^/.]+$/, '');
+    const cleanFileName = `${baseName}-1500x2000.jpg`;
+    const croppedFile = dataUrlToFile(croppedDataUrl, cleanFileName, 'image/jpeg');
+
+    accumulatedCroppedFiles.current.push(croppedFile);
+
+    if (currentCropObjectUrl) {
+      URL.revokeObjectURL(currentCropObjectUrl);
+    }
+
+    if (cropIndex + 1 < cropQueue.length) {
+      const nextIndex = cropIndex + 1;
+      setCropIndex(nextIndex);
+      const nextObjectUrl = URL.createObjectURL(cropQueue[nextIndex]);
+      setCurrentCropObjectUrl(nextObjectUrl);
+    } else {
+      setIsCropModalOpen(false);
+      setCurrentCropObjectUrl('');
+      const finalFiles = [...accumulatedCroppedFiles.current];
+      accumulatedCroppedFiles.current = [];
+      setCropQueue([]);
+      setCropIndex(0);
+
+      if (finalFiles.length > 0) {
+        uploadFilesToGallery(finalFiles, true);
+      }
+    }
+  };
+
+  // Skip current photo in crop queue
+  const handleCropModalSkip = () => {
+    if (currentCropObjectUrl) {
+      URL.revokeObjectURL(currentCropObjectUrl);
+    }
+
+    if (cropIndex + 1 < cropQueue.length) {
+      const nextIndex = cropIndex + 1;
+      setCropIndex(nextIndex);
+      const nextObjectUrl = URL.createObjectURL(cropQueue[nextIndex]);
+      setCurrentCropObjectUrl(nextObjectUrl);
+    } else {
+      setIsCropModalOpen(false);
+      setCurrentCropObjectUrl('');
+      const finalFiles = [...accumulatedCroppedFiles.current];
+      accumulatedCroppedFiles.current = [];
+      setCropQueue([]);
+      setCropIndex(0);
+
+      if (finalFiles.length > 0) {
+        uploadFilesToGallery(finalFiles, true);
+      }
+    }
+  };
+
+  // Close/cancel crop queue modal
+  const handleCropModalClose = () => {
+    if (currentCropObjectUrl) {
+      URL.revokeObjectURL(currentCropObjectUrl);
+    }
+    setIsCropModalOpen(false);
+    setCurrentCropObjectUrl('');
+    accumulatedCroppedFiles.current = [];
+    setCropQueue([]);
+    setCropIndex(0);
+    if (cropGalleryInputRef.current) {
+      cropGalleryInputRef.current.value = '';
+    }
+  };
+
+  // Single existing image re-crop
+  const handleStartSingleCrop = (img: ProductImageItem, index: number) => {
+    setSingleCropTarget({ img, index });
+  };
+
+  const handleSingleCropComplete = async (croppedDataUrl: string) => {
+    if (!singleCropTarget) return;
+
+    const { img, index } = singleCropTarget;
+    setSingleCropTarget(null);
+
+    const baseName = (img.name || 'product-image').replace(/\.[^/.]+$/, '');
+    const cleanFileName = `${baseName}-recrop-1500x2000.jpg`;
+    const croppedFile = dataUrlToFile(croppedDataUrl, cleanFileName, 'image/jpeg');
+
+    setIsUploading(true);
+    try {
+      const res = await uploadWordPressMediaDirect(croppedFile, {
+        mode: optimizationMode,
+        pngColors: 128,
+        jpegQuality: 0.88,
+      });
+
+      if (res.success && res.url) {
+        setImages((prev) => {
+          const next = [...prev];
+          next[index] = {
+            id: res.id,
+            src: res.url!,
+            name: res.item?.filename || croppedFile.name,
+            alt: img.alt,
+          };
+          return next;
+        });
+        if (res.item) {
+          setMediaItems((prev) => [res.item!, ...prev]);
+        }
+        showToast('success', 'Image Cropped', `Re-framed image #${index + 1} to 3:4 1500×2000.`);
+      } else {
+        showToast('error', 'Crop Upload Failed', res.error || 'Could not upload cropped image.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Crop Error', err.message);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -280,7 +445,8 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
   );
 
   return (
-    <Modal
+    <>
+      <Modal
       isOpen={isOpen}
       onClose={onClose}
       maxWidth="4xl"
@@ -294,62 +460,25 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
             Click <Star className="w-3 h-3 inline text-amber-400 fill-amber-400" /> to set an image as the Featured Cover.
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {/* Optimization Format Toggle */}
-            <div
-              className="flex items-center bg-zinc-900 p-0.5 rounded-xl border border-zinc-800"
-              title="Select upload compression mode: PNG 128-color + JPG 85 or direct WebP 85 (preserves alpha transparency)"
-            >
-              <button
-                type="button"
-                onClick={() => setOptimizationMode('smart')}
-                className={clsx(
-                  'h-8 px-2.5 rounded-lg text-[11px] transition-colors cursor-pointer flex items-center gap-1',
-                  optimizationMode === 'smart'
-                    ? 'bg-zinc-800 text-white font-semibold border border-white/10'
-                    : 'text-zinc-400 hover:text-white'
-                )}
-              >
-                <span>PNG 128c / JPG 85</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setOptimizationMode('webp')}
-                className={clsx(
-                  'h-8 px-2.5 rounded-lg text-[11px] transition-colors cursor-pointer flex items-center gap-1',
-                  optimizationMode === 'webp'
-                    ? 'bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30'
-                    : 'text-zinc-400 hover:text-white'
-                )}
-              >
-                <span>WebP 85 + Alpha</span>
-              </button>
-            </div>
 
             <button
               type="button"
               onClick={handleOpenMediaPicker}
-              className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 border border-zinc-700/60 flex items-center gap-1.5 transition cursor-pointer"
+              className="min-h-[44px] px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 border border-zinc-700/60 flex items-center gap-1.5 transition cursor-pointer"
             >
               <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
               <span>Media Library</span>
             </button>
+
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
-              className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-xs font-semibold text-amber-300 border border-amber-500/30 flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+              className="min-h-[44px] px-3.5 py-2 rounded-xl bg-zinc-850 hover:bg-zinc-800 text-xs font-medium text-zinc-300 border border-zinc-750 flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+              title="Upload original image without cropping"
             >
-              {isUploading ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
-                  <span>Uploading...</span>
-                </>
-              ) : (
-                <>
-                  <Upload className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Upload from Computer</span>
-                </>
-              )}
+              <Upload className="w-3.5 h-3.5 text-zinc-400" />
+              <span>Upload Raw</span>
             </button>
             <input
               ref={fileInputRef}
@@ -357,6 +486,34 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
               multiple
               accept="image/png,image/jpeg,image/jpg,image/webp"
               onChange={handleFileUpload}
+              className="hidden"
+            />
+
+            <button
+              type="button"
+              onClick={() => cropGalleryInputRef.current?.click()}
+              disabled={isUploading}
+              className="min-h-[44px] px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-xs font-bold text-zinc-950 shadow-lg shadow-amber-400/15 flex items-center gap-2 transition cursor-pointer disabled:opacity-50 active:scale-95"
+              title="Upload photos, adjust crop position and resize into 3:4 (1500×2000 px) for the product gallery"
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-zinc-950" />
+                  <span>Uploading Gallery...</span>
+                </>
+              ) : (
+                <>
+                  <Crop className="w-4 h-4 text-zinc-950" />
+                  <span>Upload Gallery (3:4)</span>
+                </>
+              )}
+            </button>
+            <input
+              ref={cropGalleryInputRef}
+              type="file"
+              multiple
+              accept="image/png,image/jpeg,image/jpg,image/webp"
+              onChange={handleCropGallerySelect}
               className="hidden"
             />
           </div>
@@ -430,14 +587,25 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
                         <span className="text-[10px] text-amber-400 font-medium">Cover Image</span>
                       )}
 
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveImage(idx)}
-                        className="p-1 rounded text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
-                        title="Remove image"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleStartSingleCrop(img, idx)}
+                          className="p-1 rounded text-zinc-400 hover:text-amber-400 hover:bg-amber-400/10 transition cursor-pointer"
+                          title="Re-frame image to 3:4 (1500×2000 px)"
+                        >
+                          <Crop className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(idx)}
+                          className="p-1 rounded text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                          title="Remove image"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -563,5 +731,39 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
         )}
       </div>
     </Modal>
+
+    {/* Batch Crop Modal for Uploading to Gallery (3:4 1500x2000) */}
+    {isCropModalOpen && cropQueue.length > 0 && (
+      <ImageCropModal
+        isOpen={isCropModalOpen}
+        onClose={handleCropModalClose}
+        imageSrc={currentCropObjectUrl}
+        aspectRatio={3 / 4}
+        targetWidth={1500}
+        targetHeight={2000}
+        queueIndex={cropIndex}
+        queueTotal={cropQueue.length}
+        fileName={cropQueue[cropIndex]?.name}
+        onCropComplete={handleCropModalComplete}
+        onSkip={cropQueue.length > 1 ? handleCropModalSkip : undefined}
+      />
+    )}
+
+    {/* Single Crop Modal for Re-framing an Existing Image */}
+    {singleCropTarget && (
+      <ImageCropModal
+        isOpen={!!singleCropTarget}
+        onClose={() => setSingleCropTarget(null)}
+        imageSrc={singleCropTarget.img.src}
+        aspectRatio={3 / 4}
+        targetWidth={1500}
+        targetHeight={2000}
+        title="Re-frame Product Image (3:4 1500×2000)"
+        subtitle={`Adjust crop position and zoom for image #${singleCropTarget.index + 1}. Export resolution: 1500×2000 px.`}
+        fileName={singleCropTarget.img.name || `image-${singleCropTarget.index + 1}`}
+        onCropComplete={handleSingleCropComplete}
+      />
+    )}
+  </>
   );
 };

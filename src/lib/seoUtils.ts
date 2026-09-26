@@ -125,7 +125,14 @@ export function cleanSeoCopy(
     .replace(/\u2011/g, '-') // non-breaking hyphen to normal hyphen
     .replace(/\u00a0/g, ' '); // non-breaking space
 
-  // 5. Clean punctuation spacing
+  // 5. Clean quotes and apostrophe artifacts (e.g. "?s" or ", 's" or ", , 's")
+  cleaned = cleaned
+    .replace(/[’‘‛]/g, "'")
+    .replace(/[“”„‟]/g, '"')
+    .replace(/\?s\b/g, "'s")
+    .replace(/,\s*'s\b/g, "'s");
+
+  // 6. Clean punctuation spacing
   cleaned = cleaned
     .replace(/,\s*,+/g, ',')
     .replace(/\.\s*\.+/g, '.')
