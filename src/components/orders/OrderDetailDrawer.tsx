@@ -11,7 +11,7 @@ import {
   SelectContent,
   SelectItem
 } from '../ui/Select';
-import { Order, OrderStatus, OrderNote, OrderReview, OrderReviewMedia, getOrderRma, getOrderGuarantee } from '../../types';
+import { Order, OrderItem, OrderStatus, OrderNote, OrderReview, OrderReviewMedia, getOrderRma, getOrderGuarantee } from '../../types';
 import { formatCurrency, formatDateTime, formatDate, formatFeeLabel } from '../../lib/formatters';
 import { 
   Package, 
@@ -52,7 +52,8 @@ import {
   ChevronUp,
   Plane,
   Store,
-  ClipboardCheck
+  ClipboardCheck,
+  Edit2
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { extractItemSpecs } from '../../lib/orderItems';
@@ -75,6 +76,8 @@ import { CustomerInvoiceModal } from './CustomerInvoiceModal';
 import { PackingSlipModal } from './PackingSlipModal';
 import { WarrantyReviewModal } from './WarrantyReviewModal';
 import { ManualWarrantyModal } from './ManualWarrantyModal';
+import { EditOrderAddressModal } from './EditOrderAddressModal';
+import { EditOrderItemModal } from './EditOrderItemModal';
 import { clsx } from 'clsx';
 
 interface OrderDetailDrawerProps {
@@ -112,13 +115,30 @@ const getPublicTrackingUrl = (carrier?: string, trackingNum?: string, customUrl?
 };
 
 export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
-  order,
+  order: propOrder,
   isOpen,
   onClose,
   onOrderUpdated,
   onSelectOrderById,
 }) => {
   const { showToast } = useToast();
+
+  const [internalOrder, setInternalOrder] = useState<Order | null>(propOrder);
+  useEffect(() => {
+    setInternalOrder(propOrder);
+  }, [propOrder]);
+
+  const order = internalOrder || propOrder;
+
+  // Edit Address & Item Modals state
+  const [isEditAddressModalOpen, setIsEditAddressModalOpen] = useState(false);
+  const [isEditItemModalOpen, setIsEditItemModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<OrderItem | null>(null);
+
+  const handleOrderMutated = (updatedOrder: Order) => {
+    setInternalOrder(updatedOrder);
+    if (onOrderUpdated) onOrderUpdated();
+  };
   
   // Tracking form state
   const [courier, setCourier] = useState('jne');
@@ -982,9 +1002,20 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
               <User className="w-4 h-4 text-[#f3aa18]" />
               Customer & Delivery
             </h4>
-            <span className="text-[11px] font-mono text-neutral-400">
-              Customer #{order.customer_id || 'Guest'}
-            </span>
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setIsEditAddressModalOpen(true)}
+                className="px-2.5 py-1 rounded-lg bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 text-[#f3aa18] border border-[#f3aa18]/30 text-xs font-sans font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                title="Edit customer shipping address and contact details"
+              >
+                <Edit2 className="w-3 h-3 text-[#f3aa18]" />
+                <span>Edit Address</span>
+              </button>
+              <span className="text-[11px] font-mono text-neutral-400">
+                Customer #{order.customer_id || 'Guest'}
+              </span>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1051,18 +1082,31 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   {isStorePickup ? <Store className="w-3.5 h-3.5 text-[#f3aa18]" /> : <MapPin className="w-3.5 h-3.5 text-[#f3aa18]" />}
                   {isStorePickup ? 'Pickup Location' : 'Destination Address'}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    toggleLocalStorePickupOrder(order.id);
-                    setPickupOverrideVersion((v) => v + 1);
-                    if (onOrderUpdated) onOrderUpdated();
-                  }}
-                  className="text-[10px] text-neutral-500 hover:text-[#f3aa18] underline transition-colors cursor-pointer"
-                  title="Toggle between store pickup and courier delivery view for this order"
-                >
-                  {isStorePickup ? 'Switch to Delivery' : 'Switch to Store Pickup'}
-                </button>
+                <div className="flex items-center gap-2.5">
+                  {!isStorePickup && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditAddressModalOpen(true)}
+                      className="text-[10px] text-[#f3aa18] hover:underline transition-colors cursor-pointer flex items-center gap-1 font-sans font-medium"
+                      title="Edit address"
+                    >
+                      <Edit2 className="w-2.5 h-2.5" />
+                      <span>Edit</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      toggleLocalStorePickupOrder(order.id);
+                      setPickupOverrideVersion((v) => v + 1);
+                      if (onOrderUpdated) onOrderUpdated();
+                    }}
+                    className="text-[10px] text-neutral-500 hover:text-[#f3aa18] underline transition-colors cursor-pointer"
+                    title="Toggle between store pickup and courier delivery view for this order"
+                  >
+                    {isStorePickup ? 'Switch to Delivery' : 'Switch to Store Pickup'}
+                  </button>
+                </div>
               </div>
               {isStorePickup ? (
                 <p className="text-xs text-neutral-300 font-sans leading-relaxed">
@@ -1099,13 +1143,27 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
           return (
             <div className="p-5 rounded-2xl border border-white/[0.06] bg-[#111111] space-y-4">
               <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-2">
-                  <Package className="w-4 h-4 text-[#f3aa18]" />
-                  Items ({displayItems.length})
-                </h4>
-                <span className="text-[11px] font-mono text-neutral-400">
-                  Total Units: {displayItems.reduce((acc, it) => acc + (it.quantity || 1), 0)}
-                </span>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-2">
+                    <Package className="w-4 h-4 text-[#f3aa18]" />
+                    Items ({displayItems.length})
+                  </h4>
+                  <span className="text-[11px] font-mono text-neutral-400">
+                    Total Units: {displayItems.reduce((acc, it) => acc + (it.quantity || 1), 0)}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingItem(null);
+                    setIsEditItemModalOpen(true);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 text-[#f3aa18] border border-[#f3aa18]/30 text-xs font-sans font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                  title="Add new precision skin or product to this order"
+                >
+                  <Plus className="w-3.5 h-3.5 text-[#f3aa18]" />
+                  <span>Add Item</span>
+                </button>
               </div>
 
               <div className="space-y-3">
@@ -1190,17 +1248,32 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                             </div>
                           )}
 
-                      {/* Quick Inspect Button for Custom Skins */}
-                      {(item.name.toLowerCase().startsWith('custom order') || (item as any).is_custom) && item.image_url && (
+                      {/* Action Buttons: Edit Configuration & Quick Inspect */}
+                      <div className="flex items-center gap-2 mt-2.5 flex-wrap">
                         <button
                           type="button"
-                          onClick={() => setPreviewCustomItem(item)}
-                          className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 text-[#f3aa18] border border-[#f3aa18]/30 text-[11px] font-mono font-bold transition-all cursor-pointer"
+                          onClick={() => {
+                            setEditingItem(item);
+                            setIsEditItemModalOpen(true);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-white border border-white/10 text-[11px] font-sans font-semibold transition-all cursor-pointer shadow-xs"
+                          title="Edit product, quantity, configuration layers, or form add-on specifications"
                         >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>View Custom Skin</span>
+                          <Edit2 className="w-3 h-3 text-[#f3aa18]" />
+                          <span>Edit Configuration</span>
                         </button>
-                      )}
+
+                        {(item.name.toLowerCase().startsWith('custom order') || (item as any).is_custom) && item.image_url && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewCustomItem(item)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 text-[#f3aa18] border border-[#f3aa18]/30 text-[11px] font-mono font-bold transition-all cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>View Custom Skin</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -2725,6 +2798,40 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Edit Address & Recipient Details Modal */}
+      {order && isEditAddressModalOpen && (
+        <EditOrderAddressModal
+          order={order}
+          isOpen={isEditAddressModalOpen}
+          onClose={() => setIsEditAddressModalOpen(false)}
+          onSaved={handleOrderMutated}
+        />
+      )}
+
+      {/* Edit Item & Custom Configuration Modal */}
+      {order && isEditItemModalOpen && (
+        <EditOrderItemModal
+          order={order}
+          item={editingItem}
+          isOpen={isEditItemModalOpen}
+          onClose={() => {
+            setIsEditItemModalOpen(false);
+            setEditingItem(null);
+          }}
+          onSaved={handleOrderMutated}
+          onDeleted={(delId) => {
+            const currentItems = (order.items || order.line_items || []);
+            const filtered = currentItems.filter((i) => i.id !== delId);
+            handleOrderMutated({
+              ...order,
+              items: filtered,
+              line_items: filtered,
+              item_count: filtered.reduce((acc, it) => acc + (it.quantity || 1), 0),
+            });
+          }}
+        />
       )}
     </SlideDrawer>
   );

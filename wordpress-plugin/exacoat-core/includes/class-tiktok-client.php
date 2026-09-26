@@ -1329,31 +1329,39 @@ class Exacoat_TikTok_Client {
 			], 400 );
 		}
 
-		$claim_info = self::check_existing_claim( $clean );
-		if ( $claim_info['already_claimed'] ) {
-			return rest_ensure_response([
-				'success'             => false,
-				'already_claimed'     => true,
-				'message'             => "This TikTok Shop invoice ({$clean}) has already been processed for replacement under Order #{$claim_info['existing_order_num']} ({$claim_info['claim_type']}).",
-				'existing_order_num'  => $claim_info['existing_order_num'],
-				'existing_order_type' => $claim_info['claim_type'],
-			]);
-		}
-
+		// Check cached orders first by order_id, order_sn, or tracking_number
 		$cached = get_option( self::ORDERS_CACHE_KEY, [] );
 		$found = null;
 		foreach ( (array) $cached as $ord ) {
-			if ( strcasecmp( $ord['order_id'] ?? '', $clean ) === 0 || strcasecmp( $ord['order_sn'] ?? '', $clean ) === 0 ) {
+			if (
+				strcasecmp( $ord['order_id'] ?? '', $clean ) === 0 ||
+				strcasecmp( $ord['order_sn'] ?? '', $clean ) === 0 ||
+				( ! empty( $ord['tracking_number'] ) && strcasecmp( $ord['tracking_number'], $clean ) === 0 )
+			) {
 				$found = $ord;
 				break;
 			}
 		}
 
+		$order_id_to_verify = $found['order_id'] ?? ( $found['order_sn'] ?? $clean );
+
+		$claim_info = self::check_existing_claim( $order_id_to_verify );
+		if ( $claim_info['already_claimed'] ) {
+			return rest_ensure_response([
+				'success'             => false,
+				'already_claimed'     => true,
+				'message'             => "This TikTok Shop order ({$order_id_to_verify}) has already been processed for replacement under Order #{$claim_info['existing_order_num']} ({$claim_info['claim_type']}).",
+				'existing_order_num'  => $claim_info['existing_order_num'],
+				'existing_order_type' => $claim_info['claim_type'],
+			]);
+		}
+
 		// Query live tracking info to detect real delivery status
-		$tracking       = self::get_tracking_info( $clean );
-		$order_status   = $found['order_status'] ?? 'UNKNOWN';
-		$is_delivered   = ! empty( $tracking['is_delivered'] ) || in_array( strtoupper( $order_status ), [ 'COMPLETED', 'DELIVERED' ], true );
-		$delivered_time = $tracking['delivered_time'] ?? ( $found['delivered_time'] ?? null );
+		$tracking_target = $found['order_id'] ?? ( $found['order_sn'] ?? $clean );
+		$tracking        = self::get_tracking_info( $tracking_target );
+		$order_status    = $found['order_status'] ?? 'UNKNOWN';
+		$is_delivered    = ! empty( $tracking['is_delivered'] ) || in_array( strtoupper( $order_status ), [ 'COMPLETED', 'DELIVERED' ], true );
+		$delivered_time  = $tracking['delivered_time'] ?? ( $found['delivered_time'] ?? null );
 
 		if ( $found ) {
 			return rest_ensure_response([
@@ -1363,6 +1371,7 @@ class Exacoat_TikTok_Client {
 				'is_delivered'     => $is_delivered,
 				'delivered_time'   => $delivered_time,
 				'buyer_username'   => $found['buyer_username'] ?? '',
+				'buyer_note'       => $found['buyer_note'] ?? ( $found['buyer_message'] ?? '' ),
 				'shipping_carrier' => $found['shipping_carrier'] ?? '',
 				'tracking_number'  => $found['tracking_number'] ?? '',
 				'items'            => $found['items'] ?? [],

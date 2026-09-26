@@ -1833,8 +1833,19 @@ class Exacoat_Core {
 		] );
 
 		$register( '/orders/(?P<id>\d+)', [
-			'methods'             => [ 'GET' ],
-			'callback'            => [ 'Exacoat_Order_Manager', 'get_single_order' ],
+			'methods'             => [ 'GET', 'POST', 'PUT' ],
+			'callback'            => function( $request ) {
+				if ( in_array( $request->get_method(), [ 'POST', 'PUT' ], true ) ) {
+					return Exacoat_Order_Manager::update_order( $request );
+				}
+				return Exacoat_Order_Manager::get_single_order( $request );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/orders/(?P<id>\d+)/update', [
+			'methods'             => [ 'POST', 'PUT' ],
+			'callback'            => [ 'Exacoat_Order_Manager', 'update_order' ],
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 

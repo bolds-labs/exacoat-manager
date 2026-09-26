@@ -145,8 +145,9 @@ import {
   Sliders,
   X,
   Plus,
-  ChevronDown,
   Check,
+  MessageSquare,
+  ChevronDown,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -380,11 +381,21 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
       const zip = initialShopeeOrder.recipient_postcode || '';
       setPostcode(zip);
 
-      // Format purchased Shopee products and variations
+      // Format purchased Shopee products and variations with per-item notes
       const itemsText = (initialShopeeOrder.items || [])
-        .map((it) => `${it.item_name}${it.model_name ? ` (${it.model_name})` : ''} x${it.quantity}`)
+        .map((it) => {
+          const itemNote = it.note || it.item_note || it.buyer_note || '';
+          const noteSuffix = itemNote ? ` [Note: ${itemNote}]` : '';
+          return `${it.item_name}${it.model_name ? ` (${it.model_name})` : ''} x${it.quantity}${noteSuffix}`;
+        })
         .join('\n');
-      setFreeformConfigText(itemsText);
+
+      const combinedText = [
+        itemsText,
+        initialShopeeOrder.buyer_note ? `[Shopee Order Note]: ${initialShopeeOrder.buyer_note}` : '',
+      ].filter(Boolean).join('\n\n');
+
+      setFreeformConfigText(combinedText);
       setConfigMode('modeB');
 
       // Trigger invoice duplicate check immediately
@@ -874,6 +885,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
           rma_type: claimType,
           channel,
           marketplace_invoice: marketplaceInvoice.trim(),
+          buyer_note: initialShopeeOrder?.buyer_note || '',
           customer_name: customerName.trim(),
           customer_phone: customerPhone.trim(),
           customer_email: customerEmail.trim(),
@@ -892,6 +904,8 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
               configuration: configurationString,
               configurator_data: configuratorData,
               device_model: selectedProduct!.name,
+              item_note: initialShopeeOrder?.items?.[0]?.note || initialShopeeOrder?.items?.[0]?.item_note || '',
+              note: initialShopeeOrder?.items?.[0]?.note || initialShopeeOrder?.items?.[0]?.item_note || '',
             },
           ],
           courier_id: selectedCourierId,
@@ -1717,17 +1731,45 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
               </div>
             ) : (
               /* Mode B: Freeform Variant Text */
-              <div>
-                <label className="text-xs text-neutral-400 mb-1 block">
-                  Configuration / Variant Details (Copy-paste from Shopee / Tokopedia note) *
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="e.g. Back: Black Camo | Camera: Carbon Fiber Black | Full Body"
-                  value={freeformConfigText}
-                  onChange={(e) => setFreeformConfigText(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-[#141414] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-emerald-500"
-                />
+              <div className="space-y-2.5">
+                {initialShopeeOrder?.buyer_note && (
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs flex items-start gap-2.5">
+                    <MessageSquare className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <span className="font-semibold text-amber-300 block">Catatan Pembeli Shopee:</span>
+                      <p className="text-amber-100/90 whitespace-pre-wrap mt-0.5 font-mono text-[11px]">{initialShopeeOrder.buyer_note}</p>
+                    </div>
+                  </div>
+                )}
+
+                {initialShopeeOrder?.items && initialShopeeOrder.items.some((i) => i.note || i.item_note || i.buyer_note) && (
+                  <div className="p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800 text-xs space-y-1">
+                    <span className="text-[11px] font-semibold text-neutral-400 block uppercase tracking-wider">Catatan Per Item:</span>
+                    {initialShopeeOrder.items.map((it, idx) => {
+                      const n = it.note || it.item_note || it.buyer_note;
+                      if (!n) return null;
+                      return (
+                        <div key={idx} className="flex items-start gap-1.5 text-neutral-300 text-[11px]">
+                          <span className="text-neutral-400 font-medium">• {it.item_name} {it.model_name ? `(${it.model_name})` : ''}:</span>
+                          <span className="text-amber-300 font-mono font-medium">{n}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-xs text-neutral-400 mb-1 block">
+                    Configuration / Variant Details (Copy-paste from Shopee / Tokopedia note) *
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="e.g. Back: Black Camo | Camera: Carbon Fiber Black | Full Body"
+                    value={freeformConfigText}
+                    onChange={(e) => setFreeformConfigText(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl bg-[#141414] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
               </div>
             )}
           </div>

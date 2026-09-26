@@ -94,10 +94,10 @@ class Exacoat_Warranty_Manager {
 	 * Register REST API Endpoints
 	 */
 	public static function register_routes(): void {
-		// Public: Check eligibility for an order
+		// Public: Check eligibility for an order (supports both Order ID and Tracking Number)
 		register_rest_route( 'exacoat-core/v1', '/warranty/check-eligibility', [
 			[
-				'methods'             => \WP_REST_Server::CREATABLE,
+				'methods'             => [ 'GET', 'POST' ],
 				'callback'            => [ __CLASS__, 'rest_check_eligibility' ],
 				'permission_callback' => '__return_true',
 			],
@@ -215,11 +215,75 @@ class Exacoat_Warranty_Manager {
 		}
 
 		if ( ! $order ) {
+			// Query WooCommerce orders by tracking number / waybill
+			$tracking_keys = [ '_tracking_number', 'tracking_number', '_exacoat_tracking_number', '_artmatter_tracking_number', '_biteship_waybill_id', '_biteship_tracking_id' ];
+			foreach ( $tracking_keys as $t_key ) {
+				$tracking_order_ids = self::query_order_ids_by_meta( [
+					[
+						'key'     => $t_key,
+						'value'   => $clean_id,
+						'compare' => '=',
+					],
+				], [ 'limit' => 1 ] );
+				if ( ! empty( $tracking_order_ids ) ) {
+					$order = wc_get_order( reset( $tracking_order_ids ) );
+					if ( $order ) {
+						break;
+					}
+				}
+			}
+		}
+
+		if ( ! $order ) {
+			// Search Shopee orders cache by order_sn, tracking_number, or package_number
+			$shopee_cached = get_option( 'exacoat_shopee_orders_cache', [] );
+			$shopee_match = null;
+			if ( is_array( $shopee_cached ) ) {
+				foreach ( $shopee_cached as $s_ord ) {
+					if (
+						strcasecmp( $s_ord['order_sn'] ?? '', $clean_id ) === 0 ||
+						( ! empty( $s_ord['tracking_number'] ) && strcasecmp( $s_ord['tracking_number'], $clean_id ) === 0 ) ||
+						( ! empty( $s_ord['package_number'] ) && strcasecmp( $s_ord['package_number'], $clean_id ) === 0 )
+					) {
+						$shopee_match = $s_ord;
+						break;
+					}
+				}
+			}
+
+			if ( ! $shopee_match && class_exists( 'Exacoat_Shopee_Client' ) ) {
+				$shopee_match = Exacoat_Shopee_Client::fetch_single_order_live( $clean_id );
+			}
+
+			if ( $shopee_match ) {
+				return self::check_shopee_eligibility( $shopee_match, $verification, $clean_id );
+			}
+
+			// Search TikTok Shop orders cache by order_id, order_sn, or tracking_number
+			$tiktok_cached = get_option( 'exacoat_tiktok_orders_cache', [] );
+			$tiktok_match = null;
+			if ( is_array( $tiktok_cached ) ) {
+				foreach ( $tiktok_cached as $tt_ord ) {
+					if (
+						strcasecmp( $tt_ord['order_id'] ?? '', $clean_id ) === 0 ||
+						strcasecmp( $tt_ord['order_sn'] ?? '', $clean_id ) === 0 ||
+						( ! empty( $tt_ord['tracking_number'] ) && strcasecmp( $tt_ord['tracking_number'], $clean_id ) === 0 )
+					) {
+						$tiktok_match = $tt_ord;
+						break;
+					}
+				}
+			}
+
+			if ( $tiktok_match ) {
+				return self::check_tiktok_eligibility( $tiktok_match, $verification, $clean_id );
+			}
+
 			return new \WP_REST_Response( [
 				'success'  => false,
 				'eligible' => false,
 				'reason'   => 'order_not_found',
-				'message'  => 'Order #' . esc_html( $order_param ) . ' was not found. Please verify your order number.',
+				'message'  => 'Order or tracking number #' . esc_html( $order_param ) . ' was not found. Please verify your order ID or tracking number.',
 			], 200 );
 		}
 
@@ -547,6 +611,281 @@ class Exacoat_Warranty_Manager {
 			'shipping_address'   => $shipping_address,
 			'eligible_items'     => $eligible_items,
 			'excluded_items'     => $excluded_items,
+		], 200 );
+	}
+
+	/**
+	 * Check warranty eligibility for a Shopee order
+	 */
+	public static function check_shopee_eligibility( array $ord, string $verification = '', string $query_ref = '' ): \WP_REST_Response {
+		$sn = $ord['order_sn'] ?? $query_ref;
+
+		// 1. Check existing claim
+		$existing_claim_ids = self::query_order_ids_by_meta( [
+			[
+				'key'     => '_rma_original_invoice',
+				'value'   => $sn,
+				'compare' => '=',
+			],
+		], [ 'limit' => 1 ] );
+
+		if ( ! empty( $existing_claim_ids ) ) {
+			$rep_order = wc_get_order( reset( $existing_claim_ids ) );
+			return new \WP_REST_Response( [
+				'success'              => false,
+				'eligible'             => false,
+				'reason'               => 'already_claimed',
+				'message'              => 'A warranty replacement has already been claimed for this Shopee order under replacement order #' . ( $rep_order ? $rep_order->get_order_number() : reset( $existing_claim_ids ) ) . '.',
+				'replacement_order_id' => reset( $existing_claim_ids ),
+			], 200 );
+		}
+
+		// 2. Verification check (phone number or username)
+		if ( ! empty( $verification ) ) {
+			$raw_phone = preg_replace( '/[^0-9]/', '', (string) ( $ord['recipient_phone'] ?? '' ) );
+			$digits_verif = preg_replace( '/[^0-9]/', '', $verification );
+			$is_phone_match = false;
+			if ( strlen( $digits_verif ) >= 6 && ! empty( $raw_phone ) ) {
+				$norm_order_phone = self::normalize_phone( $raw_phone );
+				$norm_verif_phone = self::normalize_phone( $digits_verif );
+				$is_phone_match = ( ! empty( $norm_order_phone ) && $norm_order_phone === $norm_verif_phone )
+					|| ( substr( $raw_phone, -8 ) === substr( $digits_verif, -8 ) );
+			}
+			$is_user_match = ( strcasecmp( trim( $verification ), trim( $ord['buyer_username'] ?? '' ) ) === 0 );
+
+			if ( ! $is_phone_match && ! $is_user_match ) {
+				return new \WP_REST_Response( [
+					'success'  => false,
+					'eligible' => false,
+					'reason'   => 'verification_failed',
+					'message'  => 'The phone number does not match the recipient records for Shopee Order #' . $sn . '.',
+				], 200 );
+			}
+		}
+
+		// 3. Delivered Status & 48-Hour Window Check
+		$raw_st = strtoupper( (string) ( $ord['order_status'] ?? '' ) );
+		$is_delivered = ! empty( $ord['is_delivered'] ) || in_array( $raw_st, [ 'COMPLETED', 'DELIVERED', 'TO_CONFIRM_RECEIVE' ], true );
+
+		if ( ! $is_delivered ) {
+			return new \WP_REST_Response( [
+				'success'  => false,
+				'eligible' => false,
+				'reason'   => 'not_delivered',
+				'status'   => $raw_st,
+				'message'  => 'This Shopee order has not been marked as delivered by the courier yet. Installation warranty is applicable within 48 hours after receiving your order.',
+			], 200 );
+		}
+
+		$delivered_at_str = $ord['delivered_time'] ?? ( ! empty( $ord['delivered_ts'] ) ? date( 'Y-m-d H:i:s', $ord['delivered_ts'] ) : null );
+		if ( empty( $delivered_at_str ) ) {
+			$delivered_at_str = current_time( 'mysql' );
+		}
+
+		$delivered_ts = strtotime( $delivered_at_str );
+		$current_ts   = current_time( 'timestamp' );
+		$elapsed_secs = max( 0, $current_ts - $delivered_ts );
+		$remaining_secs = self::WARRANTY_WINDOW_SECS - $elapsed_secs;
+
+		if ( $remaining_secs <= 0 ) {
+			$delivered_display = date( 'd M Y, H:i', $delivered_ts );
+			return new \WP_REST_Response( [
+				'success'        => false,
+				'eligible'       => false,
+				'reason'         => 'window_expired',
+				'delivered_at'   => $delivered_at_str,
+				'delivered_fmt'  => $delivered_display,
+				'elapsed_hours'  => round( $elapsed_secs / 3600, 1 ),
+				'message'        => 'The 48-hour installation warranty window has expired. Your Shopee package was delivered on ' . $delivered_display . '.',
+			], 200 );
+		}
+
+		// 4. Eligible Line Items
+		$eligible_items = [];
+		foreach ( ( $ord['items'] ?? [] ) as $idx => $it ) {
+			$name = $it['item_name'] ?? 'Exacoat Skin';
+			if ( ! empty( $it['model_name'] ) && strpos( $name, $it['model_name'] ) === false ) {
+				$name .= ' - ' . $it['model_name'];
+			}
+			$eligible_items[] = [
+				'item_id'            => $it['item_id'] ?? "shopee_{$idx}",
+				'product_id'         => $it['item_id'] ?? 0,
+				'variation_id'       => $it['model_id'] ?? 0,
+				'name'               => $name,
+				'quantity'           => (int) ( $it['quantity'] ?? 1 ),
+				'image'              => $it['image_url'] ?? '',
+				'has_multiple_parts' => false,
+				'parts'              => [],
+				'item_note'          => $it['note'] ?? ( $it['item_note'] ?? '' ),
+			];
+		}
+
+		$hours_left = floor( $remaining_secs / 3600 );
+		$mins_left  = floor( ( $remaining_secs % 3600 ) / 60 );
+
+		return new \WP_REST_Response( [
+			'success'            => true,
+			'eligible'           => true,
+			'is_marketplace'     => true,
+			'channel'            => 'Shopee',
+			'order_id'           => $sn,
+			'order_number'       => $sn,
+			'tracking_number'    => $ord['tracking_number'] ?? '',
+			'delivered_at'       => $delivered_at_str,
+			'remaining_seconds'  => $remaining_secs,
+			'remaining_text'     => "{$hours_left}h {$mins_left}m remaining",
+			'expires_at'         => date( 'Y-m-d H:i:s', $delivered_ts + self::WARRANTY_WINDOW_SECS ),
+			'buyer_note'         => $ord['buyer_note'] ?? '',
+			'shipping_address'   => [
+				'first_name' => $ord['recipient_name'] ?? ( $ord['buyer_username'] ?? 'Customer' ),
+				'last_name'  => '',
+				'address_1'  => $ord['recipient_address'] ?? '',
+				'city'       => $ord['recipient_city'] ?? '',
+				'postcode'   => $ord['recipient_postcode'] ?? '',
+				'country'    => 'ID',
+				'phone'      => $ord['recipient_phone'] ?? '',
+				'email'      => '',
+			],
+			'eligible_items'     => $eligible_items,
+			'excluded_items'     => [],
+		], 200 );
+	}
+
+	/**
+	 * Check warranty eligibility for a TikTok Shop order
+	 */
+	public static function check_tiktok_eligibility( array $ord, string $verification = '', string $query_ref = '' ): \WP_REST_Response {
+		$order_id = $ord['order_id'] ?? ( $ord['order_sn'] ?? $query_ref );
+
+		// 1. Check existing claim
+		$existing_claim_ids = self::query_order_ids_by_meta( [
+			[
+				'key'     => '_rma_original_invoice',
+				'value'   => $order_id,
+				'compare' => '=',
+			],
+		], [ 'limit' => 1 ] );
+
+		if ( ! empty( $existing_claim_ids ) ) {
+			$rep_order = wc_get_order( reset( $existing_claim_ids ) );
+			return new \WP_REST_Response( [
+				'success'              => false,
+				'eligible'             => false,
+				'reason'               => 'already_claimed',
+				'message'              => 'A warranty replacement has already been claimed for this TikTok Shop order under replacement order #' . ( $rep_order ? $rep_order->get_order_number() : reset( $existing_claim_ids ) ) . '.',
+				'replacement_order_id' => reset( $existing_claim_ids ),
+			], 200 );
+		}
+
+		// 2. Verification check
+		if ( ! empty( $verification ) ) {
+			$raw_phone = preg_replace( '/[^0-9]/', '', (string) ( $ord['recipient_phone'] ?? '' ) );
+			$digits_verif = preg_replace( '/[^0-9]/', '', $verification );
+			$is_phone_match = false;
+			if ( strlen( $digits_verif ) >= 6 && ! empty( $raw_phone ) ) {
+				$norm_order_phone = self::normalize_phone( $raw_phone );
+				$norm_verif_phone = self::normalize_phone( $digits_verif );
+				$is_phone_match = ( ! empty( $norm_order_phone ) && $norm_order_phone === $norm_verif_phone )
+					|| ( substr( $raw_phone, -8 ) === substr( $digits_verif, -8 ) );
+			}
+			$is_user_match = ( strcasecmp( trim( $verification ), trim( $ord['buyer_username'] ?? '' ) ) === 0 );
+
+			if ( ! $is_phone_match && ! $is_user_match ) {
+				return new \WP_REST_Response( [
+					'success'  => false,
+					'eligible' => false,
+					'reason'   => 'verification_failed',
+					'message'  => 'The phone number does not match the recipient records for TikTok Shop Order #' . $order_id . '.',
+				], 200 );
+			}
+		}
+
+		// 3. Delivered Status & 48-Hour Window Check
+		$raw_st = strtoupper( (string) ( $ord['order_status'] ?? '' ) );
+		$is_delivered = ! empty( $ord['is_delivered'] ) || in_array( $raw_st, [ 'COMPLETED', 'DELIVERED' ], true );
+
+		if ( ! $is_delivered ) {
+			return new \WP_REST_Response( [
+				'success'  => false,
+				'eligible' => false,
+				'reason'   => 'not_delivered',
+				'status'   => $raw_st,
+				'message'  => 'This TikTok Shop order has not been marked as delivered by the courier yet. Installation warranty is applicable within 48 hours after receiving your order.',
+			], 200 );
+		}
+
+		$delivered_at_str = $ord['delivered_time'] ?? ( ! empty( $ord['delivered_ts'] ) ? date( 'Y-m-d H:i:s', $ord['delivered_ts'] ) : null );
+		if ( empty( $delivered_at_str ) ) {
+			$delivered_at_str = current_time( 'mysql' );
+		}
+
+		$delivered_ts = strtotime( $delivered_at_str );
+		$current_ts   = current_time( 'timestamp' );
+		$elapsed_secs = max( 0, $current_ts - $delivered_ts );
+		$remaining_secs = self::WARRANTY_WINDOW_SECS - $elapsed_secs;
+
+		if ( $remaining_secs <= 0 ) {
+			$delivered_display = date( 'd M Y, H:i', $delivered_ts );
+			return new \WP_REST_Response( [
+				'success'        => false,
+				'eligible'       => false,
+				'reason'         => 'window_expired',
+				'delivered_at'   => $delivered_at_str,
+				'delivered_fmt'  => $delivered_display,
+				'elapsed_hours'  => round( $elapsed_secs / 3600, 1 ),
+				'message'        => 'The 48-hour installation warranty window has expired. Your TikTok Shop package was delivered on ' . $delivered_display . '.',
+			], 200 );
+		}
+
+		// 4. Eligible Line Items
+		$eligible_items = [];
+		foreach ( ( $ord['items'] ?? [] ) as $idx => $it ) {
+			$name = $it['item_name'] ?? 'Exacoat Skin';
+			$variant = $it['sku_name'] ?? ( $it['variation_name'] ?? '' );
+			if ( ! empty( $variant ) && strpos( $name, $variant ) === false ) {
+				$name .= ' - ' . $variant;
+			}
+			$eligible_items[] = [
+				'item_id'            => $it['item_id'] ?? "tiktok_{$idx}",
+				'product_id'         => $it['item_id'] ?? 0,
+				'variation_id'       => $it['sku_id'] ?? 0,
+				'name'               => $name,
+				'quantity'           => (int) ( $it['quantity'] ?? 1 ),
+				'image'              => $it['image_url'] ?? '',
+				'has_multiple_parts' => false,
+				'parts'              => [],
+				'item_note'          => $it['note'] ?? ( $it['item_note'] ?? '' ),
+			];
+		}
+
+		$hours_left = floor( $remaining_secs / 3600 );
+		$mins_left  = floor( ( $remaining_secs % 3600 ) / 60 );
+
+		return new \WP_REST_Response( [
+			'success'            => true,
+			'eligible'           => true,
+			'is_marketplace'     => true,
+			'channel'            => 'TikTok Shop',
+			'order_id'           => $order_id,
+			'order_number'       => $order_id,
+			'tracking_number'    => $ord['tracking_number'] ?? '',
+			'delivered_at'       => $delivered_at_str,
+			'remaining_seconds'  => $remaining_secs,
+			'remaining_text'     => "{$hours_left}h {$mins_left}m remaining",
+			'expires_at'         => date( 'Y-m-d H:i:s', $delivered_ts + self::WARRANTY_WINDOW_SECS ),
+			'buyer_note'         => $ord['buyer_note'] ?? ( $ord['buyer_message'] ?? '' ),
+			'shipping_address'   => [
+				'first_name' => $ord['recipient_name'] ?? ( $ord['buyer_username'] ?? 'Customer' ),
+				'last_name'  => '',
+				'address_1'  => $ord['recipient_address'] ?? '',
+				'city'       => $ord['recipient_city'] ?? '',
+				'postcode'   => $ord['recipient_postcode'] ?? '',
+				'country'    => 'ID',
+				'phone'      => $ord['recipient_phone'] ?? '',
+				'email'      => '',
+			],
+			'eligible_items'     => $eligible_items,
+			'excluded_items'     => [],
 		], 200 );
 	}
 
@@ -1229,6 +1568,8 @@ class Exacoat_Warranty_Manager {
 
 		$parent_id = $order->get_meta( '_rma_original_invoice' );
 		$parent_order = $parent_id ? wc_get_order( $parent_id ) : null;
+		$channel = $order->get_meta( '_rma_marketplace_channel' ) ?: ( $order->get_meta( '_marketplace_channel' ) ?: ( $order->get_meta( '_channel' ) ?: ( empty( $parent_id ) || is_numeric( $parent_id ) ? 'Web' : 'Shopee' ) ) );
+		$buyer_note = $order->get_meta( '_shopee_buyer_note' ) ?: ( $order->get_meta( '_buyer_note' ) ?: '' );
 
 		$items = [];
 		foreach ( $order->get_items() as $item ) {
@@ -1237,10 +1578,17 @@ class Exacoat_Warranty_Manager {
 			if ( $product && $product->get_image_id() ) {
 				$image_url = wp_get_attachment_image_url( $product->get_image_id(), 'thumbnail' ) ?: '';
 			}
+			$claimed_parts = $item->get_meta( '_claimed_parts' );
+			$item_note = $item->get_meta( '_item_note' ) ?: ( $item->get_meta( 'note' ) ?: ( $item->get_meta( '_shopee_note' ) ?: '' ) );
 			$items[] = [
-				'name'     => $item->get_name(),
-				'quantity' => $item->get_quantity(),
-				'image'    => $image_url,
+				'name'          => $item->get_name(),
+				'quantity'      => $item->get_quantity(),
+				'image'         => $image_url,
+				'configuration' => $item->get_meta( 'Configuration' ) ?: '',
+				'device_model'  => $item->get_meta( 'device_model' ) ?: '',
+				'claimed_parts' => is_array( $claimed_parts ) ? $claimed_parts : [],
+				'item_note'     => $item_note,
+				'note'          => $item_note,
 			];
 		}
 
@@ -1250,6 +1598,9 @@ class Exacoat_Warranty_Manager {
 			'order_number'            => $order->get_order_number(),
 			'parent_order_id'         => $parent_id,
 			'parent_order_number'     => $parent_order ? $parent_order->get_order_number() : $parent_id,
+			'channel'                 => $channel,
+			'buyer_note'              => $buyer_note,
+			'shopee_notes'            => $buyer_note,
 			'rma_status'              => $order->get_meta( '_rma_status' ) ?: 'pending_review',
 			'claim_reason'            => $order->get_meta( '_rma_claim_reason' ),
 			'customer_notes'          => $order->get_customer_note(),
@@ -1778,6 +2129,11 @@ class Exacoat_Warranty_Manager {
 								if ( ! empty( $it['device_model'] ) ) {
 									$order_item->add_meta_data( 'device_model', sanitize_text_field( $it['device_model'] ), true );
 								}
+								if ( ! empty( $it['note'] ) || ! empty( $it['item_note'] ) ) {
+									$item_note_val = sanitize_text_field( $it['note'] ?? $it['item_note'] );
+									$order_item->add_meta_data( '_item_note', $item_note_val, true );
+									$order_item->add_meta_data( 'note', $item_note_val, true );
+								}
 								$order_item->save();
 							}
 							$added_count++;
@@ -1832,6 +2188,9 @@ class Exacoat_Warranty_Manager {
 				$replacement_order->update_meta_data( '_shipping_waived', $is_free ? 'yes' : 'no' );
 				$replacement_order->update_meta_data( '_rma_reviewed_by', $admin_name );
 				$replacement_order->update_meta_data( '_rma_reviewed_at', current_time( 'mysql' ) );
+				if ( ! empty( $request->get_param( 'buyer_note' ) ) ) {
+					$replacement_order->update_meta_data( '_shopee_buyer_note', sanitize_textarea_field( $request->get_param( 'buyer_note' ) ) );
+				}
 
 				$hr_webhook_result = null;
 				if ( 'Redeem' === $rma_type ) {
@@ -2287,6 +2646,7 @@ class Exacoat_Warranty_Manager {
 			$items = [];
 			foreach ( $order->get_items() as $it ) {
 				$claimed_parts = $it->get_meta( '_claimed_parts' );
+				$item_note = $it->get_meta( '_item_note' ) ?: ( $it->get_meta( 'note' ) ?: ( $it->get_meta( '_shopee_note' ) ?: '' ) );
 				$items[] = [
 					'id'            => $it->get_id(),
 					'name'          => $it->get_name(),
@@ -2294,6 +2654,7 @@ class Exacoat_Warranty_Manager {
 					'configuration' => $it->get_meta( 'Configuration' ) ?: '',
 					'claimed_parts' => is_array( $claimed_parts ) ? $claimed_parts : [],
 					'device'        => $it->get_meta( 'device_model' ) ?: '',
+					'item_note'     => $item_note,
 				];
 			}
 
@@ -2306,6 +2667,7 @@ class Exacoat_Warranty_Manager {
 				'order_status'     => $order->get_status(),
 				'channel'          => $mp_channel,
 				'original_invoice' => $orig_number,
+				'buyer_note'       => $order->get_meta( '_shopee_buyer_note' ) ?: ( $order->get_meta( '_buyer_note' ) ?: '' ),
 				'customer_name'    => $order->get_formatted_billing_full_name() ?: ( $order->get_shipping_first_name() . ' ' . $order->get_shipping_last_name() ),
 				'customer_phone'   => $order->get_billing_phone(),
 				'customer_email'   => $order->get_billing_email(),

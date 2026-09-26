@@ -573,6 +573,7 @@ class Exacoat_Shopee_Client {
 		foreach ( ( $ord['item_list'] ?? [] ) as $item ) {
 			$var_name = trim( $item['model_name'] ?? '' );
 			$prod_name = trim( $item['item_name'] ?? 'Exacoat Skin' );
+			$item_note = trim( (string) ( $item['order_item_note'] ?? ( $item['item_note'] ?? ( $item['note'] ?? '' ) ) ) );
 
 			$items[] = [
 				'item_id'          => $item['item_id'] ?? 0,
@@ -582,6 +583,10 @@ class Exacoat_Shopee_Client {
 				'quantity'         => (int) ( $item['model_quantity_purchased'] ?? 1 ),
 				'price'            => (float) ( $item['model_discounted_price'] ?? $item['model_original_price'] ?? 0 ),
 				'image_url'        => $item['image_info']['image_url'] ?? '',
+				'note'             => $item_note,
+				'item_note'        => $item_note,
+				'order_item_note'  => $item['order_item_note'] ?? '',
+				'buyer_note'       => $item['buyer_note'] ?? '',
 			];
 		}
 
@@ -1759,26 +1764,32 @@ class Exacoat_Shopee_Client {
 			], 400 );
 		}
 
+		// Check cached orders first by order_sn, tracking_number, or package_number
+		$cached = get_option( self::ORDERS_CACHE_KEY, [] );
+		$found = null;
+		foreach ( (array) $cached as $ord ) {
+			if (
+				strcasecmp( $ord['order_sn'] ?? '', $clean ) === 0 ||
+				( ! empty( $ord['tracking_number'] ) && strcasecmp( $ord['tracking_number'], $clean ) === 0 ) ||
+				( ! empty( $ord['package_number'] ) && strcasecmp( $ord['package_number'], $clean ) === 0 )
+			) {
+				$found = $ord;
+				break;
+			}
+		}
+
+		$order_sn_to_verify = $found['order_sn'] ?? $clean;
+
 		// Check if already claimed
-		$claim_info = self::check_existing_claim( $clean );
+		$claim_info = self::check_existing_claim( $order_sn_to_verify );
 		if ( $claim_info['already_claimed'] ) {
 			return rest_ensure_response([
 				'success'             => false,
 				'already_claimed'     => true,
-				'message'             => "This Shopee invoice ({$clean}) has already been processed for replacement under Order #{$claim_info['existing_order_num']} ({$claim_info['claim_type']}).",
+				'message'             => "This Shopee order ({$order_sn_to_verify}) has already been processed for replacement under Order #{$claim_info['existing_order_num']} ({$claim_info['claim_type']}).",
 				'existing_order_num'  => $claim_info['existing_order_num'],
 				'existing_order_type' => $claim_info['claim_type'],
 			]);
-		}
-
-		// Check cached orders
-		$cached = get_option( self::ORDERS_CACHE_KEY, [] );
-		$found = null;
-		foreach ( (array) $cached as $ord ) {
-			if ( strcasecmp( $ord['order_sn'] ?? '', $clean ) === 0 ) {
-				$found = $ord;
-				break;
-			}
 		}
 
 		// If not in cache, query Shopee Open API v2 live
@@ -1797,6 +1808,7 @@ class Exacoat_Shopee_Client {
 
 				$items = [];
 				foreach ( ( $live_ord['item_list'] ?? [] ) as $item ) {
+					$item_note = trim( (string) ( $item['order_item_note'] ?? ( $item['item_note'] ?? ( $item['note'] ?? '' ) ) ) );
 					$items[] = [
 						'item_id'    => $item['item_id'] ?? 0,
 						'item_name'  => trim( $item['item_name'] ?? 'Exacoat Skin' ),
@@ -1805,13 +1817,16 @@ class Exacoat_Shopee_Client {
 						'quantity'   => (int) ( $item['model_quantity_purchased'] ?? 1 ),
 						'price'      => (float) ( $item['model_discounted_price'] ?? $item['model_original_price'] ?? 0 ),
 						'image_url'  => $item['image_info']['image_url'] ?? '',
+						'note'       => $item_note,
+						'item_note'  => $item_note,
 					];
 				}
 
 				$found = [
-					'order_sn'         => $clean,
+					'order_sn'         => $live_ord['order_sn'] ?? $clean,
 					'order_status'     => $raw_st,
 					'buyer_username'   => $live_ord['buyer_username'] ?? 'Shopee Customer',
+					'buyer_note'       => $live_ord['note'] ?? '',
 					'shipping_carrier' => $live_ord['shipping_carrier'] ?? ( $package['shipping_carrier'] ?? '' ),
 					'tracking_number'  => $tracking_num,
 					'items'            => $items,
@@ -1828,11 +1843,12 @@ class Exacoat_Shopee_Client {
 		}
 
 		// Query tracking info to detect live delivery status
-		$tracking       = self::get_tracking_info( $clean );
-		$order_status   = $found['order_status'] ?? ( $tracking['logistics_status'] ?: 'UNKNOWN' );
-		$is_delivered   = ! empty( $tracking['is_delivered'] ) || in_array( strtoupper( $order_status ), [ 'COMPLETED', 'DELIVERED', 'TO_CONFIRM_RECEIVE' ], true ) || ! empty( $found['is_delivered'] );
-		$delivered_time = $tracking['delivered_time'] ?? ( $found['delivered_time'] ?? null );
-		$delivered_ts   = $tracking['delivered_ts'] ?? ( $found['delivered_ts'] ?? null );
+		$tracking_target = $found['order_sn'] ?? $clean;
+		$tracking        = self::get_tracking_info( $tracking_target );
+		$order_status    = $found['order_status'] ?? ( $tracking['logistics_status'] ?: 'UNKNOWN' );
+		$is_delivered    = ! empty( $tracking['is_delivered'] ) || in_array( strtoupper( $order_status ), [ 'COMPLETED', 'DELIVERED', 'TO_CONFIRM_RECEIVE' ], true ) || ! empty( $found['is_delivered'] );
+		$delivered_time  = $tracking['delivered_time'] ?? ( $found['delivered_time'] ?? null );
+		$delivered_ts    = $tracking['delivered_ts'] ?? ( $found['delivered_ts'] ?? null );
 
 		if ( $found ) {
 			return rest_ensure_response([
@@ -1843,6 +1859,7 @@ class Exacoat_Shopee_Client {
 				'delivered_time'   => $delivered_time,
 				'delivered_ts'     => $delivered_ts,
 				'buyer_username'   => $found['buyer_username'] ?? '',
+				'buyer_note'       => $found['buyer_note'] ?? '',
 				'shipping_carrier' => $found['shipping_carrier'] ?? '',
 				'tracking_number'  => $found['tracking_number'] ?? '',
 				'items'            => $found['items'] ?? [],

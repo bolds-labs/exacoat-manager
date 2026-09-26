@@ -5,7 +5,7 @@
  */
 
 import { getEnv, getWordPressBaseUrl, getWcCredentials } from './env';
-import { CreateReviewPayload, Order, OrderItem, OrderTracking, DeviceConfiguratorProfile, MarketplaceDeviceImageSettings, ConfiguratorProfileSummary, DeviceFamily, AdminUser, ExacoatRole } from '../types';
+import { CreateReviewPayload, Order, OrderItem, OrderShipping, OrderTracking, DeviceConfiguratorProfile, MarketplaceDeviceImageSettings, ConfiguratorProfileSummary, DeviceFamily, AdminUser, ExacoatRole } from '../types';
 export type { MarketplaceDeviceImageSettings };
 import { renderEmailHtmlLocally } from './emailRenderer';
 import { extractItemSpecs } from './orderItems';
@@ -153,6 +153,10 @@ export interface ShopeeOrderItem {
   image_url: string;
   item_sku?: string;
   model_sku?: string;
+  note?: string;
+  item_note?: string;
+  order_item_note?: string;
+  buyer_note?: string;
 }
 
 export interface ShopeeExistingClaim {
@@ -1716,6 +1720,56 @@ export async function fetchOrderDetailDirect(orderId: number | string): Promise<
       return { success: true, order: enrichOrder(data.order) };
     }
     return { success: false, error: data.message || 'Order not found' };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export interface UpdateOrderPayload {
+  customer_name?: string;
+  customer_email?: string;
+  customer_phone?: string;
+  customer_note?: string;
+  shipping?: Partial<OrderShipping>;
+  billing?: Partial<OrderShipping>;
+  items?: Array<{
+    id?: number;
+    product_id?: number;
+    name?: string;
+    quantity?: number;
+    price?: number;
+    subtotal?: number;
+    total?: number;
+    specs?: Array<{ label: string; value: string }>;
+  }>;
+  deleted_item_ids?: number[];
+}
+
+export async function updateOrderDirect(
+  orderId: number | string,
+  payload: UpdateOrderPayload
+): Promise<{ success: boolean; order?: Order; message?: string; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/orders/${orderId}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success && data?.order) {
+      return {
+        success: true,
+        order: enrichOrder(data.order),
+        message: data.message || 'Order updated successfully',
+      };
+    }
+    if (data?.message) {
+      return { success: false, error: data.message };
+    }
+    return { success: false, error: `HTTP ${res.status} response` };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
@@ -4183,8 +4237,11 @@ export interface WarrantyClaimDetails {
   success: boolean;
   order_id: number;
   order_number: string;
-  parent_order_id: number;
+  parent_order_id: number | string;
   parent_order_number: string;
+  channel?: string;
+  buyer_note?: string;
+  shopee_notes?: string;
   rma_status: string;
   claim_reason?: string;
   customer_notes?: string;
@@ -4194,7 +4251,16 @@ export interface WarrantyClaimDetails {
   reviewed_by?: string;
   reviewed_at?: string;
   rejection_reason?: string;
-  items?: Array<{ name: string; quantity: number; image?: string }>;
+  items?: Array<{
+    name: string;
+    quantity: number;
+    image?: string;
+    configuration?: string;
+    device_model?: string;
+    claimed_parts?: string[];
+    item_note?: string;
+    note?: string;
+  }>;
   customer_name?: string;
   customer_phone?: string;
   customer_email?: string;
@@ -4319,6 +4385,8 @@ export interface ManualWarrantyItem {
   configuration?: string;
   configurator_data?: any[];
   device_model?: string;
+  item_note?: string;
+  note?: string;
 }
 
 export interface ManualWarrantyClaimPayload {
@@ -4329,6 +4397,7 @@ export interface ManualWarrantyClaimPayload {
   selected_parts?: Record<string | number, string[]>;
   channel?: 'Tokopedia' | 'Shopee' | 'TikTok Shop' | 'Manual / WhatsApp' | string;
   marketplace_invoice?: string;
+  buyer_note?: string;
   customer_name?: string;
   customer_phone?: string;
   customer_email?: string;
@@ -4362,6 +4431,8 @@ export interface RmaClaimLogItem {
   configuration?: string;
   claimed_parts?: string[];
   device?: string;
+  item_note?: string;
+  note?: string;
 }
 
 export interface RmaClaimLogEntry {
@@ -4373,6 +4444,8 @@ export interface RmaClaimLogEntry {
   order_status: string;
   channel: string;
   original_invoice: string;
+  buyer_note?: string;
+  shopee_notes?: string;
   customer_name: string;
   customer_phone?: string;
   customer_email?: string;

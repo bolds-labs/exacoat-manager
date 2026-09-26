@@ -775,12 +775,20 @@ export const RmaClaimsPage: React.FC = () => {
                                 {claim.customer_phone}
                               </div>
                             )}
+                            {claim.buyer_note && (
+                              <div
+                                className="text-[10px] text-amber-600 dark:text-amber-400 truncate max-w-[160px] italic mt-0.5"
+                                title={`Buyer Note: ${claim.buyer_note}`}
+                              >
+                                &ldquo;{claim.buyer_note}&rdquo;
+                              </div>
+                            )}
                           </td>
 
                           {/* Claimed Items & Parts */}
                           <td className="py-3.5 px-4 max-w-[240px]">
                             {claim.items && claim.items.length > 0 ? (
-                              <div className="space-y-1">
+                              <div className="space-y-1.5">
                                 {claim.items.map((it, idx) => (
                                   <div key={idx} className="text-[11px] leading-snug">
                                     <span className="text-zinc-800 dark:text-neutral-200 font-medium">{it.name}</span>
@@ -793,6 +801,14 @@ export const RmaClaimsPage: React.FC = () => {
                                         {it.configuration}
                                       </div>
                                     ) : null}
+                                    {it.item_note && (
+                                      <div
+                                        className="text-[10px] text-amber-500 dark:text-amber-300/90 font-mono truncate max-w-[220px]"
+                                        title={`Item Note: ${it.item_note}`}
+                                      >
+                                        Note: {it.item_note}
+                                      </div>
+                                    )}
                                   </div>
                                 ))}
                               </div>

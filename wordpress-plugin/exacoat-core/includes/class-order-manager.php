@@ -677,6 +677,197 @@ class Exacoat_Order_Manager {
 	}
 
 	/**
+	 * REST Route: Update Order (Address, Customer Info, Items, Configuration)
+	 */
+	public static function update_order( WP_REST_Request $request ) {
+		$order_id = (int) $request->get_param( 'id' );
+		$params   = $request->get_json_params() ?: $request->get_params();
+
+		$order = wc_get_order( $order_id );
+		if ( ! $order ) {
+			return new WP_Error( 'not_found', 'Order not found', [ 'status' => 404 ] );
+		}
+
+		$audit_notes = [];
+
+		// 1. Update Customer & Notes if provided
+		if ( isset( $params['customer_name'] ) && ! empty( $params['customer_name'] ) ) {
+			$name_parts = explode( ' ', trim( (string) $params['customer_name'] ), 2 );
+			$order->set_billing_first_name( sanitize_text_field( $name_parts[0] ) );
+			$order->set_billing_last_name( sanitize_text_field( $name_parts[1] ?? '' ) );
+			$order->set_shipping_first_name( sanitize_text_field( $name_parts[0] ) );
+			$order->set_shipping_last_name( sanitize_text_field( $name_parts[1] ?? '' ) );
+		}
+
+		if ( isset( $params['customer_email'] ) ) {
+			$email = sanitize_email( $params['customer_email'] );
+			$order->set_billing_email( $email );
+			if ( method_exists( $order, 'set_shipping_email' ) ) {
+				$order->set_shipping_email( $email );
+			}
+		}
+
+		if ( isset( $params['customer_phone'] ) ) {
+			$phone = sanitize_text_field( $params['customer_phone'] );
+			$order->set_billing_phone( $phone );
+			if ( method_exists( $order, 'set_shipping_phone' ) ) {
+				$order->set_shipping_phone( $phone );
+			}
+			$order->update_meta_data( '_shipping_phone_formatted', $phone );
+			$order->update_meta_data( '_billing_phone', $phone );
+		}
+
+		if ( isset( $params['customer_note'] ) ) {
+			$order->set_customer_note( sanitize_textarea_field( $params['customer_note'] ) );
+		}
+
+		// 2. Update Shipping Address
+		if ( isset( $params['shipping'] ) && is_array( $params['shipping'] ) ) {
+			$s = $params['shipping'];
+			if ( isset( $s['first_name'] ) ) $order->set_shipping_first_name( sanitize_text_field( $s['first_name'] ) );
+			if ( isset( $s['last_name'] ) )  $order->set_shipping_last_name( sanitize_text_field( $s['last_name'] ) );
+			if ( isset( $s['company'] ) )    $order->set_shipping_company( sanitize_text_field( $s['company'] ) );
+			if ( isset( $s['address_1'] ) )  $order->set_shipping_address_1( sanitize_text_field( $s['address_1'] ) );
+			if ( isset( $s['address_2'] ) )  $order->set_shipping_address_2( sanitize_text_field( $s['address_2'] ) );
+			if ( isset( $s['city'] ) )       $order->set_shipping_city( sanitize_text_field( $s['city'] ) );
+			if ( isset( $s['state'] ) )      $order->set_shipping_state( sanitize_text_field( $s['state'] ) );
+			if ( isset( $s['postcode'] ) )   $order->set_shipping_postcode( sanitize_text_field( $s['postcode'] ) );
+			if ( isset( $s['country'] ) )    $order->set_shipping_country( sanitize_text_field( $s['country'] ) );
+			if ( isset( $s['phone'] ) ) {
+				if ( method_exists( $order, 'set_shipping_phone' ) ) {
+					$order->set_shipping_phone( sanitize_text_field( $s['phone'] ) );
+				}
+				$order->update_meta_data( '_shipping_phone_formatted', sanitize_text_field( $s['phone'] ) );
+			}
+			$audit_notes[] = 'Shipping address updated';
+		}
+
+		// 3. Update Billing Address
+		if ( isset( $params['billing'] ) && is_array( $params['billing'] ) ) {
+			$b = $params['billing'];
+			if ( isset( $b['first_name'] ) ) $order->set_billing_first_name( sanitize_text_field( $b['first_name'] ) );
+			if ( isset( $b['last_name'] ) )  $order->set_billing_last_name( sanitize_text_field( $b['last_name'] ) );
+			if ( isset( $b['company'] ) )    $order->set_billing_company( sanitize_text_field( $b['company'] ) );
+			if ( isset( $b['address_1'] ) )  $order->set_billing_address_1( sanitize_text_field( $b['address_1'] ) );
+			if ( isset( $b['address_2'] ) )  $order->set_billing_address_2( sanitize_text_field( $b['address_2'] ) );
+			if ( isset( $b['city'] ) )       $order->set_billing_city( sanitize_text_field( $b['city'] ) );
+			if ( isset( $b['state'] ) )      $order->set_billing_state( sanitize_text_field( $b['state'] ) );
+			if ( isset( $b['postcode'] ) )   $order->set_billing_postcode( sanitize_text_field( $b['postcode'] ) );
+			if ( isset( $b['country'] ) )    $order->set_billing_country( sanitize_text_field( $b['country'] ) );
+			if ( isset( $b['email'] ) )      $order->set_billing_email( sanitize_email( $b['email'] ) );
+			if ( isset( $b['phone'] ) )      $order->set_billing_phone( sanitize_text_field( $b['phone'] ) );
+		}
+
+		// 4. Update Line Items
+		if ( isset( $params['items'] ) && is_array( $params['items'] ) ) {
+			foreach ( $params['items'] as $it_data ) {
+				$item_id = isset( $it_data['id'] ) ? intval( $it_data['id'] ) : 0;
+				$line_item = $item_id > 0 ? $order->get_item( $item_id ) : null;
+
+				if ( ! $line_item ) {
+					$line_item = new WC_Order_Item_Product();
+					$prod_id = isset( $it_data['product_id'] ) ? intval( $it_data['product_id'] ) : 0;
+					if ( $prod_id > 0 ) {
+						$product = wc_get_product( $prod_id );
+						if ( $product ) {
+							$line_item->set_product( $product );
+						}
+					}
+					if ( ! empty( $it_data['name'] ) ) {
+						$line_item->set_name( sanitize_text_field( $it_data['name'] ) );
+					}
+					$order->add_item( $line_item );
+					$audit_notes[] = 'Added item: ' . ( $it_data['name'] ?? 'Custom item' );
+				} else {
+					if ( ! empty( $it_data['name'] ) ) {
+						$line_item->set_name( sanitize_text_field( $it_data['name'] ) );
+					}
+					$audit_notes[] = 'Updated item #' . $item_id . ' (' . $line_item->get_name() . ')';
+				}
+
+				if ( isset( $it_data['quantity'] ) ) {
+					$qty = max( 1, intval( $it_data['quantity'] ) );
+					$line_item->set_quantity( $qty );
+				}
+
+				if ( isset( $it_data['subtotal'] ) ) {
+					$line_item->set_subtotal( floatval( $it_data['subtotal'] ) );
+				} elseif ( isset( $it_data['price'] ) && isset( $it_data['quantity'] ) ) {
+					$line_item->set_subtotal( floatval( $it_data['price'] ) * intval( $it_data['quantity'] ) );
+				}
+
+				if ( isset( $it_data['total'] ) ) {
+					$line_item->set_total( floatval( $it_data['total'] ) );
+				} elseif ( isset( $it_data['subtotal'] ) ) {
+					$line_item->set_total( floatval( $it_data['subtotal'] ) );
+				}
+
+				// Update specifications / configuration metadata
+				if ( isset( $it_data['specs'] ) && is_array( $it_data['specs'] ) ) {
+					$config_parts = [];
+					$raw_config = [];
+
+					foreach ( $it_data['specs'] as $sp ) {
+						$lbl = sanitize_text_field( $sp['label'] ?? '' );
+						$val = sanitize_text_field( $sp['value'] ?? '' );
+						if ( ! empty( $lbl ) && ! empty( $val ) ) {
+							$line_item->update_meta_data( $lbl, $val );
+							$config_parts[] = "{$lbl}: {$val}";
+							$raw_config[] = [
+								'layer_name'   => $lbl,
+								'name'         => $val,
+								'choice_title' => $val,
+								'is_choice'    => true,
+							];
+						}
+					}
+
+					if ( ! empty( $config_parts ) ) {
+						$line_item->update_meta_data( 'configuration', implode( ' • ', $config_parts ) );
+						$line_item->update_meta_data( '_configurator_data_raw', $raw_config );
+					}
+				}
+
+				$line_item->save();
+			}
+		}
+
+		// 5. Remove deleted items if specified
+		if ( isset( $params['deleted_item_ids'] ) && is_array( $params['deleted_item_ids'] ) ) {
+			foreach ( $params['deleted_item_ids'] as $del_id ) {
+				$del_int = intval( $del_id );
+				if ( $del_int > 0 ) {
+					$order->remove_item( $del_int );
+					$audit_notes[] = 'Removed item #' . $del_int;
+				}
+			}
+		}
+
+		// Recalculate totals & persist
+		$order->calculate_totals();
+		$order->save();
+
+		// Record note
+		if ( ! empty( $audit_notes ) ) {
+			$note_text = 'Order modified via Exacoat Manager Workstation: ' . implode( '; ', $audit_notes );
+			$order->add_order_note( $note_text, false );
+		}
+
+		if ( class_exists( 'Artmatter_Logger' ) ) {
+			Artmatter_Logger::info( 'orders', "Order #{$order_id} modified via Manager ERP", [
+				'order_id' => $order_id,
+				'changes'  => $audit_notes,
+			] );
+		}
+
+		return rest_ensure_response( [
+			'success' => true,
+			'message' => "Order #{$order_id} updated successfully",
+			'order'   => self::format_order_for_manager( $order ),
+		] );
+	}
+
+	/**
 	 * REST Route: Fulfill Order & Attach Tracking Information
 	 */
 	public static function fulfill_order( WP_REST_Request $request ) {

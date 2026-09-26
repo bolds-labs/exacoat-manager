@@ -14,7 +14,11 @@ import {
   Scissors,
   User,
   MapPin,
+  MessageSquare,
+  Send,
+  Phone,
 } from 'lucide-react';
+import { clsx } from 'clsx';
 import {
   fetchWarrantyClaimDetails,
   reviewWarrantyClaimDirect,
@@ -23,6 +27,33 @@ import {
 import { useToast } from '../../context/ToastContext';
 import { cleanItemTitle } from '../../lib/orderItems';
 import { getWordPressBaseUrl } from '../../lib/env';
+
+const WA_TEMPLATES = {
+  cut_incorrect: {
+    labelId: 'Video Potongan Tidak Sesuai (Kurang 5 Bagian)',
+    labelEn: 'Skin Cut Proof Incorrect (Not 5 Distinct Pieces)',
+    textId: (name: string, ref: string) =>
+      `Halo kak ${name}, terima kasih telah mengajukan klaim garansi pemasangan Exacoat untuk pesanan #${ref}.\n\nSetelah tim kami meninjau video bukti yang diunggah, pemotongan skin belum sesuai ketentuan garansi (skin harus dipotong menjadi minimal 5 bagian terpisah dan terlihat jelas pada video).\n\nMohon bantu kirimkan video pemotongan skin yang sesuai langsung melalui WhatsApp ini agar klaim penggantian dapat segera kami proses. Terima kasih!`,
+    textEn: (name: string, ref: string) =>
+      `Hi ${name}, thank you for submitting your Exacoat installation warranty claim for order #${ref}.\n\nUpon review, the uploaded video proof does not show the skin cut into at least 5 distinct pieces as required by our warranty policy.\n\nPlease reply with an updated video showing all claimed skins cut into at least 5 pieces so we can approve your replacement. Thank you!`,
+  },
+  missing_skins: {
+    labelId: 'Bagian Skin Belum Dipotong Lengkap di Video',
+    labelEn: 'Missing Claimed Skin Parts in Video',
+    textId: (name: string, ref: string) =>
+      `Halo kak ${name}, mengenai pengajuan garansi pemasangan Exacoat untuk pesanan #${ref}.\n\nKami melihat masih ada bagian skin yang belum dipotong di dalam video bukti yang dilampirkan. Sesuai ketentuan garansi, seluruh bagian skin yang diajukan penggantian harus dipotong menjadi 5 bagian.\n\nMohon kirimkan video pemotongan untuk seluruh bagian skin yang diklaim agar dapat kami setujui segera. Terima kasih!`,
+    textEn: (name: string, ref: string) =>
+      `Hi ${name}, regarding your Exacoat warranty replacement claim for order #${ref}.\n\nWe noticed that some of the claimed skin parts are missing from the cutting proof video. According to our warranty terms, all skins requested for replacement must be cut.\n\nPlease send a video showing all claimed skin parts cut so we can proceed with your replacement. Thank you!`,
+  },
+  unclear_video: {
+    labelId: 'Video Buram / Tidak Dapat Diputar',
+    labelEn: 'Video Unplayable or Unclear',
+    textId: (name: string, ref: string) =>
+      `Halo kak ${name}, terkait pengajuan garansi pemasangan Exacoat untuk pesanan #${ref}.\n\nVideo bukti yang diunggah tidak dapat kami putar atau resolusinya kurang jelas sehingga tim QC belum dapat melakukan verifikasi.\n\nBisa tolong kirimkan video bukti pemotongan skin secara langsung ke WhatsApp ini? Kami akan segera memproses penggantian setelah video diverifikasi. Terima kasih!`,
+    textEn: (name: string, ref: string) =>
+      `Hi ${name}, regarding your Exacoat warranty claim for order #${ref}.\n\nWe were unable to play or clearly view the uploaded proof video, preventing our team from verifying the claim.\n\nCould you please send the video showing the cut skin directly here on WhatsApp? We will process your replacement right away once verified. Thank you!`,
+  },
+};
 
 const normalizeVideoUrl = (url?: string): string => {
   if (!url) return '';
@@ -57,6 +88,66 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
 
+  // WhatsApp Customer Dispatch State
+  const [showWhatsApp, setShowWhatsApp] = useState(false);
+  const [waLanguage, setWaLanguage] = useState<'id' | 'en'>('id');
+  const [waTemplateKey, setWaTemplateKey] = useState<'cut_incorrect' | 'missing_skins' | 'unclear_video'>('cut_incorrect');
+  const [waMessage, setWaMessage] = useState('');
+  const [waPhone, setWaPhone] = useState('');
+
+  const generateWaMessage = (
+    tplKey: 'cut_incorrect' | 'missing_skins' | 'unclear_video',
+    lang: 'id' | 'en',
+    details: WarrantyClaimDetails | null
+  ) => {
+    const rawName = (details?.customer_name || '').trim();
+    const firstName = rawName.split(' ')[0] || (lang === 'id' ? 'Kak' : 'Customer');
+    const orderRef = String(details?.parent_order_number || details?.parent_order_id || details?.order_number || '');
+
+    const tpl = WA_TEMPLATES[tplKey];
+    if (!tpl) return '';
+    return lang === 'id' ? tpl.textId(firstName, orderRef) : tpl.textEn(firstName, orderRef);
+  };
+
+  const handleSelectTemplate = (tplKey: 'cut_incorrect' | 'missing_skins' | 'unclear_video') => {
+    setWaTemplateKey(tplKey);
+    setWaMessage(generateWaMessage(tplKey, waLanguage, claim));
+  };
+
+  const handleSelectLanguage = (lang: 'id' | 'en') => {
+    setWaLanguage(lang);
+    setWaMessage(generateWaMessage(waTemplateKey, lang, claim));
+  };
+
+  const handleToggleWhatsApp = () => {
+    setShowWhatsApp((prev) => {
+      const next = !prev;
+      if (next && claim) {
+        setWaMessage(generateWaMessage(waTemplateKey, waLanguage, claim));
+        if (claim.customer_phone) {
+          setWaPhone(claim.customer_phone);
+        }
+      }
+      return next;
+    });
+  };
+
+  const handleSendWhatsApp = () => {
+    const rawPhone = waPhone || claim?.customer_phone || '';
+    let cleaned = rawPhone.replace(/\D/g, '');
+    if (cleaned.startsWith('0')) {
+      cleaned = '62' + cleaned.slice(1);
+    } else if (cleaned.startsWith('8')) {
+      cleaned = '62' + cleaned;
+    }
+    if (!cleaned) {
+      showToast('warning', 'WhatsApp Phone Required', 'Customer phone number is missing or invalid.');
+      return;
+    }
+    const url = `https://wa.me/${cleaned}?text=${encodeURIComponent(waMessage)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   const loadDetails = async () => {
     if (!orderId) return;
     setIsLoading(true);
@@ -65,6 +156,9 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
     const res = await fetchWarrantyClaimDetails(orderId);
     if (res.success && res.data) {
       setClaim(res.data);
+      if (res.data.customer_phone) {
+        setWaPhone(res.data.customer_phone);
+      }
     } else {
       setError(res.error || 'Failed to load warranty claim details.');
     }
@@ -75,6 +169,8 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
     if (isOpen && orderId) {
       setShowRejectInput(false);
       setRejectionReason('');
+      setShowWhatsApp(false);
+      setWaMessage('');
       loadDetails();
     }
   }, [isOpen, orderId]);
@@ -140,13 +236,28 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
       subtitle="Verify customer 5-piece cut video proof and approve replacement"
       footer={
         <div className="flex w-full items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-neutral-700 bg-neutral-800 px-4 py-2 text-xs font-medium text-neutral-300 hover:bg-neutral-700 transition-colors"
-          >
-            Close
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-neutral-700 bg-neutral-800 px-4 py-2 text-xs font-medium text-neutral-300 hover:bg-neutral-700 transition-colors"
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              onClick={handleToggleWhatsApp}
+              className={clsx(
+                "flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-xs font-medium transition-colors",
+                showWhatsApp
+                  ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-300"
+                  : "border-neutral-700 bg-neutral-800 text-emerald-400 hover:bg-neutral-700 hover:border-emerald-500/30"
+              )}
+            >
+              <MessageSquare className="h-4 w-4" />
+              WhatsApp Customer
+            </button>
+          </div>
 
           {claim?.rma_status === 'pending_review' && (
             <div className="flex items-center gap-2">
@@ -228,7 +339,7 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
                     onClick={() => {
                       if (onSelectParentOrder) {
                         onClose();
-                        onSelectParentOrder(claim.parent_order_id);
+                        onSelectParentOrder(Number(claim.parent_order_id));
                       }
                     }}
                     className="flex items-center gap-1 font-mono text-[#f3aa18] hover:underline"
@@ -269,6 +380,104 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
             </div>
           </div>
 
+          {/* WhatsApp Interactive Assistant Panel */}
+          {showWhatsApp && (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-emerald-400 font-semibold text-xs">
+                  <MessageSquare className="h-4 w-4" />
+                  <span>Contact Customer via WhatsApp</span>
+                </div>
+                <div className="flex items-center gap-1 bg-neutral-900 rounded-lg p-0.5 border border-neutral-800 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectLanguage('id')}
+                    className={clsx(
+                      "px-2.5 py-1 rounded font-medium transition-colors",
+                      waLanguage === 'id' ? "bg-emerald-600 text-white" : "text-neutral-400 hover:text-white"
+                    )}
+                  >
+                    ID (Indonesia)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectLanguage('en')}
+                    className={clsx(
+                      "px-2.5 py-1 rounded font-medium transition-colors",
+                      waLanguage === 'en' ? "bg-emerald-600 text-white" : "text-neutral-400 hover:text-white"
+                    )}
+                  >
+                    EN (English)
+                  </button>
+                </div>
+              </div>
+
+              {/* Template Selector Chips */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] text-neutral-400 font-medium">Select Pre-filled Template:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {(Object.keys(WA_TEMPLATES) as Array<keyof typeof WA_TEMPLATES>).map((key) => {
+                    const tpl = WA_TEMPLATES[key];
+                    const isSelected = waTemplateKey === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => handleSelectTemplate(key)}
+                        className={clsx(
+                          "rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors border",
+                          isSelected
+                            ? "bg-emerald-500/20 border-emerald-500 text-emerald-300"
+                            : "bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-neutral-200 hover:border-neutral-700"
+                        )}
+                      >
+                        {waLanguage === 'id' ? tpl.labelId : tpl.labelEn}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Phone and Editable Message */}
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center gap-2">
+                  <label className="text-[11px] text-neutral-400 flex items-center gap-1 font-medium">
+                    <Phone className="h-3 w-3 text-neutral-500" />
+                    <span>Customer WhatsApp Number:</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={waPhone}
+                    onChange={(e) => setWaPhone(e.target.value)}
+                    placeholder="0812... or 62812..."
+                    className="h-7 w-48 rounded border border-neutral-700 bg-neutral-900 px-2 text-xs text-white placeholder:text-neutral-600 focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+
+                <textarea
+                  rows={4}
+                  value={waMessage}
+                  onChange={(e) => setWaMessage(e.target.value)}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-900 p-2.5 text-xs text-white placeholder:text-neutral-600 focus:border-emerald-500 focus:outline-none leading-relaxed"
+                />
+
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] text-neutral-500">
+                    Clicking will open WhatsApp Web or Desktop with the prefilled message above.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleSendWhatsApp}
+                    className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 transition-colors shadow-sm"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    Open WhatsApp
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Issue Reason & Notes */}
           <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 space-y-2">
             <div className="flex items-center gap-2 text-neutral-400 font-medium">
@@ -290,6 +499,19 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
             )}
           </div>
 
+          {/* Shopee / Marketplace Order Note Banner */}
+          {(claim.buyer_note || claim.shopee_notes) && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 space-y-1">
+              <div className="flex items-center gap-2 text-amber-400 font-semibold text-xs">
+                <MessageSquare className="h-4 w-4" />
+                <span>{claim.channel === 'shopee' ? 'Shopee Buyer Order Note' : 'Customer Order Note'}</span>
+              </div>
+              <p className="text-amber-200/90 whitespace-pre-wrap pl-6 font-mono text-[11px] leading-relaxed">
+                {claim.buyer_note || claim.shopee_notes}
+              </p>
+            </div>
+          )}
+
           {/* Replaced Items */}
           {claim.items && claim.items.length > 0 && (
             <div className="space-y-2">
@@ -300,23 +522,44 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
                 {claim.items.map((item, idx) => (
                   <div
                     key={idx}
-                    className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-900/40 p-2.5"
+                    className="flex flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900/40 p-3"
                   >
-                    {item.image ? (
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="h-10 w-10 rounded-md object-cover border border-neutral-700"
-                      />
-                    ) : (
-                      <div className="flex h-10 w-10 items-center justify-center rounded-md bg-neutral-800 text-neutral-500">
-                        <Scissors className="h-4 w-4" />
+                    <div className="flex items-center gap-3">
+                      {item.image ? (
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="h-10 w-10 rounded-md object-cover border border-neutral-700 shrink-0"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-neutral-800 text-neutral-500">
+                          <Scissors className="h-4 w-4" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium text-white">{cleanItemTitle(item.name)}</p>
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-neutral-400 mt-0.5">
+                          <span>Qty: {item.quantity} (Warranty Replacement)</span>
+                          {item.device_model && (
+                            <span className="text-neutral-500">• {item.device_model}</span>
+                          )}
+                          {item.claimed_parts && item.claimed_parts.length > 0 && (
+                            <span className="inline-flex items-center rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
+                              Parts: {item.claimed_parts.join(', ')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {item.item_note && (
+                      <div className="mt-1 flex items-start gap-1.5 rounded bg-neutral-950/70 px-2.5 py-1.5 text-[11px] border border-neutral-800 text-amber-300">
+                        <FileText className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-medium text-neutral-400">Customization / Item Note: </span>
+                          <span className="font-mono text-amber-200">{item.item_note}</span>
+                        </div>
                       </div>
                     )}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-white">{cleanItemTitle(item.name)}</p>
-                      <p className="text-[11px] text-neutral-500">Qty: {item.quantity} (Warranty Replacement)</p>
-                    </div>
                   </div>
                 ))}
               </div>
