@@ -58,6 +58,73 @@ interface CustomSpecEntry {
   value: string;
 }
 
+function isDeviceSupportingCoverage(
+  productName: string,
+  profile?: DeviceConfiguratorProfile | null
+): boolean {
+  const nameLower = (productName || profile?.device_name || '').toLowerCase();
+  const fam = (profile?.family || '').toLowerCase();
+  const cat = (profile?.category || '').toLowerCase();
+
+  // Explicit non-phone devices (Macbooks, laptops, tablets, consoles, audio) NEVER support 360 vs Model Cut coverage
+  const isNonPhone =
+    fam === 'macbook' ||
+    fam === 'laptop' ||
+    fam === 'tablet' ||
+    fam === 'ipad' ||
+    fam === 'console' ||
+    fam === 'audio' ||
+    fam === 'foldable' ||
+    fam === 'charger' ||
+    cat.includes('laptop') ||
+    cat.includes('macbook') ||
+    cat.includes('tablet') ||
+    cat.includes('ipad') ||
+    cat.includes('console') ||
+    nameLower.includes('macbook') ||
+    nameLower.includes('laptop') ||
+    nameLower.includes('notebook') ||
+    nameLower.includes('thinkpad') ||
+    nameLower.includes('surface') ||
+    nameLower.includes('ipad') ||
+    nameLower.includes('tablet') ||
+    nameLower.includes('tab ') ||
+    nameLower.includes('tab s') ||
+    nameLower.includes('playstation') ||
+    nameLower.includes('ps5') ||
+    nameLower.includes('ps4') ||
+    nameLower.includes('xbox') ||
+    nameLower.includes('switch') ||
+    nameLower.includes('steam deck') ||
+    nameLower.includes('rog ally') ||
+    nameLower.includes('keyboard') ||
+    nameLower.includes('airpods');
+
+  if (isNonPhone) {
+    return false;
+  }
+
+  // For phone devices, check true configurator profile coverage settings
+  const cov = profile?.coverage_and_cutouts;
+  if (!cov) return false;
+
+  const covType = (cov.coverage_type || '').toLowerCase();
+  // If explicitly none or single cut only, buyer has no choice between Model Cut and 360
+  if (covType === 'none' || covType === 'model_cut_only' || covType === 'model_360_only') {
+    return false;
+  }
+
+  if (covType === 'model_cut_and_360' || (covType as any) === 'both') {
+    return true;
+  }
+
+  if (Array.isArray(cov.available_coverages) && cov.available_coverages.length > 1) {
+    return true;
+  }
+
+  return false;
+}
+
 export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
   order,
   item,
@@ -154,7 +221,8 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
   const loadProductConfig = async (
     pId: number,
     currentSpecs: ItemCustomizationSpec[],
-    isNewItem = false
+    isNewItem = false,
+    nameOverride?: string
   ) => {
     setIsLoadingProfile(true);
     let loadedProfile: DeviceConfiguratorProfile | null = null;
@@ -200,6 +268,8 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
     setIsConfiguratorProduct(isConfigurable);
     setConfigMode(isConfigurable ? 'configurator' : 'form');
 
+    const effectiveProductName = nameOverride || productName || loadedProfile?.device_name || '';
+
     if (isConfigurable) {
       // 1. Configure layers based on true existingSpecs
       setLayers(resolvedLayers);
@@ -228,21 +298,13 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
       const firstActive = resolvedLayers.find((l) => initialActive[l.id]);
       setActiveLayerId(firstActive ? firstActive.id : resolvedLayers[0]?.id || null);
 
-      // 2. Coverage option: ONLY show if profile explicitly supports 360/model cut choice OR existing order had it
-      const cov = loadedProfile?.coverage_and_cutouts;
-      const covType = cov?.coverage_type;
-      const profileHasCoverage =
-        covType === 'model_cut_and_360' ||
-        (covType as any) === 'both' ||
-        Boolean(cov?.model_360_extra_price) ||
-        (Array.isArray(cov?.available_coverages) && cov.available_coverages.length > 1);
-
-      const existingCov = currentSpecs.find((s) =>
-        /^(coverage|cut|model cut|360)$/i.test(s.label.trim())
-      );
-      const showCoverage = Boolean(profileHasCoverage || existingCov);
-      setHasCoverageOption(showCoverage);
-      if (showCoverage) {
+      // 2. Coverage option: ONLY show if device genuinely supports coverage choice (Model Cut vs 360)
+      const deviceSupportsCoverage = isDeviceSupportingCoverage(effectiveProductName, loadedProfile);
+      setHasCoverageOption(deviceSupportsCoverage);
+      if (deviceSupportsCoverage) {
+        const existingCov = currentSpecs.find((s) =>
+          /^(coverage|cut|model cut|360)$/i.test(s.label.trim())
+        );
         if (existingCov) {
           setCoverage(
             existingCov.value.toLowerCase().includes('360')
@@ -362,7 +424,7 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
       setUnitPrice(Math.round(parsedPrice || 0));
 
       const existingSpecs = extractItemSpecs(item);
-      loadProductConfig(item.product_id || 0, existingSpecs, false);
+      loadProductConfig(item.product_id || 0, existingSpecs, false, item.name || '');
       setIsChangingProduct(false);
     } else {
       // Add mode defaults
@@ -396,7 +458,7 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
     if (priceNum > 0) setUnitPrice(priceNum);
     setIsChangingProduct(false);
 
-    loadProductConfig(product.id, [], !isEditing);
+    loadProductConfig(product.id, [], !isEditing, product.name || '');
   };
 
   // Filter finishes based on group & search query (uses real store catalog only)

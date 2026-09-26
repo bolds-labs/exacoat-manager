@@ -2370,7 +2370,7 @@ class Exacoat_Configurator_Engine {
 			'coverage_type'         => $cov_type,
 			'model_cutout_url'      => $model_cut_image ?: '',
 			'model_cut_mask_url'    => $model_cut_image ?: '',
-			'model_360_extra_price' => $model_360_price ?: 40000,
+			'model_360_extra_price' => ( $cov_type === 'model_cut_and_360' || $cov_type === 'both' ) ? ( $model_360_price ?: 40000 ) : 0,
 		];
 
 		$base_price = self::get_product_base_price( $product );
@@ -2755,20 +2755,14 @@ class Exacoat_Configurator_Engine {
 			}
 			$profile['presets']  = isset( $profile['presets'] ) && is_array( $profile['presets'] ) ? $profile['presets'] : [];
 			if ( ! empty( $profile['coverage_and_cutouts'] ) && is_array( $profile['coverage_and_cutouts'] ) ) {
-				if ( ! isset( $profile['coverage_and_cutouts']['model_360_extra_price'] ) || ! is_numeric( $profile['coverage_and_cutouts']['model_360_extra_price'] ) ) {
-					$profile['coverage_and_cutouts']['model_360_extra_price'] = 40000;
-				}
-				// Default phone coverage only if coverage_type is missing/unset entirely (honor explicit 'none')
 				$dev_fam = $profile['family'] ?? '';
-				if ( $dev_fam === 'phone' && ! isset( $profile['coverage_and_cutouts']['coverage_type'] ) ) {
-					$profile['coverage_and_cutouts']['coverage_type'] = 'model_cut_and_360';
-					$profile['coverage_and_cutouts']['has_model_cut'] = true;
-					$profile['coverage_and_cutouts']['model_360_extra_price'] = 40000;
-					if ( ! empty( $modern_profile ) ) {
-						update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
-					}
+				$cur_cov = $profile['coverage_and_cutouts']['coverage_type'] ?? '';
+
+				if ( in_array( $dev_fam, [ 'laptop', 'macbook', 'tablet', 'ipad', 'console', 'audio', 'charger', 'keyboard' ], true ) ) {
+					$profile['coverage_and_cutouts']['coverage_type'] = 'none';
+					$profile['coverage_and_cutouts']['has_model_cut'] = false;
+					$profile['coverage_and_cutouts']['model_360_extra_price'] = 0;
 				} elseif ( $dev_fam === 'foldable' ) {
-					$cur_cov = $profile['coverage_and_cutouts']['coverage_type'] ?? '';
 					if ( $cur_cov !== 'none' && $cur_cov !== 'model_cut_only' ) {
 						$profile['coverage_and_cutouts']['coverage_type'] = 'model_cut_only';
 						$profile['coverage_and_cutouts']['has_model_cut'] = true;
@@ -2780,6 +2774,22 @@ class Exacoat_Configurator_Engine {
 					}
 					if ( $needs_save && ! empty( $modern_profile ) ) {
 						update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
+					}
+				} else {
+					if ( $cur_cov === 'none' || $cur_cov === 'model_cut_only' ) {
+						$profile['coverage_and_cutouts']['model_360_extra_price'] = 0;
+					} elseif ( ! isset( $profile['coverage_and_cutouts']['model_360_extra_price'] ) || ! is_numeric( $profile['coverage_and_cutouts']['model_360_extra_price'] ) ) {
+						$profile['coverage_and_cutouts']['model_360_extra_price'] = 40000;
+					}
+
+					// Default phone coverage only if coverage_type is missing/unset entirely (honor explicit 'none')
+					if ( $dev_fam === 'phone' && ! isset( $profile['coverage_and_cutouts']['coverage_type'] ) ) {
+						$profile['coverage_and_cutouts']['coverage_type'] = 'model_cut_and_360';
+						$profile['coverage_and_cutouts']['has_model_cut'] = true;
+						$profile['coverage_and_cutouts']['model_360_extra_price'] = 40000;
+						if ( ! empty( $modern_profile ) ) {
+							update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
+						}
 					}
 				}
 			}
