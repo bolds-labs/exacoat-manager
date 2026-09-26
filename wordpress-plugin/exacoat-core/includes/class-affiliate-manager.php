@@ -208,10 +208,10 @@ class Exacoat_Affiliate_Manager {
 
 		update_option( 'exacoat_affiliate_db_version', '1.3.0' );
 
-		// One-time auto-recalculation and Edwin Yang setup on plugin update
-		if ( ! get_option( 'exacoat_affiliate_recalc_v87', false ) ) {
+		// One-time auto-recalculation, Edwin Yang, and Dimas Sampurno setup on plugin update
+		if ( ! get_option( 'exacoat_affiliate_recalc_v88', false ) ) {
 			self::recalculate_all_balances();
-			update_option( 'exacoat_affiliate_recalc_v87', 1 );
+			update_option( 'exacoat_affiliate_recalc_v88', 1 );
 		}
 	}
 
@@ -2809,8 +2809,9 @@ class Exacoat_Affiliate_Manager {
 			 WHERE status = 'pending' AND (rejection_reason IS NULL OR rejection_reason = '')"
 		);
 
-		// 2. Ensure Edwin Yang profile, coupon assignment, and order 542410 commission
+		// 2. Ensure Edwin Yang and Dimas Sampurno setups, coupon assignments, and commissions
 		self::ensure_edwin_yang_setup();
+		self::ensure_dimas_sampurno_setup();
 
 		// 3. Re-sum balances and order/click counts across all affiliates
 		$all_affiliates = $wpdb->get_results( "SELECT id FROM {$table_affiliates}" );
@@ -2971,6 +2972,175 @@ class Exacoat_Affiliate_Manager {
 					'status'            => 'unpaid',
 					'customer_email'    => 'edwinyang10@gmail.com',
 					'created_at'        => '2026-09-24 22:27:00',
+				]
+			);
+		}
+	}
+
+	/**
+	 * Ensure Dimas Sampurno account is active, configured with 15% rate and ds10 coupon, and commission history is intact.
+	 */
+	public static function ensure_dimas_sampurno_setup(): void {
+		global $wpdb;
+		$table_affiliates  = $wpdb->prefix . 'exacoat_affiliates';
+		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
+
+		// Look for user by ID 53126 or slug 'ds'
+		$user_id    = 53126;
+		$user       = get_userdata( $user_id );
+		$user_email = $user ? $user->user_email : '';
+
+		$aff = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT * FROM {$table_affiliates} WHERE user_id = %d OR slug = 'ds' LIMIT 1",
+				$user_id
+			)
+		);
+
+		$dimas_aff_id = 0;
+		if ( $aff ) {
+			$dimas_aff_id = (int) $aff->id;
+			$wpdb->update(
+				$table_affiliates,
+				[
+					'coupon_code'     => 'ds10',
+					'commission_rate' => ( ! empty( $aff->commission_rate ) && (float) $aff->commission_rate > 0 ) ? (float) $aff->commission_rate : 15.00,
+					'status'          => 'active',
+					'slug'            => 'ds',
+				],
+				[ 'id' => $dimas_aff_id ]
+			);
+		} else {
+			$wpdb->insert(
+				$table_affiliates,
+				[
+					'user_id'           => $user_id,
+					'slug'              => 'ds',
+					'slug_locked'       => 1,
+					'status'            => 'active',
+					'affiliate_type'    => 'Migrated from SliceWP',
+					'promotion_channel' => 'Creator & Partner',
+					'coupon_code'       => 'ds10',
+					'commission_rate'   => 15.00,
+					'bank_name'         => 'BCA',
+					'created_at'        => '2022-04-12 17:06:51',
+				]
+			);
+			$dimas_aff_id = (int) $wpdb->insert_id;
+		}
+
+		// Ensure WordPress user has affiliate role if user exists
+		if ( $user && ( $user instanceof WP_User ) ) {
+			$user->add_role( self::ROLE_AFFILIATE );
+		}
+
+		// Synchronize WooCommerce coupon ds10 if available
+		if ( function_exists( 'wc_get_coupon_id_by_code' ) ) {
+			$coupon_id = wc_get_coupon_id_by_code( 'ds10' );
+			if ( $coupon_id > 0 ) {
+				update_post_meta( $coupon_id, '_exacoat_affiliate_id', $dimas_aff_id );
+				update_post_meta( $coupon_id, '_exacoat_affiliate_slug', 'ds' );
+				if ( $user_email ) {
+					update_post_meta( $coupon_id, '_exacoat_affiliate_email', $user_email );
+				}
+			} elseif ( class_exists( 'WC_Coupon' ) ) {
+				try {
+					$new_coupon = new \WC_Coupon();
+					$new_coupon->set_code( 'ds10' );
+					$new_coupon->set_discount_type( 'percent' );
+					$new_coupon->set_amount( 10 );
+					$new_coupon->set_description( 'Affiliate discount coupon for Dimas Sampurno (@ds)' );
+					$new_coupon->set_individual_use( true );
+					$new_coupon->update_meta_data( '_exacoat_affiliate_id', $dimas_aff_id );
+					$new_coupon->update_meta_data( '_exacoat_affiliate_slug', 'ds' );
+					if ( $user_email ) {
+						$new_coupon->update_meta_data( '_exacoat_affiliate_email', $user_email );
+					}
+					$new_coupon->save();
+				} catch ( \Throwable $e ) {
+					// Graceful fallback if coupon creation fails
+				}
+			}
+		}
+
+		// Ensure Dimas Sampurno unpaid commission 542238 (amount 70200.00, order subtotal 468062.00, date 2026-09-16 12:41:40)
+		$existing_comm = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT id FROM {$table_commissions} WHERE order_id = 542238 OR order_number = '542238' LIMIT 1"
+			)
+		);
+
+		if ( $existing_comm ) {
+			$wpdb->update(
+				$table_commissions,
+				[
+					'affiliate_id'      => $dimas_aff_id,
+					'order_id'          => 542238,
+					'order_number'      => '542238',
+					'order_subtotal'    => 468062.00,
+					'commission_rate'   => 15.00,
+					'commission_amount' => 70200.00,
+					'coupon_code'       => 'ds10',
+					'status'            => 'unpaid',
+					'created_at'        => '2026-09-16 12:41:40',
+				],
+				[ 'id' => (int) $existing_comm->id ]
+			);
+		} else {
+			$wpdb->insert(
+				$table_commissions,
+				[
+					'affiliate_id'      => $dimas_aff_id,
+					'order_id'          => 542238,
+					'order_number'      => '542238',
+					'order_subtotal'    => 468062.00,
+					'commission_rate'   => 15.00,
+					'commission_amount' => 70200.00,
+					'coupon_code'       => 'ds10',
+					'status'            => 'unpaid',
+					'customer_email'    => $user_email,
+					'created_at'        => '2026-09-16 12:41:40',
+				]
+			);
+		}
+
+		// Also check order 540964 if not present (amount 25515.00, order subtotal 102670.00, date 2026-04-12 11:32:02)
+		$existing_comm2 = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT id FROM {$table_commissions} WHERE order_id = 540964 OR order_number = '540964' LIMIT 1"
+			)
+		);
+
+		if ( $existing_comm2 ) {
+			$wpdb->update(
+				$table_commissions,
+				[
+					'affiliate_id'      => $dimas_aff_id,
+					'order_id'          => 540964,
+					'order_number'      => '540964',
+					'order_subtotal'    => 102670.00,
+					'commission_rate'   => 24.85,
+					'commission_amount' => 25515.00,
+					'coupon_code'       => 'ds10',
+					'status'            => 'unpaid',
+					'created_at'        => '2026-04-12 11:32:02',
+				],
+				[ 'id' => (int) $existing_comm2->id ]
+			);
+		} else {
+			$wpdb->insert(
+				$table_commissions,
+				[
+					'affiliate_id'      => $dimas_aff_id,
+					'order_id'          => 540964,
+					'order_number'      => '540964',
+					'order_subtotal'    => 102670.00,
+					'commission_rate'   => 24.85,
+					'commission_amount' => 25515.00,
+					'coupon_code'       => 'ds10',
+					'status'            => 'unpaid',
+					'customer_email'    => $user_email,
+					'created_at'        => '2026-04-12 11:32:02',
 				]
 			);
 		}

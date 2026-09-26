@@ -80,7 +80,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Marked all pending commissions as unpaid and recalculated balances across creators\n- Added Edwin Yang commission for order 542410 (Rp 28.050 at 10% rate)\n- Enabled coupon code assignment (edwin15) to affiliates with automatic checkout attribution\n- Added coupon display to Manager workstation and Creator Portal`,
+      changelog: `### Version ${version}\n- Connected promo coupon code ds10 to creator Dimas Sampurno (@ds) with automatic checkout attribution\n- Restored Dimas Sampurno historical commissions and unpaid balance\n- Ensured automated balance synchronization and creator profile updates\n- Maintained Edwin Yang (edwin15) configuration and active creator statuses`,
     },
   };
 

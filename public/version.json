@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.87",
+  "version": "0.1.88",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.87.zip?v=0.1.87",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.88.zip?v=0.1.88",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-26T15:13:25.055Z",
+  "last_updated": "2026-09-26T15:21:38.901Z",
   "sections": {
-    "changelog": "### Version 0.1.87\n- Marked all pending commissions as unpaid and recalculated balances across creators\n- Added Edwin Yang commission for order 542410 (Rp 28.050 at 10% rate)\n- Enabled coupon code assignment (edwin15) to affiliates with automatic checkout attribution\n- Added coupon display to Manager workstation and Creator Portal"
+    "changelog": "### Version 0.1.88\n- Connected promo coupon code ds10 to creator Dimas Sampurno (@ds) with automatic checkout attribution\n- Restored Dimas Sampurno historical commissions and unpaid balance\n- Ensured automated balance synchronization and creator profile updates\n- Maintained Edwin Yang (edwin15) configuration and active creator statuses"
   }
 }
