@@ -484,6 +484,87 @@ class Exacoat_Email_Engine {
 				'type'           => 'abandoned_cart',
 				'defaults'       => self::get_mock_abandoned_cart_defaults( '2' ),
 			],
+
+			// 7. Affiliate & Creator Program Notifications
+			'creator_commission_available' => [
+				'category'       => 'Affiliate & Creator Program',
+				'label'          => 'Commission Available to Withdraw',
+				'subject'        => 'Commission Available: {{commission_amount}} from Order #{{order_number}}',
+				'badge'          => 'Commission Available',
+				'icon'           => 'document_verified',
+				'title'          => 'Commission ready to withdraw',
+				'body_primary'   => 'Order #{{order_number}} has cleared the 7-day post-delivery grace period. Your commission of {{commission_amount}} is now unlocked and available in your withdrawable balance.',
+				'body_secondary' => 'You can request a payout anytime to your configured BCA or Bank Mandiri account once your balance meets the minimum threshold of Rp 250.000.',
+				'cta_text'       => 'Go to Creator Workstation',
+				'type'           => 'creator',
+				'defaults'       => [
+					'creator_name'      => 'Dimas Sampurno',
+					'commission_amount' => 'Rp 74.500',
+					'order_number'      => '14890',
+					'unpaid_balance'    => 'Rp 324.500',
+					'dashboard_url'     => 'https://exacoat.com/?portal=affiliate',
+				],
+			],
+			'creator_commission_recorded' => [
+				'category'       => 'Affiliate & Creator Program',
+				'label'          => 'New Referral Sale Recorded',
+				'subject'        => 'New Referral Sale Recorded: Order #{{order_number}}',
+				'badge'          => 'Referral Sale',
+				'icon'           => 'document_verified',
+				'title'          => 'New commission earned',
+				'body_primary'   => 'A customer just completed an order (#{{order_number}}) using your referral link or coupon.',
+				'body_secondary' => 'Your commission of {{commission_amount}} has been recorded and will mature into your withdrawable balance 7 days after the order is delivered.',
+				'cta_text'       => 'View Creator Workstation',
+				'type'           => 'creator',
+				'defaults'       => [
+					'creator_name'      => 'Dimas Sampurno',
+					'commission_amount' => 'Rp 74.500',
+					'order_number'      => '14890',
+					'unpaid_balance'    => 'Rp 250.000',
+					'dashboard_url'     => 'https://exacoat.com/?portal=affiliate',
+				],
+			],
+			'creator_payout_requested' => [
+				'category'       => 'Affiliate & Creator Program',
+				'label'          => 'Creator Payout Request Received',
+				'subject'        => 'Payout Request Received: {{payout_amount}}',
+				'badge'          => 'Payout Requested',
+				'icon'           => 'document_verified',
+				'title'          => 'Payout request received',
+				'body_primary'   => 'We received your payout request for {{payout_amount}} to your {{bank_name}} account ({{bank_account_number}}). Our finance team processes payouts on a regular schedule and you will receive a confirmation once transferred.',
+				'body_secondary' => 'Account Holder: {{bank_account_name}}',
+				'cta_text'       => 'View Creator Workstation',
+				'type'           => 'creator',
+				'defaults'       => [
+					'creator_name'        => 'Dimas Sampurno',
+					'payout_amount'       => 'Rp 500.000',
+					'bank_name'           => 'BCA',
+					'bank_account_number' => '8830192831',
+					'bank_account_name'   => 'Dimas Sampurno',
+					'dashboard_url'       => 'https://exacoat.com/?portal=affiliate',
+				],
+			],
+			'creator_payout_transferred' => [
+				'category'       => 'Affiliate & Creator Program',
+				'label'          => 'Creator Payout Transferred',
+				'subject'        => 'Payout Transferred: {{payout_amount}} sent to your bank account',
+				'badge'          => 'Payout Sent',
+				'icon'           => 'document_verified',
+				'title'          => 'Your payout is on the way',
+				'body_primary'   => 'We have processed your payout request of {{payout_amount}} and transferred the funds to your {{bank_name}} account.',
+				'body_secondary' => 'Account Number: {{bank_account_number}}',
+				'cta_text'       => 'View Payout History',
+				'type'           => 'creator',
+				'defaults'       => [
+					'creator_name'        => 'Dimas Sampurno',
+					'payout_amount'       => 'Rp 500.000',
+					'bank_name'           => 'BCA',
+					'bank_account_number' => '8830192831',
+					'bank_account_name'   => 'Dimas Sampurno',
+					'transfer_reference'  => 'TRX-BCA-8921',
+					'dashboard_url'       => 'https://exacoat.com/?portal=affiliate',
+				],
+			],
 		];
 	}
 
@@ -613,6 +694,11 @@ class Exacoat_Email_Engine {
 		// Branch directly to Light-Mode Customer Order Layout for customer orders
 		if ( $type === 'customer_order' || str_starts_with( $event, 'customer_order_' ) ) {
 			return self::render_customer_order_html( $event, $merged_data, $tmpl );
+		}
+
+		// Branch directly to Creator / Affiliate Program Layout
+		if ( $type === 'creator' || str_starts_with( $event, 'creator_' ) || str_starts_with( $event, 'affiliate_' ) ) {
+			return self::render_creator_email_html( $event, $merged_data, $tmpl );
 		}
 
 		$customer_name = esc_html( $merged_data['customer_name'] ?? $merged_data['display_name'] ?? 'Customer' );
@@ -1976,6 +2062,207 @@ class Exacoat_Email_Engine {
                 </p>
                 <p style=\"margin:0;font-size:11px;color:#a1a1aa;letter-spacing:0.2px;\">
                   &copy; Exacoat
+                </p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>";
+
+		return [
+			'subject'   => $subject,
+			'html'      => $html,
+			'tmpl_info' => $tmpl,
+		];
+	}
+
+	/**
+	 * Render Professional Light-Mode Affiliate & Creator Program Email Notifications
+	 */
+	public static function render_creator_email_html( string $event, array $data, array $tmpl ): array {
+		$replacements = [];
+		foreach ( $data as $k => $v ) {
+			if ( is_scalar( $v ) ) {
+				$val_str = (string) $v;
+				$replacements[ '{{' . $k . '}}' ] = $val_str;
+				$replacements[ '{' . $k . '}' ]   = $val_str;
+			}
+		}
+
+		$creator_name      = esc_html( $data['creator_name'] ?? ( $data['display_name'] ?? ( $data['customer_name'] ?? 'Creator' ) ) );
+		$commission_amount = esc_html( $data['commission_amount'] ?? 'Rp 74.500' );
+		$payout_amount     = esc_html( $data['payout_amount'] ?? 'Rp 500.000' );
+		$order_number      = esc_html( $data['order_number'] ?? '' );
+		$unpaid_balance    = esc_html( $data['unpaid_balance'] ?? '' );
+		$bank_name         = esc_html( $data['bank_name'] ?? 'BCA' );
+		$bank_acc          = esc_html( $data['bank_account_number'] ?? '' );
+		$bank_acc_name     = esc_html( $data['bank_account_name'] ?? '' );
+		$ref               = esc_html( $data['transfer_reference'] ?? '' );
+		$default_portal    = defined( 'EXACOAT_WEB_URL' ) ? trailingslashit( EXACOAT_WEB_URL ) . '?portal=affiliate' : home_url( '/?portal=affiliate' );
+		$dashboard_url     = esc_url( $data['dashboard_url'] ?? $default_portal );
+		$badge_text        = esc_html( $data['badge_text'] ?? ( $tmpl['badge'] ?? 'Creator Program' ) );
+		$title             = esc_html( $data['title'] ?? ( $tmpl['title'] ?? 'Commission ready to withdraw' ) );
+		$cta_text          = esc_html( $data['cta_text'] ?? ( $tmpl['cta_text'] ?? 'Go to Creator Workstation' ) );
+
+		$subject        = str_replace( array_keys( $replacements ), array_values( $replacements ), $tmpl['subject'] );
+		$title          = str_replace( array_keys( $replacements ), array_values( $replacements ), $title );
+		$body_primary   = str_replace( array_keys( $replacements ), array_values( $replacements ), $tmpl['body_primary'] ?? '' );
+		$body_secondary = str_replace( array_keys( $replacements ), array_values( $replacements ), $tmpl['body_secondary'] ?? '' );
+
+		// Clean leftover tags
+		$tag_pattern    = '/\{\{[a-zA-Z0-9_-]+\}\}|\{[a-zA-Z0-9_-]+\}/';
+		$subject        = preg_replace( $tag_pattern, '', $subject );
+		$subject        = preg_replace( '/\s{2,}/', ' ', trim( $subject ) );
+		$title          = preg_replace( $tag_pattern, '', $title );
+		$body_primary   = preg_replace( $tag_pattern, '', $body_primary );
+		$body_secondary = preg_replace( $tag_pattern, '', $body_secondary );
+
+		// Highlight block rendering based on event
+		if ( 'creator_payout_transferred' === $event ) {
+			$ref_html = ! empty( $ref ) ? "<p style=\"margin:12px 0 0;font-size:12px;color:#71717a;\">Reference: <strong style=\"color:#18181b;\">{$ref}</strong></p>" : "";
+			$card_content = "
+				<p style=\"margin:0 0 6px;font-size:11px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:1px;\">Transferred Payout</p>
+				<div style=\"margin:6px 0;\">
+					<span class=\"balance-text\" style=\"font-size:34px;font-weight:800;letter-spacing:-0.5px;color:#111111;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif;\">{$payout_amount}</span>
+				</div>
+				<div style=\"display:inline-block;padding:4px 12px;background:#ecfdf5;color:#047857;font-size:12px;font-weight:700;border-radius:9999px;border:1px solid #a7f3d0;margin-top:10px;\">
+					Transferred to {$bank_name} &bull; {$bank_acc}
+				</div>
+				{$ref_html}";
+			$footer_note = "Bank transfers typically reflect within 1-2 business days depending on interbank clearing.";
+		} elseif ( 'creator_payout_requested' === $event ) {
+			$acc_line = ! empty( $bank_acc_name ) ? " ({$bank_acc_name})" : "";
+			$card_content = "
+				<p style=\"margin:0 0 6px;font-size:11px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:1px;\">Requested Payout</p>
+				<div style=\"margin:6px 0;\">
+					<span class=\"balance-text\" style=\"font-size:34px;font-weight:800;letter-spacing:-0.5px;color:#111111;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif;\">{$payout_amount}</span>
+				</div>
+				<div style=\"display:inline-block;padding:4px 12px;background:#fef3c7;color:#92400e;font-size:12px;font-weight:700;border-radius:9999px;border:1px solid #fde68a;margin-top:10px;\">
+					Destination: {$bank_name} &bull; {$bank_acc}{$acc_line}
+				</div>
+				<p style=\"margin:12px 0 0;font-size:12px;color:#71717a;\">
+					Our finance team is reviewing your request.
+				</p>";
+			$footer_note = "You will receive an email confirmation once the transfer is completed.";
+		} elseif ( 'creator_commission_recorded' === $event ) {
+			$order_label = ! empty( $order_number ) ? "Order #{$order_number}" : "Referral Sale";
+			$card_content = "
+				<p style=\"margin:0 0 6px;font-size:11px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:1px;\">Pending Commission</p>
+				<div style=\"margin:6px 0;\">
+					<span class=\"balance-text\" style=\"font-size:34px;font-weight:800;letter-spacing:-0.5px;color:#f3aa18;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif;\">{$commission_amount}</span>
+				</div>
+				<div style=\"display:inline-block;padding:4px 12px;background:#fef3c7;color:#92400e;font-size:12px;font-weight:700;border-radius:9999px;border:1px solid #fde68a;margin-top:10px;\">
+					{$order_label} &bull; Pending Grace Period
+				</div>
+				<p style=\"margin:12px 0 0;font-size:12px;color:#71717a;\">
+					Matures into withdrawable balance 7 days after delivery
+				</p>";
+			$footer_note = "Track real-time visits, clicks, and conversion rates directly in your workstation.";
+		} else {
+			// creator_commission_available
+			$order_label = ! empty( $order_number ) ? "Order #{$order_number}" : "Commission";
+			$unpaid_line = ! empty( $unpaid_balance ) ? "<p style=\"margin:12px 0 0;font-size:12px;color:#71717a;\">Current Withdrawable Balance: <strong style=\"color:#18181b;\">{$unpaid_balance}</strong></p>" : "";
+			$card_content = "
+				<p style=\"margin:0 0 6px;font-size:11px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:1px;\">Withdrawable Commission</p>
+				<div style=\"margin:6px 0;\">
+					<span class=\"balance-text\" style=\"font-size:34px;font-weight:800;letter-spacing:-0.5px;color:#10b981;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif;\">{$commission_amount}</span>
+				</div>
+				<div style=\"display:inline-block;padding:4px 12px;background:#ecfdf5;color:#047857;font-size:12px;font-weight:700;border-radius:9999px;border:1px solid #a7f3d0;margin-top:10px;\">
+					{$order_label} &bull; Cleared Grace Period
+				</div>
+				{$unpaid_line}";
+			$footer_note = "Payouts can be requested anytime once your balance reaches the minimum threshold of Rp 250.000.";
+		}
+
+		$brand_logo = self::get_brand_logo_html();
+
+		$html = "<!doctype html>
+<html lang=\"en\" xmlns:v=\"urn:schemas-microsoft-com:vml\" xmlns:o=\"urn:schemas-microsoft-com:office:office\">
+<head>
+  <meta charset=\"utf-8\">
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+  <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">
+  <title>" . esc_html( $subject ) . "</title>
+  <style>
+    body { margin:0; padding:0; width:100% !important; background-color:#f8f8fa; font-family:'Neue Haas Display','Neue Haas Grotesk Text Pro',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
+    table { border-collapse:collapse; }
+    img { border:0; outline:none; text-decoration:none; display:block; }
+    @media only screen and (max-width:620px) {
+      .container-table { width:100% !important; border-radius:0 !important; border-left:none !important; border-right:none !important; }
+      .mobile-padding { padding:24px 20px !important; }
+      .balance-text { font-size:28px !important; }
+    }
+  </style>
+</head>
+<body style=\"margin:0;padding:40px 10px;background-color:#f8f8fa;\">
+  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">
+    <tr>
+      <td align=\"center\">
+        <table class=\"container-table\" width=\"580\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:580px;background:#ffffff;border:1px solid #eaeaea;border-radius:18px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.03);\">
+          <tbody>
+            <!-- Header -->
+            <tr>
+              <td style=\"padding:28px 36px 20px;border-bottom:1px solid #f0f0f2;\" class=\"mobile-padding\">
+                <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">
+                  <tr>
+                    <td valign=\"middle\">
+                      {$brand_logo}
+                    </td>
+                    <td align=\"right\" valign=\"middle\">
+                      <span style=\"display:inline-block;padding:5px 12px;background:#f4f4f5;color:#18181b;font-size:11px;font-weight:600;border-radius:9999px;border:1px solid #e4e4e7;\">{$badge_text}</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Main Content -->
+            <tr>
+              <td style=\"padding:36px 36px 28px;\" class=\"mobile-padding\">
+                <h1 style=\"margin:0 0 16px;font-size:24px;font-weight:600;color:#111111;letter-spacing:-0.4px;line-height:1.3;\">{$title}</h1>
+                <p style=\"margin:0 0 12px;font-size:15px;font-weight:500;color:#18181b;\">Hi {$creator_name},</p>
+                <p style=\"margin:0 0 14px;font-size:14px;line-height:1.7;color:#3f3f46;\">{$body_primary}</p>
+                <p style=\"margin:0 0 24px;font-size:14px;line-height:1.7;color:#52525b;\">{$body_secondary}</p>
+
+                <!-- Metric Card -->
+                <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#fafafa;border:1px solid #e4e4e7;border-radius:14px;overflow:hidden;margin-bottom:28px;\">
+                  <tr>
+                    <td align=\"center\" style=\"padding:26px 20px;\">
+                      {$card_content}
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- Action Button -->
+                <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">
+                  <tr>
+                    <td align=\"center\" style=\"padding:6px 0 12px;\">
+                      <a href=\"{$dashboard_url}\" target=\"_blank\" style=\"display:inline-block;padding:15px 36px;font-size:14px;font-weight:600;color:#ffffff;background:#111111;border-radius:12px;text-decoration:none;letter-spacing:0.2px;\">
+                        {$cta_text} &rarr;
+                      </a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td align=\"center\" style=\"padding-top:8px;\">
+                      <span style=\"font-size:12px;color:#71717a;\">{$footer_note}</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style=\"padding:24px 36px 28px;background:#fcfcfd;border-top:1px solid #f0f0f2;text-align:center;\" class=\"mobile-padding\">
+                <p style=\"margin:0 0 8px;font-size:12px;line-height:1.65;color:#71717a;\">
+                  Questions regarding your commissions or payout? Reach our partnership team at <a href=\"mailto:creators@exacoat.com\" style=\"color:#111111;text-decoration:underline;font-weight:500;\">creators@exacoat.com</a>
+                </p>
+                <p style=\"margin:0;font-size:11px;color:#a1a1aa;letter-spacing:0.2px;\">
+                  &copy; Exacoat Creator Program
                 </p>
               </td>
             </tr>

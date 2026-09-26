@@ -7125,6 +7125,7 @@ export async function fetchAffiliatePortalData(affiliateId?: number): Promise<{
 }
 
 export async function updateAffiliateSettings(payload: {
+  affiliate_id?: number;
   bank_name?: 'BCA' | 'MANDIRI';
   bank_account_number?: string;
   bank_account_name?: string;
@@ -7135,6 +7136,11 @@ export async function updateAffiliateSettings(payload: {
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat/v1/affiliate/settings`;
 
+  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const affIdFromUrl = urlParams ? urlParams.get('affiliate_id') : null;
+  const resolvedAffId = payload.affiliate_id || (affIdFromUrl ? parseInt(affIdFromUrl, 10) : undefined);
+  const finalPayload = resolvedAffId ? { ...payload, affiliate_id: resolvedAffId } : payload;
+
   try {
     const res = await authenticatedFetch(url, {
       method: 'POST',
@@ -7142,7 +7148,7 @@ export async function updateAffiliateSettings(payload: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(finalPayload),
     });
 
     const data = await res.json();
@@ -7165,8 +7171,12 @@ export async function requestAffiliatePayout(affiliateId?: number): Promise<{
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat/v1/affiliate/payout-request`;
 
+  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const affIdFromUrl = urlParams ? urlParams.get('affiliate_id') : null;
+  const targetId = affiliateId || (affIdFromUrl ? parseInt(affIdFromUrl, 10) : undefined);
+
   try {
-    const payload = affiliateId ? { affiliate_id: affiliateId } : {};
+    const payload = targetId ? { affiliate_id: targetId } : {};
     const res = await authenticatedFetch(url, {
       method: 'POST',
       headers: {

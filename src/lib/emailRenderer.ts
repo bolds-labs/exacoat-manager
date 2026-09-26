@@ -20,6 +20,8 @@ export function renderEmailHtmlLocally(event: string, customData: Record<string,
     return renderReviewRewardEmail(customData);
   } else if (event === 'customer_cashback_earned' || event === 'customer_store_credit_reminder' || event === 'customer_store_credit_pre_expiry') {
     return renderStoreCreditEmail(event, customData);
+  } else if (event.startsWith('creator_') || event.startsWith('affiliate_')) {
+    return renderCreatorEmail(event, customData);
   } else if (event.startsWith('customer_cart_abandoned_')) {
     return renderAbandonedCartEmail(event, customData);
   } else if (event.startsWith('customer_order_')) {
@@ -952,6 +954,203 @@ function renderStoreCreditEmail(event: string, data: Record<string, any>): Rende
                     </td>
                   </tr>
                 </table>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return { subject, html, isLightMode: true };
+}
+
+function renderCreatorEmail(event: string, data: Record<string, any>): RenderedEmail {
+  const creatorName = escapeHtml(data.creator_name || data.display_name || data.customer_first_name || 'Creator');
+  const commissionAmount = escapeHtml(data.commission_amount || 'Rp 74.500');
+  const payoutAmount = escapeHtml(data.payout_amount || 'Rp 500.000');
+  const orderNumber = escapeHtml(data.order_number || '14890');
+  const unpaidBalance = escapeHtml(data.unpaid_balance || 'Rp 324.500');
+  const bankName = escapeHtml(data.bank_name || 'BCA');
+  const bankAcc = escapeHtml(data.bank_account_number || '8830192831');
+  const bankAccName = escapeHtml(data.bank_account_name || '');
+  const ref = escapeHtml(data.transfer_reference || '');
+  const dashboardUrl = escapeHtml(data.dashboard_url || 'https://exacoat.com/?portal=affiliate');
+
+  let subject = '';
+  let badgeText = '';
+  let title = '';
+  let bodyPrimary = '';
+  let bodySecondary = '';
+  let cardContent = '';
+  let ctaText = '';
+  let footerNote = '';
+
+  if (event === 'creator_payout_transferred') {
+    subject = `Payout Transferred: ${payoutAmount} sent to your bank account`;
+    badgeText = 'Payout Sent';
+    title = 'Your payout is on the way';
+    bodyPrimary = `We have processed your payout request of ${payoutAmount} and transferred the funds to your ${bankName} account.`;
+    bodySecondary = `Account Number: ${bankAcc}`;
+    ctaText = 'View Payout History';
+    const refHtml = ref ? `<p style="margin:12px 0 0;font-size:12px;color:#71717a;">Reference: <strong style="color:#18181b;">${ref}</strong></p>` : '';
+    cardContent = `
+      <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:1px;">Transferred Payout</p>
+      <div style="margin:6px 0;">
+        <span class="balance-text" style="font-size:34px;font-weight:800;letter-spacing:-0.5px;color:#111111;">${payoutAmount}</span>
+      </div>
+      <div style="display:inline-block;padding:4px 12px;background:#ecfdf5;color:#047857;font-size:12px;font-weight:700;border-radius:9999px;border:1px solid #a7f3d0;margin-top:10px;">
+        Transferred to ${bankName} &bull; ${bankAcc}
+      </div>
+      ${refHtml}
+    `;
+    footerNote = 'Bank transfers typically reflect within 1-2 business days depending on interbank clearing.';
+  } else if (event === 'creator_payout_requested') {
+    subject = `Payout Request Received: ${payoutAmount}`;
+    badgeText = 'Payout Requested';
+    title = 'Payout request received';
+    bodyPrimary = `We received your payout request for ${payoutAmount} to your ${bankName} account (${bankAcc}). Our finance team processes payouts on a regular schedule and you will receive a confirmation once transferred.`;
+    bodySecondary = bankAccName ? `Account Holder: ${bankAccName}` : '';
+    ctaText = 'View Creator Workstation';
+    cardContent = `
+      <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:1px;">Requested Payout</p>
+      <div style="margin:6px 0;">
+        <span class="balance-text" style="font-size:34px;font-weight:800;letter-spacing:-0.5px;color:#111111;">${payoutAmount}</span>
+      </div>
+      <div style="display:inline-block;padding:4px 12px;background:#fef3c7;color:#92400e;font-size:12px;font-weight:700;border-radius:9999px;border:1px solid #fde68a;margin-top:10px;">
+        Destination: ${bankName} &bull; ${bankAcc}
+      </div>
+      <p style="margin:12px 0 0;font-size:12px;color:#71717a;">
+        Our finance team is reviewing your request.
+      </p>
+    `;
+    footerNote = 'You will receive an email confirmation once the transfer is completed.';
+  } else if (event === 'creator_commission_recorded') {
+    subject = `New Referral Sale Recorded: Order #${orderNumber}`;
+    badgeText = 'Referral Sale';
+    title = 'New commission earned';
+    bodyPrimary = `A customer just completed an order (#${orderNumber}) using your referral link or coupon.`;
+    bodySecondary = `Your commission of ${commissionAmount} has been recorded and will mature into your withdrawable balance 7 days after the order is delivered.`;
+    ctaText = 'View Creator Workstation';
+    cardContent = `
+      <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:1px;">Pending Commission</p>
+      <div style="margin:6px 0;">
+        <span class="balance-text" style="font-size:34px;font-weight:800;letter-spacing:-0.5px;color:#f3aa18;">${commissionAmount}</span>
+      </div>
+      <div style="display:inline-block;padding:4px 12px;background:#fef3c7;color:#92400e;font-size:12px;font-weight:700;border-radius:9999px;border:1px solid #fde68a;margin-top:10px;">
+        Order #${orderNumber} &bull; Pending Grace Period
+      </div>
+      <p style="margin:12px 0 0;font-size:12px;color:#71717a;">
+        Matures into withdrawable balance 7 days after delivery
+      </p>
+    `;
+    footerNote = 'Track real-time visits, clicks, and conversion rates directly in your workstation.';
+  } else {
+    // creator_commission_available
+    subject = `Commission Available: ${commissionAmount} from Order #${orderNumber}`;
+    badgeText = 'Commission Available';
+    title = 'Commission ready to withdraw';
+    bodyPrimary = `Order #${orderNumber} has cleared the 7-day post-delivery grace period. Your commission of ${commissionAmount} is now unlocked and available in your withdrawable balance.`;
+    bodySecondary = 'You can request a payout anytime to your configured BCA or Bank Mandiri account once your balance meets the minimum threshold of Rp 250.000.';
+    ctaText = 'Go to Creator Workstation';
+    const unpaidLine = unpaidBalance ? `<p style="margin:12px 0 0;font-size:12px;color:#71717a;">Current Withdrawable Balance: <strong style="color:#18181b;">${unpaidBalance}</strong></p>` : '';
+    cardContent = `
+      <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:1px;">Withdrawable Commission</p>
+      <div style="margin:6px 0;">
+        <span class="balance-text" style="font-size:34px;font-weight:800;letter-spacing:-0.5px;color:#10b981;">${commissionAmount}</span>
+      </div>
+      <div style="display:inline-block;padding:4px 12px;background:#ecfdf5;color:#047857;font-size:12px;font-weight:700;border-radius:9999px;border:1px solid #a7f3d0;margin-top:10px;">
+        Order #${orderNumber} &bull; Cleared Grace Period
+      </div>
+      ${unpaidLine}
+    `;
+    footerNote = 'Payouts can be requested anytime once your balance reaches the minimum threshold of Rp 250.000.';
+  }
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+    body {
+      margin: 0; padding: 0; width: 100% !important; background-color: #f7f7f7;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+    table { border-collapse: collapse; }
+    img { border: 0; display: block; }
+    @media only screen and (max-width: 620px) {
+      .container-table { width: 100% !important; border-radius: 0 !important; }
+      .mobile-padding { padding-left: 24px !important; padding-right: 24px !important; }
+      .balance-text { font-size: 28px !important; }
+    }
+  </style>
+</head>
+<body bgcolor="#f7f7f7" style="margin:0;padding:0;background-color:#f7f7f7;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="padding:44px 16px;">
+    <tr>
+      <td align="center">
+        <table class="container-table" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:24px;border:1px solid #eaeaea;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,0.04);">
+          <tbody>
+            <tr>
+              <td style="padding:32px 36px 20px;border-bottom:1px solid #f0f0f2;" class="mobile-padding">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td valign="middle">
+                      ${BRAND_LOGO_HTML}
+                    </td>
+                    <td align="right" valign="middle">
+                      <span style="display:inline-block;padding:5px 12px;background:#f4f4f5;color:#18181b;font-size:11px;font-weight:600;border-radius:9999px;border:1px solid #e4e4e7;">${badgeText}</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:36px 36px 28px;" class="mobile-padding">
+                <h1 style="margin:0 0 16px;font-size:24px;font-weight:600;color:#111111;letter-spacing:-0.4px;line-height:1.3;">${title}</h1>
+                <p style="margin:0 0 12px;font-size:15px;font-weight:500;color:#18181b;">Hi ${creatorName},</p>
+                <p style="margin:0 0 14px;font-size:14px;line-height:1.7;color:#3f3f46;">${bodyPrimary}</p>
+                <p style="margin:0 0 24px;font-size:14px;line-height:1.7;color:#52525b;">${bodySecondary}</p>
+
+                <table width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #e4e4e7;border-radius:14px;overflow:hidden;margin-bottom:28px;">
+                  <tr>
+                    <td align="center" style="padding:26px 20px;">
+                      ${cardContent}
+                    </td>
+                  </tr>
+                </table>
+
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td align="center" style="padding:6px 0 12px;">
+                      <a href="${dashboardUrl}" target="_blank" style="display:inline-block;padding:15px 36px;font-size:14px;font-weight:600;color:#ffffff;background:#111111;border-radius:12px;text-decoration:none;letter-spacing:0.2px;">
+                        ${ctaText} &rarr;
+                      </a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td align="center" style="padding-top:8px;">
+                      <span style="font-size:12px;color:#71717a;">${footerNote}</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:24px 36px 28px;background:#fcfcfd;border-top:1px solid #f0f0f2;text-align:center;" class="mobile-padding">
+                <p style="margin:0 0 8px;font-size:12px;line-height:1.65;color:#71717a;">
+                  Questions regarding your commissions or payout? Reach our partnership team at <a href="mailto:creators@exacoat.com" style="color:#111111;text-decoration:underline;font-weight:500;">creators@exacoat.com</a>
+                </p>
+                <p style="margin:0;font-size:11px;color:#a1a1aa;letter-spacing:0.2px;">
+                  &copy; Exacoat Creator Program
+                </p>
               </td>
             </tr>
           </tbody>

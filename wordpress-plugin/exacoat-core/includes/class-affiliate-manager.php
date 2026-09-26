@@ -2108,12 +2108,39 @@ class Exacoat_Affiliate_Manager {
 			return new WP_Error( 'unauthorized', 'Authentication required.', [ 'status' => 401 ] );
 		}
 
-		$affiliate = self::get_affiliate_by_user_id( $user_id );
+		$params = $request->get_json_params() ?: $request->get_params();
+		$param_aff_id = (int) ( $params['affiliate_id'] ?? $request->get_param( 'affiliate_id' ) ?? 0 );
+
+		$affiliate = null;
+		$is_admin = current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' );
+
+		if ( $param_aff_id > 0 ) {
+			$candidate = self::get_affiliate_by_id( $param_aff_id );
+			if ( $candidate && ( $is_admin || (int) $candidate->user_id === $user_id ) ) {
+				$affiliate = $candidate;
+			}
+		}
+
+		if ( ! $affiliate ) {
+			$affiliate = self::get_affiliate_by_user_id( $user_id );
+		}
+
+		// Fallback lookup by user email if affiliate user_id is null or mismatched
+		if ( ! $affiliate ) {
+			$current_user = get_userdata( $user_id );
+			if ( $current_user && ! empty( $current_user->user_email ) ) {
+				global $wpdb;
+				$tbl = $wpdb->prefix . 'exacoat_affiliates';
+				$affiliate = $wpdb->get_row(
+					$wpdb->prepare( "SELECT * FROM {$tbl} WHERE email = %s LIMIT 1", $current_user->user_email )
+				);
+			}
+		}
+
 		if ( ! $affiliate ) {
 			return new WP_Error( 'not_found', 'Affiliate profile not found.', [ 'status' => 404 ] );
 		}
 
-		$params = $request->get_json_params() ?: $request->get_params();
 		global $wpdb;
 		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
 
@@ -2153,7 +2180,7 @@ class Exacoat_Affiliate_Manager {
 			$formats[] = '%s';
 		}
 
-		if ( ! empty( $params['slug'] ) && ! $affiliate->slug_locked ) {
+		if ( ! empty( $params['slug'] ) && ( ! $affiliate->slug_locked || $is_admin ) ) {
 			$new_slug = sanitize_title( trim( $params['slug'] ) );
 			if ( strlen( $new_slug ) < 3 ) {
 				return new WP_Error( 'invalid_slug', 'Referral URL slug must be at least 3 characters.', [ 'status' => 400 ] );
@@ -2226,12 +2253,28 @@ class Exacoat_Affiliate_Manager {
 		self::process_matured_commissions();
 
 		$affiliate = null;
-		$param_affiliate_id = (int) $request->get_param( 'affiliate_id' );
-		if ( $param_affiliate_id > 0 && ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) ) {
-			$affiliate = self::get_affiliate_by_id( $param_affiliate_id );
+		$params = $request->get_json_params() ?: $request->get_params();
+		$param_affiliate_id = (int) ( $params['affiliate_id'] ?? $request->get_param( 'affiliate_id' ) ?? 0 );
+		$is_admin = current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' );
+
+		if ( $param_affiliate_id > 0 ) {
+			$candidate = self::get_affiliate_by_id( $param_affiliate_id );
+			if ( $candidate && ( $is_admin || (int) $candidate->user_id === $user_id ) ) {
+				$affiliate = $candidate;
+			}
 		}
 		if ( ! $affiliate ) {
 			$affiliate = self::get_affiliate_by_user_id( $user_id );
+		}
+		if ( ! $affiliate ) {
+			$current_user = get_userdata( $user_id );
+			if ( $current_user && ! empty( $current_user->user_email ) ) {
+				global $wpdb;
+				$tbl = $wpdb->prefix . 'exacoat_affiliates';
+				$affiliate = $wpdb->get_row(
+					$wpdb->prepare( "SELECT * FROM {$tbl} WHERE email = %s LIMIT 1", $current_user->user_email )
+				);
+			}
 		}
 
 		if ( ! $affiliate || 'active' !== $affiliate->status ) {
@@ -2778,29 +2821,41 @@ class Exacoat_Affiliate_Manager {
 			return;
 		}
 
-		$formatted_amount = 'Rp ' . number_format( $amount, 0, ',', '.' );
-		$order_num        = $order->get_order_number();
+		$formatted_amount   = 'Rp ' . number_format( $amount, 0, ',', '.' );
+		$order_num          = $order->get_order_number();
+		$site_url           = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'https://exacoat.com';
+		$portal_url         = trailingslashit( $site_url ) . '?portal=affiliate';
+		$unpaid_balance_fmt = 'Rp ' . number_format( (float) $affiliate->unpaid_balance, 0, ',', '.' );
+		$creator_name       = self::get_creator_display_name( $affiliate );
 
 		if ( 'confirmed' === $type ) {
-			$subject = "Commission Cleared: {$formatted_amount} from Order #{$order_num}";
-			$body    = "<p>Hi {$user->first_name},</p><p>Order #{$order_num} has successfully cleared the 7-day post-delivery grace period. Your 20% commission of <strong>{$formatted_amount}</strong> is now available in your withdrawable balance.</p>";
+			$event = 'creator_commission_available';
+			$data  = [
+				'creator_name'      => $creator_name,
+				'commission_amount' => $formatted_amount,
+				'order_number'      => $order_num,
+				'unpaid_balance'    => $unpaid_balance_fmt,
+				'dashboard_url'     => $portal_url,
+			];
 		} elseif ( 'recorded' === $type ) {
-			$subject = "New Referral Sale Recorded: Order #{$order_num}";
-			$body    = "<p>Hi {$user->first_name},</p><p>A customer just placed order #{$order_num} using your referral link. A commission of <strong>{$formatted_amount}</strong> is pending delivery and will mature to your balance after the 7-day post-delivery grace period.</p>";
+			$event = 'creator_commission_recorded';
+			$data  = [
+				'creator_name'      => $creator_name,
+				'commission_amount' => $formatted_amount,
+				'order_number'      => $order_num,
+				'unpaid_balance'    => $unpaid_balance_fmt,
+				'dashboard_url'     => $portal_url,
+			];
 		} else {
-			$subject = "Commission Update: Order #{$order_num} Refunded";
-			$body    = "<p>Hi {$user->first_name},</p><p>Order #{$order_num} was refunded or cancelled. The associated commission of {$formatted_amount} has been cancelled accordingly.</p>";
+			return;
 		}
 
 		if ( class_exists( 'Exacoat_Email_Engine' ) ) {
 			Exacoat_Email_Engine::send_email(
-				'customer_order_refunded',
+				$event,
 				$user->user_email,
-				$user->first_name,
-				[
-					'subject'      => $subject,
-					'body_primary' => $body,
-				]
+				$creator_name,
+				$data
 			);
 		}
 	}
@@ -2809,26 +2864,38 @@ class Exacoat_Affiliate_Manager {
 	 * Transactional email dispatcher for payout notifications.
 	 */
 	private static function dispatch_payout_email( string $type, string $email, string $first_name, float $amount, string $bank, string $acc, string $ref = '' ): void {
-		$formatted = 'Rp ' . number_format( $amount, 0, ',', '.' );
+		$formatted  = 'Rp ' . number_format( $amount, 0, ',', '.' );
+		$site_url   = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'https://exacoat.com';
+		$portal_url = trailingslashit( $site_url ) . '?portal=affiliate';
 
 		if ( 'requested' === $type ) {
-			$subject = "Payout Request Received: {$formatted}";
-			$body    = "<p>Hi {$first_name},</p><p>We received your payout request for <strong>{$formatted}</strong> to your {$bank} account ({$acc}). Our finance team processes payouts on a regular schedule and you will receive a confirmation once transferred.</p>";
+			$event = 'creator_payout_requested';
+			$data  = [
+				'creator_name'        => $first_name,
+				'payout_amount'       => $formatted,
+				'bank_name'           => $bank,
+				'bank_account_number' => $acc,
+				'transfer_reference'  => $ref,
+				'dashboard_url'       => $portal_url,
+			];
 		} else {
-			$subject = "Payout Sent: {$formatted} has been transferred";
-			$ref_str = ! empty( $ref ) ? "<p>Bank Transfer Reference: <strong>{$ref}</strong></p>" : '';
-			$body    = "<p>Hi {$first_name},</p><p>Your payout of <strong>{$formatted}</strong> has been transferred to your {$bank} account ({$acc}).</p>{$ref_str}";
+			$event = 'creator_payout_transferred';
+			$data  = [
+				'creator_name'        => $first_name,
+				'payout_amount'       => $formatted,
+				'bank_name'           => $bank,
+				'bank_account_number' => $acc,
+				'transfer_reference'  => $ref,
+				'dashboard_url'       => $portal_url,
+			];
 		}
 
 		if ( class_exists( 'Exacoat_Email_Engine' ) ) {
 			Exacoat_Email_Engine::send_email(
-				'customer_order_completed',
+				$event,
 				$email,
 				$first_name,
-				[
-					'subject'      => $subject,
-					'body_primary' => $body,
-				]
+				$data
 			);
 		}
 	}

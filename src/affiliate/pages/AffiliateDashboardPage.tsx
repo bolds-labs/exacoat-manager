@@ -525,19 +525,9 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-white/[0.06] space-y-2">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-zinc-400 font-sans">Payout Target: Rp 250k</span>
-              <span className="font-mono text-zinc-300 font-semibold">{payoutProgressPercent}%</span>
-            </div>
-            <div className="w-full h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-emerald-500 to-[#f3aa18] transition-all duration-500 rounded-full"
-                style={{ width: `${payoutProgressPercent}%` }}
-              />
-            </div>
+          <div className="mt-4 pt-3 border-t border-white/[0.06]">
             {hasPendingPayout ? (
-              <div className="w-full mt-2 py-1.5 px-2.5 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-400 text-[11px] font-semibold flex items-center justify-between">
+              <div className="w-full py-2.5 px-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs font-semibold flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5" />
                   <span>Request Under Review</span>
@@ -545,38 +535,40 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
                 <button
                   type="button"
                   onClick={() => onNavigateTab('payouts')}
-                  className="text-[10px] text-amber-300 hover:text-white underline cursor-pointer"
+                  className="text-[11px] text-amber-300 hover:text-white underline cursor-pointer"
                 >
                   View
                 </button>
               </div>
-            ) : canRequestPayout ? (
+            ) : !hasValidBank ? (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('settings')}
+                className="w-full py-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-2"
+                title="Configure BCA or Mandiri account in settings"
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                <span>Add Bank Info to Withdraw</span>
+              </button>
+            ) : unpaidBalance < minPayout ? (
+              <button
+                type="button"
+                disabled
+                className="w-full py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-zinc-500 text-xs font-semibold flex items-center justify-center gap-2 cursor-not-allowed"
+                title="Minimum payout threshold is Rp 250.000"
+              >
+                <Wallet className="w-4 h-4 text-zinc-600" />
+                <span>Request Payout (Min. Rp 250k)</span>
+              </button>
+            ) : (
               <button
                 type="button"
                 onClick={() => setShowPayoutModal(true)}
-                className="w-full mt-1.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/10 cursor-pointer flex items-center justify-center gap-1.5"
+                className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/15 cursor-pointer flex items-center justify-center gap-2"
               >
-                <Wallet className="w-3.5 h-3.5 text-zinc-950" />
+                <Wallet className="w-4 h-4 text-zinc-950" />
                 <span>Request Payout</span>
               </button>
-            ) : unpaidBalance >= minPayout && !hasValidBank ? (
-              <div className="space-y-1 mt-1.5">
-                <button
-                  type="button"
-                  onClick={() => onNavigateTab('settings')}
-                  className="w-full py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-[11px] font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <Sliders className="w-3 h-3" />
-                  <span>Add Bank Info to Withdraw</span>
-                </button>
-                <p className="text-[10px] text-amber-400/80 text-center">
-                  BCA or Mandiri details required
-                </p>
-              </div>
-            ) : (
-              <p className="text-[10px] text-zinc-400">
-                {formatIDR(minPayout - unpaidBalance)} remaining to withdraw (min. Rp 250k)
-              </p>
             )}
           </div>
         </GlassCard>

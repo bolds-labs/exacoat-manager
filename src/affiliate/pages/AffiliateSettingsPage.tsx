@@ -55,6 +55,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
     setIsSavingDiscount(true);
     try {
       const res = await updateAffiliateSettings({
+        affiliate_id: profile.id,
         discount_rate: discountRate,
       });
       if (res.success) {
@@ -84,6 +85,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
     setIsSavingDisplayName(true);
     try {
       const res = await updateAffiliateSettings({
+        affiliate_id: profile.id,
         display_name: displayName.trim(),
       });
 
@@ -118,6 +120,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
     setIsSavingBank(true);
     try {
       const res = await updateAffiliateSettings({
+        affiliate_id: profile.id,
         bank_name: bankName as 'BCA' | 'MANDIRI',
         bank_account_number: accountNumber.trim(),
         bank_account_name: accountName.trim(),
@@ -154,6 +157,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
     setIsSavingSlug(true);
     try {
       const res = await updateAffiliateSettings({
+        affiliate_id: profile.id,
         slug: sanitized,
       });
 

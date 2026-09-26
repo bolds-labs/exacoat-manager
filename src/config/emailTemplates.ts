@@ -343,6 +343,82 @@ export const EMAIL_TEMPLATES_CATALOG: { category: string; items: EmailTemplateIt
         }
       }
     ]
+  },
+  {
+    category: '🤝 Affiliate & Creator Program',
+    items: [
+      {
+        key: 'creator_commission_available',
+        name: 'Commission Available to Withdraw',
+        category: '🤝 Affiliate & Creator Program',
+        badge: 'Commission Available',
+        badgeVariant: 'lime',
+        subject: 'Commission Available: {commission_amount} from Order #{order_number}',
+        trigger: 'Dispatched when an order commission clears the 7-day post-delivery grace period and becomes withdrawable.',
+        payload: '{ "event": "creator_commission_available", "recipient_email": "creator@example.com", "creator_name": "Dimas", "commission_amount": "Rp 74.500", "order_number": "14890", "unpaid_balance": "Rp 324.500" }',
+        defaults: {
+          creator_name: 'Dimas Sampurno',
+          commission_amount: 'Rp 74.500',
+          order_number: '14890',
+          unpaid_balance: 'Rp 324.500',
+          dashboard_url: 'https://exacoat.com/?portal=affiliate',
+        },
+      },
+      {
+        key: 'creator_commission_recorded',
+        name: 'New Referral Sale Recorded',
+        category: '🤝 Affiliate & Creator Program',
+        badge: 'Referral Sale',
+        badgeVariant: 'amber',
+        subject: 'New Referral Sale Recorded: Order #{order_number}',
+        trigger: 'Dispatched immediately when a customer completes an order using the creator referral link or coupon.',
+        payload: '{ "event": "creator_commission_recorded", "recipient_email": "creator@example.com", "creator_name": "Dimas", "commission_amount": "Rp 74.500", "order_number": "14890" }',
+        defaults: {
+          creator_name: 'Dimas Sampurno',
+          commission_amount: 'Rp 74.500',
+          order_number: '14890',
+          unpaid_balance: 'Rp 250.000',
+          dashboard_url: 'https://exacoat.com/?portal=affiliate',
+        },
+      },
+      {
+        key: 'creator_payout_requested',
+        name: 'Creator Payout Request Received',
+        category: '🤝 Affiliate & Creator Program',
+        badge: 'Payout Requested',
+        badgeVariant: 'amber',
+        subject: 'Payout Request Received: {payout_amount}',
+        trigger: 'Dispatched to creator when a payout withdrawal request is submitted and queued for finance processing.',
+        payload: '{ "event": "creator_payout_requested", "recipient_email": "creator@example.com", "creator_name": "Dimas", "payout_amount": "Rp 500.000", "bank_name": "BCA", "bank_account_number": "8830192831" }',
+        defaults: {
+          creator_name: 'Dimas Sampurno',
+          payout_amount: 'Rp 500.000',
+          bank_name: 'BCA',
+          bank_account_number: '8830192831',
+          bank_account_name: 'Dimas Sampurno',
+          dashboard_url: 'https://exacoat.com/?portal=affiliate',
+        },
+      },
+      {
+        key: 'creator_payout_transferred',
+        name: 'Creator Payout Transferred',
+        category: '🤝 Affiliate & Creator Program',
+        badge: 'Payout Sent',
+        badgeVariant: 'lime',
+        subject: 'Payout Transferred: {payout_amount} sent to your bank account',
+        trigger: 'Dispatched when a creator payout request is approved and funds are transferred via BCA or Mandiri.',
+        payload: '{ "event": "creator_payout_transferred", "recipient_email": "creator@example.com", "creator_name": "Dimas", "payout_amount": "Rp 500.000", "bank_name": "BCA", "bank_account_number": "8830192831", "transfer_reference": "TRX-BCA-8921" }',
+        defaults: {
+          creator_name: 'Dimas Sampurno',
+          payout_amount: 'Rp 500.000',
+          bank_name: 'BCA',
+          bank_account_number: '8830192831',
+          bank_account_name: 'Dimas Sampurno',
+          transfer_reference: 'TRX-BCA-8921',
+          dashboard_url: 'https://exacoat.com/?portal=affiliate',
+        },
+      },
+    ],
   }
 ];
 
