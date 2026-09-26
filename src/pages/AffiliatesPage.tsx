@@ -65,6 +65,8 @@ import { GlassCard } from '../components/ui/GlassCard';
 import { PageHeroHeader } from '../components/ui/PageHeroHeader';
 import { Button } from '../components/ui/Button';
 import { clsx } from 'clsx';
+import { createPortal } from 'react-dom';
+import { lockBodyScroll } from '../lib/bodyScrollLock';
 
 const AFFILIATE_STATUS_OPTIONS: FilterSelectOption[] = [
   { value: 'all', label: 'All Statuses' },
@@ -188,16 +190,37 @@ export const AffiliatesPage: React.FC = () => {
   const [isLoadingCreatorPreview, setIsLoadingCreatorPreview] = useState(false);
   const [creatorPreviewError, setCreatorPreviewError] = useState<string | null>(null);
 
-  // Keyboard accessibility: Close preview on Escape key (antislop R-32)
+  // Modal open tracker and scroll locking
+  const isAnyModalOpen = Boolean(
+    rejectingApp ||
+    payingPayout ||
+    selectedAffiliateForCoupon ||
+    isAddManualCommissionOpen ||
+    editingCommission ||
+    previewCreatorAffiliate
+  );
+
+  useEffect(() => {
+    if (!isAnyModalOpen) return;
+    const unlock = lockBodyScroll();
+    return () => unlock();
+  }, [isAnyModalOpen]);
+
+  // Keyboard accessibility: Close active modal on Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && previewCreatorAffiliate) {
-        setPreviewCreatorAffiliate(null);
+      if (e.key === 'Escape') {
+        if (previewCreatorAffiliate) setPreviewCreatorAffiliate(null);
+        else if (selectedAffiliateForCoupon) setSelectedAffiliateForCoupon(null);
+        else if (rejectingApp) setRejectingApp(null);
+        else if (payingPayout) setPayingPayout(null);
+        else if (isAddManualCommissionOpen) setIsAddManualCommissionOpen(false);
+        else if (editingCommission) setEditingCommission(null);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [previewCreatorAffiliate]);
+  }, [previewCreatorAffiliate, selectedAffiliateForCoupon, rejectingApp, payingPayout, isAddManualCommissionOpen, editingCommission]);
 
   const handleSeeAsCreator = async (aff: any) => {
     setPreviewCreatorAffiliate(aff);
@@ -236,7 +259,7 @@ export const AffiliatesPage: React.FC = () => {
   const handleOpenCouponModal = (aff: any) => {
     setSelectedAffiliateForCoupon(aff);
     setCreatorDisplayNameInput(aff.creator_display_name || aff.display_name || '');
-    setDiscountRateInput(aff.discount_rate != null ? String(aff.discount_rate) : '10');
+    setDiscountRateInput(aff.discount_rate != null ? String(aff.discount_rate) : '0');
     setCouponCodeInput(aff.coupon_code || '');
     setCommissionRateInput(aff.commission_rate ? String(aff.commission_rate) : '');
     setShowManualAdj(false);
@@ -1037,13 +1060,23 @@ export const AffiliatesPage: React.FC = () => {
                             <span className="font-mono text-[11px] text-[#f3aa18]">
                               @{aff.slug}
                             </span>
-                            <span 
-                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold" 
-                              title={`Direct Creator Customer Discount: ${aff.discount_rate != null ? aff.discount_rate : 10}% off applied automatically when visitors enter via creator link`}
-                            >
-                              <Percent className="w-3 h-3 text-emerald-400" />
-                              {aff.discount_rate != null ? aff.discount_rate : 10}% Off Link
-                            </span>
+                            {Number(aff.discount_rate) > 0 ? (
+                              <span 
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold" 
+                                title={`Direct Creator Customer Discount: ${aff.discount_rate}% off applied automatically when visitors enter via creator link`}
+                              >
+                                <Percent className="w-3 h-3 text-emerald-400" />
+                                {aff.discount_rate}% Off Link
+                              </span>
+                            ) : (
+                              <span 
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-white/[0.04] text-neutral-400 border border-white/10 font-semibold" 
+                                title="Standard Creator Link (0% Customer Discount, full commission retained by creator)"
+                              >
+                                <Percent className="w-3 h-3 text-neutral-400" />
+                                0% Off Link
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="py-3">
@@ -1921,671 +1954,719 @@ export const AffiliatesPage: React.FC = () => {
       )}
 
       {/* 10. Reject Application Modal */}
-      {rejectingApp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <GlassCard className="max-w-md w-full p-6 space-y-4 border border-white/[0.08] bg-[#141414]">
-            <h3 className="text-base font-semibold text-white">
-              Reject Application for @{rejectingApp.slug}
-            </h3>
-            <p className="text-xs text-neutral-400">
-              Provide optional feedback to the applicant explaining why their channel was not accepted at this time.
-            </p>
-            <textarea
-              rows={3}
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="e.g. Channel does not currently match our gadget accessories focus..."
-              className="w-full bg-[#111111] border border-white/[0.08] rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-rose-500/50"
-            />
-            <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setRejectingApp(null)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="danger"
-                size="sm"
-                disabled={isProcessingAction}
-                onClick={handleConfirmRejectApplicant}
-              >
-                Confirm Rejection
-              </Button>
-            </div>
-          </GlassCard>
-        </div>
+      {rejectingApp && createPortal(
+        <div className="fixed inset-0 z-50">
+          <div
+            className="fixed inset-0 bg-black/85 backdrop-blur-md pointer-events-auto transition-opacity"
+            onClick={() => setRejectingApp(null)}
+            aria-hidden="true"
+          />
+          <div className="fixed inset-0 lg:left-64 z-10 overflow-y-auto flex items-center justify-center p-4 pointer-events-none">
+            <GlassCard className="pointer-events-auto max-w-md w-full p-6 space-y-4 border border-white/[0.08] bg-[#141414] shadow-2xl">
+              <h3 className="text-base font-semibold text-white">
+                Reject Application for @{rejectingApp.slug}
+              </h3>
+              <p className="text-xs text-neutral-400">
+                Provide optional feedback to the applicant explaining why their channel was not accepted at this time.
+              </p>
+              <textarea
+                rows={3}
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="e.g. Channel does not currently match our gadget accessories focus..."
+                className="w-full bg-[#111111] border border-white/[0.08] rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-rose-500/50"
+              />
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRejectingApp(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  disabled={isProcessingAction}
+                  onClick={handleConfirmRejectApplicant}
+                >
+                  Confirm Rejection
+                </Button>
+              </div>
+            </GlassCard>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* 11. Mark Payout Paid Modal */}
-      {payingPayout && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <GlassCard className="max-w-md w-full p-6 space-y-4 border border-white/[0.08] bg-[#141414]">
-            <h3 className="text-base font-semibold text-white">
-              Record Transfer for PAY-{payingPayout.id}
-            </h3>
-            <div className="p-3.5 rounded-xl bg-[#111111] border border-white/[0.06] space-y-1 text-xs">
-              <span className="text-neutral-400">Recipient Account</span>
-              <p className="font-semibold text-white">
-                {payingPayout.bank_name} &bull; {payingPayout.bank_account_number}
-              </p>
-              <p className="text-neutral-400">a.n. {payingPayout.bank_account_name}</p>
-              <p className="text-[#f3aa18] font-mono font-bold pt-1">{formatIDR(payingPayout.amount)}</p>
-            </div>
-            <div className="space-y-1.5 text-xs">
-              <label className="font-medium text-neutral-300">
-                Bank Transfer Reference Number <span className="text-[#f3aa18]">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={transferRef}
-                onChange={(e) => setTransferRef(e.target.value)}
-                placeholder="e.g. BCA-98218902 or Mandiri-MCM-310"
-                className="w-full bg-[#111111] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-xs font-mono text-white focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setPayingPayout(null)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                disabled={isProcessingAction}
-                onClick={handleConfirmPayPayout}
-              >
-                Confirm Paid
-              </Button>
-            </div>
-          </GlassCard>
-        </div>
+      {payingPayout && createPortal(
+        <div className="fixed inset-0 z-50">
+          <div
+            className="fixed inset-0 bg-black/85 backdrop-blur-md pointer-events-auto transition-opacity"
+            onClick={() => setPayingPayout(null)}
+            aria-hidden="true"
+          />
+          <div className="fixed inset-0 lg:left-64 z-10 overflow-y-auto flex items-center justify-center p-4 pointer-events-none">
+            <GlassCard className="pointer-events-auto max-w-md w-full p-6 space-y-4 border border-white/[0.08] bg-[#141414] shadow-2xl">
+              <h3 className="text-base font-semibold text-white">
+                Record Transfer for PAY-{payingPayout.id}
+              </h3>
+              <div className="p-3.5 rounded-xl bg-[#111111] border border-white/[0.06] space-y-1 text-xs">
+                <span className="text-neutral-400">Recipient Account</span>
+                <p className="font-semibold text-white">
+                  {payingPayout.bank_name} &bull; {payingPayout.bank_account_number}
+                </p>
+                <p className="text-neutral-400">a.n. {payingPayout.bank_account_name}</p>
+                <p className="text-[#f3aa18] font-mono font-bold pt-1">{formatIDR(payingPayout.amount)}</p>
+              </div>
+              <div className="space-y-1.5 text-xs">
+                <label className="font-medium text-neutral-300">
+                  Bank Transfer Reference Number <span className="text-[#f3aa18]">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={transferRef}
+                  onChange={(e) => setTransferRef(e.target.value)}
+                  placeholder="e.g. BCA-98218902 or Mandiri-MCM-310"
+                  className="w-full bg-[#111111] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-xs font-mono text-white focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPayingPayout(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  disabled={isProcessingAction}
+                  onClick={handleConfirmPayPayout}
+                >
+                  Confirm Paid
+                </Button>
+              </div>
+            </GlassCard>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal: Edit Affiliate Commission & Settings */}
-      {selectedAffiliateForCoupon && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
-          <GlassCard className="w-full max-w-md bg-[#111111] border border-white/[0.1] rounded-2xl p-6 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
-            <button
-              type="button"
-              onClick={() => setSelectedAffiliateForCoupon(null)}
-              className="absolute top-4 right-4 p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/[0.05] transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
+      {selectedAffiliateForCoupon && createPortal(
+        <div className="fixed inset-0 z-50">
+          <div
+            className="fixed inset-0 bg-black/85 backdrop-blur-md pointer-events-auto transition-opacity"
+            onClick={() => setSelectedAffiliateForCoupon(null)}
+            aria-hidden="true"
+          />
+          <div className="fixed inset-0 lg:left-64 z-10 overflow-y-auto flex items-center justify-center p-4 pointer-events-none">
+            <GlassCard className="pointer-events-auto w-full max-w-md bg-[#111111] border border-white/[0.1] rounded-2xl p-6 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
+              <button
+                type="button"
+                onClick={() => setSelectedAffiliateForCoupon(null)}
+                className="absolute top-4 right-4 p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/[0.05] transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
 
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-                <Sliders className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-semibold text-white">Edit Creator Settings</h3>
-                <p className="text-xs text-neutral-400">
-                  Settings for <span className="text-[#f3aa18] font-mono">@{selectedAffiliateForCoupon.slug}</span> ({creatorDisplayNameInput || selectedAffiliateForCoupon.creator_display_name || selectedAffiliateForCoupon.display_name || selectedAffiliateForCoupon.user_login})
-                </p>
-              </div>
-            </div>
-
-            <form onSubmit={handleSaveCouponAssignment} className="space-y-4">
-              {/* Creator Display Name */}
-              <div>
-                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                  Creator Display Name
-                </label>
-                <div className="relative">
-                  <User className="w-3.5 h-3.5 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="text"
-                    placeholder="e.g. Edwin Yang, Dimas Sampurno"
-                    value={creatorDisplayNameInput}
-                    onChange={(e) => setCreatorDisplayNameInput(e.target.value)}
-                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
-                  />
-                </div>
-                <p className="text-[11px] text-neutral-500 mt-1">
-                  Shown in storefront toast notification (e.g. 10% off from {creatorDisplayNameInput || 'Creator'}) and portal workstation.
-                </p>
-              </div>
-
-              {/* Customer Referral Discount Rate */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-medium text-neutral-300">
-                    Customer Referral Discount (%)
-                  </label>
-                  <span className="text-[11px] font-mono text-emerald-400 font-semibold">
-                    {discountRateInput ? `${discountRateInput}% Off` : '10% (Default)'}
-                  </span>
-                </div>
-                <div className="relative">
-                  <Percent className="w-3.5 h-3.5 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    max="100"
-                    placeholder="10 (standard is 10%)"
-                    value={discountRateInput}
-                    onChange={(e) => setDiscountRateInput(e.target.value)}
-                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl pl-9 pr-8 py-2.5 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
-                  />
-                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">
-                    %
-                  </span>
-                </div>
-                <p className="text-[11px] text-neutral-500">
-                  Applied directly to visitor cart and checkout when entering via creator referral link.
-                </p>
-              </div>
-
-              {/* Commission Rate Presets & Custom Input */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-medium text-neutral-300">
-                    Creator Commission Rate (%)
-                  </label>
-                  <span className="text-[11px] font-mono text-[#f3aa18]">
-                    {commissionRateInput ? `${commissionRateInput}%` : '20% (Default)'}
-                  </span>
-                </div>
-
-                {/* Quick Presets */}
-                <div className="grid grid-cols-5 gap-1.5">
-                  {['10', '15', '20', '25'].map((rate) => (
-                    <button
-                      key={rate}
-                      type="button"
-                      onClick={() => setCommissionRateInput(rate)}
-                      className={clsx(
-                        'py-1.5 rounded-lg text-xs font-mono font-semibold border transition-all cursor-pointer text-center',
-                        commissionRateInput === rate
-                          ? 'bg-[#f3aa18] text-black border-[#f3aa18]'
-                          : 'bg-[#18181b] text-neutral-300 hover:text-white border-white/[0.08] hover:border-white/[0.2]'
-                      )}
-                    >
-                      {rate}%
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setCommissionRateInput('')}
-                    className={clsx(
-                      'py-1.5 rounded-lg text-xs font-mono font-semibold border transition-all cursor-pointer text-center',
-                      !commissionRateInput
-                        ? 'bg-amber-500/20 text-[#f3aa18] border-amber-500/40'
-                        : 'bg-[#18181b] text-neutral-400 hover:text-white border-white/[0.08]'
-                    )}
-                    title="Reset to store default rate"
-                  >
-                    Default
-                  </button>
-                </div>
-
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="100"
-                    placeholder="Custom rate % (leave empty for default 20%)"
-                    value={commissionRateInput}
-                    onChange={(e) => setCommissionRateInput(e.target.value)}
-                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
-                  />
-                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">
-                    %
-                  </span>
-                </div>
-                <p className="text-[11px] text-neutral-500">
-                  Commission earned by creator on net subtotal of attributed customer orders.
-                </p>
-              </div>
-
-              {/* Manual Balance Adjustment Section */}
-              <div className="pt-2 border-t border-white/[0.08]">
-                <button
-                  type="button"
-                  onClick={() => setShowManualAdj(!showManualAdj)}
-                  className="flex items-center justify-between w-full text-left text-xs font-semibold text-neutral-300 hover:text-white py-1 cursor-pointer"
-                >
-                  <span className="flex items-center gap-1.5 text-[#f3aa18]">
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Manual Commission Adjustment</span>
-                  </span>
-                  <span className="text-[11px] text-neutral-500 font-mono">
-                    {showManualAdj ? 'Hide' : '+ Adjust Balance'}
-                  </span>
-                </button>
-
-                {showManualAdj && (
-                  <div className="mt-3 p-3.5 rounded-xl bg-[#141414] border border-white/[0.06] space-y-3">
-                    <div>
-                      <label className="block text-[11px] font-medium text-neutral-300 mb-1">
-                        Adjustment Amount (IDR)
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">
-                          Rp
-                        </span>
-                        <input
-                          type="number"
-                          step="1000"
-                          placeholder="e.g. 50000 or -25000"
-                          value={manualAdjAmount}
-                          onChange={(e) => setManualAdjAmount(e.target.value)}
-                          className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl pl-9 pr-3 py-2 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[11px] font-medium text-neutral-300 mb-1">
-                          Status
-                        </label>
-                        <CustomSelect
-                          value={manualAdjStatus}
-                          onChange={(val) => setManualAdjStatus(val as 'unpaid' | 'paid')}
-                          options={[
-                            { value: 'unpaid', label: 'Unpaid (Ready)', badge: 'Unpaid', badgeVariant: 'lime' },
-                            { value: 'paid', label: 'Paid (Settled)', badge: 'Paid', badgeVariant: 'zinc' },
-                          ]}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-medium text-neutral-300 mb-1">
-                          Order / Ref (Opt)
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. 542410"
-                          value={manualAdjOrderRef}
-                          onChange={(e) => setManualAdjOrderRef(e.target.value)}
-                          className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-2.5 py-2 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-medium text-neutral-300 mb-1">
-                        Reason / Notes
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Bonus for YouTube review, campaign reward..."
-                        value={manualAdjNotes}
-                        onChange={(e) => setManualAdjNotes(e.target.value)}
-                        className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/[0.08]">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedAffiliateForCoupon(null)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="sm"
-                  disabled={isAssigningCoupon}
-                  leftIcon={isAssigningCoupon ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                >
-                  {isAssigningCoupon ? 'Saving...' : 'Save Settings'}
-                </Button>
-              </div>
-            </form>
-          </GlassCard>
-        </div>
-      )}
-
-      {/* Modal: Dedicated Add Manual Commission */}
-      {isAddManualCommissionOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
-          <GlassCard className="w-full max-w-md bg-[#111111] border border-white/[0.1] rounded-2xl p-6 shadow-2xl relative space-y-4">
-            <button
-              type="button"
-              onClick={() => setIsAddManualCommissionOpen(false)}
-              className="absolute top-4 right-4 p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/[0.05] transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#f3aa18]/10 border border-[#f3aa18]/20 flex items-center justify-center text-[#f3aa18]">
-                <Plus className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-semibold text-white">Record Manual Commission</h3>
-                <p className="text-xs text-neutral-400">
-                  Credit or adjust commission for any creator partner
-                </p>
-              </div>
-            </div>
-
-            <form onSubmit={handleSaveManualCommission} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                  Select Creator <span className="text-[#f3aa18]">*</span>
-                </label>
-                <CustomSelect
-                  value={String(manualCommAffiliateId || '')}
-                  onChange={(val) => setManualCommAffiliateId(val)}
-                  searchable
-                  placeholder="Select Affiliate Creator..."
-                  options={affiliates.map((a) => ({
-                    value: String(a.id),
-                    label: `@${a.slug} (${a.display_name || a.user_login})`,
-                    subtitle: a.email,
-                    badge: a.commission_rate ? `${a.commission_rate}%` : undefined,
-                    badgeVariant: 'amber',
-                  }))}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                  Commission Amount (IDR) <span className="text-[#f3aa18]">*</span>
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">
-                    Rp
-                  </span>
-                  <input
-                    type="number"
-                    step="1000"
-                    required
-                    placeholder="e.g. 50000"
-                    value={manualCommAmount}
-                    onChange={(e) => setManualCommAmount(e.target.value)}
-                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                    Status
-                  </label>
-                  <CustomSelect
-                    value={manualCommStatus}
-                    onChange={(val) => setManualCommStatus(val as 'unpaid' | 'paid')}
-                    options={[
-                      { value: 'unpaid', label: 'Ready for Payout (Unpaid)', badge: 'Unpaid', badgeVariant: 'lime' },
-                      { value: 'paid', label: 'Already Settled (Paid)', badge: 'Paid', badgeVariant: 'zinc' },
-                    ]}
-                  />
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                  <Sliders className="w-5 h-5" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                    Order # / Ref
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 542410 or MANUAL"
-                    value={manualCommOrderRef}
-                    onChange={(e) => setManualCommOrderRef(e.target.value)}
-                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                  Reason / Notes
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="e.g. Special campaign commission, affiliate bonus..."
-                  value={manualCommNotes}
-                  onChange={(e) => setManualCommNotes(e.target.value)}
-                  className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/[0.08]">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsAddManualCommissionOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="sm"
-                  disabled={isSavingManualComm}
-                  leftIcon={isSavingManualComm ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                >
-                  {isSavingManualComm ? 'Recording...' : 'Record Commission'}
-                </Button>
-              </div>
-            </form>
-          </GlassCard>
-        </div>
-      )}
-
-      {/* Modal: Edit Existing Commission Record */}
-      {editingCommission && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
-          <GlassCard className="w-full max-w-md bg-[#111111] border border-white/[0.1] rounded-2xl p-6 shadow-2xl relative space-y-4">
-            <button
-              type="button"
-              onClick={() => setEditingCommission(null)}
-              className="absolute top-4 right-4 p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/[0.05] transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-                <Edit3 className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-semibold text-white">Edit Commission #{editingCommission.id}</h3>
-                <p className="text-xs text-neutral-400">
-                  Affiliated to <span className="text-[#f3aa18] font-mono">@{editingCommission.affiliate_slug}</span>
-                </p>
-              </div>
-            </div>
-
-            <form onSubmit={handleSaveEditCommission} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                    Order # / Ref
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editCommOrderNumber}
-                    onChange={(e) => setEditCommOrderNumber(e.target.value)}
-                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#f3aa18]/60"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                    Status
-                  </label>
-                  <CustomSelect
-                    value={editCommStatus}
-                    onChange={(val) => setEditCommStatus(val)}
-                    options={[
-                      { value: 'unpaid', label: 'Ready for Payout (Unpaid)', badge: 'Unpaid', badgeVariant: 'lime' },
-                      { value: 'paid', label: 'Paid Out', badge: 'Paid', badgeVariant: 'zinc' },
-                      { value: 'pending', label: 'Pending Grace Period', badge: 'Pending', badgeVariant: 'amber' },
-                      { value: 'rejected', label: 'Rejected / Cancelled', badge: 'Void', badgeVariant: 'rose' },
-                    ]}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                  Commission Amount (IDR)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">
-                    Rp
-                  </span>
-                  <input
-                    type="number"
-                    step="1"
-                    required
-                    value={editCommAmount}
-                    onChange={(e) => setEditCommAmount(e.target.value)}
-                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#f3aa18]/60"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                  Notes / Reason
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="Reason for adjustment, order status change, or rejection..."
-                  value={editCommNotes}
-                  onChange={(e) => setEditCommNotes(e.target.value)}
-                  className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/[0.08]">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setEditingCommission(null)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="sm"
-                  disabled={isSavingEditComm}
-                  leftIcon={isSavingEditComm ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                >
-                  {isSavingEditComm ? 'Saving...' : 'Save Changes'}
-                </Button>
-              </div>
-            </form>
-          </GlassCard>
-        </div>
-      )}
-
-      {/* Modal: See as Creator (Preview Creator Portal Workstation) */}
-      {previewCreatorAffiliate && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="creator-preview-title"
-        >
-          <div className="relative w-full max-w-6xl max-h-[92vh] flex flex-col bg-[#0c0c0e] border border-white/[0.12] rounded-2xl shadow-2xl overflow-hidden">
-            {/* Modal Header */}
-            <div className="p-4 sm:p-5 border-b border-white/[0.08] flex items-center justify-between gap-4 bg-[#141416]/90 backdrop-blur-md shrink-0">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-                  <Eye className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 id="creator-preview-title" className="text-sm font-bold text-white font-['Chakra_Petch'] uppercase tracking-wider truncate">
-                      {previewCreatorAffiliate.display_name || previewCreatorAffiliate.user_login}
-                    </h3>
-                    <span className="font-mono text-xs text-[#f3aa18]">
-                      @{previewCreatorAffiliate.slug}
-                    </span>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-mono border bg-amber-500/10 text-amber-400 border-amber-500/20 uppercase font-semibold">
-                      Admin Creator Preview
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-neutral-400 truncate mt-0.5">
-                    {previewCreatorAffiliate.user_email || previewCreatorAffiliate.email} {previewCreatorAffiliate.discount_rate != null ? `• ${previewCreatorAffiliate.discount_rate}% Customer Discount Link` : ''}
+                  <h3 className="text-base font-semibold text-white">Edit Creator Settings</h3>
+                  <p className="text-xs text-neutral-400">
+                    Settings for <span className="text-[#f3aa18] font-mono">@{selectedAffiliateForCoupon.slug}</span> ({creatorDisplayNameInput || selectedAffiliateForCoupon.creator_display_name || selectedAffiliateForCoupon.display_name || selectedAffiliateForCoupon.user_login})
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                <a
-                  href={`/?portal=affiliate&affiliate_id=${previewCreatorAffiliate.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-neutral-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                  title="Open creator portal in full dedicated workstation tab"
-                >
-                  <ExternalLink className="w-3.5 h-3.5 text-neutral-400" />
-                  <span className="hidden sm:inline">Open in Portal Tab</span>
-                </a>
-                <button
-                  type="button"
-                  onClick={() => setPreviewCreatorAffiliate(null)}
-                  className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer"
-                  title="Close preview (Esc)"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[#080808]">
-              {isLoadingCreatorPreview ? (
-                <div className="py-20 flex flex-col items-center justify-center gap-3 text-neutral-400 font-mono text-xs">
-                  <Loader2 className="w-8 h-8 text-[#f3aa18] animate-spin" />
-                  <span>Loading creator workstation...</span>
-                </div>
-              ) : creatorPreviewError ? (
-                <div className="py-16 text-center space-y-3">
-                  <div className="w-12 h-12 rounded-full bg-rose-500/10 text-rose-400 mx-auto flex items-center justify-center">
-                    <AlertCircle className="w-6 h-6" />
+              <form onSubmit={handleSaveCouponAssignment} className="space-y-4">
+                {/* Creator Display Name */}
+                <div>
+                  <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                    Creator Display Name
+                  </label>
+                  <div className="relative">
+                    <User className="w-3.5 h-3.5 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="e.g. Edwin Yang, Dimas Sampurno"
+                      value={creatorDisplayNameInput}
+                      onChange={(e) => setCreatorDisplayNameInput(e.target.value)}
+                      className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
+                    />
                   </div>
-                  <h4 className="text-sm font-semibold text-white">Failed to Load Creator Workstation</h4>
-                  <p className="text-xs text-neutral-400 max-w-md mx-auto">{creatorPreviewError}</p>
+                  <p className="text-[11px] text-neutral-500 mt-1">
+                    Shown in storefront toast notification (e.g. 10% off from {creatorDisplayNameInput || 'Creator'}) and portal workstation.
+                  </p>
+                </div>
+
+                {/* Customer Referral Discount Rate */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-neutral-300">
+                      Customer Referral Discount (%)
+                    </label>
+                    <span className="text-[11px] font-mono text-emerald-400 font-semibold">
+                      {discountRateInput ? `${discountRateInput}% Off` : '0% (Standard Link)'}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <Percent className="w-3.5 h-3.5 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      max="100"
+                      placeholder="0 (e.g. 0% for standard link, 10% for discount)"
+                      value={discountRateInput}
+                      onChange={(e) => setDiscountRateInput(e.target.value)}
+                      className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl pl-9 pr-8 py-2.5 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
+                    />
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">
+                      %
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-neutral-500">
+                    Applied directly to visitor cart and checkout when entering via creator referral link. Set to 0% for standard full-commission link without customer discount.
+                  </p>
+                </div>
+
+                {/* Commission Rate Presets & Custom Input */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-neutral-300">
+                      Creator Commission Rate (%)
+                    </label>
+                    <span className="text-[11px] font-mono text-[#f3aa18]">
+                      {commissionRateInput ? `${commissionRateInput}%` : '20% (Default)'}
+                    </span>
+                  </div>
+
+                  {/* Quick Presets */}
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {['10', '15', '20', '25'].map((rate) => (
+                      <button
+                        key={rate}
+                        type="button"
+                        onClick={() => setCommissionRateInput(rate)}
+                        className={clsx(
+                          'py-1.5 rounded-lg text-xs font-mono font-semibold border transition-all cursor-pointer text-center',
+                          commissionRateInput === rate
+                            ? 'bg-[#f3aa18] text-black border-[#f3aa18]'
+                            : 'bg-[#18181b] text-neutral-300 hover:text-white border-white/[0.08] hover:border-white/[0.2]'
+                        )}
+                      >
+                        {rate}%
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setCommissionRateInput('')}
+                      className={clsx(
+                        'py-1.5 rounded-lg text-xs font-mono font-semibold border transition-all cursor-pointer text-center',
+                        !commissionRateInput
+                          ? 'bg-amber-500/20 text-[#f3aa18] border-amber-500/40'
+                          : 'bg-[#18181b] text-neutral-400 hover:text-white border-white/[0.08]'
+                      )}
+                      title="Reset to store default rate"
+                    >
+                      Default
+                    </button>
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="100"
+                      placeholder="Custom rate % (leave empty for default 20%)"
+                      value={commissionRateInput}
+                      onChange={(e) => setCommissionRateInput(e.target.value)}
+                      className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
+                    />
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">
+                      %
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-neutral-500">
+                    Commission earned by creator on net subtotal of attributed customer orders.
+                  </p>
+                </div>
+
+                {/* Manual Balance Adjustment Section */}
+                <div className="pt-2 border-t border-white/[0.08]">
                   <button
                     type="button"
-                    onClick={() => handleSeeAsCreator(previewCreatorAffiliate)}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-zinc-950 transition-colors cursor-pointer"
+                    onClick={() => setShowManualAdj(!showManualAdj)}
+                    className="flex items-center justify-between w-full text-left text-xs font-semibold text-neutral-300 hover:text-white py-1 cursor-pointer"
                   >
-                    Retry
+                    <span className="flex items-center gap-1.5 text-[#f3aa18]">
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Manual Commission Adjustment</span>
+                    </span>
+                    <span className="text-[11px] text-neutral-500 font-mono">
+                      {showManualAdj ? 'Hide' : '+ Adjust Balance'}
+                    </span>
+                  </button>
+
+                  {showManualAdj && (
+                    <div className="mt-3 p-3.5 rounded-xl bg-[#141414] border border-white/[0.06] space-y-3">
+                      <div>
+                        <label className="block text-[11px] font-medium text-neutral-300 mb-1">
+                          Adjustment Amount (IDR)
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">
+                            Rp
+                          </span>
+                          <input
+                            type="number"
+                            step="1000"
+                            placeholder="e.g. 50000 or -25000"
+                            value={manualAdjAmount}
+                            onChange={(e) => setManualAdjAmount(e.target.value)}
+                            className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl pl-9 pr-3 py-2 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[11px] font-medium text-neutral-300 mb-1">
+                            Status
+                          </label>
+                          <CustomSelect
+                            value={manualAdjStatus}
+                            onChange={(val) => setManualAdjStatus(val as 'unpaid' | 'paid')}
+                            options={[
+                              { value: 'unpaid', label: 'Unpaid (Ready)', badge: 'Unpaid', badgeVariant: 'lime' },
+                              { value: 'paid', label: 'Paid (Settled)', badge: 'Paid', badgeVariant: 'zinc' },
+                            ]}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-neutral-300 mb-1">
+                            Order / Ref (Opt)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 542410"
+                            value={manualAdjOrderRef}
+                            onChange={(e) => setManualAdjOrderRef(e.target.value)}
+                            className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-2.5 py-2 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-medium text-neutral-300 mb-1">
+                          Reason / Notes
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Bonus for YouTube review, campaign reward..."
+                          value={manualAdjNotes}
+                          onChange={(e) => setManualAdjNotes(e.target.value)}
+                          className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/[0.08]">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedAffiliateForCoupon(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    disabled={isAssigningCoupon}
+                    leftIcon={isAssigningCoupon ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  >
+                    {isAssigningCoupon ? 'Saving...' : 'Save Settings'}
+                  </Button>
+                </div>
+              </form>
+            </GlassCard>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal: Dedicated Add Manual Commission */}
+      {isAddManualCommissionOpen && createPortal(
+        <div className="fixed inset-0 z-50">
+          <div
+            className="fixed inset-0 bg-black/85 backdrop-blur-md pointer-events-auto transition-opacity"
+            onClick={() => setIsAddManualCommissionOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="fixed inset-0 lg:left-64 z-10 overflow-y-auto flex items-center justify-center p-4 pointer-events-none">
+            <GlassCard className="pointer-events-auto w-full max-w-md bg-[#111111] border border-white/[0.1] rounded-2xl p-6 shadow-2xl relative space-y-4">
+              <button
+                type="button"
+                onClick={() => setIsAddManualCommissionOpen(false)}
+                className="absolute top-4 right-4 p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/[0.05] transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#f3aa18]/10 border border-[#f3aa18]/20 flex items-center justify-center text-[#f3aa18]">
+                  <Plus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-white">Record Manual Commission</h3>
+                  <p className="text-xs text-neutral-400">
+                    Credit or adjust commission for any creator partner
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handleSaveManualCommission} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                    Select Creator <span className="text-[#f3aa18]">*</span>
+                  </label>
+                  <CustomSelect
+                    value={String(manualCommAffiliateId || '')}
+                    onChange={(val) => setManualCommAffiliateId(val)}
+                    searchable
+                    placeholder="Select Affiliate Creator..."
+                    options={affiliates.map((a) => ({
+                      value: String(a.id),
+                      label: `@${a.slug} (${a.display_name || a.user_login})`,
+                      subtitle: a.email,
+                      badge: a.commission_rate ? `${a.commission_rate}%` : undefined,
+                      badgeVariant: 'amber',
+                    }))}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                    Commission Amount (IDR) <span className="text-[#f3aa18]">*</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">
+                      Rp
+                    </span>
+                    <input
+                      type="number"
+                      step="1000"
+                      required
+                      placeholder="e.g. 50000"
+                      value={manualCommAmount}
+                      onChange={(e) => setManualCommAmount(e.target.value)}
+                      className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                      Status
+                    </label>
+                    <CustomSelect
+                      value={manualCommStatus}
+                      onChange={(val) => setManualCommStatus(val as 'unpaid' | 'paid')}
+                      options={[
+                        { value: 'unpaid', label: 'Ready for Payout (Unpaid)', badge: 'Unpaid', badgeVariant: 'lime' },
+                        { value: 'paid', label: 'Already Settled (Paid)', badge: 'Paid', badgeVariant: 'zinc' },
+                      ]}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                      Order # / Ref
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 542410 or MANUAL"
+                      value={manualCommOrderRef}
+                      onChange={(e) => setManualCommOrderRef(e.target.value)}
+                      className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                    Reason / Notes
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="e.g. Special campaign commission, affiliate bonus..."
+                    value={manualCommNotes}
+                    onChange={(e) => setManualCommNotes(e.target.value)}
+                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/[0.08]">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsAddManualCommissionOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    disabled={isSavingManualComm}
+                    leftIcon={isSavingManualComm ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  >
+                    {isSavingManualComm ? 'Recording...' : 'Record Commission'}
+                  </Button>
+                </div>
+              </form>
+            </GlassCard>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal: Edit Existing Commission Record */}
+      {editingCommission && createPortal(
+        <div className="fixed inset-0 z-50">
+          <div
+            className="fixed inset-0 bg-black/85 backdrop-blur-md pointer-events-auto transition-opacity"
+            onClick={() => setEditingCommission(null)}
+            aria-hidden="true"
+          />
+          <div className="fixed inset-0 lg:left-64 z-10 overflow-y-auto flex items-center justify-center p-4 pointer-events-none">
+            <GlassCard className="pointer-events-auto w-full max-w-md bg-[#111111] border border-white/[0.1] rounded-2xl p-6 shadow-2xl relative space-y-4">
+              <button
+                type="button"
+                onClick={() => setEditingCommission(null)}
+                className="absolute top-4 right-4 p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/[0.05] transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                  <Edit3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-white">Edit Commission #{editingCommission.id}</h3>
+                  <p className="text-xs text-neutral-400">
+                    Affiliated to <span className="text-[#f3aa18] font-mono">@{editingCommission.affiliate_slug}</span>
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handleSaveEditCommission} className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                      Order # / Ref
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={editCommOrderNumber}
+                      onChange={(e) => setEditCommOrderNumber(e.target.value)}
+                      className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#f3aa18]/60"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                      Status
+                    </label>
+                    <CustomSelect
+                      value={editCommStatus}
+                      onChange={(val) => setEditCommStatus(val)}
+                      options={[
+                        { value: 'unpaid', label: 'Ready for Payout (Unpaid)', badge: 'Unpaid', badgeVariant: 'lime' },
+                        { value: 'paid', label: 'Paid Out', badge: 'Paid', badgeVariant: 'zinc' },
+                        { value: 'pending', label: 'Pending Grace Period', badge: 'Pending', badgeVariant: 'amber' },
+                        { value: 'rejected', label: 'Rejected / Cancelled', badge: 'Void', badgeVariant: 'rose' },
+                      ]}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                    Commission Amount (IDR)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">
+                      Rp
+                    </span>
+                    <input
+                      type="number"
+                      step="1"
+                      required
+                      value={editCommAmount}
+                      onChange={(e) => setEditCommAmount(e.target.value)}
+                      className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#f3aa18]/60"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                    Notes / Reason
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="Reason for adjustment, order status change, or rejection..."
+                    value={editCommNotes}
+                    onChange={(e) => setEditCommNotes(e.target.value)}
+                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/[0.08]">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditingCommission(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    disabled={isSavingEditComm}
+                    leftIcon={isSavingEditComm ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  >
+                    {isSavingEditComm ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                </div>
+              </form>
+            </GlassCard>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal: See as Creator (Preview Creator Portal Workstation) */}
+      {previewCreatorAffiliate && createPortal(
+        <div className="fixed inset-0 z-50">
+          <div
+            className="fixed inset-0 bg-black/85 backdrop-blur-md pointer-events-auto transition-opacity"
+            onClick={() => setPreviewCreatorAffiliate(null)}
+            aria-hidden="true"
+          />
+          <div
+            className="fixed inset-0 lg:left-64 z-10 overflow-y-auto flex items-center justify-center p-3 sm:p-6 pointer-events-none"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="creator-preview-title"
+          >
+            <div className="pointer-events-auto relative w-full max-w-6xl max-h-[92vh] flex flex-col bg-[#0c0c0e] border border-white/[0.12] rounded-2xl shadow-2xl overflow-hidden">
+              {/* Modal Header */}
+              <div className="p-4 sm:p-5 border-b border-white/[0.08] flex items-center justify-between gap-4 bg-[#141416]/90 backdrop-blur-md shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                    <Eye className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 id="creator-preview-title" className="text-sm font-bold text-white font-['Chakra_Petch'] uppercase tracking-wider truncate">
+                        {previewCreatorAffiliate.display_name || previewCreatorAffiliate.user_login}
+                      </h3>
+                      <span className="font-mono text-xs text-[#f3aa18]">
+                        @{previewCreatorAffiliate.slug}
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono border bg-amber-500/10 text-amber-400 border-amber-500/20 uppercase font-semibold">
+                        Admin Creator Preview
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-neutral-400 truncate mt-0.5">
+                      {previewCreatorAffiliate.user_email || previewCreatorAffiliate.email} {Number(previewCreatorAffiliate.discount_rate) > 0 ? `• ${previewCreatorAffiliate.discount_rate}% Customer Discount Link` : '• Standard Link (0% Customer Discount)'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <a
+                    href={`/?portal=affiliate&affiliate_id=${previewCreatorAffiliate.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-neutral-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Open creator portal in full dedicated workstation tab"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-neutral-400" />
+                    <span className="hidden sm:inline">Open in Portal Tab</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewCreatorAffiliate(null)}
+                    className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer"
+                    title="Close preview (Esc)"
+                  >
+                    <X className="w-5 h-5" />
                   </button>
                 </div>
-              ) : previewPortalData ? (
-                <AffiliateDashboardPage
-                  profile={previewPortalData.profile}
-                  metrics={previewPortalData.metrics}
-                  commissions={previewPortalData.commissions}
-                  clicks={previewPortalData.clicks}
-                  dailyStats={previewPortalData.daily_stats}
-                  onRefresh={() => handleSeeAsCreator(previewCreatorAffiliate)}
-                  onNavigateTab={() => {}}
-                />
-              ) : null}
+              </div>
+
+              {/* Modal Body */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[#080808]">
+                {isLoadingCreatorPreview ? (
+                  <div className="py-20 flex flex-col items-center justify-center gap-3 text-neutral-400 font-mono text-xs">
+                    <Loader2 className="w-8 h-8 text-[#f3aa18] animate-spin" />
+                    <span>Loading creator workstation...</span>
+                  </div>
+                ) : creatorPreviewError ? (
+                  <div className="py-16 text-center space-y-3">
+                    <div className="w-12 h-12 rounded-full bg-rose-500/10 text-rose-400 mx-auto flex items-center justify-center">
+                      <AlertCircle className="w-6 h-6" />
+                    </div>
+                    <h4 className="text-sm font-semibold text-white">Failed to Load Creator Workstation</h4>
+                    <p className="text-xs text-neutral-400 max-w-md mx-auto">{creatorPreviewError}</p>
+                    <button
+                      type="button"
+                      onClick={() => handleSeeAsCreator(previewCreatorAffiliate)}
+                      className="px-4 py-2 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-zinc-950 transition-colors cursor-pointer"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : previewPortalData ? (
+                  <AffiliateDashboardPage
+                    profile={previewPortalData.profile}
+                    metrics={previewPortalData.metrics}
+                    commissions={previewPortalData.commissions}
+                    clicks={previewPortalData.clicks}
+                    dailyStats={previewPortalData.daily_stats}
+                    onRefresh={() => handleSeeAsCreator(previewCreatorAffiliate)}
+                    onNavigateTab={() => {}}
+                  />
+                ) : null}
+              </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Order Detail Drawer for Commission Drilldown */}

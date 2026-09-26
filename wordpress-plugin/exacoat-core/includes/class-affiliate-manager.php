@@ -135,7 +135,7 @@ class Exacoat_Affiliate_Manager {
 				bank_account_name varchar(100) NOT NULL DEFAULT '',
 				coupon_code varchar(100) NOT NULL DEFAULT '',
 				commission_rate decimal(5,2) NULL DEFAULT NULL,
-				discount_rate decimal(5,2) NULL DEFAULT 10.00,
+				discount_rate decimal(5,2) NULL DEFAULT 0.00,
 				lifetime_earnings decimal(14,2) NOT NULL DEFAULT 0.00,
 				unpaid_balance decimal(14,2) NOT NULL DEFAULT 0.00,
 				total_clicks bigint(20) unsigned NOT NULL DEFAULT 0,
@@ -191,10 +191,8 @@ class Exacoat_Affiliate_Manager {
 
 			$col_check_aff_discount = $wpdb->get_results( "SHOW COLUMNS FROM {$table_affiliates} LIKE 'discount_rate'" );
 			if ( empty( $col_check_aff_discount ) ) {
-				$wpdb->query( "ALTER TABLE {$table_affiliates} ADD COLUMN discount_rate decimal(5,2) NULL DEFAULT 10.00 AFTER commission_rate" );
+				$wpdb->query( "ALTER TABLE {$table_affiliates} ADD COLUMN discount_rate decimal(5,2) NULL DEFAULT 0.00 AFTER commission_rate" );
 			}
-
-			$wpdb->query( "UPDATE {$table_affiliates} SET discount_rate = 10.00 WHERE discount_rate IS NULL OR discount_rate = 0" );
 
 			$col_check_aff_max = $wpdb->get_results( "SHOW COLUMNS FROM {$table_affiliates} LIKE 'max_commission_rate'" );
 			if ( empty( $col_check_aff_max ) ) {
@@ -251,9 +249,9 @@ class Exacoat_Affiliate_Manager {
 			update_option( 'exacoat_affiliate_db_version', '1.3.1' );
 
 			// One-time auto-recalculation and creator setups on plugin update
-			if ( ! get_option( 'exacoat_affiliate_recalc_v97', false ) ) {
+			if ( ! get_option( 'exacoat_affiliate_recalc_v98', false ) ) {
 				self::recalculate_all_balances();
-				update_option( 'exacoat_affiliate_recalc_v97', 1 );
+				update_option( 'exacoat_affiliate_recalc_v98', 1 );
 			}
 		} catch ( \Throwable $e ) {
 			if ( class_exists( 'Exacoat_Logger' ) ) {
@@ -467,7 +465,7 @@ class Exacoat_Affiliate_Manager {
 
 		$discount_rate = ( ! empty( $affiliate->discount_rate ) && (float) $affiliate->discount_rate > 0 )
 			? (float) $affiliate->discount_rate
-			: 10.00;
+			: 0.00;
 
 		if ( $discount_rate <= 0 ) {
 			return;
@@ -513,7 +511,7 @@ class Exacoat_Affiliate_Manager {
 
 		$discount_rate = ( ! empty( $affiliate->discount_rate ) && (float) $affiliate->discount_rate > 0 )
 			? (float) $affiliate->discount_rate
-			: 10.00;
+			: 0.00;
 
 		if ( $discount_rate <= 0 ) {
 			return;
@@ -691,7 +689,7 @@ class Exacoat_Affiliate_Manager {
 		$creator_name  = self::get_creator_display_name( $affiliate );
 		$discount_rate = ( ! empty( $affiliate->discount_rate ) && (float) $affiliate->discount_rate > 0 )
 			? (float) $affiliate->discount_rate
-			: 10.00;
+			: 0.00;
 
 		$order->update_meta_data( '_exacoat_affiliate_slug', $affiliate->slug );
 		$order->update_meta_data( '_exacoat_affiliate_id', (int) $affiliate->id );
@@ -2038,8 +2036,8 @@ class Exacoat_Affiliate_Manager {
 				'coupon_discount_amount' => $coupon_discount_amount,
 				'coupon_discount_type'   => $coupon_discount_type,
 				'display_name'           => self::get_creator_display_name( $affiliate ),
-				'max_commission_rate'    => ( ! empty( $affiliate->max_commission_rate ) && (float) $affiliate->max_commission_rate > 0 ) ? (float) $affiliate->max_commission_rate : max( 20.00, round( (float) ( $affiliate->commission_rate ?? 15 ) + (float) ( $affiliate->discount_rate ?? 10 ), 2 ) ),
-				'discount_rate'          => ( ! empty( $affiliate->discount_rate ) && (float) $affiliate->discount_rate > 0 ) ? (float) $affiliate->discount_rate : 10.00,
+				'max_commission_rate'    => ( ! empty( $affiliate->max_commission_rate ) && (float) $affiliate->max_commission_rate > 0 ) ? (float) $affiliate->max_commission_rate : max( 20.00, round( (float) ( $affiliate->commission_rate ?? 20 ) + (float) ( $affiliate->discount_rate ?? 0 ), 2 ) ),
+				'discount_rate'          => isset( $affiliate->discount_rate ) ? max( 0.0, (float) $affiliate->discount_rate ) : 0.00,
 				'commission_rate'        => ! empty( $affiliate->commission_rate ) ? (float) $affiliate->commission_rate : self::get_commission_rate(),
 			],
 			'metrics' => [
@@ -2047,7 +2045,7 @@ class Exacoat_Affiliate_Manager {
 				'unpaid_balance'      => (float) $affiliate->unpaid_balance,
 				'total_clicks'        => (int) $affiliate->total_clicks,
 				'total_orders'        => (int) $affiliate->total_orders,
-				'max_commission_rate' => ( ! empty( $affiliate->max_commission_rate ) && (float) $affiliate->max_commission_rate > 0 ) ? (float) $affiliate->max_commission_rate : max( 20.00, round( (float) ( $affiliate->commission_rate ?? 15 ) + (float) ( $affiliate->discount_rate ?? 10 ), 2 ) ),
+				'max_commission_rate' => ( ! empty( $affiliate->max_commission_rate ) && (float) $affiliate->max_commission_rate > 0 ) ? (float) $affiliate->max_commission_rate : max( 20.00, round( (float) ( $affiliate->commission_rate ?? 20 ) + (float) ( $affiliate->discount_rate ?? 0 ), 2 ) ),
 				'commission_rate'     => ! empty( $affiliate->commission_rate ) ? (float) $affiliate->commission_rate : self::get_commission_rate(),
 				'grace_period_days'   => self::get_grace_period_days(),
 				'min_payout_amount'   => self::get_min_payout(),
@@ -2340,7 +2338,7 @@ class Exacoat_Affiliate_Manager {
 				$u = get_userdata( (int) $aff->user_id );
 				$aff->roles = $u ? array_values( $u->roles ) : [ 'affiliate' ];
 				$aff->display_name = ! empty( $aff->creator_display_name ) ? $aff->creator_display_name : self::get_creator_display_name( $aff );
-				$aff->discount_rate = ( ! empty( $aff->discount_rate ) && (float) $aff->discount_rate > 0 ) ? (float) $aff->discount_rate : 10.00;
+				$aff->discount_rate = isset( $aff->discount_rate ) ? max( 0.0, (float) $aff->discount_rate ) : 0.00;
 				$aff->coupon_discount_amount = null;
 				$aff->coupon_discount_type   = null;
 				if ( ! empty( $aff->coupon_code ) && class_exists( 'WC_Coupon' ) ) {
@@ -4193,13 +4191,13 @@ class Exacoat_Affiliate_Manager {
 				1133 => [ 'paid' => 2932060.07, 'unpaid' => 2442454.35, 'max_pool' => 25.0, 'disc' => 15.0, 'comm' => 10.0, 'coupon' => 'edwin15', 'slug' => 'edwinyg' ],
 				1135 => [ 'paid' => 9531878.22, 'unpaid' => 95715.00,   'max_pool' => 25.0, 'disc' => 10.0, 'comm' => 15.0, 'coupon' => 'ds10',    'slug' => 'ds' ],
 				1153 => [ 'paid' => 0.00,       'unpaid' => 339413.46,  'max_pool' => 25.0, 'disc' => 10.0, 'comm' => 15.0, 'coupon' => 'suns10',  'slug' => 'suns' ],
-				1142 => [ 'paid' => 0.00,       'unpaid' => 181750.00,  'max_pool' => 25.0, 'disc' => 10.0, 'comm' => 15.0, 'coupon' => '',        'slug' => 'shandy' ],
-				1140 => [ 'paid' => 378605.00,   'unpaid' => 160990.00,  'max_pool' => 20.0, 'disc' => 10.0, 'comm' => 10.0, 'coupon' => '',        'slug' => 'prasetyo' ],
-				1150 => [ 'paid' => 0.00,       'unpaid' => 725362.41,  'max_pool' => 20.0, 'disc' => 10.0, 'comm' => 10.0, 'coupon' => '',        'slug' => 'tenere' ],
-				1209 => [ 'paid' => 0.00,       'unpaid' => 312710.00,  'max_pool' => 20.0, 'disc' => 10.0, 'comm' => 10.0, 'coupon' => '',        'slug' => 'aditya' ],
-				1228 => [ 'paid' => 0.00,       'unpaid' => 99600.00,   'max_pool' => 20.0, 'disc' => 10.0, 'comm' => 10.0, 'coupon' => '',        'slug' => 'fariqul' ],
-				1216 => [ 'paid' => 0.00,       'unpaid' => 53490.00,   'max_pool' => 20.0, 'disc' => 10.0, 'comm' => 10.0, 'coupon' => '',        'slug' => 'ruswenda' ],
-				1158 => [ 'paid' => 396450.00,   'unpaid' => 49800.00,   'max_pool' => 20.0, 'disc' => 10.0, 'comm' => 10.0, 'coupon' => '',        'slug' => 'misellako' ],
+				1142 => [ 'paid' => 0.00,       'unpaid' => 181750.00,  'max_pool' => 25.0, 'disc' => 0.0,  'comm' => 25.0, 'coupon' => '',        'slug' => 'shandy' ],
+				1140 => [ 'paid' => 378605.00,   'unpaid' => 160990.00,  'max_pool' => 20.0, 'disc' => 0.0,  'comm' => 20.0, 'coupon' => '',        'slug' => 'prasetyo' ],
+				1150 => [ 'paid' => 0.00,       'unpaid' => 725362.41,  'max_pool' => 20.0, 'disc' => 0.0,  'comm' => 20.0, 'coupon' => '',        'slug' => 'tenere' ],
+				1209 => [ 'paid' => 0.00,       'unpaid' => 312710.00,  'max_pool' => 20.0, 'disc' => 0.0,  'comm' => 20.0, 'coupon' => '',        'slug' => 'aditya' ],
+				1228 => [ 'paid' => 0.00,       'unpaid' => 99600.00,   'max_pool' => 20.0, 'disc' => 0.0,  'comm' => 20.0, 'coupon' => '',        'slug' => 'fariqul' ],
+				1216 => [ 'paid' => 0.00,       'unpaid' => 53490.00,   'max_pool' => 20.0, 'disc' => 0.0,  'comm' => 20.0, 'coupon' => '',        'slug' => 'ruswenda' ],
+				1158 => [ 'paid' => 396450.00,   'unpaid' => 49800.00,   'max_pool' => 20.0, 'disc' => 0.0,  'comm' => 20.0, 'coupon' => '',        'slug' => 'misellako' ],
 			];
 
 			$all_affiliates = $wpdb->get_results( "SELECT id, user_id, slug, total_clicks FROM {$table_affiliates}" );
@@ -4241,9 +4239,16 @@ class Exacoat_Affiliate_Manager {
 							$aff_id
 						)
 					);
-					$max_pool = 25.00;
-					$disc     = 10.00;
-					$comm     = 15.00;
+					$existing_aff = $wpdb->get_row( $wpdb->prepare( "SELECT coupon_code, max_commission_rate, commission_rate, discount_rate FROM {$table_affiliates} WHERE id = %d", $aff_id ) );
+					$has_coupon = ! empty( $existing_aff->coupon_code );
+					$max_pool   = ( ! empty( $existing_aff->max_commission_rate ) && (float) $existing_aff->max_commission_rate > 0 ) ? (float) $existing_aff->max_commission_rate : 20.00;
+					if ( $has_coupon ) {
+						$disc = ( ! empty( $existing_aff->discount_rate ) && (float) $existing_aff->discount_rate > 0 ) ? (float) $existing_aff->discount_rate : 10.00;
+						$comm = ( ! empty( $existing_aff->commission_rate ) && (float) $existing_aff->commission_rate > 0 ) ? (float) $existing_aff->commission_rate : max( 0.0, $max_pool - $disc );
+					} else {
+						$disc = 0.00;
+						$comm = $max_pool;
+					}
 				}
 
 				$total_orders = (int) $wpdb->get_var(
@@ -4267,13 +4272,10 @@ class Exacoat_Affiliate_Manager {
 					'lifetime_earnings'   => $unpaid + $paid,
 					'total_orders'        => $total_orders,
 					'total_clicks'        => max( $click_count, $existing_clicks, (int) $total_orders ),
+					'max_commission_rate' => $max_pool,
+					'discount_rate'       => $disc,
+					'commission_rate'     => $comm,
 				];
-
-				if ( $gt ) {
-					$update_data['max_commission_rate'] = $max_pool;
-					$update_data['discount_rate']       = $disc;
-					$update_data['commission_rate']     = $comm;
-				}
 
 				$wpdb->update(
 					$table_affiliates,

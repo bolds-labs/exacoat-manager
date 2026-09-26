@@ -34,7 +34,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
 
   // Customer discount slider state following creator max commission pool
   const maxPool = Number(profile.max_commission_rate) || 25;
-  const currentDiscount = Number(profile.discount_rate) || 10;
+  const currentDiscount = profile.discount_rate != null ? Number(profile.discount_rate) : 0;
   const [discountRate, setDiscountRate] = useState<number>(Math.min(maxPool, currentDiscount));
   const [isSavingDiscount, setIsSavingDiscount] = useState(false);
   const creatorCommission = Math.max(0, Math.round((maxPool - discountRate) * 100) / 100);
@@ -293,7 +293,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
             </div>
           </div>
           <span className="self-start sm:self-auto text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/25">
-            Active Discount: {profile.discount_rate || 10}% Off
+            Active Discount: {profile.discount_rate != null ? profile.discount_rate : 0}% Off
           </span>
         </div>
 
@@ -312,7 +312,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
               className="w-full bg-[#050506] border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
             />
             <p className="text-[11px] text-zinc-400">
-              Displayed in customer discount notifications: &quot;Creator discount applied: {profile.discount_rate || 10}% off from {displayName.trim() || 'Your Name'}&quot; and reflected in checkout totals.
+              Displayed in customer discount notifications: &quot;Creator discount applied: {profile.discount_rate != null ? profile.discount_rate : 0}% off from {displayName.trim() || 'Your Name'}&quot; and reflected in checkout totals.
             </p>
           </div>
 

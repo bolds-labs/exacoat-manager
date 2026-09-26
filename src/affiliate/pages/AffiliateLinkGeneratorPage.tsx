@@ -54,7 +54,7 @@ export const AffiliateLinkGeneratorPage: React.FC<AffiliateLinkGeneratorPageProp
 
   const slug = profile.slug;
   const commissionRate = Number(profile.commission_rate) || 15;
-  const discountRate = Number(profile.discount_rate) || 10;
+  const discountRate = profile.discount_rate != null ? Number(profile.discount_rate) : 0;
 
   const buildAffiliateUrl = (rawUrl: string): string => {
     try {
@@ -161,18 +161,30 @@ export const AffiliateLinkGeneratorPage: React.FC<AffiliateLinkGeneratorPageProp
       {/* Direct Creator Discount Status */}
       <div className="p-4 rounded-2xl bg-white/[0.025] border border-white/[0.08] flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+          <div className={clsx(
+            "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border",
+            discountRate > 0 
+              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+              : "bg-white/[0.04] border-white/10 text-neutral-400"
+          )}>
             <Percent className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-white">Direct Customer Discount:</span>
-              <span className="font-mono text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/25">
-                {discountRate}% OFF
+              <span className={clsx(
+                "font-mono text-xs font-bold px-2 py-0.5 rounded border",
+                discountRate > 0
+                  ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/25"
+                  : "text-neutral-400 bg-white/[0.05] border-white/10"
+              )}>
+                {discountRate > 0 ? `${discountRate}% OFF` : '0% OFF (Standard Link)'}
               </span>
             </div>
             <p className="text-[11px] text-zinc-400 mt-0.5">
-              Shoppers who click your links automatically receive {discountRate}% off without typing a promo code.
+              {discountRate > 0 
+                ? `Shoppers who click your links automatically receive ${discountRate}% off without typing a promo code.`
+                : 'Shoppers who click your links shop at standard prices while you retain your full commission rate.'}
             </p>
           </div>
         </div>
@@ -294,7 +306,7 @@ export const AffiliateLinkGeneratorPage: React.FC<AffiliateLinkGeneratorPageProp
                   {/* Top Bar: View In Store link */}
                   <div className="relative z-10 p-5 flex items-center justify-between">
                     <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 bg-white/[0.06] border border-white/[0.08] px-2.5 py-1 rounded-full backdrop-blur-md">
-                      {discountRate}% Off Applied
+                      {discountRate > 0 ? `${discountRate}% Off Applied` : 'Standard Referral Link'}
                     </span>
                     <a
                       href={prod.permalink}

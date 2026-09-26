@@ -80,7 +80,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Fixed plugin update critical error by deferring table and role setup to WordPress init hook (priority 20)\n- Hardened WooCommerce coupon datastore queries with defensive exception handling\n- Verified creator promo coupons suns10, putra10, and msbn15 attribution\n- Restored Suns Channel historical commission ledger and unpaid balance\n- Maintained Edwin Yang (edwin15) and Dimas Sampurno (ds10) active configurations`,
+      changelog: `### Version ${version}\n- Default discount rate to 0.00 (0% OFF standard referral link) for creators without past coupons\n- Preserved genuine coupon discounts for Edwin Yang (edwin15 15%), Dimas Sampurno (ds10 10%), Suns Channel (suns10 10%), and Putra S (putra10 10%)\n- Portalled all affiliate admin modals to document body with full-screen dark backdrop and workspace centering\n- Fixed modal scroll locking and backdrop dismiss handlers`,
     },
   };
 

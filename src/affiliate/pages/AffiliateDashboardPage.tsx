@@ -84,7 +84,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
 
   const referralUrl = profile.referral_url || `https://exacoat.com/?x=${profile.slug}`;
   const commissionRate = Number(profile.commission_rate) || Number(metrics.commission_rate) || 15;
-  const discountRate = Number(profile.discount_rate) || 10;
+  const discountRate = profile.discount_rate != null ? Number(profile.discount_rate) : 0;
   const maxPool = Number(profile.max_commission_rate) || Number(metrics.max_commission_rate) || 25;
 
   const formatIDR = (val: number): string => {
@@ -436,9 +436,14 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
       <div className="p-4 sm:p-5 rounded-2xl border border-white/[0.08] bg-white/[0.02] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 font-mono flex items-center gap-1">
-              <Percent className="w-3 h-3 text-emerald-400" />
-              CUSTOMER DISCOUNT: {discountRate}% OFF
+            <span className={clsx(
+              "text-[11px] font-semibold px-2.5 py-0.5 rounded-full border font-mono flex items-center gap-1",
+              discountRate > 0 
+                ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                : "text-neutral-400 bg-white/[0.05] border-white/10"
+            )}>
+              <Percent className="w-3 h-3 text-neutral-400" />
+              {discountRate > 0 ? `CUSTOMER DISCOUNT: ${discountRate}% OFF` : 'STANDARD CREATOR LINK (0% OFF)'}
             </span>
             <span className="text-[11px] font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-2.5 py-0.5 rounded-full border border-[#f3aa18]/25 font-mono">
               YOUR COMMISSION: {commissionRate}% CASH
@@ -448,7 +453,15 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
             </span>
           </div>
           <p className="text-xs text-zinc-300">
-            Shoppers clicking your link automatically receive a <strong className="text-white">{discountRate}% discount</strong> from <strong className="text-[#f3aa18]">{profile.display_name || profile.username}</strong> without entering any coupon code.
+            {discountRate > 0 ? (
+              <>
+                Shoppers clicking your link automatically receive a <strong className="text-white">{discountRate}% discount</strong> from <strong className="text-[#f3aa18]">{profile.display_name || profile.username}</strong> without entering any coupon code.
+              </>
+            ) : (
+              <>
+                Shoppers clicking your link shop at standard store prices while you earn your full <strong className="text-white">{commissionRate}% commission</strong> on every order.
+              </>
+            )}
           </p>
         </div>
         <div className="shrink-0 flex items-center gap-2">
