@@ -7093,6 +7093,7 @@ export async function fetchAffiliatePortalData(affiliateId?: number): Promise<{
     unpaid_balance: number;
     total_clicks: number;
     total_orders: number;
+    max_commission_rate?: number;
     commission_rate: number;
     min_payout_amount: number;
     can_request_payout: boolean;

@@ -10,19 +10,13 @@ import {
   MousePointerClick, 
   Clock, 
   ShieldCheck, 
-  AlertCircle,
-  X,
-  ArrowRight,
-  RefreshCw,
-  Calendar,
-  Link2,
-  Sliders,
-  ChevronDown,
-  Search,
-  Filter,
-  Layers,
-  Percent,
-  Ticket
+  X, 
+  ArrowRight, 
+  RefreshCw, 
+  Link2, 
+  Sliders, 
+  Search, 
+  Percent 
 } from 'lucide-react';
 import { 
   AffiliateProfile, 
@@ -57,6 +51,7 @@ interface AffiliateDashboardPageProps {
     unpaid_balance: number;
     total_clicks: number;
     total_orders: number;
+    max_commission_rate?: number;
     commission_rate: number;
     min_payout_amount: number;
     can_request_payout: boolean;
@@ -88,6 +83,9 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
   const [showQrModal, setShowQrModal] = useState(false);
 
   const referralUrl = profile.referral_url || `https://exacoat.com/?x=${profile.slug}`;
+  const commissionRate = Number(profile.commission_rate) || Number(metrics.commission_rate) || 15;
+  const discountRate = Number(profile.discount_rate) || 10;
+  const maxPool = Number(profile.max_commission_rate) || Number(metrics.max_commission_rate) || 25;
 
   const formatIDR = (val: number): string => {
     return 'Rp ' + Math.round(val).toLocaleString('id-ID');
@@ -153,12 +151,16 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
     return horizonCommissions.filter(c => c.status !== 'rejected').length;
   }, [horizonCommissions]);
 
+  // Clicks and visits: a sale requires at least 1 visit
   const windowVisits = useMemo(() => {
+    let rawVisits = 0;
     if (horizon === 'all') {
-      return metrics.total_clicks || horizonClicks.length;
+      rawVisits = Number(metrics.total_clicks) || horizonClicks.length;
+    } else {
+      rawVisits = horizonClicks.length;
     }
-    return horizonClicks.length;
-  }, [horizon, metrics.total_clicks, horizonClicks]);
+    return Math.max(rawVisits, windowOrders);
+  }, [horizon, metrics.total_clicks, horizonClicks, windowOrders]);
 
   const conversionRate = useMemo(() => {
     if (windowVisits > 0) {
@@ -175,7 +177,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
   const chartData = useMemo(() => {
     const map: Record<string, { date: string; label: string; earnings: number; visits: number; orders: number }> = {};
 
-    // 1. Ingest backend dailyStats if available
+    // 1. Ingest backend dailyStats
     dailyStats.forEach(st => {
       if (!st.date) return;
       const d = new Date(st.date);
@@ -203,7 +205,6 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
       if (!map[key]) {
         map[key] = { date: key, label, earnings: 0, visits: 0, orders: 0 };
       }
-      // If dailyStats did not already capture earnings for this date, aggregate from commission events
       const hasDailyStatsEarnings = dailyStats.some(
         s => s.date && s.date.split('T')[0] === key && (Number(s.earnings) > 0 || Number(s.orders) > 0)
       );
@@ -232,10 +233,15 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
       }
     });
 
-    // Sort chronologically
-    const sorted = Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
+    // Enforce physical visit consistency across all entries: visits must be >= orders
+    const sorted = Object.values(map)
+      .map(entry => ({
+        ...entry,
+        visits: Math.max(entry.visits, entry.orders),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
 
-    // Fill minimum date points if dataset is sparse for smooth visualization
+    // Fill minimum date points if dataset is sparse
     if (sorted.length === 0) {
       const todayKey = new Date().toISOString().split('T')[0];
       const label = new Date().toLocaleDateString('default', { month: 'short', day: 'numeric' });
@@ -261,59 +267,41 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
     });
   }, [horizonCommissions, statusFilter, searchQuery]);
 
-  const getCommissionBadge = (
-    status: string, 
-    reason?: string | null, 
-    maturesAt?: string | null
-  ) => {
+  const getCommissionBadge = (status: string, reason?: string | null, maturesAt?: string | null) => {
     switch (status) {
       case 'paid':
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-zinc-800 text-zinc-300 border border-white/[0.08]">
             Paid
           </span>
         );
       case 'unpaid':
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
-            Cleared (Unpaid)
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+            Cleared
           </span>
         );
-      case 'pending': {
-        if (maturesAt) {
-          const maturesDate = new Date(maturesAt);
-          const now = new Date();
-          const daysLeft = Math.max(0, Math.ceil((maturesDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
-          return (
-            <span 
-              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/25"
-              title={`Delivered. 7-day grace period matures on ${maturesDate.toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' })}`}
-            >
-              Grace Period ({daysLeft > 0 ? `${daysLeft}d left` : 'clearing'})
-            </span>
-          );
-        }
+      case 'pending':
         return (
           <span 
-            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-zinc-800 text-zinc-300 border border-zinc-700"
-            title="Awaiting verified parcel delivery to start 7-day grace period"
+            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/25"
+            title={maturesAt ? `Clears on ${new Date(maturesAt).toLocaleDateString()}` : 'Under 7-day grace period'}
           >
-            Processing Order
+            Pending
           </span>
         );
-      }
       case 'rejected':
         return (
           <span 
-            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20"
-            title={reason || 'Commission rejected'}
+            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-rose-500/10 text-rose-400 border border-rose-500/25"
+            title={reason || 'Order cancelled or refunded'}
           >
-            Rejected
+            Void
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-zinc-800 text-zinc-300 border border-zinc-700">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-white/[0.05] text-zinc-400">
             {status}
           </span>
         );
@@ -321,16 +309,16 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+    <div className="space-y-6 max-w-7xl mx-auto pb-16">
       {/* Top Banner and Horizon Switcher */}
       <PageHeroHeader
         title="Creator Overview"
-        subtitle="Live performance analytics, tracking metrics, and commission ledger."
+        subtitle="Live performance metrics, audience discount attribution, and commission ledger."
         badge={{ label: 'CREATOR WORKSTATION', variant: 'amber' }}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             {/* Date Horizon Switcher */}
-            <div className="p-1 rounded-xl bg-[#141414] border border-white/[0.08] flex items-center gap-1 font-mono text-xs">
+            <div className="p-1 rounded-xl bg-[#121214] border border-white/[0.08] flex items-center gap-1 font-mono text-xs">
               {(['today', '7d', '30d', 'this_month', 'all'] as AffiliateHorizon[]).map((preset) => {
                 const labels: Record<AffiliateHorizon, string> = {
                   today: 'Today',
@@ -346,7 +334,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
                     type="button"
                     onClick={() => setHorizon(preset)}
                     className={clsx(
-                      'px-2.5 py-1 rounded-lg transition-all cursor-pointer font-semibold',
+                      'px-3 py-1.5 rounded-lg transition-all cursor-pointer font-semibold',
                       isActive
                         ? 'bg-[#f3aa18] text-[#080808] shadow-xs'
                         : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
@@ -358,7 +346,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
               })}
             </div>
 
-            {/* Quick Action Button */}
+            {/* Product Links Navigation Button */}
             <Button
               type="button"
               variant="outline"
@@ -374,7 +362,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
               type="button"
               onClick={onRefresh}
               disabled={isLoading}
-              className="px-3.5 py-2 rounded-xl bg-[#141414] hover:bg-white/[0.06] text-neutral-300 hover:text-white border border-white/[0.08] text-xs font-semibold font-sans flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer shrink-0"
+              className="px-3.5 py-2 rounded-xl bg-[#121214] hover:bg-white/[0.06] text-neutral-300 hover:text-white border border-white/[0.08] text-xs font-semibold font-sans flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer shrink-0"
               title="Refresh affiliate performance data"
             >
               <RefreshCw className={clsx('w-3.5 h-3.5', isLoading && 'animate-spin text-[#f3aa18]')} />
@@ -384,7 +372,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
         }
       />
 
-      {/* Referral Link & Quick Sharing Banner */}
+      {/* Referral Link & Sharing Bar */}
       <GlassCard className="p-5 sm:p-6 border border-white/[0.08] relative overflow-hidden">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1">
@@ -397,7 +385,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
               </span>
             </div>
             <p className="text-xs text-zinc-400">
-              Share this base link across your socials or bio to attribute customer sales for 30 days.
+              Share this link across your bio or descriptions to attribute customer purchases for 30 days.
             </p>
           </div>
 
@@ -407,7 +395,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
                 type="text"
                 readOnly
                 value={referralUrl}
-                className="w-full bg-[#0a0a0c]/90 border border-white/[0.1] rounded-xl pl-3.5 pr-10 py-2.5 text-xs font-mono text-zinc-200 select-all focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
+                className="w-full bg-[#050506] border border-white/[0.1] rounded-xl pl-3.5 pr-10 py-2.5 text-xs font-mono text-zinc-200 select-all focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
               />
               <button
                 type="button"
@@ -444,36 +432,37 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
         </div>
       </GlassCard>
 
-      {/* Active Creator Direct Discount Card */}
-      <GlassCard className="p-4 sm:p-5 border border-white/[0.08] bg-white/[0.02]">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 font-mono flex items-center gap-1">
-                <Percent className="w-3 h-3 text-emerald-400" />
-                CUSTOMER DISCOUNT: {profile.discount_rate || 10}% OFF
-              </span>
-              <span className="text-[11px] font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-2.5 py-0.5 rounded-full border border-[#f3aa18]/25 font-mono">
-                YOUR COMMISSION: {metrics.commission_rate || 10}% CASH
-              </span>
-            </div>
-            <p className="text-xs text-zinc-300">
-              When shoppers visit through your link, their cart automatically receives a <strong className="text-white">{profile.discount_rate || 10}% discount</strong> from <strong className="text-[#f3aa18]">{profile.display_name || profile.username}</strong> without entering any coupon code.
-            </p>
+      {/* Direct Customer Discount Banner */}
+      <div className="p-4 sm:p-5 rounded-2xl border border-white/[0.08] bg-white/[0.02] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 font-mono flex items-center gap-1">
+              <Percent className="w-3 h-3 text-emerald-400" />
+              CUSTOMER DISCOUNT: {discountRate}% OFF
+            </span>
+            <span className="text-[11px] font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-2.5 py-0.5 rounded-full border border-[#f3aa18]/25 font-mono">
+              YOUR COMMISSION: {commissionRate}% CASH
+            </span>
+            <span className="text-[10px] font-mono text-zinc-500">
+              (Total Pool: {maxPool}%)
+            </span>
           </div>
-          <div className="shrink-0 flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onNavigateTab('settings')}
-              leftIcon={<Sliders className="w-3.5 h-3.5 text-[#f3aa18]" />}
-            >
-              Adjust Split Slider
-            </Button>
-          </div>
+          <p className="text-xs text-zinc-300">
+            Shoppers clicking your link automatically receive a <strong className="text-white">{discountRate}% discount</strong> from <strong className="text-[#f3aa18]">{profile.display_name || profile.username}</strong> without entering any coupon code.
+          </p>
         </div>
-      </GlassCard>
+        <div className="shrink-0 flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onNavigateTab('settings')}
+            leftIcon={<Sliders className="w-3.5 h-3.5 text-[#f3aa18]" />}
+          >
+            Adjust Split Slider
+          </Button>
+        </div>
+      </div>
 
       {/* 4 Primary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -575,7 +564,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
           </div>
         </GlassCard>
 
-        {/* Card 4: Orders & Conversion */}
+        {/* Card 4: Orders & Conversion Rate */}
         <GlassCard className="p-5 border border-white/[0.08] relative overflow-hidden flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
@@ -598,7 +587,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
 
           <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs text-zinc-400">
             <span>Commission Rate:</span>
-            <span className="font-mono text-[#f3aa18] font-bold">{metrics.commission_rate}% Net</span>
+            <span className="font-mono text-[#f3aa18] font-bold">{commissionRate}% Net</span>
           </div>
         </GlassCard>
       </div>
@@ -619,7 +608,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
           </div>
 
           {/* Metric Selector Tabs */}
-          <div className="p-1 rounded-xl bg-[#141416] border border-white/[0.08] flex items-center gap-1 font-sans text-xs">
+          <div className="p-1 rounded-xl bg-[#121214] border border-white/[0.08] flex items-center gap-1 font-sans text-xs">
             <button
               type="button"
               onClick={() => setChartView('combined')}
@@ -798,12 +787,12 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search order number..."
-                className="pl-9 pr-3 py-1.5 bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all font-mono"
+                className="pl-9 pr-3 py-1.5 bg-[#050506] border border-white/[0.1] rounded-xl text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all font-mono"
               />
             </div>
 
             {/* Beautiful Custom Dropdown */}
-            <div className="w-44">
+            <div className="w-48">
               <CustomSelect
                 value={statusFilter}
                 onChange={(val) => setStatusFilter(val as CommissionFilterStatus)}

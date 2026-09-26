@@ -1256,7 +1256,7 @@ class Exacoat_Shipping_Tracker {
 		}
 
 		// Split on hyphens, en-dashes, em-dashes, commas, slashes, pipes
-		$parts = preg_split( '/\s*[-–—,\/|]\s*/u', $loc );
+		$parts = preg_split( '/\s*[-\x{2013}\x{2014},\/|]\s*/u', $loc );
 		$cleaned_parts = [];
 		$seen = [];
 

@@ -681,6 +681,7 @@ export interface AffiliateProfile {
   total_orders: number;
   referral_url: string;
   display_name?: string;
+  max_commission_rate?: number;
   discount_rate?: number;
   created_at: string;
   updated_at?: string;

@@ -196,6 +196,13 @@ class Exacoat_Affiliate_Manager {
 
 			$wpdb->query( "UPDATE {$table_affiliates} SET discount_rate = 10.00 WHERE discount_rate IS NULL OR discount_rate = 0" );
 
+			$col_check_aff_max = $wpdb->get_results( "SHOW COLUMNS FROM {$table_affiliates} LIKE 'max_commission_rate'" );
+			if ( empty( $col_check_aff_max ) ) {
+				$wpdb->query( "ALTER TABLE {$table_affiliates} ADD COLUMN max_commission_rate decimal(5,2) NULL DEFAULT 25.00 AFTER discount_rate" );
+			}
+
+			$wpdb->query( "UPDATE {$table_affiliates} SET max_commission_rate = 25.00 WHERE max_commission_rate IS NULL OR max_commission_rate = 0" );
+
 			$col_check_comm_matures = $wpdb->get_results( "SHOW COLUMNS FROM {$table_commissions} LIKE 'matures_at'" );
 			if ( empty( $col_check_comm_matures ) ) {
 				$wpdb->query( "ALTER TABLE {$table_commissions} ADD COLUMN delivered_at datetime NULL AFTER status, ADD COLUMN matures_at datetime NULL AFTER delivered_at, ADD KEY matures_at (matures_at)" );
@@ -241,12 +248,12 @@ class Exacoat_Affiliate_Manager {
 			) {$charset_collate};";
 			dbDelta( $sql_clicks );
 
-			update_option( 'exacoat_affiliate_db_version', '1.3.0' );
+			update_option( 'exacoat_affiliate_db_version', '1.3.1' );
 
 			// One-time auto-recalculation and creator setups on plugin update
-			if ( ! get_option( 'exacoat_affiliate_recalc_v96', false ) ) {
+			if ( ! get_option( 'exacoat_affiliate_recalc_v97', false ) ) {
 				self::recalculate_all_balances();
-				update_option( 'exacoat_affiliate_recalc_v96', 1 );
+				update_option( 'exacoat_affiliate_recalc_v97', 1 );
 			}
 		} catch ( \Throwable $e ) {
 			if ( class_exists( 'Exacoat_Logger' ) ) {
@@ -1944,7 +1951,7 @@ class Exacoat_Affiliate_Manager {
 			} elseif ( 'ds' === $affiliate->slug ) {
 				$slicewp_legacy_id = 1135;
 			} elseif ( 'suns' === $affiliate->slug ) {
-				$slicewp_legacy_id = 1140;
+				$slicewp_legacy_id = 1153;
 			} elseif ( 'putra' === $affiliate->slug ) {
 				$slicewp_legacy_id = 1141;
 			} elseif ( 'msbn' === $affiliate->slug ) {
@@ -2031,18 +2038,20 @@ class Exacoat_Affiliate_Manager {
 				'coupon_discount_amount' => $coupon_discount_amount,
 				'coupon_discount_type'   => $coupon_discount_type,
 				'display_name'           => self::get_creator_display_name( $affiliate ),
+				'max_commission_rate'    => ( ! empty( $affiliate->max_commission_rate ) && (float) $affiliate->max_commission_rate > 0 ) ? (float) $affiliate->max_commission_rate : max( 20.00, round( (float) ( $affiliate->commission_rate ?? 15 ) + (float) ( $affiliate->discount_rate ?? 10 ), 2 ) ),
 				'discount_rate'          => ( ! empty( $affiliate->discount_rate ) && (float) $affiliate->discount_rate > 0 ) ? (float) $affiliate->discount_rate : 10.00,
 				'commission_rate'        => ! empty( $affiliate->commission_rate ) ? (float) $affiliate->commission_rate : self::get_commission_rate(),
 			],
 			'metrics' => [
-				'lifetime_earnings' => (float) $affiliate->lifetime_earnings,
-				'unpaid_balance'    => (float) $affiliate->unpaid_balance,
-				'total_clicks'      => (int) $affiliate->total_clicks,
-				'total_orders'      => (int) $affiliate->total_orders,
-				'commission_rate'   => ! empty( $affiliate->commission_rate ) ? (float) $affiliate->commission_rate : self::get_commission_rate(),
-				'grace_period_days' => self::get_grace_period_days(),
-				'min_payout_amount' => self::get_min_payout(),
-				'can_request_payout'=> ( (float) $affiliate->unpaid_balance >= self::get_min_payout() && in_array( $affiliate->bank_name, [ 'BCA', 'MANDIRI' ], true ) && ! empty( $affiliate->bank_account_number ) ),
+				'lifetime_earnings'   => (float) $affiliate->lifetime_earnings,
+				'unpaid_balance'      => (float) $affiliate->unpaid_balance,
+				'total_clicks'        => (int) $affiliate->total_clicks,
+				'total_orders'        => (int) $affiliate->total_orders,
+				'max_commission_rate' => ( ! empty( $affiliate->max_commission_rate ) && (float) $affiliate->max_commission_rate > 0 ) ? (float) $affiliate->max_commission_rate : max( 20.00, round( (float) ( $affiliate->commission_rate ?? 15 ) + (float) ( $affiliate->discount_rate ?? 10 ), 2 ) ),
+				'commission_rate'     => ! empty( $affiliate->commission_rate ) ? (float) $affiliate->commission_rate : self::get_commission_rate(),
+				'grace_period_days'   => self::get_grace_period_days(),
+				'min_payout_amount'   => self::get_min_payout(),
+				'can_request_payout'  => ( (float) $affiliate->unpaid_balance >= self::get_min_payout() && in_array( $affiliate->bank_name, [ 'BCA', 'MANDIRI' ], true ) && ! empty( $affiliate->bank_account_number ) ),
 			],
 			'commissions' => $commissions ?: [],
 			'payouts'     => $payouts ?: [],
@@ -2126,13 +2135,13 @@ class Exacoat_Affiliate_Manager {
 
 		if ( isset( $params['discount_rate'] ) && '' !== $params['discount_rate'] ) {
 			$raw_discount = round( (float) $params['discount_rate'], 2 );
-			$curr_comm    = ! empty( $affiliate->commission_rate ) ? (float) $affiliate->commission_rate : self::get_commission_rate();
-			$curr_disc    = ! empty( $affiliate->discount_rate ) ? (float) $affiliate->discount_rate : 10.00;
-			$total_pool   = max( 20.00, round( $curr_comm + $curr_disc, 2 ) );
+			$max_pool     = ( ! empty( $affiliate->max_commission_rate ) && (float) $affiliate->max_commission_rate > 0 ) 
+				? (float) $affiliate->max_commission_rate 
+				: max( 20.00, round( ( (float) ( $affiliate->commission_rate ?? 15 ) ) + ( (float) ( $affiliate->discount_rate ?? 10 ) ), 2 ) );
 
-			// Clamp discount rate between 0 and total pool
-			$new_discount   = max( 0.00, min( $total_pool, $raw_discount ) );
-			$new_commission = max( 0.00, round( $total_pool - $new_discount, 2 ) );
+			// Clamp discount rate between 0 and max pool
+			$new_discount   = max( 0.00, min( $max_pool, $raw_discount ) );
+			$new_commission = max( 0.00, round( $max_pool - $new_discount, 2 ) );
 
 			$updates['discount_rate']   = $new_discount;
 			$formats[]                  = '%f';
@@ -4069,8 +4078,10 @@ class Exacoat_Affiliate_Manager {
 							$ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'edwinyg' LIMIT 1" );
 						} elseif ( ! $ex_id && 1135 === $s_id ) {
 							$ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'ds' LIMIT 1" );
-						} elseif ( ! $ex_id && 1140 === $s_id ) {
+						} elseif ( ! $ex_id && 1153 === $s_id ) {
 							$ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'suns' LIMIT 1" );
+						} elseif ( ! $ex_id && 1140 === $s_id ) {
+							$ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug IN ('ehgxp', 'prasetyo') LIMIT 1" );
 						} elseif ( ! $ex_id && 1141 === $s_id ) {
 							$ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'putra' LIMIT 1" );
 						} elseif ( ! $ex_id && 1142 === $s_id ) {
@@ -4112,7 +4123,8 @@ class Exacoat_Affiliate_Manager {
 							);
 							if ( ! $ex_id && 1133 === $s_id ) $ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'edwinyg' LIMIT 1" );
 							elseif ( ! $ex_id && 1135 === $s_id ) $ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'ds' LIMIT 1" );
-							elseif ( ! $ex_id && 1140 === $s_id ) $ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'suns' LIMIT 1" );
+							elseif ( ! $ex_id && 1153 === $s_id ) $ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'suns' LIMIT 1" );
+							elseif ( ! $ex_id && 1140 === $s_id ) $ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug IN ('ehgxp', 'prasetyo') LIMIT 1" );
 							elseif ( ! $ex_id && 1141 === $s_id ) $ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'putra' LIMIT 1" );
 							elseif ( ! $ex_id && 1142 === $s_id ) $ex_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'msbn' LIMIT 1" );
 							if ( ! $ex_id ) continue;
@@ -4176,26 +4188,63 @@ class Exacoat_Affiliate_Manager {
 			self::ensure_msbn_setup();
 			self::ensure_historical_payouts_synced();
 
-			// 3. Re-sum balances and order/click counts across all affiliates
-			$all_affiliates = $wpdb->get_results( "SELECT id, total_clicks FROM {$table_affiliates}" );
+			// 3. Ground truth ledger from verified SliceWP financial audit (media_1790451461395)
+			$slicewp_ground_truth = [
+				1133 => [ 'paid' => 2932060.07, 'unpaid' => 2442454.35, 'max_pool' => 25.0, 'disc' => 15.0, 'comm' => 10.0, 'coupon' => 'edwin15', 'slug' => 'edwinyg' ],
+				1135 => [ 'paid' => 9531878.22, 'unpaid' => 95715.00,   'max_pool' => 25.0, 'disc' => 10.0, 'comm' => 15.0, 'coupon' => 'ds10',    'slug' => 'ds' ],
+				1153 => [ 'paid' => 0.00,       'unpaid' => 339413.46,  'max_pool' => 25.0, 'disc' => 10.0, 'comm' => 15.0, 'coupon' => 'suns10',  'slug' => 'suns' ],
+				1142 => [ 'paid' => 0.00,       'unpaid' => 181750.00,  'max_pool' => 25.0, 'disc' => 10.0, 'comm' => 15.0, 'coupon' => '',        'slug' => 'shandy' ],
+				1140 => [ 'paid' => 378605.00,   'unpaid' => 160990.00,  'max_pool' => 20.0, 'disc' => 10.0, 'comm' => 10.0, 'coupon' => '',        'slug' => 'prasetyo' ],
+				1150 => [ 'paid' => 0.00,       'unpaid' => 725362.41,  'max_pool' => 20.0, 'disc' => 10.0, 'comm' => 10.0, 'coupon' => '',        'slug' => 'tenere' ],
+				1209 => [ 'paid' => 0.00,       'unpaid' => 312710.00,  'max_pool' => 20.0, 'disc' => 10.0, 'comm' => 10.0, 'coupon' => '',        'slug' => 'aditya' ],
+				1228 => [ 'paid' => 0.00,       'unpaid' => 99600.00,   'max_pool' => 20.0, 'disc' => 10.0, 'comm' => 10.0, 'coupon' => '',        'slug' => 'fariqul' ],
+				1216 => [ 'paid' => 0.00,       'unpaid' => 53490.00,   'max_pool' => 20.0, 'disc' => 10.0, 'comm' => 10.0, 'coupon' => '',        'slug' => 'ruswenda' ],
+				1158 => [ 'paid' => 396450.00,   'unpaid' => 49800.00,   'max_pool' => 20.0, 'disc' => 10.0, 'comm' => 10.0, 'coupon' => '',        'slug' => 'misellako' ],
+			];
+
+			$all_affiliates = $wpdb->get_results( "SELECT id, user_id, slug, total_clicks FROM {$table_affiliates}" );
 			$count = 0;
 
 			foreach ( $all_affiliates as $aff ) {
 				$aff_id = (int) $aff->id;
+				$u_id   = (int) $aff->user_id;
+				$s_id   = (int) get_user_meta( $u_id, '_slicewp_legacy_affiliate_id', true );
 
-				$unpaid = (float) $wpdb->get_var(
-					$wpdb->prepare(
-						"SELECT COALESCE(SUM(commission_amount), 0.00) FROM {$table_commissions} WHERE affiliate_id = %d AND status = 'unpaid'",
-						$aff_id
-					)
-				);
+				$gt = null;
+				if ( $s_id && isset( $slicewp_ground_truth[ $s_id ] ) ) {
+					$gt = $slicewp_ground_truth[ $s_id ];
+				} else {
+					foreach ( $slicewp_ground_truth as $k => $item ) {
+						if ( ! empty( $item['slug'] ) && $item['slug'] === $aff->slug ) {
+							$gt = $item;
+							break;
+						}
+					}
+				}
 
-				$paid = (float) $wpdb->get_var(
-					$wpdb->prepare(
-						"SELECT COALESCE(SUM(commission_amount), 0.00) FROM {$table_commissions} WHERE affiliate_id = %d AND status = 'paid'",
-						$aff_id
-					)
-				);
+				if ( $gt ) {
+					$unpaid   = (float) $gt['unpaid'];
+					$paid     = (float) $gt['paid'];
+					$max_pool = (float) $gt['max_pool'];
+					$disc     = (float) $gt['disc'];
+					$comm     = (float) $gt['comm'];
+				} else {
+					$unpaid = (float) $wpdb->get_var(
+						$wpdb->prepare(
+							"SELECT COALESCE(SUM(commission_amount), 0.00) FROM {$table_commissions} WHERE affiliate_id = %d AND status = 'unpaid'",
+							$aff_id
+						)
+					);
+					$paid = (float) $wpdb->get_var(
+						$wpdb->prepare(
+							"SELECT COALESCE(SUM(commission_amount), 0.00) FROM {$table_commissions} WHERE affiliate_id = %d AND status = 'paid'",
+							$aff_id
+						)
+					);
+					$max_pool = 25.00;
+					$disc     = 10.00;
+					$comm     = 15.00;
+				}
 
 				$total_orders = (int) $wpdb->get_var(
 					$wpdb->prepare(
@@ -4213,14 +4262,22 @@ class Exacoat_Affiliate_Manager {
 
 				$existing_clicks = (int) ( $aff->total_clicks ?? 0 );
 
+				$update_data = [
+					'unpaid_balance'      => $unpaid,
+					'lifetime_earnings'   => $unpaid + $paid,
+					'total_orders'        => $total_orders,
+					'total_clicks'        => max( $click_count, $existing_clicks, (int) $total_orders ),
+				];
+
+				if ( $gt ) {
+					$update_data['max_commission_rate'] = $max_pool;
+					$update_data['discount_rate']       = $disc;
+					$update_data['commission_rate']     = $comm;
+				}
+
 				$wpdb->update(
 					$table_affiliates,
-					[
-						'unpaid_balance'    => $unpaid,
-						'lifetime_earnings' => $unpaid + $paid,
-						'total_orders'      => $total_orders,
-						'total_clicks'      => max( $click_count, $existing_clicks, (int) $total_orders ),
-					],
+					$update_data,
 					[ 'id' => $aff_id ]
 				);
 				$count++;
@@ -4268,12 +4325,15 @@ class Exacoat_Affiliate_Manager {
 			$wpdb->update(
 				$table_affiliates,
 				[
-					'display_name'    => 'Edwin Yang',
-					'discount_rate'   => 10.00,
-					'coupon_code'     => 'edwin15',
-					'commission_rate' => 10.00,
-					'status'          => 'active',
-					'slug'            => 'edwinyg',
+					'display_name'        => 'Edwin Yang',
+					'max_commission_rate' => 25.00,
+					'discount_rate'       => 15.00,
+					'coupon_code'         => 'edwin15',
+					'commission_rate'     => 10.00,
+					'unpaid_balance'      => 2442454.35,
+					'lifetime_earnings'   => 5374514.42,
+					'status'              => 'active',
+					'slug'                => 'edwinyg',
 				],
 				[ 'id' => $edwin_aff_id ]
 			);
@@ -4281,18 +4341,21 @@ class Exacoat_Affiliate_Manager {
 			$wpdb->insert(
 				$table_affiliates,
 				[
-					'user_id'           => $user_id,
-					'slug'              => 'edwinyg',
-					'display_name'      => 'Edwin Yang',
-					'discount_rate'     => 10.00,
-					'slug_locked'       => 1,
-					'status'            => 'active',
-					'affiliate_type'    => 'Content Creator',
-					'promotion_channel' => 'Creator & Partner',
-					'coupon_code'       => 'edwin15',
-					'commission_rate'   => 10.00,
-					'bank_name'         => 'BCA',
-					'created_at'        => current_time( 'mysql' ),
+					'user_id'             => $user_id,
+					'slug'                => 'edwinyg',
+					'display_name'        => 'Edwin Yang',
+					'max_commission_rate' => 25.00,
+					'discount_rate'       => 15.00,
+					'slug_locked'         => 1,
+					'status'              => 'active',
+					'affiliate_type'      => 'Content Creator',
+					'promotion_channel'   => 'Creator & Partner',
+					'coupon_code'         => 'edwin15',
+					'commission_rate'     => 10.00,
+					'unpaid_balance'      => 2442454.35,
+					'lifetime_earnings'   => 5374514.42,
+					'bank_name'           => 'BCA',
+					'created_at'          => current_time( 'mysql' ),
 				]
 			);
 			$edwin_aff_id = (int) $wpdb->insert_id;
@@ -4301,9 +4364,10 @@ class Exacoat_Affiliate_Manager {
 		// Ensure WordPress user has affiliate role if user exists
 		if ( $user && ( $user instanceof WP_User ) ) {
 			$user->add_role( self::ROLE_AFFILIATE );
+			update_user_meta( $user_id, '_slicewp_legacy_affiliate_id', 1133 );
 		}
 
-		// Synchronize WooCommerce coupon edwin15 if available
+		// Synchronize WooCommerce coupon edwin15 if available with 15% discount
 		if ( function_exists( 'wc_get_coupon_id_by_code' ) ) {
 			try {
 				$coupon_id = wc_get_coupon_id_by_code( 'edwin15' );
@@ -4311,6 +4375,7 @@ class Exacoat_Affiliate_Manager {
 					update_post_meta( $coupon_id, '_exacoat_affiliate_id', $edwin_aff_id );
 					update_post_meta( $coupon_id, '_exacoat_affiliate_slug', 'edwinyg' );
 					update_post_meta( $coupon_id, '_exacoat_affiliate_email', 'edwinyang10@gmail.com' );
+					update_post_meta( $coupon_id, 'coupon_amount', '15' );
 				}
 			} catch ( \Throwable $e ) {
 				// WooCommerce datastore might not be initialized yet
@@ -4359,20 +4424,6 @@ class Exacoat_Affiliate_Manager {
 			);
 		}
 
-		// Settle historical commissions prior to order 542410 so only recent balance is unpaid
-		$wpdb->query(
-			$wpdb->prepare(
-				"UPDATE {$table_commissions} 
-				 SET status = 'paid' 
-				 WHERE affiliate_id = %d 
-				   AND order_id != 542410 
-				   AND order_number != '542410' 
-				   AND status = 'unpaid' 
-				   AND created_at < '2026-09-01'",
-				$edwin_aff_id
-			)
-		);
-
 		// Populate true destination account for Edwin Yang
 		$edwin_dst = self::get_slicewp_payout_destination( 1133, $user_id );
 		if ( ! empty( $edwin_dst['bank_account_number'] ) ) {
@@ -4414,12 +4465,15 @@ class Exacoat_Affiliate_Manager {
 			$wpdb->update(
 				$table_affiliates,
 				[
-					'display_name'    => 'Dimas Sampurno',
-					'discount_rate'   => 10.00,
-					'coupon_code'     => 'ds10',
-					'commission_rate' => ( ! empty( $aff->commission_rate ) && (float) $aff->commission_rate > 0 ) ? (float) $aff->commission_rate : 15.00,
-					'status'          => 'active',
-					'slug'            => 'ds',
+					'display_name'        => 'Dimas Sampurno',
+					'max_commission_rate' => 25.00,
+					'discount_rate'       => 10.00,
+					'coupon_code'         => 'ds10',
+					'commission_rate'     => 15.00,
+					'unpaid_balance'      => 95715.00,
+					'lifetime_earnings'   => 9627593.22,
+					'status'              => 'active',
+					'slug'                => 'ds',
 				],
 				[ 'id' => $dimas_aff_id ]
 			);
@@ -4427,18 +4481,21 @@ class Exacoat_Affiliate_Manager {
 			$wpdb->insert(
 				$table_affiliates,
 				[
-					'user_id'           => $user_id,
-					'slug'              => 'ds',
-					'display_name'      => 'Dimas Sampurno',
-					'discount_rate'     => 10.00,
-					'slug_locked'       => 1,
-					'status'            => 'active',
-					'affiliate_type'    => 'Content Creator',
-					'promotion_channel' => 'Creator & Partner',
-					'coupon_code'       => 'ds10',
-					'commission_rate'   => 15.00,
-					'bank_name'         => 'BCA',
-					'created_at'        => '2022-04-12 17:06:51',
+					'user_id'             => $user_id,
+					'slug'                => 'ds',
+					'display_name'        => 'Dimas Sampurno',
+					'max_commission_rate' => 25.00,
+					'discount_rate'       => 10.00,
+					'slug_locked'         => 1,
+					'status'              => 'active',
+					'affiliate_type'      => 'Content Creator',
+					'promotion_channel'   => 'Creator & Partner',
+					'coupon_code'         => 'ds10',
+					'commission_rate'     => 15.00,
+					'unpaid_balance'      => 95715.00,
+					'lifetime_earnings'   => 9627593.22,
+					'bank_name'           => 'BCA',
+					'created_at'          => '2022-04-12 17:06:51',
 				]
 			);
 			$dimas_aff_id = (int) $wpdb->insert_id;
@@ -4447,6 +4504,7 @@ class Exacoat_Affiliate_Manager {
 		// Ensure WordPress user has affiliate role if user exists
 		if ( $user && ( $user instanceof WP_User ) ) {
 			$user->add_role( self::ROLE_AFFILIATE );
+			update_user_meta( $user_id, '_slicewp_legacy_affiliate_id', 1135 );
 		}
 
 		// Synchronize WooCommerce coupon ds10 if available
@@ -4459,6 +4517,7 @@ class Exacoat_Affiliate_Manager {
 					if ( $user_email ) {
 						update_post_meta( $coupon_id, '_exacoat_affiliate_email', $user_email );
 					}
+					update_post_meta( $coupon_id, 'coupon_amount', '10' );
 				} elseif ( class_exists( 'WC_Coupon' ) ) {
 					try {
 						$new_coupon = new \WC_Coupon();
@@ -4523,7 +4582,7 @@ class Exacoat_Affiliate_Manager {
 			);
 		}
 
-		// Historical commission for order 540964 was already paid in past SliceWP payouts
+		// Ensure Dimas Sampurno unpaid commission 540964 (amount 25515.00, order subtotal 102670.00, date 2026-04-12 11:32:02)
 		$existing_comm2 = $wpdb->get_row(
 			$wpdb->prepare(
 				"SELECT id FROM {$table_commissions} WHERE order_id = 540964 OR order_number = '540964' LIMIT 1"
@@ -4541,7 +4600,7 @@ class Exacoat_Affiliate_Manager {
 					'commission_rate'   => 24.85,
 					'commission_amount' => 25515.00,
 					'coupon_code'       => 'ds10',
-					'status'            => 'paid',
+					'status'            => 'unpaid',
 					'created_at'        => '2026-04-12 11:32:02',
 				],
 				[ 'id' => (int) $existing_comm2->id ]
@@ -4557,23 +4616,23 @@ class Exacoat_Affiliate_Manager {
 					'commission_rate'   => 24.85,
 					'commission_amount' => 25515.00,
 					'coupon_code'       => 'ds10',
-					'status'            => 'paid',
+					'status'            => 'unpaid',
 					'customer_email'    => $user_email,
 					'created_at'        => '2026-04-12 11:32:02',
 				]
 			);
 		}
 
-		// Settle historical commissions prior to order 542238 so only recent balance is unpaid
+		// Settle historical commissions prior to order 540964 so only genuine SliceWP balance is unpaid (70200 + 25515 = 95715)
 		$wpdb->query(
 			$wpdb->prepare(
 				"UPDATE {$table_commissions} 
 				 SET status = 'paid' 
 				 WHERE affiliate_id = %d 
-				   AND order_id != 542238 
-				   AND order_number != '542238' 
+				   AND order_id NOT IN (542238, 540964) 
+				   AND order_number NOT IN ('542238', '540964') 
 				   AND status = 'unpaid' 
-				   AND created_at < '2026-09-01'",
+				   AND created_at < '2026-04-01'",
 				$dimas_aff_id
 			)
 		);
@@ -4618,12 +4677,15 @@ class Exacoat_Affiliate_Manager {
 			$wpdb->update(
 				$table_affiliates,
 				[
-					'display_name'    => 'Suns Channel',
-					'discount_rate'   => 10.00,
-					'coupon_code'     => 'suns10',
-					'commission_rate' => ( ! empty( $aff->commission_rate ) && (float) $aff->commission_rate > 0 ) ? (float) $aff->commission_rate : 15.00,
-					'status'          => 'active',
-					'slug'            => 'suns',
+					'display_name'        => 'Suns Channel',
+					'max_commission_rate' => 25.00,
+					'discount_rate'       => 10.00,
+					'coupon_code'         => 'suns10',
+					'commission_rate'     => 15.00,
+					'unpaid_balance'      => 339413.46,
+					'lifetime_earnings'   => 339413.46,
+					'status'              => 'active',
+					'slug'                => 'suns',
 				],
 				[ 'id' => $suns_aff_id ]
 			);
@@ -4631,18 +4693,21 @@ class Exacoat_Affiliate_Manager {
 			$wpdb->insert(
 				$table_affiliates,
 				[
-					'user_id'           => $user_id,
-					'slug'              => 'suns',
-					'display_name'      => 'Suns Channel',
-					'discount_rate'     => 10.00,
-					'slug_locked'       => 1,
-					'status'            => 'active',
-					'affiliate_type'    => 'Content Creator',
-					'promotion_channel' => 'YouTube & Creator Partner',
-					'coupon_code'       => 'suns10',
-					'commission_rate'   => 15.00,
-					'bank_name'         => 'BCA',
-					'created_at'        => '2022-08-14 05:45:39',
+					'user_id'             => $user_id,
+					'slug'                => 'suns',
+					'display_name'        => 'Suns Channel',
+					'max_commission_rate' => 25.00,
+					'discount_rate'       => 10.00,
+					'slug_locked'         => 1,
+					'status'              => 'active',
+					'affiliate_type'      => 'Content Creator',
+					'promotion_channel'   => 'YouTube & Creator Partner',
+					'coupon_code'         => 'suns10',
+					'commission_rate'     => 15.00,
+					'unpaid_balance'      => 339413.46,
+					'lifetime_earnings'   => 339413.46,
+					'bank_name'           => 'BCA',
+					'created_at'          => '2022-08-14 05:45:39',
 				]
 			);
 			$suns_aff_id = (int) $wpdb->insert_id;
@@ -4650,9 +4715,10 @@ class Exacoat_Affiliate_Manager {
 
 		if ( $user && ( $user instanceof \WP_User ) ) {
 			$user->add_role( self::ROLE_AFFILIATE );
+			update_user_meta( $user_id, '_slicewp_legacy_affiliate_id', 1153 );
 		}
 
-		// Synchronize WooCommerce coupon suns10
+		// Synchronize WooCommerce coupon suns10 with 10% discount
 		if ( function_exists( 'wc_get_coupon_id_by_code' ) ) {
 			try {
 				$coupon_id = wc_get_coupon_id_by_code( 'suns10' );
@@ -4662,6 +4728,7 @@ class Exacoat_Affiliate_Manager {
 					if ( $user_email ) {
 						update_post_meta( $coupon_id, '_exacoat_affiliate_email', $user_email );
 					}
+					update_post_meta( $coupon_id, 'coupon_amount', '10' );
 				} elseif ( class_exists( 'WC_Coupon' ) ) {
 					try {
 						$new_coupon = new \WC_Coupon();
@@ -4737,7 +4804,7 @@ class Exacoat_Affiliate_Manager {
 		}
 
 		// Populate true destination account for Suns Channel
-		$suns_dst = self::get_slicewp_payout_destination( 1140, $user_id );
+		$suns_dst = self::get_slicewp_payout_destination( 1153, $user_id );
 		if ( ! empty( $suns_dst['bank_account_number'] ) ) {
 			$wpdb->update(
 				$table_affiliates,

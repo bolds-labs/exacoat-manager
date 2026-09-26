@@ -246,7 +246,7 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
     const t = text.toLowerCase();
 
     // Extract service code if present (e.g. from "SICEPAT - BEST" -> "BEST", "JNE - REG" -> "REG")
-    const serviceMatch = text.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|anteraja|ninja|spx|shopee)\s*[-–—:]\s*([A-Za-z0-9_\s]+)/i);
+    const serviceMatch = text.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i);
     const serviceName = serviceMatch ? serviceMatch[1].trim().toUpperCase() : undefined;
 
     if (t.includes('sicepat')) {

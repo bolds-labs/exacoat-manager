@@ -6,14 +6,13 @@ import {
   AlertCircle, 
   Save, 
   User, 
-  Globe,
-  ShieldCheck,
-  CreditCard,
-  AtSign,
-  Sliders,
-  Percent,
-  Coins,
-  ExternalLink
+  ShieldCheck, 
+  CreditCard, 
+  AtSign, 
+  Sliders, 
+  Percent, 
+  Coins, 
+  ExternalLink 
 } from 'lucide-react';
 import { AffiliateProfile, AffiliateBankName } from '../../types';
 import { updateAffiliateSettings } from '../../lib/wordpressBridge';
@@ -36,13 +35,12 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
   const [displayName, setDisplayName] = useState(profile.display_name || '');
   const [isSavingDisplayName, setIsSavingDisplayName] = useState(false);
 
-  // Customer discount slider state
+  // Customer discount slider state following creator max commission pool
+  const maxPool = Number(profile.max_commission_rate) || 25;
   const currentDiscount = Number(profile.discount_rate) || 10;
-  const currentCommission = Number(profile.commission_rate) || 10;
-  const totalPool = Math.max(20, Math.round(currentDiscount + currentCommission));
-  const [discountRate, setDiscountRate] = useState<number>(currentDiscount);
+  const [discountRate, setDiscountRate] = useState<number>(Math.min(maxPool, currentDiscount));
   const [isSavingDiscount, setIsSavingDiscount] = useState(false);
-  const creatorCommission = Math.max(0, Math.round((totalPool - discountRate) * 100) / 100);
+  const creatorCommission = Math.max(0, Math.round((maxPool - discountRate) * 100) / 100);
 
   // Bank details form state
   const [bankName, setBankName] = useState<AffiliateBankName | ''>(profile.bank_name || '');
@@ -63,7 +61,11 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
         discount_rate: discountRate,
       });
       if (res.success) {
-        showToast('success', 'Discount Saved', `Customer discount updated to ${discountRate}% (Creator commission: ${creatorCommission}%).`);
+        showToast(
+          'success', 
+          'Discount Saved', 
+          `Customer discount set to ${discountRate}% and creator commission to ${creatorCommission}%.`
+        );
         onRefresh();
       } else {
         showToast('error', 'Update Failed', res.error || 'Unable to update discount split.');
@@ -172,19 +174,19 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
   };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-12">
+    <div className="space-y-6 max-w-5xl mx-auto pb-16">
       {/* Page Header */}
       <PageHeroHeader
-        title="Affiliate Settings"
-        subtitle="Configure your creator display name, Indonesian bank payout destination, and branded referral slug."
+        title="Creator Preferences"
+        subtitle="Manage discount split, Indonesian payout bank, and referral profile settings."
         badge={{ label: 'PREFERENCES', variant: 'amber' }}
       />
 
-      {/* 1. Customer Discount & Commission Slider Card */}
+      {/* 1. Customer Discount & Commission Split Slider */}
       <GlassCard className="p-6 sm:p-7 border border-white/[0.08] space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/[0.06]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
               <Sliders className="w-5 h-5" />
             </div>
             <div>
@@ -192,41 +194,41 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
                 Customer Discount &amp; Commission Split
               </h2>
               <p className="text-xs text-zinc-400 mt-0.5">
-                Slide the percentage to balance customer savings against your earned payout commission.
+                Balance customer savings against your earned payout commission from your {maxPool}% rate pool.
               </p>
             </div>
           </div>
           <span className="self-start sm:self-auto text-[11px] font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-3 py-1 rounded-full border border-[#f3aa18]/25 font-mono">
-            Total Budget Pool: {totalPool}%
+            Maximum Pool: {maxPool}%
           </span>
         </div>
 
         <form onSubmit={handleSaveDiscount} className="space-y-6">
           {/* Split KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="p-4 rounded-xl bg-emerald-500/[0.06] border border-emerald-500/20 space-y-1">
+            <div className="p-4 rounded-2xl bg-emerald-500/[0.05] border border-emerald-500/20 space-y-1">
               <div className="flex items-center justify-between text-xs text-emerald-400 font-semibold">
                 <span className="flex items-center gap-1.5">
                   <Percent className="w-3.5 h-3.5" />
                   Customer Discount
                 </span>
-                <span className="font-mono text-base font-bold">{discountRate}% Off</span>
+                <span className="font-mono text-base font-bold">{discountRate}% OFF</span>
               </div>
               <p className="text-[11px] text-zinc-400">
-                Automatically deducted for shoppers entering via your referral link.
+                Directly deducted for customers entering through your referral link.
               </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-amber-500/[0.06] border border-amber-500/20 space-y-1">
+            <div className="p-4 rounded-2xl bg-amber-500/[0.05] border border-amber-500/20 space-y-1">
               <div className="flex items-center justify-between text-xs text-[#f3aa18] font-semibold">
                 <span className="flex items-center gap-1.5">
                   <Coins className="w-3.5 h-3.5" />
                   Your Commission
                 </span>
-                <span className="font-mono text-base font-bold">{creatorCommission}% Cash</span>
+                <span className="font-mono text-base font-bold">{creatorCommission}% CASH</span>
               </div>
               <p className="text-[11px] text-zinc-400">
-                Disbursed to your registered Indonesian bank account after order maturity.
+                Disbursed to your Indonesian bank account upon order maturity.
               </p>
             </div>
           </div>
@@ -234,9 +236,9 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
           {/* Interactive Range Slider */}
           <div className="space-y-3 pt-2">
             <div className="flex items-center justify-between text-xs text-zinc-300">
-              <span className="font-medium">Slide Customer Discount Percentage</span>
-              <span className="font-mono font-bold text-white bg-white/[0.08] px-2.5 py-0.5 rounded-lg border border-white/[0.1]">
-                {discountRate}% / {creatorCommission}%
+              <span className="font-medium">Slide to Allocate Discount vs Commission</span>
+              <span className="font-mono font-bold text-white bg-white/[0.08] px-3 py-1 rounded-xl border border-white/[0.1]">
+                {discountRate}% Discount / {creatorCommission}% Commission
               </span>
             </div>
 
@@ -244,16 +246,16 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
               <input
                 type="range"
                 min="0"
-                max={totalPool}
+                max={maxPool}
                 step="1"
                 value={discountRate}
                 onChange={(e) => setDiscountRate(Number(e.target.value))}
-                className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#f3aa18] focus:outline-none"
+                className="w-full h-2.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#f3aa18] focus:outline-none"
               />
               <div className="flex justify-between text-[10px] font-mono text-zinc-500 mt-2 px-0.5">
-                <span>0% Discount</span>
-                <span>{Math.round(totalPool / 2)}% / {Math.round(totalPool / 2)}%</span>
-                <span>{totalPool}% Discount</span>
+                <span>0% Discount ({maxPool}% Commission)</span>
+                <span>{Math.round(maxPool / 2)}% / {Math.round(maxPool / 2)}%</span>
+                <span>{maxPool}% Discount (0% Commission)</span>
               </div>
             </div>
 
@@ -261,54 +263,68 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
             <div className="w-full h-2 rounded-full overflow-hidden flex bg-zinc-800 border border-white/[0.06]">
               <div
                 className="bg-emerald-500 h-full transition-all duration-150"
-                style={{ width: `${(discountRate / totalPool) * 100}%` }}
+                style={{ width: `${(discountRate / maxPool) * 100}%` }}
                 title={`Customer Discount: ${discountRate}%`}
               />
               <div
                 className="bg-[#f3aa18] h-full transition-all duration-150"
-                style={{ width: `${(creatorCommission / totalPool) * 100}%` }}
+                style={{ width: `${(creatorCommission / maxPool) * 100}%` }}
                 title={`Creator Commission: ${creatorCommission}%`}
               />
             </div>
 
             {/* Quick Presets */}
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <span className="text-[11px] text-zinc-500 font-mono">Presets:</span>
+            <div className="flex flex-wrap items-center gap-2 pt-2">
+              <span className="text-[11px] text-zinc-500 font-mono">Quick Presets:</span>
               <button
                 type="button"
-                onClick={() => setDiscountRate(Math.round(totalPool / 2))}
+                onClick={() => setDiscountRate(10)}
                 className={clsx(
-                  'px-2.5 py-1 rounded-lg text-[11px] font-mono border transition-all cursor-pointer',
-                  discountRate === Math.round(totalPool / 2)
+                  'px-3 py-1 rounded-lg text-[11px] font-mono border transition-all cursor-pointer',
+                  discountRate === 10
                     ? 'bg-white/[0.12] text-white border-white/30'
                     : 'bg-white/[0.03] text-zinc-400 border-white/[0.06] hover:bg-white/[0.08] hover:text-zinc-200'
                 )}
               >
-                50 / 50 Balanced
+                10% Discount ({maxPool - 10}% Commission)
+              </button>
+              {maxPool >= 20 && (
+                <button
+                  type="button"
+                  onClick={() => setDiscountRate(15)}
+                  className={clsx(
+                    'px-3 py-1 rounded-lg text-[11px] font-mono border transition-all cursor-pointer',
+                    discountRate === 15
+                      ? 'bg-white/[0.12] text-white border-white/30'
+                      : 'bg-white/[0.03] text-zinc-400 border-white/[0.06] hover:bg-white/[0.08] hover:text-zinc-200'
+                  )}
+                >
+                  15% Discount ({maxPool - 15}% Commission)
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setDiscountRate(5)}
+                className={clsx(
+                  'px-3 py-1 rounded-lg text-[11px] font-mono border transition-all cursor-pointer',
+                  discountRate === 5
+                    ? 'bg-white/[0.12] text-white border-white/30'
+                    : 'bg-white/[0.03] text-zinc-400 border-white/[0.06] hover:bg-white/[0.08] hover:text-zinc-200'
+                )}
+              >
+                5% Discount ({maxPool - 5}% Commission)
               </button>
               <button
                 type="button"
-                onClick={() => setDiscountRate(totalPool >= 25 ? 10 : 5)}
+                onClick={() => setDiscountRate(0)}
                 className={clsx(
-                  'px-2.5 py-1 rounded-lg text-[11px] font-mono border transition-all cursor-pointer',
-                  discountRate === (totalPool >= 25 ? 10 : 5)
+                  'px-3 py-1 rounded-lg text-[11px] font-mono border transition-all cursor-pointer',
+                  discountRate === 0
                     ? 'bg-white/[0.12] text-white border-white/30'
                     : 'bg-white/[0.03] text-zinc-400 border-white/[0.06] hover:bg-white/[0.08] hover:text-zinc-200'
                 )}
               >
-                Higher Commission ({totalPool >= 25 ? '10% / 15%' : '5% / 15%'})
-              </button>
-              <button
-                type="button"
-                onClick={() => setDiscountRate(15)}
-                className={clsx(
-                  'px-2.5 py-1 rounded-lg text-[11px] font-mono border transition-all cursor-pointer',
-                  discountRate === 15
-                    ? 'bg-white/[0.12] text-white border-white/30'
-                    : 'bg-white/[0.03] text-zinc-400 border-white/[0.06] hover:bg-white/[0.08] hover:text-zinc-200'
-                )}
-              >
-                Higher Discount (15% / {totalPool - 15}%)
+                0% Discount ({maxPool}% Commission)
               </button>
             </div>
           </div>
@@ -322,7 +338,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
               isLoading={isSavingDiscount}
               leftIcon={<Save className="w-3.5 h-3.5" />}
             >
-              Save Discount Split
+              Save Split Percentage
             </Button>
           </div>
         </form>
@@ -332,7 +348,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
       <GlassCard className="p-6 sm:p-7 border border-white/[0.08] space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/[0.06]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/25 text-[#f3aa18] flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[#f3aa18] flex items-center justify-center shrink-0">
               <User className="w-5 h-5" />
             </div>
             <div>
@@ -340,7 +356,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
                 Creator Display Name
               </h2>
               <p className="text-xs text-zinc-400 mt-0.5">
-                The public name presented to your audience when your direct discount is applied.
+                The name shown to customers when your discount is automatically applied to their cart.
               </p>
             </div>
           </div>
@@ -361,7 +377,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="e.g. Edwin Yang"
-              className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
+              className="w-full bg-[#050506] border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
             />
             <p className="text-[11px] text-zinc-400">
               Displayed in customer discount notifications: &quot;Creator discount applied: {profile.discount_rate || 10}% off from {displayName.trim() || 'Your Name'}&quot; and reflected in checkout totals.
@@ -387,7 +403,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
       <GlassCard className="p-6 sm:p-7 border border-white/[0.08] space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/[0.06]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#f3aa18]/10 border border-[#f3aa18]/25 text-[#f3aa18] flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-[#f3aa18]/10 border border-[#f3aa18]/20 text-[#f3aa18] flex items-center justify-center shrink-0">
               <Building2 className="w-5 h-5" />
             </div>
             <div>
@@ -400,7 +416,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
             </div>
           </div>
           <span className="self-start sm:self-auto text-[11px] font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-3 py-1 rounded-full border border-[#f3aa18]/25">
-            BCA &amp; Mandiri Only
+            BCA &amp; Mandiri Supported
           </span>
         </div>
 
@@ -436,7 +452,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
                 value={accountNumber}
                 onChange={(e) => setAccountNumber(e.target.value.replace(/[^0-9]/g, ''))}
                 placeholder="e.g. 5271234567"
-                className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs font-mono text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
+                className="w-full bg-[#050506] border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs font-mono text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
               />
             </div>
           </div>
@@ -452,11 +468,11 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
               type="text"
               value={accountName}
               onChange={(e) => setAccountName(e.target.value)}
-              placeholder="e.g. Budi Santoso"
-              className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
+              placeholder="e.g. Edwin Yang"
+              className="w-full bg-[#050506] border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
             />
             <p className="text-[11px] text-zinc-400">
-              Please ensure the holder name matches your bank passbook exactly to prevent transfer reversals.
+              Please ensure the holder name matches your bank account exactly to prevent transfer reversals.
             </p>
           </div>
 
@@ -474,7 +490,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
         </form>
       </GlassCard>
 
-      {/* 3. Custom Referral Slug Card */}
+      {/* 4. Custom Referral Slug Card */}
       <GlassCard className="p-6 sm:p-7 border border-white/[0.08] space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/[0.06]">
           <div className="flex items-center gap-3">
@@ -510,7 +526,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
 
         {isSlugLocked ? (
           <div className="space-y-3">
-            <div className="p-4 rounded-xl bg-[#09090b]/80 border border-white/[0.08] space-y-1.5">
+            <div className="p-4 rounded-xl bg-[#050506] border border-white/[0.08] space-y-1.5">
               <span className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider">
                 Current Referral Base URL
               </span>
@@ -538,7 +554,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
                   value={customSlug}
                   onChange={(e) => setCustomSlug(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
                   placeholder="your-brand-name"
-                  className="flex-1 bg-[#0a0a0c]/80 border border-white/[0.1] rounded-r-xl px-4 py-2.5 text-xs font-mono text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
+                  className="flex-1 bg-[#050506] border border-white/[0.1] rounded-r-xl px-4 py-2.5 text-xs font-mono text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
                 />
               </div>
             </div>
@@ -566,7 +582,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
         )}
       </GlassCard>
 
-      {/* 4. Account Profile Snapshot */}
+      {/* 5. Account Profile Snapshot */}
       <GlassCard className="p-6 sm:p-7 border border-white/[0.08] space-y-4">
         <div className="flex items-center gap-3 pb-3 border-b border-white/[0.06]">
           <div className="w-9 h-9 rounded-xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-center text-zinc-300">
@@ -583,27 +599,27 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
-          <div className="p-4 rounded-xl bg-[#09090b]/70 border border-white/[0.06] space-y-1">
+          <div className="p-4 rounded-xl bg-[#050506] border border-white/[0.06] space-y-1">
             <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block">
               Account Username
             </span>
             <p className="font-mono text-zinc-200 font-semibold">{profile.username}</p>
           </div>
-          <div className="p-4 rounded-xl bg-[#09090b]/70 border border-white/[0.06] space-y-1">
+          <div className="p-4 rounded-xl bg-[#050506] border border-white/[0.06] space-y-1">
             <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block">
               Email Address
             </span>
             <p className="font-mono text-zinc-200 font-semibold">{profile.email}</p>
           </div>
           {profile.affiliate_type && !profile.affiliate_type.toLowerCase().includes('slicewp') && (
-            <div className="p-4 rounded-xl bg-[#09090b]/70 border border-white/[0.06] space-y-1">
+            <div className="p-4 rounded-xl bg-[#050506] border border-white/[0.06] space-y-1">
               <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block">
                 Affiliate Category
               </span>
               <p className="text-zinc-200 font-medium">{profile.affiliate_type}</p>
             </div>
           )}
-          <div className="p-4 rounded-xl bg-[#09090b]/70 border border-white/[0.06] space-y-1">
+          <div className="p-4 rounded-xl bg-[#050506] border border-white/[0.06] space-y-1">
             <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block">
               Primary Channel
             </span>
@@ -612,7 +628,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
         </div>
       </GlassCard>
 
-      {/* 5. Account Credentials & Security Card */}
+      {/* 6. Account Credentials & Security Card */}
       <GlassCard className="p-6 sm:p-7 border border-white/[0.08] space-y-4">
         <div className="flex items-center gap-3 pb-3 border-b border-white/[0.06]">
           <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
@@ -628,7 +644,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
           </div>
         </div>
 
-        <div className="p-4 rounded-xl bg-[#09090b]/70 border border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="p-4 rounded-xl bg-[#050506] border border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1 text-xs text-zinc-300">
             <p className="font-medium text-white">Need to change your password or primary email?</p>
             <p className="text-zinc-400 leading-relaxed">

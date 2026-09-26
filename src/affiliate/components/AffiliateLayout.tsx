@@ -75,7 +75,7 @@ export const AffiliateLayout: React.FC<AffiliateLayoutProps> = ({
   };
 
   return (
-    <div className="manager-workspace min-h-screen bg-[#070709] text-zinc-100 flex flex-col font-sans relative overflow-x-hidden selection:bg-[#f3aa18]/30 selection:text-white">
+    <div className="manager-workspace dark min-h-screen bg-[#070709] text-zinc-100 flex flex-col font-sans relative overflow-x-hidden selection:bg-[#f3aa18]/30 selection:text-white">
       {/* Ambient luxury lighting */}
       <div 
         aria-hidden="true" 

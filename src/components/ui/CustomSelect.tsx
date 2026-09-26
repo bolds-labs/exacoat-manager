@@ -83,7 +83,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   return (
     <div className={clsx('relative space-y-1.5 font-sans', className)} ref={containerRef}>
       {label && (
-        <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block font-mono">
+        <label className="text-xs font-semibold text-zinc-300 block font-mono">
           {label}
         </label>
       )}
@@ -94,10 +94,9 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         disabled={disabled}
         onClick={() => !disabled && setIsOpen(!isOpen)}
         className={clsx(
-          'w-full p-2.5 rounded-xl text-xs flex items-center justify-between gap-2 text-left transition-all',
-          'bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10',
-          'hover:border-zinc-300 dark:hover:border-white/20 shadow-xs',
-          isOpen && 'border-zinc-400 dark:border-white/30 ring-2 ring-zinc-200 dark:ring-white/10',
+          'w-full p-2.5 rounded-xl text-xs flex items-center justify-between gap-2 text-left transition-all cursor-pointer',
+          'bg-[#09090b] border border-white/[0.12] hover:border-white/25 shadow-xs',
+          isOpen && 'border-[#f3aa18]/70 ring-2 ring-[#f3aa18]/15',
           disabled && 'opacity-50 cursor-not-allowed'
         )}
       >
@@ -108,11 +107,11 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
             </span>
           )}
           <div className="truncate">
-            <span className={clsx('font-bold', selectedOption ? 'text-zinc-900 dark:text-white' : 'text-zinc-400')}>
+            <span className={clsx('font-medium', selectedOption ? 'text-white' : 'text-zinc-500')}>
               {selectedOption ? selectedOption.label : placeholder}
             </span>
             {selectedOption?.subtitle && (
-              <span className="text-[10px] text-zinc-500 block truncate font-mono">
+              <span className="text-[10px] text-zinc-400 block truncate font-mono">
                 {selectedOption.subtitle}
               </span>
             )}
@@ -122,16 +121,16 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         <div className="flex items-center gap-1.5 shrink-0">
           {selectedOption?.badge && (
             <span className={clsx(
-              'px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase',
-              selectedOption.badgeVariant === 'lime' && 'bg-lime-500/15 text-[#f3aa18] border border-lime-500/30',
-              selectedOption.badgeVariant === 'amber' && 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
+              'px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider',
+              selectedOption.badgeVariant === 'lime' && 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
+              selectedOption.badgeVariant === 'amber' && 'bg-amber-500/15 text-[#f3aa18] border border-amber-500/30',
               selectedOption.badgeVariant === 'rose' && 'bg-rose-500/15 text-rose-400 border border-rose-500/30',
-              (!selectedOption.badgeVariant || selectedOption.badgeVariant === 'zinc') && 'bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+              (!selectedOption.badgeVariant || selectedOption.badgeVariant === 'zinc') && 'bg-white/[0.08] text-zinc-300 border border-white/[0.1]'
             )}>
               {selectedOption.badge}
             </span>
           )}
-          <ChevronDown className={clsx('w-4 h-4 text-zinc-400 transition-transform duration-200', isOpen && 'rotate-180 text-zinc-900 dark:text-white')} />
+          <ChevronDown className={clsx('w-4 h-4 text-zinc-400 transition-transform duration-200', isOpen && 'rotate-180 text-white')} />
         </div>
       </button>
 
@@ -140,14 +139,14 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         <div
           className={clsx(
             'absolute left-0 right-0 top-full mt-1.5 z-50 rounded-2xl overflow-hidden shadow-2xl',
-            'bg-[#ffffff] dark:bg-[#121215] border border-zinc-200 dark:border-white/10 backdrop-blur-xl',
+            'bg-[#0c0c0e] border border-white/[0.14] backdrop-blur-2xl',
             'animate-in fade-in zoom-in-95 duration-150',
             dropdownClassName
           )}
         >
           {/* Optional Search Box */}
           {searchable && (
-            <div className="p-2 border-b border-zinc-200 dark:border-white/[0.06] bg-zinc-50 dark:bg-black/40">
+            <div className="p-2 border-b border-white/[0.08] bg-black/40">
               <div className="relative flex items-center">
                 <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5" />
                 <input
@@ -156,14 +155,14 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Search options..."
-                  className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 text-xs text-zinc-900 dark:text-white font-mono focus:outline-hidden focus:border-zinc-400 dark:focus:border-white/30"
+                  className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-[#050506] border border-white/[0.1] text-xs text-white font-mono focus:outline-none focus:border-white/30"
                 />
               </div>
             </div>
           )}
 
           {/* Options List */}
-          <div className="max-h-72 overflow-y-auto p-1.5 space-y-1 divide-y divide-zinc-100 dark:divide-white/[0.04]">
+          <div className="max-h-72 overflow-y-auto p-1.5 space-y-1 divide-y divide-white/[0.04]">
             {searchable && searchQuery.trim() && !options.some(o => o.value.toLowerCase() === searchQuery.trim().toLowerCase()) && (
               <div className="p-1 pb-1.5">
                 <button
@@ -172,10 +171,10 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                     onChange(searchQuery.trim());
                     setIsOpen(false);
                   }}
-                  className="w-full px-3 py-2 rounded-xl text-xs flex items-center justify-between text-left bg-zinc-100 hover:bg-zinc-200 dark:bg-white/[0.08] dark:hover:bg-white/[0.14] text-zinc-900 dark:text-white font-mono border border-zinc-200 dark:border-white/10 transition-all"
+                  className="w-full px-3 py-2 rounded-xl text-xs flex items-center justify-between text-left bg-white/[0.08] hover:bg-white/[0.14] text-white font-mono border border-white/10 transition-all cursor-pointer"
                 >
-                  <span className="truncate">Use custom: <strong>"{searchQuery.trim()}"</strong></span>
-                  <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-white/20 text-zinc-800 dark:text-white">Custom</span>
+                  <span className="truncate">Use custom: <strong>&quot;{searchQuery.trim()}&quot;</strong></span>
+                  <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-white/20 text-white">Custom</span>
                 </button>
               </div>
             )}
@@ -186,7 +185,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
             ) : hasCategories ? (
               Object.entries(groupedOptions).map(([category, items]) => (
                 <div key={category} className="pt-1.5 first:pt-0 space-y-1">
-                  <div className="px-2.5 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                  <div className="px-2.5 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
                     {category}
                   </div>
                   {items.map(opt => {
@@ -200,20 +199,20 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                           setIsOpen(false);
                         }}
                         className={clsx(
-                          'w-full px-3 py-2 rounded-xl text-xs flex items-center justify-between text-left transition-all',
+                          'w-full px-3 py-2.5 rounded-xl text-xs flex items-center justify-between text-left transition-all cursor-pointer',
                           isSelected
-                            ? 'bg-zinc-100 dark:bg-white/[0.08] text-zinc-950 dark:text-white font-bold border border-zinc-200 dark:border-white/10'
-                            : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/[0.06] hover:text-zinc-900 dark:hover:text-white'
+                            ? 'bg-white/[0.1] text-white font-semibold border border-white/[0.12]'
+                            : 'text-zinc-300 hover:bg-white/[0.06] hover:text-white'
                         )}
                       >
                         <div className="flex items-center gap-2.5 truncate">
                           {opt.icon && (
-                            <span className={clsx('shrink-0 flex items-center justify-center', isSelected ? 'text-zinc-900 dark:text-white' : 'text-zinc-400')}>
+                            <span className={clsx('shrink-0 flex items-center justify-center', isSelected ? 'text-white' : 'text-zinc-400')}>
                               {opt.icon}
                             </span>
                           )}
                           <div className="truncate">
-                            <span className="block truncate">{opt.label}</span>
+                            <span className="block truncate font-medium">{opt.label}</span>
                             {opt.subtitle && (
                               <span className="text-[10px] text-zinc-400 font-mono block truncate">
                                 {opt.subtitle}
@@ -225,16 +224,16 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                         <div className="flex items-center gap-2 shrink-0 ml-2">
                           {opt.badge && (
                             <span className={clsx(
-                              'px-1.5 py-0.2 rounded text-[9px] font-mono font-bold uppercase',
-                              opt.badgeVariant === 'lime' && 'bg-lime-500/15 text-[#f3aa18]',
-                              opt.badgeVariant === 'amber' && 'bg-amber-500/15 text-amber-400',
-                              opt.badgeVariant === 'rose' && 'bg-rose-500/15 text-rose-400',
-                              (!opt.badgeVariant || opt.badgeVariant === 'zinc') && 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
+                              'px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider',
+                              opt.badgeVariant === 'lime' && 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
+                              opt.badgeVariant === 'amber' && 'bg-amber-500/15 text-[#f3aa18] border border-amber-500/30',
+                              opt.badgeVariant === 'rose' && 'bg-rose-500/15 text-rose-400 border border-rose-500/30',
+                              (!opt.badgeVariant || opt.badgeVariant === 'zinc') && 'bg-white/[0.08] text-zinc-300 border border-white/[0.1]'
                             )}>
                               {opt.badge}
                             </span>
                           )}
-                          {isSelected && <Check className="w-4 h-4 text-zinc-900 dark:text-white shrink-0" />}
+                          {isSelected && <Check className="w-4 h-4 text-[#f3aa18] shrink-0" />}
                         </div>
                       </button>
                     );
@@ -253,20 +252,20 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                       setIsOpen(false);
                     }}
                     className={clsx(
-                      'w-full px-3 py-2 rounded-xl text-xs flex items-center justify-between text-left transition-all',
+                      'w-full px-3 py-2.5 rounded-xl text-xs flex items-center justify-between text-left transition-all cursor-pointer',
                       isSelected
-                        ? 'bg-zinc-100 dark:bg-white/[0.08] text-zinc-950 dark:text-white font-bold border border-zinc-200 dark:border-white/10'
-                        : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/[0.06] hover:text-zinc-900 dark:hover:text-white'
+                        ? 'bg-white/[0.1] text-white font-semibold border border-white/[0.12]'
+                        : 'text-zinc-300 hover:bg-white/[0.06] hover:text-white'
                     )}
                   >
                     <div className="flex items-center gap-2.5 truncate">
                       {opt.icon && (
-                        <span className={clsx('shrink-0 flex items-center justify-center', isSelected ? 'text-zinc-900 dark:text-white' : 'text-zinc-400')}>
+                        <span className={clsx('shrink-0 flex items-center justify-center', isSelected ? 'text-white' : 'text-zinc-400')}>
                           {opt.icon}
                         </span>
                       )}
                       <div className="truncate">
-                        <span className="block truncate">{opt.label}</span>
+                        <span className="block truncate font-medium">{opt.label}</span>
                         {opt.subtitle && (
                           <span className="text-[10px] text-zinc-400 font-mono block truncate">
                             {opt.subtitle}
@@ -278,16 +277,16 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                     <div className="flex items-center gap-2 shrink-0 ml-2">
                       {opt.badge && (
                         <span className={clsx(
-                          'px-1.5 py-0.2 rounded text-[9px] font-mono font-bold uppercase',
-                          opt.badgeVariant === 'lime' && 'bg-lime-500/15 text-[#f3aa18]',
-                          opt.badgeVariant === 'amber' && 'bg-amber-500/15 text-amber-400',
-                          opt.badgeVariant === 'rose' && 'bg-rose-500/15 text-rose-400',
-                          (!opt.badgeVariant || opt.badgeVariant === 'zinc') && 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
+                          'px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider',
+                          opt.badgeVariant === 'lime' && 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
+                          opt.badgeVariant === 'amber' && 'bg-amber-500/15 text-[#f3aa18] border border-amber-500/30',
+                          opt.badgeVariant === 'rose' && 'bg-rose-500/15 text-rose-400 border border-rose-500/30',
+                          (!opt.badgeVariant || opt.badgeVariant === 'zinc') && 'bg-white/[0.08] text-zinc-300 border border-white/[0.1]'
                         )}>
                           {opt.badge}
                         </span>
                       )}
-                      {isSelected && <Check className="w-4 h-4 text-zinc-900 dark:text-white shrink-0" />}
+                      {isSelected && <Check className="w-4 h-4 text-[#f3aa18] shrink-0" />}
                     </div>
                   </button>
                 );

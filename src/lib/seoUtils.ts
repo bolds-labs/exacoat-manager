@@ -53,7 +53,7 @@ export function cleanRedundantSeoTitle(title: string, rawProductName?: string): 
   }
 
   // Ensure no em dashes or exclamation marks
-  cleaned = cleaned.replace(/[—–]/g, ', ').replace(/--/g, ', ').replace(/!+/g, '.');
+  cleaned = cleaned.replace(/[\u2014\u2013]/g, ', ').replace(/--/g, ', ').replace(/!+/g, '.');
 
   return cleaned.trim();
 }
@@ -71,7 +71,7 @@ export function buildCanonicalFocusKeyword(rawName: string): string {
  * and enforces Antislop copywriting rules (no em dashes, no exclamation marks).
  *
  * Transforms boilerplate like:
- * "Let’s get one thing straight — your <a href="[geturl]">[product_name]</a> is cool. But not <em>your kind of cool</em>. Wrap your [product_name] with Exacoat’s premium skin – no added bulk, just flawless defense. Engineered for an exact, edge‑to‑edge fit."
+ * "Let's get one thing straight, your <a href="[geturl]">[product_name]</a> is cool. But not <em>your kind of cool</em>. Wrap your [product_name] with Exacoat's premium skin, no added bulk, just flawless defense. Engineered for an exact, edge-to-edge fit."
  * Into:
  * "Let's get one thing straight, your iPhone 18 Pro is cool. But not your kind of cool. Wrap your iPhone 18 Pro with Exacoat's premium skin, no added bulk, just flawless defense. Engineered for an exact, edge-to-edge fit."
  */
@@ -108,8 +108,8 @@ export function cleanSeoCopy(
   cleaned = cleaned.replace(/<\/?[a-z][a-z0-9]*\b[^>]*>/gi, '');
 
   // 3. Antislop & Typography rules
-  // Strictly NO em dashes (—) or en dashes (–) or double hyphens (--)
-  cleaned = cleaned.replace(/[—–]/g, ', ');
+  // Strictly NO em dashes or en dashes or double hyphens (--)
+  cleaned = cleaned.replace(/[\u2014\u2013]/g, ', ');
   cleaned = cleaned.replace(/--/g, ', ');
 
   // Strictly NO exclamation marks
@@ -154,7 +154,7 @@ export function hasBoilerplateTokens(text: string): boolean {
     /\[geturl\]/i.test(text) ||
     /<a\b[^>]*>/i.test(text) ||
     /<em>/i.test(text) ||
-    /[—–]/.test(text) ||
+    /[\u2014\u2013]/.test(text) ||
     /--/.test(text) ||
     /\bskins?\s+skin\b/i.test(text)
   );

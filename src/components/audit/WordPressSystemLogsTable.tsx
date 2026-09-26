@@ -318,7 +318,7 @@ export const WordPressSystemLogsTable: React.FC = () => {
                           <span>Inspect JSON</span>
                         </button>
                       ) : (
-                        <span className="text-zinc-600 text-[10px]">—</span>
+                        <span className="text-zinc-600 text-[10px]">-</span>
                       )}
                     </td>
                   </tr>
