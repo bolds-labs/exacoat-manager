@@ -7358,4 +7358,142 @@ export function getAdminExportPayoutsUrl(bank: 'BCA' | 'MANDIRI'): string {
   return `${base}/wp-json/exacoat/v1/affiliate/admin/export-payouts?bank=${bank}`;
 }
 
+export async function fetchAdminAffiliateSettings(): Promise<{
+  success: boolean;
+  settings?: {
+    commission_rate: number;
+    min_payout_amount: number;
+    grace_period_days: number;
+    cookie_days: number;
+    auto_approve: boolean;
+  };
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat/v1/affiliate/admin/settings`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, settings: data.settings };
+    }
+    return { success: false, error: data?.message || 'Failed to fetch settings.' };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function updateAdminAffiliateSettings(settings: {
+  commission_rate?: number;
+  min_payout_amount?: number;
+  grace_period_days?: number;
+  cookie_days?: number;
+  auto_approve?: boolean;
+}): Promise<{ success: boolean; message?: string; settings?: any; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat/v1/affiliate/admin/settings`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(settings),
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, message: data.message, settings: data.settings };
+    }
+    return { success: false, error: data?.message || 'Failed to update settings.' };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchAdminSliceWpStatus(): Promise<{
+  success: boolean;
+  available: boolean;
+  affiliates_count: number;
+  commissions_count: number;
+  visits_count: number;
+  unpaid_total: number;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat/v1/affiliate/admin/slicewp-status`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return data;
+    }
+    return {
+      success: false,
+      available: false,
+      affiliates_count: 0,
+      commissions_count: 0,
+      visits_count: 0,
+      unpaid_total: 0,
+      error: data?.message || 'Failed to check SliceWP tables.',
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      available: false,
+      affiliates_count: 0,
+      commissions_count: 0,
+      visits_count: 0,
+      unpaid_total: 0,
+      error: err.message,
+    };
+  }
+}
+
+export async function runAdminSliceWpMigration(): Promise<{
+  success: boolean;
+  message?: string;
+  summary?: {
+    affiliates_migrated: number;
+    commissions_migrated: number;
+    clicks_migrated: number;
+  };
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat/v1/affiliate/admin/slicewp-migrate`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({}),
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return data;
+    }
+    return { success: false, error: data?.message || 'Migration failed.' };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+
 

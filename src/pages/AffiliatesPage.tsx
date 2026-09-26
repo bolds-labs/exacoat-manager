@@ -12,11 +12,19 @@ import {
   ExternalLink, 
   Building2, 
   AlertCircle,
-  FileSpreadsheet,
-  Check,
-  X,
-  Loader2,
-  Filter
+  Check, 
+  X, 
+  Loader2, 
+  Filter,
+  Sliders,
+  Database,
+  ArrowRight,
+  TrendingUp,
+  Sparkles,
+  Percent,
+  Calendar,
+  Save,
+  Info
 } from 'lucide-react';
 import { 
   fetchAdminAffiliates, 
@@ -24,11 +32,19 @@ import {
   fetchAdminAffiliateCommissions, 
   fetchAdminAffiliatePayouts, 
   updateAdminAffiliatePayout,
-  getAdminExportPayoutsUrl 
+  getAdminExportPayoutsUrl,
+  fetchAdminAffiliateSettings,
+  updateAdminAffiliateSettings,
+  fetchAdminSliceWpStatus,
+  runAdminSliceWpMigration
 } from '../lib/wordpressBridge';
 import { AffiliateCommission, AffiliatePayout } from '../types';
 import { useToast } from '../context/ToastContext';
 import { FilterSelect, FilterSelectOption } from '../components/ui/FilterSelect';
+import { GlassCard } from '../components/ui/GlassCard';
+import { PageHeroHeader } from '../components/ui/PageHeroHeader';
+import { Button } from '../components/ui/Button';
+import { clsx } from 'clsx';
 
 const AFFILIATE_STATUS_OPTIONS: FilterSelectOption[] = [
   { value: 'all', label: 'All Statuses' },
@@ -37,9 +53,23 @@ const AFFILIATE_STATUS_OPTIONS: FilterSelectOption[] = [
   { value: 'suspended', label: 'Suspended' },
   { value: 'rejected', label: 'Rejected' },
 ];
-import { clsx } from 'clsx';
 
-type TabKey = 'applications' | 'affiliates' | 'commissions' | 'payouts';
+const COMMISSION_STATUS_OPTIONS: FilterSelectOption[] = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'pending', label: 'Pending Grace Period' },
+  { value: 'unpaid', label: 'Unpaid / Cleared' },
+  { value: 'paid', label: 'Paid' },
+  { value: 'rejected', label: 'Rejected (Refunded)' },
+];
+
+const PAYOUT_STATUS_OPTIONS: FilterSelectOption[] = [
+  { value: 'all', label: 'All Payouts' },
+  { value: 'pending', label: 'Pending Transfers' },
+  { value: 'paid', label: 'Completed Transfers' },
+  { value: 'rejected', label: 'Rejected' },
+];
+
+type TabKey = 'applications' | 'affiliates' | 'commissions' | 'payouts' | 'settings' | 'slicewp';
 
 export const AffiliatesPage: React.FC = () => {
   const { showToast } = useToast();
@@ -55,6 +85,32 @@ export const AffiliatesPage: React.FC = () => {
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  // Program Settings state
+  const [settings, setSettings] = useState({
+    commission_rate: 20,
+    min_payout_amount: 250000,
+    grace_period_days: 7,
+    cookie_days: 30,
+    auto_approve: false,
+  });
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // SliceWP Migration state
+  const [sliceWpStatus, setSliceWpStatus] = useState<{
+    available: boolean;
+    affiliates_count: number;
+    commissions_count: number;
+    visits_count: number;
+    unpaid_total: number;
+  } | null>(null);
+  const [isCheckingSliceWp, setIsCheckingSliceWp] = useState(false);
+  const [isMigratingSliceWp, setIsMigratingSliceWp] = useState(false);
+  const [migrationResult, setMigrationResult] = useState<{
+    affiliates_migrated: number;
+    commissions_migrated: number;
+    clicks_migrated: number;
+  } | null>(null);
 
   // Modals
   const [rejectingApp, setRejectingApp] = useState<any | null>(null);
@@ -83,6 +139,24 @@ export const AffiliatesPage: React.FC = () => {
         if (res.success) {
           setPayouts(res.payouts);
         }
+      } else if (activeTab === 'settings') {
+        const res = await fetchAdminAffiliateSettings();
+        if (res.success && res.settings) {
+          setSettings(res.settings);
+        }
+      } else if (activeTab === 'slicewp') {
+        setIsCheckingSliceWp(true);
+        const res = await fetchAdminSliceWpStatus();
+        if (res.success) {
+          setSliceWpStatus({
+            available: res.available,
+            affiliates_count: res.affiliates_count,
+            commissions_count: res.commissions_count,
+            visits_count: res.visits_count,
+            unpaid_total: res.unpaid_total,
+          });
+        }
+        setIsCheckingSliceWp(false);
       }
     } catch (err: any) {
       showToast('error', 'Network Error', err.message);
@@ -179,234 +253,361 @@ export const AffiliatesPage: React.FC = () => {
     }
   };
 
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingSettings(true);
+    try {
+      const res = await updateAdminAffiliateSettings(settings);
+      if (res.success) {
+        showToast('success', 'Settings Saved', 'Affiliate program settings updated.');
+        if (res.settings) setSettings(res.settings);
+      } else {
+        showToast('error', 'Error', res.error || 'Failed to update settings.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message);
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const handleExecuteSliceWpMigration = async () => {
+    const confirmed = window.confirm(
+      'Begin historical data migration from SliceWP? This will import affiliates, preserve WordPress user roles, copy verified commissions, and calculate current balances.'
+    );
+    if (!confirmed) return;
+
+    setIsMigratingSliceWp(true);
+    try {
+      const res = await runAdminSliceWpMigration();
+      if (res.success && res.summary) {
+        setMigrationResult(res.summary);
+        showToast('success', 'Migration Finished', 'SliceWP historical data successfully imported.');
+        // Refresh status
+        const statusRes = await fetchAdminSliceWpStatus();
+        if (statusRes.success) {
+          setSliceWpStatus({
+            available: statusRes.available,
+            affiliates_count: statusRes.affiliates_count,
+            commissions_count: statusRes.commissions_count,
+            visits_count: statusRes.visits_count,
+            unpaid_total: statusRes.unpaid_total,
+          });
+        }
+      } else {
+        showToast('error', 'Migration Failed', res.error || 'An error occurred during import.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Migration Error', err.message);
+    } finally {
+      setIsMigratingSliceWp(false);
+    }
+  };
+
   const formatIDR = (val: number): string => {
     return 'Rp ' + Math.round(Number(val || 0)).toLocaleString('id-ID');
   };
 
   const pendingApps = affiliates.filter((a) => a.status === 'pending_approval');
+  const activeAffiliatesCount = affiliates.filter((a) => a.status === 'active').length;
   const pendingPayoutsCount = payouts.filter((p) => p.status === 'pending').length;
+
+  const totalUnpaidLiability = affiliates.reduce((sum, a) => sum + Number(a.unpaid_balance || 0), 0);
+  const totalLifetimeEarned = affiliates.reduce((sum, a) => sum + Number(a.lifetime_earnings || 0), 0);
+
+  const tabs: { key: TabKey; label: string; count?: number }[] = [
+    { key: 'applications', label: 'Applications', count: pendingApps.length },
+    { key: 'affiliates', label: 'Affiliates Directory', count: activeAffiliatesCount },
+    { key: 'commissions', label: 'Commissions Ledger' },
+    { key: 'payouts', label: 'Payout Requests', count: pendingPayoutsCount },
+    { key: 'settings', label: 'Program Settings' },
+    { key: 'slicewp', label: 'SliceWP Migration' },
+  ];
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-5">
-        <div>
-          <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2.5">
-            <Users className="w-5 h-5 text-amber-400" />
-            <span>Affiliate &amp; Creator Program</span>
-          </h1>
-          <p className="text-xs text-zinc-400 mt-1">
-            Review incoming creator applications, audit 20% order attribution, and process BCA and Mandiri bulk payouts.
-          </p>
-        </div>
+      {/* 1. Page Header & Actions */}
+      <PageHeroHeader
+        title="Affiliate & Creator Program"
+        subtitle="Manage creator partnerships, audit commission attribution, disburse bulk bank payouts, and manage system settings."
+        badge={{
+          label: 'Custom Engine',
+          variant: 'amber',
+        }}
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            <a
+              href={getAdminExportPayoutsUrl('BCA')}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-2 rounded-xl bg-[#141414] hover:bg-white/[0.06] text-neutral-300 hover:text-white border border-white/[0.08] text-xs font-semibold font-sans flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+              title="Download BCA KlikBCA Bisnis Payroll CSV"
+            >
+              <Download className="w-3.5 h-3.5 text-blue-400" />
+              <span>Export BCA CSV</span>
+            </a>
+            <a
+              href={getAdminExportPayoutsUrl('MANDIRI')}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-2 rounded-xl bg-[#141414] hover:bg-white/[0.06] text-neutral-300 hover:text-white border border-white/[0.08] text-xs font-semibold font-sans flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+              title="Download Mandiri Cash Management (MCM) CSV"
+            >
+              <Download className="w-3.5 h-3.5 text-amber-400" />
+              <span>Export Mandiri CSV</span>
+            </a>
+            <button
+              type="button"
+              onClick={loadData}
+              disabled={isLoading}
+              className="px-3.5 py-2 rounded-xl bg-[#141414] hover:bg-white/[0.06] text-neutral-300 hover:text-white border border-white/[0.08] text-xs font-semibold font-sans flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer shrink-0"
+              title="Refresh Ledger"
+            >
+              <RefreshCw className={clsx('w-3.5 h-3.5', isLoading && 'animate-spin text-[#f3aa18]')} />
+              <span>Refresh</span>
+            </button>
+          </div>
+        }
+      />
 
-        {/* Quick Bulk Export buttons */}
-        <div className="flex items-center gap-2">
-          <a
-            href={getAdminExportPayoutsUrl('BCA')}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition-colors shadow-sm"
-            title="Download BCA KlikBCA Bisnis Payroll CSV"
-          >
-            <Download className="w-3.5 h-3.5 text-blue-400" />
-            <span>Export BCA CSV</span>
-          </a>
-          <a
-            href={getAdminExportPayoutsUrl('MANDIRI')}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition-colors shadow-sm"
-            title="Download Mandiri Cash Management (MCM) CSV"
-          >
-            <Download className="w-3.5 h-3.5 text-amber-400" />
-            <span>Export Mandiri CSV</span>
-          </a>
-          <button
-            type="button"
-            onClick={loadData}
-            disabled={isLoading}
-            className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-zinc-700 transition-colors cursor-pointer"
-            title="Refresh Ledger"
-          >
-            <RefreshCw className={clsx('w-4 h-4', isLoading && 'animate-spin text-amber-400')} />
-          </button>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-zinc-800">
-        <button
-          type="button"
-          onClick={() => { setActiveTab('applications'); setStatusFilter('all'); }}
-          className={clsx(
-            'flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer',
-            activeTab === 'applications'
-              ? 'border-amber-400 text-white'
-              : 'border-transparent text-zinc-400 hover:text-zinc-200'
-          )}
-        >
-          <span>Applications</span>
-          {pendingApps.length > 0 && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-              {pendingApps.length}
+      {/* 2. Core Metrics KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Card 1: Active Creators */}
+        <GlassCard className="p-5 space-y-2 border border-white/[0.06] bg-[#111111]">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-neutral-400 font-mono">
+              Affiliate Partners
             </span>
-          )}
-        </button>
+            <div className="w-8 h-8 rounded-lg bg-[#f3aa18]/10 border border-[#f3aa18]/20 flex items-center justify-center text-[#f3aa18]">
+              <Users className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <p className="text-2xl font-bold font-mono text-white">
+              {affiliates.length.toLocaleString()}
+            </p>
+            <p className="text-[11px] font-sans text-neutral-400">
+              <span className="text-[#f3aa18] font-mono font-semibold">{activeAffiliatesCount}</span> active creators &bull; <span className="text-amber-400 font-mono font-semibold">{pendingApps.length}</span> awaiting review
+            </p>
+          </div>
+        </GlassCard>
 
-        <button
-          type="button"
-          onClick={() => { setActiveTab('affiliates'); setStatusFilter('all'); }}
-          className={clsx(
-            'flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer',
-            activeTab === 'affiliates'
-              ? 'border-amber-400 text-white'
-              : 'border-transparent text-zinc-400 hover:text-zinc-200'
-          )}
-        >
-          <span>Affiliate Directory</span>
-        </button>
+        {/* Card 2: Commission Liability */}
+        <GlassCard className="p-5 space-y-2 border border-white/[0.06] bg-[#111111]">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-neutral-400 font-mono">
+              Unpaid Liability
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+              <Wallet className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <p className="text-2xl font-bold font-mono text-[#f3aa18]">
+              {formatIDR(totalUnpaidLiability)}
+            </p>
+            <p className="text-[11px] font-sans text-neutral-400">
+              Cleared commissions ready for creator disbursement
+            </p>
+          </div>
+        </GlassCard>
 
-        <button
-          type="button"
-          onClick={() => { setActiveTab('commissions'); setStatusFilter('all'); }}
-          className={clsx(
-            'flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer',
-            activeTab === 'commissions'
-              ? 'border-amber-400 text-white'
-              : 'border-transparent text-zinc-400 hover:text-zinc-200'
-          )}
-        >
-          <span>Commissions Ledger</span>
-        </button>
+        {/* Card 3: Lifetime Paid Out */}
+        <GlassCard className="p-5 space-y-2 border border-white/[0.06] bg-[#111111]">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-neutral-400 font-mono">
+              Lifetime Paid Out
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+              <TrendingUp className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <p className="text-2xl font-bold font-mono text-white">
+              {formatIDR(totalLifetimeEarned)}
+            </p>
+            <p className="text-[11px] font-sans text-neutral-400">
+              Total historical earnings paid to creator partners
+            </p>
+          </div>
+        </GlassCard>
 
-        <button
-          type="button"
-          onClick={() => { setActiveTab('payouts'); setStatusFilter('all'); }}
-          className={clsx(
-            'flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer',
-            activeTab === 'payouts'
-              ? 'border-amber-400 text-white'
-              : 'border-transparent text-zinc-400 hover:text-zinc-200'
-          )}
-        >
-          <span>Payout Requests</span>
-          {pendingPayoutsCount > 0 && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+        {/* Card 4: Payout Requests Queue */}
+        <GlassCard className="p-5 space-y-2 border border-white/[0.06] bg-[#111111]">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-neutral-400 font-mono">
+              Pending Payouts
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400">
+              <Clock className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <p className="text-2xl font-bold font-mono text-white">
               {pendingPayoutsCount}
-            </span>
-          )}
-        </button>
+            </p>
+            <p className="text-[11px] font-sans text-neutral-400">
+              Transfer requests waiting for bank settlement
+            </p>
+          </div>
+        </GlassCard>
       </div>
 
-      {/* Tab 1: Applications */}
+      {/* 3. Segmented Navigation Bar */}
+      <GlassCard className="p-2 border border-white/[0.06] bg-[#111111]">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => {
+                setActiveTab(tab.key);
+                setStatusFilter('all');
+                setSearchQuery('');
+              }}
+              className={clsx(
+                'px-3.5 py-2 rounded-xl text-xs font-semibold font-sans whitespace-nowrap transition-all cursor-pointer flex items-center gap-2',
+                activeTab === tab.key
+                  ? 'bg-[#f3aa18] text-[#080808] shadow-xs'
+                  : 'bg-[#141414] text-neutral-400 hover:text-white hover:bg-white/[0.06] border border-white/[0.06]'
+              )}
+            >
+              <span>{tab.label}</span>
+              {tab.count !== undefined && tab.count > 0 && (
+                <span className={clsx(
+                  'px-1.5 py-0.2 rounded-full text-[10px] font-bold font-mono',
+                  activeTab === tab.key ? 'bg-black/20 text-black' : 'bg-[#f3aa18]/20 text-[#f3aa18]'
+                )}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </GlassCard>
+
+      {/* 4. Tab 1: Applications */}
       {activeTab === 'applications' && (
         <div className="space-y-4">
-          <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-400 flex items-center justify-between">
-            <span>
-              Creators applying to join the program. Approving an application will set their status to <strong>active</strong>, assign their referral slug, and send them a welcome email.
+          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-neutral-300 flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Info className="w-4 h-4 text-[#f3aa18] shrink-0" />
+              Creators applying to join the program. Approving an application activates their referral slug and delivers a welcome notification.
             </span>
-            <span className="font-mono text-zinc-300">
+            <span className="font-mono text-[#f3aa18] font-bold shrink-0">
               {pendingApps.length} pending
             </span>
           </div>
 
           {pendingApps.length === 0 ? (
-            <div className="py-16 text-center rounded-2xl bg-zinc-900 border border-zinc-800 p-6 space-y-2">
+            <GlassCard className="py-16 text-center p-6 space-y-2 border border-white/[0.06] bg-[#111111]">
               <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto" />
               <h3 className="text-sm font-semibold text-white">All caught up</h3>
-              <p className="text-xs text-zinc-400">There are no pending affiliate applications at this time.</p>
-            </div>
+              <p className="text-xs text-neutral-400">There are no pending affiliate applications at this time.</p>
+            </GlassCard>
           ) : (
             <div className="space-y-3">
               {pendingApps.map((app) => (
-                <div
+                <GlassCard
                   key={app.id}
-                  className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4 hover:border-zinc-700/80 transition-colors shadow-sm"
+                  className="p-5 border border-white/[0.06] bg-[#111111] space-y-4 hover:border-white/[0.12] transition-colors"
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="text-sm font-bold text-white">
                           {app.display_name || app.user_login}
                         </h3>
-                        <span className="font-mono text-xs text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded">
+                        <span className="font-mono text-xs text-[#f3aa18] bg-[#f3aa18]/10 border border-[#f3aa18]/20 px-2 py-0.5 rounded">
                           @{app.slug}
                         </span>
                       </div>
-                      <p className="text-xs text-zinc-400 font-mono mt-0.5">{app.user_email}</p>
+                      <p className="text-xs text-neutral-400 font-mono mt-0.5">{app.user_email}</p>
                     </div>
-                    <span className="text-[11px] text-zinc-400">
+                    <span className="text-[11px] font-mono text-neutral-400">
                       Applied {new Date(app.created_at).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' })}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                    <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 space-y-1">
-                      <span className="text-zinc-400 font-medium">Affiliate Type:</span>
-                      <p className="text-zinc-200">{app.affiliate_type || 'Creator'}</p>
+                    <div className="p-3 rounded-xl bg-[#141414] border border-white/[0.06] space-y-1">
+                      <span className="text-neutral-400 font-medium">Affiliate Type</span>
+                      <p className="text-white font-semibold">{app.affiliate_type || 'Creator'}</p>
                     </div>
-                    <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 space-y-1">
-                      <span className="text-zinc-400 font-medium">Channel / Website:</span>
-                      <p className="text-zinc-200 font-mono truncate" title={app.promotion_channel}>
+                    <div className="p-3 rounded-xl bg-[#141414] border border-white/[0.06] space-y-1">
+                      <span className="text-neutral-400 font-medium">Channel / Website</span>
+                      <p className="text-neutral-200 font-mono truncate" title={app.promotion_channel}>
                         {app.promotion_channel || 'Not provided'}
                       </p>
                     </div>
-                    <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 space-y-1">
-                      <span className="text-zinc-400 font-medium">Bank Details:</span>
-                      <p className="text-zinc-200">
+                    <div className="p-3 rounded-xl bg-[#141414] border border-white/[0.06] space-y-1">
+                      <span className="text-neutral-400 font-medium">Bank Details</span>
+                      <p className="text-neutral-200 font-mono">
                         {app.bank_name ? `${app.bank_name} - ${app.bank_account_number}` : 'Not configured yet'}
                       </p>
                     </div>
                   </div>
 
                   {app.promotion_notes && (
-                    <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800 text-xs space-y-1">
-                      <span className="text-zinc-400 font-medium">Promotion Plan:</span>
-                      <p className="text-zinc-300 leading-relaxed">{app.promotion_notes}</p>
+                    <div className="p-3 rounded-xl bg-[#141414] border border-white/[0.06] text-xs space-y-1">
+                      <span className="text-neutral-400 font-medium">Promotion Plan</span>
+                      <p className="text-neutral-300 leading-relaxed">{app.promotion_notes}</p>
                     </div>
                   )}
 
                   <div className="flex items-center justify-end gap-2 pt-2">
-                    <button
+                    <Button
                       type="button"
+                      variant="danger"
+                      size="sm"
                       disabled={isProcessingAction}
                       onClick={() => setRejectingApp(app)}
-                      className="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
                     >
                       Reject Application
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
+                      variant="primary"
+                      size="sm"
                       disabled={isProcessingAction}
                       onClick={() => handleApproveApplicant(app)}
-                      className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors flex items-center gap-1.5 shadow-sm"
+                      leftIcon={<Check className="w-3.5 h-3.5" />}
                     >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Approve Creator</span>
-                    </button>
+                      Approve Creator
+                    </Button>
                   </div>
-                </div>
+                </GlassCard>
               ))}
             </div>
           )}
         </div>
       )}
 
-      {/* Tab 2: Affiliate Directory */}
+      {/* 5. Tab 2: Affiliate Directory */}
       {activeTab === 'affiliates' && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <GlassCard className="p-5 border border-white/[0.06] bg-[#111111] space-y-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <div className="relative flex-1">
-              <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by slug, username, email, or account name..."
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-[#f3aa18]/50 focus:border-[#f3aa18]/50 transition-all font-sans"
+                className="w-full pl-9 pr-8 h-9 rounded-xl bg-[#141414] border border-white/[0.08] focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/30 text-xs text-white placeholder-neutral-500 focus:outline-none transition-all font-sans"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white p-0.5 cursor-pointer"
+                  title="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
+
             <FilterSelect
               label="Status"
               value={statusFilter}
@@ -416,12 +617,13 @@ export const AffiliatesPage: React.FC = () => {
             />
           </div>
 
-          <div className="rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden shadow-sm">
+          <div className="rounded-xl border border-white/[0.06] overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="border-b border-zinc-800 text-zinc-400 font-medium bg-zinc-950/40">
+                  <tr className="border-b border-white/[0.06] text-neutral-400 font-medium bg-white/[0.02]">
                     <th className="py-3 pl-4">Creator / Slug</th>
+                    <th className="py-3">Account Roles</th>
                     <th className="py-3">Status</th>
                     <th className="py-3">Clicks</th>
                     <th className="py-3">Orders</th>
@@ -431,23 +633,52 @@ export const AffiliatesPage: React.FC = () => {
                     <th className="py-3 pr-4 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-850">
+                <tbody className="divide-y divide-white/[0.04]">
                   {affiliates.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-zinc-400">
+                      <td colSpan={9} className="py-12 text-center text-neutral-400">
                         No affiliates match the current filters.
                       </td>
                     </tr>
                   ) : (
                     affiliates.map((aff) => (
-                      <tr key={aff.id} className="hover:bg-zinc-850/50 transition-colors">
+                      <tr key={aff.id} className="hover:bg-white/[0.02] transition-colors">
                         <td className="py-3 pl-4">
                           <span className="font-semibold text-white block">
                             {aff.display_name || aff.user_login}
                           </span>
-                          <span className="font-mono text-[11px] text-amber-400">
+                          <span className="font-mono text-[11px] text-[#f3aa18]">
                             @{aff.slug}
                           </span>
+                        </td>
+                        <td className="py-3">
+                          <div className="flex flex-wrap gap-1">
+                            {aff.roles && Array.isArray(aff.roles) ? (
+                              aff.roles.map((r: string) => {
+                                const roleStyles: Record<string, string> = {
+                                  affiliate: 'bg-[#f3aa18]/15 text-[#f3aa18] border-[#f3aa18]/30',
+                                  administrator: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
+                                  customer: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
+                                  subscriber: 'bg-neutral-500/15 text-neutral-300 border-neutral-500/30',
+                                };
+                                return (
+                                  <span
+                                    key={r}
+                                    className={clsx(
+                                      'px-1.5 py-0.5 rounded text-[10px] font-mono border capitalize',
+                                      roleStyles[r.toLowerCase()] || 'bg-white/[0.05] text-neutral-400 border-white/10'
+                                    )}
+                                  >
+                                    {r}
+                                  </span>
+                                );
+                              })
+                            ) : (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono border bg-[#f3aa18]/15 text-[#f3aa18] border-[#f3aa18]/30">
+                                Affiliate
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3">
                           <span className={clsx(
@@ -455,30 +686,30 @@ export const AffiliatesPage: React.FC = () => {
                             aff.status === 'active' && 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
                             aff.status === 'pending_approval' && 'bg-amber-500/10 text-amber-400 border-amber-500/20',
                             aff.status === 'suspended' && 'bg-rose-500/10 text-rose-400 border-rose-500/20',
-                            aff.status === 'rejected' && 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                            aff.status === 'rejected' && 'bg-neutral-800 text-neutral-400 border-neutral-700'
                           )}>
                             {aff.status}
                           </span>
                         </td>
-                        <td className="py-3 font-mono text-zinc-300">
+                        <td className="py-3 font-mono text-neutral-300">
                           {Number(aff.total_clicks || 0).toLocaleString('id-ID')}
                         </td>
-                        <td className="py-3 font-mono text-zinc-300">
+                        <td className="py-3 font-mono text-neutral-300">
                           {Number(aff.total_orders || 0).toLocaleString('id-ID')}
                         </td>
-                        <td className="py-3 font-mono font-bold text-amber-400">
+                        <td className="py-3 font-mono font-bold text-[#f3aa18]">
                           {formatIDR(aff.unpaid_balance)}
                         </td>
                         <td className="py-3 font-mono text-emerald-400">
                           {formatIDR(aff.lifetime_earnings)}
                         </td>
-                        <td className="py-3 text-zinc-300">
+                        <td className="py-3 text-neutral-300">
                           {aff.bank_name ? (
                             <span className="font-mono text-[11px]">
                               <strong>{aff.bank_name}</strong> {aff.bank_account_number}
                             </span>
                           ) : (
-                            <span className="text-zinc-400 text-[11px]">Unset</span>
+                            <span className="text-neutral-500 text-[11px]">Unset</span>
                           )}
                         </td>
                         <td className="py-3 pr-4 text-right">
@@ -486,7 +717,7 @@ export const AffiliatesPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => updateAdminAffiliateStatus(aff.id, 'suspended').then(loadData)}
-                              className="text-[11px] font-medium text-rose-400 hover:text-rose-300 transition-colors"
+                              className="text-[11px] font-medium text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
                             >
                               Suspend
                             </button>
@@ -494,7 +725,7 @@ export const AffiliatesPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => updateAdminAffiliateStatus(aff.id, 'active').then(loadData)}
-                              className="text-[11px] font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
+                              className="text-[11px] font-medium text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
                             >
                               Activate
                             </button>
@@ -507,73 +738,76 @@ export const AffiliatesPage: React.FC = () => {
               </table>
             </div>
           </div>
-        </div>
+        </GlassCard>
       )}
 
-      {/* Tab 3: Commissions Ledger */}
+      {/* 6. Tab 3: Commissions Ledger */}
       {activeTab === 'commissions' && (
-        <div className="space-y-4">
+        <GlassCard className="p-5 border border-white/[0.06] bg-[#111111] space-y-4">
           <div className="flex items-center justify-between">
-            <select
+            <FilterSelect
+              label="Status"
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-zinc-200"
-            >
-              <option value="all">All Commission Statuses</option>
-              <option value="pending">Pending Orders</option>
-              <option value="unpaid">Unpaid / Cleared</option>
-              <option value="paid">Paid</option>
-              <option value="rejected">Rejected (Refunded/Self)</option>
-            </select>
+              onChange={(val) => setStatusFilter(val)}
+              options={COMMISSION_STATUS_OPTIONS}
+              align="left"
+            />
+            <span className="text-xs font-mono text-neutral-500">
+              {commissions.length} commission events
+            </span>
           </div>
 
-          <div className="rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden shadow-sm">
+          <div className="rounded-xl border border-white/[0.06] overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="border-b border-zinc-800 text-zinc-400 font-medium bg-zinc-950/40">
+                  <tr className="border-b border-white/[0.06] text-neutral-400 font-medium bg-white/[0.02]">
                     <th className="py-3 pl-4">Order #</th>
                     <th className="py-3">Date</th>
                     <th className="py-3">Affiliate Slug</th>
                     <th className="py-3">Eligible Subtotal</th>
-                    <th className="py-3">20% Commission</th>
+                    <th className="py-3">Commission Rate</th>
+                    <th className="py-3">Commission Amount</th>
                     <th className="py-3">Buyer Email</th>
                     <th className="py-3 pr-4 text-right">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-850">
+                <tbody className="divide-y divide-white/[0.04]">
                   {commissions.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-12 text-center text-zinc-400">
+                      <td colSpan={8} className="py-12 text-center text-neutral-400">
                         No commissions found.
                       </td>
                     </tr>
                   ) : (
                     commissions.map((c) => (
-                      <tr key={c.id} className="hover:bg-zinc-850/50 transition-colors">
+                      <tr key={c.id} className="hover:bg-white/[0.02] transition-colors">
                         <td className="py-3 pl-4 font-mono font-medium text-white">
                           #{c.order_number}
                         </td>
-                        <td className="py-3 text-zinc-400">
+                        <td className="py-3 text-neutral-400 font-mono">
                           {new Date(c.created_at).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' })}
                         </td>
-                        <td className="py-3 font-mono text-amber-400">
+                        <td className="py-3 font-mono text-[#f3aa18]">
                           @{c.affiliate_slug}
                         </td>
-                        <td className="py-3 font-mono text-zinc-300">
+                        <td className="py-3 font-mono text-neutral-300">
                           {formatIDR(c.order_subtotal)}
+                        </td>
+                        <td className="py-3 font-mono text-neutral-300">
+                          {c.commission_rate}%
                         </td>
                         <td className="py-3 font-mono font-bold text-emerald-400">
                           {formatIDR(c.commission_amount)}
                         </td>
-                        <td className="py-3 text-zinc-400 font-mono text-[11px]">
-                          {c.customer_email}
+                        <td className="py-3 text-neutral-400 font-mono text-[11px]">
+                          {c.customer_email || 'guest'}
                         </td>
                         <td className="py-3 pr-4 text-right">
                           {c.status === 'pending' ? (
                             <span 
                               className="px-2 py-0.5 rounded text-[10px] font-medium border uppercase tracking-wider bg-amber-500/10 text-amber-400 border-amber-500/20"
-                              title={c.matures_at ? `Delivered: ${c.delivered_at}. Grace period matures: ${c.matures_at}` : 'Order awaiting delivery confirmation'}
+                              title={c.matures_at ? `Grace period matures: ${c.matures_at}` : 'Awaiting order delivery confirmation'}
                             >
                               {c.matures_at ? 'Grace Period' : 'Pending Delivery'}
                             </span>
@@ -581,7 +815,7 @@ export const AffiliatesPage: React.FC = () => {
                             <span className={clsx(
                               'px-2 py-0.5 rounded text-[10px] font-medium border uppercase tracking-wider',
                               c.status === 'paid' && 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-                              c.status === 'unpaid' && 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+                              c.status === 'unpaid' && 'bg-sky-500/10 text-sky-400 border-sky-500/20',
                               c.status === 'rejected' && 'bg-rose-500/10 text-rose-400 border-rose-500/20'
                             )}>
                               {c.status}
@@ -595,30 +829,30 @@ export const AffiliatesPage: React.FC = () => {
               </table>
             </div>
           </div>
-        </div>
+        </GlassCard>
       )}
 
-      {/* Tab 4: Payout Requests */}
+      {/* 7. Tab 4: Payout Requests */}
       {activeTab === 'payouts' && (
-        <div className="space-y-4">
+        <GlassCard className="p-5 border border-white/[0.06] bg-[#111111] space-y-4">
           <div className="flex items-center justify-between">
-            <select
+            <FilterSelect
+              label="Status"
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-zinc-200"
-            >
-              <option value="all">All Payout Statuses</option>
-              <option value="pending">Pending Transfers</option>
-              <option value="paid">Completed Transfers</option>
-              <option value="rejected">Rejected</option>
-            </select>
+              onChange={(val) => setStatusFilter(val)}
+              options={PAYOUT_STATUS_OPTIONS}
+              align="left"
+            />
+            <span className="text-xs font-mono text-neutral-500">
+              {payouts.length} payout records
+            </span>
           </div>
 
-          <div className="rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden shadow-sm">
+          <div className="rounded-xl border border-white/[0.06] overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="border-b border-zinc-800 text-zinc-400 font-medium bg-zinc-950/40">
+                  <tr className="border-b border-white/[0.06] text-neutral-400 font-medium bg-white/[0.02]">
                     <th className="py-3 pl-4">Payout ID</th>
                     <th className="py-3">Date</th>
                     <th className="py-3">Affiliate</th>
@@ -629,30 +863,30 @@ export const AffiliatesPage: React.FC = () => {
                     <th className="py-3 pr-4 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-850">
+                <tbody className="divide-y divide-white/[0.04]">
                   {payouts.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-zinc-400">
+                      <td colSpan={8} className="py-12 text-center text-neutral-400">
                         No payout requests found.
                       </td>
                     </tr>
                   ) : (
                     payouts.map((p) => (
-                      <tr key={p.id} className="hover:bg-zinc-850/50 transition-colors">
-                        <td className="py-3 pl-4 font-mono text-zinc-200">
+                      <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
+                        <td className="py-3 pl-4 font-mono text-neutral-200">
                           PAY-{p.id}
                         </td>
-                        <td className="py-3 text-zinc-400">
+                        <td className="py-3 text-neutral-400 font-mono">
                           {new Date(p.created_at).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' })}
                         </td>
-                        <td className="py-3 font-mono text-amber-400">
+                        <td className="py-3 font-mono text-[#f3aa18]">
                           @{p.affiliate_slug}
                         </td>
                         <td className="py-3 font-mono font-bold text-white">
                           {formatIDR(p.amount)}
                         </td>
-                        <td className="py-3 text-zinc-300">
-                          <span className="font-semibold text-amber-400">{p.bank_name}</span> &bull; {p.bank_account_number} ({p.bank_account_name})
+                        <td className="py-3 text-neutral-300">
+                          <span className="font-semibold text-[#f3aa18]">{p.bank_name}</span> &bull; {p.bank_account_number} ({p.bank_account_name})
                         </td>
                         <td className="py-3">
                           <span className={clsx(
@@ -664,7 +898,7 @@ export const AffiliatesPage: React.FC = () => {
                             {p.status}
                           </span>
                         </td>
-                        <td className="py-3 font-mono text-[11px] text-zinc-400">
+                        <td className="py-3 font-mono text-[11px] text-neutral-400">
                           {p.transfer_reference || '-'}
                         </td>
                         <td className="py-3 pr-4 text-right">
@@ -673,20 +907,21 @@ export const AffiliatesPage: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => handleRejectPayout(p.id)}
-                                className="text-[11px] text-rose-400 hover:text-rose-300 transition-colors"
+                                className="text-[11px] text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
                               >
                                 Reject
                               </button>
-                              <button
+                              <Button
                                 type="button"
+                                variant="primary"
+                                size="xs"
                                 onClick={() => { setPayingPayout(p); setTransferRef(`TRF-${p.bank_name}-${Date.now().toString().slice(-6)}`); }}
-                                className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
                               >
                                 Mark Paid
-                              </button>
+                              </Button>
                             </div>
                           ) : (
-                            <span className="text-[11px] text-zinc-400">Settled</span>
+                            <span className="text-[11px] text-neutral-500 font-mono">Settled</span>
                           )}
                         </td>
                       </tr>
@@ -696,17 +931,319 @@ export const AffiliatesPage: React.FC = () => {
               </table>
             </div>
           </div>
+        </GlassCard>
+      )}
+
+      {/* 8. Tab 5: Program Settings */}
+      {activeTab === 'settings' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-4">
+            <GlassCard className="p-6 border border-white/[0.06] bg-[#111111] space-y-6">
+              <div className="flex items-center justify-between border-b border-white/[0.06] pb-4">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-[#f3aa18]" />
+                    <span>Affiliate Program Rules</span>
+                  </h3>
+                  <p className="text-xs text-neutral-400 mt-1">
+                    Control global commission rates, payout limits, attribution windows, and approval policies.
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handleSaveSettings} className="space-y-5">
+                {/* 1. Commission Rate */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+                  <div>
+                    <label className="text-xs font-semibold text-white block">
+                      Default Commission Rate
+                    </label>
+                    <span className="text-[11px] text-neutral-400">
+                      Applied to net order subtotal (excluding tax and shipping).
+                    </span>
+                  </div>
+                  <div className="sm:col-span-2 relative">
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      step={0.5}
+                      required
+                      value={settings.commission_rate}
+                      onChange={(e) => setSettings({ ...settings, commission_rate: parseFloat(e.target.value) || 0 })}
+                      className="w-full pl-3.5 pr-8 h-9 rounded-xl bg-[#141414] border border-white/[0.08] focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/30 text-xs text-white font-mono"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">
+                      %
+                    </span>
+                  </div>
+                </div>
+
+                {/* 2. Minimum Payout Threshold */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+                  <div>
+                    <label className="text-xs font-semibold text-white block">
+                      Minimum Payout Threshold
+                    </label>
+                    <span className="text-[11px] text-neutral-400">
+                      Balance required before creator can submit a payout request.
+                    </span>
+                  </div>
+                  <div className="sm:col-span-2 relative">
+                    <input
+                      type="number"
+                      min={10000}
+                      step={50000}
+                      required
+                      value={settings.min_payout_amount}
+                      onChange={(e) => setSettings({ ...settings, min_payout_amount: parseInt(e.target.value, 10) || 0 })}
+                      className="w-full pl-10 pr-3.5 h-9 rounded-xl bg-[#141414] border border-white/[0.08] focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/30 text-xs text-white font-mono"
+                    />
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">
+                      Rp
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. Refund / Delivered Grace Period */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+                  <div>
+                    <label className="text-xs font-semibold text-white block">
+                      Delivery Grace Period
+                    </label>
+                    <span className="text-[11px] text-neutral-400">
+                      Days commission remains pending after order delivery before maturing to unpaid.
+                    </span>
+                  </div>
+                  <div className="sm:col-span-2 relative">
+                    <input
+                      type="number"
+                      min={0}
+                      max={90}
+                      required
+                      value={settings.grace_period_days}
+                      onChange={(e) => setSettings({ ...settings, grace_period_days: parseInt(e.target.value, 10) || 0 })}
+                      className="w-full pl-3.5 pr-14 h-9 rounded-xl bg-[#141414] border border-white/[0.08] focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/30 text-xs text-white font-mono"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">
+                      days
+                    </span>
+                  </div>
+                </div>
+
+                {/* 4. Tracking Cookie Lifetime */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+                  <div>
+                    <label className="text-xs font-semibold text-white block">
+                      Cookie Duration
+                    </label>
+                    <span className="text-[11px] text-neutral-400">
+                      Attribution duration on visitor browser. Credits last affiliate.
+                    </span>
+                  </div>
+                  <div className="sm:col-span-2 relative">
+                    <input
+                      type="number"
+                      min={1}
+                      max={365}
+                      required
+                      value={settings.cookie_days}
+                      onChange={(e) => setSettings({ ...settings, cookie_days: parseInt(e.target.value, 10) || 0 })}
+                      className="w-full pl-3.5 pr-14 h-9 rounded-xl bg-[#141414] border border-white/[0.08] focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/30 text-xs text-white font-mono"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">
+                      days
+                    </span>
+                  </div>
+                </div>
+
+                {/* 5. Auto Approval Toggle */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center pt-2 border-t border-white/[0.06]">
+                  <div>
+                    <label className="text-xs font-semibold text-white block">
+                      Auto-Approve Applicants
+                    </label>
+                    <span className="text-[11px] text-neutral-400">
+                      Instantly activate accounts without admin review.
+                    </span>
+                  </div>
+                  <div className="sm:col-span-2 flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setSettings({ ...settings, auto_approve: !settings.auto_approve })}
+                      className={clsx(
+                        'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                        settings.auto_approve ? 'bg-[#f3aa18]' : 'bg-neutral-800'
+                      )}
+                    >
+                      <span
+                        className={clsx(
+                          'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                          settings.auto_approve ? 'translate-x-5' : 'translate-x-0'
+                        )}
+                      />
+                    </button>
+                    <span className="text-xs text-neutral-300">
+                      {settings.auto_approve ? 'Enabled (Instant Access)' : 'Disabled (Requires Manual Approval)'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-white/[0.06] flex justify-end">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    disabled={isSavingSettings}
+                    leftIcon={isSavingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  >
+                    Save Program Settings
+                  </Button>
+                </div>
+              </form>
+            </GlassCard>
+          </div>
+
+          <div className="space-y-4">
+            <GlassCard className="p-5 border border-white/[0.06] bg-[#111111] space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-400 font-mono flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5 text-[#f3aa18]" />
+                <span>Engine Policies</span>
+              </h4>
+              <ul className="text-xs text-neutral-300 space-y-2 list-disc pl-4 leading-relaxed">
+                <li>
+                  <strong>20% Default Commission:</strong> Applies cleanly to order line subtotal without shipping costs or taxes.
+                </li>
+                <li>
+                  <strong>Self-Earn Prevention:</strong> Commissions are automatically blocked if the buyer email or account ID matches the affiliate.
+                </li>
+                <li>
+                  <strong>7-Day Delivery Grace:</strong> Commissions are created as pending and only mature to unpaid 7 days after the order is delivered.
+                </li>
+                <li>
+                  <strong>Refund Reversal:</strong> If an order is refunded or cancelled, the attributed commission is rejected and deducted.
+                </li>
+              </ul>
+            </GlassCard>
+          </div>
         </div>
       )}
 
-      {/* Reject Application Modal */}
+      {/* 9. Tab 6: SliceWP Migration */}
+      {activeTab === 'slicewp' && (
+        <div className="space-y-6">
+          <GlassCard className="p-6 border border-white/[0.06] bg-[#111111] space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.06] pb-4">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Database className="w-4 h-4 text-[#f3aa18]" />
+                  <span>SliceWP Historical Data Migration</span>
+                </h3>
+                <p className="text-xs text-neutral-400 mt-1">
+                  Import past affiliate accounts, order attribution records, visits, and balances from SliceWP database tables.
+                </p>
+              </div>
+
+              <div>
+                {isCheckingSliceWp ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono bg-white/[0.05] text-neutral-400 border border-white/10">
+                    <Loader2 className="w-3 h-3 animate-spin text-[#f3aa18]" />
+                    Scanning Database...
+                  </span>
+                ) : sliceWpStatus?.available ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    SliceWP MySQL Tables Detected
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono bg-neutral-800 text-neutral-400 border border-neutral-700">
+                    No SliceWP Tables Found
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-[#141414] border border-white/[0.06] text-xs text-neutral-300 space-y-2 leading-relaxed">
+              <p className="font-semibold text-white flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#f3aa18]" />
+                Do I need to keep SliceWP plugin active?
+              </p>
+              <p>
+                <strong>No, SliceWP does NOT need to be activated.</strong> When deactivated, its underlying MySQL tables (e.g. <code className="font-mono text-amber-300">wp_slicewp_affiliates</code>, <code className="font-mono text-amber-300">wp_slicewp_commissions</code>, <code className="font-mono text-amber-300">wp_slicewp_visits</code>) remain safely stored in the database.
+              </p>
+              <p>
+                Our custom migration engine reads these tables directly, adds the <code className="font-mono text-amber-300">affiliate</code> role to existing WordPress users without removing customer or admin permissions, converts commissions into the new clean schema, and computes accurate unpaid balances.
+              </p>
+            </div>
+
+            {sliceWpStatus && sliceWpStatus.available && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="p-4 rounded-xl bg-[#141414] border border-white/[0.06] space-y-1">
+                  <span className="text-neutral-400 text-xs">Affiliates in SliceWP</span>
+                  <p className="text-xl font-bold font-mono text-white">
+                    {sliceWpStatus.affiliates_count.toLocaleString()}
+                  </p>
+                </div>
+                <div className="p-4 rounded-xl bg-[#141414] border border-white/[0.06] space-y-1">
+                  <span className="text-neutral-400 text-xs">Commissions in SliceWP</span>
+                  <p className="text-xl font-bold font-mono text-white">
+                    {sliceWpStatus.commissions_count.toLocaleString()}
+                  </p>
+                </div>
+                <div className="p-4 rounded-xl bg-[#141414] border border-white/[0.06] space-y-1">
+                  <span className="text-neutral-400 text-xs">Visits Logged</span>
+                  <p className="text-xl font-bold font-mono text-white">
+                    {sliceWpStatus.visits_count.toLocaleString()}
+                  </p>
+                </div>
+                <div className="p-4 rounded-xl bg-[#141414] border border-white/[0.06] space-y-1">
+                  <span className="text-neutral-400 text-xs">Unpaid Balance Total</span>
+                  <p className="text-xl font-bold font-mono text-[#f3aa18]">
+                    {formatIDR(sliceWpStatus.unpaid_total)}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {migrationResult && (
+              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs space-y-2">
+                <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Migration completed successfully!</span>
+                </div>
+                <div className="grid grid-cols-3 gap-3 font-mono text-neutral-200">
+                  <div>Affiliates Imported: <strong>{migrationResult.affiliates_migrated}</strong></div>
+                  <div>Commissions Imported: <strong>{migrationResult.commissions_migrated}</strong></div>
+                  <div>Visits Imported: <strong>{migrationResult.clicks_migrated}</strong></div>
+                </div>
+              </div>
+            )}
+
+            <div className="pt-2 flex items-center justify-between border-t border-white/[0.06]">
+              <span className="text-xs text-neutral-400">
+                Safe to run multiple times: duplicate records are automatically ignored.
+              </span>
+              <Button
+                type="button"
+                variant="primary"
+                disabled={isMigratingSliceWp || !sliceWpStatus?.available}
+                onClick={handleExecuteSliceWpMigration}
+                leftIcon={isMigratingSliceWp ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              >
+                {isMigratingSliceWp ? 'Importing SliceWP Data...' : 'Run SliceWP Migration'}
+              </Button>
+            </div>
+          </GlassCard>
+        </div>
+      )}
+
+      {/* 10. Reject Application Modal */}
       {rejectingApp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 space-y-4">
+          <GlassCard className="max-w-md w-full p-6 space-y-4 border border-white/[0.08] bg-[#141414]">
             <h3 className="text-base font-semibold text-white">
               Reject Application for @{rejectingApp.slug}
             </h3>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-neutral-400">
               Provide optional feedback to the applicant explaining why their channel was not accepted at this time.
             </p>
             <textarea
@@ -714,47 +1251,49 @@ export const AffiliatesPage: React.FC = () => {
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               placeholder="e.g. Channel does not currently match our gadget accessories focus..."
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-rose-500/50"
+              className="w-full bg-[#111111] border border-white/[0.08] rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-rose-500/50"
             />
             <div className="flex justify-end gap-2">
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => setRejectingApp(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-zinc-800 text-zinc-300"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="danger"
+                size="sm"
                 disabled={isProcessingAction}
                 onClick={handleConfirmRejectApplicant}
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white"
               >
                 Confirm Rejection
-              </button>
+              </Button>
             </div>
-          </div>
+          </GlassCard>
         </div>
       )}
 
-      {/* Mark Payout Paid Modal */}
+      {/* 11. Mark Payout Paid Modal */}
       {payingPayout && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 space-y-4">
+          <GlassCard className="max-w-md w-full p-6 space-y-4 border border-white/[0.08] bg-[#141414]">
             <h3 className="text-base font-semibold text-white">
               Record Transfer for PAY-{payingPayout.id}
             </h3>
-            <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 space-y-1 text-xs">
-              <span className="text-zinc-400">Recipient Account:</span>
+            <div className="p-3.5 rounded-xl bg-[#111111] border border-white/[0.06] space-y-1 text-xs">
+              <span className="text-neutral-400">Recipient Account</span>
               <p className="font-semibold text-white">
                 {payingPayout.bank_name} &bull; {payingPayout.bank_account_number}
               </p>
-              <p className="text-zinc-400">a.n. {payingPayout.bank_account_name}</p>
-              <p className="text-amber-400 font-mono font-bold pt-1">{formatIDR(payingPayout.amount)}</p>
+              <p className="text-neutral-400">a.n. {payingPayout.bank_account_name}</p>
+              <p className="text-[#f3aa18] font-mono font-bold pt-1">{formatIDR(payingPayout.amount)}</p>
             </div>
             <div className="space-y-1.5 text-xs">
-              <label className="font-medium text-zinc-300">
-                Bank Transfer Reference Number <span className="text-amber-400">*</span>
+              <label className="font-medium text-neutral-300">
+                Bank Transfer Reference Number <span className="text-[#f3aa18]">*</span>
               </label>
               <input
                 type="text"
@@ -762,27 +1301,29 @@ export const AffiliatesPage: React.FC = () => {
                 value={transferRef}
                 onChange={(e) => setTransferRef(e.target.value)}
                 placeholder="e.g. BCA-98218902 or Mandiri-MCM-310"
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs font-mono text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                className="w-full bg-[#111111] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-xs font-mono text-white focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
               />
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => setPayingPayout(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-zinc-800 text-zinc-300"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="primary"
+                size="sm"
                 disabled={isProcessingAction}
                 onClick={handleConfirmPayPayout}
-                className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white"
               >
                 Confirm Paid
-              </button>
+              </Button>
             </div>
-          </div>
+          </GlassCard>
         </div>
       )}
     </div>
