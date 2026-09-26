@@ -482,7 +482,7 @@ class Exacoat_Shopee_Client {
 				'shop_id'                   => $shop_id,
 				'sign'                      => $detail_sign,
 				'order_sn_list'             => implode( ',', $chunk_sns ),
-				'response_optional_fields'  => 'buyer_user_id,buyer_username,recipient_address,item_list,shipping_carrier,total_amount,pay_time,order_status,package_list,note,shipping_document_status,ship_by_date',
+				'response_optional_fields'  => 'buyer_user_id,buyer_username,recipient_address,item_list,shipping_carrier,total_amount,pay_time,order_status,package_list,note,shipping_document_status,ship_by_date,tracking_number',
 			]);
 
 			$detail_res = wp_remote_get( $detail_url, [ 'timeout' => 30 ] );
@@ -518,6 +518,10 @@ class Exacoat_Shopee_Client {
 		foreach ( $normalized_orders as $new_ord ) {
 			if ( ! empty( $new_ord['order_sn'] ) ) {
 				$sn = $new_ord['order_sn'];
+				// Preserve existing tracking number if already cached
+				if ( empty( $new_ord['tracking_number'] ) && ! empty( $order_map[ $sn ]['tracking_number'] ) ) {
+					$new_ord['tracking_number'] = $order_map[ $sn ]['tracking_number'];
+				}
 				// Preserve existing printed status if previous cache marked it printed
 				$was_printed = ! empty( $order_map[ $sn ]['is_printed'] ) || ( ( $order_map[ $sn ]['shipping_document_status'] ?? '' ) === 'PRINTED' );
 				if ( $was_printed && empty( $new_ord['is_printed'] ) ) {
@@ -527,6 +531,24 @@ class Exacoat_Shopee_Client {
 				$order_map[ $sn ] = $new_ord;
 			}
 		}
+
+		// Fallback lookup: Resolve missing tracking numbers for up to 15 arranged/shipped/completed orders
+		$resi_lookup_count = 0;
+		foreach ( $order_map as $sn => &$m_ord ) {
+			if ( $resi_lookup_count >= 15 ) break;
+			$st = strtoupper( $m_ord['order_status'] ?? '' );
+			if (
+				empty( $m_ord['tracking_number'] ) &&
+				in_array( $st, [ 'PROCESSED', 'SHIPPED', 'TO_CONFIRM_RECEIVE', 'COMPLETED' ], true )
+			) {
+				$resi_res = self::get_tracking_number( $sn, $m_ord['package_number'] ?? '' );
+				if ( ! empty( $resi_res['response']['tracking_number'] ) ) {
+					$m_ord['tracking_number'] = trim( $resi_res['response']['tracking_number'] );
+					$resi_lookup_count++;
+				}
+			}
+		}
+		unset( $m_ord );
 
 		$all_cached_orders = array_values( $order_map );
 		usort( $all_cached_orders, function( $a, $b ) {
@@ -605,8 +627,21 @@ class Exacoat_Shopee_Client {
 			}
 		}
 		$raw_order_st = strtoupper( (string) ( $ord['order_status'] ?? 'UNKNOWN' ) );
-		$tracking_num = trim( (string) ( $package['tracking_number'] ?? '' ) );
-		$pkg_num = trim( (string) ( $package['package_number'] ?? '' ) );
+		$tracking_num = trim( (string) ( $ord['tracking_number'] ?? ( $ord['tracking_no'] ?? '' ) ) );
+		$pkg_num = '';
+		if ( ! empty( $ord['package_list'] ) && is_array( $ord['package_list'] ) ) {
+			foreach ( $ord['package_list'] as $pkg_item ) {
+				if ( empty( $tracking_num ) ) {
+					$candidate = trim( (string) ( $pkg_item['tracking_number'] ?? ( $pkg_item['tracking_no'] ?? '' ) ) );
+					if ( ! empty( $candidate ) ) {
+						$tracking_num = $candidate;
+					}
+				}
+				if ( empty( $pkg_num ) && ! empty( $pkg_item['package_number'] ) ) {
+					$pkg_num = trim( (string) $pkg_item['package_number'] );
+				}
+			}
+		}
 
 		$ship_by_ts = ! empty( $ord['ship_by_date'] ) && is_numeric( $ord['ship_by_date'] ) ? (int) $ord['ship_by_date'] : null;
 		$ship_by_date = $ship_by_ts ? date( 'Y-m-d H:i:s', $ship_by_ts ) : null;
@@ -697,7 +732,7 @@ class Exacoat_Shopee_Client {
 			'shop_id'                   => $shop_id,
 			'sign'                      => $detail_sign,
 			'order_sn_list'             => $clean_sn,
-			'response_optional_fields'  => 'buyer_user_id,buyer_username,recipient_address,item_list,shipping_carrier,total_amount,pay_time,order_status,package_list,note,shipping_document_status,ship_by_date',
+			'response_optional_fields'  => 'buyer_user_id,buyer_username,recipient_address,item_list,shipping_carrier,total_amount,pay_time,order_status,package_list,note,shipping_document_status,ship_by_date,tracking_number',
 		]);
 
 		$res = wp_remote_get( $detail_url, [ 'timeout' => 20 ] );
@@ -1567,6 +1602,36 @@ class Exacoat_Shopee_Client {
 			return ( $b['create_timestamp'] ?? 0 ) <=> ( $a['create_timestamp'] ?? 0 );
 		});
 
+		// Resolve missing tracking numbers on-the-fly for up to 10 recent orders that are arranged or shipped
+		$resolved_resi_count = 0;
+		$cache_resi_updated = false;
+		foreach ( $filtered as &$f_ord ) {
+			if ( $resolved_resi_count >= 10 ) break;
+			$st = strtoupper( $f_ord['order_status'] ?? '' );
+			if (
+				empty( $f_ord['tracking_number'] ) &&
+				in_array( $st, [ 'PROCESSED', 'SHIPPED', 'TO_CONFIRM_RECEIVE', 'COMPLETED' ], true )
+			) {
+				$resi_res = self::get_tracking_number( $f_ord['order_sn'], $f_ord['package_number'] ?? '' );
+				if ( ! empty( $resi_res['response']['tracking_number'] ) ) {
+					$f_ord['tracking_number'] = trim( $resi_res['response']['tracking_number'] );
+					foreach ( $cached as &$c_target ) {
+						if ( ( $c_target['order_sn'] ?? '' ) === $f_ord['order_sn'] ) {
+							$c_target['tracking_number'] = $f_ord['tracking_number'];
+							break;
+						}
+					}
+					unset( $c_target );
+					$cache_resi_updated = true;
+					$resolved_resi_count++;
+				}
+			}
+		}
+		unset( $f_ord );
+		if ( $cache_resi_updated ) {
+			update_option( self::ORDERS_CACHE_KEY, $cached );
+		}
+
 		$s = self::get_settings();
 
 		return rest_ensure_response([
@@ -1796,14 +1861,20 @@ class Exacoat_Shopee_Client {
 		if ( ! $found ) {
 			$detail_res = self::call_shop_api( '/api/v2/order/get_order_detail', 'GET', [
 				'order_sn_list'            => $clean,
-				'response_optional_fields' => 'buyer_user_id,buyer_username,recipient_address,item_list,shipping_carrier,total_amount,pay_time,order_status,package_list,note',
+				'response_optional_fields' => 'buyer_user_id,buyer_username,recipient_address,item_list,shipping_carrier,total_amount,pay_time,order_status,package_list,note,shipping_document_status,ship_by_date,tracking_number',
 			]);
 			if ( ! empty( $detail_res['response']['order_list'][0] ) ) {
 				$live_ord = $detail_res['response']['order_list'][0];
 				$raw_st = strtoupper( (string) ( $live_ord['order_status'] ?? 'UNKNOWN' ) );
 				$package = ( $live_ord['package_list'] ?? [] )[0] ?? [];
 				$pkg_logistics_st = strtoupper( (string) ( $package['logistics_status'] ?? '' ) );
-				$tracking_num = trim( (string) ( $package['tracking_number'] ?? '' ) );
+				$tracking_num = trim( (string) ( $live_ord['tracking_number'] ?? ( $package['tracking_number'] ?? '' ) ) );
+				if ( empty( $tracking_num ) && in_array( $raw_st, [ 'PROCESSED', 'SHIPPED', 'TO_CONFIRM_RECEIVE', 'COMPLETED' ], true ) ) {
+					$resi_res = self::get_tracking_number( $clean, $package['package_number'] ?? '' );
+					if ( ! empty( $resi_res['response']['tracking_number'] ) ) {
+						$tracking_num = trim( $resi_res['response']['tracking_number'] );
+					}
+				}
 				$rec = $live_ord['recipient_address'] ?? [];
 
 				$items = [];

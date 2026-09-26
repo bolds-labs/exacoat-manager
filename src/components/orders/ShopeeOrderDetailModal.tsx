@@ -132,9 +132,16 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
 
   const isCancelled = ['CANCELLED', 'IN_CANCEL', 'TO_RETURN'].includes((order.order_status || '').toUpperCase());
   const badge = getStatusBadge(order.order_status, order);
-  const isArranged = order.order_status === 'PROCESSED';
-  const isReadyToShip = order.order_status === 'READY_TO_SHIP';
-  const isOrderPrinted = Boolean(isPrinted || order.is_printed || order.shipping_document_status === 'PRINTED');
+  const isArranged = ['PROCESSED', 'SHIPPED', 'TO_CONFIRM_RECEIVE', 'COMPLETED'].includes((order.order_status || '').toUpperCase()) || Boolean(order.is_arranged);
+  const isReadyToShip = (order.order_status || '').toUpperCase() === 'READY_TO_SHIP';
+  const isOrderPrinted = Boolean(
+    isPrinted ||
+    order.is_printed ||
+    order.shipping_document_status === 'PRINTED' ||
+    ['SHIPPED', 'TO_CONFIRM_RECEIVE', 'COMPLETED'].includes((order.order_status || '').toUpperCase()) ||
+    order.is_delivered ||
+    isOrderDelivered
+  );
 
   return (
     <SlideDrawer
@@ -167,18 +174,7 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
       headerActions={
         <div className="flex items-center gap-2">
           {!isCancelled && (
-            !isOrderPrinted ? (
-              <button
-                type="button"
-                onClick={() => onPrintLabel(order)}
-                className="group px-3 py-1 rounded-full font-semibold border flex items-center gap-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/30 transition-all cursor-pointer shadow-2xs hover:shadow-amber-500/10 active:scale-95"
-                title="Klik untuk mengunduh & mencetak label resmi Shopee"
-              >
-                <Printer className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
-                <span className="text-[11px]">Perlu Dicetak</span>
-                <ArrowRight className="w-3 h-3 text-amber-400 group-hover:translate-x-0.5 transition-transform" />
-              </button>
-            ) : (
+            isOrderPrinted ? (
               <span
                 className="text-[11px] px-2.5 py-0.5 rounded-full font-semibold border flex items-center gap-1.5 bg-emerald-500/10 text-emerald-300 border-emerald-500/25"
                 title="Label pengiriman resmi telah dicetak"
@@ -186,7 +182,17 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Telah Dicetak</span>
               </span>
-            )
+            ) : order.order_status === 'PROCESSED' ? (
+              <button
+                type="button"
+                onClick={() => onPrintLabel(order)}
+                className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer active:scale-95"
+                title="Klik untuk mengunduh & mencetak label resmi Shopee"
+              >
+                <Printer className="w-3.5 h-3.5 text-neutral-400" />
+                <span className="text-[11px]">Cetak Label</span>
+              </button>
+            ) : null
           )}
           <span
             className={clsx(
@@ -320,6 +326,12 @@ export const ShopeeOrderDetailModal: React.FC<ShopeeOrderDetailModalProps> = ({
                       <p className="text-[10px] font-mono text-neutral-500 mt-0.5">
                         SKU: {item.item_sku || item.model_sku}
                       </p>
+                    )}
+                    {Boolean(item.note || item.item_note || item.order_item_note || item.buyer_note) && (
+                      <div className="mt-1.5 flex items-start gap-1.5 text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg font-sans">
+                        <span className="font-bold text-amber-400 shrink-0">Catatan Item:</span>
+                        <span className="break-words">{item.note || item.item_note || item.order_item_note || item.buyer_note}</span>
+                      </div>
                     )}
                   </div>
                 </div>
