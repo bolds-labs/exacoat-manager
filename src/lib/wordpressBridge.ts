@@ -7648,5 +7648,115 @@ export async function runAdminSliceWpMigration(options: {
   return { success: false, error: lastError };
 }
 
+export async function updateAdminAffiliateCommissionRate(payload: {
+  affiliate_id: number;
+  commission_rate: number | null;
+  coupon_code?: string;
+}): Promise<{ success: boolean; message?: string; affiliate?: any; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const wcCreds = getWcCredentials();
+  const authKey = wcCreds.key || 'ck_d3c2e9b67aa61b8c189dc89d7b99974002420cec';
+  const authSecret = wcCreds.secret || 'cs_c0ff3f48991c0c0a66cb5c7b14749cbc0f6a5b52';
+  const queryParams = new URLSearchParams({
+    consumer_key: authKey,
+    consumer_secret: authSecret,
+  }).toString();
 
+  const url = `${base}/wp-json/exacoat/v1/affiliate/admin/update-commission-rate?${queryParams}`;
 
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, message: data.message, affiliate: data.affiliate };
+    }
+    return { success: false, error: data?.message || 'Failed to update commission rate.' };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function createAdminManualCommission(payload: {
+  affiliate_id: number;
+  amount: number;
+  order_number?: string;
+  notes?: string;
+  status?: 'unpaid' | 'paid' | 'pending';
+}): Promise<{ success: boolean; message?: string; commission_id?: number; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const wcCreds = getWcCredentials();
+  const authKey = wcCreds.key || 'ck_d3c2e9b67aa61b8c189dc89d7b99974002420cec';
+  const authSecret = wcCreds.secret || 'cs_c0ff3f48991c0c0a66cb5c7b14749cbc0f6a5b52';
+  const queryParams = new URLSearchParams({
+    consumer_key: authKey,
+    consumer_secret: authSecret,
+  }).toString();
+
+  const url = `${base}/wp-json/exacoat/v1/affiliate/admin/manual-commission?${queryParams}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, message: data.message, commission_id: data.commission_id };
+    }
+    return { success: false, error: data?.message || 'Failed to record manual commission.' };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function updateAdminCommission(payload: {
+  id: number;
+  commission_amount?: number;
+  status?: string;
+  order_number?: string;
+  order_subtotal?: number;
+  notes?: string;
+}): Promise<{ success: boolean; message?: string; commission?: any; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const wcCreds = getWcCredentials();
+  const authKey = wcCreds.key || 'ck_d3c2e9b67aa61b8c189dc89d7b99974002420cec';
+  const authSecret = wcCreds.secret || 'cs_c0ff3f48991c0c0a66cb5c7b14749cbc0f6a5b52';
+  const queryParams = new URLSearchParams({
+    consumer_key: authKey,
+    consumer_secret: authSecret,
+  }).toString();
+
+  const url = `${base}/wp-json/exacoat/v1/affiliate/admin/update-commission?${queryParams}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, message: data.message, commission: data.commission };
+    }
+    return { success: false, error: data?.message || 'Failed to update commission.' };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}

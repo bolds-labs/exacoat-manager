@@ -990,6 +990,24 @@ class Exacoat_Affiliate_Manager {
 				'permission_callback' => [ __CLASS__, 'check_admin_auth' ],
 			] );
 
+			register_rest_route( $ns, '/affiliate/admin/update-commission-rate', [
+				'methods'             => 'POST',
+				'callback'            => [ __CLASS__, 'rest_admin_update_commission_rate' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_auth' ],
+			] );
+
+			register_rest_route( $ns, '/affiliate/admin/manual-commission', [
+				'methods'             => 'POST',
+				'callback'            => [ __CLASS__, 'rest_admin_manual_commission' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_auth' ],
+			] );
+
+			register_rest_route( $ns, '/affiliate/admin/update-commission', [
+				'methods'             => 'POST',
+				'callback'            => [ __CLASS__, 'rest_admin_update_commission' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_auth' ],
+			] );
+
 			register_rest_route( $ns, '/affiliate/admin/recalculate', [
 				'methods'             => 'POST',
 				'callback'            => [ __CLASS__, 'rest_admin_recalculate_balances' ],
@@ -1746,6 +1764,7 @@ class Exacoat_Affiliate_Manager {
 	 */
 	public static function rest_admin_get_payouts( WP_REST_Request $request ) {
 		self::process_matured_commissions();
+		self::ensure_historical_payouts_synced();
 
 		global $wpdb;
 		$table_payouts    = $wpdb->prefix . 'exacoat_affiliate_payouts';
@@ -1762,7 +1781,10 @@ class Exacoat_Affiliate_Manager {
 		}
 
 		$where_sql = implode( ' AND ', $where_clauses );
-		$query = "SELECT p.*, a.slug as affiliate_slug, a.user_id, u.user_email 
+		$query = "SELECT p.*, a.slug as affiliate_slug, a.user_id, u.user_email,
+			COALESCE(NULLIF(p.bank_name, ''), a.bank_name, 'BCA') as bank_name,
+			COALESCE(NULLIF(p.bank_account_number, ''), a.bank_account_number, '') as bank_account_number,
+			COALESCE(NULLIF(p.bank_account_name, ''), a.bank_account_name, u.display_name, '') as bank_account_name
 			FROM {$table_payouts} p 
 			LEFT JOIN {$table_affiliates} a ON p.affiliate_id = a.id 
 			LEFT JOIN {$wpdb->users} u ON a.user_id = u.ID 
@@ -2318,19 +2340,23 @@ class Exacoat_Affiliate_Manager {
 		$table_exacoat_affiliates  = $wpdb->prefix . 'exacoat_affiliates';
 		$table_exacoat_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
 		$table_exacoat_clicks      = $wpdb->prefix . 'exacoat_affiliate_clicks';
+		$table_exacoat_payouts     = $wpdb->prefix . 'exacoat_affiliate_payouts';
 
 		$affiliates_migrated  = 0;
 		$commissions_migrated = 0;
 		$clicks_migrated      = 0;
+		$payouts_migrated     = 0;
 		$affiliate_id_map     = [];
 		$migration_source     = 'sql';
 
 		// Discover SliceWP SQL tables
 		$all_slicewp_tables = $wpdb->get_col( "SHOW TABLES LIKE '%slicewp%'" );
-		$aff_table    = null;
-		$comm_table   = null;
-		$visits_table = null;
-		$meta_table   = null;
+		$aff_table      = null;
+		$comm_table     = null;
+		$visits_table   = null;
+		$payments_table = null;
+		$payouts_table  = null;
+		$meta_table     = null;
 
 		foreach ( $all_slicewp_tables as $tbl ) {
 			if ( preg_match( '/slicewp_affiliates$/i', $tbl ) ) {
@@ -2339,15 +2365,20 @@ class Exacoat_Affiliate_Manager {
 				$comm_table = $tbl;
 			} elseif ( preg_match( '/slicewp_visits$/i', $tbl ) ) {
 				$visits_table = $tbl;
+			} elseif ( preg_match( '/slicewp_payments$/i', $tbl ) ) {
+				$payments_table = $tbl;
+			} elseif ( preg_match( '/slicewp_payouts$/i', $tbl ) ) {
+				$payouts_table = $tbl;
 			} elseif ( preg_match( '/slicewp_affiliate_meta$/i', $tbl ) ) {
 				$meta_table = $tbl;
 			}
 		}
 
 		// A. Try REST API if tables are empty or not found on this database
-		$rest_affiliates = [];
+		$rest_affiliates  = [];
 		$rest_commissions = [];
-		$rest_visits = [];
+		$rest_visits      = [];
+		$rest_payouts     = [];
 
 		if ( ( empty( $aff_table ) && empty( $comm_table ) ) || ! empty( $params['use_rest'] ) ) {
 			$rest_hosts = array_unique( array_filter( [ $source_url, 'https://staging.exacoat.com', 'https://exacoat.com' ] ) );
@@ -2394,6 +2425,21 @@ class Exacoat_Affiliate_Manager {
 							$v_body = json_decode( wp_remote_retrieve_body( $v_resp ), true );
 							if ( is_array( $v_body ) ) {
 								$rest_visits = $v_body;
+							}
+						}
+
+						// Fetch payments/payouts via REST
+						$p_url  = trailingslashit( $h ) . 'wp-json/slicewp/v1/payments?number=1000';
+						$p_resp = wp_remote_get( $p_url, [
+							'headers' => [
+								'Authorization' => 'Basic ' . base64_encode( $consumer_key . ':' . $consumer_secret ),
+							],
+							'timeout' => 25,
+						] );
+						if ( ! is_wp_error( $p_resp ) && 200 === wp_remote_retrieve_response_code( $p_resp ) ) {
+							$p_body = json_decode( wp_remote_retrieve_body( $p_resp ), true );
+							if ( is_array( $p_body ) ) {
+								$rest_payouts = $p_body;
 							}
 						}
 
@@ -2671,6 +2717,90 @@ class Exacoat_Affiliate_Manager {
 						]
 					);
 					$clicks_migrated++;
+				}
+			}
+
+			// 4. Migrate Payments and Payouts via REST API
+			if ( ! empty( $rest_payouts ) ) {
+				foreach ( $rest_payouts as $sp ) {
+					$slicewp_aff_id = (int) ( $sp['affiliate_id'] ?? 0 );
+					$exacoat_aff_id = $affiliate_id_map[ $slicewp_aff_id ] ?? 0;
+					if ( ! $exacoat_aff_id ) {
+						if ( 1133 === $slicewp_aff_id ) {
+							$exacoat_aff_id = (int) $wpdb->get_var( "SELECT id FROM {$table_exacoat_affiliates} WHERE slug = 'edwinyg' LIMIT 1" );
+						} elseif ( 1135 === $slicewp_aff_id ) {
+							$exacoat_aff_id = (int) $wpdb->get_var( "SELECT id FROM {$table_exacoat_affiliates} WHERE slug = 'ds' LIMIT 1" );
+						} elseif ( 1140 === $slicewp_aff_id ) {
+							$exacoat_aff_id = (int) $wpdb->get_var( "SELECT id FROM {$table_exacoat_affiliates} WHERE slug = 'ehgxp' LIMIT 1" );
+						} elseif ( 1158 === $slicewp_aff_id ) {
+							$exacoat_aff_id = (int) $wpdb->get_var( "SELECT id FROM {$table_exacoat_affiliates} WHERE slug = 'clt9q' LIMIT 1" );
+						}
+					}
+					if ( ! $exacoat_aff_id ) {
+						$exacoat_aff_id = (int) $wpdb->get_var(
+							$wpdb->prepare(
+								"SELECT a.id FROM {$table_exacoat_affiliates} a 
+								 INNER JOIN {$wpdb->usermeta} um ON a.user_id = um.user_id 
+								 WHERE um.meta_key = '_slicewp_legacy_affiliate_id' AND um.meta_value = %s LIMIT 1",
+								(string) $slicewp_aff_id
+							)
+						);
+					}
+					if ( ! $exacoat_aff_id ) continue;
+
+					$p_id       = (int) ( $sp['id'] ?? 0 );
+					$raw_amount = (float) ( $sp['amount'] ?? 0.0 );
+					$p_curr     = ! empty( $sp['currency'] ) ? $sp['currency'] : 'IDR';
+					$idr_amount = self::convert_amount_to_idr( $raw_amount, $p_curr );
+					$created_at = ! empty( $sp['date_created'] ) ? $sp['date_created'] : current_time( 'mysql' );
+					$paid_at    = ! empty( $sp['date_modified'] ) ? $sp['date_modified'] : $created_at;
+					$trf_ref    = 'SLICEWP-PAYMENT-' . $p_id;
+
+					$aff_info = $wpdb->get_row(
+						$wpdb->prepare( "SELECT bank_name, bank_account_number, bank_account_name FROM {$table_exacoat_affiliates} WHERE id = %d LIMIT 1", $exacoat_aff_id )
+					);
+
+					$existing_payout_id = (int) $wpdb->get_var(
+						$wpdb->prepare(
+							"SELECT id FROM {$table_exacoat_payouts} WHERE transfer_reference = %s LIMIT 1",
+							$trf_ref
+						)
+					);
+
+					if ( ! $existing_payout_id ) {
+						$wpdb->insert(
+							$table_exacoat_payouts,
+							[
+								'affiliate_id'        => $exacoat_aff_id,
+								'amount'              => $idr_amount,
+								'bank_name'           => ! empty( $aff_info->bank_name ) ? $aff_info->bank_name : 'BCA',
+								'bank_account_number' => ! empty( $aff_info->bank_account_number ) ? $aff_info->bank_account_number : '',
+								'bank_account_name'   => ! empty( $aff_info->bank_account_name ) ? $aff_info->bank_account_name : '',
+								'status'              => 'paid',
+								'transfer_reference'  => $trf_ref,
+								'admin_notes'         => 'Migrated from SliceWP Payment #' . $p_id . ( ! empty( $sp['payout_id'] ) ? ' (Payout #' . $sp['payout_id'] . ')' : '' ),
+								'created_at'          => $created_at,
+								'paid_at'             => $paid_at,
+							]
+						);
+						$existing_payout_id = $wpdb->insert_id;
+						$payouts_migrated++;
+					}
+
+					// Link commissions
+					if ( ! empty( $sp['commission_ids'] ) ) {
+						$comm_ids = array_filter( array_map( 'intval', explode( ',', (string) $sp['commission_ids'] ) ) );
+						if ( ! empty( $comm_ids ) ) {
+							$in_sql = implode( ',', $comm_ids );
+							$wpdb->query(
+								"UPDATE {$table_exacoat_commissions} 
+								 SET status = 'paid', payout_id = {$existing_payout_id} 
+								 WHERE affiliate_id = {$exacoat_aff_id} 
+								   AND status != 'rejected' 
+								   AND id IN ({$in_sql})"
+							);
+						}
+					}
 				}
 			}
 		} else {
@@ -2971,9 +3101,85 @@ class Exacoat_Affiliate_Manager {
 					}
 				}
 			}
+
+			// 4. Migrate Payments via SQL
+			if ( $payments_table ) {
+				$raw_payments = $wpdb->get_results( "SELECT * FROM {$payments_table}" );
+				if ( ! empty( $raw_payments ) ) {
+					foreach ( $raw_payments as $sp ) {
+						$slicewp_aff_id = (int) ( $sp->affiliate_id ?? 0 );
+						$exacoat_aff_id = $affiliate_id_map[ $slicewp_aff_id ] ?? 0;
+						if ( ! $exacoat_aff_id ) {
+							if ( 1133 === $slicewp_aff_id ) {
+								$exacoat_aff_id = (int) $wpdb->get_var( "SELECT id FROM {$table_exacoat_affiliates} WHERE slug = 'edwinyg' LIMIT 1" );
+							} elseif ( 1135 === $slicewp_aff_id ) {
+								$exacoat_aff_id = (int) $wpdb->get_var( "SELECT id FROM {$table_exacoat_affiliates} WHERE slug = 'ds' LIMIT 1" );
+							} elseif ( 1140 === $slicewp_aff_id ) {
+								$exacoat_aff_id = (int) $wpdb->get_var( "SELECT id FROM {$table_exacoat_affiliates} WHERE slug = 'ehgxp' LIMIT 1" );
+							} elseif ( 1158 === $slicewp_aff_id ) {
+								$exacoat_aff_id = (int) $wpdb->get_var( "SELECT id FROM {$table_exacoat_affiliates} WHERE slug = 'clt9q' LIMIT 1" );
+							}
+						}
+						if ( ! $exacoat_aff_id ) continue;
+
+						$p_id       = (int) ( $sp->id ?? 0 );
+						$raw_amount = (float) ( $sp->amount ?? 0.0 );
+						$p_curr     = ! empty( $sp->currency ) ? $sp->currency : 'IDR';
+						$idr_amount = self::convert_amount_to_idr( $raw_amount, $p_curr );
+						$created_at = ! empty( $sp->date_created ) ? $sp->date_created : current_time( 'mysql' );
+						$paid_at    = ! empty( $sp->date_modified ) ? $sp->date_modified : $created_at;
+						$trf_ref    = 'SLICEWP-PAYMENT-' . $p_id;
+
+						$aff_info = $wpdb->get_row(
+							$wpdb->prepare( "SELECT bank_name, bank_account_number, bank_account_name FROM {$table_exacoat_affiliates} WHERE id = %d LIMIT 1", $exacoat_aff_id )
+						);
+
+						$existing_payout_id = (int) $wpdb->get_var(
+							$wpdb->prepare(
+								"SELECT id FROM {$table_exacoat_payouts} WHERE transfer_reference = %s LIMIT 1",
+								$trf_ref
+							)
+						);
+
+						if ( ! $existing_payout_id ) {
+							$wpdb->insert(
+								$table_exacoat_payouts,
+								[
+									'affiliate_id'        => $exacoat_aff_id,
+									'amount'              => $idr_amount,
+									'bank_name'           => ! empty( $aff_info->bank_name ) ? $aff_info->bank_name : 'BCA',
+									'bank_account_number' => ! empty( $aff_info->bank_account_number ) ? $aff_info->bank_account_number : '',
+									'bank_account_name'   => ! empty( $aff_info->bank_account_name ) ? $aff_info->bank_account_name : '',
+									'status'              => 'paid',
+									'transfer_reference'  => $trf_ref,
+									'admin_notes'         => 'Migrated from SliceWP Payment #' . $p_id,
+									'created_at'          => $created_at,
+									'paid_at'             => $paid_at,
+								]
+							);
+							$existing_payout_id = $wpdb->insert_id;
+							$payouts_migrated++;
+						}
+
+						if ( ! empty( $sp->commission_ids ) ) {
+							$comm_ids = array_filter( array_map( 'intval', explode( ',', (string) $sp->commission_ids ) ) );
+							if ( ! empty( $comm_ids ) ) {
+								$in_sql = implode( ',', $comm_ids );
+								$wpdb->query(
+									"UPDATE {$table_exacoat_commissions} 
+									 SET status = 'paid', payout_id = {$existing_payout_id} 
+									 WHERE affiliate_id = {$exacoat_aff_id} 
+									   AND status != 'rejected' 
+									   AND id IN ({$in_sql})"
+								);
+							}
+						}
+					}
+				}
+			}
 		}
 
-		// 4. Recalculate all affiliate balances from clean commission records
+		// 5. Recalculate all affiliate balances from clean commission records
 		self::recalculate_all_balances();
 
 		return rest_ensure_response( [
@@ -2984,6 +3190,7 @@ class Exacoat_Affiliate_Manager {
 				'affiliates_migrated'  => $affiliates_migrated,
 				'commissions_migrated' => $commissions_migrated,
 				'clicks_migrated'      => $clicks_migrated,
+				'payouts_migrated'     => $payouts_migrated,
 			],
 		] );
 	}
@@ -3033,6 +3240,7 @@ class Exacoat_Affiliate_Manager {
 			self::ensure_suns_channel_setup();
 			self::ensure_putra_setup();
 			self::ensure_msbn_setup();
+			self::ensure_historical_payouts_synced();
 
 			// 3. Re-sum balances and order/click counts across all affiliates
 			$all_affiliates = $wpdb->get_results( "SELECT id FROM {$table_affiliates}" );
@@ -3787,6 +3995,363 @@ class Exacoat_Affiliate_Manager {
 	public static function rest_admin_recalculate_balances( WP_REST_Request $request ) {
 		$result = self::recalculate_all_balances();
 		return rest_ensure_response( $result );
+	}
+
+	/**
+	 * Sync SliceWP historical payments into exacoat_affiliate_payouts table.
+	 */
+	public static function ensure_historical_payouts_synced(): int {
+		global $wpdb;
+		$table_payouts     = $wpdb->prefix . 'exacoat_affiliate_payouts';
+		$table_affiliates  = $wpdb->prefix . 'exacoat_affiliates';
+		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
+
+		// If we already have SliceWP payments migrated, return existing count
+		$existing_slicewp_count = (int) $wpdb->get_var(
+			"SELECT COUNT(*) FROM {$table_payouts} WHERE transfer_reference LIKE 'SLICEWP-PAYMENT-%'"
+		);
+		if ( $existing_slicewp_count >= 27 ) {
+			return $existing_slicewp_count;
+		}
+
+		$payments = [];
+
+		// 1. Try local MySQL table slicewp_payments
+		$all_tables = $wpdb->get_col( "SHOW TABLES LIKE '%slicewp_payments%'" );
+		if ( ! empty( $all_tables ) ) {
+			$tbl = current( $all_tables );
+			$raw = $wpdb->get_results( "SELECT * FROM {$tbl} ORDER BY id ASC" );
+			if ( ! empty( $raw ) ) {
+				foreach ( $raw as $r ) {
+					$payments[] = (array) $r;
+				}
+			}
+		}
+
+		// 2. If table is empty or missing, fetch from SliceWP REST API
+		if ( empty( $payments ) ) {
+			$hosts = [
+				site_url(),
+				'https://staging.exacoat.com',
+				'https://exacoat.com',
+			];
+			$ck = 'ck_tzL8mw8a3BI1y2ypr2x7D6lnsmkkof';
+			$cs = 'cs_fbqylIFi6Zi29Zmnmir8km2wv4mJRb';
+
+			foreach ( array_unique( $hosts ) as $h ) {
+				$url  = trailingslashit( $h ) . 'wp-json/slicewp/v1/payments?number=1000';
+				$resp = wp_remote_get( $url, [
+					'headers' => [
+						'Authorization' => 'Basic ' . base64_encode( $ck . ':' . $cs ),
+					],
+					'timeout' => 20,
+				] );
+				if ( ! is_wp_error( $resp ) && 200 === wp_remote_retrieve_response_code( $resp ) ) {
+					$body = json_decode( wp_remote_retrieve_body( $resp ), true );
+					if ( is_array( $body ) && ! empty( $body ) ) {
+						$payments = $body;
+						break;
+					}
+				}
+			}
+		}
+
+		if ( empty( $payments ) ) {
+			return $existing_slicewp_count;
+		}
+
+		$synced_count = 0;
+		foreach ( $payments as $sp ) {
+			$slicewp_aff_id = (int) ( $sp['affiliate_id'] ?? 0 );
+			$p_id           = (int) ( $sp['id'] ?? 0 );
+			$trf_ref        = 'SLICEWP-PAYMENT-' . $p_id;
+
+			$already_exists = (int) $wpdb->get_var(
+				$wpdb->prepare( "SELECT id FROM {$table_payouts} WHERE transfer_reference = %s LIMIT 1", $trf_ref )
+			);
+			if ( $already_exists ) {
+				continue;
+			}
+
+			// Map affiliate
+			$exacoat_aff_id = 0;
+			if ( 1133 === $slicewp_aff_id ) {
+				$exacoat_aff_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'edwinyg' LIMIT 1" );
+			} elseif ( 1135 === $slicewp_aff_id ) {
+				$exacoat_aff_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'ds' LIMIT 1" );
+			} elseif ( 1140 === $slicewp_aff_id ) {
+				$exacoat_aff_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'ehgxp' LIMIT 1" );
+			} elseif ( 1158 === $slicewp_aff_id ) {
+				$exacoat_aff_id = (int) $wpdb->get_var( "SELECT id FROM {$table_affiliates} WHERE slug = 'clt9q' LIMIT 1" );
+			}
+
+			if ( ! $exacoat_aff_id ) {
+				$exacoat_aff_id = (int) $wpdb->get_var(
+					$wpdb->prepare(
+						"SELECT a.id FROM {$table_affiliates} a 
+						 INNER JOIN {$wpdb->usermeta} um ON a.user_id = um.user_id 
+						 WHERE um.meta_key = '_slicewp_legacy_affiliate_id' AND um.meta_value = %s LIMIT 1",
+						(string) $slicewp_aff_id
+					)
+				);
+			}
+
+			if ( ! $exacoat_aff_id ) {
+				continue;
+			}
+
+			$aff_info = $wpdb->get_row(
+				$wpdb->prepare( "SELECT bank_name, bank_account_number, bank_account_name FROM {$table_affiliates} WHERE id = %d LIMIT 1", $exacoat_aff_id )
+			);
+
+			$raw_amount = (float) ( $sp['amount'] ?? 0.0 );
+			$p_curr     = ! empty( $sp['currency'] ) ? $sp['currency'] : 'IDR';
+			$idr_amount = self::convert_amount_to_idr( $raw_amount, $p_curr );
+			$created_at = ! empty( $sp['date_created'] ) ? $sp['date_created'] : current_time( 'mysql' );
+			$paid_at    = ! empty( $sp['date_modified'] ) ? $sp['date_modified'] : $created_at;
+
+			$wpdb->insert(
+				$table_payouts,
+				[
+					'affiliate_id'        => $exacoat_aff_id,
+					'amount'              => $idr_amount,
+					'bank_name'           => ! empty( $aff_info->bank_name ) ? $aff_info->bank_name : 'BCA',
+					'bank_account_number' => ! empty( $aff_info->bank_account_number ) ? $aff_info->bank_account_number : '',
+					'bank_account_name'   => ! empty( $aff_info->bank_account_name ) ? $aff_info->bank_account_name : '',
+					'status'              => 'paid',
+					'transfer_reference'  => $trf_ref,
+					'admin_notes'         => 'Migrated from SliceWP Payment #' . $p_id . ( ! empty( $sp['payout_id'] ) ? ' (Payout #' . $sp['payout_id'] . ')' : '' ),
+					'created_at'          => $created_at,
+					'paid_at'             => $paid_at,
+				]
+			);
+			$new_payout_id = $wpdb->insert_id;
+			$synced_count++;
+
+			// Link commissions
+			if ( ! empty( $sp['commission_ids'] ) ) {
+				$comm_ids = array_filter( array_map( 'intval', explode( ',', (string) $sp['commission_ids'] ) ) );
+				if ( ! empty( $comm_ids ) ) {
+					$in_sql = implode( ',', $comm_ids );
+					$wpdb->query(
+						"UPDATE {$table_commissions} 
+						 SET status = 'paid', payout_id = {$new_payout_id} 
+						 WHERE affiliate_id = {$exacoat_aff_id} 
+						   AND (status != 'rejected') 
+						   AND id IN ({$in_sql})"
+					);
+				}
+			}
+		}
+
+		return $existing_slicewp_count + $synced_count;
+	}
+
+	/**
+	 * Admin Endpoint: Update commission rate and/or coupon code for an affiliate.
+	 */
+	public static function rest_admin_update_commission_rate( WP_REST_Request $request ) {
+		$params          = $request->get_json_params() ?: $request->get_params();
+		$affiliate_id    = (int) ( $params['affiliate_id'] ?? 0 );
+		$coupon_code     = sanitize_text_field( trim( strtolower( (string) ( $params['coupon_code'] ?? '' ) ) ) );
+		$commission_rate = isset( $params['commission_rate'] ) && '' !== $params['commission_rate'] && null !== $params['commission_rate']
+			? round( (float) $params['commission_rate'], 2 )
+			: null;
+
+		if ( ! $affiliate_id ) {
+			return new WP_Error( 'missing_id', 'Affiliate ID is required.', [ 'status' => 400 ] );
+		}
+
+		global $wpdb;
+		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
+
+		$affiliate = $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$table_affiliates} WHERE id = %d LIMIT 1", $affiliate_id )
+		);
+
+		if ( ! $affiliate ) {
+			return new WP_Error( 'not_found', 'Affiliate not found.', [ 'status' => 404 ] );
+		}
+
+		$update_data = [
+			'commission_rate' => $commission_rate,
+		];
+		if ( isset( $params['coupon_code'] ) ) {
+			$update_data['coupon_code'] = $coupon_code;
+		}
+
+		$wpdb->update(
+			$table_affiliates,
+			$update_data,
+			[ 'id' => $affiliate_id ]
+		);
+
+		// Synchronize coupon if set
+		if ( ! empty( $coupon_code ) && function_exists( 'wc_get_coupon_id_by_code' ) ) {
+			try {
+				$coupon_id  = wc_get_coupon_id_by_code( $coupon_code );
+				$aff_user   = get_userdata( $affiliate->user_id );
+				$user_email = $aff_user ? $aff_user->user_email : '';
+				if ( $coupon_id > 0 ) {
+					update_post_meta( $coupon_id, '_exacoat_affiliate_id', $affiliate_id );
+					update_post_meta( $coupon_id, '_exacoat_affiliate_slug', $affiliate->slug );
+					if ( $user_email ) {
+						update_post_meta( $coupon_id, '_exacoat_affiliate_email', $user_email );
+					}
+				}
+			} catch ( \Throwable $e ) {
+			}
+		}
+
+		$updated = $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$table_affiliates} WHERE id = %d LIMIT 1", $affiliate_id )
+		);
+
+		return rest_ensure_response( [
+			'success'   => true,
+			'message'   => 'Commission rate and settings updated successfully.',
+			'affiliate' => $updated,
+		] );
+	}
+
+	/**
+	 * Admin Endpoint: Create a manual commission entry for an affiliate.
+	 */
+	public static function rest_admin_manual_commission( WP_REST_Request $request ) {
+		$params       = $request->get_json_params() ?: $request->get_params();
+		$affiliate_id = (int) ( $params['affiliate_id'] ?? 0 );
+		$amount       = (float) ( $params['amount'] ?? 0.0 );
+		$order_ref    = sanitize_text_field( trim( (string) ( $params['order_number'] ?? '' ) ) );
+		$notes        = sanitize_textarea_field( trim( (string) ( $params['notes'] ?? '' ) ) );
+		$status       = sanitize_text_field( trim( strtolower( (string) ( $params['status'] ?? 'unpaid' ) ) ) );
+
+		if ( ! $affiliate_id ) {
+			return new WP_Error( 'missing_affiliate', 'Affiliate ID is required.', [ 'status' => 400 ] );
+		}
+		if ( 0.0 === $amount ) {
+			return new WP_Error( 'invalid_amount', 'Commission amount cannot be zero.', [ 'status' => 400 ] );
+		}
+		if ( ! in_array( $status, [ 'unpaid', 'paid', 'pending' ], true ) ) {
+			$status = 'unpaid';
+		}
+
+		global $wpdb;
+		$table_affiliates  = $wpdb->prefix . 'exacoat_affiliates';
+		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
+
+		$affiliate = $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$table_affiliates} WHERE id = %d LIMIT 1", $affiliate_id )
+		);
+		if ( ! $affiliate ) {
+			return new WP_Error( 'not_found', 'Affiliate not found.', [ 'status' => 404 ] );
+		}
+
+		if ( empty( $order_ref ) ) {
+			$order_ref = 'MANUAL-' . wp_date( 'Ymd' ) . '-' . wp_rand( 1000, 9999 );
+		}
+
+		// Clean numeric order ID if order_ref is numeric
+		$numeric_order_id = is_numeric( $order_ref ) ? (int) $order_ref : 0;
+		$order_subtotal   = abs( $amount );
+		if ( $numeric_order_id > 0 && function_exists( 'wc_get_order' ) ) {
+			$wc_order = wc_get_order( $numeric_order_id );
+			if ( $wc_order instanceof WC_Order ) {
+				$order_subtotal = (float) $wc_order->get_subtotal();
+			}
+		}
+
+		$rate = ( $order_subtotal > 0 ) ? round( ( abs( $amount ) / $order_subtotal ) * 100, 2 ) : ( (float) $affiliate->commission_rate ?: 20.00 );
+
+		$wpdb->insert(
+			$table_commissions,
+			[
+				'affiliate_id'      => $affiliate_id,
+				'order_id'          => $numeric_order_id,
+				'order_number'      => $order_ref,
+				'order_subtotal'    => $order_subtotal,
+				'commission_rate'   => $rate,
+				'commission_amount' => $amount,
+				'coupon_code'       => (string) $affiliate->coupon_code,
+				'status'            => $status,
+				'delivered_at'      => current_time( 'mysql' ),
+				'matures_at'        => current_time( 'mysql' ),
+				'customer_email'    => $notes ?: 'Manual Adjustment',
+				'rejection_reason'  => $notes,
+				'created_at'        => current_time( 'mysql' ),
+			]
+		);
+		$comm_id = $wpdb->insert_id;
+
+		// Recalculate affiliate balances
+		self::recalculate_all_balances();
+
+		return rest_ensure_response( [
+			'success'       => true,
+			'message'       => 'Manual commission record created successfully.',
+			'commission_id' => $comm_id,
+		] );
+	}
+
+	/**
+	 * Admin Endpoint: Edit an existing commission record.
+	 */
+	public static function rest_admin_update_commission( WP_REST_Request $request ) {
+		$params  = $request->get_json_params() ?: $request->get_params();
+		$comm_id = (int) ( $params['id'] ?? 0 );
+
+		if ( ! $comm_id ) {
+			return new WP_Error( 'missing_id', 'Commission ID is required.', [ 'status' => 400 ] );
+		}
+
+		global $wpdb;
+		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
+
+		$commission = $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$table_commissions} WHERE id = %d LIMIT 1", $comm_id )
+		);
+		if ( ! $commission ) {
+			return new WP_Error( 'not_found', 'Commission record not found.', [ 'status' => 404 ] );
+		}
+
+		$update_fields = [];
+		if ( isset( $params['commission_amount'] ) ) {
+			$update_fields['commission_amount'] = (float) $params['commission_amount'];
+		}
+		if ( isset( $params['status'] ) ) {
+			$valid_statuses = [ 'pending', 'unpaid', 'paid', 'rejected' ];
+			$new_status     = sanitize_text_field( trim( strtolower( (string) $params['status'] ) ) );
+			if ( in_array( $new_status, $valid_statuses, true ) ) {
+				$update_fields['status'] = $new_status;
+			}
+		}
+		if ( isset( $params['order_number'] ) ) {
+			$update_fields['order_number'] = sanitize_text_field( trim( (string) $params['order_number'] ) );
+		}
+		if ( isset( $params['order_subtotal'] ) ) {
+			$update_fields['order_subtotal'] = (float) $params['order_subtotal'];
+		}
+		if ( isset( $params['notes'] ) || isset( $params['rejection_reason'] ) ) {
+			$update_fields['rejection_reason'] = sanitize_textarea_field( trim( (string) ( $params['notes'] ?? $params['rejection_reason'] ) ) );
+		}
+
+		if ( ! empty( $update_fields ) ) {
+			$wpdb->update(
+				$table_commissions,
+				$update_fields,
+				[ 'id' => $comm_id ]
+			);
+			self::recalculate_all_balances();
+		}
+
+		$updated_comm = $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$table_commissions} WHERE id = %d LIMIT 1", $comm_id )
+		);
+
+		return rest_ensure_response( [
+			'success'    => true,
+			'message'    => 'Commission updated successfully.',
+			'commission' => $updated_comm,
+		] );
 	}
 
 }

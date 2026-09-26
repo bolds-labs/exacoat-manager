@@ -31,7 +31,10 @@ import {
   User,
   ShoppingBag,
   Ticket,
-  Tag
+  Tag,
+  Edit3,
+  Plus,
+  DollarSign
 } from 'lucide-react';
 import { 
   fetchAdminAffiliates, 
@@ -46,7 +49,10 @@ import {
   runAdminSliceWpMigration,
   fetchOrderDetailDirect,
   assignAdminAffiliateCoupon,
-  recalculateAdminAffiliateBalances
+  recalculateAdminAffiliateBalances,
+  updateAdminAffiliateCommissionRate,
+  createAdminManualCommission,
+  updateAdminCommission
 } from '../lib/wordpressBridge';
 import { AffiliateCommission, AffiliatePayout, Order } from '../types';
 import { OrderDetailDrawer } from '../components/orders/OrderDetailDrawer';
@@ -135,17 +141,44 @@ export const AffiliatesPage: React.FC = () => {
   const [transferRef, setTransferRef] = useState('');
   const [isProcessingAction, setIsProcessingAction] = useState(false);
 
-  // Coupon Assignment & Recalculate State
+  // Coupon, Commission Rate & Manual Adjustment State
   const [selectedAffiliateForCoupon, setSelectedAffiliateForCoupon] = useState<any | null>(null);
   const [couponCodeInput, setCouponCodeInput] = useState('');
   const [commissionRateInput, setCommissionRateInput] = useState('');
+  const [showManualAdj, setShowManualAdj] = useState(false);
+  const [manualAdjAmount, setManualAdjAmount] = useState('');
+  const [manualAdjOrderRef, setManualAdjOrderRef] = useState('');
+  const [manualAdjNotes, setManualAdjNotes] = useState('');
+  const [manualAdjStatus, setManualAdjStatus] = useState<'unpaid' | 'paid'>('unpaid');
   const [isAssigningCoupon, setIsAssigningCoupon] = useState(false);
   const [isRecalculatingBalances, setIsRecalculatingBalances] = useState(false);
+
+  // Dedicated Add Manual Commission Modal State
+  const [isAddManualCommissionOpen, setIsAddManualCommissionOpen] = useState(false);
+  const [manualCommAffiliateId, setManualCommAffiliateId] = useState<string | number>('');
+  const [manualCommAmount, setManualCommAmount] = useState('');
+  const [manualCommOrderRef, setManualCommOrderRef] = useState('');
+  const [manualCommNotes, setManualCommNotes] = useState('');
+  const [manualCommStatus, setManualCommStatus] = useState<'unpaid' | 'paid'>('unpaid');
+  const [isSavingManualComm, setIsSavingManualComm] = useState(false);
+
+  // Edit Commission Record Modal State
+  const [editingCommission, setEditingCommission] = useState<AffiliateCommission | null>(null);
+  const [editCommAmount, setEditCommAmount] = useState('');
+  const [editCommStatus, setEditCommStatus] = useState('unpaid');
+  const [editCommOrderNumber, setEditCommOrderNumber] = useState('');
+  const [editCommNotes, setEditCommNotes] = useState('');
+  const [isSavingEditComm, setIsSavingEditComm] = useState(false);
 
   const handleOpenCouponModal = (aff: any) => {
     setSelectedAffiliateForCoupon(aff);
     setCouponCodeInput(aff.coupon_code || '');
     setCommissionRateInput(aff.commission_rate ? String(aff.commission_rate) : '');
+    setShowManualAdj(false);
+    setManualAdjAmount('');
+    setManualAdjOrderRef('');
+    setManualAdjNotes('');
+    setManualAdjStatus('unpaid');
   };
 
   const handleSaveCouponAssignment = async (e: React.FormEvent) => {
@@ -153,22 +186,122 @@ export const AffiliatesPage: React.FC = () => {
     if (!selectedAffiliateForCoupon) return;
     setIsAssigningCoupon(true);
     try {
-      const res = await assignAdminAffiliateCoupon({
+      const res = await updateAdminAffiliateCommissionRate({
         affiliate_id: selectedAffiliateForCoupon.id,
         coupon_code: couponCodeInput.trim(),
         commission_rate: commissionRateInput.trim() ? parseFloat(commissionRateInput) : null,
       });
+
+      let manualMsg = '';
+      if (showManualAdj && manualAdjAmount.trim()) {
+        const parsedAmt = parseFloat(manualAdjAmount);
+        if (!isNaN(parsedAmt) && parsedAmt !== 0) {
+          const mRes = await createAdminManualCommission({
+            affiliate_id: selectedAffiliateForCoupon.id,
+            amount: parsedAmt,
+            order_number: manualAdjOrderRef.trim() || undefined,
+            notes: manualAdjNotes.trim() || undefined,
+            status: manualAdjStatus,
+          });
+          if (mRes.success) {
+            manualMsg = ' and manual commission recorded';
+          }
+        }
+      }
+
       if (res.success) {
-        showToast('success', 'Coupon Assigned', `Coupon ${couponCodeInput} assigned successfully.`);
+        showToast('success', 'Affiliate Updated', `Settings${manualMsg} saved successfully.`);
         setSelectedAffiliateForCoupon(null);
         loadData();
       } else {
-        showToast('error', 'Assignment Failed', res.error || 'Failed to assign coupon.');
+        showToast('error', 'Update Failed', res.error || 'Failed to update affiliate.');
       }
     } catch (err: any) {
       showToast('error', 'Error', err.message);
     } finally {
       setIsAssigningCoupon(false);
+    }
+  };
+
+  const handleSaveManualCommission = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const affId = Number(manualCommAffiliateId);
+    const amt = parseFloat(manualCommAmount);
+    if (!affId) {
+      showToast('error', 'Validation Error', 'Please select a creator.');
+      return;
+    }
+    if (isNaN(amt) || amt === 0) {
+      showToast('error', 'Validation Error', 'Please enter a valid non-zero commission amount.');
+      return;
+    }
+
+    setIsSavingManualComm(true);
+    try {
+      const res = await createAdminManualCommission({
+        affiliate_id: affId,
+        amount: amt,
+        order_number: manualCommOrderRef.trim() || undefined,
+        notes: manualCommNotes.trim() || undefined,
+        status: manualCommStatus,
+      });
+
+      if (res.success) {
+        showToast('success', 'Commission Added', 'Manual commission adjustment recorded successfully.');
+        setIsAddManualCommissionOpen(false);
+        setManualCommAmount('');
+        setManualCommOrderRef('');
+        setManualCommNotes('');
+        loadData();
+      } else {
+        showToast('error', 'Creation Failed', res.error || 'Failed to record manual commission.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message);
+    } finally {
+      setIsSavingManualComm(false);
+    }
+  };
+
+  const handleOpenEditCommission = (c: AffiliateCommission, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setEditingCommission(c);
+    setEditCommAmount(String(c.commission_amount));
+    setEditCommStatus(c.status);
+    setEditCommOrderNumber(c.order_number || String(c.order_id || ''));
+    setEditCommNotes(c.rejection_reason || '');
+  };
+
+  const handleSaveEditCommission = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCommission) return;
+    const amt = parseFloat(editCommAmount);
+    if (isNaN(amt)) {
+      showToast('error', 'Validation Error', 'Please enter a valid numeric amount.');
+      return;
+    }
+
+    setIsSavingEditComm(true);
+    try {
+      const res = await updateAdminCommission({
+        id: editingCommission.id,
+        commission_amount: amt,
+        status: editCommStatus,
+        order_number: editCommOrderNumber.trim(),
+        notes: editCommNotes.trim(),
+      });
+
+      if (res.success) {
+        showToast('success', 'Commission Updated', 'Commission record updated successfully.');
+        setEditingCommission(null);
+        loadData();
+      } else {
+        showToast('error', 'Update Failed', res.error || 'Failed to update commission.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message);
+    } finally {
+      setIsSavingEditComm(false);
     }
   };
 
@@ -810,6 +943,7 @@ export const AffiliatesPage: React.FC = () => {
                     <th className="py-3 pl-4">Creator / Slug</th>
                     <th className="py-3">Account Roles</th>
                     <th className="py-3">Status</th>
+                    <th className="py-3">Rate</th>
                     <th className="py-3">Clicks</th>
                     <th className="py-3">Orders</th>
                     <th className="py-3">Unpaid Balance</th>
@@ -821,7 +955,7 @@ export const AffiliatesPage: React.FC = () => {
                 <tbody className="divide-y divide-white/[0.04]">
                   {affiliates.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="py-12 text-center text-neutral-400">
+                      <td colSpan={10} className="py-12 text-center text-neutral-400">
                         No affiliates match the current filters.
                       </td>
                     </tr>
@@ -887,6 +1021,16 @@ export const AffiliatesPage: React.FC = () => {
                             {aff.status}
                           </span>
                         </td>
+                        <td className="py-3">
+                          <span className={clsx(
+                            'font-mono text-[11px] px-2 py-0.5 rounded font-semibold border inline-block',
+                            aff.commission_rate
+                              ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                              : 'bg-white/[0.04] text-neutral-400 border-white/[0.08]'
+                          )}>
+                            {aff.commission_rate ? `${aff.commission_rate}%` : '20% (Default)'}
+                          </span>
+                        </td>
                         <td className="py-3 font-mono text-neutral-300">
                           {Number(aff.total_clicks || 0).toLocaleString('id-ID')}
                         </td>
@@ -914,10 +1058,10 @@ export const AffiliatesPage: React.FC = () => {
                               type="button"
                               onClick={() => handleOpenCouponModal(aff)}
                               className="text-[11px] font-medium text-amber-400 hover:text-amber-300 transition-colors cursor-pointer flex items-center gap-1"
-                              title="Assign promo coupon code and custom commission rate"
+                              title="Edit commission rate, promo coupon, or add manual balance adjustment"
                             >
-                              <Ticket className="w-3 h-3" />
-                              <span>{aff.coupon_code ? 'Edit Coupon' : 'Assign Coupon'}</span>
+                              <Sliders className="w-3 h-3" />
+                              <span>Edit Commission</span>
                             </button>
                             <span className="text-white/20">|</span>
                             {aff.status === 'active' ? (
@@ -1031,6 +1175,24 @@ export const AffiliatesPage: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    setIsAddManualCommissionOpen(true);
+                    setManualCommAffiliateId(affiliates[0]?.id || '');
+                    setManualCommAmount('');
+                    setManualCommOrderRef('');
+                    setManualCommNotes('');
+                    setManualCommStatus('unpaid');
+                  }}
+                  leftIcon={<Plus className="w-3.5 h-3.5" />}
+                  className="shrink-0"
+                  title="Manually create a commission record for any creator"
+                >
+                  Add Commission
+                </Button>
                 <FilterSelect
                   label="Status"
                   value={statusFilter}
@@ -1238,14 +1400,25 @@ export const AffiliatesPage: React.FC = () => {
 
                         {/* Actions */}
                         <td className="py-3 pr-4 text-right">
-                          <button
-                            type="button"
-                            onClick={(e) => handleOpenOrderById(c.order_id || c.order_number, e)}
-                            className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[#141414] hover:bg-white/[0.08] text-neutral-300 hover:text-white border border-white/[0.06] transition-colors inline-flex items-center gap-1 cursor-pointer"
-                          >
-                            <Eye className="w-3 h-3" />
-                            <span>Inspect</span>
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={(e) => handleOpenEditCommission(c, e)}
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[#141414] hover:bg-white/[0.08] text-amber-400 hover:text-amber-300 border border-white/[0.06] transition-colors inline-flex items-center gap-1 cursor-pointer"
+                              title="Edit commission amount, status, or reference"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => handleOpenOrderById(c.order_id || c.order_number, e)}
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[#141414] hover:bg-white/[0.08] text-neutral-300 hover:text-white border border-white/[0.06] transition-colors inline-flex items-center gap-1 cursor-pointer"
+                            >
+                              <Eye className="w-3 h-3" />
+                              <span>Inspect</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -1763,10 +1936,10 @@ export const AffiliatesPage: React.FC = () => {
         </div>
       )}
 
-      {/* Modal: Assign Promo Coupon & Custom Commission Rate */}
+      {/* Modal: Edit Affiliate Commission & Settings */}
       {selectedAffiliateForCoupon && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
-          <GlassCard className="w-full max-w-md bg-[#111111] border border-white/[0.1] rounded-2xl p-6 shadow-2xl relative space-y-4">
+          <GlassCard className="w-full max-w-md bg-[#111111] border border-white/[0.1] rounded-2xl p-6 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
             <button
               type="button"
               onClick={() => setSelectedAffiliateForCoupon(null)}
@@ -1777,51 +1950,179 @@ export const AffiliatesPage: React.FC = () => {
 
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-                <Ticket className="w-5 h-5" />
+                <Sliders className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-base font-semibold text-white">Assign Promo Coupon</h3>
+                <h3 className="text-base font-semibold text-white">Edit Creator Commission</h3>
                 <p className="text-xs text-neutral-400">
-                  Connect coupon code for <span className="text-[#f3aa18] font-mono">@{selectedAffiliateForCoupon.slug}</span>
+                  Settings for <span className="text-[#f3aa18] font-mono">@{selectedAffiliateForCoupon.slug}</span> ({selectedAffiliateForCoupon.display_name || selectedAffiliateForCoupon.user_login})
                 </p>
               </div>
             </div>
 
             <form onSubmit={handleSaveCouponAssignment} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                  Coupon Code
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. edwin15"
-                  value={couponCodeInput}
-                  onChange={(e) => setCouponCodeInput(e.target.value)}
-                  className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 uppercase"
-                />
-                <p className="text-[11px] text-neutral-500 mt-1">
-                  Orders using this coupon in WooCommerce checkout will automatically credit this creator.
+              {/* Commission Rate Presets & Custom Input */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-neutral-300">
+                    Commission Rate (%)
+                  </label>
+                  <span className="text-[11px] font-mono text-[#f3aa18]">
+                    {commissionRateInput ? `${commissionRateInput}%` : '20% (Default)'}
+                  </span>
+                </div>
+
+                {/* Quick Presets */}
+                <div className="grid grid-cols-5 gap-1.5">
+                  {['10', '15', '20', '25'].map((rate) => (
+                    <button
+                      key={rate}
+                      type="button"
+                      onClick={() => setCommissionRateInput(rate)}
+                      className={clsx(
+                        'py-1.5 rounded-lg text-xs font-mono font-semibold border transition-all cursor-pointer text-center',
+                        commissionRateInput === rate
+                          ? 'bg-[#f3aa18] text-black border-[#f3aa18]'
+                          : 'bg-[#18181b] text-neutral-300 hover:text-white border-white/[0.08] hover:border-white/[0.2]'
+                      )}
+                    >
+                      {rate}%
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setCommissionRateInput('')}
+                    className={clsx(
+                      'py-1.5 rounded-lg text-xs font-mono font-semibold border transition-all cursor-pointer text-center',
+                      !commissionRateInput
+                        ? 'bg-amber-500/20 text-[#f3aa18] border-amber-500/40'
+                        : 'bg-[#18181b] text-neutral-400 hover:text-white border-white/[0.08]'
+                    )}
+                    title="Reset to store default rate"
+                  >
+                    Default
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    placeholder="Custom rate % (leave empty for default 20%)"
+                    value={commissionRateInput}
+                    onChange={(e) => setCommissionRateInput(e.target.value)}
+                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
+                  />
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">
+                    %
+                  </span>
+                </div>
+                <p className="text-[11px] text-neutral-500">
+                  Custom rate applies to all future orders attributed to this creator.
                 </p>
               </div>
 
+              {/* Promo Coupon Code */}
               <div>
                 <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                  Custom Commission Rate (%)
+                  Connected Promo Coupon Code
                 </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="100"
-                  placeholder="Leave empty for default 20%"
-                  value={commissionRateInput}
-                  onChange={(e) => setCommissionRateInput(e.target.value)}
-                  className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
-                />
+                <div className="relative">
+                  <Ticket className="w-3.5 h-3.5 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="e.g. edwin15, ds10 (optional)"
+                    value={couponCodeInput}
+                    onChange={(e) => setCouponCodeInput(e.target.value)}
+                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 uppercase"
+                  />
+                </div>
                 <p className="text-[11px] text-neutral-500 mt-1">
-                  Override standard 20% commission (e.g. 10.0 for 10% creator earnings).
+                  Orders using this coupon during checkout will credit this affiliate.
                 </p>
+              </div>
+
+              {/* Manual Balance Adjustment Section */}
+              <div className="pt-2 border-t border-white/[0.08]">
+                <button
+                  type="button"
+                  onClick={() => setShowManualAdj(!showManualAdj)}
+                  className="flex items-center justify-between w-full text-left text-xs font-semibold text-neutral-300 hover:text-white py-1 cursor-pointer"
+                >
+                  <span className="flex items-center gap-1.5 text-[#f3aa18]">
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Manual Commission Adjustment</span>
+                  </span>
+                  <span className="text-[11px] text-neutral-500 font-mono">
+                    {showManualAdj ? 'Hide' : '+ Adjust Balance'}
+                  </span>
+                </button>
+
+                {showManualAdj && (
+                  <div className="mt-3 p-3.5 rounded-xl bg-[#141414] border border-white/[0.06] space-y-3">
+                    <div>
+                      <label className="block text-[11px] font-medium text-neutral-300 mb-1">
+                        Adjustment Amount (IDR)
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">
+                          Rp
+                        </span>
+                        <input
+                          type="number"
+                          step="1000"
+                          placeholder="e.g. 50000 or -25000"
+                          value={manualAdjAmount}
+                          onChange={(e) => setManualAdjAmount(e.target.value)}
+                          className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl pl-9 pr-3 py-2 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[11px] font-medium text-neutral-300 mb-1">
+                          Status
+                        </label>
+                        <select
+                          value={manualAdjStatus}
+                          onChange={(e) => setManualAdjStatus(e.target.value as 'unpaid' | 'paid')}
+                          className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[#f3aa18]/60"
+                        >
+                          <option value="unpaid">Unpaid (Ready)</option>
+                          <option value="paid">Paid (Settled)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-neutral-300 mb-1">
+                          Order / Ref (Opt)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 542410"
+                          value={manualAdjOrderRef}
+                          onChange={(e) => setManualAdjOrderRef(e.target.value)}
+                          className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-2.5 py-2 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-medium text-neutral-300 mb-1">
+                        Reason / Notes
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Bonus for YouTube review, campaign reward..."
+                        value={manualAdjNotes}
+                        onChange={(e) => setManualAdjNotes(e.target.value)}
+                        className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/[0.08]">
@@ -1840,7 +2141,247 @@ export const AffiliatesPage: React.FC = () => {
                   disabled={isAssigningCoupon}
                   leftIcon={isAssigningCoupon ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                 >
-                  {isAssigningCoupon ? 'Saving...' : 'Save Assignment'}
+                  {isAssigningCoupon ? 'Saving...' : 'Save Settings'}
+                </Button>
+              </div>
+            </form>
+          </GlassCard>
+        </div>
+      )}
+
+      {/* Modal: Dedicated Add Manual Commission */}
+      {isAddManualCommissionOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+          <GlassCard className="w-full max-w-md bg-[#111111] border border-white/[0.1] rounded-2xl p-6 shadow-2xl relative space-y-4">
+            <button
+              type="button"
+              onClick={() => setIsAddManualCommissionOpen(false)}
+              className="absolute top-4 right-4 p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/[0.05] transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#f3aa18]/10 border border-[#f3aa18]/20 flex items-center justify-center text-[#f3aa18]">
+                <Plus className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-white">Record Manual Commission</h3>
+                <p className="text-xs text-neutral-400">
+                  Credit or adjust commission for any creator partner
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveManualCommission} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                  Select Creator <span className="text-[#f3aa18]">*</span>
+                </label>
+                <select
+                  required
+                  value={manualCommAffiliateId}
+                  onChange={(e) => setManualCommAffiliateId(e.target.value)}
+                  className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
+                >
+                  <option value="" disabled>Select Affiliate Creator</option>
+                  {affiliates.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      @{a.slug} ({a.display_name || a.user_login}) {a.commission_rate ? `(${a.commission_rate}%)` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                  Commission Amount (IDR) <span className="text-[#f3aa18]">*</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">
+                    Rp
+                  </span>
+                  <input
+                    type="number"
+                    step="1000"
+                    required
+                    placeholder="e.g. 50000"
+                    value={manualCommAmount}
+                    onChange={(e) => setManualCommAmount(e.target.value)}
+                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                    Status
+                  </label>
+                  <select
+                    value={manualCommStatus}
+                    onChange={(e) => setManualCommStatus(e.target.value as 'unpaid' | 'paid')}
+                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#f3aa18]/60"
+                  >
+                    <option value="unpaid">Ready for Payout (Unpaid)</option>
+                    <option value="paid">Already Settled (Paid)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                    Order # / Ref
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 542410 or MANUAL"
+                    value={manualCommOrderRef}
+                    onChange={(e) => setManualCommOrderRef(e.target.value)}
+                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                  Reason / Notes
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Special campaign commission, affiliate bonus..."
+                  value={manualCommNotes}
+                  onChange={(e) => setManualCommNotes(e.target.value)}
+                  className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/[0.08]">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsAddManualCommissionOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  disabled={isSavingManualComm}
+                  leftIcon={isSavingManualComm ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                >
+                  {isSavingManualComm ? 'Recording...' : 'Record Commission'}
+                </Button>
+              </div>
+            </form>
+          </GlassCard>
+        </div>
+      )}
+
+      {/* Modal: Edit Existing Commission Record */}
+      {editingCommission && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+          <GlassCard className="w-full max-w-md bg-[#111111] border border-white/[0.1] rounded-2xl p-6 shadow-2xl relative space-y-4">
+            <button
+              type="button"
+              onClick={() => setEditingCommission(null)}
+              className="absolute top-4 right-4 p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/[0.05] transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                <Edit3 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-white">Edit Commission #{editingCommission.id}</h3>
+                <p className="text-xs text-neutral-400">
+                  Affiliated to <span className="text-[#f3aa18] font-mono">@{editingCommission.affiliate_slug}</span>
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveEditCommission} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                    Order # / Ref
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editCommOrderNumber}
+                    onChange={(e) => setEditCommOrderNumber(e.target.value)}
+                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#f3aa18]/60"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                    Status
+                  </label>
+                  <select
+                    value={editCommStatus}
+                    onChange={(e) => setEditCommStatus(e.target.value)}
+                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#f3aa18]/60"
+                  >
+                    <option value="unpaid">Ready for Payout (Unpaid)</option>
+                    <option value="paid">Paid Out</option>
+                    <option value="pending">Pending Grace Period</option>
+                    <option value="rejected">Rejected / Cancelled</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                  Commission Amount (IDR)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">
+                    Rp
+                  </span>
+                  <input
+                    type="number"
+                    step="1"
+                    required
+                    value={editCommAmount}
+                    onChange={(e) => setEditCommAmount(e.target.value)}
+                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#f3aa18]/60"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                  Notes / Reason
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Reason for adjustment, order status change, or rejection..."
+                  value={editCommNotes}
+                  onChange={(e) => setEditCommNotes(e.target.value)}
+                  className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/[0.08]">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditingCommission(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  disabled={isSavingEditComm}
+                  leftIcon={isSavingEditComm ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                >
+                  {isSavingEditComm ? 'Saving...' : 'Save Changes'}
                 </Button>
               </div>
             </form>
