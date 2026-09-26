@@ -5,6 +5,7 @@ import {
   uploadWordPressMediaDirect,
   fetchWordPressMedia,
   WpMediaItem,
+  revalidateStorefrontWebDirect,
 } from '../../lib/wordpressBridge';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../../context/ToastContext';
@@ -377,7 +378,13 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
       });
 
       if (res.success && res.product) {
-        showToast('success', 'Images Saved', `Updated gallery for ${product.name}.`);
+        // Trigger storefront on-demand ISR revalidation and Cloudflare edge cache purge
+        revalidateStorefrontWebDirect({
+          slug: product.slug,
+          category: product.categories?.[0]?.slug,
+        }).catch((err) => console.warn('[Images] Cache revalidation notice:', err));
+
+        showToast('success', 'Images Saved', `Updated gallery for ${product.name}. Storefront and edge cache refreshed.`);
         onUpdated(res.product);
         onClose();
       } else {

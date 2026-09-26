@@ -5,6 +5,7 @@ import {
   updateProductSeoDirect,
   generateProductSeoAndDescriptionAi,
   getCachedPluginSettings,
+  revalidateStorefrontWebDirect,
 } from '../../lib/wordpressBridge';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../../context/ToastContext';
@@ -268,7 +269,17 @@ export const ProductSeoModal: React.FC<ProductSeoModalProps> = ({
       });
 
       if (res.success) {
-        showToast('success', 'SEO Saved', `Updated SEO and short description for ${product.name}.`);
+        // Trigger storefront on-demand ISR revalidation and Cloudflare edge cache purge
+        revalidateStorefrontWebDirect({
+          slug: product.slug,
+          category: product.categories?.[0]?.slug,
+        }).catch((err) => console.warn('[SEO] Cache revalidation notice:', err));
+
+        showToast(
+          'success',
+          'SEO Saved',
+          `Updated SEO for ${product.name}. Storefront and edge cache refreshed.`
+        );
         onUpdated({
           ...product,
           short_description: shortDesc.trim(),

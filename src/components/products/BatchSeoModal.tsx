@@ -1,5 +1,11 @@
 import React, { useState } from 'react';
-import { Product, updateProductSeoDirect, generateProductSeoAndDescriptionAi, getCachedPluginSettings } from '../../lib/wordpressBridge';
+import {
+  Product,
+  updateProductSeoDirect,
+  generateProductSeoAndDescriptionAi,
+  getCachedPluginSettings,
+  revalidateStorefrontWebDirect,
+} from '../../lib/wordpressBridge';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../../context/ToastContext';
 import {
@@ -132,10 +138,17 @@ export const BatchSeoModal: React.FC<BatchSeoModalProps> = ({
 
     setIsProcessing(false);
     onProductsUpdated(updatedProductsList);
+
+    if (successCount > 0) {
+      revalidateStorefrontWebDirect({ purge_everything: true }).catch((err) =>
+        console.warn('[BatchClean] Cache revalidation notice:', err)
+      );
+    }
+
     showToast(
       'success',
       'Batch Clean Complete',
-      `Optimized ${successCount} products. Stripped HTML tags, resolved device names, and normalized titles.`
+      `Optimized ${successCount} products. Stripped HTML tags, resolved device names, and refreshed storefront cache.`
     );
   };
 
@@ -189,10 +202,17 @@ export const BatchSeoModal: React.FC<BatchSeoModalProps> = ({
 
     setIsProcessing(false);
     onProductsUpdated(updatedProductsList);
+
+    if (successCount > 0) {
+      revalidateStorefrontWebDirect({ purge_everything: true }).catch((err) =>
+        console.warn('[BatchAI] Cache revalidation notice:', err)
+      );
+    }
+
     showToast(
       'success',
       'AI Batch Generation Complete',
-      `Generated unique device SEO copy for ${successCount} products using ${provider}.`
+      `Generated unique device SEO copy for ${successCount} products using ${provider}, and refreshed storefront cache.`
     );
   };
 
