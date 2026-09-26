@@ -245,6 +245,7 @@ class Exacoat_Configurator_Engine {
 
 		// Hook into WooCommerce cart and order items for headless addons
 		add_filter( 'woocommerce_add_cart_item_data', [ __CLASS__, 'add_addon_data_to_cart_item' ], 10, 3 );
+		add_filter( 'woocommerce_get_cart_item_from_session', [ __CLASS__, 'get_cart_item_from_session' ], 10, 3 );
 		add_action( 'woocommerce_before_calculate_totals', [ __CLASS__, 'calculate_custom_addon_totals' ], 20, 1 );
 		add_filter( 'woocommerce_get_item_data', [ __CLASS__, 'display_custom_addons_in_cart' ], 10, 2 );
 		add_filter( 'woocommerce_store_api_cart_line_item_data', [ __CLASS__, 'filter_store_api_cart_line_item_data' ], 10, 3 );
@@ -3782,6 +3783,19 @@ class Exacoat_Configurator_Engine {
 		return $cart_item_data;
 	}
 
+	public static function get_cart_item_from_session( $cart_item, $values, $key ) {
+		if ( ! empty( $values['exacoat_addons'] ) ) {
+			$cart_item['exacoat_addons'] = $values['exacoat_addons'];
+		}
+		if ( ! empty( $values['exacoat_custom_image'] ) ) {
+			$cart_item['exacoat_custom_image'] = $values['exacoat_custom_image'];
+		}
+		if ( ! empty( $values['exacoat_custom_price'] ) ) {
+			$cart_item['exacoat_custom_price'] = $values['exacoat_custom_price'];
+		}
+		return $cart_item;
+	}
+
 	public static function calculate_custom_addon_totals( $cart ) {
 		if ( is_admin() && ! defined( 'DOING_AJAX' ) ) return;
 		if ( did_action( 'woocommerce_before_calculate_totals' ) >= 2 ) return;
@@ -3821,13 +3835,6 @@ class Exacoat_Configurator_Engine {
 					];
 				}
 			}
-		}
-		if ( ! empty( $cart_item['exacoat_custom_image'] ) ) {
-			$item_data[] = [
-				'key'    => '_configured_image_url',
-				'value'  => esc_url_raw( $cart_item['exacoat_custom_image'] ),
-				'hidden' => true,
-			];
 		}
 		return $item_data;
 	}
