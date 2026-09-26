@@ -247,6 +247,8 @@ class Exacoat_Configurator_Engine {
 		add_filter( 'woocommerce_add_cart_item_data', [ __CLASS__, 'add_addon_data_to_cart_item' ], 10, 3 );
 		add_action( 'woocommerce_before_calculate_totals', [ __CLASS__, 'calculate_custom_addon_totals' ], 20, 1 );
 		add_filter( 'woocommerce_get_item_data', [ __CLASS__, 'display_custom_addons_in_cart' ], 10, 2 );
+		add_filter( 'woocommerce_store_api_cart_line_item_data', [ __CLASS__, 'filter_store_api_cart_line_item_data' ], 10, 3 );
+		add_filter( 'woocommerce_cart_item_thumbnail', [ __CLASS__, 'filter_cart_item_thumbnail' ], 10, 3 );
 		add_action( 'woocommerce_checkout_create_order_line_item', [ __CLASS__, 'save_custom_addons_to_order_item' ], 10, 4 );
 	}
 
@@ -3820,7 +3822,41 @@ class Exacoat_Configurator_Engine {
 				}
 			}
 		}
+		if ( ! empty( $cart_item['exacoat_custom_image'] ) ) {
+			$item_data[] = [
+				'key'    => '_configured_image_url',
+				'value'  => esc_url_raw( $cart_item['exacoat_custom_image'] ),
+				'hidden' => true,
+			];
+		}
 		return $item_data;
+	}
+
+	public static function filter_store_api_cart_line_item_data( $data, $cart_item, $cart ) {
+		if ( ! empty( $cart_item['exacoat_custom_image'] ) ) {
+			$custom_img = esc_url_raw( $cart_item['exacoat_custom_image'] );
+			$custom_img_obj = [
+				'id'        => 0,
+				'src'       => $custom_img,
+				'thumbnail' => $custom_img,
+				'srcset'    => '',
+				'sizes'     => '',
+				'name'      => $data['name'] ?? '',
+				'alt'       => $data['name'] ?? '',
+			];
+			$data['images'] = array_merge( [ $custom_img_obj ], $data['images'] ?? [] );
+		}
+		return $data;
+	}
+
+	public static function filter_cart_item_thumbnail( $thumbnail, $cart_item, $cart_item_key ) {
+		if ( ! empty( $cart_item['exacoat_custom_image'] ) ) {
+			return sprintf(
+				'<img src="%s" class="attachment-woocommerce_thumbnail size-woocommerce_thumbnail" alt="" />',
+				esc_url( $cart_item['exacoat_custom_image'] )
+			);
+		}
+		return $thumbnail;
 	}
 
 	public static function save_custom_addons_to_order_item( $item, $cart_item_key, $values, $order ) {
