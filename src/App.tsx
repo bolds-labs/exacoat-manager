@@ -111,6 +111,15 @@ export const App: React.FC = () => {
   const { showToast } = useToast();
 
   const isShopManager = user?.role === 'shop_manager';
+  const isAffiliate = user?.role === 'affiliate';
+
+  const isAffiliatePortal = typeof window !== 'undefined' && (
+    window.location.hostname.startsWith('affiliate.') ||
+    window.location.search.includes('portal=affiliate') ||
+    window.location.pathname.startsWith('/affiliate') ||
+    isAffiliate
+  );
+
   const [currentTab, setCurrentTab] = useState<NavItemKey>(() => {
     const tabFromUrl = getTabFromUrl();
     return tabFromUrl;
@@ -119,6 +128,8 @@ export const App: React.FC = () => {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [targetCustomerId, setTargetCustomerId] = useState<number | null>(null);
+  const [targetCustomerEmail, setTargetCustomerEmail] = useState<string | null>(null);
 
   // Keep shop_manager strictly locked to orders, rma claims, export, and tracking pool
   useEffect(() => {
@@ -190,9 +201,19 @@ export const App: React.FC = () => {
     window.location.hash = `#${tab}`;
   }, [user?.role]);
 
+  const handleNavigateToCustomer = useCallback((customerId: number, customerEmail?: string) => {
+    setTargetCustomerId(customerId || null);
+    setTargetCustomerEmail(customerEmail || null);
+    handleTabChange('customers');
+  }, [handleTabChange]);
+
+  const handleSelectOrder = useCallback((_order: Order) => {
+    handleTabChange('orders');
+  }, [handleTabChange]);
+
   // Load store orders and audit logs
   const loadWorkspaceData = useCallback(async (quiet = false) => {
-    if (!user) return;
+    if (!user || isAffiliatePortal) return;
     try {
       if (!quiet) setIsLoading(true);
       else setIsRefreshing(true);
@@ -210,13 +231,13 @@ export const App: React.FC = () => {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [user, showToast]);
+  }, [user, isAffiliatePortal, showToast]);
 
   useEffect(() => {
-    if (user) {
+    if (user && !isAffiliatePortal) {
       loadWorkspaceData();
     }
-  }, [user, loadWorkspaceData]);
+  }, [user, isAffiliatePortal, loadWorkspaceData]);
 
   // Auth Loading
   if (isAuthLoading) {
@@ -229,13 +250,6 @@ export const App: React.FC = () => {
   }
 
   // Check if current session or host is for the affiliate creator portal (affiliate.exacoat.com)
-  const isAffiliatePortal = typeof window !== 'undefined' && (
-    window.location.hostname.startsWith('affiliate.') ||
-    window.location.search.includes('portal=affiliate') ||
-    window.location.pathname.startsWith('/affiliate') ||
-    user?.role === 'affiliate'
-  );
-
   if (isAffiliatePortal) {
     return (
       <React.Suspense
@@ -259,19 +273,6 @@ export const App: React.FC = () => {
   const processingCount = orders.filter(
     o => String(o.status).replace(/^wc-/, '') === 'processing'
   ).length;
-
-  const [targetCustomerId, setTargetCustomerId] = useState<number | null>(null);
-  const [targetCustomerEmail, setTargetCustomerEmail] = useState<string | null>(null);
-
-  const handleNavigateToCustomer = (customerId: number, customerEmail?: string) => {
-    setTargetCustomerId(customerId || null);
-    setTargetCustomerEmail(customerEmail || null);
-    handleTabChange('customers');
-  };
-
-  const handleSelectOrder = (order: Order) => {
-    handleTabChange('orders');
-  };
 
   const renderActiveTab = () => {
     if (user?.role === 'shop_manager') {
