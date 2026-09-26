@@ -21,13 +21,14 @@ if ( ! class_exists( 'Exacoat_Customer_Manager' ) ) {
 
 class Exacoat_Customer_Manager {
 
-	private const SUMMARY_CACHE_KEY = 'exacoat_customer_analytics_summary_v2';
+	private const SUMMARY_CACHE_KEY = 'exacoat_customer_analytics_summary_v3';
 	private const SUMMARY_CACHE_TTL = 300; // 5 minutes
 
 	private const EXCLUDED_EMAILS = [
 		'exaorder@gmail.com',
 		'orderexa@gmail.com',
 		'order@exacoat.com',
+		'exacoat.cs@gmail.com',
 	];
 
 	/**

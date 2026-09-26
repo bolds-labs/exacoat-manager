@@ -21,6 +21,26 @@ class Exacoat_Affiliate_Manager {
 	public const ROLE_AFFILIATE     = 'affiliate';
 	public const GRACE_PERIOD_DAYS  = 7;
 
+	public static function get_commission_rate(): float {
+		return (float) get_option( 'exacoat_affiliate_commission_rate', self::COMMISSION_RATE );
+	}
+
+	public static function get_min_payout(): float {
+		return (float) get_option( 'exacoat_affiliate_min_payout', self::MIN_PAYOUT_IDR );
+	}
+
+	public static function get_grace_period_days(): int {
+		return (int) get_option( 'exacoat_affiliate_grace_period_days', self::GRACE_PERIOD_DAYS );
+	}
+
+	public static function get_cookie_days(): int {
+		return (int) get_option( 'exacoat_affiliate_cookie_days', self::COOKIE_DAYS );
+	}
+
+	public static function is_auto_approve(): bool {
+		return (bool) get_option( 'exacoat_affiliate_auto_approve', false );
+	}
+
 	public static function init(): void {
 		self::register_role();
 		self::ensure_tables();
@@ -222,7 +242,7 @@ class Exacoat_Affiliate_Manager {
 		);
 
 		$cookie_domain = self::get_cookie_domain();
-		$ttl           = time() + ( self::COOKIE_DAYS * DAY_IN_SECONDS );
+		$ttl           = time() + ( self::get_cookie_days() * DAY_IN_SECONDS );
 		$is_secure     = is_ssl();
 
 		setcookie(
@@ -306,7 +326,7 @@ class Exacoat_Affiliate_Manager {
 		// Only stamp delivery and maturity if not already stamped
 		if ( empty( $comm->delivered_at ) || empty( $comm->matures_at ) ) {
 			$delivered_time = current_time( 'mysql' );
-			$matures_time   = gmdate( 'Y-m-d H:i:s', time() + ( self::GRACE_PERIOD_DAYS * DAY_IN_SECONDS ) );
+			$matures_time   = gmdate( 'Y-m-d H:i:s', time() + ( self::get_grace_period_days() * DAY_IN_SECONDS ) );
 
 			$wpdb->update(
 				$table_commissions,
@@ -322,7 +342,7 @@ class Exacoat_Affiliate_Manager {
 			// Schedule single Action Scheduler worker if available
 			if ( function_exists( 'as_schedule_single_action' ) ) {
 				as_schedule_single_action(
-					time() + ( self::GRACE_PERIOD_DAYS * DAY_IN_SECONDS ),
+					time() + ( self::get_grace_period_days() * DAY_IN_SECONDS ),
 					'exacoat_affiliate_mature_commission_action',
 					[ 'commission_id' => (int) $comm->id ]
 				);
@@ -456,7 +476,7 @@ class Exacoat_Affiliate_Manager {
 		$subtotal        = (float) $order->get_subtotal();
 		$discount_total  = (float) $order->get_discount_total();
 		$net_eligible    = max( 0.0, $subtotal - $discount_total );
-		$commission_rate = self::COMMISSION_RATE;
+		$commission_rate = self::get_commission_rate();
 		$commission_amt  = round( $net_eligible * ( $commission_rate / 100.0 ), 2 );
 
 		if ( $commission_amt <= 0 ) {
@@ -679,6 +699,30 @@ class Exacoat_Affiliate_Manager {
 				'callback'            => [ __CLASS__, 'rest_admin_export_payouts' ],
 				'permission_callback' => [ __CLASS__, 'check_admin_auth' ],
 			] );
+
+			register_rest_route( $ns, '/affiliate/admin/settings', [
+				'methods'             => 'GET',
+				'callback'            => [ __CLASS__, 'rest_admin_get_settings' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_auth' ],
+			] );
+
+			register_rest_route( $ns, '/affiliate/admin/settings', [
+				'methods'             => 'POST',
+				'callback'            => [ __CLASS__, 'rest_admin_update_settings' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_auth' ],
+			] );
+
+			register_rest_route( $ns, '/affiliate/admin/slicewp-status', [
+				'methods'             => 'GET',
+				'callback'            => [ __CLASS__, 'rest_admin_slicewp_status' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_auth' ],
+			] );
+
+			register_rest_route( $ns, '/affiliate/admin/slicewp-migrate', [
+				'methods'             => 'POST',
+				'callback'            => [ __CLASS__, 'rest_admin_slicewp_migrate' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_auth' ],
+			] );
 		}
 	}
 
@@ -830,7 +874,7 @@ class Exacoat_Affiliate_Manager {
 		}
 
 		$wp_user = new WP_User( $user_id );
-		$wp_user->set_role( self::ROLE_AFFILIATE );
+		$wp_user->add_role( self::ROLE_AFFILIATE );
 
 		wp_update_user( [
 			'ID'         => $user_id,
@@ -839,13 +883,15 @@ class Exacoat_Affiliate_Manager {
 			'nickname'   => $username,
 		] );
 
+		$initial_status = self::is_auto_approve() ? 'active' : 'pending_approval';
+
 		$wpdb->insert(
 			$table_affiliates,
 			[
 				'user_id'           => $user_id,
 				'slug'              => $candidate_slug,
 				'slug_locked'       => 0,
-				'status'            => 'pending_approval',
+				'status'            => $initial_status,
 				'affiliate_type'    => $affiliate_type,
 				'promotion_channel' => $promotion_channel,
 				'promotion_notes'   => $promotion_notes,
@@ -856,13 +902,19 @@ class Exacoat_Affiliate_Manager {
 
 		$affiliate_id = $wpdb->insert_id;
 
-		self::dispatch_applicant_email( 'received', $email, $first_name );
+		if ( 'active' === $initial_status ) {
+			self::dispatch_applicant_email( 'approved', $email, $first_name, $candidate_slug );
+		} else {
+			self::dispatch_applicant_email( 'received', $email, $first_name );
+		}
 
 		return rest_ensure_response( [
 			'success'      => true,
-			'message'      => 'Application received. Our team will review your application shortly.',
+			'message'      => 'active' === $initial_status
+				? 'Application approved automatically. You can now access your creator portal.'
+				: 'Application received. Our team will review your application shortly.',
 			'affiliate_id' => $affiliate_id,
-			'status'       => 'pending_approval',
+			'status'       => $initial_status,
 			'slug'         => $candidate_slug,
 		] );
 	}
@@ -988,10 +1040,10 @@ class Exacoat_Affiliate_Manager {
 				'unpaid_balance'    => (float) $affiliate->unpaid_balance,
 				'total_clicks'      => (int) $affiliate->total_clicks,
 				'total_orders'      => (int) $affiliate->total_orders,
-				'commission_rate'   => self::COMMISSION_RATE,
-				'grace_period_days' => self::GRACE_PERIOD_DAYS,
-				'min_payout_amount' => self::MIN_PAYOUT_IDR,
-				'can_request_payout'=> ( (float) $affiliate->unpaid_balance >= self::MIN_PAYOUT_IDR && in_array( $affiliate->bank_name, [ 'BCA', 'MANDIRI' ], true ) && ! empty( $affiliate->bank_account_number ) ),
+				'commission_rate'   => self::get_commission_rate(),
+				'grace_period_days' => self::get_grace_period_days(),
+				'min_payout_amount' => self::get_min_payout(),
+				'can_request_payout'=> ( (float) $affiliate->unpaid_balance >= self::get_min_payout() && in_array( $affiliate->bank_name, [ 'BCA', 'MANDIRI' ], true ) && ! empty( $affiliate->bank_account_number ) ),
 			],
 			'commissions' => $commissions ?: [],
 			'payouts'     => $payouts ?: [],
@@ -1101,10 +1153,11 @@ class Exacoat_Affiliate_Manager {
 		}
 
 		$unpaid = (float) $affiliate->unpaid_balance;
-		if ( $unpaid < self::MIN_PAYOUT_IDR ) {
+		$min_payout = self::get_min_payout();
+		if ( $unpaid < $min_payout ) {
 			return new WP_Error(
 				'below_minimum',
-				sprintf( 'Minimum payout threshold is Rp %s.', number_format( self::MIN_PAYOUT_IDR, 0, ',', '.' ) ),
+				sprintf( 'Minimum payout threshold is Rp %s.', number_format( $min_payout, 0, ',', '.' ) ),
 				[ 'status' => 400 ]
 			);
 		}
