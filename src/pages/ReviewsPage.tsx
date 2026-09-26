@@ -36,6 +36,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import { PageHeroHeader } from '../components/ui/PageHeroHeader';
 import { COUNTRY_OPTIONS, ALL_COUNTRIES } from '../lib/countries';
 import {
@@ -113,6 +114,8 @@ export const ReviewsPage: React.FC<ReviewsPageProps> = ({
   onSelectOrder,
 }) => {
   const { showToast } = useToast();
+  const { user } = useAuth();
+  const isShopManager = user?.role === 'shop_manager';
 
   const [reviews, setReviews] = useState<OrderReview[]>([]);
   const [stats, setStats] = useState<{
@@ -575,21 +578,23 @@ export const ReviewsPage: React.FC<ReviewsPageProps> = ({
               Refresh
             </button>
 
-            <button
-              onClick={() => {
-                loadRewardSettings();
-                setIsRewardModalOpen(true);
-              }}
-              className="px-4 py-2 rounded-xl bg-[#141414] hover:bg-white/[0.06] text-neutral-300 hover:text-white border border-white/[0.08] text-xs font-semibold font-sans flex items-center gap-2 transition-all shrink-0 self-start sm:self-auto"
-            >
-              <Gift className="w-3.5 h-3.5 text-amber-400" />
-              Review Incentive
-              {rewardSettings.enabled && (
-                <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
-                  {rewardSettings.discount_percent}%
-                </span>
-              )}
-            </button>
+            {!isShopManager && (
+              <button
+                onClick={() => {
+                  loadRewardSettings();
+                  setIsRewardModalOpen(true);
+                }}
+                className="px-4 py-2 rounded-xl bg-[#141414] hover:bg-white/[0.06] text-neutral-300 hover:text-white border border-white/[0.08] text-xs font-semibold font-sans flex items-center gap-2 transition-all shrink-0 self-start sm:self-auto"
+              >
+                <Gift className="w-3.5 h-3.5 text-amber-400" />
+                Review Incentive
+                {rewardSettings.enabled && (
+                  <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
+                    {rewardSettings.discount_percent}%
+                  </span>
+                )}
+              </button>
+            )}
 
             <button
               onClick={() => setIsInviteModalOpen(true)}

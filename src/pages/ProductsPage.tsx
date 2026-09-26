@@ -1132,7 +1132,7 @@ export const ProductsPage: React.FC = () => {
               placeholder={`Search ${activeChannel === 'wordpress' ? 'WooCommerce' : activeChannel === 'shopee' ? 'Shopee' : 'TikTok'} products by name, ID, or SKU...`}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-9 pl-8.5 pr-8 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-xs text-zinc-900 dark:text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+              className="w-full h-9 pl-9 pr-8 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-xs text-zinc-900 dark:text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
             />
             {searchQuery && (
               <button
