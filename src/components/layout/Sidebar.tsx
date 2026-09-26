@@ -181,7 +181,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             { key: 'tracking_pool', label: 'Tracking Pool', icon: Package },
           ]
         },
-        { key: 'products', label: 'Products', icon: Package },
+        { key: 'reviews', label: 'Reviews', icon: Star, badge: pendingReviewCount > 0 ? pendingReviewCount : undefined, badgeVariant: 'amber' },
       ]
     }
   ];

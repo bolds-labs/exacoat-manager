@@ -30,7 +30,6 @@ import {
   saveFinishGroupSettingsDirect,
   fetchConfiguratorPresetsDirect,
   saveConfiguratorPresetsDirect,
-  syncDeviceFamiliesDirect,
   FinishSurchargeTier,
   DEFAULT_FINISH_SURCHARGE_TIERS,
   fetchFinishSurchargeTiersDirect,
@@ -711,7 +710,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [filterConfigured, setFilterConfigured] = useState<'all' | 'configured' | 'pending'>('all');
-  const [filterVersion, setFilterVersion] = useState<'all' | 'v1' | 'v2'>('all');
   const [filterAudit, setFilterAudit] = useState<'all' | 'audited' | 'unaudited' | 'issues'>('all');
   const [globalAuditMode, setGlobalAuditMode] = useState<'all' | 'unaudited'>('all');
   const [showAllProducts, setShowAllProducts] = useState(false);
@@ -724,7 +722,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
     skipped_count?: number;
     total_scanned?: number;
   } | null>(null);
-  const [isSyncingFamilies, setIsSyncingFamilies] = useState(false);
 
   // Quick Price Edit Dialog state (Catalog)
   const [priceEditModal, setPriceEditModal] = useState<{
@@ -1746,27 +1743,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
       showToast('error', 'Migration Error', err.message);
     } finally {
       setIsMigrating(false);
-    }
-  };
-
-  const handleSyncFamilies = async () => {
-    setIsSyncingFamilies(true);
-    try {
-      const res = await syncDeviceFamiliesDirect();
-      if (res.success) {
-        showToast(
-          'success',
-          'Device Families Synced',
-          `${res.updated_count} devices updated to correct family and size multiplier.`
-        );
-        loadData(true);
-      } else {
-        showToast('error', 'Sync Failed', res.error || 'Failed syncing device families');
-      }
-    } catch (err: any) {
-      showToast('error', 'Sync Error', err.message);
-    } finally {
-      setIsSyncingFamilies(false);
     }
   };
 
@@ -4580,9 +4556,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
           ? p.is_configurable && p.is_configurator !== false
           : !p.is_configurable || p.is_configurator === false;
 
-      const matchesVersion =
-        filterVersion === 'all' ? true : (p.configurator_version || 'v1') === filterVersion;
-
       const matchesAudit =
         filterAudit === 'all'
           ? true
@@ -4592,9 +4565,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
           ? !p.last_audited_at || p.audit_status === 'unaudited'
           : p.audit_status === 'issues' || Boolean(p.audit_issues && p.audit_issues > 0);
 
-      return matchesSearch && matchesCat && matchesStatus && matchesVersion && matchesAudit;
+      return matchesSearch && matchesCat && matchesStatus && matchesAudit;
     });
-  }, [profiles, searchQuery, selectedCategory, filterConfigured, filterVersion, filterAudit]);
+  }, [profiles, searchQuery, selectedCategory, filterConfigured, filterAudit]);
 
   // Live Price Calculation in Simulator
   const simulatedTotalPrice = useMemo(() => {
@@ -4796,16 +4769,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
               )}
             </button>
             <button
-              type="button"
-              onClick={handleSyncFamilies}
-              disabled={isSyncingFamilies}
-              className="px-4 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl border border-white/10 hover:bg-white/[0.06] text-zinc-300 transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
-              title="Auto-detect tablets, laptops, foldables, and keyboards to set correct device family and size pricing multiplier"
-            >
-              <RefreshCw className={clsx('w-3.5 h-3.5 text-[#f3aa18]', isSyncingFamilies && 'animate-spin')} />
-              <span>{isSyncingFamilies ? 'Syncing Families...' : 'Sync Families'}</span>
-            </button>
-            <button
               onClick={handleBatchMigrate}
               disabled={isMigrating}
               className="px-4 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
@@ -4941,40 +4904,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
               )}
             >
               Active
-            </button>
-          </div>
-
-          <div className="flex items-center gap-1 bg-zinc-900/60 p-1 rounded-xl border border-white/10 shrink-0">
-            <button
-              onClick={() => setFilterVersion('all')}
-              className={clsx(
-                'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer',
-                filterVersion === 'all' ? 'bg-white/15 text-white font-bold' : 'text-zinc-400 hover:text-white'
-              )}
-            >
-              All Engines
-            </button>
-            <button
-              onClick={() => setFilterVersion('v1')}
-              className={clsx(
-                'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer',
-                filterVersion === 'v1'
-                  ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40'
-                  : 'text-zinc-400 hover:text-white'
-              )}
-            >
-              v1 Legacy
-            </button>
-            <button
-              onClick={() => setFilterVersion('v2')}
-              className={clsx(
-                'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer',
-                filterVersion === 'v2'
-                  ? 'bg-sky-500/20 text-sky-300 font-bold border border-sky-500/40'
-                  : 'text-zinc-400 hover:text-white'
-              )}
-            >
-              v2 Modern
             </button>
           </div>
 

@@ -93,7 +93,7 @@ const getTabFromUrl = (): NavItemKey => {
 
 };
 
-const SHOP_MANAGER_ALLOWED_TABS: NavItemKey[] = ['orders', 'products', 'rma', 'warranty', 'export', 'tracking_pool'];
+const SHOP_MANAGER_ALLOWED_TABS: NavItemKey[] = ['orders', 'reviews', 'rma', 'warranty', 'export', 'tracking_pool'];
 
 export const App: React.FC = () => {
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -232,6 +232,9 @@ export const App: React.FC = () => {
 
   const renderActiveTab = () => {
     if (user?.role === 'shop_manager') {
+      if (currentTab === 'reviews') {
+        return <ReviewsPage />;
+      }
       if (currentTab === 'rma' || currentTab === 'warranty') {
         return <RmaClaimsPage />;
       }
