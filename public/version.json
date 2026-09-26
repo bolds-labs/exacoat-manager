@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.93",
+  "version": "0.1.94",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.93.zip?v=0.1.93",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.94.zip?v=0.1.94",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-26T18:26:24.964Z",
+  "last_updated": "2026-09-26T18:48:11.742Z",
   "sections": {
-    "changelog": "### Version 0.1.93\n- Fixed plugin update critical error by deferring table and role setup to WordPress init hook (priority 20)\n- Hardened WooCommerce coupon datastore queries with defensive exception handling\n- Verified creator promo coupons suns10, putra10, and msbn15 attribution\n- Restored Suns Channel historical commission ledger and unpaid balance\n- Maintained Edwin Yang (edwin15) and Dimas Sampurno (ds10) active configurations"
+    "changelog": "### Version 0.1.94\n- Fixed plugin update critical error by deferring table and role setup to WordPress init hook (priority 20)\n- Hardened WooCommerce coupon datastore queries with defensive exception handling\n- Verified creator promo coupons suns10, putra10, and msbn15 attribution\n- Restored Suns Channel historical commission ledger and unpaid balance\n- Maintained Edwin Yang (edwin15) and Dimas Sampurno (ds10) active configurations"
   }
 }

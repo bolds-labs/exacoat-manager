@@ -48,6 +48,12 @@ class Exacoat_Affiliate_Manager {
 		// Cookie tracking across storefront requests
 		add_action( 'init', [ __CLASS__, 'capture_referral_cookie' ], 1 );
 
+		// WooCommerce Cart and Checkout Creator Discount integration
+		add_action( 'woocommerce_cart_calculate_fees', [ __CLASS__, 'apply_creator_discount_to_cart' ], 20, 1 );
+
+		// Storefront toast for applied creator discount
+		add_action( 'wp_footer', [ __CLASS__, 'render_creator_discount_toast' ] );
+
 		// WooCommerce order integration hooks
 		add_action( 'woocommerce_checkout_order_processed', [ __CLASS__, 'attach_referral_to_order' ], 10, 3 );
 		add_action( 'woocommerce_order_status_processing', [ __CLASS__, 'handle_order_processing' ], 20, 1 );
@@ -118,6 +124,7 @@ class Exacoat_Affiliate_Manager {
 				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 				user_id bigint(20) unsigned NOT NULL,
 				slug varchar(60) NOT NULL,
+				display_name varchar(150) NOT NULL DEFAULT '',
 				slug_locked tinyint(1) NOT NULL DEFAULT 0,
 				status varchar(30) NOT NULL DEFAULT 'pending_approval',
 				affiliate_type varchar(100) NOT NULL DEFAULT '',
@@ -128,6 +135,7 @@ class Exacoat_Affiliate_Manager {
 				bank_account_name varchar(100) NOT NULL DEFAULT '',
 				coupon_code varchar(100) NOT NULL DEFAULT '',
 				commission_rate decimal(5,2) NULL DEFAULT NULL,
+				discount_rate decimal(5,2) NULL DEFAULT 10.00,
 				lifetime_earnings decimal(14,2) NOT NULL DEFAULT 0.00,
 				unpaid_balance decimal(14,2) NOT NULL DEFAULT 0.00,
 				total_clicks bigint(20) unsigned NOT NULL DEFAULT 0,
@@ -175,6 +183,18 @@ class Exacoat_Affiliate_Manager {
 			if ( empty( $col_check_aff ) ) {
 				$wpdb->query( "ALTER TABLE {$table_affiliates} ADD COLUMN coupon_code varchar(100) NOT NULL DEFAULT '' AFTER bank_account_name, ADD COLUMN commission_rate decimal(5,2) NULL DEFAULT NULL AFTER coupon_code, ADD KEY coupon_code (coupon_code)" );
 			}
+
+			$col_check_aff_display = $wpdb->get_results( "SHOW COLUMNS FROM {$table_affiliates} LIKE 'display_name'" );
+			if ( empty( $col_check_aff_display ) ) {
+				$wpdb->query( "ALTER TABLE {$table_affiliates} ADD COLUMN display_name varchar(150) NOT NULL DEFAULT '' AFTER slug" );
+			}
+
+			$col_check_aff_discount = $wpdb->get_results( "SHOW COLUMNS FROM {$table_affiliates} LIKE 'discount_rate'" );
+			if ( empty( $col_check_aff_discount ) ) {
+				$wpdb->query( "ALTER TABLE {$table_affiliates} ADD COLUMN discount_rate decimal(5,2) NULL DEFAULT 10.00 AFTER commission_rate" );
+			}
+
+			$wpdb->query( "UPDATE {$table_affiliates} SET discount_rate = 10.00 WHERE discount_rate IS NULL OR discount_rate = 0" );
 
 			$col_check_comm_matures = $wpdb->get_results( "SHOW COLUMNS FROM {$table_commissions} LIKE 'matures_at'" );
 			if ( empty( $col_check_comm_matures ) ) {
@@ -329,45 +349,347 @@ class Exacoat_Affiliate_Manager {
 			]
 		);
 		$_COOKIE[ self::COOKIE_NAME ] = $raw_slug;
+
+		if ( function_exists( 'WC' ) && WC()->session ) {
+			WC()->session->set( 'exacoat_aff_ref', $canonical_slug );
+		}
+	}
+
+	/**
+	 * Helper: Resolve public display name for creator to show on storefront toast and cart.
+	 */
+	public static function get_creator_display_name( $affiliate ): string {
+		if ( is_object( $affiliate ) && ! empty( $affiliate->display_name ) ) {
+			return trim( (string) $affiliate->display_name );
+		}
+
+		if ( is_object( $affiliate ) && ! empty( $affiliate->user_id ) ) {
+			$user = get_userdata( (int) $affiliate->user_id );
+			if ( $user ) {
+				if ( ! empty( $user->display_name ) && $user->display_name !== $user->user_login ) {
+					return trim( (string) $user->display_name );
+				}
+				$full_name = trim( (string) ( $user->first_name . ' ' . $user->last_name ) );
+				if ( ! empty( $full_name ) ) {
+					return $full_name;
+				}
+			}
+		}
+
+		if ( is_object( $affiliate ) && ! empty( $affiliate->slug ) ) {
+			return ucwords( str_replace( [ '-', '_' ], ' ', (string) $affiliate->slug ) );
+		}
+
+		return 'Creator';
+	}
+
+	/**
+	 * Helper: Retrieve the active affiliate record currently attributed to the visitor or session.
+	 */
+	public static function get_active_referred_affiliate(): ?object {
+		$ref_slug = '';
+
+		// 1. Check URL parameters in current request
+		if ( ! empty( $_GET['x'] ) ) {
+			$ref_slug = sanitize_text_field( wp_unslash( $_GET['x'] ) );
+		} elseif ( ! empty( $_GET['ref'] ) ) {
+			$ref_slug = sanitize_text_field( wp_unslash( $_GET['ref'] ) );
+		} elseif ( ! empty( $_GET['aff'] ) ) {
+			$ref_slug = sanitize_text_field( wp_unslash( $_GET['aff'] ) );
+		} elseif ( ! empty( $_GET['sla'] ) ) {
+			$ref_slug = sanitize_text_field( wp_unslash( $_GET['sla'] ) );
+		}
+
+		// 2. Fallback to WooCommerce session
+		if ( empty( $ref_slug ) && function_exists( 'WC' ) && WC()->session ) {
+			$session_ref = WC()->session->get( 'exacoat_aff_ref' );
+			if ( ! empty( $session_ref ) ) {
+				$ref_slug = sanitize_text_field( (string) $session_ref );
+			}
+		}
+
+		// 3. Fallback to 30-day Cookie
+		if ( empty( $ref_slug ) && ! empty( $_COOKIE[ self::COOKIE_NAME ] ) ) {
+			$ref_slug = sanitize_text_field( wp_unslash( $_COOKIE[ self::COOKIE_NAME ] ) );
+		}
+
+		if ( empty( $ref_slug ) ) {
+			return null;
+		}
+
+		$raw_slug  = sanitize_title( $ref_slug );
+		$affiliate = self::get_affiliate_by_slug( $raw_slug );
+
+		if ( ! $affiliate && is_numeric( $ref_slug ) ) {
+			$affiliate = self::get_affiliate_by_id( (int) $ref_slug );
+			if ( ! $affiliate ) {
+				$affiliate = self::get_affiliate_by_user_id( (int) $ref_slug );
+			}
+		}
+
+		if ( ! $affiliate || 'active' !== $affiliate->status ) {
+			return null;
+		}
+
+		// Ensure persistent attribution in WooCommerce session
+		if ( function_exists( 'WC' ) && WC()->session ) {
+			if ( WC()->session->get( 'exacoat_aff_ref' ) !== $affiliate->slug ) {
+				WC()->session->set( 'exacoat_aff_ref', $affiliate->slug );
+			}
+		}
+
+		return $affiliate;
+	}
+
+	/**
+	 * Automatically apply the affiliate customer discount to WooCommerce cart as a native discount fee.
+	 */
+	public static function apply_creator_discount_to_cart( $cart ): void {
+		if ( is_admin() && ! defined( 'DOING_AJAX' ) ) {
+			return;
+		}
+
+		if ( ! $cart instanceof \WC_Cart || $cart->is_empty() ) {
+			return;
+		}
+
+		$affiliate = self::get_active_referred_affiliate();
+		if ( ! $affiliate ) {
+			return;
+		}
+
+		$discount_rate = ( ! empty( $affiliate->discount_rate ) && (float) $affiliate->discount_rate > 0 )
+			? (float) $affiliate->discount_rate
+			: 10.00;
+
+		if ( $discount_rate <= 0 ) {
+			return;
+		}
+
+		$creator_name = self::get_creator_display_name( $affiliate );
+
+		// Calculate eligible product subtotal (excluding shipping and taxes)
+		$subtotal = 0.0;
+		foreach ( $cart->get_cart() as $cart_item ) {
+			$subtotal += (float) ( isset( $cart_item['line_total'] ) ? $cart_item['line_total'] : ( $cart_item['data']->get_price() * $cart_item['quantity'] ) );
+		}
+		if ( $subtotal <= 0 ) {
+			$subtotal = (float) $cart->get_subtotal();
+		}
+
+		if ( $subtotal <= 0 ) {
+			return;
+		}
+
+		$discount_amount = round( ( $subtotal * $discount_rate ) / 100.0, 2 );
+		if ( $discount_amount <= 0 ) {
+			return;
+		}
+
+		// Native WooCommerce negative fee
+		$fee_label = sprintf( 'Creator Discount (%g%% - %s)', $discount_rate, $creator_name );
+		$cart->add_fee( $fee_label, -$discount_amount, false );
+	}
+
+	/**
+	 * Render luxury subtle toast in storefront footer when creator discount is applied.
+	 */
+	public static function render_creator_discount_toast(): void {
+		if ( is_admin() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+			return;
+		}
+
+		$affiliate = self::get_active_referred_affiliate();
+		if ( ! $affiliate ) {
+			return;
+		}
+
+		$discount_rate = ( ! empty( $affiliate->discount_rate ) && (float) $affiliate->discount_rate > 0 )
+			? (float) $affiliate->discount_rate
+			: 10.00;
+
+		if ( $discount_rate <= 0 ) {
+			return;
+		}
+
+		$creator_name = self::get_creator_display_name( $affiliate );
+		$slug         = esc_js( $affiliate->slug );
+		$is_fresh     = ( ! empty( $_GET['ref'] ) || ! empty( $_GET['x'] ) || ! empty( $_GET['aff'] ) || ! empty( $_GET['sla'] ) ) ? 'true' : 'false';
+		?>
+		<div id="exacoat-creator-toast" class="exacoat-creator-toast-container" style="display: none;" aria-live="polite">
+			<div class="exacoat-toast-inner">
+				<div class="exacoat-toast-icon">
+					<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f3aa18" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M20 6L9 17l-5-5"/>
+					</svg>
+				</div>
+				<div class="exacoat-toast-content">
+					<div class="exacoat-toast-title">Creator discount applied</div>
+					<div class="exacoat-toast-subtitle"><?php echo esc_html( sprintf( '%g%% off from %s', $discount_rate, $creator_name ) ); ?></div>
+				</div>
+				<button type="button" class="exacoat-toast-close" aria-label="Dismiss notification" onclick="window.__dismissExacoatToast && window.__dismissExacoatToast()">&times;</button>
+			</div>
+		</div>
+		<style>
+			.exacoat-creator-toast-container {
+				position: fixed;
+				bottom: 24px;
+				right: 24px;
+				z-index: 999999;
+				pointer-events: auto;
+				transform: translateY(16px);
+				opacity: 0;
+				transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease;
+				max-width: calc(100vw - 32px);
+			}
+			.exacoat-creator-toast-container.is-visible {
+				transform: translateY(0);
+				opacity: 1;
+			}
+			.exacoat-toast-inner {
+				display: flex;
+				align-items: center;
+				gap: 12px;
+				background: rgba(12, 12, 14, 0.94);
+				backdrop-filter: blur(16px);
+				-webkit-backdrop-filter: blur(16px);
+				border: 1px solid rgba(243, 170, 24, 0.35);
+				border-radius: 12px;
+				padding: 12px 16px;
+				box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.65), 0 0 20px rgba(243, 170, 24, 0.12);
+				color: #ffffff;
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+			}
+			.exacoat-toast-icon {
+				width: 28px;
+				height: 28px;
+				border-radius: 8px;
+				background: rgba(243, 170, 24, 0.12);
+				border: 1px solid rgba(243, 170, 24, 0.28);
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				flex-shrink: 0;
+			}
+			.exacoat-toast-content {
+				display: flex;
+				flex-direction: column;
+				gap: 2px;
+				min-width: 0;
+			}
+			.exacoat-toast-title {
+				font-size: 13px;
+				font-weight: 600;
+				color: #ffffff;
+				letter-spacing: -0.01em;
+				line-height: 1.25;
+			}
+			.exacoat-toast-subtitle {
+				font-size: 12px;
+				color: #d1d5db;
+				line-height: 1.3;
+			}
+			.exacoat-toast-close {
+				background: transparent;
+				border: none;
+				color: #9ca3af;
+				cursor: pointer;
+				padding: 4px;
+				margin-left: 6px;
+				font-size: 18px;
+				line-height: 1;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				transition: color 0.15s ease;
+			}
+			.exacoat-toast-close:hover {
+				color: #ffffff;
+			}
+			@media (max-width: 640px) {
+				.exacoat-creator-toast-container {
+					left: 16px;
+					right: 16px;
+					bottom: 16px;
+					max-width: none;
+				}
+				.exacoat-toast-inner {
+					width: 100%;
+					justify-content: space-between;
+				}
+			}
+		</style>
+		<script>
+			(function() {
+				var slug = '<?php echo $slug; ?>';
+				var isFresh = <?php echo $is_fresh; ?>;
+				var storageKey = 'exacoat_toast_shown_' + slug;
+
+				if (!isFresh && sessionStorage.getItem(storageKey)) {
+					return;
+				}
+
+				var toast = document.getElementById('exacoat-creator-toast');
+				if (!toast) return;
+
+				window.__dismissExacoatToast = function() {
+					toast.classList.remove('is-visible');
+					setTimeout(function() {
+						if (toast && toast.parentNode) {
+							toast.parentNode.removeChild(toast);
+						}
+					}, 350);
+				};
+
+				setTimeout(function() {
+					toast.style.display = 'block';
+					void toast.offsetWidth;
+					toast.classList.add('is-visible');
+					sessionStorage.setItem(storageKey, '1');
+
+					setTimeout(function() {
+						window.__dismissExacoatToast();
+					}, 6500);
+				}, 500);
+			})();
+		</script>
+		<?php
 	}
 
 	/**
 	 * Attach referral slug to WooCommerce order meta during checkout.
 	 */
 	public static function attach_referral_to_order( int $order_id, array $posted_data, WC_Order $order ): void {
-		// 1. First priority: Check if any applied coupon belongs to an affiliate
-		$applied_coupons = $order->get_coupon_codes();
-		if ( ! empty( $applied_coupons ) ) {
-			foreach ( $applied_coupons as $code ) {
-				$aff_by_coupon = self::get_affiliate_by_coupon( $code );
-				if ( $aff_by_coupon && 'active' === $aff_by_coupon->status ) {
-					$clean_coupon = strtolower( trim( $code ) );
-					$order->update_meta_data( '_exacoat_affiliate_slug', $aff_by_coupon->slug );
-					$order->update_meta_data( '_exacoat_affiliate_id', (int) $aff_by_coupon->id );
-					$order->update_meta_data( '_exacoat_affiliate_coupon', $clean_coupon );
-					$order->save();
-					return;
+		$affiliate = self::get_active_referred_affiliate();
+
+		// Fallback check on applied coupons for legacy coupon usage
+		if ( ! $affiliate ) {
+			$applied_coupons = $order->get_coupon_codes();
+			if ( ! empty( $applied_coupons ) ) {
+				foreach ( $applied_coupons as $code ) {
+					$aff_by_coupon = self::get_affiliate_by_coupon( $code );
+					if ( $aff_by_coupon && 'active' === $aff_by_coupon->status ) {
+						$affiliate = $aff_by_coupon;
+						$order->update_meta_data( '_exacoat_affiliate_coupon', strtolower( trim( $code ) ) );
+						break;
+					}
 				}
 			}
 		}
 
-		// 2. Second priority: Cookie tracking
-		$ref_slug = '';
-		if ( ! empty( $_COOKIE[ self::COOKIE_NAME ] ) ) {
-			$ref_slug = sanitize_title( wp_unslash( $_COOKIE[ self::COOKIE_NAME ] ) );
-		}
-
-		if ( empty( $ref_slug ) ) {
-			return;
-		}
-
-		$affiliate = self::get_affiliate_by_slug( $ref_slug );
 		if ( ! $affiliate || 'active' !== $affiliate->status ) {
 			return;
 		}
 
-		$order->update_meta_data( '_exacoat_affiliate_slug', $ref_slug );
+		$creator_name  = self::get_creator_display_name( $affiliate );
+		$discount_rate = ( ! empty( $affiliate->discount_rate ) && (float) $affiliate->discount_rate > 0 )
+			? (float) $affiliate->discount_rate
+			: 10.00;
+
+		$order->update_meta_data( '_exacoat_affiliate_slug', $affiliate->slug );
 		$order->update_meta_data( '_exacoat_affiliate_id', (int) $affiliate->id );
+		$order->update_meta_data( '_exacoat_creator_name', $creator_name );
+		$order->update_meta_data( '_exacoat_creator_discount_rate', $discount_rate );
 		$order->save();
 	}
 
@@ -620,28 +942,34 @@ class Exacoat_Affiliate_Manager {
 
 		$matched_coupon = $order->get_meta( '_exacoat_affiliate_coupon' );
 		$ref_slug       = $order->get_meta( '_exacoat_affiliate_slug' );
+		$aff_id_meta    = (int) $order->get_meta( '_exacoat_affiliate_id' );
 		$affiliate      = null;
 
-		// 1. Check applied coupons on order
-		$applied_coupons = $order->get_coupon_codes();
-		if ( ! empty( $applied_coupons ) ) {
-			foreach ( $applied_coupons as $code ) {
-				$coupon_aff = self::get_affiliate_by_coupon( $code );
-				if ( $coupon_aff && 'active' === $coupon_aff->status ) {
-					$affiliate      = $coupon_aff;
-					$ref_slug       = $affiliate->slug;
-					$matched_coupon = strtolower( trim( $code ) );
-					break;
-				}
-			}
+		// 1. First priority: Affiliate ID or slug attached to order meta
+		if ( $aff_id_meta > 0 ) {
+			$affiliate = self::get_affiliate_by_id( $aff_id_meta );
 		}
-
-		// 2. Check meta slug
 		if ( ! $affiliate && ! empty( $ref_slug ) ) {
 			$affiliate = self::get_affiliate_by_slug( $ref_slug );
 		}
 
-		// 3. Fallback to cookie
+		// 2. Second priority: Applied coupons on order (for historical / legacy compatibility)
+		if ( ! $affiliate ) {
+			$applied_coupons = $order->get_coupon_codes();
+			if ( ! empty( $applied_coupons ) ) {
+				foreach ( $applied_coupons as $code ) {
+					$coupon_aff = self::get_affiliate_by_coupon( $code );
+					if ( $coupon_aff && 'active' === $coupon_aff->status ) {
+						$affiliate      = $coupon_aff;
+						$ref_slug       = $affiliate->slug;
+						$matched_coupon = strtolower( trim( $code ) );
+						break;
+					}
+				}
+			}
+		}
+
+		// 3. Third priority: Cookie or active referred session
 		if ( ! $affiliate && ! empty( $_COOKIE[ self::COOKIE_NAME ] ) ) {
 			$ref_slug  = sanitize_title( wp_unslash( $_COOKIE[ self::COOKIE_NAME ] ) );
 			$affiliate = self::get_affiliate_by_slug( $ref_slug );
@@ -665,10 +993,17 @@ class Exacoat_Affiliate_Manager {
 			$is_self_referral = true;
 		}
 
-		// Compute commission base: subtotal minus discounts, strictly excluding tax and shipping
-		$subtotal        = (float) $order->get_subtotal();
-		$discount_total  = (float) $order->get_discount_total();
-		$net_eligible    = max( 0.0, $subtotal - $discount_total );
+		// Compute commission base: subtotal minus discounts and creator discount fee, strictly excluding tax and shipping
+		$subtotal         = (float) $order->get_subtotal();
+		$discount_total   = (float) $order->get_discount_total();
+		$creator_discount = 0.0;
+		foreach ( $order->get_fees() as $fee_item ) {
+			$fee_total = (float) $fee_item->get_total();
+			if ( $fee_total < 0 && stripos( $fee_item->get_name(), 'Creator Discount' ) !== false ) {
+				$creator_discount += abs( $fee_total );
+			}
+		}
+		$net_eligible     = max( 0.0, $subtotal - $discount_total - $creator_discount );
 
 		// Multi-currency: convert net eligible order amount to IDR base currency
 		$net_eligible_idr = self::convert_amount_to_idr( $net_eligible, $order->get_currency(), $order );
@@ -799,9 +1134,14 @@ class Exacoat_Affiliate_Manager {
 	public static function get_affiliate_by_slug( string $slug ) {
 		global $wpdb;
 		$table = $wpdb->prefix . 'exacoat_affiliates';
-		return $wpdb->get_row(
-			$wpdb->prepare( "SELECT * FROM {$table} WHERE slug = %s LIMIT 1", sanitize_title( $slug ) )
+		$clean = sanitize_title( $slug );
+		$row   = $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$table} WHERE slug = %s LIMIT 1", $clean )
 		);
+		if ( ! $row && 'edwin' === $clean ) {
+			$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE slug = 'edwinyg' LIMIT 1" ) );
+		}
+		return $row;
 	}
 
 	/**
@@ -1417,6 +1757,8 @@ class Exacoat_Affiliate_Manager {
 				'coupon_code'            => $affiliate->coupon_code ?? '',
 				'coupon_discount_amount' => $coupon_discount_amount,
 				'coupon_discount_type'   => $coupon_discount_type,
+				'display_name'           => self::get_creator_display_name( $affiliate ),
+				'discount_rate'          => ( ! empty( $affiliate->discount_rate ) && (float) $affiliate->discount_rate > 0 ) ? (float) $affiliate->discount_rate : 10.00,
 				'commission_rate'        => ! empty( $affiliate->commission_rate ) ? (float) $affiliate->commission_rate : self::get_commission_rate(),
 			],
 			'metrics' => [
@@ -1437,7 +1779,7 @@ class Exacoat_Affiliate_Manager {
 	}
 
 	/**
-	 * Endpoint: Save bank settings (BCA / Mandiri only) and lock referral slug.
+	 * Endpoint: Save bank settings (BCA / Mandiri only), creator display name, and lock referral slug.
 	 */
 	public static function rest_update_settings( WP_REST_Request $request ) {
 		$user_id = get_current_user_id() ?: self::extract_authenticated_user_id( $request );
@@ -1456,6 +1798,12 @@ class Exacoat_Affiliate_Manager {
 
 		$updates = [];
 		$formats = [];
+
+		if ( isset( $params['display_name'] ) ) {
+			$raw_name = sanitize_text_field( trim( (string) $params['display_name'] ) );
+			$updates['display_name'] = $raw_name;
+			$formats[] = '%s';
+		}
 
 		if ( isset( $params['bank_name'] ) ) {
 			$raw_bank = strtoupper( trim( sanitize_text_field( $params['bank_name'] ) ) );
@@ -1668,7 +2016,7 @@ class Exacoat_Affiliate_Manager {
 		}
 
 		$where_sql = implode( ' AND ', $where_clauses );
-		$query = "SELECT a.*, u.user_email, u.user_login, u.display_name 
+		$query = "SELECT a.*, a.display_name AS creator_display_name, a.discount_rate, u.user_email, u.user_login, u.display_name AS wp_display_name 
 			FROM {$table_affiliates} a 
 			LEFT JOIN {$wpdb->users} u ON a.user_id = u.ID 
 			WHERE {$where_sql} 
@@ -1680,6 +2028,8 @@ class Exacoat_Affiliate_Manager {
 			foreach ( $results as $aff ) {
 				$u = get_userdata( (int) $aff->user_id );
 				$aff->roles = $u ? array_values( $u->roles ) : [ 'affiliate' ];
+				$aff->display_name = ! empty( $aff->creator_display_name ) ? $aff->creator_display_name : self::get_creator_display_name( $aff );
+				$aff->discount_rate = ( ! empty( $aff->discount_rate ) && (float) $aff->discount_rate > 0 ) ? (float) $aff->discount_rate : 10.00;
 				$aff->coupon_discount_amount = null;
 				$aff->coupon_discount_type   = null;
 				if ( ! empty( $aff->coupon_code ) && class_exists( 'WC_Coupon' ) ) {
@@ -3371,6 +3721,8 @@ class Exacoat_Affiliate_Manager {
 			$wpdb->update(
 				$table_affiliates,
 				[
+					'display_name'    => 'Edwin Yang',
+					'discount_rate'   => 10.00,
 					'coupon_code'     => 'edwin15',
 					'commission_rate' => 10.00,
 					'status'          => 'active',
@@ -3384,9 +3736,11 @@ class Exacoat_Affiliate_Manager {
 				[
 					'user_id'           => $user_id,
 					'slug'              => 'edwinyg',
+					'display_name'      => 'Edwin Yang',
+					'discount_rate'     => 10.00,
 					'slug_locked'       => 1,
 					'status'            => 'active',
-					'affiliate_type'    => 'Migrated from SliceWP',
+					'affiliate_type'    => 'Content Creator',
 					'promotion_channel' => 'Creator & Partner',
 					'coupon_code'       => 'edwin15',
 					'commission_rate'   => 10.00,
@@ -3485,6 +3839,8 @@ class Exacoat_Affiliate_Manager {
 			$wpdb->update(
 				$table_affiliates,
 				[
+					'display_name'    => 'Dimas Sampurno',
+					'discount_rate'   => 10.00,
 					'coupon_code'     => 'ds10',
 					'commission_rate' => ( ! empty( $aff->commission_rate ) && (float) $aff->commission_rate > 0 ) ? (float) $aff->commission_rate : 15.00,
 					'status'          => 'active',
@@ -3498,9 +3854,11 @@ class Exacoat_Affiliate_Manager {
 				[
 					'user_id'           => $user_id,
 					'slug'              => 'ds',
+					'display_name'      => 'Dimas Sampurno',
+					'discount_rate'     => 10.00,
 					'slug_locked'       => 1,
 					'status'            => 'active',
-					'affiliate_type'    => 'Migrated from SliceWP',
+					'affiliate_type'    => 'Content Creator',
 					'promotion_channel' => 'Creator & Partner',
 					'coupon_code'       => 'ds10',
 					'commission_rate'   => 15.00,
@@ -3657,6 +4015,8 @@ class Exacoat_Affiliate_Manager {
 			$wpdb->update(
 				$table_affiliates,
 				[
+					'display_name'    => 'Suns Channel',
+					'discount_rate'   => 10.00,
 					'coupon_code'     => 'suns10',
 					'commission_rate' => ( ! empty( $aff->commission_rate ) && (float) $aff->commission_rate > 0 ) ? (float) $aff->commission_rate : 15.00,
 					'status'          => 'active',
@@ -3670,9 +4030,11 @@ class Exacoat_Affiliate_Manager {
 				[
 					'user_id'           => $user_id,
 					'slug'              => 'suns',
+					'display_name'      => 'Suns Channel',
+					'discount_rate'     => 10.00,
 					'slug_locked'       => 1,
 					'status'            => 'active',
-					'affiliate_type'    => 'Migrated from SliceWP',
+					'affiliate_type'    => 'Content Creator',
 					'promotion_channel' => 'YouTube & Creator Partner',
 					'coupon_code'       => 'suns10',
 					'commission_rate'   => 15.00,
@@ -3796,6 +4158,8 @@ class Exacoat_Affiliate_Manager {
 			$wpdb->update(
 				$table_affiliates,
 				[
+					'display_name'    => 'Putra S',
+					'discount_rate'   => 10.00,
 					'coupon_code'     => 'putra10',
 					'commission_rate' => ( ! empty( $aff->commission_rate ) && (float) $aff->commission_rate > 0 ) ? (float) $aff->commission_rate : 10.00,
 					'status'          => 'active',
@@ -3809,9 +4173,11 @@ class Exacoat_Affiliate_Manager {
 				[
 					'user_id'           => $user_id,
 					'slug'              => 'putra',
+					'display_name'      => 'Putra S',
+					'discount_rate'     => 10.00,
 					'slug_locked'       => 1,
 					'status'            => 'active',
-					'affiliate_type'    => 'Migrated from SliceWP',
+					'affiliate_type'    => 'Content Creator',
 					'promotion_channel' => 'Creator & Partner',
 					'coupon_code'       => 'putra10',
 					'commission_rate'   => 10.00,
@@ -3883,6 +4249,8 @@ class Exacoat_Affiliate_Manager {
 			$wpdb->update(
 				$table_affiliates,
 				[
+					'display_name'    => 'Ignatius Reysa (MSBN)',
+					'discount_rate'   => 15.00,
 					'coupon_code'     => 'msbn15',
 					'commission_rate' => ( ! empty( $aff->commission_rate ) && (float) $aff->commission_rate > 0 ) ? (float) $aff->commission_rate : 15.00,
 					'status'          => 'active',
@@ -3896,9 +4264,11 @@ class Exacoat_Affiliate_Manager {
 				[
 					'user_id'           => $user_id,
 					'slug'              => 'msbn',
+					'display_name'      => 'Ignatius Reysa (MSBN)',
+					'discount_rate'     => 15.00,
 					'slug_locked'       => 1,
 					'status'            => 'active',
-					'affiliate_type'    => 'Migrated from SliceWP',
+					'affiliate_type'    => 'Content Creator',
 					'promotion_channel' => 'Creator & Partner',
 					'coupon_code'       => 'msbn15',
 					'commission_rate'   => 15.00,
@@ -3952,9 +4322,13 @@ class Exacoat_Affiliate_Manager {
 	public static function rest_admin_assign_coupon( WP_REST_Request $request ) {
 		$params          = $request->get_json_params() ?: $request->get_params();
 		$affiliate_id    = (int) ( $params['affiliate_id'] ?? 0 );
-		$coupon_code     = sanitize_text_field( trim( strtolower( $params['coupon_code'] ?? '' ) ) );
+		$coupon_code     = isset( $params['coupon_code'] ) ? sanitize_text_field( trim( strtolower( $params['coupon_code'] ) ) ) : null;
 		$commission_rate = isset( $params['commission_rate'] ) && '' !== $params['commission_rate']
 			? round( (float) $params['commission_rate'], 2 )
+			: null;
+		$display_name    = isset( $params['display_name'] ) ? sanitize_text_field( trim( (string) $params['display_name'] ) ) : null;
+		$discount_rate   = isset( $params['discount_rate'] ) && '' !== $params['discount_rate']
+			? round( (float) $params['discount_rate'], 2 )
 			: null;
 
 		if ( ! $affiliate_id ) {
@@ -3972,14 +4346,23 @@ class Exacoat_Affiliate_Manager {
 			return new WP_Error( 'not_found', 'Affiliate not found.', [ 'status' => 404 ] );
 		}
 
-		$wpdb->update(
-			$table_affiliates,
-			[
-				'coupon_code'     => $coupon_code,
-				'commission_rate' => $commission_rate,
-			],
-			[ 'id' => $affiliate_id ]
-		);
+		$updates = [];
+		if ( null !== $commission_rate || array_key_exists( 'commission_rate', $params ) ) {
+			$updates['commission_rate'] = $commission_rate;
+		}
+		if ( null !== $coupon_code ) {
+			$updates['coupon_code'] = $coupon_code;
+		}
+		if ( null !== $display_name ) {
+			$updates['display_name'] = $display_name;
+		}
+		if ( null !== $discount_rate ) {
+			$updates['discount_rate'] = $discount_rate;
+		}
+
+		if ( ! empty( $updates ) ) {
+			$wpdb->update( $table_affiliates, $updates, [ 'id' => $affiliate_id ] );
+		}
 
 		// Synchronize with WooCommerce coupon if coupon code is non-empty
 		if ( ! empty( $coupon_code ) && function_exists( 'wc_get_coupon_id_by_code' ) ) {

@@ -20,6 +20,7 @@ import {
   Search,
   Filter,
   Layers,
+  Percent,
   Ticket
 } from 'lucide-react';
 import { 
@@ -82,7 +83,6 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
   const [statusFilter, setStatusFilter] = useState<CommissionFilterStatus>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
-  const [copiedCoupon, setCopiedCoupon] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
 
   const referralUrl = profile.referral_url || `https://exacoat.com/?x=${profile.slug}`;
@@ -99,18 +99,6 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
       setTimeout(() => setCopiedLink(false), 2500);
     } catch {
       showToast('error', 'Copy Failed', 'Please manually copy the URL from the input.');
-    }
-  };
-
-  const handleCopyCoupon = async () => {
-    if (!profile.coupon_code) return;
-    try {
-      await navigator.clipboard.writeText(profile.coupon_code);
-      setCopiedCoupon(true);
-      showToast('success', 'Coupon Copied', profile.coupon_code);
-      setTimeout(() => setCopiedCoupon(false), 2500);
-    } catch {
-      showToast('error', 'Copy Failed', 'Please manually copy the coupon code.');
     }
   };
 
@@ -454,46 +442,29 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
         </div>
       </GlassCard>
 
-      {/* Assigned Promo Coupon Card (if assigned) */}
-      {profile.coupon_code && (
-        <GlassCard className="p-5 sm:p-6 border border-amber-500/30 bg-gradient-to-r from-amber-500/[0.08] via-transparent to-transparent">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2.5">
-                <span className="text-[11px] font-semibold text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-full border border-amber-500/30 font-mono flex items-center gap-1">
-                  <Ticket className="w-3 h-3 text-amber-400" />
-                  PROMO COUPON
-                </span>
-                <span className="text-xs font-bold text-white font-['Chakra_Petch'] uppercase tracking-wider">
-                  Attributed Checkout Promo Code
-                </span>
-              </div>
-              <p className="text-xs text-zinc-300">
-                Your audience can enter this code at checkout to get an instant{profile.coupon_discount_amount ? ` ${profile.coupon_discount_amount}%` : ''} discount while automatically crediting your {profile.commission_rate || 20}% commission without clicking a link.
-              </p>
-            </div>
-
+      {/* Active Creator Direct Discount Card */}
+      <GlassCard className="p-4 sm:p-5 border border-amber-500/25 bg-gradient-to-r from-amber-500/[0.06] via-transparent to-transparent">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2.5 bg-[#0a0a0c] border border-amber-500/40 rounded-xl px-4 py-2">
-                <span className="font-mono text-sm font-bold text-amber-400 tracking-wider">
-                  {profile.coupon_code}
-                  {profile.coupon_discount_amount != null && (
-                    <span className="ml-1.5 text-xs text-amber-300 font-normal">({profile.coupon_discount_amount}% OFF)</span>
-                  )}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleCopyCoupon}
-                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer"
-                  title="Copy coupon code"
-                >
-                  {copiedCoupon ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                </button>
-              </div>
+              <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 font-mono flex items-center gap-1">
+                <Percent className="w-3 h-3 text-emerald-400" />
+                DIRECT CREATOR DISCOUNT
+              </span>
+              <span className="text-xs font-bold text-white font-['Chakra_Petch'] uppercase tracking-wider">
+                {profile.discount_rate || 10}% Customer Discount Active
+              </span>
             </div>
+            <p className="text-xs text-zinc-300">
+              When customers enter via your referral link, their cart automatically receives a <strong className="text-white">{profile.discount_rate || 10}% creator discount</strong> from <strong className="text-[#f3aa18]">{profile.display_name || profile.username}</strong> without needing any coupon code.
+            </p>
           </div>
-        </GlassCard>
-      )}
+          <div className="shrink-0 flex items-center gap-2 text-xs font-mono text-zinc-400 bg-[#0a0a0c] px-3 py-1.5 rounded-xl border border-white/[0.08]">
+            <span className="text-[#f3aa18]">Attribution:</span>
+            <span className="text-white">Direct Link</span>
+          </div>
+        </div>
+      </GlassCard>
 
       {/* 4 Primary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

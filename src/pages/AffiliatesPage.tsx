@@ -145,6 +145,8 @@ export const AffiliatesPage: React.FC = () => {
 
   // Coupon, Commission Rate & Manual Adjustment State
   const [selectedAffiliateForCoupon, setSelectedAffiliateForCoupon] = useState<any | null>(null);
+  const [creatorDisplayNameInput, setCreatorDisplayNameInput] = useState('');
+  const [discountRateInput, setDiscountRateInput] = useState('');
   const [couponCodeInput, setCouponCodeInput] = useState('');
   const [commissionRateInput, setCommissionRateInput] = useState('');
   const [showManualAdj, setShowManualAdj] = useState(false);
@@ -232,6 +234,8 @@ export const AffiliatesPage: React.FC = () => {
 
   const handleOpenCouponModal = (aff: any) => {
     setSelectedAffiliateForCoupon(aff);
+    setCreatorDisplayNameInput(aff.creator_display_name || aff.display_name || '');
+    setDiscountRateInput(aff.discount_rate != null ? String(aff.discount_rate) : '10');
     setCouponCodeInput(aff.coupon_code || '');
     setCommissionRateInput(aff.commission_rate ? String(aff.commission_rate) : '');
     setShowManualAdj(false);
@@ -250,6 +254,8 @@ export const AffiliatesPage: React.FC = () => {
         affiliate_id: selectedAffiliateForCoupon.id,
         coupon_code: couponCodeInput.trim(),
         commission_rate: commissionRateInput.trim() ? parseFloat(commissionRateInput) : null,
+        display_name: creatorDisplayNameInput.trim(),
+        discount_rate: discountRateInput.trim() ? parseFloat(discountRateInput) : null,
       });
 
       let manualMsg = '';
@@ -1024,24 +1030,19 @@ export const AffiliatesPage: React.FC = () => {
                       <tr key={aff.id} className="hover:bg-white/[0.02] transition-colors">
                         <td className="py-3 pl-4">
                           <span className="font-semibold text-white block">
-                            {aff.display_name || aff.user_login}
+                            {aff.creator_display_name || aff.display_name || aff.user_login}
                           </span>
                           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                             <span className="font-mono text-[11px] text-[#f3aa18]">
                               @{aff.slug}
                             </span>
-                            {aff.coupon_code && (
-                              <span 
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold" 
-                                title={`Assigned Promo Coupon: ${aff.coupon_code}${aff.coupon_discount_amount != null ? ` (${aff.coupon_discount_amount}%)` : ''}`}
-                              >
-                                <Ticket className="w-3 h-3 text-amber-400" />
-                                {aff.coupon_code}
-                                {aff.coupon_discount_amount != null && (
-                                  <span className="text-amber-400/80 font-normal">({aff.coupon_discount_amount}%)</span>
-                                )}
-                              </span>
-                            )}
+                            <span 
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold" 
+                              title={`Direct Creator Customer Discount: ${aff.discount_rate != null ? aff.discount_rate : 10}% off applied automatically when visitors enter via creator link`}
+                            >
+                              <Percent className="w-3 h-3 text-emerald-400" />
+                              {aff.discount_rate != null ? aff.discount_rate : 10}% Off Link
+                            </span>
                           </div>
                         </td>
                         <td className="py-3">
@@ -2026,19 +2027,70 @@ export const AffiliatesPage: React.FC = () => {
                 <Sliders className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-base font-semibold text-white">Edit Creator Commission</h3>
+                <h3 className="text-base font-semibold text-white">Edit Creator Settings</h3>
                 <p className="text-xs text-neutral-400">
-                  Settings for <span className="text-[#f3aa18] font-mono">@{selectedAffiliateForCoupon.slug}</span> ({selectedAffiliateForCoupon.display_name || selectedAffiliateForCoupon.user_login})
+                  Settings for <span className="text-[#f3aa18] font-mono">@{selectedAffiliateForCoupon.slug}</span> ({creatorDisplayNameInput || selectedAffiliateForCoupon.creator_display_name || selectedAffiliateForCoupon.display_name || selectedAffiliateForCoupon.user_login})
                 </p>
               </div>
             </div>
 
             <form onSubmit={handleSaveCouponAssignment} className="space-y-4">
+              {/* Creator Display Name */}
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                  Creator Display Name
+                </label>
+                <div className="relative">
+                  <User className="w-3.5 h-3.5 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="e.g. Edwin Yang, Dimas Sampurno"
+                    value={creatorDisplayNameInput}
+                    onChange={(e) => setCreatorDisplayNameInput(e.target.value)}
+                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
+                  />
+                </div>
+                <p className="text-[11px] text-neutral-500 mt-1">
+                  Shown in storefront toast notification (e.g. 10% off from {creatorDisplayNameInput || 'Creator'}) and portal workstation.
+                </p>
+              </div>
+
+              {/* Customer Referral Discount Rate */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-neutral-300">
+                    Customer Referral Discount (%)
+                  </label>
+                  <span className="text-[11px] font-mono text-emerald-400 font-semibold">
+                    {discountRateInput ? `${discountRateInput}% Off` : '10% (Default)'}
+                  </span>
+                </div>
+                <div className="relative">
+                  <Percent className="w-3.5 h-3.5 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    max="100"
+                    placeholder="10 (standard is 10%)"
+                    value={discountRateInput}
+                    onChange={(e) => setDiscountRateInput(e.target.value)}
+                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl pl-9 pr-8 py-2.5 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
+                  />
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">
+                    %
+                  </span>
+                </div>
+                <p className="text-[11px] text-neutral-500">
+                  Applied directly to visitor cart and checkout when entering via creator referral link.
+                </p>
+              </div>
+
               {/* Commission Rate Presets & Custom Input */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-medium text-neutral-300">
-                    Commission Rate (%)
+                    Creator Commission Rate (%)
                   </label>
                   <span className="text-[11px] font-mono text-[#f3aa18]">
                     {commissionRateInput ? `${commissionRateInput}%` : '20% (Default)'}
@@ -2093,27 +2145,7 @@ export const AffiliatesPage: React.FC = () => {
                   </span>
                 </div>
                 <p className="text-[11px] text-neutral-500">
-                  Custom rate applies to all future orders attributed to this creator.
-                </p>
-              </div>
-
-              {/* Promo Coupon Code */}
-              <div>
-                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                  Connected Promo Coupon Code
-                </label>
-                <div className="relative">
-                  <Ticket className="w-3.5 h-3.5 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="text"
-                    placeholder="e.g. edwin15, ds10 (optional)"
-                    value={couponCodeInput}
-                    onChange={(e) => setCouponCodeInput(e.target.value)}
-                    className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 uppercase"
-                  />
-                </div>
-                <p className="text-[11px] text-neutral-500 mt-1">
-                  Orders using this coupon during checkout will credit this affiliate.
+                  Commission earned by creator on net subtotal of attributed customer orders.
                 </p>
               </div>
 
@@ -2490,7 +2522,7 @@ export const AffiliatesPage: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-[11px] text-neutral-400 truncate mt-0.5">
-                    {previewCreatorAffiliate.user_email || previewCreatorAffiliate.email} {previewCreatorAffiliate.coupon_code ? `• Promo Coupon: ${previewCreatorAffiliate.coupon_code}` : ''}
+                    {previewCreatorAffiliate.user_email || previewCreatorAffiliate.email} {previewCreatorAffiliate.discount_rate != null ? `• ${previewCreatorAffiliate.discount_rate}% Customer Discount Link` : ''}
                   </p>
                 </div>
               </div>

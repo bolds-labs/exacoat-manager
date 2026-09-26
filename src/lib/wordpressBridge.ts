@@ -7127,6 +7127,7 @@ export async function updateAffiliateSettings(payload: {
   bank_name?: 'BCA' | 'MANDIRI';
   bank_account_number?: string;
   bank_account_name?: string;
+  display_name?: string;
   slug?: string;
 }): Promise<{ success: boolean; message?: string; error?: string }> {
   const base = getWordPressBaseUrl();
@@ -7652,6 +7653,8 @@ export async function runAdminSliceWpMigration(options: {
 export async function updateAdminAffiliateCommissionRate(payload: {
   affiliate_id: number;
   commission_rate: number | null;
+  display_name?: string;
+  discount_rate?: number | null;
   coupon_code?: string;
 }): Promise<{ success: boolean; message?: string; affiliate?: any; error?: string }> {
   const base = getWordPressBaseUrl();

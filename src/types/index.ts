@@ -680,6 +680,8 @@ export interface AffiliateProfile {
   total_clicks: number;
   total_orders: number;
   referral_url: string;
+  display_name?: string;
+  discount_rate?: number;
   created_at: string;
   updated_at?: string;
 }

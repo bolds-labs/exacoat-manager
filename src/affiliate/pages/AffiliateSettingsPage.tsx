@@ -9,7 +9,9 @@ import {
   Globe,
   ShieldCheck,
   CreditCard,
-  AtSign
+  AtSign,
+  Sparkles,
+  ExternalLink
 } from 'lucide-react';
 import { AffiliateProfile, AffiliateBankName } from '../../types';
 import { updateAffiliateSettings } from '../../lib/wordpressBridge';
@@ -27,6 +29,10 @@ interface AffiliateSettingsPageProps {
 export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ profile, onRefresh }) => {
   const { showToast } = useToast();
 
+  // Creator display name form state
+  const [displayName, setDisplayName] = useState(profile.display_name || '');
+  const [isSavingDisplayName, setIsSavingDisplayName] = useState(false);
+
   // Bank details form state
   const [bankName, setBankName] = useState<AffiliateBankName | ''>(profile.bank_name || '');
   const [accountNumber, setAccountNumber] = useState(profile.bank_account_number || '');
@@ -37,6 +43,32 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
   const [customSlug, setCustomSlug] = useState(profile.slug || '');
   const [isSavingSlug, setIsSavingSlug] = useState(false);
   const isSlugLocked = profile.slug_locked;
+
+  const handleSaveDisplayName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!displayName.trim()) {
+      showToast('error', 'Missing Name', 'Please enter your creator display name.');
+      return;
+    }
+
+    setIsSavingDisplayName(true);
+    try {
+      const res = await updateAffiliateSettings({
+        display_name: displayName.trim(),
+      });
+
+      if (res.success) {
+        showToast('success', 'Profile Saved', 'Creator display name updated successfully.');
+        onRefresh();
+      } else {
+        showToast('error', 'Save Failed', res.error || 'Unable to update display name.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message || 'Network error occurred.');
+    } finally {
+      setIsSavingDisplayName(false);
+    }
+  };
 
   const handleSaveBankDetails = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,11 +145,66 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
       {/* Page Header */}
       <PageHeroHeader
         title="Affiliate Settings"
-        subtitle="Configure your Indonesian bank payout destination and customize your branded referral slug."
+        subtitle="Configure your creator display name, Indonesian bank payout destination, and branded referral slug."
         badge={{ label: 'PREFERENCES', variant: 'amber' }}
       />
 
-      {/* 1. Indonesian Bank Settings Card */}
+      {/* 1. Creator Display Details Card */}
+      <GlassCard className="p-6 sm:p-7 border border-white/[0.08] space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/[0.06]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/25 text-[#f3aa18] flex items-center justify-center shrink-0">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-white font-['Chakra_Petch'] tracking-wide uppercase">
+                Creator Display Name
+              </h2>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                The public name presented to your audience when your direct discount is applied.
+              </p>
+            </div>
+          </div>
+          <span className="self-start sm:self-auto text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/25">
+            Active Discount: {profile.discount_rate || 10}% Off
+          </span>
+        </div>
+
+        <form onSubmit={handleSaveDisplayName} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 text-[#f3aa18]" />
+              <span>Public Creator Name</span>
+              <span className="text-[#f3aa18]">*</span>
+            </label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="e.g. Edwin Yang"
+              className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
+            />
+            <p className="text-[11px] text-zinc-400">
+              Displayed in customer discount notifications: &quot;Creator discount applied: {profile.discount_rate || 10}% off from {displayName.trim() || 'Your Name'}&quot; and reflected in checkout totals.
+            </p>
+          </div>
+
+          <div className="pt-2 flex justify-end">
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              disabled={isSavingDisplayName || displayName.trim() === (profile.display_name || '').trim()}
+              isLoading={isSavingDisplayName}
+              leftIcon={<Save className="w-3.5 h-3.5" />}
+            >
+              Save Creator Name
+            </Button>
+          </div>
+        </form>
+      </GlassCard>
+
+      {/* 2. Indonesian Bank Settings Card */}
       <GlassCard className="p-6 sm:p-7 border border-white/[0.08] space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/[0.06]">
           <div className="flex items-center gap-3">
@@ -208,7 +295,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
         </form>
       </GlassCard>
 
-      {/* 2. Custom Referral Slug Card */}
+      {/* 3. Custom Referral Slug Card */}
       <GlassCard className="p-6 sm:p-7 border border-white/[0.08] space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/[0.06]">
           <div className="flex items-center gap-3">
@@ -300,7 +387,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
         )}
       </GlassCard>
 
-      {/* 3. Account Profile Snapshot */}
+      {/* 4. Account Profile Snapshot */}
       <GlassCard className="p-6 sm:p-7 border border-white/[0.08] space-y-4">
         <div className="flex items-center gap-3 pb-3 border-b border-white/[0.06]">
           <div className="w-9 h-9 rounded-xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-center text-zinc-300">
@@ -329,18 +416,63 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
             </span>
             <p className="font-mono text-zinc-200 font-semibold">{profile.email}</p>
           </div>
-          <div className="p-4 rounded-xl bg-[#09090b]/70 border border-white/[0.06] space-y-1">
-            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block">
-              Affiliate Category
-            </span>
-            <p className="text-zinc-200 font-medium">{profile.affiliate_type || 'Content Creator'}</p>
-          </div>
+          {profile.affiliate_type && !profile.affiliate_type.toLowerCase().includes('slicewp') && (
+            <div className="p-4 rounded-xl bg-[#09090b]/70 border border-white/[0.06] space-y-1">
+              <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block">
+                Affiliate Category
+              </span>
+              <p className="text-zinc-200 font-medium">{profile.affiliate_type}</p>
+            </div>
+          )}
           <div className="p-4 rounded-xl bg-[#09090b]/70 border border-white/[0.06] space-y-1">
             <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block">
               Primary Channel
             </span>
             <p className="text-zinc-200 font-medium truncate">{profile.promotion_channel || 'Not specified'}</p>
           </div>
+        </div>
+      </GlassCard>
+
+      {/* 5. Account Credentials & Security Card */}
+      <GlassCard className="p-6 sm:p-7 border border-white/[0.08] space-y-4">
+        <div className="flex items-center gap-3 pb-3 border-b border-white/[0.06]">
+          <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+            <ShieldCheck className="w-4 h-4" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-white font-['Chakra_Petch'] tracking-wide uppercase">
+              Account Credentials &amp; Security
+            </h2>
+            <p className="text-xs text-zinc-400">
+              Manage your login email and account password on the Exacoat store portal.
+            </p>
+          </div>
+        </div>
+
+        <div className="p-4 rounded-xl bg-[#09090b]/70 border border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1 text-xs text-zinc-300">
+            <p className="font-medium text-white">Need to change your password or primary email?</p>
+            <p className="text-zinc-400 leading-relaxed">
+              Your creator workstation login is linked directly with your primary Exacoat customer account. To update credentials, please visit the account management portal.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            asChild
+            className="shrink-0 border-white/[0.15] hover:border-[#f3aa18]/50 hover:text-[#f3aa18]"
+          >
+            <a
+              href="https://exacoat.com/my-account/edit-account/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2"
+            >
+              <span>Manage on Exacoat.com</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </Button>
         </div>
       </GlassCard>
     </div>
