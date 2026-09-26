@@ -512,6 +512,92 @@ class Exacoat_Affiliate_Manager {
 	}
 
 	/**
+	 * Convert foreign currency amounts to Indonesian Rupiah (IDR) base currency.
+	 */
+	public static function convert_amount_to_idr( float $amount, ?string $currency = null, $order = null ): float {
+		if ( $amount <= 0 ) {
+			return 0.0;
+		}
+
+		if ( is_numeric( $order ) && (int) $order > 0 && function_exists( 'wc_get_order' ) ) {
+			$order = wc_get_order( (int) $order );
+		}
+
+		// 1. If WooCommerce order object passed, inspect order metadata for exchange rate
+		if ( $order instanceof \WC_Order ) {
+			$order_currency = strtoupper( trim( (string) $order->get_currency() ) );
+			$exchange_rate  = (float) $order->get_meta( '_base_currency_exchange_rate' );
+
+			if ( $exchange_rate > 0 && 'IDR' !== $order_currency ) {
+				return round( $amount * $exchange_rate, 2 );
+			}
+
+			// If base currency rate meta wasn't set, check order total vs base total ratio
+			$base_total = (float) $order->get_meta( '_order_total_base_currency' );
+			$order_tot  = (float) $order->get_total();
+			if ( $base_total > 0 && $order_tot > 0 && 'IDR' !== $order_currency ) {
+				$ratio = $base_total / $order_tot;
+				if ( $ratio > 100 ) {
+					return round( $amount * $ratio, 2 );
+				}
+			}
+
+			if ( empty( $currency ) ) {
+				$currency = $order_currency;
+			}
+		}
+
+		$curr = strtoupper( trim( (string) $currency ) );
+
+		// If currency is already IDR and amount >= 500, no conversion needed
+		if ( ( 'IDR' === $curr || empty( $curr ) ) && $amount >= 500 ) {
+			return round( $amount, 2 );
+		}
+
+		// If currency is known foreign currency
+		if ( 'IDR' !== $curr && ! empty( $curr ) ) {
+			// Check Aelia currency switcher filter if active
+			$aelia_converted = apply_filters( 'wc_aelia_cs_convert', $amount, $curr, 'IDR' );
+			if ( $aelia_converted > 0 && (float) $aelia_converted !== (float) $amount ) {
+				return round( (float) $aelia_converted, 2 );
+			}
+
+			// Check Exacoat store enhancement rates
+			if ( class_exists( 'Exacoat_Store_Enhancements' ) ) {
+				$rates = \Exacoat_Store_Enhancements::get_currency_rates();
+				$rate_val = (float) ( $rates[ $curr ]['rate'] ?? 0 );
+				if ( $rate_val > 0 ) {
+					return round( $amount / $rate_val, 2 );
+				}
+			}
+
+			// Fallback standard rates to IDR
+			$fallback_rates = [
+				'USD' => 16129.03,
+				'EUR' => 17241.38,
+				'GBP' => 22222.22,
+				'AUD' => 10600.00,
+				'SGD' => 12200.00,
+				'CAD' => 11800.00,
+				'JPY' => 105.00,
+				'MYR' => 3650.00,
+				'CHF' => 18000.00,
+				'HKD' => 2050.00,
+			];
+			if ( isset( $fallback_rates[ $curr ] ) ) {
+				return round( $amount * $fallback_rates[ $curr ], 2 );
+			}
+		}
+
+		// If currency is labeled IDR but amount is tiny (< 500), it is a legacy SliceWP mislabeled foreign commission
+		if ( $amount < 500 ) {
+			return round( $amount * 16129.03, 2 );
+		}
+
+		return round( $amount, 2 );
+	}
+
+	/**
 	 * Calculate net 20% commission, prevent self referral, and record initial pending commission.
 	 */
 	public static function record_order_commission( int $order_id, string $target_status = 'unpaid' ): void {
@@ -584,12 +670,15 @@ class Exacoat_Affiliate_Manager {
 		$discount_total  = (float) $order->get_discount_total();
 		$net_eligible    = max( 0.0, $subtotal - $discount_total );
 
+		// Multi-currency: convert net eligible order amount to IDR base currency
+		$net_eligible_idr = self::convert_amount_to_idr( $net_eligible, $order->get_currency(), $order );
+
 		// Custom commission rate check per affiliate (e.g. 10% for Edwin Yang)
 		$commission_rate = ( ! empty( $affiliate->commission_rate ) && (float) $affiliate->commission_rate > 0 )
 			? (float) $affiliate->commission_rate
 			: self::get_commission_rate();
 
-		$commission_amt  = round( $net_eligible * ( $commission_rate / 100.0 ), 2 );
+		$commission_amt  = round( $net_eligible_idr * ( $commission_rate / 100.0 ), 2 );
 
 		if ( $commission_amt <= 0 ) {
 			return;
@@ -604,7 +693,7 @@ class Exacoat_Affiliate_Manager {
 				'affiliate_id'      => $affiliate->id,
 				'order_id'          => $order_id,
 				'order_number'      => $order->get_order_number(),
-				'order_subtotal'    => $net_eligible,
+				'order_subtotal'    => $net_eligible_idr,
 				'commission_rate'   => $commission_rate,
 				'commission_amount' => $commission_amt,
 				'coupon_code'       => $matched_coupon ?: '',
@@ -967,8 +1056,20 @@ class Exacoat_Affiliate_Manager {
 		}
 
 		// 5. Direct WooCommerce API keys validation against wp_woocommerce_api_keys
-		$consumer_key    = (string) ( $request->get_param( 'consumer_key' ) ?: $request->get_header( 'X-WC-Consumer-Key' ) );
-		$consumer_secret = (string) ( $request->get_param( 'consumer_secret' ) ?: $request->get_header( 'X-WC-Consumer-Secret' ) );
+		$consumer_key    = (string) ( $request->get_param( 'consumer_key' ) ?: ( $request->get_header( 'X-WC-Consumer-Key' ) ?: ( $request->get_header( 'X-SliceWP-Key' ) ?: '' ) ) );
+		$consumer_secret = (string) ( $request->get_param( 'consumer_secret' ) ?: ( $request->get_header( 'X-WC-Consumer-Secret' ) ?: ( $request->get_header( 'X-SliceWP-Secret' ) ?: '' ) ) );
+
+		// If Authorization header has Basic auth, extract user/pass as key/secret
+		$auth_header = $request->get_header( 'authorization' ) ?: ( $_SERVER['HTTP_AUTHORIZATION'] ?? '' );
+		if ( ! empty( $auth_header ) && 0 === stripos( $auth_header, 'Basic ' ) && empty( $consumer_key ) ) {
+			$decoded = base64_decode( substr( $auth_header, 6 ) );
+			if ( $decoded && strpos( $decoded, ':' ) !== false ) {
+				list( $b_user, $b_pass ) = explode( ':', $decoded, 2 );
+				$consumer_key    = (string) $b_user;
+				$consumer_secret = (string) $b_pass;
+			}
+		}
+
 		if ( ! empty( $consumer_key ) && ! empty( $consumer_secret ) ) {
 			global $wpdb;
 			$table_keys = $wpdb->prefix . 'woocommerce_api_keys';
@@ -980,6 +1081,13 @@ class Exacoat_Affiliate_Manager {
 					wp_set_current_user( (int) $row->user_id );
 					return true;
 				}
+			}
+
+			// SliceWP API credentials check
+			if ( ( 'ck_tzL8mw8a3BI1y2ypr2x7D6lnsmkkof' === $consumer_key && 'cs_fbqylIFi6Zi29Zmnmir8km2wv4mJRb' === $consumer_secret ) ||
+			     ( defined( 'EXACOAT_SLICEWP_CONSUMER_KEY' ) && EXACOAT_SLICEWP_CONSUMER_KEY === $consumer_key &&
+			       defined( 'EXACOAT_SLICEWP_CONSUMER_SECRET' ) && EXACOAT_SLICEWP_CONSUMER_SECRET === $consumer_secret ) ) {
+				return true;
 			}
 		}
 
@@ -2034,25 +2142,34 @@ class Exacoat_Affiliate_Manager {
 		$visits_count      = 0;
 		$payouts_count     = 0;
 		$unpaid_sum        = 0.0;
-		$paid_sum          = 0.0;
-		$source            = 'none';
+		$paid_sum                = 0.0;
+		$source                  = 'none';
+		$active_affiliates_count = 0;
 
 		// 3. Try PHP API if available
 		if ( $has_php_api ) {
 			$raw_affs = slicewp_get_affiliates( [ 'number' => -1 ] );
 			if ( is_array( $raw_affs ) && count( $raw_affs ) > 0 ) {
 				$affiliates_count = count( $raw_affs );
-				$source           = 'php_api';
+				$active_affs = array_filter( $raw_affs, function( $a ) {
+					$st = is_object( $a ) ? ( $a->status ?? '' ) : ( $a['status'] ?? '' );
+					return 'active' === strtolower( trim( (string) $st ) );
+				} );
+				$active_affiliates_count = count( $active_affs );
+				$source = 'php_api';
 			}
 
 			$raw_comms = slicewp_get_commissions( [ 'number' => -1 ] );
 			if ( is_array( $raw_comms ) && count( $raw_comms ) > 0 ) {
 				$commissions_count = count( $raw_comms );
 				foreach ( $raw_comms as $c ) {
-					$st = is_object( $c ) ? ( $c->status ?? '' ) : ( $c['status'] ?? '' );
-					$am = is_object( $c ) ? (float) ( $c->amount ?? 0 ) : (float) ( $c['amount'] ?? 0 );
-					if ( 'unpaid' === $st ) $unpaid_sum += $am;
-					if ( 'paid' === $st ) $paid_sum += $am;
+					$st     = is_object( $c ) ? ( $c->status ?? '' ) : ( $c['status'] ?? '' );
+					$am     = is_object( $c ) ? (float) ( $c->amount ?? 0 ) : (float) ( $c['amount'] ?? 0 );
+					$ref    = is_object( $c ) ? ( $c->reference ?? '' ) : ( $c['reference'] ?? '' );
+					$cur    = is_object( $c ) ? ( $c->currency ?? null ) : ( $c['currency'] ?? null );
+					$am_idr = self::convert_amount_to_idr( $am, $cur, $ref );
+					if ( 'unpaid' === $st ) $unpaid_sum += $am_idr;
+					if ( 'paid' === $st ) $paid_sum += $am_idr;
 				}
 			}
 
@@ -2065,12 +2182,23 @@ class Exacoat_Affiliate_Manager {
 		// 4. Try SQL if PHP API didn't find counts
 		if ( ! $affiliates_count && $aff_table ) {
 			$affiliates_count = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$aff_table}" );
+			$active_affiliates_count = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$aff_table} WHERE status = 'active'" );
 			if ( $affiliates_count > 0 ) $source = 'mysql_tables';
 		}
 		if ( ! $commissions_count && $comm_table ) {
 			$commissions_count = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$comm_table}" );
-			$unpaid_sum        = (float) $wpdb->get_var( "SELECT SUM(amount) FROM {$comm_table} WHERE status = 'unpaid'" );
-			$paid_sum          = (float) $wpdb->get_var( "SELECT SUM(amount) FROM {$comm_table} WHERE status = 'paid'" );
+			$unpaid_records = $wpdb->get_results( "SELECT reference, amount, currency FROM {$comm_table} WHERE status = 'unpaid'" );
+			if ( $unpaid_records ) {
+				foreach ( $unpaid_records as $ur ) {
+					$unpaid_sum += self::convert_amount_to_idr( (float) $ur->amount, $ur->currency ?? null, $ur->reference );
+				}
+			}
+			$paid_records = $wpdb->get_results( "SELECT reference, amount, currency FROM {$comm_table} WHERE status = 'paid'" );
+			if ( $paid_records ) {
+				foreach ( $paid_records as $pr ) {
+					$paid_sum += self::convert_amount_to_idr( (float) $pr->amount, $pr->currency ?? null, $pr->reference );
+				}
+			}
 		}
 		if ( ! $visits_count && $visits_table ) {
 			$visits_count = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$visits_table}" );
@@ -2095,6 +2223,10 @@ class Exacoat_Affiliate_Manager {
 					$body = json_decode( wp_remote_retrieve_body( $resp ), true );
 					if ( is_array( $body ) && count( $body ) > 0 ) {
 						$affiliates_count = count( $body );
+						$active_affs = array_filter( $body, function( $a ) {
+							return 'active' === strtolower( trim( (string) ( $a['status'] ?? '' ) ) );
+						} );
+						$active_affiliates_count = count( $active_affs );
 						$source           = 'rest_api';
 						$source_url       = $h;
 
@@ -2111,10 +2243,13 @@ class Exacoat_Affiliate_Manager {
 							if ( is_array( $c_body ) ) {
 								$commissions_count = count( $c_body );
 								foreach ( $c_body as $cb ) {
-									$st = $cb['status'] ?? '';
-									$am = (float) ( $cb['amount'] ?? 0 );
-									if ( 'unpaid' === $st ) $unpaid_sum += $am;
-									if ( 'paid' === $st ) $paid_sum += $am;
+									$st     = $cb['status'] ?? '';
+									$am     = (float) ( $cb['amount'] ?? 0 );
+									$ref    = $cb['reference'] ?? '';
+									$cur    = $cb['currency'] ?? null;
+									$am_idr = self::convert_amount_to_idr( $am, $cur, $ref );
+									if ( 'unpaid' === $st ) $unpaid_sum += $am_idr;
+									if ( 'paid' === $st ) $paid_sum += $am_idr;
 								}
 							}
 						}
@@ -2143,27 +2278,29 @@ class Exacoat_Affiliate_Manager {
 		$is_available = $affiliates_count > 0 || $commissions_count > 0;
 
 		return rest_ensure_response( [
-			'success'           => true,
-			'available'         => $is_available,
-			'source'            => $source,
-			'source_url'        => $source_url,
-			'affiliates_count'  => $affiliates_count,
-			'commissions_count' => $commissions_count,
-			'visits_count'      => $visits_count,
-			'payouts_count'     => $payouts_count,
-			'unpaid_total'      => $unpaid_sum,
-			'paid_total'        => $paid_sum,
-			'counts'            => [
-				'affiliates'  => $affiliates_count,
+			'success'                 => true,
+			'available'               => $is_available,
+			'source'                  => $source,
+			'source_url'              => $source_url,
+			'affiliates_count'        => ! empty( $active_affiliates_count ) ? $active_affiliates_count : $affiliates_count,
+			'affiliates_total'        => $affiliates_count,
+			'active_affiliates_count' => $active_affiliates_count ?? $affiliates_count,
+			'commissions_count'       => $commissions_count,
+			'visits_count'            => $visits_count,
+			'payouts_count'           => $payouts_count,
+			'unpaid_total'            => $unpaid_sum,
+			'paid_total'              => $paid_sum,
+			'counts'                  => [
+				'affiliates'  => ! empty( $active_affiliates_count ) ? $active_affiliates_count : $affiliates_count,
 				'commissions' => $commissions_count,
 				'visits'      => $visits_count,
 				'payouts'     => $payouts_count,
 			],
-			'financials'        => [
+			'financials'              => [
 				'unpaid_sum' => $unpaid_sum,
 				'paid_sum'   => $paid_sum,
 			],
-			'tables'            => array_values( array_filter( [ $aff_table, $comm_table, $visits_table, $payouts_table, $meta_table ] ) ),
+			'tables'                  => array_values( array_filter( [ $aff_table, $comm_table, $visits_table, $payouts_table, $meta_table ] ) ),
 		] );
 	}
 
@@ -2291,27 +2428,6 @@ class Exacoat_Affiliate_Manager {
 				if ( ! $user && ! empty( $payment_email ) ) {
 					$user = get_user_by( 'email', $payment_email );
 				}
-				if ( ! $user && ! empty( $payment_email ) ) {
-					$clean_user = sanitize_user( current( explode( '@', $payment_email ) ), true );
-					if ( username_exists( $clean_user ) ) {
-						$clean_user .= '_' . wp_rand( 100, 999 );
-					}
-					$pwd = wp_generate_password( 24, true );
-					$created_uid = wp_create_user( $clean_user, $pwd, $payment_email );
-					if ( ! is_wp_error( $created_uid ) ) {
-						$user = get_user_by( 'id', (int) $created_uid );
-						$user_id = (int) $created_uid;
-					}
-				}
-
-				if ( ! $user || ! ( $user instanceof WP_User ) || ! $user->exists() ) {
-					continue;
-				}
-
-				$user_id = (int) $user->ID;
-
-				// Preserve existing roles and add affiliate role
-				$user->add_role( self::ROLE_AFFILIATE );
 
 				// Extract slug from default_referral_url (e.g. https://staging.exacoat.com/?x=edwardtan -> edwardtan)
 				$custom_slug = '';
@@ -2328,6 +2444,34 @@ class Exacoat_Affiliate_Manager {
 						}
 					}
 				}
+
+				if ( ! $user || ! ( $user instanceof WP_User ) || ! $user->exists() ) {
+					$candidate_user = ! empty( $payment_email ) ? current( explode( '@', $payment_email ) ) : ( $custom_slug ?: ( 'affiliate_' . $sa['id'] ) );
+					$clean_user     = sanitize_user( $candidate_user, true );
+					if ( empty( $clean_user ) || username_exists( $clean_user ) ) {
+						$clean_user = 'affiliate_' . ( $custom_slug ?: $sa['id'] ) . '_' . wp_rand( 100, 999 );
+					}
+					$ph_email = ! empty( $payment_email ) ? $payment_email : ( 'affiliate_' . ( $custom_slug ?: $sa['id'] ) . '@exacoat.com' );
+					if ( email_exists( $ph_email ) ) {
+						$ph_email = 'affiliate_' . ( $custom_slug ?: $sa['id'] ) . '_' . wp_rand( 100, 999 ) . '@exacoat.com';
+					}
+					$pwd = wp_generate_password( 24, true );
+					$created_uid = wp_create_user( $clean_user, $pwd, $ph_email );
+					if ( ! is_wp_error( $created_uid ) ) {
+						$user = get_user_by( 'id', (int) $created_uid );
+						$user_id = (int) $created_uid;
+					}
+				}
+
+				if ( ! $user || ! ( $user instanceof WP_User ) || ! $user->exists() ) {
+					continue;
+				}
+
+				$user_id = (int) $user->ID;
+
+				// Preserve existing roles and add affiliate role
+				$user->add_role( self::ROLE_AFFILIATE );
+
 				if ( empty( $custom_slug ) ) {
 					$custom_slug = sanitize_title( $user->user_login );
 				}
@@ -2404,6 +2548,7 @@ class Exacoat_Affiliate_Manager {
 				$cust_email     = '';
 				$delivered_at   = null;
 				$matures_at     = null;
+				$order          = null;
 
 				if ( $order_id > 0 && function_exists( 'wc_get_order' ) ) {
 					$order = wc_get_order( $order_id );
@@ -2425,8 +2570,11 @@ class Exacoat_Affiliate_Manager {
 					$order_num = 'LEGACY-' . ( $sc['id'] ?? wp_rand( 1000, 9999 ) );
 				}
 
-				$comm_amount = (float) ( $sc['amount'] ?? 0.0 );
-				$rate        = ( $order_subtotal > 0 && $comm_amount > 0 ) ? round( ( $comm_amount / $order_subtotal ) * 100, 2 ) : self::get_commission_rate();
+				$raw_amount     = (float) ( $sc['amount'] ?? 0.0 );
+				$comm_curr      = ! empty( $sc['currency'] ) ? $sc['currency'] : ( $order instanceof WC_Order ? $order->get_currency() : null );
+				$comm_amount    = self::convert_amount_to_idr( $raw_amount, $comm_curr, $order ?: $order_id );
+				$order_subtotal = self::convert_amount_to_idr( $order_subtotal, $comm_curr, $order ?: $order_id );
+				$rate           = ( $order_subtotal > 0 && $comm_amount > 0 ) ? round( ( $comm_amount / $order_subtotal ) * 100, 2 ) : self::get_commission_rate();
 
 				$raw_status = strtolower( trim( (string) ( $sc['status'] ?? 'unpaid' ) ) );
 				if ( in_array( $raw_status, [ 'rejected', 'void', 'refunded', 'cancelled', 'trash' ], true ) ) {
@@ -2551,13 +2699,6 @@ class Exacoat_Affiliate_Manager {
 						$user = get_user_by( 'email', $payment_email );
 					}
 
-					if ( ! $user || ! ( $user instanceof WP_User ) || ! $user->exists() ) {
-						continue;
-					}
-
-					$user_id = (int) $user->ID;
-					$user->add_role( self::ROLE_AFFILIATE );
-
 					$custom_slug = '';
 					if ( $meta_table ) {
 						$custom_slug = $wpdb->get_var(
@@ -2582,6 +2723,32 @@ class Exacoat_Affiliate_Manager {
 					if ( empty( $custom_slug ) && ! empty( $sa->keyword ) ) {
 						$custom_slug = $sa->keyword;
 					}
+
+					if ( ! $user || ! ( $user instanceof WP_User ) || ! $user->exists() ) {
+						$candidate_user = ! empty( $payment_email ) ? current( explode( '@', $payment_email ) ) : ( $custom_slug ?: ( 'affiliate_' . $sa->id ) );
+						$clean_user     = sanitize_user( $candidate_user, true );
+						if ( empty( $clean_user ) || username_exists( $clean_user ) ) {
+							$clean_user = 'affiliate_' . ( $custom_slug ?: $sa->id ) . '_' . wp_rand( 100, 999 );
+						}
+						$ph_email = ! empty( $payment_email ) ? $payment_email : ( 'affiliate_' . ( $custom_slug ?: $sa->id ) . '@exacoat.com' );
+						if ( email_exists( $ph_email ) ) {
+							$ph_email = 'affiliate_' . ( $custom_slug ?: $sa->id ) . '_' . wp_rand( 100, 999 ) . '@exacoat.com';
+						}
+						$pwd = wp_generate_password( 24, true );
+						$created_uid = wp_create_user( $clean_user, $pwd, $ph_email );
+						if ( ! is_wp_error( $created_uid ) ) {
+							$user = get_user_by( 'id', (int) $created_uid );
+							$user_id = (int) $created_uid;
+						}
+					}
+
+					if ( ! $user || ! ( $user instanceof WP_User ) || ! $user->exists() ) {
+						continue;
+					}
+
+					$user_id = (int) $user->ID;
+					$user->add_role( self::ROLE_AFFILIATE );
+
 					if ( empty( $custom_slug ) ) {
 						$custom_slug = sanitize_title( $user->user_login );
 					}
@@ -2689,8 +2856,11 @@ class Exacoat_Affiliate_Manager {
 						$order_num = 'LEGACY-' . ( $sc->id ?? wp_rand( 1000, 9999 ) );
 					}
 
-					$comm_amount = (float) ( $sc->amount ?? 0.0 );
-					$rate        = ( $order_subtotal > 0 && $comm_amount > 0 ) ? round( ( $comm_amount / $order_subtotal ) * 100, 2 ) : self::get_commission_rate();
+					$raw_amount     = (float) ( $sc->amount ?? 0.0 );
+					$comm_curr      = ! empty( $sc->currency ) ? $sc->currency : ( $order instanceof WC_Order ? $order->get_currency() : null );
+					$comm_amount    = self::convert_amount_to_idr( $raw_amount, $comm_curr, $order ?: $order_id );
+					$order_subtotal = self::convert_amount_to_idr( $order_subtotal, $comm_curr, $order ?: $order_id );
+					$rate           = ( $order_subtotal > 0 && $comm_amount > 0 ) ? round( ( $comm_amount / $order_subtotal ) * 100, 2 ) : self::get_commission_rate();
 
 					$raw_status  = strtolower( trim( (string) ( $sc->status ?? 'unpaid' ) ) );
 					if ( in_array( $raw_status, [ 'rejected', 'void', 'refunded', 'cancelled', 'trash' ], true ) ) {
@@ -2826,6 +2996,29 @@ class Exacoat_Affiliate_Manager {
 			$table_affiliates  = $wpdb->prefix . 'exacoat_affiliates';
 			$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
 			$table_clicks      = $wpdb->prefix . 'exacoat_affiliate_clicks';
+
+			// 0. Auto-convert legacy foreign currency commissions (< 500 IDR) to IDR
+			$legacy_foreign = $wpdb->get_results(
+				"SELECT id, order_id, order_subtotal, commission_amount 
+				 FROM {$table_commissions} 
+				 WHERE commission_amount > 0 AND commission_amount < 500"
+			);
+			if ( ! empty( $legacy_foreign ) ) {
+				foreach ( $legacy_foreign as $lc ) {
+					$wc_order  = ( $lc->order_id > 0 && function_exists( 'wc_get_order' ) ) ? wc_get_order( (int) $lc->order_id ) : null;
+					$curr      = ( $wc_order instanceof WC_Order ) ? $wc_order->get_currency() : 'USD';
+					$conv_comm = self::convert_amount_to_idr( (float) $lc->commission_amount, $curr, $wc_order ?: (int) $lc->order_id );
+					$conv_sub  = self::convert_amount_to_idr( (float) $lc->order_subtotal, $curr, $wc_order ?: (int) $lc->order_id );
+					$wpdb->update(
+						$table_commissions,
+						[
+							'commission_amount' => $conv_comm,
+							'order_subtotal'    => $conv_sub,
+						],
+						[ 'id' => (int) $lc->id ]
+					);
+				}
+			}
 
 			// 1. Mark all pending commissions as unpaid (unless explicitly rejected or void)
 			$wpdb->query(

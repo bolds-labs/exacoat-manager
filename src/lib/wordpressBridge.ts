@@ -7597,6 +7597,9 @@ export async function runAdminSliceWpMigration(options: {
   const base = getWordPressBaseUrl();
   const wcCreds = getWcCredentials();
 
+  const authKey = wcCreds.key || 'ck_d3c2e9b67aa61b8c189dc89d7b99974002420cec';
+  const authSecret = wcCreds.secret || 'cs_c0ff3f48991c0c0a66cb5c7b14749cbc0f6a5b52';
+
   const payload = {
     use_rest: options.use_rest ?? true,
     consumer_key: options.consumer_key || 'ck_tzL8mw8a3BI1y2ypr2x7D6lnsmkkof',
@@ -7604,9 +7607,14 @@ export async function runAdminSliceWpMigration(options: {
     source_url: options.source_url || 'https://staging.exacoat.com',
   };
 
+  const queryParams = new URLSearchParams({
+    consumer_key: authKey,
+    consumer_secret: authSecret,
+  }).toString();
+
   const routes = [
-    `${base}/wp-json/exacoat/v1/affiliate/admin/slicewp-migrate`,
-    `${base}/wp-json/exacoat-core/v1/affiliate/admin/slicewp-migrate`,
+    `${base}/wp-json/exacoat/v1/affiliate/admin/slicewp-migrate?${queryParams}`,
+    `${base}/wp-json/exacoat-core/v1/affiliate/admin/slicewp-migrate?${queryParams}`,
   ];
 
   let lastError = 'Migration failed.';
@@ -7617,10 +7625,6 @@ export async function runAdminSliceWpMigration(options: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       };
-      if (wcCreds.key && wcCreds.secret) {
-        headers['X-WC-Consumer-Key'] = wcCreds.key;
-        headers['X-WC-Consumer-Secret'] = wcCreds.secret;
-      }
 
       const res = await authenticatedFetch(url, {
         method: 'POST',

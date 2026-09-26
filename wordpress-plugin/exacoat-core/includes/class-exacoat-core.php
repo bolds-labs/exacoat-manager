@@ -150,7 +150,7 @@ class Exacoat_Core {
 		header( 'Access-Control-Allow-Credentials: true' );
 		header( 'Vary: Origin', false );
 		header( 'Access-Control-Allow-Methods: OPTIONS, GET, POST, PUT, PATCH, DELETE, HEAD' );
-		header( 'Access-Control-Allow-Headers: Authorization, Content-Type, X-WP-Nonce, Cache-Control, Pragma, X-Requested-With, sent_from, x-api-key, X-Api-Key, apikey, Accept, Origin, Cart-Token, Nonce, X-Exacoat-Currency, X-Artmatter-Currency, X-Exacoat-Client-IP, X-Artmatter-Client-IP, x-secret-key, X-Secret-Key, X-Exacoat-Secret, x_exacoat_secret' );
+		header( 'Access-Control-Allow-Headers: Authorization, Content-Type, X-WP-Nonce, Cache-Control, Pragma, X-Requested-With, sent_from, x-api-key, X-Api-Key, apikey, Accept, Origin, Cart-Token, Nonce, X-Exacoat-Currency, X-Artmatter-Currency, X-Exacoat-Client-IP, X-Artmatter-Client-IP, x-secret-key, X-Secret-Key, X-Exacoat-Secret, x_exacoat_secret, X-WC-Consumer-Key, X-WC-Consumer-Secret, X-SliceWP-Key, X-SliceWP-Secret' );
 		header( 'Access-Control-Expose-Headers: Cart-Token, Nonce, X-WP-Total, X-WP-TotalPages, X-Exacoat-Currency, X-Artmatter-Currency' );
 		header( 'Cache-Control: no-cache, no-store, must-revalidate, max-age=0' );
 		header( 'Pragma: no-cache' );
@@ -1284,7 +1284,7 @@ class Exacoat_Core {
 					. "- Never mention vinyl manufacturer brand names.\n"
 					. "- Never sound like a technical spec sheet or installation manual (avoid millimeter thickness measurements, adhesive terminology, or mechanical jargon).\n"
 					. "- Strictly NO exclamation marks.\n"
-					. "- Strictly NO em dashes of any kind (do not use long dashes '—' or double hyphens '--'). Use commas or periods instead.\n"
+					. "- Strictly NO em dashes of any kind (do not use long dashes or double hyphens '--'). Use commas or periods instead.\n"
 					. "- Strictly NO generic AI hype words ('elevate', 'revolutionary', 'unleash', 'game-changer', 'ultimate armor', 'unparalleled', 'seamless').\n\n"
 					. "Output Requirement:\n"
 					. "Return ONLY a valid JSON object with the following four keys (no markdown formatting, no conversational text):\n"
@@ -1299,7 +1299,7 @@ class Exacoat_Core {
 					foreach ( [ 'seo_title', 'seo_description', 'short_description', 'focus_keyword' ] as $k ) {
 						if ( isset( $data[ $k ] ) && is_string( $data[ $k ] ) ) {
 							$val = preg_replace( '/!+/', '.', $data[ $k ] );
-							$val = preg_replace( '/[—–]|--/', ', ', $val );
+							$val = preg_replace( '/[\x{2014}\x{2013}]|--/u', ', ', $val );
 							$data[ $k ] = trim( preg_replace( '/\s{2,}/', ' ', $val ) );
 						}
 					}

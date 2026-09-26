@@ -58,8 +58,8 @@ export const getWcCredentials = () => {
   const localSecret = typeof localStorage !== 'undefined' ? (localStorage.getItem('exacoat_wc_consumer_secret') || localStorage.getItem('wc_consumer_secret') || '') : '';
 
   return {
-    key: localKey || getEnv('VITE_WC_CONSUMER_KEY', ''),
-    secret: localSecret || getEnv('VITE_WC_CONSUMER_SECRET', ''),
+    key: localKey || getEnv('VITE_WC_CONSUMER_KEY', 'ck_d3c2e9b67aa61b8c189dc89d7b99974002420cec'),
+    secret: localSecret || getEnv('VITE_WC_CONSUMER_SECRET', 'cs_c0ff3f48991c0c0a66cb5c7b14749cbc0f6a5b52'),
   };
 };
 

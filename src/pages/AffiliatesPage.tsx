@@ -113,6 +113,7 @@ export const AffiliatesPage: React.FC = () => {
     source?: string;
     source_url?: string;
     affiliates_count: number;
+    affiliates_total?: number;
     commissions_count: number;
     visits_count: number;
     unpaid_total: number;
@@ -308,6 +309,7 @@ export const AffiliatesPage: React.FC = () => {
             source: res.source,
             source_url: res.source_url,
             affiliates_count: res.affiliates_count,
+            affiliates_total: (res as any).affiliates_total || res.affiliates_count,
             commissions_count: res.commissions_count,
             visits_count: res.visits_count,
             unpaid_total: res.unpaid_total,
@@ -446,11 +448,26 @@ export const AffiliatesPage: React.FC = () => {
         if (statusRes.success) {
           setSliceWpStatus({
             available: statusRes.available,
+            source: statusRes.source,
+            source_url: statusRes.source_url,
             affiliates_count: statusRes.affiliates_count,
+            affiliates_total: (statusRes as any).affiliates_total || statusRes.affiliates_count,
             commissions_count: statusRes.commissions_count,
             visits_count: statusRes.visits_count,
             unpaid_total: statusRes.unpaid_total,
+            paid_total: statusRes.paid_total,
           });
+        }
+        // Refresh affiliate directory and commissions immediately
+        const [affsRes, commsRes] = await Promise.all([
+          fetchAdminAffiliates('all', ''),
+          fetchAdminAffiliateCommissions('all'),
+        ]);
+        if (affsRes.success) {
+          setAffiliates(affsRes.affiliates);
+        }
+        if (commsRes.success) {
+          setCommissions(commsRes.commissions);
         }
       } else {
         showToast('error', 'Migration Failed', res.error || 'An error occurred during import.');
@@ -1586,9 +1603,14 @@ export const AffiliatesPage: React.FC = () => {
             {sliceWpStatus && sliceWpStatus.available && (
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                 <div className="p-4 rounded-xl bg-[#141414] border border-white/[0.06] space-y-1">
-                  <span className="text-neutral-400 text-xs">Creators in SliceWP</span>
+                  <span className="text-neutral-400 text-xs">Active Creators</span>
                   <p className="text-xl font-bold font-mono text-white">
                     {sliceWpStatus.affiliates_count.toLocaleString()}
+                    {sliceWpStatus.affiliates_total && sliceWpStatus.affiliates_total > sliceWpStatus.affiliates_count ? (
+                      <span className="text-xs text-neutral-400 font-normal ml-1.5">
+                        ({sliceWpStatus.affiliates_total} in SliceWP)
+                      </span>
+                    ) : null}
                   </p>
                 </div>
                 <div className="p-4 rounded-xl bg-[#141414] border border-white/[0.06] space-y-1">
