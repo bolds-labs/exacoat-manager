@@ -1,12 +1,12 @@
 # Migration Guide: Staging (staging.exacoat.com) to Production (exacoat.com)
 
-This document outlines the step-by-step procedure to migrate configurator data, global texture finishes, product SEO metadata, and app connections from the staging environment to the live production store.
+This document outlines the step-by-step procedure to migrate configurator data, global texture finishes, product SEO metadata, affiliate creator programs, and app connections from the staging environment to the live production store.
 
 ---
 
 ## 1. System Overview & Architecture
 
-Configurator setups, materials, and storefront metadata are distributed across four distinct layers:
+Configurator setups, materials, affiliate ledgers, and storefront metadata are distributed across five distinct layers:
 
 1. **WordPress Database (Staging vs Production):**
    - **Global Finishes & Materials:** Stored in `wp_options` under:
@@ -22,15 +22,22 @@ Configurator setups, materials, and storefront metadata are distributed across f
    - **Rank Math Metadata:** Stored in `wp_postmeta` under keys `rank_math_title`, `rank_math_description`, `rank_math_focus_keyword`.
    - **Device Name Normalization:** Eliminates redundant titles like `iPhone 18 Pro Skins Skin & Wrap | Exacoat` by normalizing `iPhone 18 Pro Skins` to `iPhone 18 Pro Skin & Wrap | Exacoat`.
    - **Boilerplate Resolution Engine:** Automatically strips raw HTML tags (`<a href="[geturl]">`, `<em>`), resolves `[product_name]` shortcodes, and replaces em dashes with clean punctuation.
-3. **Media Storage (`/wp-content/uploads/`):**
+3. **Affiliate & Creator Program Layer (SliceWP to Native Exacoat Core):**
+   - **Affiliates Registry (`wp_exacoat_affiliates`):** All 77+ creators, custom referral slugs (`@edwinyg`, `@ds`, `@suns`, `@putra`), custom commission rates, customer discount percentages (15%, 10%, 0%), bank payout accounts (BCA, Mandiri), and lifecycle status.
+   - **Commissions Ledger (`wp_exacoat_affiliate_commissions`):** Complete historical ledger of 882+ commissions verified against WooCommerce order totals, maturation status (7-day post-delivery grace period), and exact unpaid balances.
+   - **Referral Clicks (`wp_exacoat_affiliate_clicks`):** 22,900+ logged visitor click events with cookie attribution metadata.
+   - **Payouts (`wp_exacoat_affiliate_payouts`):** Historical and pending bank disbursement records.
+   - **Configuration Options (`wp_options`):** `exacoat_affiliate_settings`, `exacoat_affiliate_recalc_v98`.
+   - **Dynamic Domain Resolution:** Referral links use dynamic `home_url('/')` resolution (`$referral_url = trailingslashit( $site_url ) . '?x=' . rawurlencode( $affiliate->slug );`), meaning links automatically point to `https://exacoat.com/?x={slug}` on production without code changes.
+4. **Media Storage (`/wp-content/uploads/`):**
    - All uploaded texture image files, bump maps, normal maps, and device cut mask PNGs reside in WordPress uploads.
-4. **Exacoat Manager ERP (React / Vite):**
+5. **Exacoat Manager ERP (React / Vite):**
    - Connects to WordPress via REST API endpoints (`/wp-json/wc/v3` and `/wp-json/exacoat-core/v1`).
    - Resolves target URL via `localStorage`, `.env` (`VITE_WORDPRESS_URL`), and internal fallbacks.
 
 ---
 
-## 2. Five-Step Migration Procedure
+## 2. Six-Step Migration Procedure
 
 ### Step 1: Synchronize Media Uploads (`/wp-content/uploads/`)
 Before switching data or endpoints, ensure all assets referenced by the configurator exist on the production server:
@@ -106,14 +113,50 @@ If you migrate the entire database using WP Migrate DB, All-in-One WP Migration,
 
 ---
 
-### Step 4: Deploy Plugin and Configure Production API Keys
+### Step 4: Affiliate & Creator Program Migration (SliceWP to Native Exacoat Core)
+
+The affiliate system transitions seamlessly from legacy SliceWP to Exacoat Core native architecture.
+
+#### Method A: One-Button SliceWP Migration via Manager UI (Recommended)
+1. Open Exacoat Manager and navigate to **Affiliate & Creator Program** (`/affiliates`).
+2. Select the **SliceWP Migration** tab.
+3. Review the live pre-migration audit numbers:
+   - Active Creators (77)
+   - Total Commissions (882)
+   - Unpaid Balance audit total
+   - Visits & Clicks Tracked (22,900+)
+4. Click the single button: **Run SliceWP Migration**.
+5. The migration runs server-side via REST API:
+   - Transfers all creators without changing their user roles or permissions.
+   - Preserves custom slugs (`edwinyg`, `ds`, `suns`, `putra`).
+   - Retains genuine customer discount coupons (`edwin15` 15%, `ds10` 10%, `suns10` 10%, `putra10` 10%).
+   - Configures non-coupon creators to 0% customer discount links so they retain their full commission.
+   - Preserves BCA and Mandiri bank destination accounts.
+   - Fully idempotent: safe to run multiple times without duplicating commissions or clicks.
+
+#### Method B: Direct REST API Execution
+Run an authenticated POST request against the production store:
+```bash
+POST https://exacoat.com/wp-json/exacoat-core/v1/affiliate/admin/slicewp-migrate
+Headers: Authorization: Basic <base64(consumer_key:consumer_secret)>
+```
+
+#### Method C: Database-Level Migration (Auto-Continuation)
+If you clone or export the staging database to production:
+- The 4 custom tables (`wp_exacoat_affiliates`, `wp_exacoat_affiliate_commissions`, `wp_exacoat_affiliate_clicks`, `wp_exacoat_affiliate_payouts`) and `wp_options` records automatically transfer to production.
+- Because referral links resolve via WordPress `home_url('/')`, all referral URLs automatically point to `https://exacoat.com/?x={slug}` with zero manual reconfiguration.
+- SliceWP can be completely deactivated on production once verified.
+
+---
+
+### Step 5: Deploy Plugin and Configure Production API Keys
 
 1. **Package Latest Plugin:**
    In `exacoat-manager`, run:
    ```bash
    node scripts/package-plugin.cjs
    ```
-   This generates the current release ZIP at `public/exacoat-core.zip`.
+   This generates the current release ZIP at `public/exacoat-core.zip` and `public/exacoat-core-v0.1.99.zip`.
 2. **Update Plugin on Production:**
    - Go to `exacoat.com` WP Admin -> Plugins -> Add New -> Upload Plugin.
    - Upload and replace the existing `exacoat-core` plugin.
@@ -127,7 +170,7 @@ If you migrate the entire database using WP Migrate DB, All-in-One WP Migration,
 
 ---
 
-### Step 5: Update Exacoat Manager Configuration
+### Step 6: Update Exacoat Manager Configuration
 
 1. **Update `.env` file:**
    ```env
@@ -151,11 +194,79 @@ If you migrate the entire database using WP Migrate DB, All-in-One WP Migration,
 
 ---
 
-## 3. Post-Migration Verification Checklist
+## 3. The Unified "One-Button Migration" Architecture
+
+To eliminate human error and make staging-to-production migration turn-key, Exacoat Manager provides three modular one-button execution surfaces and an all-in-one CLI runner:
+
+```mermaid
+flowchart TD
+    subgraph Staging ["1. Staging Environment (staging.exacoat.com)"]
+        S1["Configurator Finishes & Surcharge Tiers"]
+        S2["Device Profiles (wp_postmeta)"]
+        S3["Catalog SEO & Clean Device Titles"]
+        S4["SliceWP Affiliate Data & Historical Ledger"]
+    end
+
+    subgraph Pipeline ["2. Unified One-Button Migration Pipeline"]
+        B1["Button 1: Batch Finishes & Composable Sync"]
+        B2["Button 2: Batch SEO Quick Clean & Resolve All"]
+        B3["Button 3: Run SliceWP Migration (Affiliate Roster)"]
+        CLI["Single CLI Command: node scripts/migrate-staging-to-live.cjs"]
+    end
+
+    subgraph Production ["3. Live Production (exacoat.com)"]
+        P1["Modern Composable 3D Configurator"]
+        P2["Canonical SEO Metadata & SERP Snippets"]
+        P3["Native Exacoat Core Affiliate Engine (0% or Coupon)"]
+        P4["Automatic home_url referral resolution"]
+    end
+
+    S1 --> B1 --> P1
+    S2 --> B1 --> P1
+    S3 --> B2 --> P2
+    S4 --> B3 --> P3
+    CLI -.-> B1
+    CLI -.-> B2
+    CLI -.-> B3
+```
+
+### Module 1: One-Click Configurator Batch Migration
+- **Location:** Configurator Studio -> Overview / Settings.
+- **Action:** Click **Auto-Migrate All Products**.
+- **Operation:** Calls `/configurator/batch-migrate` to convert legacy MKL configurations to composable profiles in a single pass.
+
+### Module 2: One-Click Catalog SEO & Copywriting Resolution
+- **Location:** Products Hub -> Exacoat Webstore -> Batch SEO Optimizer.
+- **Action:** Click **Quick Clean & Resolve All**.
+- **Operation:** Resolves all `[product_name]` shortcodes, canonicalizes titles to `${cleanDevice} Skin & Wrap | Exacoat`, removes `[geturl]`, and strips raw HTML across all products in one click.
+
+### Module 3: One-Click Affiliate & Creator Migration
+- **Location:** Affiliate & Creator Program -> SliceWP Migration.
+- **Action:** Click **Run SliceWP Migration**.
+- **Operation:** Calls `/affiliate/admin/slicewp-migrate` to import all 77 creators, 882 commissions, 22,900+ clicks, and payout destinations in one click.
+
+### Single-Command Automated Pipeline
+If you prefer running the full migration directly via terminal:
+```bash
+node scripts/migrate-staging-to-live.cjs
+```
+This script sequentially executes:
+1. Configurator finishes & surcharge tiers extraction, domain URL transformation, and production push.
+2. SliceWP affiliate program migration and balance verification.
+3. Composable configurator batch product migration.
+
+---
+
+## 4. Post-Migration Verification Checklist
 
 - [ ] **Materials Inventory:** Open Materials Stock page in Exacoat Manager. Verify all configured textures (concrete, camo, colors) appear with correct stock and active toggles.
 - [ ] **Configurator Studio:** Open a device in Configurator Studio. Check that 3D preview loads, masks render properly, and texture scaling is preserved.
 - [ ] **SEO & SERP Snippet Verification:** Open Products Hub -> Exacoat Webstore. Open the "SEO & Copy" modal on 2-3 devices (e.g. iPhone, MacBook). Verify that the Google search result preview renders clean device text without raw HTML tags, without `[product_name]` shortcodes, and without redundant "Skins Skin & Wrap" in the title.
 - [ ] **Catalog Uniformity:** In the Batch SEO Optimizer, verify that 0 products remain with boilerplate tokens or raw HTML.
+- [ ] **Affiliate Roster & Slugs:** Open Affiliate & Creator Program in Exacoat Manager. Verify all active creators appear with their custom slugs (`@edwinyg`, `@ds`, `@suns`, `@putra`) and correct commission rates.
+- [ ] **Unpaid Balances Integrity:** Verify exact unpaid balances match audit ledger (Edwin Yang IDR 1.258.826, Dimas Sampurno IDR 4.159.681, Suns Channel IDR 1.157.060, Putra S IDR 578.435).
+- [ ] **Customer Discount Rates:** Confirm Edwin (15%), Dimas (10%), Suns (10%), Putra (10%) have customer discount badges; verify other creators are set to 0% Off Link.
+- [ ] **Referral Link Resolution:** Verify referral link generation on `exacoat.com` resolves to `https://exacoat.com/?x={slug}` and captures `exacoat_aff_ref` cookie upon visit.
+- [ ] **Creator Workstation:** Open "See as Creator" modal and verify portal workstation loads metrics and daily charts.
 - [ ] **Orders & RMA:** Open Orders view. Verify live orders load without REST API authentication errors. Test opening Manual Warranty / Redeem modal.
 - [ ] **Image Proxy:** Test opening a product item preview or generating a composite thumbnail to confirm CORS and proxy headers function properly on `exacoat.com`.
