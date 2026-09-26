@@ -572,9 +572,10 @@ export async function authenticatedFetch(input: RequestInfo | URL, init: Request
       headers.set('Authorization', auth.Authorization);
     }
 
-    // Attach WooCommerce credentials to /wp-json/wc/, /wp-json/exacoat-core/, and /wp-json/wc-store-credits/ requests if not using JWT Bearer
+    // Attach WooCommerce credentials to /wp-json/wc/, /wp-json/exacoat-core/, /wp-json/exacoat/, and /wp-json/wc-store-credits/ requests if not using JWT Bearer
     const isWcOrPluginRoute = targetUrlObj.pathname.includes('/wp-json/wc/') ||
       targetUrlObj.pathname.includes('/wp-json/exacoat-core/') ||
+      targetUrlObj.pathname.includes('/wp-json/exacoat/') ||
       targetUrlObj.pathname.includes('/wp-json/wc-store-credits/');
 
     if (isWcOrPluginRoute && !auth.Authorization?.startsWith('Bearer')) {
@@ -7538,7 +7539,7 @@ export async function runAdminSliceWpMigration(options: {
   error?: string;
 }> {
   const base = getWordPressBaseUrl();
-  const url = `${base}/wp-json/exacoat/v1/affiliate/admin/slicewp-migrate`;
+  const wcCreds = getWcCredentials();
 
   const payload = {
     use_rest: options.use_rest ?? true,
@@ -7547,24 +7548,44 @@ export async function runAdminSliceWpMigration(options: {
     source_url: options.source_url || 'https://staging.exacoat.com',
   };
 
-  try {
-    const res = await authenticatedFetch(url, {
-      method: 'POST',
-      headers: {
+  const routes = [
+    `${base}/wp-json/exacoat/v1/affiliate/admin/slicewp-migrate`,
+    `${base}/wp-json/exacoat-core/v1/affiliate/admin/slicewp-migrate`,
+  ];
+
+  let lastError = 'Migration failed.';
+
+  for (const url of routes) {
+    try {
+      const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         Accept: 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
+      };
+      if (wcCreds.key && wcCreds.secret) {
+        headers['X-WC-Consumer-Key'] = wcCreds.key;
+        headers['X-WC-Consumer-Secret'] = wcCreds.secret;
+      }
 
-    const data = await res.json();
-    if (res.ok && data?.success) {
-      return data;
+      const res = await authenticatedFetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (res.ok && data?.success) {
+        return data;
+      }
+      lastError = data?.message || `Endpoint returned status ${res.status}`;
+      if (res.status !== 404 && res.status !== 403) {
+        return { success: false, error: lastError };
+      }
+    } catch (err: any) {
+      lastError = err.message;
     }
-    return { success: false, error: data?.message || 'Migration failed.' };
-  } catch (err: any) {
-    return { success: false, error: err.message };
   }
+
+  return { success: false, error: lastError };
 }
 
 

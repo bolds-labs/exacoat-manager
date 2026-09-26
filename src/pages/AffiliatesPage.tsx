@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   Users, 
   ShieldCheck, 
@@ -24,7 +24,12 @@ import {
   Percent,
   Calendar,
   Save,
-  Info
+  Info,
+  Copy,
+  Hourglass,
+  Eye,
+  User,
+  ShoppingBag
 } from 'lucide-react';
 import { 
   fetchAdminAffiliates, 
@@ -36,9 +41,11 @@ import {
   fetchAdminAffiliateSettings,
   updateAdminAffiliateSettings,
   fetchAdminSliceWpStatus,
-  runAdminSliceWpMigration
+  runAdminSliceWpMigration,
+  fetchOrderDetailDirect
 } from '../lib/wordpressBridge';
-import { AffiliateCommission, AffiliatePayout } from '../types';
+import { AffiliateCommission, AffiliatePayout, Order } from '../types';
+import { OrderDetailDrawer } from '../components/orders/OrderDetailDrawer';
 import { useToast } from '../context/ToastContext';
 import { FilterSelect, FilterSelectOption } from '../components/ui/FilterSelect';
 import { GlassCard } from '../components/ui/GlassCard';
@@ -122,6 +129,92 @@ export const AffiliatesPage: React.FC = () => {
   const [payingPayout, setPayingPayout] = useState<AffiliatePayout | null>(null);
   const [transferRef, setTransferRef] = useState('');
   const [isProcessingAction, setIsProcessingAction] = useState(false);
+
+  // Drilldown Order Drawer State
+  const [drilldownOrder, setDrilldownOrder] = useState<Order | null>(null);
+  const [isOrderDrawerOpen, setIsOrderDrawerOpen] = useState(false);
+  const [isLoadingOrder, setIsLoadingOrder] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const handleCopyText = (text: string, key: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    showToast('success', 'Copied to Clipboard', text);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  const handleOpenOrderById = async (orderId: number | string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const cleanId = String(orderId).replace(/[^0-9]/g, '');
+    if (!cleanId) {
+      showToast('error', 'Invalid Order', 'No numeric WooCommerce order ID available.');
+      return;
+    }
+
+    setIsLoadingOrder(true);
+    try {
+      const res = await fetchOrderDetailDirect(cleanId);
+      if (res.success && res.order) {
+        setDrilldownOrder(res.order);
+        setIsOrderDrawerOpen(true);
+      } else {
+        showToast('error', 'Order Not Found', `Could not find order #${orderId}`);
+      }
+    } catch (err: any) {
+      showToast('error', 'Failed to Open Order', err.message);
+    } finally {
+      setIsLoadingOrder(false);
+    }
+  };
+
+  // Commission Ledger Summary Metrics
+  const commissionMetrics = useMemo(() => {
+    let totalAmt = 0;
+    let paidAmt = 0;
+    let unpaidAmt = 0;
+    let pendingAmt = 0;
+    let paidCount = 0;
+    let unpaidCount = 0;
+    let pendingCount = 0;
+
+    commissions.forEach((c) => {
+      const amt = Number(c.commission_amount) || 0;
+      if (c.status !== 'rejected') {
+        totalAmt += amt;
+      }
+      if (c.status === 'paid') {
+        paidAmt += amt;
+        paidCount++;
+      } else if (c.status === 'unpaid') {
+        unpaidAmt += amt;
+        unpaidCount++;
+      } else if (c.status === 'pending') {
+        pendingAmt += amt;
+        pendingCount++;
+      }
+    });
+
+    return { totalAmt, paidAmt, unpaidAmt, pendingAmt, paidCount, unpaidCount, pendingCount };
+  }, [commissions]);
+
+  // Filtered Commissions by Search & Status
+  const filteredCommissions = useMemo(() => {
+    return commissions.filter((c) => {
+      if (statusFilter !== 'all' && c.status !== statusFilter) {
+        return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchNum = String(c.order_number || c.order_id || '').toLowerCase().includes(q);
+        const matchSlug = String(c.affiliate_slug || '').toLowerCase().includes(q);
+        const matchName = String((c as any).affiliate_name || '').toLowerCase().includes(q);
+        const matchEmail = String(c.customer_email || '').toLowerCase().includes(q);
+        if (!matchNum && !matchSlug && !matchName && !matchEmail) return false;
+      }
+      return true;
+    });
+  }, [commissions, statusFilter, searchQuery]);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -750,84 +843,293 @@ export const AffiliatesPage: React.FC = () => {
 
       {/* 6. Tab 3: Commissions Ledger */}
       {activeTab === 'commissions' && (
-        <GlassCard className="p-5 border border-white/[0.06] bg-[#111111] space-y-4">
-          <div className="flex items-center justify-between">
-            <FilterSelect
-              label="Status"
-              value={statusFilter}
-              onChange={(val) => setStatusFilter(val)}
-              options={COMMISSION_STATUS_OPTIONS}
-              align="left"
-            />
-            <span className="text-xs font-mono text-neutral-500">
-              {commissions.length} commission events
-            </span>
+        <div className="space-y-4">
+          {/* Commission Summary Metrics Banner */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <GlassCard className="p-4 border border-white/[0.06] bg-[#111111] space-y-1">
+              <div className="flex items-center justify-between text-neutral-400 text-xs">
+                <span className="font-medium">Total Recorded</span>
+                <Percent className="w-3.5 h-3.5 text-[#f3aa18]" />
+              </div>
+              <p className="text-xl font-bold font-mono text-white">
+                {formatIDR(commissionMetrics.totalAmt)}
+              </p>
+              <p className="text-[11px] font-mono text-neutral-500">
+                {commissions.length} total commission events
+              </p>
+            </GlassCard>
+
+            <GlassCard className="p-4 border border-sky-500/20 bg-[#111111] space-y-1">
+              <div className="flex items-center justify-between text-sky-400 text-xs">
+                <span className="font-medium">Ready for Payout</span>
+                <Clock className="w-3.5 h-3.5 text-sky-400" />
+              </div>
+              <p className="text-xl font-bold font-mono text-sky-400">
+                {formatIDR(commissionMetrics.unpaidAmt)}
+              </p>
+              <p className="text-[11px] font-mono text-neutral-500">
+                {commissionMetrics.unpaidCount} orders cleared after grace period
+              </p>
+            </GlassCard>
+
+            <GlassCard className="p-4 border border-amber-500/20 bg-[#111111] space-y-1">
+              <div className="flex items-center justify-between text-amber-400 text-xs">
+                <span className="font-medium">7-Day Grace Period</span>
+                <Hourglass className="w-3.5 h-3.5 text-amber-400" />
+              </div>
+              <p className="text-xl font-bold font-mono text-amber-400">
+                {formatIDR(commissionMetrics.pendingAmt)}
+              </p>
+              <p className="text-[11px] font-mono text-neutral-500">
+                {commissionMetrics.pendingCount} orders in return/maturation window
+              </p>
+            </GlassCard>
+
+            <GlassCard className="p-4 border border-emerald-500/20 bg-[#111111] space-y-1">
+              <div className="flex items-center justify-between text-emerald-400 text-xs">
+                <span className="font-medium">Historical Paid Out</span>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              </div>
+              <p className="text-xl font-bold font-mono text-emerald-400">
+                {formatIDR(commissionMetrics.paidAmt)}
+              </p>
+              <p className="text-[11px] font-mono text-neutral-500">
+                {commissionMetrics.paidCount} orders settled via bank transfer
+              </p>
+            </GlassCard>
           </div>
 
-          <div className="rounded-xl border border-white/[0.06] overflow-hidden">
+          {/* Search, Filter, and Controls Bar */}
+          <GlassCard className="p-4 border border-white/[0.06] bg-[#111111] space-y-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by order #, creator slug, or customer email..."
+                  className="w-full bg-[#141414] border border-white/[0.06] rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-[#f3aa18]"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <FilterSelect
+                  label="Status"
+                  value={statusFilter}
+                  onChange={(val) => setStatusFilter(val)}
+                  options={COMMISSION_STATUS_OPTIONS}
+                  align="right"
+                />
+                {(searchQuery || statusFilter !== 'all') && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setStatusFilter('all');
+                    }}
+                  >
+                    Reset
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] text-neutral-400 pt-1 border-t border-white/[0.04]">
+              <span>
+                Showing <strong className="text-white font-mono">{filteredCommissions.length}</strong> of <strong className="text-white font-mono">{commissions.length}</strong> commission records
+              </span>
+              {isLoadingOrder && (
+                <span className="flex items-center gap-1.5 text-[#f3aa18] font-mono">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Opening order details...
+                </span>
+              )}
+            </div>
+          </GlassCard>
+
+          {/* Commissions Table */}
+          <GlassCard className="p-0 border border-white/[0.06] bg-[#111111] overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-white/[0.06] text-neutral-400 font-medium bg-white/[0.02]">
                     <th className="py-3 pl-4">Order #</th>
                     <th className="py-3">Date</th>
-                    <th className="py-3">Affiliate Slug</th>
+                    <th className="py-3">Creator / Affiliate</th>
                     <th className="py-3">Eligible Subtotal</th>
-                    <th className="py-3">Commission Rate</th>
-                    <th className="py-3">Commission Amount</th>
-                    <th className="py-3">Buyer Email</th>
-                    <th className="py-3 pr-4 text-right">Status</th>
+                    <th className="py-3">Rate</th>
+                    <th className="py-3">Commission Earned</th>
+                    <th className="py-3">Customer</th>
+                    <th className="py-3">Status</th>
+                    <th className="py-3 pr-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.04]">
-                  {commissions.length === 0 ? (
+                  {filteredCommissions.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-neutral-400">
-                        No commissions found.
+                      <td colSpan={9} className="py-16 text-center space-y-2">
+                        <ShoppingBag className="w-8 h-8 text-neutral-600 mx-auto" />
+                        <p className="text-sm font-semibold text-white">No commissions found</p>
+                        <p className="text-xs text-neutral-400 max-w-sm mx-auto">
+                          {searchQuery || statusFilter !== 'all' 
+                            ? 'No commissions match your current search or status filter.' 
+                            : 'Commissions generated from customer orders will appear here automatically.'}
+                        </p>
                       </td>
                     </tr>
                   ) : (
-                    commissions.map((c) => (
-                      <tr key={c.id} className="hover:bg-white/[0.02] transition-colors">
-                        <td className="py-3 pl-4 font-mono font-medium text-white">
-                          #{c.order_number}
+                    filteredCommissions.map((c) => (
+                      <tr 
+                        key={c.id} 
+                        className="hover:bg-white/[0.02] transition-colors group cursor-pointer"
+                        onClick={() => handleOpenOrderById(c.order_id || c.order_number)}
+                      >
+                        {/* Order Number */}
+                        <td className="py-3 pl-4">
+                          <button
+                            type="button"
+                            onClick={(e) => handleOpenOrderById(c.order_id || c.order_number, e)}
+                            className="font-mono font-bold text-white hover:text-[#f3aa18] transition-colors flex items-center gap-1.5 group-hover:underline cursor-pointer"
+                          >
+                            <span>#{c.order_number || c.order_id}</span>
+                            <ExternalLink className="w-3 h-3 text-neutral-500 group-hover:text-[#f3aa18]" />
+                          </button>
                         </td>
-                        <td className="py-3 text-neutral-400 font-mono">
-                          {new Date(c.created_at).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' })}
+
+                        {/* Date */}
+                        <td className="py-3 text-neutral-400 font-mono text-[11px] whitespace-nowrap">
+                          <span className="flex items-center gap-1.5">
+                            <Calendar className="w-3 h-3 text-neutral-500 shrink-0" />
+                            {new Date(c.created_at).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' })}
+                          </span>
                         </td>
-                        <td className="py-3 font-mono text-[#f3aa18]">
-                          @{c.affiliate_slug}
+
+                        {/* Affiliate Slug & Name */}
+                        <td className="py-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-semibold text-[#f3aa18] bg-[#f3aa18]/10 border border-[#f3aa18]/20 px-2 py-0.5 rounded text-[11px]">
+                              @{c.affiliate_slug}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => handleCopyText(c.affiliate_slug || '', `aff-${c.id}`, e)}
+                              className="text-neutral-500 hover:text-white transition-colors p-1 rounded"
+                              title="Copy slug"
+                            >
+                              {copiedKey === `aff-${c.id}` ? (
+                                <Check className="w-3 h-3 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-3 h-3" />
+                              )}
+                            </button>
+                          </div>
+                          {(c as any).affiliate_name && (c as any).affiliate_name !== c.affiliate_slug && (
+                            <p className="text-[10px] text-neutral-500 truncate max-w-[140px] mt-0.5">
+                              {(c as any).affiliate_name}
+                            </p>
+                          )}
                         </td>
-                        <td className="py-3 font-mono text-neutral-300">
+
+                        {/* Eligible Subtotal */}
+                        <td className="py-3 font-mono text-neutral-200">
                           {formatIDR(c.order_subtotal)}
                         </td>
-                        <td className="py-3 font-mono text-neutral-300">
-                          {c.commission_rate}%
+
+                        {/* Commission Rate */}
+                        <td className="py-3">
+                          <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.08] text-neutral-300">
+                            {c.commission_rate}%
+                          </span>
                         </td>
-                        <td className="py-3 font-mono font-bold text-emerald-400">
-                          {formatIDR(c.commission_amount)}
+
+                        {/* Commission Amount */}
+                        <td className="py-3 font-mono font-bold text-emerald-400 whitespace-nowrap">
+                          +{formatIDR(c.commission_amount)}
                         </td>
-                        <td className="py-3 text-neutral-400 font-mono text-[11px]">
-                          {c.customer_email || 'guest'}
+
+                        {/* Customer Email */}
+                        <td className="py-3">
+                          <div className="flex items-center gap-1.5">
+                            <User className="w-3 h-3 text-neutral-500 shrink-0" />
+                            <span className="font-mono text-neutral-300 text-[11px] truncate max-w-[150px]" title={c.customer_email || 'guest'}>
+                              {c.customer_email || 'guest'}
+                            </span>
+                            {c.customer_email && (
+                              <button
+                                type="button"
+                                onClick={(e) => handleCopyText(c.customer_email || '', `cust-${c.id}`, e)}
+                                className="text-neutral-500 hover:text-white transition-colors p-0.5 rounded"
+                                title="Copy customer email"
+                              >
+                                {copiedKey === `cust-${c.id}` ? (
+                                  <Check className="w-3 h-3 text-emerald-400" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </button>
+                            )}
+                          </div>
                         </td>
-                        <td className="py-3 pr-4 text-right">
+
+                        {/* Status Badge */}
+                        <td className="py-3">
                           {c.status === 'pending' ? (
                             <span 
-                              className="px-2 py-0.5 rounded text-[10px] font-medium border uppercase tracking-wider bg-amber-500/10 text-amber-400 border-amber-500/20"
-                              title={c.matures_at ? `Grace period matures: ${c.matures_at}` : 'Awaiting order delivery confirmation'}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border bg-amber-500/10 text-amber-400 border-amber-500/20"
+                              title={c.matures_at ? `Grace period matures: ${new Date(c.matures_at).toLocaleDateString('id-ID')}` : 'Awaiting order delivery confirmation'}
                             >
-                              {c.matures_at ? 'Grace Period' : 'Pending Delivery'}
+                              <Hourglass className="w-3 h-3" />
+                              <span>{c.matures_at ? 'Grace Period' : 'Pending Delivery'}</span>
+                            </span>
+                          ) : c.status === 'unpaid' ? (
+                            <span 
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border bg-sky-500/10 text-sky-400 border-sky-500/20"
+                              title="Cleared: eligible for creator payout"
+                            >
+                              <Clock className="w-3 h-3" />
+                              <span>Ready for Payout</span>
+                            </span>
+                          ) : c.status === 'paid' ? (
+                            <span 
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                              title="Paid out to creator bank account"
+                            >
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>Paid Out</span>
                             </span>
                           ) : (
-                            <span className={clsx(
-                              'px-2 py-0.5 rounded text-[10px] font-medium border uppercase tracking-wider',
-                              c.status === 'paid' && 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-                              c.status === 'unpaid' && 'bg-sky-500/10 text-sky-400 border-sky-500/20',
-                              c.status === 'rejected' && 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                            )}>
-                              {c.status}
+                            <span 
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border bg-rose-500/10 text-rose-400 border-rose-500/20"
+                              title={c.rejection_reason || 'Rejected or refunded'}
+                            >
+                              <XCircle className="w-3 h-3" />
+                              <span>Rejected</span>
                             </span>
                           )}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="py-3 pr-4 text-right">
+                          <button
+                            type="button"
+                            onClick={(e) => handleOpenOrderById(c.order_id || c.order_number, e)}
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[#141414] hover:bg-white/[0.08] text-neutral-300 hover:text-white border border-white/[0.06] transition-colors inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>Inspect</span>
+                          </button>
                         </td>
                       </tr>
                     ))
@@ -835,8 +1137,8 @@ export const AffiliatesPage: React.FC = () => {
                 </tbody>
               </table>
             </div>
-          </div>
-        </GlassCard>
+          </GlassCard>
+        </div>
       )}
 
       {/* 7. Tab 4: Payout Requests */}
@@ -1339,6 +1641,17 @@ export const AffiliatesPage: React.FC = () => {
           </GlassCard>
         </div>
       )}
+
+      {/* Order Detail Drawer for Commission Drilldown */}
+      <OrderDetailDrawer
+        order={drilldownOrder}
+        isOpen={isOrderDrawerOpen}
+        onClose={() => {
+          setIsOrderDrawerOpen(false);
+          setDrilldownOrder(null);
+        }}
+        onOrderUpdated={loadData}
+      />
     </div>
   );
 };

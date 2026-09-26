@@ -769,18 +769,68 @@ class Exacoat_Affiliate_Manager {
 
 	/**
 	 * Permission check: verify administrator or shop_manager access.
+	 * Supports cookie sessions, WooCommerce API credentials, Exacoat Core auth, and secret keys.
 	 */
 	public static function check_admin_auth( WP_REST_Request $request ): bool {
+		// 1. Direct WordPress capability check if logged in via cookie
+		if ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) {
+			return true;
+		}
+
+		// 2. Delegate to Exacoat_Core verifiers if available
+		if ( class_exists( 'Exacoat_Core' ) ) {
+			if ( method_exists( 'Exacoat_Core', 'verify_wc_api_credentials' ) && Exacoat_Core::verify_wc_api_credentials( $request ) ) {
+				return true;
+			}
+			if ( method_exists( 'Exacoat_Core', 'verify_application_password' ) && Exacoat_Core::verify_application_password( $request ) ) {
+				return true;
+			}
+			if ( method_exists( 'Exacoat_Core', 'verify_secret_key' ) && Exacoat_Core::verify_secret_key( $request ) ) {
+				return true;
+			}
+			if ( method_exists( 'Exacoat_Core', 'verify_manager_session' ) && Exacoat_Core::verify_manager_session( $request ) ) {
+				return true;
+			}
+		}
+
+		// 3. Check Basic Auth or User ID extraction
 		$user_id = get_current_user_id();
 		if ( ! $user_id ) {
 			$user_id = self::extract_authenticated_user_id( $request );
 		}
 
-		if ( ! $user_id ) {
-			return false;
+		if ( $user_id > 0 ) {
+			return user_can( $user_id, 'manage_woocommerce' ) || user_can( $user_id, 'administrator' ) || user_can( $user_id, 'shop_manager' );
 		}
 
-		return user_can( $user_id, 'manage_woocommerce' ) || user_can( $user_id, 'administrator' );
+		// 4. Header secret or master webhook secret fallback
+		$header_secret = $request->get_header( 'x-secret-key' )
+			?: ( $request->get_header( 'x-manager-secret' ) ?: $request->get_header( 'x-exacoat-secret' ) );
+		if ( ! empty( $header_secret ) ) {
+			$expected_secret = defined( 'EXA_WEBHOOK_SECRET' ) ? EXA_WEBHOOK_SECRET : get_option( 'exacoat_webhook_secret', '' );
+			if ( ! empty( $expected_secret ) && hash_equals( (string) $expected_secret, (string) $header_secret ) ) {
+				return true;
+			}
+		}
+
+		// 5. Direct WooCommerce API keys validation against wp_woocommerce_api_keys
+		$consumer_key    = (string) ( $request->get_param( 'consumer_key' ) ?: $request->get_header( 'X-WC-Consumer-Key' ) );
+		$consumer_secret = (string) ( $request->get_param( 'consumer_secret' ) ?: $request->get_header( 'X-WC-Consumer-Secret' ) );
+		if ( ! empty( $consumer_key ) && ! empty( $consumer_secret ) ) {
+			global $wpdb;
+			$table_keys = $wpdb->prefix . 'woocommerce_api_keys';
+			$key_hash   = function_exists( 'wc_api_hash' ) ? wc_api_hash( $consumer_key ) : hash( 'sha256', $consumer_key );
+			$row        = $wpdb->get_row( $wpdb->prepare( "SELECT user_id, consumer_secret FROM {$table_keys} WHERE consumer_key = %s LIMIT 1", $key_hash ) );
+			if ( $row && hash_equals( (string) $row->consumer_secret, (string) $consumer_secret ) ) {
+				$key_user = get_user_by( 'id', (int) $row->user_id );
+				if ( $key_user && ( $key_user->has_cap( 'manage_woocommerce' ) || $key_user->has_cap( 'manage_options' ) ) ) {
+					wp_set_current_user( (int) $row->user_id );
+					return true;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -1411,11 +1461,14 @@ class Exacoat_Affiliate_Manager {
 		}
 
 		$where_sql = implode( ' AND ', $where_clauses );
-		$query = "SELECT c.*, a.slug as affiliate_slug, a.bank_name, a.bank_account_number 
+		$query = "SELECT c.*, a.slug as affiliate_slug, a.bank_name, a.bank_account_number,
+				COALESCE(u.display_name, u.user_login, a.slug) as affiliate_name,
+				COALESCE(u.user_email, '') as affiliate_email
 			FROM {$table_commissions} c 
 			LEFT JOIN {$table_affiliates} a ON c.affiliate_id = a.id 
+			LEFT JOIN {$wpdb->users} u ON a.user_id = u.ID
 			WHERE {$where_sql} 
-			ORDER BY c.id DESC LIMIT 200";
+			ORDER BY c.id DESC LIMIT 1000";
 
 		$results = ! empty( $params ) ? $wpdb->get_results( $wpdb->prepare( $query, ...$params ) ) : $wpdb->get_results( $query );
 
@@ -2058,30 +2111,52 @@ class Exacoat_Affiliate_Manager {
 			}
 		}
 
+		// Clean up any previously migrated SliceWP affiliates that are pending or rejected
+		$wpdb->query(
+			"DELETE FROM {$table_exacoat_affiliates} 
+			 WHERE affiliate_type = 'Migrated from SliceWP' 
+			   AND status IN ('pending', 'pending_approval', 'rejected')"
+		);
+
 		if ( 'rest_api' === $migration_source && ! empty( $rest_affiliates ) ) {
-			// 1. Migrate Affiliates via REST API
+			// 1. Migrate Affiliates via REST API (STRICT: Active only)
 			foreach ( $rest_affiliates as $sa ) {
+				$aff_raw_status = strtolower( trim( (string) ( $sa['status'] ?? '' ) ) );
+				if ( 'active' !== $aff_raw_status ) {
+					continue; // STRICT: Do not migrate pending or rejected affiliates
+				}
+
 				$user_id = (int) ( $sa['user_id'] ?? 0 );
 				$payment_email = sanitize_email( $sa['payment_email'] ?? '' );
 
-				if ( ! $user_id && ! empty( $payment_email ) ) {
-					$existing_user = get_user_by( 'email', $payment_email );
-					if ( $existing_user ) {
-						$user_id = $existing_user->ID;
+				$user = null;
+				if ( $user_id > 0 ) {
+					$user = get_user_by( 'id', $user_id );
+				}
+				if ( ! $user && ! empty( $payment_email ) ) {
+					$user = get_user_by( 'email', $payment_email );
+				}
+				if ( ! $user && ! empty( $payment_email ) ) {
+					$clean_user = sanitize_user( current( explode( '@', $payment_email ) ), true );
+					if ( username_exists( $clean_user ) ) {
+						$clean_user .= '_' . wp_rand( 100, 999 );
+					}
+					$pwd = wp_generate_password( 24, true );
+					$created_uid = wp_create_user( $clean_user, $pwd, $payment_email );
+					if ( ! is_wp_error( $created_uid ) ) {
+						$user = get_user_by( 'id', (int) $created_uid );
+						$user_id = (int) $created_uid;
 					}
 				}
 
-				if ( ! $user_id ) {
+				if ( ! $user || ! ( $user instanceof WP_User ) || ! $user->exists() ) {
 					continue;
 				}
 
-				$wp_user = new WP_User( $user_id );
-				if ( ! $wp_user->exists() ) {
-					continue;
-				}
+				$user_id = (int) $user->ID;
 
 				// Preserve existing roles and add affiliate role
-				$wp_user->add_role( self::ROLE_AFFILIATE );
+				$user->add_role( self::ROLE_AFFILIATE );
 
 				// Extract slug from default_referral_url (e.g. https://staging.exacoat.com/?x=edwardtan -> edwardtan)
 				$custom_slug = '';
@@ -2099,7 +2174,7 @@ class Exacoat_Affiliate_Manager {
 					}
 				}
 				if ( empty( $custom_slug ) ) {
-					$custom_slug = sanitize_title( $wp_user->user_login );
+					$custom_slug = sanitize_title( $user->user_login );
 				}
 				if ( empty( $custom_slug ) ) {
 					$custom_slug = 'affiliate-' . $user_id;
@@ -2110,15 +2185,13 @@ class Exacoat_Affiliate_Manager {
 
 				$bank_name   = get_user_meta( $user_id, 'bank_name', true ) ?: ( get_user_meta( $user_id, '_exacoat_bank_name', true ) ?: '' );
 				$bank_acc    = get_user_meta( $user_id, 'bank_account_number', true ) ?: ( get_user_meta( $user_id, '_exacoat_bank_account_number', true ) ?: '' );
-				$bank_holder = get_user_meta( $user_id, 'bank_account_name', true ) ?: ( get_user_meta( $user_id, '_exacoat_bank_account_name', true ) ?: ( $wp_user->display_name ?: '' ) );
+				$bank_holder = get_user_meta( $user_id, 'bank_account_name', true ) ?: ( get_user_meta( $user_id, '_exacoat_bank_account_name', true ) ?: ( $user->display_name ?: '' ) );
 
 				if ( ! in_array( strtoupper( $bank_name ), [ 'BCA', 'MANDIRI' ], true ) ) {
 					$bank_name = '';
 				} else {
 					$bank_name = strtoupper( $bank_name );
 				}
-
-				$status = in_array( $sa['status'] ?? '', [ 'active', 'rejected', 'pending_approval' ], true ) ? $sa['status'] : 'active';
 
 				$existing_exacoat = $wpdb->get_row(
 					$wpdb->prepare( "SELECT id FROM {$table_exacoat_affiliates} WHERE user_id = %d LIMIT 1", $user_id )
@@ -2129,7 +2202,7 @@ class Exacoat_Affiliate_Manager {
 					$wpdb->update(
 						$table_exacoat_affiliates,
 						[
-							'status' => $status,
+							'status' => 'active',
 							'slug'   => $custom_slug,
 						],
 						[ 'id' => $exacoat_id ]
@@ -2148,7 +2221,7 @@ class Exacoat_Affiliate_Manager {
 							'user_id'             => $user_id,
 							'slug'                => $custom_slug,
 							'slug_locked'         => 1,
-							'status'              => $status,
+							'status'              => 'active',
 							'affiliate_type'      => 'Migrated from SliceWP',
 							'promotion_channel'   => $sa['website'] ?? '',
 							'bank_name'           => $bank_name,
@@ -2174,14 +2247,27 @@ class Exacoat_Affiliate_Manager {
 				$order_num      = (string) $order_id;
 				$order_subtotal = (float) ( $sc['reference_amount'] ?? 0.0 );
 				$cust_email     = '';
+				$delivered_at   = null;
+				$matures_at     = null;
 
 				if ( $order_id > 0 && function_exists( 'wc_get_order' ) ) {
 					$order = wc_get_order( $order_id );
 					if ( $order instanceof WC_Order ) {
 						$order_num      = $order->get_order_number() ?: (string) $order_id;
-						if ( $order_subtotal <= 0 ) $order_subtotal = (float) $order->get_subtotal();
-						$cust_email     = $order->get_billing_email() ?: '';
+						if ( $order_subtotal <= 0 ) {
+							$order_subtotal = (float) $order->get_subtotal();
+						}
+						$cust_email = $order->get_billing_email() ?: '';
+						$date_completed = $order->get_date_completed();
+						if ( $date_completed ) {
+							$delivered_at = $date_completed->date( 'Y-m-d H:i:s' );
+							$matures_at   = date( 'Y-m-d H:i:s', $date_completed->getTimestamp() + ( self::get_grace_period_days() * DAY_IN_SECONDS ) );
+						}
 					}
+				}
+
+				if ( empty( $order_num ) || '0' === $order_num ) {
+					$order_num = 'LEGACY-' . ( $sc['id'] ?? wp_rand( 1000, 9999 ) );
 				}
 
 				$comm_amount = (float) ( $sc['amount'] ?? 0.0 );
@@ -2196,15 +2282,41 @@ class Exacoat_Affiliate_Manager {
 					$status = 'unpaid';
 				}
 
-				$exists = $wpdb->get_var(
-					$wpdb->prepare(
-						"SELECT id FROM {$table_exacoat_commissions} WHERE affiliate_id = %d AND order_id = %d LIMIT 1",
-						$exacoat_aff_id,
-						$order_id
-					)
-				);
+				$created_at = ! empty( $sc['date_created'] ) ? $sc['date_created'] : current_time( 'mysql' );
 
-				if ( ! $exists ) {
+				$exists = 0;
+				if ( $order_id > 0 ) {
+					$exists = (int) $wpdb->get_var(
+						$wpdb->prepare(
+							"SELECT id FROM {$table_exacoat_commissions} WHERE affiliate_id = %d AND order_id = %d LIMIT 1",
+							$exacoat_aff_id,
+							$order_id
+						)
+					);
+				} else {
+					$exists = (int) $wpdb->get_var(
+						$wpdb->prepare(
+							"SELECT id FROM {$table_exacoat_commissions} WHERE affiliate_id = %d AND order_number = %s LIMIT 1",
+							$exacoat_aff_id,
+							$order_num
+						)
+					);
+				}
+
+				if ( $exists > 0 ) {
+					$wpdb->update(
+						$table_exacoat_commissions,
+						[
+							'status'            => $status,
+							'commission_amount' => $comm_amount,
+							'order_subtotal'    => $order_subtotal,
+							'customer_email'    => $cust_email,
+							'delivered_at'      => $delivered_at,
+							'matures_at'        => $matures_at,
+						],
+						[ 'id' => $exists ]
+					);
+				} else {
 					$wpdb->insert(
 						$table_exacoat_commissions,
 						[
@@ -2215,8 +2327,10 @@ class Exacoat_Affiliate_Manager {
 							'commission_rate'   => $rate,
 							'commission_amount' => $comm_amount,
 							'status'            => $status,
+							'delivered_at'      => $delivered_at,
+							'matures_at'        => $matures_at,
 							'customer_email'    => $cust_email,
-							'created_at'        => ! empty( $sc['date_created'] ) ? $sc['date_created'] : current_time( 'mysql' ),
+							'created_at'        => $created_at,
 						]
 					);
 					$commissions_migrated++;
@@ -2262,26 +2376,32 @@ class Exacoat_Affiliate_Manager {
 				return new WP_Error( 'not_found', 'SliceWP data not found via MySQL tables or REST API.', [ 'status' => 404 ] );
 			}
 
-			// 1. Migrate Affiliates via SQL
+			// 1. Migrate Affiliates via SQL (STRICT: Active only)
 			if ( $aff_table ) {
 				$raw_affiliates = $wpdb->get_results( "SELECT * FROM {$aff_table}" );
 				foreach ( $raw_affiliates as $sa ) {
+					$aff_raw_status = strtolower( trim( (string) ( $sa->status ?? '' ) ) );
+					if ( 'active' !== $aff_raw_status ) {
+						continue; // STRICT: Do not migrate pending or rejected affiliates
+					}
+
 					$user_id = (int) ( $sa->user_id ?? 0 );
 					$payment_email = sanitize_email( $sa->payment_email ?? '' );
 
-					if ( ! $user_id && ! empty( $payment_email ) ) {
-						$existing_user = get_user_by( 'email', $payment_email );
-						if ( $existing_user ) {
-							$user_id = $existing_user->ID;
-						}
+					$user = null;
+					if ( $user_id > 0 ) {
+						$user = get_user_by( 'id', $user_id );
+					}
+					if ( ! $user && ! empty( $payment_email ) ) {
+						$user = get_user_by( 'email', $payment_email );
 					}
 
-					if ( ! $user_id ) continue;
+					if ( ! $user || ! ( $user instanceof WP_User ) || ! $user->exists() ) {
+						continue;
+					}
 
-					$wp_user = new WP_User( $user_id );
-					if ( ! $wp_user->exists() ) continue;
-
-					$wp_user->add_role( self::ROLE_AFFILIATE );
+					$user_id = (int) $user->ID;
+					$user->add_role( self::ROLE_AFFILIATE );
 
 					$custom_slug = '';
 					if ( $meta_table ) {
@@ -2308,7 +2428,7 @@ class Exacoat_Affiliate_Manager {
 						$custom_slug = $sa->keyword;
 					}
 					if ( empty( $custom_slug ) ) {
-						$custom_slug = sanitize_title( $wp_user->user_login );
+						$custom_slug = sanitize_title( $user->user_login );
 					}
 					if ( empty( $custom_slug ) ) {
 						$custom_slug = 'affiliate-' . $user_id;
@@ -2318,15 +2438,13 @@ class Exacoat_Affiliate_Manager {
 
 					$bank_name   = get_user_meta( $user_id, 'bank_name', true ) ?: ( get_user_meta( $user_id, '_exacoat_bank_name', true ) ?: '' );
 					$bank_acc    = get_user_meta( $user_id, 'bank_account_number', true ) ?: ( get_user_meta( $user_id, '_exacoat_bank_account_number', true ) ?: '' );
-					$bank_holder = get_user_meta( $user_id, 'bank_account_name', true ) ?: ( get_user_meta( $user_id, '_exacoat_bank_account_name', true ) ?: ( $wp_user->display_name ?: '' ) );
+					$bank_holder = get_user_meta( $user_id, 'bank_account_name', true ) ?: ( get_user_meta( $user_id, '_exacoat_bank_account_name', true ) ?: ( $user->display_name ?: '' ) );
 
 					if ( ! in_array( strtoupper( $bank_name ), [ 'BCA', 'MANDIRI' ], true ) ) {
 						$bank_name = '';
 					} else {
 						$bank_name = strtoupper( $bank_name );
 					}
-
-					$status = in_array( $sa->status ?? '', [ 'active', 'rejected', 'pending_approval' ], true ) ? $sa->status : 'active';
 
 					$existing_exacoat = $wpdb->get_row(
 						$wpdb->prepare( "SELECT id FROM {$table_exacoat_affiliates} WHERE user_id = %d LIMIT 1", $user_id )
@@ -2337,7 +2455,7 @@ class Exacoat_Affiliate_Manager {
 						$wpdb->update(
 							$table_exacoat_affiliates,
 							[
-								'status' => $status,
+								'status' => 'active',
 								'slug'   => $custom_slug,
 							],
 							[ 'id' => $exacoat_id ]
@@ -2356,7 +2474,7 @@ class Exacoat_Affiliate_Manager {
 								'user_id'             => $user_id,
 								'slug'                => $custom_slug,
 								'slug_locked'         => 1,
-								'status'              => $status,
+								'status'              => 'active',
 								'affiliate_type'      => 'Migrated from SliceWP',
 								'promotion_channel'   => $sa->website ?? '',
 								'bank_name'           => $bank_name,
@@ -2395,6 +2513,8 @@ class Exacoat_Affiliate_Manager {
 					$order_num      = (string) $order_id;
 					$order_subtotal = 0.0;
 					$cust_email     = '';
+					$delivered_at   = null;
+					$matures_at     = null;
 
 					if ( $order_id > 0 && function_exists( 'wc_get_order' ) ) {
 						$order = wc_get_order( $order_id );
@@ -2402,7 +2522,16 @@ class Exacoat_Affiliate_Manager {
 							$order_num      = $order->get_order_number() ?: (string) $order_id;
 							$order_subtotal = (float) $order->get_subtotal();
 							$cust_email     = $order->get_billing_email() ?: '';
+							$date_completed = $order->get_date_completed();
+							if ( $date_completed ) {
+								$delivered_at = $date_completed->date( 'Y-m-d H:i:s' );
+								$matures_at   = date( 'Y-m-d H:i:s', $date_completed->getTimestamp() + ( self::get_grace_period_days() * DAY_IN_SECONDS ) );
+							}
 						}
+					}
+
+					if ( empty( $order_num ) || '0' === $order_num ) {
+						$order_num = 'LEGACY-' . ( $sc->id ?? wp_rand( 1000, 9999 ) );
 					}
 
 					$comm_amount = (float) ( $sc->amount ?? 0.0 );
@@ -2417,15 +2546,41 @@ class Exacoat_Affiliate_Manager {
 						$status = 'unpaid';
 					}
 
-					$exists = $wpdb->get_var(
-						$wpdb->prepare(
-							"SELECT id FROM {$table_exacoat_commissions} WHERE affiliate_id = %d AND order_id = %d LIMIT 1",
-							$exacoat_aff_id,
-							$order_id
-						)
-					);
+					$created_at = ! empty( $sc->date_created ) ? $sc->date_created : current_time( 'mysql' );
 
-					if ( ! $exists ) {
+					$exists = 0;
+					if ( $order_id > 0 ) {
+						$exists = (int) $wpdb->get_var(
+							$wpdb->prepare(
+								"SELECT id FROM {$table_exacoat_commissions} WHERE affiliate_id = %d AND order_id = %d LIMIT 1",
+								$exacoat_aff_id,
+								$order_id
+							)
+						);
+					} else {
+						$exists = (int) $wpdb->get_var(
+							$wpdb->prepare(
+								"SELECT id FROM {$table_exacoat_commissions} WHERE affiliate_id = %d AND order_number = %s LIMIT 1",
+								$exacoat_aff_id,
+								$order_num
+							)
+						);
+					}
+
+					if ( $exists > 0 ) {
+						$wpdb->update(
+							$table_exacoat_commissions,
+							[
+								'status'            => $status,
+								'commission_amount' => $comm_amount,
+								'order_subtotal'    => $order_subtotal,
+								'customer_email'    => $cust_email,
+								'delivered_at'      => $delivered_at,
+								'matures_at'        => $matures_at,
+							],
+							[ 'id' => $exists ]
+						);
+					} else {
 						$wpdb->insert(
 							$table_exacoat_commissions,
 							[
@@ -2436,8 +2591,10 @@ class Exacoat_Affiliate_Manager {
 								'commission_rate'   => $rate,
 								'commission_amount' => $comm_amount,
 								'status'            => $status,
+								'delivered_at'      => $delivered_at,
+								'matures_at'        => $matures_at,
 								'customer_email'    => $cust_email,
-								'created_at'        => ! empty( $sc->date_created ) ? $sc->date_created : current_time( 'mysql' ),
+								'created_at'        => $created_at,
 							]
 						);
 						$commissions_migrated++;
