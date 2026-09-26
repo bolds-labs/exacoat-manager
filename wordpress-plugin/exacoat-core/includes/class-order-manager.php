@@ -1036,46 +1036,15 @@ class Exacoat_Order_Manager {
 
 		$customer_id = $order->get_customer_id();
 
-		// Handle Advanced Coupons store credit refund if requested
-		if ( $refund_to_store_credit ) {
-			if ( ! $customer_id ) {
-				return new WP_Error( 'guest_customer', 'Store credit refunds require a registered customer account.', [ 'status' => 400 ] );
-			}
-
-			$store_credit_issued = false;
-
-			// 1. Try ACFW official helper classes if loaded
-			if ( class_exists( 'ACFW_Store_Credits' ) && method_exists( 'ACFW_Store_Credits', 'add_credit' ) ) {
-				try {
-					\ACFW_Store_Credits::add_credit( $customer_id, $refund_amount, "Refund for Order #{$order_id}" );
-					$store_credit_issued = true;
-				} catch ( Throwable $e ) {
-					// Fallback
-				}
-			}
-
-			// 2. Action hooks (Advanced Coupons & store credit ecosystem)
-			if ( ! $store_credit_issued ) {
-				do_action( 'acfw_add_store_credit', $customer_id, $refund_amount, "Refund for Order #{$order_id}" );
-				do_action( 'advanced_coupons_add_store_credit', $customer_id, $refund_amount, "Refund for Order #{$order_id}" );
-			}
-
-			// 3. User meta update for acfw_store_credit_balance
-			$current_bal = floatval( get_user_meta( $customer_id, 'acfw_store_credit_balance', true ) );
-			$new_bal     = round( $current_bal + $refund_amount, 2 );
-			update_user_meta( $customer_id, 'acfw_store_credit_balance', $new_bal );
-
-			// Prefix reason with Store Credit
-			if ( stripos( $reason, 'store credit' ) === false ) {
-				$reason = empty( $reason ) ? 'Refunded to Store Credit' : "Store Credit: {$reason}";
-			}
-
-			$order->add_order_note( "Refunded " . wc_price( $refund_amount ) . " to customer store credit balance (New balance: " . wc_price( $new_bal ) . ")." );
+		// Prepare WooCommerce Refund args
+		$clean_reason = trim( $reason );
+		if ( $refund_to_store_credit && stripos( $clean_reason, 'store credit' ) === false ) {
+			$clean_reason = empty( $clean_reason ) ? 'Refunded to Store Credit' : "Store Credit: {$clean_reason}";
 		}
 
 		$refund_args = [
 			'amount'           => $refund_amount,
-			'reason'           => $reason,
+			'reason'           => $clean_reason,
 			'order_id'         => $order_id,
 			'restock_items'    => $restock,
 			'refunded_payment' => ! $refund_to_store_credit,
@@ -1092,10 +1061,76 @@ class Exacoat_Order_Manager {
 				Exacoat_Logger::error( 'refunds', "Failed creating refund for Order #{$order_id}: " . $refund->get_error_message(), [
 					'order_id' => $order_id,
 					'amount'   => $refund_amount,
-					'reason'   => $reason,
+					'reason'   => $clean_reason,
 				] );
 			}
 			return new WP_Error( 'refund_failed', $refund->get_error_message(), [ 'status' => 500 ] );
+		}
+
+		$store_credit_issued = false;
+		$new_bal             = 0.0;
+
+		// Handle Advanced Coupons store credit ledger allocation if requested
+		if ( $refund_to_store_credit ) {
+			$entry_note = $clean_reason ? "Refund for Order #{$order_id}: {$clean_reason}" : "Refund for Order #{$order_id}";
+
+			// 1. Dispatch internal REST entry to Advanced Coupons store credit engine
+			$old_user_id = get_current_user_id();
+			if ( ! current_user_can( 'manage_woocommerce' ) ) {
+				$admins = get_users( [ 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ] );
+				if ( ! empty( $admins ) ) {
+					wp_set_current_user( (int) $admins[0] );
+				}
+			}
+
+			try {
+				$entry_req = new WP_REST_Request( 'POST', '/wc-store-credits/v1/entries' );
+				$entry_req->set_header( 'content-type', 'application/json' );
+				$entry_req->set_body( wp_json_encode( [
+					'amount'    => $refund_amount,
+					'user_id'   => $customer_id,
+					'type'      => 'increase',
+					'action'    => 'refund',
+					'object_id' => $order_id,
+					'note'      => $entry_note,
+				] ) );
+
+				$entry_res = rest_do_request( $entry_req );
+				if ( ! is_wp_error( $entry_res ) && $entry_res->get_status() >= 200 && $entry_res->get_status() < 300 ) {
+					$store_credit_issued = true;
+					$res_data            = $entry_res->get_data();
+					$new_bal             = floatval( $res_data['balance_raw'] ?? ( $res_data['balance'] ?? 0 ) );
+				}
+			} catch ( \Throwable $e ) {
+				if ( class_exists( 'Exacoat_Logger' ) ) {
+					Exacoat_Logger::error( 'refunds', "Exception calling /wc-store-credits/v1/entries for Order #{$order_id}: " . $e->getMessage() );
+				}
+			} finally {
+				if ( $old_user_id !== get_current_user_id() ) {
+					wp_set_current_user( $old_user_id );
+				}
+			}
+
+			// 2. Direct ACFW helper class fallback if loaded
+			if ( ! $store_credit_issued && class_exists( 'ACFW_Store_Credits' ) && method_exists( 'ACFW_Store_Credits', 'add_credit' ) ) {
+				try {
+					\ACFW_Store_Credits::add_credit( $customer_id, $refund_amount, $entry_note );
+					$store_credit_issued = true;
+				} catch ( \Throwable $e ) {
+					// Fallback
+				}
+			}
+
+			// 3. User meta sync and fallback
+			$current_bal = floatval( get_user_meta( $customer_id, 'acfw_store_credit_balance', true ) );
+			if ( ! $store_credit_issued ) {
+				$new_bal = round( $current_bal + $refund_amount, 2 );
+				update_user_meta( $customer_id, 'acfw_store_credit_balance', $new_bal );
+			} elseif ( $new_bal <= 0 ) {
+				$new_bal = floatval( get_user_meta( $customer_id, 'acfw_store_credit_balance', true ) );
+			}
+
+			$order->add_order_note( "Refunded " . wc_price( $refund_amount ) . " to customer store credit balance (New balance: " . wc_price( $new_bal ) . ")." );
 		}
 
 		// Refresh order instance
@@ -1111,19 +1146,21 @@ class Exacoat_Order_Manager {
 				'order_id'               => $order_id,
 				'refund_id'              => $refund->get_id(),
 				'refund_amount'          => $refund_amount,
-				'reason'                 => $reason,
+				'reason'                 => $clean_reason,
 				'restock'                => $restock,
 				'refund_to_store_credit' => $refund_to_store_credit,
+				'store_credit_issued'    => $store_credit_issued,
 			] );
 		}
 
 		return rest_ensure_response( [
-			'success'       => true,
-			'refund_id'     => $refund->get_id(),
-			'message'       => $refund_to_store_credit 
+			'success'             => true,
+			'refund_id'           => $refund->get_id(),
+			'store_credit_issued' => $refund_to_store_credit ? $store_credit_issued : false,
+			'message'             => $refund_to_store_credit 
 				? "Refund of " . number_format( $refund_amount, 2 ) . " issued to Store Credit"
 				: "Refund of " . number_format( $refund_amount, 2 ) . " processed",
-			'order'         => self::format_order_for_manager( $updated_order ),
+			'order'               => self::format_order_for_manager( $updated_order ),
 		] );
 	}
 

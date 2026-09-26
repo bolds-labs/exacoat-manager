@@ -554,9 +554,10 @@ export async function authenticatedFetch(input: RequestInfo | URL, init: Request
       headers.set('Authorization', auth.Authorization);
     }
 
-    // Attach WooCommerce credentials to /wp-json/wc/ and /wp-json/exacoat-core/ requests if not using JWT Bearer
+    // Attach WooCommerce credentials to /wp-json/wc/, /wp-json/exacoat-core/, and /wp-json/wc-store-credits/ requests if not using JWT Bearer
     const isWcOrPluginRoute = targetUrlObj.pathname.includes('/wp-json/wc/') ||
-      targetUrlObj.pathname.includes('/wp-json/exacoat-core/');
+      targetUrlObj.pathname.includes('/wp-json/exacoat-core/') ||
+      targetUrlObj.pathname.includes('/wp-json/wc-store-credits/');
 
     if (isWcOrPluginRoute && !auth.Authorization?.startsWith('Bearer')) {
       const { key, secret } = getWcCredentials();
@@ -1899,6 +1900,31 @@ export async function refundOrderDirect(orderId: number | string, payload: { amo
       body: JSON.stringify(payload),
     });
     const data = await res.json();
+
+    // Resilient fallback: If store credit was requested and the backend did not flag that the ACFW entry was created natively
+    if (data.success && payload.refund_to_store_credit && !data.store_credit_issued) {
+      const customerId = data.order?.customer_id;
+      if (customerId) {
+        try {
+          const scUrl = `${base}/wp-json/wc-store-credits/v1/entries`;
+          await authenticatedFetch(scUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({
+              amount: Number(payload.amount),
+              user_id: Number(customerId),
+              type: 'increase',
+              action: 'refund',
+              object_id: Number(orderId),
+              note: payload.reason ? `Refund for Order #${orderId}: ${payload.reason}` : `Refund for Order #${orderId}`,
+            }),
+          });
+        } catch (scErr) {
+          console.warn('[StoreCredit] Fallback entry creation failed:', scErr);
+        }
+      }
+    }
+
     return {
       ...data,
       message: data.message,
@@ -1907,6 +1933,7 @@ export async function refundOrderDirect(orderId: number | string, payload: { amo
     return { success: false, error: err.message, message: err.message };
   }
 }
+
 
 // ==========================================
 // Sales & Analytics
