@@ -246,12 +246,23 @@ class Exacoat_Affiliate_Manager {
 			) {$charset_collate};";
 			dbDelta( $sql_clicks );
 
-			update_option( 'exacoat_affiliate_db_version', '1.3.1' );
+			update_option( 'exacoat_affiliate_db_version', '1.3.2' );
+
+			// Ensure only genuine coupon creators have discount_rate > 0
+			$allowed_discount_slugs = [ 'edwinyg', 'edwin', 'ds', 'suns', 'putra', 'msbn' ];
+			$allowed_slugs_sql = "'" . implode( "','", $allowed_discount_slugs ) . "'";
+			$wpdb->query(
+				"UPDATE {$table_affiliates} 
+				 SET discount_rate = 0.00, 
+				     commission_rate = COALESCE(NULLIF(commission_rate, 0), max_commission_rate, 20.00) 
+				 WHERE slug NOT IN ({$allowed_slugs_sql}) 
+				   AND coupon_code NOT IN ('edwin15', 'ds10', 'suns10', 'putra10', 'msbn15')"
+			);
 
 			// One-time auto-recalculation and creator setups on plugin update
-			if ( ! get_option( 'exacoat_affiliate_recalc_v98', false ) ) {
+			if ( ! get_option( 'exacoat_affiliate_recalc_v101', false ) ) {
 				self::recalculate_all_balances();
-				update_option( 'exacoat_affiliate_recalc_v98', 1 );
+				update_option( 'exacoat_affiliate_recalc_v101', 1 );
 			}
 		} catch ( \Throwable $e ) {
 			if ( class_exists( 'Exacoat_Logger' ) ) {
@@ -389,6 +400,21 @@ class Exacoat_Affiliate_Manager {
 	}
 
 	/**
+	 * Helper: Determine if an affiliate is eligible for customer referral discount links.
+	 * Only the 5 designated creators (msbn, putra, suns, ds, edwinyg/edwin) have coupon discounts.
+	 */
+	public static function is_discount_eligible_creator( $affiliate ): bool {
+		if ( ! $affiliate ) {
+			return false;
+		}
+		$slug   = strtolower( trim( (string) ( is_object( $affiliate ) ? ( $affiliate->slug ?? '' ) : ( $affiliate['slug'] ?? '' ) ) ) );
+		$coupon = strtolower( trim( (string) ( is_object( $affiliate ) ? ( $affiliate->coupon_code ?? '' ) : ( $affiliate['coupon_code'] ?? '' ) ) ) );
+		$allowed_slugs   = [ 'msbn', 'putra', 'suns', 'ds', 'edwinyg', 'edwin' ];
+		$allowed_coupons = [ 'msbn15', 'putra10', 'suns10', 'ds10', 'edwin15' ];
+		return in_array( $slug, $allowed_slugs, true ) || in_array( $coupon, $allowed_coupons, true );
+	}
+
+	/**
 	 * Helper: Retrieve the active affiliate record currently attributed to the visitor or session.
 	 */
 	public static function get_active_referred_affiliate(): ?object {
@@ -459,7 +485,7 @@ class Exacoat_Affiliate_Manager {
 		}
 
 		$affiliate = self::get_active_referred_affiliate();
-		if ( ! $affiliate ) {
+		if ( ! $affiliate || ! self::is_discount_eligible_creator( $affiliate ) ) {
 			return;
 		}
 
@@ -505,7 +531,7 @@ class Exacoat_Affiliate_Manager {
 		}
 
 		$affiliate = self::get_active_referred_affiliate();
-		if ( ! $affiliate ) {
+		if ( ! $affiliate || ! self::is_discount_eligible_creator( $affiliate ) ) {
 			return;
 		}
 
@@ -687,7 +713,7 @@ class Exacoat_Affiliate_Manager {
 		}
 
 		$creator_name  = self::get_creator_display_name( $affiliate );
-		$discount_rate = ( ! empty( $affiliate->discount_rate ) && (float) $affiliate->discount_rate > 0 )
+		$discount_rate = ( self::is_discount_eligible_creator( $affiliate ) && ! empty( $affiliate->discount_rate ) && (float) $affiliate->discount_rate > 0 )
 			? (float) $affiliate->discount_rate
 			: 0.00;
 
@@ -2021,6 +2047,15 @@ class Exacoat_Affiliate_Manager {
 			}
 		}
 
+		$is_allowed_disc = self::is_discount_eligible_creator( $affiliate );
+		$portal_discount_rate = $is_allowed_disc ? ( isset( $affiliate->discount_rate ) ? max( 0.0, (float) $affiliate->discount_rate ) : 0.00 ) : 0.00;
+		$portal_max_pool = ( ! empty( $affiliate->max_commission_rate ) && (float) $affiliate->max_commission_rate > 0 )
+			? (float) $affiliate->max_commission_rate
+			: max( 20.00, round( (float) ( $affiliate->commission_rate ?? 20 ) + (float) ( $affiliate->discount_rate ?? 0 ), 2 ) );
+		$portal_commission_rate = $is_allowed_disc
+			? ( ! empty( $affiliate->commission_rate ) ? (float) $affiliate->commission_rate : max( 0.0, $portal_max_pool - $portal_discount_rate ) )
+			: $portal_max_pool;
+
 		return rest_ensure_response( [
 			'success' => true,
 			'profile' => [
@@ -2038,21 +2073,21 @@ class Exacoat_Affiliate_Manager {
 				'bank_account_number'    => $affiliate->bank_account_number,
 				'bank_account_name'      => $affiliate->bank_account_name,
 				'referral_url'           => $referral_url,
-				'coupon_code'            => $affiliate->coupon_code ?? '',
-				'coupon_discount_amount' => $coupon_discount_amount,
-				'coupon_discount_type'   => $coupon_discount_type,
+				'coupon_code'            => $is_allowed_disc ? ( $affiliate->coupon_code ?? '' ) : '',
+				'coupon_discount_amount' => $is_allowed_disc ? $coupon_discount_amount : null,
+				'coupon_discount_type'   => $is_allowed_disc ? $coupon_discount_type : null,
 				'display_name'           => self::get_creator_display_name( $affiliate ),
-				'max_commission_rate'    => ( ! empty( $affiliate->max_commission_rate ) && (float) $affiliate->max_commission_rate > 0 ) ? (float) $affiliate->max_commission_rate : max( 20.00, round( (float) ( $affiliate->commission_rate ?? 20 ) + (float) ( $affiliate->discount_rate ?? 0 ), 2 ) ),
-				'discount_rate'          => isset( $affiliate->discount_rate ) ? max( 0.0, (float) $affiliate->discount_rate ) : 0.00,
-				'commission_rate'        => ! empty( $affiliate->commission_rate ) ? (float) $affiliate->commission_rate : self::get_commission_rate(),
+				'max_commission_rate'    => $portal_max_pool,
+				'discount_rate'          => $portal_discount_rate,
+				'commission_rate'        => $portal_commission_rate,
 			],
 			'metrics' => [
 				'lifetime_earnings'   => (float) $affiliate->lifetime_earnings,
 				'unpaid_balance'      => (float) $affiliate->unpaid_balance,
 				'total_clicks'        => (int) $affiliate->total_clicks,
 				'total_orders'        => (int) $affiliate->total_orders,
-				'max_commission_rate' => ( ! empty( $affiliate->max_commission_rate ) && (float) $affiliate->max_commission_rate > 0 ) ? (float) $affiliate->max_commission_rate : max( 20.00, round( (float) ( $affiliate->commission_rate ?? 20 ) + (float) ( $affiliate->discount_rate ?? 0 ), 2 ) ),
-				'commission_rate'     => ! empty( $affiliate->commission_rate ) ? (float) $affiliate->commission_rate : self::get_commission_rate(),
+				'max_commission_rate' => $portal_max_pool,
+				'commission_rate'     => $portal_commission_rate,
 				'grace_period_days'   => self::get_grace_period_days(),
 				'min_payout_amount'   => self::get_min_payout(),
 				'can_request_payout'  => ( (float) $affiliate->unpaid_balance >= self::get_min_payout() && in_array( $affiliate->bank_name, [ 'BCA', 'MANDIRI' ], true ) && ! empty( $affiliate->bank_account_number ) ),
@@ -2137,7 +2172,7 @@ class Exacoat_Affiliate_Manager {
 			$formats[]              = '%d';
 		}
 
-		if ( isset( $params['discount_rate'] ) && '' !== $params['discount_rate'] ) {
+		if ( isset( $params['discount_rate'] ) && '' !== $params['discount_rate'] && self::is_discount_eligible_creator( $affiliate ) ) {
 			$raw_discount = round( (float) $params['discount_rate'], 2 );
 			$max_pool     = ( ! empty( $affiliate->max_commission_rate ) && (float) $affiliate->max_commission_rate > 0 ) 
 				? (float) $affiliate->max_commission_rate 
@@ -2190,7 +2225,15 @@ class Exacoat_Affiliate_Manager {
 		// Mature any eligible commissions first
 		self::process_matured_commissions();
 
-		$affiliate = self::get_affiliate_by_user_id( $user_id );
+		$affiliate = null;
+		$param_affiliate_id = (int) $request->get_param( 'affiliate_id' );
+		if ( $param_affiliate_id > 0 && ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) ) {
+			$affiliate = self::get_affiliate_by_id( $param_affiliate_id );
+		}
+		if ( ! $affiliate ) {
+			$affiliate = self::get_affiliate_by_user_id( $user_id );
+		}
+
 		if ( ! $affiliate || 'active' !== $affiliate->status ) {
 			return new WP_Error( 'forbidden', 'Only approved active affiliates can request payouts.', [ 'status' => 403 ] );
 		}
@@ -2256,6 +2299,38 @@ class Exacoat_Affiliate_Manager {
 		$user = get_userdata( $affiliate->user_id );
 		if ( $user ) {
 			self::dispatch_payout_email( 'requested', $user->user_email, $user->first_name, $unpaid, $affiliate->bank_name, $affiliate->bank_account_number );
+		}
+
+		// Dispatch Pushover notification to admin devices
+		$creator_name     = self::get_creator_display_name( $affiliate );
+		$formatted_amount = 'Rp ' . number_format( $unpaid, 0, ',', '.' );
+		$pushover_title   = 'New Affiliate Payout Request';
+		$pushover_msg     = sprintf(
+			"<b>%s</b> has requested a payout of <b>%s</b>.\n\n" .
+			"• <b>Creator:</b> %s (@%s)\n" .
+			"• <b>Bank:</b> %s - %s\n" .
+			"• <b>A/N:</b> %s\n" .
+			"• <b>Payout ID:</b> #%d",
+			esc_html( $creator_name ),
+			esc_html( $formatted_amount ),
+			esc_html( $creator_name ),
+			esc_html( $affiliate->slug ),
+			esc_html( $affiliate->bank_name ),
+			esc_html( $affiliate->bank_account_number ),
+			esc_html( $affiliate->bank_account_name ?: $creator_name ),
+			$payout_id
+		);
+
+		if ( class_exists( 'Exacoat_Pushover_Service' ) ) {
+			Exacoat_Pushover_Service::send(
+				$pushover_title,
+				$pushover_msg,
+				[
+					'priority'  => 1,
+					'url'       => admin_url( 'admin.php?page=exacoat-manager#/affiliates' ),
+					'url_title' => 'Review Affiliates',
+				]
+			);
 		}
 
 		return rest_ensure_response( [
@@ -2344,14 +2419,24 @@ class Exacoat_Affiliate_Manager {
 				$u = get_userdata( (int) $aff->user_id );
 				$aff->roles = $u ? array_values( $u->roles ) : [ 'affiliate' ];
 				$aff->display_name = ! empty( $aff->creator_display_name ) ? $aff->creator_display_name : self::get_creator_display_name( $aff );
-				$aff->discount_rate = isset( $aff->discount_rate ) ? max( 0.0, (float) $aff->discount_rate ) : 0.00;
-				$aff->coupon_discount_amount = null;
-				$aff->coupon_discount_type   = null;
-				if ( ! empty( $aff->coupon_code ) && class_exists( 'WC_Coupon' ) ) {
-					$c_obj = new WC_Coupon( sanitize_text_field( $aff->coupon_code ) );
-					if ( $c_obj && $c_obj->get_id() ) {
-						$aff->coupon_discount_amount = (float) $c_obj->get_amount();
-						$aff->coupon_discount_type   = $c_obj->get_discount_type();
+				$is_allowed_disc = self::is_discount_eligible_creator( $aff );
+				if ( ! $is_allowed_disc ) {
+					$aff->discount_rate          = 0.00;
+					$aff->coupon_code            = '';
+					$aff->coupon_discount_amount = null;
+					$aff->coupon_discount_type   = null;
+					$max_pool = ( ! empty( $aff->max_commission_rate ) && (float) $aff->max_commission_rate > 0 ) ? (float) $aff->max_commission_rate : 20.00;
+					$aff->commission_rate        = $max_pool;
+				} else {
+					$aff->discount_rate          = isset( $aff->discount_rate ) ? max( 0.0, (float) $aff->discount_rate ) : 0.00;
+					$aff->coupon_discount_amount = null;
+					$aff->coupon_discount_type   = null;
+					if ( ! empty( $aff->coupon_code ) && class_exists( 'WC_Coupon' ) ) {
+						$c_obj = new WC_Coupon( sanitize_text_field( $aff->coupon_code ) );
+						if ( $c_obj && $c_obj->get_id() ) {
+							$aff->coupon_discount_amount = (float) $c_obj->get_amount();
+							$aff->coupon_discount_type   = $c_obj->get_discount_type();
+						}
 					}
 				}
 			}
@@ -4245,10 +4330,10 @@ class Exacoat_Affiliate_Manager {
 							$aff_id
 						)
 					);
-					$existing_aff = $wpdb->get_row( $wpdb->prepare( "SELECT coupon_code, max_commission_rate, commission_rate, discount_rate FROM {$table_affiliates} WHERE id = %d", $aff_id ) );
-					$has_coupon = ! empty( $existing_aff->coupon_code );
+					$existing_aff = $wpdb->get_row( $wpdb->prepare( "SELECT slug, coupon_code, max_commission_rate, commission_rate, discount_rate FROM {$table_affiliates} WHERE id = %d", $aff_id ) );
+					$is_allowed = self::is_discount_eligible_creator( $existing_aff ?: $aff );
 					$max_pool   = ( ! empty( $existing_aff->max_commission_rate ) && (float) $existing_aff->max_commission_rate > 0 ) ? (float) $existing_aff->max_commission_rate : 20.00;
-					if ( $has_coupon ) {
+					if ( $is_allowed ) {
 						$disc = ( ! empty( $existing_aff->discount_rate ) && (float) $existing_aff->discount_rate > 0 ) ? (float) $existing_aff->discount_rate : 10.00;
 						$comm = ( ! empty( $existing_aff->commission_rate ) && (float) $existing_aff->commission_rate > 0 ) ? (float) $existing_aff->commission_rate : max( 0.0, $max_pool - $disc );
 					} else {
@@ -4282,6 +4367,10 @@ class Exacoat_Affiliate_Manager {
 					'discount_rate'       => $disc,
 					'commission_rate'     => $comm,
 				];
+
+				if ( ! $is_allowed ) {
+					$update_data['coupon_code'] = '';
+				}
 
 				$wpdb->update(
 					$table_affiliates,

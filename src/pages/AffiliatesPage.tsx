@@ -1086,28 +1086,9 @@ export const AffiliatesPage: React.FC = () => {
                           <span className="font-semibold text-white block">
                             {aff.creator_display_name || aff.display_name || aff.user_login}
                           </span>
-                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                            <span className="font-mono text-[11px] text-[#f3aa18]">
-                              @{aff.slug}
-                            </span>
-                            {Number(aff.discount_rate) > 0 ? (
-                              <span 
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold" 
-                                title={`Direct Creator Customer Discount: ${aff.discount_rate}% off applied automatically when visitors enter via creator link`}
-                              >
-                                <Percent className="w-3 h-3 text-emerald-400" />
-                                {aff.discount_rate}% Off Link
-                              </span>
-                            ) : (
-                              <span 
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-white/[0.04] text-neutral-400 border border-white/10 font-semibold" 
-                                title="Standard Creator Link (0% Customer Discount, full commission retained by creator)"
-                              >
-                                <Percent className="w-3 h-3 text-neutral-400" />
-                                0% Off Link
-                              </span>
-                            )}
-                          </div>
+                          <span className="font-mono text-[11px] text-[#f3aa18] mt-0.5 block">
+                            @{aff.slug}
+                          </span>
                         </td>
                         <td className="py-3">
                           <span className={clsx(
@@ -1121,14 +1102,20 @@ export const AffiliatesPage: React.FC = () => {
                           </span>
                         </td>
                         <td className="py-3">
-                          <span className={clsx(
-                            'font-mono text-[11px] px-2 py-0.5 rounded font-semibold border inline-block',
-                            aff.commission_rate
-                              ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                              : 'bg-white/[0.04] text-neutral-400 border-white/[0.08]'
-                          )}>
-                            {aff.commission_rate ? `${aff.commission_rate}%` : '20% (Default)'}
-                          </span>
+                          {Number(aff.discount_rate) > 0 ? (
+                            <span 
+                              className="font-mono text-[11px] px-2 py-0.5 rounded font-semibold border inline-flex items-center gap-1 bg-amber-500/15 text-amber-300 border-amber-500/30"
+                              title={`Creator Commission: ${aff.commission_rate || 20}% | Customer Discount: ${aff.discount_rate}%`}
+                            >
+                              <span>{aff.commission_rate || 20}%</span>
+                              <span className="text-white/40">|</span>
+                              <span className="text-emerald-300">{aff.discount_rate}%</span>
+                            </span>
+                          ) : (
+                            <span className="font-mono text-[11px] px-2 py-0.5 rounded font-semibold border inline-block bg-white/[0.04] text-neutral-300 border-white/[0.08]">
+                              {aff.commission_rate ? `${aff.commission_rate}%` : '20%'}
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 font-mono text-neutral-300">
                           {Number(aff.total_clicks || 0).toLocaleString('id-ID')}
@@ -1166,10 +1153,11 @@ export const AffiliatesPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleOpenCouponModal(aff)}
-                              className="p-1 rounded text-neutral-400 hover:text-[#f3aa18] hover:bg-white/[0.06] transition-colors cursor-pointer"
-                              title="Creator Settings, Slug & Commission"
+                              className="text-[11px] font-medium text-neutral-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 px-2 py-1 rounded transition-colors cursor-pointer flex items-center gap-1.5"
+                              title="Edit Commission & Slug"
                             >
-                              <Settings className="w-4 h-4" />
+                              <Settings className="w-3.5 h-3.5 text-neutral-400" />
+                              <span>Edit Commission</span>
                             </button>
                             <span className="text-white/15">|</span>
                             {aff.status === 'active' ? (
@@ -2773,6 +2761,7 @@ export const AffiliatesPage: React.FC = () => {
                     commissions={previewPortalData.commissions}
                     clicks={previewPortalData.clicks}
                     dailyStats={previewPortalData.daily_stats}
+                    payouts={previewPortalData.payouts}
                     onRefresh={() => handleSeeAsCreator(previewCreatorAffiliate)}
                     onNavigateTab={() => {}}
                   />

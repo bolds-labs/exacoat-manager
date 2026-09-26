@@ -7155,7 +7155,7 @@ export async function updateAffiliateSettings(payload: {
   }
 }
 
-export async function requestAffiliatePayout(): Promise<{
+export async function requestAffiliatePayout(affiliateId?: number): Promise<{
   success: boolean;
   message?: string;
   payout_id?: number;
@@ -7166,13 +7166,14 @@ export async function requestAffiliatePayout(): Promise<{
   const url = `${base}/wp-json/exacoat/v1/affiliate/payout-request`;
 
   try {
+    const payload = affiliateId ? { affiliate_id: affiliateId } : {};
     const res = await authenticatedFetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      body: JSON.stringify({}),
+      body: JSON.stringify(payload),
     });
 
     const data = await res.json();

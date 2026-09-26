@@ -22,8 +22,10 @@ import {
   AffiliateProfile, 
   AffiliateCommission, 
   AffiliateClick, 
-  AffiliateDailyStat 
+  AffiliateDailyStat,
+  AffiliatePayout 
 } from '../../types';
+import { requestAffiliatePayout } from '../../lib/wordpressBridge';
 import { useToast } from '../../context/ToastContext';
 import { PageHeroHeader } from '../../components/ui/PageHeroHeader';
 import { GlassCard } from '../../components/ui/GlassCard';
@@ -59,6 +61,7 @@ interface AffiliateDashboardPageProps {
   commissions: AffiliateCommission[];
   clicks?: AffiliateClick[];
   dailyStats?: AffiliateDailyStat[];
+  payouts?: AffiliatePayout[];
   onRefresh?: () => void;
   isLoading?: boolean;
   onNavigateTab: (tab: 'dashboard' | 'links' | 'payouts' | 'settings') => void;
@@ -70,6 +73,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
   commissions,
   clicks = [],
   dailyStats = [],
+  payouts = [],
   onRefresh = () => {},
   isLoading = false,
   onNavigateTab,
@@ -169,9 +173,33 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
     return windowOrders > 0 ? '100%' : '0.0%';
   }, [windowOrders, windowVisits]);
 
+  const [showPayoutModal, setShowPayoutModal] = useState(false);
+  const [isSubmittingPayout, setIsSubmittingPayout] = useState(false);
+
   const unpaidBalance = Number(metrics.unpaid_balance) || 0;
   const minPayout = Number(metrics.min_payout_amount) || 250000;
   const payoutProgressPercent = Math.min(100, Math.round((unpaidBalance / minPayout) * 100));
+  const hasValidBank = Boolean(profile.bank_name && profile.bank_account_number);
+  const hasPendingPayout = Boolean(payouts && payouts.some((p) => p.status === 'pending'));
+  const canRequestPayout = unpaidBalance >= minPayout && hasValidBank && !hasPendingPayout && profile.status === 'active';
+
+  const handleConfirmPayout = async () => {
+    setIsSubmittingPayout(true);
+    try {
+      const res = await requestAffiliatePayout(profile.id);
+      if (res.success) {
+        showToast('success', 'Payout Requested', res.message || 'Your payout request has been submitted.');
+        setShowPayoutModal(false);
+        onRefresh();
+      } else {
+        showToast('error', 'Request Failed', res.message || 'Failed to submit payout request.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message || 'Unexpected network error.');
+    } finally {
+      setIsSubmittingPayout(false);
+    }
+  };
 
   // Build Time-Series Performance Chart Data
   const chartData = useMemo(() => {
@@ -508,20 +536,46 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
                 style={{ width: `${payoutProgressPercent}%` }}
               />
             </div>
-            {metrics.can_request_payout ? (
+            {hasPendingPayout ? (
+              <div className="w-full mt-2 py-1.5 px-2.5 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-400 text-[11px] font-semibold flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Request Under Review</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onNavigateTab('payouts')}
+                  className="text-[10px] text-amber-300 hover:text-white underline cursor-pointer"
+                >
+                  View
+                </button>
+              </div>
+            ) : canRequestPayout ? (
               <button
                 type="button"
-                onClick={() => onNavigateTab('payouts')}
-                className="w-full mt-1 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-[11px] font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                onClick={() => setShowPayoutModal(true)}
+                className="w-full mt-1.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/10 cursor-pointer flex items-center justify-center gap-1.5"
               >
+                <Wallet className="w-3.5 h-3.5 text-zinc-950" />
                 <span>Request Payout</span>
-                <ArrowRight className="w-3 h-3" />
               </button>
+            ) : unpaidBalance >= minPayout && !hasValidBank ? (
+              <div className="space-y-1 mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => onNavigateTab('settings')}
+                  className="w-full py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-[11px] font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Sliders className="w-3 h-3" />
+                  <span>Add Bank Info to Withdraw</span>
+                </button>
+                <p className="text-[10px] text-amber-400/80 text-center">
+                  BCA or Mandiri details required
+                </p>
+              </div>
             ) : (
               <p className="text-[10px] text-zinc-400">
-                {unpaidBalance >= minPayout 
-                  ? 'Ready for transfer' 
-                  : `${formatIDR(minPayout - unpaidBalance)} remaining to withdraw`}
+                {formatIDR(minPayout - unpaidBalance)} remaining to withdraw (min. Rp 250k)
               </p>
             )}
           </div>
@@ -913,6 +967,100 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
             >
               Copy Link URL
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Payout Request Confirmation Modal */}
+      {showPayoutModal && (
+        <div className="fixed inset-0 z-50">
+          <div
+            className="fixed inset-0 bg-black/85 backdrop-blur-md pointer-events-auto transition-opacity"
+            onClick={() => !isSubmittingPayout && setShowPayoutModal(false)}
+            aria-hidden="true"
+          />
+          <div
+            className="fixed inset-0 z-10 overflow-y-auto flex items-center justify-center p-4 pointer-events-none"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="payout-modal-title"
+          >
+            <div className="pointer-events-auto relative w-full max-w-md bg-[#0e0e11] border border-white/[0.12] rounded-2xl shadow-2xl overflow-hidden p-6 space-y-5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                    <Wallet className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 id="payout-modal-title" className="text-sm font-bold text-white font-['Chakra_Petch'] uppercase tracking-wider">
+                      Request Payout
+                    </h3>
+                    <p className="text-xs text-zinc-400">Direct creator balance withdrawal</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={isSubmittingPayout}
+                  onClick={() => setShowPayoutModal(false)}
+                  className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.08] space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-zinc-400">Payout Amount</span>
+                  <span className="font-mono text-base font-bold text-emerald-400">
+                    {formatIDR(unpaidBalance)}
+                  </span>
+                </div>
+                <div className="h-px bg-white/[0.06]" />
+                <div className="space-y-1.5 text-xs font-mono">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Destination Bank:</span>
+                    <span className="text-zinc-200 font-semibold">{profile.bank_name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Account Number:</span>
+                    <span className="text-zinc-200">{profile.bank_account_number}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Account Holder:</span>
+                    <span className="text-zinc-200">{profile.bank_account_name || profile.display_name || profile.username}</span>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                An instant Pushover notification will be sent to the Exacoat admin team upon submission. Transfers will be completed to your verified bank account.
+              </p>
+
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="default"
+                  className="flex-1"
+                  disabled={isSubmittingPayout}
+                  onClick={() => setShowPayoutModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="default"
+                  className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold border-none"
+                  disabled={isSubmittingPayout}
+                  onClick={handleConfirmPayout}
+                  isLoading={isSubmittingPayout}
+                  leftIcon={!isSubmittingPayout && <Check className="w-4 h-4 text-zinc-950" />}
+                >
+                  Confirm Request
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}

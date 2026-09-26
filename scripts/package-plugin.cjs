@@ -80,7 +80,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Added option to delete affiliate revoking the affiliate role while preserving WordPress user account and data\n- Removed redundant Account Roles column from affiliate management table\n- Transformed Edit Commission into an icon-only Settings button with support for editing creator referral slugs\n- Synchronized affiliate slug updates across user metadata and WooCommerce promo coupon records`,
+      changelog: `### Version ${version}\n- Added direct Request Payout button to affiliate workstation with Rp 250.000 minimum threshold and bank account validation\n- Integrated real-time administrator Pushover alert notifications upon affiliate payout requests\n- Enforced 0% customer discount links across all creators except the 5 designated coupon affiliates (msbn, putra, suns, ds, edwinyg)\n- Combined creator commission and customer discount into clean Rate column (e.g. 15% | 10% or full 20%/25%)\n- Transformed Settings icon into clear Edit Commission button with slug editing capability`,
     },
   };
 

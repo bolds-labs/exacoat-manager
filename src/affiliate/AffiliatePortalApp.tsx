@@ -154,6 +154,7 @@ export const AffiliatePortalApp: React.FC = () => {
           commissions={commissions}
           clicks={clicks}
           dailyStats={dailyStats}
+          payouts={payouts}
           onRefresh={loadPortalData}
           isLoading={isLoadingData}
           onNavigateTab={setCurrentTab}
