@@ -52,10 +52,12 @@ import {
   recalculateAdminAffiliateBalances,
   updateAdminAffiliateCommissionRate,
   createAdminManualCommission,
-  updateAdminCommission
+  updateAdminCommission,
+  fetchAffiliatePortalData
 } from '../lib/wordpressBridge';
 import { AffiliateCommission, AffiliatePayout, Order } from '../types';
 import { OrderDetailDrawer } from '../components/orders/OrderDetailDrawer';
+import { AffiliateDashboardPage } from '../affiliate/pages/AffiliateDashboardPage';
 import { useToast } from '../context/ToastContext';
 import { FilterSelect, FilterSelectOption } from '../components/ui/FilterSelect';
 import { GlassCard } from '../components/ui/GlassCard';
@@ -169,6 +171,64 @@ export const AffiliatesPage: React.FC = () => {
   const [editCommOrderNumber, setEditCommOrderNumber] = useState('');
   const [editCommNotes, setEditCommNotes] = useState('');
   const [isSavingEditComm, setIsSavingEditComm] = useState(false);
+
+  // See as Creator (Preview Creator Portal) State
+  const [previewCreatorAffiliate, setPreviewCreatorAffiliate] = useState<any | null>(null);
+  const [previewPortalData, setPreviewPortalData] = useState<{
+    profile: any;
+    metrics: any;
+    commissions: any[];
+    payouts: any[];
+    clicks: any[];
+    daily_stats: any[];
+  } | null>(null);
+  const [isLoadingCreatorPreview, setIsLoadingCreatorPreview] = useState(false);
+  const [creatorPreviewError, setCreatorPreviewError] = useState<string | null>(null);
+
+  // Keyboard accessibility: Close preview on Escape key (antislop R-32)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && previewCreatorAffiliate) {
+        setPreviewCreatorAffiliate(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewCreatorAffiliate]);
+
+  const handleSeeAsCreator = async (aff: any) => {
+    setPreviewCreatorAffiliate(aff);
+    setIsLoadingCreatorPreview(true);
+    setCreatorPreviewError(null);
+    setPreviewPortalData(null);
+    try {
+      const res = await fetchAffiliatePortalData(aff.id);
+      if (res.success && res.profile) {
+        setPreviewPortalData({
+          profile: res.profile,
+          metrics: res.metrics || {
+            lifetime_earnings: 0,
+            unpaid_balance: 0,
+            total_clicks: 0,
+            total_orders: 0,
+            commission_rate: aff.commission_rate || 20,
+            min_payout_amount: 250000,
+            can_request_payout: false,
+          },
+          commissions: res.commissions || [],
+          payouts: res.payouts || [],
+          clicks: res.clicks || [],
+          daily_stats: res.daily_stats || [],
+        });
+      } else {
+        setCreatorPreviewError(res.error || 'Failed to load creator workstation data.');
+      }
+    } catch (err: any) {
+      setCreatorPreviewError(err.message || 'Error communicating with creator workstation server.');
+    } finally {
+      setIsLoadingCreatorPreview(false);
+    }
+  };
 
   const handleOpenCouponModal = (aff: any) => {
     setSelectedAffiliateForCoupon(aff);
@@ -971,11 +1031,14 @@ export const AffiliatesPage: React.FC = () => {
                               @{aff.slug}
                             </span>
                             {aff.coupon_code && (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold" title={`Assigned Promo Coupon: ${aff.coupon_code}`}>
+                              <span 
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold" 
+                                title={`Assigned Promo Coupon: ${aff.coupon_code}${aff.coupon_discount_amount != null ? ` (${aff.coupon_discount_amount}%)` : ''}`}
+                              >
                                 <Ticket className="w-3 h-3 text-amber-400" />
                                 {aff.coupon_code}
-                                {aff.commission_rate && (
-                                  <span className="text-amber-400/80 font-normal">({aff.commission_rate}%)</span>
+                                {aff.coupon_discount_amount != null && (
+                                  <span className="text-amber-400/80 font-normal">({aff.coupon_discount_amount}%)</span>
                                 )}
                               </span>
                             )}
@@ -1054,6 +1117,16 @@ export const AffiliatesPage: React.FC = () => {
                         </td>
                         <td className="py-3 pr-4 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSeeAsCreator(aff)}
+                              className="text-[11px] font-medium text-neutral-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 px-2 py-1 rounded transition-colors cursor-pointer flex items-center gap-1.5"
+                              title="See as Creator: preview creator portal workstation"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-[#f3aa18]" />
+                              <span>See as Creator</span>
+                            </button>
+                            <span className="text-white/20">|</span>
                             <button
                               type="button"
                               onClick={() => handleOpenCouponModal(aff)}
@@ -2386,6 +2459,99 @@ export const AffiliatesPage: React.FC = () => {
               </div>
             </form>
           </GlassCard>
+        </div>
+      )}
+
+      {/* Modal: See as Creator (Preview Creator Portal Workstation) */}
+      {previewCreatorAffiliate && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="creator-preview-title"
+        >
+          <div className="relative w-full max-w-6xl max-h-[92vh] flex flex-col bg-[#0c0c0e] border border-white/[0.12] rounded-2xl shadow-2xl overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-white/[0.08] flex items-center justify-between gap-4 bg-[#141416]/90 backdrop-blur-md shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                  <Eye className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 id="creator-preview-title" className="text-sm font-bold text-white font-['Chakra_Petch'] uppercase tracking-wider truncate">
+                      {previewCreatorAffiliate.display_name || previewCreatorAffiliate.user_login}
+                    </h3>
+                    <span className="font-mono text-xs text-[#f3aa18]">
+                      @{previewCreatorAffiliate.slug}
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono border bg-amber-500/10 text-amber-400 border-amber-500/20 uppercase font-semibold">
+                      Admin Creator Preview
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-neutral-400 truncate mt-0.5">
+                    {previewCreatorAffiliate.user_email || previewCreatorAffiliate.email} {previewCreatorAffiliate.coupon_code ? `• Promo Coupon: ${previewCreatorAffiliate.coupon_code}` : ''}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={`/?portal=affiliate&affiliate_id=${previewCreatorAffiliate.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-neutral-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Open creator portal in full dedicated workstation tab"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-neutral-400" />
+                  <span className="hidden sm:inline">Open in Portal Tab</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewCreatorAffiliate(null)}
+                  className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer"
+                  title="Close preview (Esc)"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[#080808]">
+              {isLoadingCreatorPreview ? (
+                <div className="py-20 flex flex-col items-center justify-center gap-3 text-neutral-400 font-mono text-xs">
+                  <Loader2 className="w-8 h-8 text-[#f3aa18] animate-spin" />
+                  <span>Loading creator workstation...</span>
+                </div>
+              ) : creatorPreviewError ? (
+                <div className="py-16 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-rose-500/10 text-rose-400 mx-auto flex items-center justify-center">
+                    <AlertCircle className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-sm font-semibold text-white">Failed to Load Creator Workstation</h4>
+                  <p className="text-xs text-neutral-400 max-w-md mx-auto">{creatorPreviewError}</p>
+                  <button
+                    type="button"
+                    onClick={() => handleSeeAsCreator(previewCreatorAffiliate)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-zinc-950 transition-colors cursor-pointer"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : previewPortalData ? (
+                <AffiliateDashboardPage
+                  profile={previewPortalData.profile}
+                  metrics={previewPortalData.metrics}
+                  commissions={previewPortalData.commissions}
+                  clicks={previewPortalData.clicks}
+                  dailyStats={previewPortalData.daily_stats}
+                  onRefresh={() => handleSeeAsCreator(previewCreatorAffiliate)}
+                  onNavigateTab={() => {}}
+                />
+              ) : null}
+            </div>
+          </div>
         </div>
       )}
 

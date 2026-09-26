@@ -201,35 +201,46 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
       map[key].orders += Number(st.orders) || 0;
     });
 
-    // 2. Ingest commissions for real-time accuracy
+    // 2. Ingest commissions for real-time accuracy and full historical coverage
     horizonCommissions.forEach(c => {
       if (c.status === 'rejected') return;
       const d = c.created_at ? new Date(c.created_at) : new Date();
+      if (horizonCutoffMs > 0 && d.getTime() < horizonCutoffMs) return;
+
       const key = d.toISOString().split('T')[0];
       const label = d.toLocaleDateString('default', { month: 'short', day: 'numeric' });
 
       if (!map[key]) {
         map[key] = { date: key, label, earnings: 0, visits: 0, orders: 0 };
       }
-      if (dailyStats.length === 0) {
+      // If dailyStats did not already capture earnings for this date, aggregate from commission events
+      const hasDailyStatsEarnings = dailyStats.some(
+        s => s.date && s.date.split('T')[0] === key && (Number(s.earnings) > 0 || Number(s.orders) > 0)
+      );
+      if (!hasDailyStatsEarnings) {
         map[key].earnings += Number(c.commission_amount) || 0;
         map[key].orders += 1;
       }
     });
 
-    // 3. Ingest clicks if dailyStats is empty
-    if (dailyStats.length === 0) {
-      horizonClicks.forEach(cl => {
-        const d = cl.created_at ? new Date(cl.created_at) : new Date();
-        const key = d.toISOString().split('T')[0];
-        const label = d.toLocaleDateString('default', { month: 'short', day: 'numeric' });
+    // 3. Ingest clicks if not already captured in dailyStats
+    horizonClicks.forEach(cl => {
+      const d = cl.created_at ? new Date(cl.created_at) : new Date();
+      if (horizonCutoffMs > 0 && d.getTime() < horizonCutoffMs) return;
 
-        if (!map[key]) {
-          map[key] = { date: key, label, earnings: 0, visits: 0, orders: 0 };
-        }
+      const key = d.toISOString().split('T')[0];
+      const label = d.toLocaleDateString('default', { month: 'short', day: 'numeric' });
+
+      if (!map[key]) {
+        map[key] = { date: key, label, earnings: 0, visits: 0, orders: 0 };
+      }
+      const hasDailyStatsVisits = dailyStats.some(
+        s => s.date && s.date.split('T')[0] === key && Number(s.visits) > 0
+      );
+      if (!hasDailyStatsVisits) {
         map[key].visits += 1;
-      });
-    }
+      }
+    });
 
     // Sort chronologically
     const sorted = Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
@@ -458,7 +469,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
                 </span>
               </div>
               <p className="text-xs text-zinc-300">
-                Your audience can enter this code at checkout to get an instant discount while automatically crediting your {profile.commission_rate || 20}% commission without clicking a link.
+                Your audience can enter this code at checkout to get an instant{profile.coupon_discount_amount ? ` ${profile.coupon_discount_amount}%` : ''} discount while automatically crediting your {profile.commission_rate || 20}% commission without clicking a link.
               </p>
             </div>
 
@@ -466,6 +477,9 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
               <div className="flex items-center gap-2.5 bg-[#0a0a0c] border border-amber-500/40 rounded-xl px-4 py-2">
                 <span className="font-mono text-sm font-bold text-amber-400 tracking-wider">
                   {profile.coupon_code}
+                  {profile.coupon_discount_amount != null && (
+                    <span className="ml-1.5 text-xs text-amber-300 font-normal">({profile.coupon_discount_amount}% OFF)</span>
+                  )}
                 </span>
                 <button
                   type="button"
@@ -668,7 +682,15 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
         {/* Chart Viewport */}
         <div className="w-full h-72 sm:h-80">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+            <AreaChart 
+              data={chartData} 
+              margin={{ 
+                top: 10, 
+                right: chartView === 'combined' ? 25 : 10, 
+                left: -10, 
+                bottom: 0 
+              }}
+            >
               <defs>
                 <linearGradient id="affiliateEarningsGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#f3aa18" stopOpacity={0.3} />
@@ -686,17 +708,31 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
                 axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
                 tickLine={false}
               />
-              <YAxis 
-                tick={{ fill: '#71717a', fontSize: 10, fontFamily: 'monospace' }}
-                tickFormatter={(val) => {
-                  if (chartView === 'visits') return `${val}`;
-                  if (val >= 1000000) return `Rp ${(val / 1000000).toFixed(1)}M`;
-                  if (val >= 1000) return `Rp ${(val / 1000).toFixed(0)}k`;
-                  return `Rp ${val}`;
-                }}
-                axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
-                tickLine={false}
-              />
+              {(chartView === 'combined' || chartView === 'earnings') && (
+                <YAxis 
+                  yAxisId="earnings"
+                  orientation="left"
+                  tick={{ fill: '#71717a', fontSize: 10, fontFamily: 'monospace' }}
+                  tickFormatter={(val) => {
+                    if (val >= 1000000) return `Rp ${(val / 1000000).toFixed(1)}M`;
+                    if (val >= 1000) return `Rp ${(val / 1000).toFixed(0)}k`;
+                    return `Rp ${val}`;
+                  }}
+                  axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                  tickLine={false}
+                />
+              )}
+              {(chartView === 'combined' || chartView === 'visits') && (
+                <YAxis 
+                  yAxisId="visits"
+                  orientation={chartView === 'visits' ? 'left' : 'right'}
+                  allowDecimals={false}
+                  tick={{ fill: '#71717a', fontSize: 10, fontFamily: 'monospace' }}
+                  tickFormatter={(val) => `${val}`}
+                  axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                  tickLine={false}
+                />
+              )}
               <Tooltip 
                 content={({ active, payload }) => {
                   if (active && payload && payload.length) {
@@ -732,6 +768,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
               />
               {(chartView === 'combined' || chartView === 'earnings') && (
                 <Area 
+                  yAxisId="earnings"
                   type="monotone" 
                   dataKey="earnings" 
                   stroke="#f3aa18" 
@@ -742,6 +779,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
               )}
               {(chartView === 'combined' || chartView === 'visits') && (
                 <Area 
+                  yAxisId="visits"
                   type="monotone" 
                   dataKey="visits" 
                   stroke="#38bdf8" 

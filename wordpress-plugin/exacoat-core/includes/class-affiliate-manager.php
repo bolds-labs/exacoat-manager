@@ -1290,9 +1290,19 @@ class Exacoat_Affiliate_Manager {
 		// Ensure any commissions that have cleared the 7-day grace period mature now
 		self::process_matured_commissions();
 
-		$affiliate = self::get_affiliate_by_user_id( $user_id );
-		if ( ! $affiliate ) {
-			return new WP_Error( 'not_found', 'Affiliate profile not found.', [ 'status' => 404 ] );
+		// Support admin or shop manager previewing a creator dashboard by passing ?affiliate_id=X
+		$requested_aff_id = (int) $request->get_param( 'affiliate_id' );
+		if ( $requested_aff_id > 0 && ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) ) {
+			$affiliate = self::get_affiliate_by_id( $requested_aff_id );
+			if ( ! $affiliate ) {
+				return new WP_Error( 'not_found', 'Affiliate profile not found.', [ 'status' => 404 ] );
+			}
+			$user_id = (int) $affiliate->user_id;
+		} else {
+			$affiliate = self::get_affiliate_by_user_id( $user_id );
+			if ( ! $affiliate ) {
+				return new WP_Error( 'not_found', 'Affiliate profile not found.', [ 'status' => 404 ] );
+			}
 		}
 
 		$user = get_userdata( $user_id );
@@ -1300,13 +1310,13 @@ class Exacoat_Affiliate_Manager {
 		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
 		$table_payouts     = $wpdb->prefix . 'exacoat_affiliate_payouts';
 
-		// Retrieve commissions with grace period delivery timestamps
+		// Retrieve commissions with grace period delivery timestamps (expanded limit for complete history)
 		$commissions = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT id, order_number, order_subtotal, commission_amount, status, delivered_at, matures_at, rejection_reason, created_at 
 				FROM {$table_commissions} 
 				WHERE affiliate_id = %d 
-				ORDER BY id DESC LIMIT 50",
+				ORDER BY id DESC LIMIT 500",
 				$affiliate->id
 			)
 		);
@@ -1317,7 +1327,7 @@ class Exacoat_Affiliate_Manager {
 				"SELECT id, amount, bank_name, bank_account_number, bank_account_name, status, transfer_reference, created_at, paid_at 
 				FROM {$table_payouts} 
 				WHERE affiliate_id = %d 
-				ORDER BY id DESC LIMIT 30",
+				ORDER BY id DESC LIMIT 50",
 				$affiliate->id
 			)
 		);
@@ -1334,12 +1344,12 @@ class Exacoat_Affiliate_Manager {
 			)
 		);
 
-		// Compute aggregated daily stats for the last 60 days
+		// Compute aggregated daily stats across full creator history (no 60-day limit)
 		$daily_clicks = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT DATE(created_at) as stat_date, COUNT(*) as visit_count 
 				FROM {$table_clicks} 
-				WHERE affiliate_id = %d AND created_at >= DATE_SUB(NOW(), INTERVAL 60 DAY)
+				WHERE affiliate_id = %d
 				GROUP BY DATE(created_at)",
 				$affiliate->id
 			),
@@ -1350,7 +1360,7 @@ class Exacoat_Affiliate_Manager {
 			$wpdb->prepare(
 				"SELECT DATE(created_at) as stat_date, COUNT(*) as order_count, SUM(commission_amount) as total_earnings 
 				FROM {$table_commissions} 
-				WHERE affiliate_id = %d AND status != 'rejected' AND created_at >= DATE_SUB(NOW(), INTERVAL 60 DAY)
+				WHERE affiliate_id = %d AND status != 'rejected'
 				GROUP BY DATE(created_at)",
 				$affiliate->id
 			),
@@ -1376,25 +1386,38 @@ class Exacoat_Affiliate_Manager {
 		$site_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'https://exacoat.com';
 		$referral_url = trailingslashit( $site_url ) . '?x=' . rawurlencode( $affiliate->slug );
 
+		// Lookup assigned WooCommerce coupon details if present
+		$coupon_discount_amount = null;
+		$coupon_discount_type   = null;
+		if ( ! empty( $affiliate->coupon_code ) && class_exists( 'WC_Coupon' ) ) {
+			$c_obj = new WC_Coupon( sanitize_text_field( $affiliate->coupon_code ) );
+			if ( $c_obj && $c_obj->get_id() ) {
+				$coupon_discount_amount = (float) $c_obj->get_amount();
+				$coupon_discount_type   = $c_obj->get_discount_type();
+			}
+		}
+
 		return rest_ensure_response( [
 			'success' => true,
 			'profile' => [
-				'id'                  => (int) $affiliate->id,
-				'username'            => $user ? $user->user_login : '',
-				'first_name'          => $user ? $user->first_name : '',
-				'last_name'           => $user ? $user->last_name : '',
-				'email'               => $user ? $user->user_email : '',
-				'slug'                => $affiliate->slug,
-				'slug_locked'         => (bool) $affiliate->slug_locked,
-				'status'              => $affiliate->status,
-				'affiliate_type'      => $affiliate->affiliate_type,
-				'promotion_channel'   => $affiliate->promotion_channel,
-				'bank_name'           => $affiliate->bank_name,
-				'bank_account_number' => $affiliate->bank_account_number,
-				'bank_account_name'   => $affiliate->bank_account_name,
-				'referral_url'        => $referral_url,
-				'coupon_code'         => $affiliate->coupon_code ?? '',
-				'commission_rate'     => ! empty( $affiliate->commission_rate ) ? (float) $affiliate->commission_rate : self::get_commission_rate(),
+				'id'                     => (int) $affiliate->id,
+				'username'               => $user ? $user->user_login : '',
+				'first_name'             => $user ? $user->first_name : '',
+				'last_name'              => $user ? $user->last_name : '',
+				'email'                  => $user ? $user->user_email : '',
+				'slug'                   => $affiliate->slug,
+				'slug_locked'            => (bool) $affiliate->slug_locked,
+				'status'                 => $affiliate->status,
+				'affiliate_type'         => $affiliate->affiliate_type,
+				'promotion_channel'      => $affiliate->promotion_channel,
+				'bank_name'              => $affiliate->bank_name,
+				'bank_account_number'    => $affiliate->bank_account_number,
+				'bank_account_name'      => $affiliate->bank_account_name,
+				'referral_url'           => $referral_url,
+				'coupon_code'            => $affiliate->coupon_code ?? '',
+				'coupon_discount_amount' => $coupon_discount_amount,
+				'coupon_discount_type'   => $coupon_discount_type,
+				'commission_rate'        => ! empty( $affiliate->commission_rate ) ? (float) $affiliate->commission_rate : self::get_commission_rate(),
 			],
 			'metrics' => [
 				'lifetime_earnings' => (float) $affiliate->lifetime_earnings,
@@ -1657,6 +1680,15 @@ class Exacoat_Affiliate_Manager {
 			foreach ( $results as $aff ) {
 				$u = get_userdata( (int) $aff->user_id );
 				$aff->roles = $u ? array_values( $u->roles ) : [ 'affiliate' ];
+				$aff->coupon_discount_amount = null;
+				$aff->coupon_discount_type   = null;
+				if ( ! empty( $aff->coupon_code ) && class_exists( 'WC_Coupon' ) ) {
+					$c_obj = new WC_Coupon( sanitize_text_field( $aff->coupon_code ) );
+					if ( $c_obj && $c_obj->get_id() ) {
+						$aff->coupon_discount_amount = (float) $c_obj->get_amount();
+						$aff->coupon_discount_type   = $c_obj->get_discount_type();
+					}
+				}
 			}
 		}
 
@@ -2623,6 +2655,10 @@ class Exacoat_Affiliate_Manager {
 				$rate           = ( $order_subtotal > 0 && $comm_amount > 0 ) ? round( ( $comm_amount / $order_subtotal ) * 100, 2 ) : self::get_commission_rate();
 
 				$raw_status = strtolower( trim( (string) ( $sc['status'] ?? 'unpaid' ) ) );
+				// Strictly exclude all SliceWP pending commissions and mistake order 521383
+				if ( 'pending' === $raw_status || $order_id === 521383 || (string) $order_num === '521383' ) {
+					continue;
+				}
 				if ( in_array( $raw_status, [ 'rejected', 'void', 'refunded', 'cancelled', 'trash' ], true ) ) {
 					$status = 'rejected';
 				} elseif ( 'paid' === $raw_status ) {
@@ -2993,6 +3029,10 @@ class Exacoat_Affiliate_Manager {
 					$rate           = ( $order_subtotal > 0 && $comm_amount > 0 ) ? round( ( $comm_amount / $order_subtotal ) * 100, 2 ) : self::get_commission_rate();
 
 					$raw_status  = strtolower( trim( (string) ( $sc->status ?? 'unpaid' ) ) );
+					// Strictly exclude all SliceWP pending commissions and mistake order 521383
+					if ( 'pending' === $raw_status || $order_id === 521383 || (string) $order_num === '521383' ) {
+						continue;
+					}
 					if ( in_array( $raw_status, [ 'rejected', 'void', 'refunded', 'cancelled', 'trash' ], true ) ) {
 						$status = 'rejected';
 					} elseif ( 'paid' === $raw_status ) {
@@ -3227,11 +3267,10 @@ class Exacoat_Affiliate_Manager {
 				}
 			}
 
-			// 1. Mark all pending commissions as unpaid (unless explicitly rejected or void)
+			// 1. Exclude and purge all SliceWP pending commissions and mistake order 521383
 			$wpdb->query(
-				"UPDATE {$table_commissions} 
-				 SET status = 'unpaid' 
-				 WHERE status = 'pending' AND (rejection_reason IS NULL OR rejection_reason = '')"
+				"DELETE FROM {$table_commissions} 
+				 WHERE order_id = 521383 OR order_number = '521383' OR (notes LIKE '%SliceWP%' AND status = 'pending')"
 			);
 
 			// 2. Ensure creator profiles, coupon assignments, and commissions
@@ -3293,7 +3332,7 @@ class Exacoat_Affiliate_Manager {
 			return [
 				'success'              => true,
 				'affiliates_processed' => $count,
-				'message'              => 'All pending commissions marked as unpaid and creator balances recalculated successfully.',
+				'message'              => 'Creator balances and historical records recalculated successfully without pending mistakes.',
 			];
 		} catch ( \Throwable $e ) {
 			if ( class_exists( 'Exacoat_Logger' ) ) {

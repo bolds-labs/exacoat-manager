@@ -47,7 +47,11 @@ export const AffiliatePortalApp: React.FC = () => {
     setIsLoadingData(true);
     setErrorMsg(null);
     try {
-      const res = await fetchAffiliatePortalData();
+      const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+      const affIdParam = searchParams?.get('affiliate_id');
+      const isStaff = user.role === 'super_admin' || user.role === 'manager' || user.role === 'shop_manager';
+      const targetAffId = affIdParam && isStaff ? Number(affIdParam) : undefined;
+      const res = await fetchAffiliatePortalData(targetAffId);
       if (res.success && res.profile) {
         setProfile(res.profile);
         if (res.metrics) setMetrics(res.metrics);

@@ -669,6 +669,8 @@ export interface AffiliateProfile {
   promotion_channel: string;
   promotion_notes?: string;
   coupon_code?: string;
+  coupon_discount_amount?: number;
+  coupon_discount_type?: string;
   commission_rate?: number;
   bank_name: AffiliateBankName | '';
   bank_account_number: string;

@@ -7085,7 +7085,7 @@ export async function registerAffiliateApplicant(
   }
 }
 
-export async function fetchAffiliatePortalData(): Promise<{
+export async function fetchAffiliatePortalData(affiliateId?: number): Promise<{
   success: boolean;
   profile?: AffiliateProfile;
   metrics?: {
@@ -7104,7 +7104,8 @@ export async function fetchAffiliatePortalData(): Promise<{
   error?: string;
 }> {
   const base = getWordPressBaseUrl();
-  const url = `${base}/wp-json/exacoat/v1/affiliate/portal`;
+  const query = affiliateId ? `?affiliate_id=${encodeURIComponent(affiliateId)}` : '';
+  const url = `${base}/wp-json/exacoat/v1/affiliate/portal${query}`;
 
   try {
     const res = await authenticatedFetch(url, {
