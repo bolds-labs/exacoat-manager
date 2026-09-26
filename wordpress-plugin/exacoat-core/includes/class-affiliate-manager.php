@@ -156,7 +156,22 @@ class Exacoat_Affiliate_Manager {
 		) {$charset_collate};";
 		dbDelta( $sql_payouts );
 
-		update_option( 'exacoat_affiliate_db_version', $target_ver );
+		$table_clicks = $wpdb->prefix . 'exacoat_affiliate_clicks';
+		$sql_clicks   = "CREATE TABLE {$table_clicks} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			affiliate_id bigint(20) unsigned NOT NULL,
+			landing_url varchar(255) NOT NULL DEFAULT '',
+			referrer_url varchar(255) NOT NULL DEFAULT '',
+			ip_address varchar(45) NOT NULL DEFAULT '',
+			user_agent varchar(255) NOT NULL DEFAULT '',
+			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY  (id),
+			KEY affiliate_id (affiliate_id),
+			KEY created_at (created_at)
+		) {$charset_collate};";
+		dbDelta( $sql_clicks );
+
+		update_option( 'exacoat_affiliate_db_version', '1.2.0' );
 	}
 
 	/**
@@ -184,6 +199,26 @@ class Exacoat_Affiliate_Manager {
 				"UPDATE {$table_affiliates} SET total_clicks = total_clicks + 1 WHERE id = %d",
 				$affiliate->id
 			)
+		);
+
+		// Record detailed click event for analytics
+		$table_clicks = $wpdb->prefix . 'exacoat_affiliate_clicks';
+		$req_uri      = ! empty( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/';
+		$referrer     = ! empty( $_SERVER['HTTP_REFERER'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_REFERER'] ) ) : '';
+		$user_agent   = ! empty( $_SERVER['HTTP_USER_AGENT'] ) ? substr( sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ), 0, 255 ) : '';
+		$remote_ip    = ! empty( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+
+		$wpdb->insert(
+			$table_clicks,
+			[
+				'affiliate_id' => (int) $affiliate->id,
+				'landing_url'  => $req_uri,
+				'referrer_url' => $referrer,
+				'ip_address'   => $remote_ip,
+				'user_agent'   => $user_agent,
+				'created_at'   => current_time( 'mysql' ),
+			],
+			[ '%d', '%s', '%s', '%s', '%s', '%s' ]
 		);
 
 		$cookie_domain = self::get_cookie_domain();
@@ -697,10 +732,57 @@ class Exacoat_Affiliate_Manager {
 	}
 
 	/**
+	 * Verify Cloudflare Turnstile bot prevention token.
+	 */
+	public static function verify_turnstile( string $token, string $remote_ip = '' ): bool {
+		if ( empty( $token ) ) {
+			return false;
+		}
+
+		$secret_key = defined( 'CLOUDFLARE_TURNSTILE_SECRET_KEY' ) ? CLOUDFLARE_TURNSTILE_SECRET_KEY : '';
+		if ( empty( $secret_key ) ) {
+			return true;
+		}
+
+		$body = [
+			'secret'   => $secret_key,
+			'response' => $token,
+		];
+		if ( ! empty( $remote_ip ) ) {
+			$body['remoteip'] = $remote_ip;
+		}
+
+		$response = wp_remote_post( 'https://challenges.cloudflare.com/turnstile/v0/siteverify', [
+			'timeout' => 10,
+			'body'    => $body,
+		] );
+
+		if ( is_wp_error( $response ) ) {
+			error_log( '[Exacoat Turnstile] Verification API request error: ' . $response->get_error_message() );
+			return false;
+		}
+
+		$data = json_decode( wp_remote_retrieve_body( $response ), true );
+		return ! empty( $data['success'] );
+	}
+
+	/**
 	 * Endpoint: Register a new affiliate applicant.
 	 */
 	public static function rest_register( WP_REST_Request $request ) {
 		$params = $request->get_json_params() ?: $request->get_params();
+
+		// Verify Cloudflare Turnstile token to prevent spam bots
+		$turnstile_token = trim( $params['turnstile_token'] ?? ( $params['cf-turnstile-response'] ?? '' ) );
+		$remote_ip       = ! empty( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+
+		if ( ! self::verify_turnstile( $turnstile_token, $remote_ip ) ) {
+			return new WP_Error(
+				'turnstile_failed',
+				'Bot verification challenge failed. Please verify you are human and try again.',
+				[ 'status' => 403 ]
+			);
+		}
 
 		$username          = sanitize_user( trim( $params['username'] ?? '' ) );
 		$first_name        = sanitize_text_field( trim( $params['first_name'] ?? '' ) );
@@ -829,6 +911,57 @@ class Exacoat_Affiliate_Manager {
 			)
 		);
 
+		// Retrieve recent clicks/visits for analytics
+		$table_clicks = $wpdb->prefix . 'exacoat_affiliate_clicks';
+		$clicks = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT id, landing_url, referrer_url, created_at 
+				FROM {$table_clicks} 
+				WHERE affiliate_id = %d 
+				ORDER BY id DESC LIMIT 300",
+				$affiliate->id
+			)
+		);
+
+		// Compute aggregated daily stats for the last 60 days
+		$daily_clicks = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT DATE(created_at) as stat_date, COUNT(*) as visit_count 
+				FROM {$table_clicks} 
+				WHERE affiliate_id = %d AND created_at >= DATE_SUB(NOW(), INTERVAL 60 DAY)
+				GROUP BY DATE(created_at)",
+				$affiliate->id
+			),
+			OBJECT_K
+		);
+
+		$daily_commissions = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT DATE(created_at) as stat_date, COUNT(*) as order_count, SUM(commission_amount) as total_earnings 
+				FROM {$table_commissions} 
+				WHERE affiliate_id = %d AND status != 'rejected' AND created_at >= DATE_SUB(NOW(), INTERVAL 60 DAY)
+				GROUP BY DATE(created_at)",
+				$affiliate->id
+			),
+			OBJECT_K
+		);
+
+		$all_dates = array_unique( array_merge( array_keys( $daily_clicks ?: [] ), array_keys( $daily_commissions ?: [] ) ) );
+		sort( $all_dates );
+
+		$daily_stats = [];
+		foreach ( $all_dates as $d ) {
+			$v = isset( $daily_clicks[ $d ] ) ? (int) $daily_clicks[ $d ]->visit_count : 0;
+			$o = isset( $daily_commissions[ $d ] ) ? (int) $daily_commissions[ $d ]->order_count : 0;
+			$e = isset( $daily_commissions[ $d ] ) ? (float) $daily_commissions[ $d ]->total_earnings : 0.0;
+			$daily_stats[] = [
+				'date'     => $d,
+				'visits'   => $v,
+				'orders'   => $o,
+				'earnings' => $e,
+			];
+		}
+
 		$site_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'https://exacoat.com';
 		$referral_url = trailingslashit( $site_url ) . '?ref=' . rawurlencode( $affiliate->slug );
 
@@ -862,6 +995,8 @@ class Exacoat_Affiliate_Manager {
 			],
 			'commissions' => $commissions ?: [],
 			'payouts'     => $payouts ?: [],
+			'clicks'      => $clicks ?: [],
+			'daily_stats' => $daily_stats ?: [],
 		] );
 	}
 

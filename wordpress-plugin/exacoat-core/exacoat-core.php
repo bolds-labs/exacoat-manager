@@ -33,6 +33,14 @@ if ( ! defined( 'EXACOAT_MEDIA_URL' ) ) {
 	define( 'EXACOAT_MEDIA_URL', getenv( 'EXACOAT_MEDIA_URL' ) ?: 'https://exacoat.com' );
 }
 
+// Cloudflare Turnstile anti-spam keys (overridable in wp-config.php)
+if ( ! defined( 'CLOUDFLARE_TURNSTILE_SITE_KEY' ) ) {
+	define( 'CLOUDFLARE_TURNSTILE_SITE_KEY', '0x4AAAAAAFEWyzSLkA95XBCd' );
+}
+if ( ! defined( 'CLOUDFLARE_TURNSTILE_SECRET_KEY' ) ) {
+	define( 'CLOUDFLARE_TURNSTILE_SECRET_KEY', '0x4AAAAAAFEWy0Xbv1s9RUfqSE0O896viQY' );
+}
+
 // Safety Fallbacks for legacy/forked constant references to prevent fatal undefined constant crashes
 if ( ! defined( 'ARTMATTER_CORE_VERSION' ) ) {
 	define( 'ARTMATTER_CORE_VERSION', EXACOAT_CORE_VERSION );

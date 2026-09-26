@@ -32,6 +32,8 @@ const AFFILIATE_TYPE_OPTIONS = [
   'Other Promotional Channel',
 ];
 
+const TURNSTILE_SITE_KEY = '0x4AAAAAAFEWyzSLkA95XBCd';
+
 export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ onNavigateToLogin }) => {
   const { showToast } = useToast();
 
@@ -43,9 +45,65 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [promotionChannel, setPromotionChannel] = useState('');
   const [promotionNotes, setPromotionNotes] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
+
+  const turnstileContainerRef = React.useRef<HTMLDivElement>(null);
+  const widgetIdRef = React.useRef<string | null>(null);
+
+  // Load and render Cloudflare Turnstile widget
+  React.useEffect(() => {
+    const scriptId = 'cf-turnstile-script';
+    let script = document.getElementById(scriptId) as HTMLScriptElement | null;
+
+    const renderWidget = () => {
+      const turnstile = (window as any).turnstile;
+      if (turnstile && turnstileContainerRef.current && !widgetIdRef.current) {
+        try {
+          widgetIdRef.current = turnstile.render(turnstileContainerRef.current, {
+            sitekey: TURNSTILE_SITE_KEY,
+            theme: 'dark',
+            callback: (token: string) => {
+              setTurnstileToken(token);
+            },
+            'expired-callback': () => {
+              setTurnstileToken('');
+            },
+            'error-callback': () => {
+              setTurnstileToken('');
+            },
+          });
+        } catch (err) {
+          console.warn('Turnstile render notice:', err);
+        }
+      }
+    };
+
+    if (!script) {
+      script = document.createElement('script');
+      script.id = scriptId;
+      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        renderWidget();
+      };
+      document.head.appendChild(script);
+    } else if ((window as any).turnstile) {
+      renderWidget();
+    }
+
+    return () => {
+      if (widgetIdRef.current && (window as any).turnstile) {
+        try {
+          (window as any).turnstile.remove(widgetIdRef.current);
+          widgetIdRef.current = null;
+        } catch {}
+      }
+    };
+  }, []);
 
   const toggleTypeOption = (opt: string) => {
     if (selectedTypes.includes(opt)) {
@@ -78,6 +136,11 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
       return;
     }
 
+    if (!turnstileToken) {
+      showToast('warning', 'Verification Required', 'Please complete the Cloudflare security verification challenge.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const res = await registerAffiliateApplicant({
@@ -89,6 +152,7 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
         affiliate_type: selectedTypes,
         promotion_channel: promotionChannel.trim(),
         promotion_notes: promotionNotes.trim(),
+        turnstile_token: turnstileToken,
       });
 
       if (res.success) {
@@ -348,6 +412,17 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
                 <p className="leading-relaxed">
                   Commissions are 20% on product subtotal (excluding shipping and taxes). Self referrals are strictly prohibited. Cancelled or refunded orders forfeit commission. Payout minimum is Rp 250.000 via BCA or Mandiri.
                 </p>
+              </div>
+
+              {/* Cloudflare Turnstile Bot Prevention */}
+              <div className="p-3.5 rounded-2xl bg-[#09090b]/80 border border-white/[0.08] flex flex-col items-center justify-center min-h-[75px] space-y-1.5">
+                <div ref={turnstileContainerRef} />
+                {!turnstileToken && (
+                  <p className="text-[11px] text-zinc-400 flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#f3aa18]" />
+                    <span>Please verify the security check above to submit application</span>
+                  </p>
+                )}
               </div>
 
               {/* Submit Button */}

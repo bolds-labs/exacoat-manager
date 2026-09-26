@@ -8,7 +8,7 @@ import { AffiliateSettingsPage } from './pages/AffiliateSettingsPage';
 import { AffiliateRegisterPage } from './pages/AffiliateRegisterPage';
 import { LoginPage } from '../pages/LoginPage';
 import { fetchAffiliatePortalData } from '../lib/wordpressBridge';
-import { AffiliateProfile, AffiliateCommission, AffiliatePayout } from '../types';
+import { AffiliateProfile, AffiliateCommission, AffiliatePayout, AffiliateClick, AffiliateDailyStat } from '../types';
 import { Loader2, AlertCircle } from 'lucide-react';
 
 export const AffiliatePortalApp: React.FC = () => {
@@ -37,6 +37,8 @@ export const AffiliatePortalApp: React.FC = () => {
   });
   const [commissions, setCommissions] = useState<AffiliateCommission[]>([]);
   const [payouts, setPayouts] = useState<AffiliatePayout[]>([]);
+  const [clicks, setClicks] = useState<AffiliateClick[]>([]);
+  const [dailyStats, setDailyStats] = useState<AffiliateDailyStat[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -51,6 +53,8 @@ export const AffiliatePortalApp: React.FC = () => {
         if (res.metrics) setMetrics(res.metrics);
         if (res.commissions) setCommissions(res.commissions);
         if (res.payouts) setPayouts(res.payouts);
+        if (res.clicks) setClicks(res.clicks);
+        if (res.daily_stats) setDailyStats(res.daily_stats);
       } else {
         setErrorMsg(res.error || 'Unable to retrieve affiliate profile.');
       }
@@ -144,6 +148,10 @@ export const AffiliatePortalApp: React.FC = () => {
           profile={profile}
           metrics={metrics}
           commissions={commissions}
+          clicks={clicks}
+          dailyStats={dailyStats}
+          onRefresh={loadPortalData}
+          isLoading={isLoadingData}
           onNavigateTab={setCurrentTab}
         />
       )}

@@ -716,6 +716,21 @@ export interface AffiliatePayout {
   user_email?: string;
 }
 
+export interface AffiliateClick {
+  id: number;
+  affiliate_id: number;
+  landing_url: string;
+  referrer_url: string;
+  created_at: string;
+}
+
+export interface AffiliateDailyStat {
+  date: string;
+  visits: number;
+  orders: number;
+  earnings: number;
+}
+
 export interface AffiliateRegistrationPayload {
   username: string;
   first_name: string;
@@ -725,4 +740,5 @@ export interface AffiliateRegistrationPayload {
   affiliate_type: string[] | string;
   promotion_channel: string;
   promotion_notes: string;
+  turnstile_token?: string;
 }

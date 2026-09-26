@@ -20,7 +20,9 @@ import {
   AffiliateProfile,
   AffiliateCommission,
   AffiliatePayout,
-  AffiliateRegistrationPayload
+  AffiliateRegistrationPayload,
+  AffiliateClick,
+  AffiliateDailyStat
 } from '../types';
 export type { MarketplaceDeviceImageSettings };
 import { renderEmailHtmlLocally } from './emailRenderer';
@@ -7096,6 +7098,8 @@ export async function fetchAffiliatePortalData(): Promise<{
   };
   commissions?: AffiliateCommission[];
   payouts?: AffiliatePayout[];
+  clicks?: AffiliateClick[];
+  daily_stats?: AffiliateDailyStat[];
   error?: string;
 }> {
   const base = getWordPressBaseUrl();
