@@ -1510,6 +1510,12 @@ class Exacoat_Affiliate_Manager {
 				'permission_callback' => [ __CLASS__, 'check_admin_auth' ],
 			] );
 
+			register_rest_route( $ns, '/affiliate/admin/delete', [
+				'methods'             => 'POST',
+				'callback'            => [ __CLASS__, 'rest_admin_delete_affiliate' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_auth' ],
+			] );
+
 			register_rest_route( $ns, '/affiliate/admin/commissions', [
 				'methods'             => 'GET',
 				'callback'            => [ __CLASS__, 'rest_admin_get_commissions' ],
@@ -5313,7 +5319,7 @@ class Exacoat_Affiliate_Manager {
 	}
 
 	/**
-	 * Admin Endpoint: Update commission rate and/or coupon code for an affiliate.
+	 * Admin Endpoint: Update commission rate, slug, display name, discount rate, and/or coupon code for an affiliate.
 	 */
 	public static function rest_admin_update_commission_rate( WP_REST_Request $request ) {
 		$params          = $request->get_json_params() ?: $request->get_params();
@@ -5345,21 +5351,60 @@ class Exacoat_Affiliate_Manager {
 			$update_data['coupon_code'] = $coupon_code;
 		}
 
+		// Handle creator slug change if provided
+		$new_slug = '';
+		if ( ! empty( $params['slug'] ) ) {
+			$new_slug = sanitize_title( trim( (string) $params['slug'] ) );
+			if ( empty( $new_slug ) ) {
+				return new WP_Error( 'invalid_slug', 'Creator slug cannot be empty.', [ 'status' => 400 ] );
+			}
+			if ( $new_slug !== $affiliate->slug ) {
+				$existing_slug = $wpdb->get_var(
+					$wpdb->prepare( "SELECT id FROM {$table_affiliates} WHERE slug = %s AND id != %d LIMIT 1", $new_slug, $affiliate_id )
+				);
+				if ( $existing_slug ) {
+					return new WP_Error( 'slug_exists', 'This creator slug is already in use by another affiliate.', [ 'status' => 400 ] );
+				}
+				$update_data['slug'] = $new_slug;
+			}
+		}
+
+		// Handle display name
+		if ( isset( $params['display_name'] ) ) {
+			$update_data['display_name'] = sanitize_text_field( trim( (string) $params['display_name'] ) );
+		}
+
+		// Handle discount rate
+		if ( isset( $params['discount_rate'] ) && '' !== $params['discount_rate'] && null !== $params['discount_rate'] ) {
+			$update_data['discount_rate'] = round( (float) $params['discount_rate'], 2 );
+		}
+
 		$wpdb->update(
 			$table_affiliates,
 			$update_data,
 			[ 'id' => $affiliate_id ]
 		);
 
+		$effective_slug = ! empty( $new_slug ) ? $new_slug : $affiliate->slug;
+
+		// Keep user meta synchronized
+		if ( ! empty( $affiliate->user_id ) ) {
+			update_user_meta( $affiliate->user_id, 'exacoat_affiliate_slug', $effective_slug );
+			if ( isset( $update_data['display_name'] ) && ! empty( $update_data['display_name'] ) ) {
+				update_user_meta( $affiliate->user_id, 'exacoat_creator_display_name', $update_data['display_name'] );
+			}
+		}
+
 		// Synchronize coupon if set
-		if ( ! empty( $coupon_code ) && function_exists( 'wc_get_coupon_id_by_code' ) ) {
+		$effective_coupon = isset( $params['coupon_code'] ) ? $coupon_code : $affiliate->coupon_code;
+		if ( ! empty( $effective_coupon ) && function_exists( 'wc_get_coupon_id_by_code' ) ) {
 			try {
-				$coupon_id  = wc_get_coupon_id_by_code( $coupon_code );
+				$coupon_id  = wc_get_coupon_id_by_code( $effective_coupon );
 				$aff_user   = get_userdata( $affiliate->user_id );
 				$user_email = $aff_user ? $aff_user->user_email : '';
 				if ( $coupon_id > 0 ) {
 					update_post_meta( $coupon_id, '_exacoat_affiliate_id', $affiliate_id );
-					update_post_meta( $coupon_id, '_exacoat_affiliate_slug', $affiliate->slug );
+					update_post_meta( $coupon_id, '_exacoat_affiliate_slug', $effective_slug );
 					if ( $user_email ) {
 						update_post_meta( $coupon_id, '_exacoat_affiliate_email', $user_email );
 					}
@@ -5374,8 +5419,68 @@ class Exacoat_Affiliate_Manager {
 
 		return rest_ensure_response( [
 			'success'   => true,
-			'message'   => 'Commission rate and settings updated successfully.',
+			'message'   => 'Creator settings and commission rate updated successfully.',
 			'affiliate' => $updated,
+		] );
+	}
+
+	/**
+	 * Admin Endpoint: Delete an affiliate, revoking their affiliate role without deleting their WordPress user account.
+	 */
+	public static function rest_admin_delete_affiliate( WP_REST_Request $request ) {
+		$params       = $request->get_json_params() ?: $request->get_params();
+		$affiliate_id = (int) ( $params['affiliate_id'] ?? 0 );
+
+		if ( ! $affiliate_id ) {
+			return new WP_Error( 'missing_id', 'Affiliate ID is required.', [ 'status' => 400 ] );
+		}
+
+		global $wpdb;
+		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
+
+		$affiliate = $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$table_affiliates} WHERE id = %d LIMIT 1", $affiliate_id )
+		);
+
+		if ( ! $affiliate ) {
+			return new WP_Error( 'not_found', 'Affiliate not found.', [ 'status' => 404 ] );
+		}
+
+		$user_id = (int) $affiliate->user_id;
+
+		// 1. Revoke affiliate role from WordPress user account (DO NOT delete the user account)
+		if ( $user_id > 0 ) {
+			$user = get_userdata( $user_id );
+			if ( $user ) {
+				$user->remove_role( self::ROLE_AFFILIATE );
+				$user->remove_role( 'exacoat_affiliate' );
+			}
+			delete_user_meta( $user_id, 'exacoat_affiliate_id' );
+			delete_user_meta( $user_id, 'exacoat_affiliate_slug' );
+			delete_user_meta( $user_id, 'exacoat_creator_display_name' );
+		}
+
+		// 2. Unlink any attached coupon postmeta
+		if ( ! empty( $affiliate->coupon_code ) && function_exists( 'wc_get_coupon_id_by_code' ) ) {
+			try {
+				$coupon_id = wc_get_coupon_id_by_code( $affiliate->coupon_code );
+				if ( $coupon_id > 0 ) {
+					delete_post_meta( $coupon_id, '_exacoat_affiliate_id' );
+					delete_post_meta( $coupon_id, '_exacoat_affiliate_slug' );
+				}
+			} catch ( \Throwable $e ) {
+			}
+		}
+
+		// 3. Remove record from affiliates table
+		$wpdb->delete(
+			$table_affiliates,
+			[ 'id' => $affiliate_id ]
+		);
+
+		return rest_ensure_response( [
+			'success' => true,
+			'message' => 'Affiliate removed and affiliate role revoked successfully. User account was preserved.',
 		] );
 	}
 

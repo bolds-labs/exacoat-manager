@@ -7654,6 +7654,7 @@ export async function runAdminSliceWpMigration(options: {
 
 export async function updateAdminAffiliateCommissionRate(payload: {
   affiliate_id: number;
+  slug?: string;
   commission_rate: number | null;
   display_name?: string;
   discount_rate?: number | null;
@@ -7685,6 +7686,38 @@ export async function updateAdminAffiliateCommissionRate(payload: {
       return { success: true, message: data.message, affiliate: data.affiliate };
     }
     return { success: false, error: data?.message || 'Failed to update commission rate.' };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function deleteAdminAffiliate(affiliateId: number): Promise<{ success: boolean; message?: string; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const wcCreds = getWcCredentials();
+  const authKey = wcCreds.key || 'ck_d3c2e9b67aa61b8c189dc89d7b99974002420cec';
+  const authSecret = wcCreds.secret || 'cs_c0ff3f48991c0c0a66cb5c7b14749cbc0f6a5b52';
+  const queryParams = new URLSearchParams({
+    consumer_key: authKey,
+    consumer_secret: authSecret,
+  }).toString();
+
+  const url = `${base}/wp-json/exacoat/v1/affiliate/admin/delete?${queryParams}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ affiliate_id: affiliateId }),
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, message: data.message };
+    }
+    return { success: false, error: data?.message || 'Failed to delete affiliate.' };
   } catch (err: any) {
     return { success: false, error: err.message };
   }

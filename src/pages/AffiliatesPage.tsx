@@ -34,7 +34,9 @@ import {
   Tag,
   Edit3,
   Plus,
-  DollarSign
+  DollarSign,
+  Settings,
+  Trash2
 } from 'lucide-react';
 import { 
   fetchAdminAffiliates, 
@@ -53,7 +55,8 @@ import {
   updateAdminAffiliateCommissionRate,
   createAdminManualCommission,
   updateAdminCommission,
-  fetchAffiliatePortalData
+  fetchAffiliatePortalData,
+  deleteAdminAffiliate
 } from '../lib/wordpressBridge';
 import { AffiliateCommission, AffiliatePayout, Order } from '../types';
 import { OrderDetailDrawer } from '../components/orders/OrderDetailDrawer';
@@ -148,6 +151,7 @@ export const AffiliatesPage: React.FC = () => {
 
   // Coupon, Commission Rate & Manual Adjustment State
   const [selectedAffiliateForCoupon, setSelectedAffiliateForCoupon] = useState<any | null>(null);
+  const [creatorSlugInput, setCreatorSlugInput] = useState('');
   const [creatorDisplayNameInput, setCreatorDisplayNameInput] = useState('');
   const [discountRateInput, setDiscountRateInput] = useState('');
   const [couponCodeInput, setCouponCodeInput] = useState('');
@@ -159,6 +163,10 @@ export const AffiliatesPage: React.FC = () => {
   const [manualAdjStatus, setManualAdjStatus] = useState<'unpaid' | 'paid'>('unpaid');
   const [isAssigningCoupon, setIsAssigningCoupon] = useState(false);
   const [isRecalculatingBalances, setIsRecalculatingBalances] = useState(false);
+
+  // Delete Affiliate Confirmation State
+  const [deletingAffiliate, setDeletingAffiliate] = useState<any | null>(null);
+  const [isDeletingAffiliate, setIsDeletingAffiliate] = useState(false);
 
   // Dedicated Add Manual Commission Modal State
   const [isAddManualCommissionOpen, setIsAddManualCommissionOpen] = useState(false);
@@ -195,6 +203,7 @@ export const AffiliatesPage: React.FC = () => {
     rejectingApp ||
     payingPayout ||
     selectedAffiliateForCoupon ||
+    deletingAffiliate ||
     isAddManualCommissionOpen ||
     editingCommission ||
     previewCreatorAffiliate
@@ -212,6 +221,7 @@ export const AffiliatesPage: React.FC = () => {
       if (e.key === 'Escape') {
         if (previewCreatorAffiliate) setPreviewCreatorAffiliate(null);
         else if (selectedAffiliateForCoupon) setSelectedAffiliateForCoupon(null);
+        else if (deletingAffiliate) setDeletingAffiliate(null);
         else if (rejectingApp) setRejectingApp(null);
         else if (payingPayout) setPayingPayout(null);
         else if (isAddManualCommissionOpen) setIsAddManualCommissionOpen(false);
@@ -220,7 +230,7 @@ export const AffiliatesPage: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [previewCreatorAffiliate, selectedAffiliateForCoupon, rejectingApp, payingPayout, isAddManualCommissionOpen, editingCommission]);
+  }, [previewCreatorAffiliate, selectedAffiliateForCoupon, deletingAffiliate, rejectingApp, payingPayout, isAddManualCommissionOpen, editingCommission]);
 
   const handleSeeAsCreator = async (aff: any) => {
     setPreviewCreatorAffiliate(aff);
@@ -258,6 +268,7 @@ export const AffiliatesPage: React.FC = () => {
 
   const handleOpenCouponModal = (aff: any) => {
     setSelectedAffiliateForCoupon(aff);
+    setCreatorSlugInput(aff.slug || '');
     setCreatorDisplayNameInput(aff.creator_display_name || aff.display_name || '');
     setDiscountRateInput(aff.discount_rate != null ? String(aff.discount_rate) : '0');
     setCouponCodeInput(aff.coupon_code || '');
@@ -276,6 +287,7 @@ export const AffiliatesPage: React.FC = () => {
     try {
       const res = await updateAdminAffiliateCommissionRate({
         affiliate_id: selectedAffiliateForCoupon.id,
+        slug: creatorSlugInput.trim().toLowerCase(),
         coupon_code: couponCodeInput.trim(),
         commission_rate: commissionRateInput.trim() ? parseFloat(commissionRateInput) : null,
         display_name: creatorDisplayNameInput.trim(),
@@ -310,6 +322,25 @@ export const AffiliatesPage: React.FC = () => {
       showToast('error', 'Error', err.message);
     } finally {
       setIsAssigningCoupon(false);
+    }
+  };
+
+  const handleConfirmDeleteAffiliate = async () => {
+    if (!deletingAffiliate) return;
+    setIsDeletingAffiliate(true);
+    try {
+      const res = await deleteAdminAffiliate(deletingAffiliate.id);
+      if (res.success) {
+        showToast('success', 'Affiliate Deleted', 'Affiliate removed and role revoked. User account kept.');
+        setDeletingAffiliate(null);
+        loadData();
+      } else {
+        showToast('error', 'Delete Failed', res.error || 'Failed to delete affiliate.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message);
+    } finally {
+      setIsDeletingAffiliate(false);
     }
   };
 
@@ -1031,7 +1062,6 @@ export const AffiliatesPage: React.FC = () => {
                 <thead>
                   <tr className="border-b border-white/[0.06] text-neutral-400 font-medium bg-white/[0.02]">
                     <th className="py-3 pl-4">Creator / Slug</th>
-                    <th className="py-3">Account Roles</th>
                     <th className="py-3">Status</th>
                     <th className="py-3">Rate</th>
                     <th className="py-3">Clicks</th>
@@ -1045,7 +1075,7 @@ export const AffiliatesPage: React.FC = () => {
                 <tbody className="divide-y divide-white/[0.04]">
                   {affiliates.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="py-12 text-center text-neutral-400">
+                      <td colSpan={9} className="py-12 text-center text-neutral-400">
                         No affiliates match the current filters.
                       </td>
                     </tr>
@@ -1075,35 +1105,6 @@ export const AffiliatesPage: React.FC = () => {
                               >
                                 <Percent className="w-3 h-3 text-neutral-400" />
                                 0% Off Link
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-3">
-                          <div className="flex flex-wrap gap-1">
-                            {aff.roles && Array.isArray(aff.roles) ? (
-                              aff.roles.map((r: string) => {
-                                const roleStyles: Record<string, string> = {
-                                  affiliate: 'bg-[#f3aa18]/15 text-[#f3aa18] border-[#f3aa18]/30',
-                                  administrator: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
-                                  customer: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
-                                  subscriber: 'bg-neutral-500/15 text-neutral-300 border-neutral-500/30',
-                                };
-                                return (
-                                  <span
-                                    key={r}
-                                    className={clsx(
-                                      'px-1.5 py-0.5 rounded text-[10px] font-mono border capitalize',
-                                      roleStyles[r.toLowerCase()] || 'bg-white/[0.05] text-neutral-400 border-white/10'
-                                    )}
-                                  >
-                                    {r}
-                                  </span>
-                                );
-                              })
-                            ) : (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono border bg-[#f3aa18]/15 text-[#f3aa18] border-[#f3aa18]/30">
-                                Affiliate
                               </span>
                             )}
                           </div>
@@ -1151,7 +1152,7 @@ export const AffiliatesPage: React.FC = () => {
                           )}
                         </td>
                         <td className="py-3 pr-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-1.5">
                             <button
                               type="button"
                               onClick={() => handleSeeAsCreator(aff)}
@@ -1161,22 +1162,22 @@ export const AffiliatesPage: React.FC = () => {
                               <Eye className="w-3.5 h-3.5 text-[#f3aa18]" />
                               <span>See as Creator</span>
                             </button>
-                            <span className="text-white/20">|</span>
+                            <span className="text-white/15">|</span>
                             <button
                               type="button"
                               onClick={() => handleOpenCouponModal(aff)}
-                              className="text-[11px] font-medium text-amber-400 hover:text-amber-300 transition-colors cursor-pointer flex items-center gap-1"
-                              title="Edit commission rate, promo coupon, or add manual balance adjustment"
+                              className="p-1 rounded text-neutral-400 hover:text-[#f3aa18] hover:bg-white/[0.06] transition-colors cursor-pointer"
+                              title="Creator Settings, Slug & Commission"
                             >
-                              <Sliders className="w-3 h-3" />
-                              <span>Edit Commission</span>
+                              <Settings className="w-4 h-4" />
                             </button>
-                            <span className="text-white/20">|</span>
+                            <span className="text-white/15">|</span>
                             {aff.status === 'active' ? (
                               <button
                                 type="button"
                                 onClick={() => updateAdminAffiliateStatus(aff.id, 'suspended').then(loadData)}
-                                className="text-[11px] font-medium text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
+                                className="text-[11px] font-medium text-amber-400/80 hover:text-amber-300 transition-colors cursor-pointer"
+                                title="Suspend affiliate"
                               >
                                 Suspend
                               </button>
@@ -1185,10 +1186,20 @@ export const AffiliatesPage: React.FC = () => {
                                 type="button"
                                 onClick={() => updateAdminAffiliateStatus(aff.id, 'active').then(loadData)}
                                 className="text-[11px] font-medium text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                                title="Activate affiliate"
                               >
                                 Activate
                               </button>
                             )}
+                            <span className="text-white/15">|</span>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingAffiliate(aff)}
+                              className="p-1 rounded text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                              title="Delete affiliate (revoke role only, keeps account)"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -2080,17 +2091,40 @@ export const AffiliatesPage: React.FC = () => {
 
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-                  <Sliders className="w-5 h-5" />
+                  <Settings className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-semibold text-white">Edit Creator Settings</h3>
+                  <h3 className="text-base font-semibold text-white">Edit Creator Settings & Commission</h3>
                   <p className="text-xs text-neutral-400">
-                    Settings for <span className="text-[#f3aa18] font-mono">@{selectedAffiliateForCoupon.slug}</span> ({creatorDisplayNameInput || selectedAffiliateForCoupon.creator_display_name || selectedAffiliateForCoupon.display_name || selectedAffiliateForCoupon.user_login})
+                    Settings for <span className="text-[#f3aa18] font-mono">@{creatorSlugInput || selectedAffiliateForCoupon.slug}</span> ({creatorDisplayNameInput || selectedAffiliateForCoupon.creator_display_name || selectedAffiliateForCoupon.display_name || selectedAffiliateForCoupon.user_login})
                   </p>
                 </div>
               </div>
 
               <form onSubmit={handleSaveCouponAssignment} className="space-y-4">
+                {/* Creator Referral Slug */}
+                <div>
+                  <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                    Creator Referral Slug
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs font-bold pointer-events-none">
+                      @
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="e.g. edwinyang"
+                      value={creatorSlugInput}
+                      onChange={(e) => setCreatorSlugInput(e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, ''))}
+                      className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl pl-8 pr-3.5 py-2.5 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
+                      required
+                    />
+                  </div>
+                  <p className="text-[11px] text-neutral-500 mt-1">
+                    Referral link: <span className="font-mono text-[#f3aa18]">exacoat.com/?x={creatorSlugInput || 'slug'}</span>. Must be unique.
+                  </p>
+                </div>
+
                 {/* Creator Display Name */}
                 <div>
                   <label className="block text-xs font-medium text-neutral-300 mb-1.5">
@@ -2306,6 +2340,87 @@ export const AffiliatesPage: React.FC = () => {
                   </Button>
                 </div>
               </form>
+            </GlassCard>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal: Delete Affiliate Confirmation */}
+      {deletingAffiliate && createPortal(
+        <div className="fixed inset-0 z-50">
+          <div
+            className="fixed inset-0 bg-black/85 backdrop-blur-md pointer-events-auto transition-opacity"
+            onClick={() => !isDeletingAffiliate && setDeletingAffiliate(null)}
+            aria-hidden="true"
+          />
+          <div className="fixed inset-0 lg:left-64 z-10 overflow-y-auto flex items-center justify-center p-4 pointer-events-none">
+            <GlassCard className="pointer-events-auto w-full max-w-md bg-[#111111] border border-rose-500/25 rounded-2xl p-6 shadow-2xl relative space-y-4">
+              <button
+                type="button"
+                onClick={() => !isDeletingAffiliate && setDeletingAffiliate(null)}
+                className="absolute top-4 right-4 p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/[0.05] transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-white">Delete Affiliate</h3>
+                  <p className="text-xs text-neutral-400">
+                    Revoke affiliate role while preserving user account
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-rose-500/5 border border-rose-500/20 text-xs text-neutral-300 space-y-2">
+                <p>
+                  Are you sure you want to remove <strong className="text-white">@{deletingAffiliate.slug}</strong> ({deletingAffiliate.creator_display_name || deletingAffiliate.display_name || deletingAffiliate.user_login}) from the affiliate program?
+                </p>
+                <div className="space-y-1.5 text-[11px] pt-1.5 border-t border-rose-500/15">
+                  <div className="flex items-start gap-1.5 text-emerald-400">
+                    <Check className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <span><strong>User Account Kept:</strong> WordPress login, customer history, and account data are not deleted.</span>
+                  </div>
+                  <div className="flex items-start gap-1.5 text-amber-400">
+                    <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <span><strong>Affiliate Role Revoked:</strong> Creator role and affiliate status will be removed immediately.</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDeletingAffiliate(null)}
+                  disabled={isDeletingAffiliate}
+                >
+                  Cancel
+                </Button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteAffiliate}
+                  disabled={isDeletingAffiliate}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white transition-colors cursor-pointer flex items-center gap-1.5 shadow-lg shadow-rose-600/20 disabled:opacity-50"
+                >
+                  {isDeletingAffiliate ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Affiliate Role</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </GlassCard>
           </div>
         </div>,

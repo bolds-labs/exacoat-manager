@@ -80,7 +80,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Default discount rate to 0.00 (0% OFF standard referral link) for creators without past coupons\n- Preserved genuine coupon discounts for Edwin Yang (edwin15 15%), Dimas Sampurno (ds10 10%), Suns Channel (suns10 10%), and Putra S (putra10 10%)\n- Portalled all affiliate admin modals to document body with full-screen dark backdrop and workspace centering\n- Fixed modal scroll locking and backdrop dismiss handlers`,
+      changelog: `### Version ${version}\n- Added option to delete affiliate revoking the affiliate role while preserving WordPress user account and data\n- Removed redundant Account Roles column from affiliate management table\n- Transformed Edit Commission into an icon-only Settings button with support for editing creator referral slugs\n- Synchronized affiliate slug updates across user metadata and WooCommerce promo coupon records`,
     },
   };
 
