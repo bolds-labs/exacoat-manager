@@ -198,19 +198,49 @@ class Exacoat_Affiliate_Manager {
 	 * Cookie tracking: credit last affiliate for 30 days on .exacoat.com.
 	 */
 	public static function capture_referral_cookie(): void {
-		if ( empty( $_GET['ref'] ) ) {
+		$raw_ref = '';
+		if ( ! empty( $_GET['x'] ) ) {
+			$raw_ref = sanitize_text_field( wp_unslash( $_GET['x'] ) );
+		} elseif ( ! empty( $_GET['ref'] ) ) {
+			$raw_ref = sanitize_text_field( wp_unslash( $_GET['ref'] ) );
+		} elseif ( ! empty( $_GET['aff'] ) ) {
+			$raw_ref = sanitize_text_field( wp_unslash( $_GET['aff'] ) );
+		} elseif ( ! empty( $_GET['sla'] ) ) {
+			$raw_ref = sanitize_text_field( wp_unslash( $_GET['sla'] ) );
+		}
+
+		if ( empty( $raw_ref ) ) {
 			return;
 		}
 
-		$raw_slug = sanitize_title( wp_unslash( $_GET['ref'] ) );
-		if ( empty( $raw_slug ) ) {
-			return;
-		}
-
+		$raw_slug = sanitize_title( $raw_ref );
 		$affiliate = self::get_affiliate_by_slug( $raw_slug );
+
+		// If not found by slug, and input is numeric, try finding by affiliate ID, WP user ID, or SliceWP legacy ID
+		if ( ! $affiliate && is_numeric( $raw_ref ) ) {
+			$numeric_id = (int) $raw_ref;
+			$affiliate  = self::get_affiliate_by_id( $numeric_id );
+			if ( ! $affiliate ) {
+				$affiliate = self::get_affiliate_by_user_id( $numeric_id );
+			}
+			if ( ! $affiliate ) {
+				$legacy_users = get_users( [
+					'meta_key'   => '_slicewp_legacy_affiliate_id',
+					'meta_value' => $numeric_id,
+					'number'     => 1,
+					'fields'     => 'ID',
+				] );
+				if ( ! empty( $legacy_users ) ) {
+					$affiliate = self::get_affiliate_by_user_id( (int) $legacy_users[0] );
+				}
+			}
+		}
+
 		if ( ! $affiliate || 'active' !== $affiliate->status ) {
 			return;
 		}
+
+		$canonical_slug = $affiliate->slug;
 
 		global $wpdb;
 		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
@@ -247,7 +277,7 @@ class Exacoat_Affiliate_Manager {
 
 		setcookie(
 			self::COOKIE_NAME,
-			$raw_slug,
+			$canonical_slug,
 			[
 				'expires'  => $ttl,
 				'path'     => '/',
@@ -1015,7 +1045,7 @@ class Exacoat_Affiliate_Manager {
 		}
 
 		$site_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'https://exacoat.com';
-		$referral_url = trailingslashit( $site_url ) . '?ref=' . rawurlencode( $affiliate->slug );
+		$referral_url = trailingslashit( $site_url ) . '?x=' . rawurlencode( $affiliate->slug );
 
 		return rest_ensure_response( [
 			'success' => true,
@@ -1594,7 +1624,7 @@ class Exacoat_Affiliate_Manager {
 			$body    = "<p>Hi {$first_name},</p><p>Thank you for applying to the Exacoat Creator Affiliate Program. Our team is currently reviewing your application channels and promotion methods. We will notify you via email once approved.</p>";
 		} elseif ( 'approved' === $type ) {
 			$subject      = 'Welcome to the Exacoat Affiliate Program';
-			$affiliate_url = trailingslashit( $store_url ) . '?ref=' . rawurlencode( $slug );
+			$affiliate_url = trailingslashit( $store_url ) . '?x=' . rawurlencode( $slug );
 			$portal_url   = 'https://affiliate.exacoat.com';
 			$body         = "<p>Congratulations {$first_name},</p><p>Your Exacoat affiliate application has been approved. You can now access your creator portal to copy your referral link, create product links, and track your commissions.</p><p><strong>Your Referral Link:</strong> <a href=\"{$affiliate_url}\">{$affiliate_url}</a></p><p><a href=\"{$portal_url}\" style=\"display:inline-block;padding:12px 24px;background:#18181b;color:#fff;border-radius:8px;text-decoration:none;\">Open Creator Portal</a></p>";
 		} else {
@@ -1855,17 +1885,37 @@ class Exacoat_Affiliate_Manager {
 				if ( $meta_table ) {
 					$custom_slug = $wpdb->get_var(
 						$wpdb->prepare(
-							"SELECT meta_value FROM {$meta_table} WHERE affiliate_id = %d AND (meta_key = 'custom_keyword' OR meta_key = 'slug') LIMIT 1",
+							"SELECT meta_value FROM {$meta_table} 
+							WHERE affiliate_id = %d 
+							  AND meta_key IN ('custom_slug', 'custom_keyword', 'slug', 'affiliate_slug') 
+							  AND meta_value != '' 
+							ORDER BY meta_id DESC LIMIT 1",
 							$sa->id
 						)
 					);
 				}
+
+				if ( empty( $custom_slug ) ) {
+					$custom_slug = get_user_meta( $user_id, 'slicewp_custom_slug', true ) 
+						?: ( get_user_meta( $user_id, 'slicewp_custom_keyword', true ) ?: '' );
+				}
+
+				if ( empty( $custom_slug ) && ! empty( $sa->slug ) ) {
+					$custom_slug = $sa->slug;
+				}
+				if ( empty( $custom_slug ) && ! empty( $sa->keyword ) ) {
+					$custom_slug = $sa->keyword;
+				}
+
 				if ( empty( $custom_slug ) ) {
 					$custom_slug = sanitize_title( $wp_user->user_login );
 				}
 				if ( empty( $custom_slug ) ) {
 					$custom_slug = 'affiliate-' . $user_id;
 				}
+
+				// Always save the SliceWP affiliate ID in user meta so legacy links like ?sla=12 can resolve
+				update_user_meta( $user_id, '_slicewp_legacy_affiliate_id', (int) $sa->id );
 
 				// Check bank details in user meta
 				$bank_name = get_user_meta( $user_id, 'bank_name', true ) ?: ( get_user_meta( $user_id, '_exacoat_bank_name', true ) ?: '' );
@@ -1947,7 +1997,8 @@ class Exacoat_Affiliate_Manager {
 					continue;
 				}
 
-				$order_id = (int) ( $sc->reference ?? 0 );
+				// SliceWP reference contains the WooCommerce Order ID
+				$order_id = (int) preg_replace( '/[^0-9]/', '', (string) ( $sc->reference ?? '' ) );
 				$order_num = (string) $order_id;
 				$order_subtotal = 0.0;
 				$cust_email = '';
@@ -1964,8 +2015,14 @@ class Exacoat_Affiliate_Manager {
 				$comm_amount = (float) ( $sc->amount ?? 0.0 );
 				$rate = ( $order_subtotal > 0 && $comm_amount > 0 ) ? round( ( $comm_amount / $order_subtotal ) * 100, 2 ) : self::get_commission_rate();
 
-				$raw_status = strtolower( trim( $sc->status ?? 'unpaid' ) );
-				$status = in_array( $raw_status, [ 'paid', 'unpaid', 'pending', 'rejected' ], true ) ? $raw_status : 'unpaid';
+				$raw_status = strtolower( trim( (string) ( $sc->status ?? 'unpaid' ) ) );
+				if ( in_array( $raw_status, [ 'rejected', 'void', 'refunded', 'cancelled', 'trash' ], true ) ) {
+					$status = 'rejected';
+				} elseif ( in_array( $raw_status, [ 'paid', 'unpaid', 'pending' ], true ) ) {
+					$status = $raw_status;
+				} else {
+					$status = 'unpaid';
+				}
 
 				// Prevent duplicate commission record
 				$exists = $wpdb->get_var(
@@ -1998,27 +2055,47 @@ class Exacoat_Affiliate_Manager {
 
 		// 3. Migrate Visits / Clicks
 		if ( $visits_table ) {
-			$raw_visits = $wpdb->get_results( "SELECT * FROM {$visits_table} LIMIT 10000" );
+			$raw_visits = $wpdb->get_results( "SELECT * FROM {$visits_table}" );
 			foreach ( $raw_visits as $sv ) {
 				$slicewp_aff_id = (int) ( $sv->affiliate_id ?? 0 );
 				$exacoat_aff_id = $affiliate_id_map[ $slicewp_aff_id ] ?? 0;
+				if ( ! $exacoat_aff_id ) {
+					if ( $aff_table ) {
+						$s_user = $wpdb->get_var( $wpdb->prepare( "SELECT user_id FROM {$aff_table} WHERE id = %d LIMIT 1", $slicewp_aff_id ) );
+						if ( $s_user ) {
+							$exacoat_aff_id = (int) $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$table_exacoat_affiliates} WHERE user_id = %d LIMIT 1", $s_user ) );
+						}
+					}
+				}
 				if ( ! $exacoat_aff_id ) continue;
 
 				$url = $sv->url ?? '/';
 				$ref = $sv->referrer ?? '';
 				$ip  = $sv->ip_address ?? '';
+				$visit_time = ! empty( $sv->date_created ) ? $sv->date_created : current_time( 'mysql' );
 
-				$wpdb->insert(
-					$table_exacoat_clicks,
-					[
-						'affiliate_id' => $exacoat_aff_id,
-						'landing_url'  => $url,
-						'referrer_url' => $ref,
-						'ip_address'   => $ip,
-						'created_at'   => ! empty( $sv->date_created ) ? $sv->date_created : current_time( 'mysql' ),
-					]
+				// Avoid duplicate clicks if re-running migration
+				$click_exists = $wpdb->get_var(
+					$wpdb->prepare(
+						"SELECT id FROM {$table_exacoat_clicks} WHERE affiliate_id = %d AND created_at = %s LIMIT 1",
+						$exacoat_aff_id,
+						$visit_time
+					)
 				);
-				$clicks_migrated++;
+
+				if ( ! $click_exists ) {
+					$wpdb->insert(
+						$table_exacoat_clicks,
+						[
+							'affiliate_id' => $exacoat_aff_id,
+							'landing_url'  => $url,
+							'referrer_url' => $ref,
+							'ip_address'   => $ip,
+							'created_at'   => $visit_time,
+						]
+					);
+					$clicks_migrated++;
+				}
 			}
 		}
 

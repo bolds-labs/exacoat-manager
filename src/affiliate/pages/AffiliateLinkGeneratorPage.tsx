@@ -46,12 +46,15 @@ export const AffiliateLinkGeneratorPage: React.FC<AffiliateLinkGeneratorPageProp
   const buildAffiliateUrl = (rawUrl: string): string => {
     try {
       const url = new URL(rawUrl.trim(), 'https://exacoat.com');
-      url.searchParams.set('ref', slug);
+      url.searchParams.delete('ref');
+      url.searchParams.delete('aff');
+      url.searchParams.delete('sla');
+      url.searchParams.set('x', slug);
       return url.toString();
     } catch {
-      const clean = rawUrl.trim().replace(/\?ref=.*$/, '');
+      const clean = rawUrl.trim().replace(/[?&](?:x|ref|aff|sla)=[^&]*/g, '');
       const separator = clean.includes('?') ? '&' : '?';
-      return `${clean}${separator}ref=${encodeURIComponent(slug)}`;
+      return `${clean}${separator}x=${encodeURIComponent(slug)}`;
     }
   };
 

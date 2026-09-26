@@ -249,7 +249,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
                 Current Referral Base URL
               </span>
               <p className="text-sm font-mono text-[#f3aa18] font-bold select-all break-all">
-                https://exacoat.com/?ref={profile.slug}
+                https://exacoat.com/?x={profile.slug}
               </p>
             </div>
             <p className="text-xs text-zinc-400 leading-relaxed">
@@ -265,7 +265,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
               </label>
               <div className="flex items-center">
                 <span className="bg-[#141416] border border-r-0 border-white/[0.1] rounded-l-xl px-3.5 py-2.5 text-xs text-zinc-400 font-mono select-none">
-                  exacoat.com/?ref=
+                  exacoat.com/?x=
                 </span>
                 <input
                   type="text"

@@ -270,7 +270,7 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
                   className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs font-mono text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
                 />
                 <p className="text-[11px] text-zinc-400">
-                  Initial referral URL: <span className="font-mono text-[#f3aa18]">exacoat.com/?ref={username || 'username'}</span>
+                  Initial referral URL: <span className="font-mono text-[#f3aa18]">exacoat.com/?x={username || 'username'}</span>
                 </p>
               </div>
 

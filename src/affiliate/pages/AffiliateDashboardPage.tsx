@@ -83,7 +83,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
   const [copiedLink, setCopiedLink] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
 
-  const referralUrl = profile.referral_url || `https://exacoat.com/?ref=${profile.slug}`;
+  const referralUrl = profile.referral_url || `https://exacoat.com/?x=${profile.slug}`;
 
   const formatIDR = (val: number): string => {
     return 'Rp ' + Math.round(val).toLocaleString('id-ID');
