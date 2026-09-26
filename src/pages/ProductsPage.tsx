@@ -130,9 +130,10 @@ const WpStatusDropdown: React.FC<{
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={clsx(
-          'h-6 px-2.5 rounded-full border text-[11px] font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none',
+          'h-6 px-2.5 rounded-full border text-[11px] font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none whitespace-nowrap',
           current.badge
         )}
+        title="Change status"
       >
         <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', current.dot)} />
         <span>{current.label}</span>
@@ -148,6 +149,202 @@ const WpStatusDropdown: React.FC<{
         <div className="absolute right-0 mt-1.5 w-32 rounded-xl bg-white dark:bg-[#161616] border border-zinc-200 dark:border-white/10 shadow-xl py-1 z-50 text-xs">
           {(['publish', 'draft', 'private'] as const).map((st) => {
             const cfg = WP_STATUS_CONFIG[st];
+            const isSelected = status === st;
+            return (
+              <button
+                key={st}
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  if (st !== status) onChange(st);
+                }}
+                className={clsx(
+                  'w-full px-3 py-1.5 text-left flex items-center justify-between transition cursor-pointer text-[11px]',
+                  isSelected
+                    ? 'bg-zinc-100 dark:bg-white/[0.06] text-zinc-900 dark:text-white font-semibold'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/[0.04] hover:text-zinc-900 dark:hover:text-zinc-200'
+                )}
+              >
+                <span className="flex items-center gap-2">
+                  <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', cfg.dot)} />
+                  <span>{cfg.label}</span>
+                </span>
+                {isSelected && <Check className="w-3 h-3 text-[#f3aa18]" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const SHOPEE_STATUS_CONFIG: Record<
+  string,
+  { label: string; dot: string; badge: string }
+> = {
+  NORMAL: {
+    label: 'Live',
+    dot: 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]',
+    badge:
+      'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25 hover:bg-emerald-500/15',
+  },
+  UNLIST: {
+    label: 'Draft',
+    dot: 'bg-amber-400',
+    badge:
+      'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25 hover:bg-amber-500/15',
+  },
+  BANNED: {
+    label: 'Banned',
+    dot: 'bg-rose-400',
+    badge:
+      'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/25 hover:bg-rose-500/15',
+  },
+};
+
+const ShopeeStatusDropdown: React.FC<{
+  status: string;
+  onChange: (newStatus: 'NORMAL' | 'UNLIST') => void;
+  disabled?: boolean;
+}> = ({ status, onChange, disabled }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const current = SHOPEE_STATUS_CONFIG[status] || SHOPEE_STATUS_CONFIG.UNLIST;
+
+  useEffect(() => {
+    if (!open) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
+        className={clsx(
+          'h-6 px-2.5 rounded-full border text-[11px] font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none whitespace-nowrap',
+          current.badge,
+          disabled && 'opacity-60 cursor-not-allowed'
+        )}
+        title="Click to change listing status"
+      >
+        <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', current.dot)} />
+        <span>{current.label}</span>
+        <ChevronDown
+          className={clsx(
+            'w-3 h-3 opacity-60 transition-transform duration-150',
+            open && 'rotate-180'
+          )}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 mt-1.5 w-32 rounded-xl bg-white dark:bg-[#161616] border border-zinc-200 dark:border-white/10 shadow-xl py-1 z-50 text-xs">
+          {(['NORMAL', 'UNLIST'] as const).map((st) => {
+            const cfg = SHOPEE_STATUS_CONFIG[st];
+            const isSelected = status === st;
+            return (
+              <button
+                key={st}
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  if (st !== status) onChange(st);
+                }}
+                className={clsx(
+                  'w-full px-3 py-1.5 text-left flex items-center justify-between transition cursor-pointer text-[11px]',
+                  isSelected
+                    ? 'bg-zinc-100 dark:bg-white/[0.06] text-zinc-900 dark:text-white font-semibold'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/[0.04] hover:text-zinc-900 dark:hover:text-zinc-200'
+                )}
+              >
+                <span className="flex items-center gap-2">
+                  <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', cfg.dot)} />
+                  <span>{cfg.label}</span>
+                </span>
+                {isSelected && <Check className="w-3 h-3 text-[#f3aa18]" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const TIKTOK_STATUS_CONFIG: Record<
+  string,
+  { label: string; dot: string; badge: string }
+> = {
+  ACTIVATE: {
+    label: 'Live',
+    dot: 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]',
+    badge:
+      'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25 hover:bg-emerald-500/15',
+  },
+  DEACTIVATE: {
+    label: 'Draft',
+    dot: 'bg-amber-400',
+    badge:
+      'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25 hover:bg-amber-500/15',
+  },
+};
+
+const TikTokStatusDropdown: React.FC<{
+  status: string;
+  onChange: (newStatus: 'ACTIVATE' | 'DEACTIVATE') => void;
+  disabled?: boolean;
+}> = ({ status, onChange, disabled }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const current = TIKTOK_STATUS_CONFIG[status] || TIKTOK_STATUS_CONFIG.DEACTIVATE;
+
+  useEffect(() => {
+    if (!open) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
+        className={clsx(
+          'h-6 px-2.5 rounded-full border text-[11px] font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none whitespace-nowrap',
+          current.badge,
+          disabled && 'opacity-60 cursor-not-allowed'
+        )}
+        title="Change listing status"
+      >
+        <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', current.dot)} />
+        <span>{current.label}</span>
+        <ChevronDown
+          className={clsx(
+            'w-3 h-3 opacity-60 transition-transform duration-150',
+            open && 'rotate-180'
+          )}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 mt-1.5 w-32 rounded-xl bg-white dark:bg-[#161616] border border-zinc-200 dark:border-white/10 shadow-xl py-1 z-50 text-xs">
+          {(['ACTIVATE', 'DEACTIVATE'] as const).map((st) => {
+            const cfg = TIKTOK_STATUS_CONFIG[st];
             const isSelected = status === st;
             return (
               <button
@@ -272,6 +469,8 @@ export const ProductsPage: React.FC = () => {
     channel: ProductChannel;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [updatingShopeeId, setUpdatingShopeeId] = useState<number | null>(null);
+  const [updatingTikTokId, setUpdatingTikTokId] = useState<string | null>(null);
 
   // Save view mode preference
   const handleToggleViewMode = (mode: ViewMode) => {
@@ -503,18 +702,19 @@ export const ProductsPage: React.FC = () => {
     }
   };
 
-  // Shopee: Toggle Status (NORMAL vs UNLIST)
-  const handleToggleShopeeStatus = async (item: ShopeeListingItem) => {
-    const isCurrentlyUnlisted = item.item_status === 'UNLIST';
-    const targetUnlist = !isCurrentlyUnlisted;
+  // Shopee: Set Status (NORMAL vs UNLIST)
+  const handleSetShopeeStatus = async (item: ShopeeListingItem, targetStatus: 'NORMAL' | 'UNLIST') => {
+    if (item.item_status === targetStatus) return;
+    const targetUnlist = targetStatus === 'UNLIST';
 
     try {
+      setUpdatingShopeeId(item.item_id);
       const res = await setShopeeProductStatusDirect(item.item_id, targetUnlist);
       if (res.success) {
         setShopeeItems((prev) =>
           prev.map((it) =>
             it.item_id === item.item_id
-              ? { ...it, item_status: targetUnlist ? 'UNLIST' : 'NORMAL' }
+              ? { ...it, item_status: targetStatus }
               : it
           )
         );
@@ -522,23 +722,24 @@ export const ProductsPage: React.FC = () => {
           'success',
           'Shopee Status Changed',
           targetUnlist
-            ? `Item #${item.item_id} set to unlisted draft.`
-            : `Item #${item.item_id} published live.`
+            ? `Item #${item.item_id} marked as Draft.`
+            : `Item #${item.item_id} marked as Live.`
         );
       } else {
         showToast('error', 'Status Change Failed', res.error || 'Unable to update Shopee item status.');
       }
     } catch (err: any) {
       showToast('error', 'Shopee Error', err.message);
+    } finally {
+      setUpdatingShopeeId(null);
     }
   };
 
-  // TikTok: Toggle Status (ACTIVATE vs DEACTIVATE)
-  const handleToggleTikTokStatus = async (item: TikTokListingItem) => {
-    const isCurrentlyActive = item.status === 'ACTIVATE';
-    const targetStatus = isCurrentlyActive ? 'DEACTIVATE' : 'ACTIVATE';
-
+  // TikTok: Set Status (ACTIVATE vs DEACTIVATE)
+  const handleSetTikTokStatus = async (item: TikTokListingItem, targetStatus: 'ACTIVATE' | 'DEACTIVATE') => {
+    if (item.status === targetStatus) return;
     try {
+      setUpdatingTikTokId(item.id);
       const res = await setTikTokProductStatusDirect(item.id, targetStatus);
       if (res.success) {
         setTiktokItems((prev) =>
@@ -548,14 +749,16 @@ export const ProductsPage: React.FC = () => {
           'success',
           'TikTok Status Changed',
           targetStatus === 'ACTIVATE'
-            ? `Product ${item.title} activated.`
-            : `Product ${item.title} deactivated.`
+            ? `Product "${item.title || item.id}" marked as Live.`
+            : `Product "${item.title || item.id}" marked as Draft.`
         );
       } else {
         showToast('error', 'Status Change Failed', res.error || 'Unable to update TikTok item status.');
       }
     } catch (err: any) {
       showToast('error', 'TikTok Error', err.message);
+    } finally {
+      setUpdatingTikTokId(null);
     }
   };
 
@@ -1465,7 +1668,6 @@ export const ProductsPage: React.FC = () => {
                 const img = item.image?.image_url_list?.[0];
                 const price = getShopeeItemPrice(item);
                 const formattedPrice = formatIDR(price);
-                const isUnlisted = item.item_status === 'UNLIST';
 
                 return (
                   <GlassCard
@@ -1486,16 +1688,11 @@ export const ProductsPage: React.FC = () => {
                         <div className="flex-1 min-w-0 space-y-1">
                           <div className="flex items-center justify-between gap-1">
                             <span className="text-[10px] font-mono text-zinc-400">ID #{item.item_id}</span>
-                            <span
-                              className={clsx(
-                                'text-[10px] font-semibold px-2 py-0.5 rounded-md border font-mono',
-                                isUnlisted
-                                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
-                                  : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                              )}
-                            >
-                              {isUnlisted ? 'UNLIST (Draft)' : 'NORMAL (Live)'}
-                            </span>
+                            <ShopeeStatusDropdown
+                              status={item.item_status}
+                              disabled={updatingShopeeId === item.item_id}
+                              onChange={(st) => handleSetShopeeStatus(item, st)}
+                            />
                           </div>
 
                           <h3 className="text-xs font-bold text-zinc-900 dark:text-white line-clamp-2 leading-snug group-hover:text-[#f3aa18] transition-colors">
@@ -1524,36 +1721,22 @@ export const ProductsPage: React.FC = () => {
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
-                          onClick={() => handleToggleShopeeStatus(item)}
-                          className={clsx(
-                            'min-h-[44px] px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer',
-                            isUnlisted
-                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
-                              : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-white/10'
-                          )}
-                          title={isUnlisted ? 'Tampilkan Listing ke Publik' : 'Arsipkan ke Status Draft (UNLIST)'}
-                        >
-                          {isUnlisted ? 'Tampilkan' : 'Arsipkan'}
-                        </button>
-
-                        <button
-                          type="button"
                           onClick={() => handleOpenShopeeDuplicator(item)}
-                          className="min-h-[44px] px-3.5 py-1.5 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                          className="h-8 px-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 text-zinc-700 dark:text-zinc-200 border border-zinc-200/80 dark:border-white/[0.08] text-[11px] font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
                           title="Duplikasi listing Shopee ini ke device baru"
                         >
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Duplikasi</span>
+                          <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                          <span>Duplicate</span>
                         </button>
 
                         <button
                           type="button"
                           onClick={() => handleOpenShopeeImageInjector(item)}
-                          className="min-h-[44px] px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-500 dark:text-amber-400 border border-amber-500/30 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                          className="h-8 px-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 text-zinc-700 dark:text-zinc-200 border border-zinc-200/80 dark:border-white/[0.08] text-[11px] font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
                           title="Auto-inject gambar cover dan variasi dari image generator"
                         >
-                          <ImageIcon className="w-3.5 h-3.5" />
-                          <span>Inject Gambar</span>
+                          <ImageIcon className="w-3.5 h-3.5 text-zinc-400" />
+                          <span>Inject Images</span>
                         </button>
                       </div>
 
@@ -1562,7 +1745,7 @@ export const ProductsPage: React.FC = () => {
                           href={item.seller_centre_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="min-h-[44px] min-w-[44px] p-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-600 hover:text-zinc-900 dark:text-neutral-400 dark:hover:text-white border border-zinc-200 dark:border-white/10 flex items-center justify-center transition-colors cursor-pointer"
+                          className="h-8 w-8 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white border border-zinc-200/80 dark:border-white/[0.08] flex items-center justify-center transition-colors cursor-pointer"
                           title="Open in Shopee Seller Centre"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
@@ -1592,7 +1775,6 @@ export const ProductsPage: React.FC = () => {
                       const img = item.image?.image_url_list?.[0];
                       const price = getShopeeItemPrice(item);
                       const formattedPrice = formatIDR(price);
-                      const isUnlisted = item.item_status === 'UNLIST';
 
                       return (
                         <tr key={item.item_id} className="hover:bg-zinc-50/80 dark:hover:bg-white/[0.02] transition-colors">
@@ -1620,54 +1802,38 @@ export const ProductsPage: React.FC = () => {
                             {formattedPrice}
                           </td>
                           <td className="py-3 px-4">
-                            <span
-                              className={clsx(
-                                'text-[10px] font-semibold px-2.5 py-1 rounded-md border font-mono',
-                                isUnlisted
-                                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
-                                  : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                              )}
-                            >
-                              {isUnlisted ? 'UNLIST (Draft)' : 'NORMAL (Live)'}
-                            </span>
+                            <ShopeeStatusDropdown
+                              status={item.item_status}
+                              disabled={updatingShopeeId === item.item_id}
+                              onChange={(st) => handleSetShopeeStatus(item, st)}
+                            />
                           </td>
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
                               <button
                                 type="button"
-                                onClick={() => handleToggleShopeeStatus(item)}
-                                className={clsx(
-                                  'min-h-[44px] px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer',
-                                  isUnlisted
-                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
-                                    : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-white/10'
-                                )}
-                              >
-                                {isUnlisted ? 'Tampilkan' : 'Arsipkan'}
-                              </button>
-                              <button
-                                type="button"
                                 onClick={() => handleOpenShopeeDuplicator(item)}
-                                className="min-h-[44px] px-3.5 py-1.5 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
+                                className="h-8 px-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 text-zinc-700 dark:text-zinc-200 border border-zinc-200/80 dark:border-white/[0.08] text-[11px] font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                                title="Duplikasi listing Shopee ini ke device baru"
                               >
-                                <Copy className="w-3.5 h-3.5" />
-                                <span>Duplikasi</span>
+                                <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                                <span>Duplicate</span>
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleOpenShopeeImageInjector(item)}
-                                className="min-h-[44px] px-3.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-500 dark:text-amber-400 border border-amber-500/30 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
+                                className="h-8 px-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 text-zinc-700 dark:text-zinc-200 border border-zinc-200/80 dark:border-white/[0.08] text-[11px] font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
                                 title="Auto-inject gambar cover dan variasi dari image generator"
                               >
-                                <ImageIcon className="w-3.5 h-3.5" />
-                                <span>Inject Gambar</span>
+                                <ImageIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                <span>Inject Images</span>
                               </button>
                               {item.seller_centre_url && (
                                 <a
                                   href={item.seller_centre_url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="min-h-[44px] min-w-[44px] p-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-600 hover:text-zinc-900 dark:text-neutral-400 dark:hover:text-white border border-zinc-200 dark:border-white/10 transition-colors cursor-pointer flex items-center justify-center"
+                                  className="h-8 w-8 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white border border-zinc-200/80 dark:border-white/[0.08] transition-colors cursor-pointer flex items-center justify-center"
                                   title="Open in Seller Centre"
                                 >
                                   <ExternalLink className="w-3.5 h-3.5" />
@@ -1753,7 +1919,6 @@ export const ProductsPage: React.FC = () => {
                 const img = item.main_images?.[0];
                 const sku = item.skus?.[0];
                 const price = sku ? formatIDR(parseFloat(sku.price || '0')) : 'Rp 0';
-                const isActive = item.status === 'ACTIVATE';
 
                 return (
                   <GlassCard
@@ -1776,16 +1941,11 @@ export const ProductsPage: React.FC = () => {
                             <span className="text-[10px] font-mono text-zinc-400 truncate max-w-[100px]">
                               #{item.id}
                             </span>
-                            <span
-                              className={clsx(
-                                'text-[10px] font-semibold px-2 py-0.5 rounded-md border font-mono',
-                                isActive
-                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                                  : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-white/[0.08]'
-                              )}
-                            >
-                              {item.status}
-                            </span>
+                            <TikTokStatusDropdown
+                              status={item.status}
+                              disabled={updatingTikTokId === item.id}
+                              onChange={(st) => handleSetTikTokStatus(item, st)}
+                            />
                           </div>
 
                           <h3 className="text-xs font-bold text-zinc-900 dark:text-white line-clamp-2 leading-snug group-hover:text-[#f3aa18] transition-colors">
@@ -1810,20 +1970,7 @@ export const ProductsPage: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="pt-3 border-t border-zinc-100 dark:border-white/5 flex items-center justify-between gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleTikTokStatus(item)}
-                        className={clsx(
-                          'min-h-[44px] px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer',
-                          isActive
-                            ? 'bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-white/10'
-                            : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
-                        )}
-                      >
-                        {isActive ? 'Deactivate' : 'Activate'}
-                      </button>
-
+                    <div className="pt-3 border-t border-zinc-100 dark:border-white/5 flex items-center justify-end gap-1.5">
                       <button
                         type="button"
                         onClick={() =>
@@ -1833,7 +1980,7 @@ export const ProductsPage: React.FC = () => {
                             channel: 'tiktok',
                           })
                         }
-                        className="min-h-[44px] min-w-[44px] p-2 rounded-xl text-zinc-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer flex items-center justify-center"
+                        className="h-8 w-8 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 text-zinc-400 hover:text-rose-500 border border-zinc-200/80 dark:border-white/[0.08] transition-colors cursor-pointer flex items-center justify-center"
                         title="Deactivate / Remove product"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -1862,7 +2009,6 @@ export const ProductsPage: React.FC = () => {
                       const img = item.main_images?.[0];
                       const sku = item.skus?.[0];
                       const price = sku ? formatIDR(parseFloat(sku.price || '0')) : 'Rp 0';
-                      const isActive = item.status === 'ACTIVATE';
 
                       return (
                         <tr key={item.id} className="hover:bg-zinc-50/80 dark:hover:bg-white/[0.02] transition-colors">
@@ -1890,31 +2036,14 @@ export const ProductsPage: React.FC = () => {
                             {price}
                           </td>
                           <td className="py-3 px-4">
-                            <span
-                              className={clsx(
-                                'text-[10px] font-semibold px-2.5 py-1 rounded-md border font-mono',
-                                isActive
-                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                                  : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-white/[0.08]'
-                              )}
-                            >
-                              {item.status}
-                            </span>
+                            <TikTokStatusDropdown
+                              status={item.status}
+                              disabled={updatingTikTokId === item.id}
+                              onChange={(st) => handleSetTikTokStatus(item, st)}
+                            />
                           </td>
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => handleToggleTikTokStatus(item)}
-                                className={clsx(
-                                  'min-h-[44px] px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer',
-                                  isActive
-                                    ? 'bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-white/10'
-                                    : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
-                                )}
-                              >
-                                {isActive ? 'Deactivate' : 'Activate'}
-                              </button>
                               <button
                                 type="button"
                                 onClick={() =>
@@ -1924,8 +2053,8 @@ export const ProductsPage: React.FC = () => {
                                     channel: 'tiktok',
                                   })
                                 }
-                                className="min-h-[44px] min-w-[44px] p-2 rounded-xl text-zinc-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer flex items-center justify-center"
-                                title="Deactivate"
+                                className="h-8 w-8 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 text-zinc-400 hover:text-rose-500 border border-zinc-200/80 dark:border-white/[0.08] transition-colors cursor-pointer flex items-center justify-center"
+                                title="Deactivate / Remove product"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
