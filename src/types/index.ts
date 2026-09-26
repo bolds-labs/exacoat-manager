@@ -668,6 +668,8 @@ export interface AffiliateProfile {
   affiliate_type: string;
   promotion_channel: string;
   promotion_notes?: string;
+  coupon_code?: string;
+  commission_rate?: number;
   bank_name: AffiliateBankName | '';
   bank_account_number: string;
   bank_account_name: string;
@@ -689,6 +691,7 @@ export interface AffiliateCommission {
   order_subtotal: number;
   commission_rate: number;
   commission_amount: number;
+  coupon_code?: string;
   status: AffiliateCommissionStatus;
   delivered_at?: string | null;
   matures_at?: string | null;

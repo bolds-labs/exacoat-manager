@@ -8,7 +8,8 @@ import {
   Sparkles, 
   ShoppingBag, 
   Loader2, 
-  ShieldCheck 
+  ShieldCheck,
+  Ticket
 } from 'lucide-react';
 import { AffiliateProfile } from '../../types';
 import { searchAffiliateProducts } from '../../lib/wordpressBridge';
@@ -123,6 +124,18 @@ export const AffiliateLinkGeneratorPage: React.FC<AffiliateLinkGeneratorPageProp
     }
   };
 
+  const handleCopyCoupon = async () => {
+    if (!profile.coupon_code) return;
+    try {
+      await navigator.clipboard.writeText(profile.coupon_code);
+      setCopiedKey('promo-coupon');
+      showToast('success', 'Coupon Copied', profile.coupon_code);
+      setTimeout(() => setCopiedKey(null), 2500);
+    } catch {
+      showToast('error', 'Copy Failed', 'Unable to access clipboard.');
+    }
+  };
+
   const formatIDR = (val: number): string => {
     return 'Rp ' + Math.round(val).toLocaleString('id-ID');
   };
@@ -134,6 +147,37 @@ export const AffiliateLinkGeneratorPage: React.FC<AffiliateLinkGeneratorPageProp
         title="Product Link Generator"
         subtitle="Generate direct tracking links for any Exacoat skin, device, or collection to earn 20% on every verified purchase."
       />
+
+      {/* Promo Coupon Card if assigned */}
+      {profile.coupon_code && (
+        <GlassCard className="p-4 border border-amber-500/30 bg-amber-500/[0.05] flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+              <Ticket className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-white font-mono uppercase tracking-wider">Your Promo Code:</span>
+                <span className="font-mono text-sm font-bold text-amber-400 bg-[#0a0a0c] px-2 py-0.5 rounded border border-amber-500/30">
+                  {profile.coupon_code}
+                </span>
+              </div>
+              <p className="text-[11px] text-zinc-400 mt-0.5">
+                Audiences can enter code <strong className="text-white font-mono">{profile.coupon_code}</strong> at checkout instead of clicking links.
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleCopyCoupon}
+            leftIcon={copiedKey === 'promo-coupon' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+          >
+            {copiedKey === 'promo-coupon' ? 'Copied' : 'Copy Code'}
+          </Button>
+        </GlassCard>
+      )}
 
       {/* Custom URL Converter Card */}
       <GlassCard className="p-6 space-y-4">

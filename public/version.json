@@ -1,17 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.86",
+  "version": "0.1.87",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.86.zip?v=0.1.86",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.87.zip?v=0.1.87",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-26T14:41:53.467Z",
+  "last_updated": "2026-09-26T15:13:25.055Z",
   "sections": {
-    "description": "The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.",
-    "changelog": "### Version 0.1.86\n- Resolved REST API authentication permissions for manager workstation migration operations\n- Enforced active-only creator filter during SliceWP data migration (skipping pending and rejected)\n- Enriched commission records with real-time WooCommerce order subtotal, delivery status, and customer attribution\n- Universal ?x={slug} referral tracking with 30-day attribution window and backwards-compatible legacy link support"
+    "changelog": "### Version 0.1.87\n- Marked all pending commissions as unpaid and recalculated balances across creators\n- Added Edwin Yang commission for order 542410 (Rp 28.050 at 10% rate)\n- Enabled coupon code assignment (edwin15) to affiliates with automatic checkout attribution\n- Added coupon display to Manager workstation and Creator Portal"
   }
 }

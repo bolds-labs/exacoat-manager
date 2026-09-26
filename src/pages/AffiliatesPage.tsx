@@ -29,7 +29,9 @@ import {
   Hourglass,
   Eye,
   User,
-  ShoppingBag
+  ShoppingBag,
+  Ticket,
+  Tag
 } from 'lucide-react';
 import { 
   fetchAdminAffiliates, 
@@ -42,7 +44,9 @@ import {
   updateAdminAffiliateSettings,
   fetchAdminSliceWpStatus,
   runAdminSliceWpMigration,
-  fetchOrderDetailDirect
+  fetchOrderDetailDirect,
+  assignAdminAffiliateCoupon,
+  recalculateAdminAffiliateBalances
 } from '../lib/wordpressBridge';
 import { AffiliateCommission, AffiliatePayout, Order } from '../types';
 import { OrderDetailDrawer } from '../components/orders/OrderDetailDrawer';
@@ -129,6 +133,60 @@ export const AffiliatesPage: React.FC = () => {
   const [payingPayout, setPayingPayout] = useState<AffiliatePayout | null>(null);
   const [transferRef, setTransferRef] = useState('');
   const [isProcessingAction, setIsProcessingAction] = useState(false);
+
+  // Coupon Assignment & Recalculate State
+  const [selectedAffiliateForCoupon, setSelectedAffiliateForCoupon] = useState<any | null>(null);
+  const [couponCodeInput, setCouponCodeInput] = useState('');
+  const [commissionRateInput, setCommissionRateInput] = useState('');
+  const [isAssigningCoupon, setIsAssigningCoupon] = useState(false);
+  const [isRecalculatingBalances, setIsRecalculatingBalances] = useState(false);
+
+  const handleOpenCouponModal = (aff: any) => {
+    setSelectedAffiliateForCoupon(aff);
+    setCouponCodeInput(aff.coupon_code || '');
+    setCommissionRateInput(aff.commission_rate ? String(aff.commission_rate) : '');
+  };
+
+  const handleSaveCouponAssignment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAffiliateForCoupon) return;
+    setIsAssigningCoupon(true);
+    try {
+      const res = await assignAdminAffiliateCoupon({
+        affiliate_id: selectedAffiliateForCoupon.id,
+        coupon_code: couponCodeInput.trim(),
+        commission_rate: commissionRateInput.trim() ? parseFloat(commissionRateInput) : null,
+      });
+      if (res.success) {
+        showToast('success', 'Coupon Assigned', `Coupon ${couponCodeInput} assigned successfully.`);
+        setSelectedAffiliateForCoupon(null);
+        loadData();
+      } else {
+        showToast('error', 'Assignment Failed', res.error || 'Failed to assign coupon.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message);
+    } finally {
+      setIsAssigningCoupon(false);
+    }
+  };
+
+  const handleRecalculateBalances = async () => {
+    setIsRecalculatingBalances(true);
+    try {
+      const res = await recalculateAdminAffiliateBalances();
+      if (res.success) {
+        showToast('success', 'Balances Synced', 'All commissions marked as unpaid and balances recalculated.');
+        loadData();
+      } else {
+        showToast('error', 'Sync Failed', res.error || 'Failed to recalculate balances.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message);
+    } finally {
+      setIsRecalculatingBalances(false);
+    }
+  };
 
   // Drilldown Order Drawer State
   const [drilldownOrder, setDrilldownOrder] = useState<Order | null>(null);
@@ -458,6 +516,16 @@ export const AffiliatesPage: React.FC = () => {
             </a>
             <button
               type="button"
+              onClick={handleRecalculateBalances}
+              disabled={isRecalculatingBalances || isLoading}
+              className="px-3.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold font-sans flex items-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer shrink-0"
+              title="Recalculate all balances and convert pending commissions to unpaid"
+            >
+              <RefreshCw className={clsx('w-3.5 h-3.5 text-amber-400', isRecalculatingBalances && 'animate-spin')} />
+              <span>{isRecalculatingBalances ? 'Syncing...' : 'Sync Balances'}</span>
+            </button>
+            <button
+              type="button"
               onClick={loadData}
               disabled={isLoading}
               className="px-3.5 py-2 rounded-xl bg-[#141414] hover:bg-white/[0.06] text-neutral-300 hover:text-white border border-white/[0.08] text-xs font-semibold font-sans flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer shrink-0"
@@ -747,9 +815,20 @@ export const AffiliatesPage: React.FC = () => {
                           <span className="font-semibold text-white block">
                             {aff.display_name || aff.user_login}
                           </span>
-                          <span className="font-mono text-[11px] text-[#f3aa18]">
-                            @{aff.slug}
-                          </span>
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            <span className="font-mono text-[11px] text-[#f3aa18]">
+                              @{aff.slug}
+                            </span>
+                            {aff.coupon_code && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold" title={`Assigned Promo Coupon: ${aff.coupon_code}`}>
+                                <Ticket className="w-3 h-3 text-amber-400" />
+                                {aff.coupon_code}
+                                {aff.commission_rate && (
+                                  <span className="text-amber-400/80 font-normal">({aff.commission_rate}%)</span>
+                                )}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3">
                           <div className="flex flex-wrap gap-1">
@@ -813,23 +892,35 @@ export const AffiliatesPage: React.FC = () => {
                           )}
                         </td>
                         <td className="py-3 pr-4 text-right">
-                          {aff.status === 'active' ? (
+                          <div className="flex items-center justify-end gap-2">
                             <button
                               type="button"
-                              onClick={() => updateAdminAffiliateStatus(aff.id, 'suspended').then(loadData)}
-                              className="text-[11px] font-medium text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
+                              onClick={() => handleOpenCouponModal(aff)}
+                              className="text-[11px] font-medium text-amber-400 hover:text-amber-300 transition-colors cursor-pointer flex items-center gap-1"
+                              title="Assign promo coupon code and custom commission rate"
                             >
-                              Suspend
+                              <Ticket className="w-3 h-3" />
+                              <span>{aff.coupon_code ? 'Edit Coupon' : 'Assign Coupon'}</span>
                             </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => updateAdminAffiliateStatus(aff.id, 'active').then(loadData)}
-                              className="text-[11px] font-medium text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
-                            >
-                              Activate
-                            </button>
-                          )}
+                            <span className="text-white/20">|</span>
+                            {aff.status === 'active' ? (
+                              <button
+                                type="button"
+                                onClick={() => updateAdminAffiliateStatus(aff.id, 'suspended').then(loadData)}
+                                className="text-[11px] font-medium text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
+                              >
+                                Suspend
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => updateAdminAffiliateStatus(aff.id, 'active').then(loadData)}
+                                className="text-[11px] font-medium text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                              >
+                                Activate
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -998,14 +1089,22 @@ export const AffiliatesPage: React.FC = () => {
                       >
                         {/* Order Number */}
                         <td className="py-3 pl-4">
-                          <button
-                            type="button"
-                            onClick={(e) => handleOpenOrderById(c.order_id || c.order_number, e)}
-                            className="font-mono font-bold text-white hover:text-[#f3aa18] transition-colors flex items-center gap-1.5 group-hover:underline cursor-pointer"
-                          >
-                            <span>#{c.order_number || c.order_id}</span>
-                            <ExternalLink className="w-3 h-3 text-neutral-500 group-hover:text-[#f3aa18]" />
-                          </button>
+                          <div className="flex flex-col items-start gap-1">
+                            <button
+                              type="button"
+                              onClick={(e) => handleOpenOrderById(c.order_id || c.order_number, e)}
+                              className="font-mono font-bold text-white hover:text-[#f3aa18] transition-colors flex items-center gap-1.5 group-hover:underline cursor-pointer"
+                            >
+                              <span>#{c.order_number || c.order_id}</span>
+                              <ExternalLink className="w-3 h-3 text-neutral-500 group-hover:text-[#f3aa18]" />
+                            </button>
+                            {c.coupon_code && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-amber-500/15 text-amber-300 border border-amber-500/30" title={`Attributed via Coupon: ${c.coupon_code}`}>
+                                <Ticket className="w-2.5 h-2.5 text-amber-400" />
+                                {c.coupon_code}
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Date */}
@@ -1638,6 +1737,91 @@ export const AffiliatesPage: React.FC = () => {
                 Confirm Paid
               </Button>
             </div>
+          </GlassCard>
+        </div>
+      )}
+
+      {/* Modal: Assign Promo Coupon & Custom Commission Rate */}
+      {selectedAffiliateForCoupon && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+          <GlassCard className="w-full max-w-md bg-[#111111] border border-white/[0.1] rounded-2xl p-6 shadow-2xl relative space-y-4">
+            <button
+              type="button"
+              onClick={() => setSelectedAffiliateForCoupon(null)}
+              className="absolute top-4 right-4 p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/[0.05] transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                <Ticket className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-white">Assign Promo Coupon</h3>
+                <p className="text-xs text-neutral-400">
+                  Connect coupon code for <span className="text-[#f3aa18] font-mono">@{selectedAffiliateForCoupon.slug}</span>
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveCouponAssignment} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                  Coupon Code
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. edwin15"
+                  value={couponCodeInput}
+                  onChange={(e) => setCouponCodeInput(e.target.value)}
+                  className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 uppercase"
+                />
+                <p className="text-[11px] text-neutral-500 mt-1">
+                  Orders using this coupon in WooCommerce checkout will automatically credit this creator.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                  Custom Commission Rate (%)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  placeholder="Leave empty for default 20%"
+                  value={commissionRateInput}
+                  onChange={(e) => setCommissionRateInput(e.target.value)}
+                  className="w-full bg-[#18181b] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
+                />
+                <p className="text-[11px] text-neutral-500 mt-1">
+                  Override standard 20% commission (e.g. 10.0 for 10% creator earnings).
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/[0.08]">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedAffiliateForCoupon(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  disabled={isAssigningCoupon}
+                  leftIcon={isAssigningCoupon ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                >
+                  {isAssigningCoupon ? 'Saving...' : 'Save Assignment'}
+                </Button>
+              </div>
+            </form>
           </GlassCard>
         </div>
       )}

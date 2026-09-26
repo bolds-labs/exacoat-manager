@@ -7265,6 +7265,62 @@ export async function updateAdminAffiliateStatus(
   }
 }
 
+export async function assignAdminAffiliateCoupon(payload: {
+  affiliate_id: number;
+  coupon_code: string;
+  commission_rate?: number | null;
+}): Promise<{ success: boolean; message?: string; affiliate?: any; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat/v1/affiliate/admin/assign-coupon`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, message: data.message, affiliate: data.affiliate };
+    }
+    return { success: false, error: data?.message || 'Failed to assign coupon.' };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function recalculateAdminAffiliateBalances(): Promise<{
+  success: boolean;
+  message?: string;
+  affiliates_processed?: number;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat/v1/affiliate/admin/recalculate`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, message: data.message, affiliates_processed: data.affiliates_processed };
+    }
+    return { success: false, error: data?.message || 'Failed to recalculate balances.' };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function fetchAdminAffiliateCommissions(
   status: string = 'all',
   affiliateId: number = 0

@@ -80,8 +80,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      description: 'The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.',
-      changelog: `### Version ${version}\n- Resolved REST API authentication permissions for manager workstation migration operations\n- Enforced active-only creator filter during SliceWP data migration (skipping pending and rejected)\n- Enriched commission records with real-time WooCommerce order subtotal, delivery status, and customer attribution\n- Universal ?x={slug} referral tracking with 30-day attribution window and backwards-compatible legacy link support`,
+      changelog: `### Version ${version}\n- Marked all pending commissions as unpaid and recalculated balances across creators\n- Added Edwin Yang commission for order 542410 (Rp 28.050 at 10% rate)\n- Enabled coupon code assignment (edwin15) to affiliates with automatic checkout attribution\n- Added coupon display to Manager workstation and Creator Portal`,
     },
   };
 
