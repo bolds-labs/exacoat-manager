@@ -20,6 +20,7 @@ import {
   Sliders,
   FileSpreadsheet,
   Package,
+  UserCog,
   LucideIcon
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -31,6 +32,7 @@ import { ExacoatLogo } from '../ui/ExacoatLogo';
 export type NavItemKey = 
   | 'dashboard'
   | 'orders'
+  | 'customers'
   | 'products'
   | 'rma'
   | 'warranty'
@@ -145,6 +147,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       title: 'Analytics',
       items: [
         { key: 'reports', label: 'Sales & Reports', icon: FileText },
+        { key: 'customers', label: 'Customers', icon: Users },
       ]
     },
     {
@@ -157,7 +160,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       title: 'Administration',
       items: [
-        { key: 'team', label: 'Team Roles', icon: Users },
+        { key: 'team', label: 'Team Roles', icon: UserCog },
         { key: 'testing', label: 'Testing Sandbox', icon: FlaskConical },
         { key: 'health', label: 'Store Health', icon: Activity },
         { key: 'audit', label: 'Audit Logs', icon: ShieldCheck },
@@ -181,6 +184,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             { key: 'tracking_pool', label: 'Tracking Pool', icon: Package },
           ]
         },
+        { key: 'customers', label: 'Customers', icon: Users },
         { key: 'reviews', label: 'Reviews', icon: Star, badge: pendingReviewCount > 0 ? pendingReviewCount : undefined, badgeVariant: 'amber' },
       ]
     }

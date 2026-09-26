@@ -26,6 +26,7 @@ const RmaClaimsPage = React.lazy(() => import('./pages/RmaClaimsPage').then(m =>
 const ExportShipmentsPage = React.lazy(() => import('./pages/ExportShipmentsPage').then(m => ({ default: m.ExportShipmentsPage })));
 const TrackingPoolPage = React.lazy(() => import('./pages/TrackingPoolPage').then(m => ({ default: m.TrackingPoolPage })));
 const ProductsPage = React.lazy(() => import('./pages/ProductsPage').then(m => ({ default: m.ProductsPage })));
+const CustomersPage = React.lazy(() => import('./pages/CustomersPage').then(m => ({ default: m.CustomersPage })));
 
 const getTabFromUrl = (): NavItemKey => {
   if (typeof window === 'undefined') return 'dashboard';
@@ -64,9 +65,12 @@ const getTabFromUrl = (): NavItemKey => {
     'emails': 'emails',
     'email': 'emails',
     'templates': 'emails',
+    'customers': 'customers',
+    'customer': 'customers',
+    'users': 'customers',
+    'user': 'customers',
     'team': 'team',
     'roles': 'team',
-    'users': 'team',
     'testing': 'testing',
     'sandbox': 'testing',
     'health': 'health',
@@ -93,7 +97,7 @@ const getTabFromUrl = (): NavItemKey => {
 
 };
 
-const SHOP_MANAGER_ALLOWED_TABS: NavItemKey[] = ['orders', 'reviews', 'rma', 'warranty', 'export', 'tracking_pool'];
+const SHOP_MANAGER_ALLOWED_TABS: NavItemKey[] = ['orders', 'customers', 'reviews', 'rma', 'warranty', 'export', 'tracking_pool'];
 
 export const App: React.FC = () => {
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -226,12 +230,30 @@ export const App: React.FC = () => {
     o => String(o.status).replace(/^wc-/, '') === 'processing'
   ).length;
 
+  const [targetCustomerId, setTargetCustomerId] = useState<number | null>(null);
+  const [targetCustomerEmail, setTargetCustomerEmail] = useState<string | null>(null);
+
+  const handleNavigateToCustomer = (customerId: number, customerEmail?: string) => {
+    setTargetCustomerId(customerId || null);
+    setTargetCustomerEmail(customerEmail || null);
+    handleTabChange('customers');
+  };
+
   const handleSelectOrder = (order: Order) => {
     handleTabChange('orders');
   };
 
   const renderActiveTab = () => {
     if (user?.role === 'shop_manager') {
+      if (currentTab === 'customers') {
+        return (
+          <CustomersPage
+            initialCustomerId={targetCustomerId}
+            initialCustomerEmail={targetCustomerEmail}
+            onNavigate={handleTabChange}
+          />
+        );
+      }
       if (currentTab === 'reviews') {
         return <ReviewsPage />;
       }
@@ -244,7 +266,7 @@ export const App: React.FC = () => {
       if (currentTab === 'tracking_pool') {
         return <TrackingPoolPage />;
       }
-      return <OrdersView initialStatus="all" />;
+      return <OrdersView initialStatus="all" onNavigateToCustomer={handleNavigateToCustomer} />;
     }
     switch (currentTab) {
       case 'dashboard':
@@ -258,7 +280,20 @@ export const App: React.FC = () => {
           />
         );
       case 'orders':
-        return <OrdersView initialStatus="all" />;
+        return (
+          <OrdersView 
+            initialStatus="all" 
+            onNavigateToCustomer={handleNavigateToCustomer} 
+          />
+        );
+      case 'customers':
+        return (
+          <CustomersPage
+            initialCustomerId={targetCustomerId}
+            initialCustomerEmail={targetCustomerEmail}
+            onNavigate={handleTabChange}
+          />
+        );
       case 'rma':
       case 'warranty':
         return <RmaClaimsPage />;

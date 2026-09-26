@@ -28,6 +28,7 @@ class Exacoat_Email_Engine {
 			'customer_processing_order',
 			'customer_completed_order',
 			'customer_refunded_order',
+			'customer_partially_refunded_order',
 			'customer_on_hold_order',
 			'customer_note',
 			'customer_invoice',
@@ -309,6 +310,21 @@ class Exacoat_Email_Engine {
 				'defaults'       => self::get_mock_order_defaults( '14589', [
 					'refund_amount'  => 'Rp 149.000',
 					'total_refunded' => 'Rp 149.000',
+				] ),
+			],
+			'customer_order_partially_refunded' => [
+				'category'       => 'Orders',
+				'label'          => 'Partially Refunded',
+				'subject'        => 'Partial refund confirmation for order #{{order_number}}',
+				'badge'          => 'Partial refund',
+				'icon'           => 'document_alert',
+				'title'          => 'Partial refund processed',
+				'body_primary'   => 'We have processed a partial refund of {{refund_amount}} for order #{{order_number}}.',
+				'body_secondary' => 'Depending on your payment method or bank, the funds will reflect in your account within 3 to 5 business days.',
+				'type'           => 'customer_order',
+				'defaults'       => self::get_mock_order_defaults( '14589', [
+					'refund_amount'  => 'Rp 50.000',
+					'total_refunded' => 'Rp 50.000',
 				] ),
 			],
 			'customer_order_on_hold' => [

@@ -20,9 +20,13 @@ import { clsx } from 'clsx';
 
 interface OrdersViewProps {
   initialStatus?: string;
+  onNavigateToCustomer?: (customerId: number, customerEmail?: string, customerName?: string) => void;
 }
 
-export const OrdersView: React.FC<OrdersViewProps> = ({ initialStatus = 'all' }) => {
+export const OrdersView: React.FC<OrdersViewProps> = ({ 
+  initialStatus = 'all',
+  onNavigateToCustomer,
+}) => {
   const { showToast } = useToast();
   const { user, simulatedRole } = useAuth();
   const effectiveRole = simulatedRole || user?.role;
@@ -472,6 +476,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({ initialStatus = 'all' })
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         onOrderUpdated={() => loadOrders(true)}
+        onNavigateToCustomer={onNavigateToCustomer}
         onSelectOrderById={async (orderId: number) => {
           const found = orders.find(o => o.id === orderId);
           if (found) {

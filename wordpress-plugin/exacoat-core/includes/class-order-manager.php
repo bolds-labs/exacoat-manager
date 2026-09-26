@@ -547,6 +547,14 @@ class Exacoat_Order_Manager {
 				} else {
 					$args['include'] = $matched_search_ids;
 				}
+
+			$customer_filter = $request->get_param( 'customer' );
+			if ( ! empty( $customer_filter ) ) {
+				if ( is_numeric( $customer_filter ) && intval( $customer_filter ) > 0 ) {
+					$args['customer_id'] = intval( $customer_filter );
+				} else {
+					$args['billing_email'] = sanitize_email( $customer_filter );
+				}
 			}
 
 			$results = wc_get_orders( $args );
@@ -1023,6 +1031,7 @@ class Exacoat_Order_Manager {
 		$reason                 = sanitize_text_field( $params['reason'] ?? 'Manual refund via Studio Manager' );
 		$restock                = ! empty( $params['restock_items'] );
 		$refund_to_store_credit = ! empty( $params['refund_to_store_credit'] );
+		$mark_as_refunded       = ! empty( $params['mark_as_refunded'] );
 		$line_items             = $params['line_items'] ?? [];
 
 		if ( $refund_amount <= 0 ) {
@@ -1136,9 +1145,34 @@ class Exacoat_Order_Manager {
 		// Refresh order instance
 		$updated_order = wc_get_order( $order_id );
 
-		// If fully refunded, mark status as refunded
-		if ( floatval( $updated_order->get_total_refunded() ) >= floatval( $updated_order->get_total() ) ) {
-			$updated_order->update_status( 'refunded', "Order fully refunded ({$refund_amount}) via Studio Manager" );
+		// Check if fully refunded or explicitly requested to mark as refunded
+		$is_full_refund       = floatval( $updated_order->get_total_refunded() ) >= floatval( $updated_order->get_total() );
+		$should_mark_refunded = $is_full_refund || $mark_as_refunded;
+
+		if ( $should_mark_refunded && 'refunded' !== $updated_order->get_status() ) {
+			$status_note = $is_full_refund
+				? "Order fully refunded (" . wc_price( $refund_amount, [ 'currency' => $updated_order->get_currency() ] ) . ") via Studio Manager"
+				: "Order marked as refunded after partial refund of " . wc_price( $refund_amount, [ 'currency' => $updated_order->get_currency() ] ) . " via Studio Manager";
+			$updated_order->update_status( 'refunded', $status_note );
+		} elseif ( ! $refund_to_store_credit && ! $should_mark_refunded ) {
+			// Dispatch partial refund confirmation email to customer
+			$customer_email = $updated_order->get_billing_email();
+			$customer_name  = trim( $updated_order->get_billing_first_name() . ' ' . $updated_order->get_billing_last_name() ) ?: 'Customer';
+			$email_class    = class_exists( 'Exacoat_Email_Engine' ) ? 'Exacoat_Email_Engine' : ( class_exists( 'Artmatter_Email_Engine' ) ? 'Artmatter_Email_Engine' : false );
+
+			if ( $email_class && ! empty( $customer_email ) ) {
+				$email_payload = self::get_email_order_payload( $updated_order, [
+					'refund_amount'  => wc_price( $refund_amount, [ 'currency' => $updated_order->get_currency() ] ),
+					'total_refunded' => wc_price( $updated_order->get_total_refunded(), [ 'currency' => $updated_order->get_currency() ] ),
+				] );
+
+				$email_class::send_email(
+					'customer_order_partially_refunded',
+					$customer_email,
+					$customer_name,
+					$email_payload
+				);
+			}
 		}
 
 		if ( class_exists( 'Exacoat_Logger' ) ) {

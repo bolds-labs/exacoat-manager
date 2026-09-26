@@ -86,6 +86,7 @@ interface OrderDetailDrawerProps {
   onClose: () => void;
   onOrderUpdated?: () => void;
   onSelectOrderById?: (orderId: number) => void;
+  onNavigateToCustomer?: (customerId: number, customerEmail?: string, customerName?: string) => void;
 }
 
 const COURIER_PRESETS = [
@@ -120,6 +121,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   onClose,
   onOrderUpdated,
   onSelectOrderById,
+  onNavigateToCustomer,
 }) => {
   const { showToast } = useToast();
 
@@ -164,6 +166,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   const [refundReason, setRefundReason] = useState('');
   const [refundMethod, setRefundMethod] = useState<'original' | 'store_credit'>('original');
   const [restockRefundedItems, setRestockRefundedItems] = useState(true);
+  const [markAsRefunded, setMarkAsRefunded] = useState(false);
   const [isProcessingRefund, setIsProcessingRefund] = useState(false);
 
   // A6 Shipping Label, Customer Invoice & Packing Slip modal state
@@ -490,11 +493,13 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
 
     try {
       setIsProcessingRefund(true);
+      const isFullRefund = amt >= remainingAvailableRefund && remainingAvailableRefund > 0;
       const res = await refundOrderDirect(order.id, {
         amount: amt,
         reason: refundReason.trim() || undefined,
         restock_items: restockRefundedItems,
         refund_to_store_credit: refundMethod === 'store_credit',
+        mark_as_refunded: isFullRefund || markAsRefunded,
       } as any);
 
       if (res.success) {
@@ -997,24 +1002,33 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
 
         {/* Section 1: Customer & Delivery Address Card */}
         <div className="p-5 rounded-2xl border border-white/[0.06] bg-[#111111] space-y-4">
-          <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+          <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 gap-3">
             <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-2">
               <User className="w-4 h-4 text-[#f3aa18]" />
               Customer & Delivery
             </h4>
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setIsEditAddressModalOpen(true)}
-                className="px-2.5 py-1 rounded-lg bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 text-[#f3aa18] border border-[#f3aa18]/30 text-xs font-sans font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-                title="Edit customer shipping address and contact details"
+                onClick={() => {
+                  if (onNavigateToCustomer) {
+                    onNavigateToCustomer(order.customer_id, order.customer_email, order.customer_name);
+                  } else {
+                    window.location.hash = `#customers?id=${order.customer_id || 0}&email=${encodeURIComponent(order.customer_email || '')}`;
+                  }
+                  onClose();
+                }}
+                className="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-neutral-200 hover:text-[#f3aa18] border border-white/10 hover:border-[#f3aa18]/40 text-xs font-sans font-medium flex items-center gap-1.5 transition-all cursor-pointer group"
+                title="View customer profile and past orders"
               >
-                <Edit2 className="w-3 h-3 text-[#f3aa18]" />
-                <span>Edit Address</span>
+                <span className="w-4 h-4 rounded-full bg-[#f3aa18]/20 text-[#f3aa18] text-[9px] font-bold flex items-center justify-center font-mono">
+                  {order.customer_name ? order.customer_name.charAt(0).toUpperCase() : 'C'}
+                </span>
+                <span className="font-semibold text-white group-hover:text-[#f3aa18] transition-colors truncate max-w-[140px] sm:max-w-[200px]">
+                  {order.customer_name || (order.customer_id ? `Customer #${order.customer_id}` : 'Guest Customer')}
+                </span>
+                <ExternalLink className="w-3 h-3 text-neutral-400 group-hover:text-[#f3aa18] transition-colors shrink-0" />
               </button>
-              <span className="text-[11px] font-mono text-neutral-400">
-                Customer #{order.customer_id || 'Guest'}
-              </span>
             </div>
           </div>
 
@@ -1071,26 +1085,26 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
 
             {/* Right: Destination Address or Store Pickup Location */}
             <div className={clsx(
-              "space-y-1.5 p-3.5 rounded-xl border",
+              "space-y-1.5 p-3.5 rounded-xl border flex flex-col justify-between",
               isStorePickup ? "border-[#f3aa18]/25 bg-[#f3aa18]/5" : "border-white/[0.04] bg-[#141414]"
             )}>
-              <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="flex items-center justify-between gap-2 pb-2 mb-1 border-b border-white/[0.04] flex-wrap">
                 <span className={clsx(
                   "text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5",
-                  isStorePickup ? "text-[#f3aa18]" : "text-neutral-500"
+                  isStorePickup ? "text-[#f3aa18]" : "text-neutral-400"
                 )}>
                   {isStorePickup ? <Store className="w-3.5 h-3.5 text-[#f3aa18]" /> : <MapPin className="w-3.5 h-3.5 text-[#f3aa18]" />}
-                  {isStorePickup ? 'Pickup Location' : 'Destination Address'}
+                  {isStorePickup ? 'Store Pickup Location' : 'Destination Address'}
                 </span>
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-1.5 shrink-0">
                   {!isStorePickup && (
                     <button
                       type="button"
                       onClick={() => setIsEditAddressModalOpen(true)}
-                      className="text-[10px] text-[#f3aa18] hover:underline transition-colors cursor-pointer flex items-center gap-1 font-sans font-medium"
-                      title="Edit address"
+                      className="px-2 py-1 rounded-md text-[11px] font-sans font-medium text-neutral-300 hover:text-white bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 transition-colors flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                      title="Edit customer shipping address"
                     >
-                      <Edit2 className="w-2.5 h-2.5" />
+                      <Edit2 className="w-3 h-3 text-[#f3aa18]" />
                       <span>Edit</span>
                     </button>
                   )}
@@ -1101,10 +1115,25 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                       setPickupOverrideVersion((v) => v + 1);
                       if (onOrderUpdated) onOrderUpdated();
                     }}
-                    className="text-[10px] text-neutral-500 hover:text-[#f3aa18] underline transition-colors cursor-pointer"
+                    className={clsx(
+                      "px-2 py-1 rounded-md text-[11px] font-sans font-medium transition-colors flex items-center gap-1 cursor-pointer whitespace-nowrap",
+                      isStorePickup 
+                        ? "text-neutral-300 hover:text-white bg-white/[0.05] hover:bg-white/[0.1] border border-white/10" 
+                        : "text-neutral-400 hover:text-[#f3aa18] bg-white/[0.03] hover:bg-[#f3aa18]/10 border border-white/5 hover:border-[#f3aa18]/30"
+                    )}
                     title="Toggle between store pickup and courier delivery view for this order"
                   >
-                    {isStorePickup ? 'Switch to Delivery' : 'Switch to Store Pickup'}
+                    {isStorePickup ? (
+                      <>
+                        <Truck className="w-3 h-3 text-[#f3aa18]" />
+                        <span>Switch to Courier</span>
+                      </>
+                    ) : (
+                      <>
+                        <Store className="w-3 h-3 text-[#f3aa18]" />
+                        <span>Store Pickup</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -1665,6 +1694,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   type="button"
                   onClick={() => {
                     setRefundAmount(String(remainingAvailableRefund));
+                    setMarkAsRefunded(false);
                     setIsRefundModalOpen(true);
                   }}
                   className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-sans font-medium flex items-center gap-1.5 transition-all shadow-sm"
@@ -2297,6 +2327,44 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                 />
                 <span>Restock items</span>
               </label>
+
+              {/* Order Status Update Control */}
+              <div className="pt-0.5">
+                {Number(refundAmount) >= remainingAvailableRefund && remainingAvailableRefund > 0 ? (
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5 font-medium text-rose-300">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Order status will update to Refunded</span>
+                      </div>
+                      <p className="text-[10px] text-neutral-400 font-sans">Full refund will automatically mark this order as refunded</p>
+                    </div>
+                    <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-rose-500/20 text-rose-300 uppercase tracking-wider font-mono">
+                      Automatic
+                    </span>
+                  </div>
+                ) : (
+                  <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-[#141414] border border-white/[0.06] hover:border-white/10 cursor-pointer transition-all">
+                    <input
+                      type="checkbox"
+                      checked={markAsRefunded}
+                      onChange={e => setMarkAsRefunded(e.target.checked)}
+                      className="mt-0.5 rounded border-white/20 bg-black/40 text-rose-500 focus:ring-0"
+                    />
+                    <div className="space-y-0.5 flex-1">
+                      <div className="text-xs font-medium text-white flex items-center justify-between font-sans">
+                        <span>Update status to Refunded</span>
+                        <span className="text-[10px] font-normal text-neutral-400">
+                          Current: <span className="capitalize text-neutral-200">{order.status.replace(/[-_]/g, ' ')}</span>
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-neutral-400 font-sans">
+                        Mark order settled as refunded, or keep current status for ongoing fulfillment
+                      </p>
+                    </div>
+                  </label>
+                )}
+              </div>
 
               <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-white/[0.08]">
                 <button

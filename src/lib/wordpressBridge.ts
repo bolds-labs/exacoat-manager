@@ -1659,6 +1659,7 @@ export async function fetchOrdersDirect(params?: {
   status?: string;
   search?: string;
   courier?: string;
+  customer?: number | string;
   page?: number;
   per_page?: number;
 }): Promise<{
@@ -1674,6 +1675,7 @@ export async function fetchOrdersDirect(params?: {
   if (params?.status && params.status !== 'all') url.searchParams.set('status', params.status);
   if (params?.search) url.searchParams.set('search', params.search);
   if (params?.courier && params.courier !== 'all') url.searchParams.set('courier', params.courier);
+  if (params?.customer) url.searchParams.set('customer', String(params.customer));
   if (params?.page) url.searchParams.set('page', String(params.page));
   if (params?.per_page) url.searchParams.set('per_page', String(params.per_page));
   url.searchParams.set('_t', String(Date.now()));
@@ -2635,7 +2637,14 @@ export async function saveConfiguratorPresetsDirect(presets: ConfiguratorPreset[
 // Customers & Products (WooCommerce REST Fallbacks)
 // ==========================================
 
-export async function fetchCustomersDirect(params?: { search?: string; page?: number; per_page?: number }): Promise<{
+export async function fetchCustomersDirect(params?: {
+  search?: string;
+  page?: number;
+  per_page?: number;
+  role?: string;
+  orderby?: string;
+  order?: 'asc' | 'desc';
+}): Promise<{
   success: boolean;
   customers: Customer[];
   total_customers: number;
@@ -2646,7 +2655,10 @@ export async function fetchCustomersDirect(params?: { search?: string; page?: nu
   const url = new URL(`${base}/wp-json/wc/v3/customers`, window.location.origin);
   if (params?.search) url.searchParams.set('search', params.search);
   if (params?.page) url.searchParams.set('page', String(params.page));
-  url.searchParams.set('per_page', String(params?.per_page || 25));
+  if (params?.role) url.searchParams.set('role', params.role);
+  if (params?.orderby) url.searchParams.set('orderby', params.orderby);
+  if (params?.order) url.searchParams.set('order', params.order);
+  url.searchParams.set('per_page', String(params?.per_page || 50));
   url.searchParams.set('_t', String(Date.now()));
 
   try {
@@ -2661,6 +2673,53 @@ export async function fetchCustomersDirect(params?: { search?: string; page?: nu
   } catch (err: any) {
     return { success: false, customers: [], total_customers: 0, max_pages: 1, error: err.message };
   }
+}
+
+export async function fetchCustomerDetailDirect(customerId: number | string): Promise<{
+  success: boolean;
+  customer?: Customer;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = new URL(`${base}/wp-json/wc/v3/customers/${customerId}`, window.location.origin);
+  url.searchParams.set('_t', String(Date.now()));
+
+  try {
+    const res = await authenticatedFetch(url.toString(), { headers: { Accept: 'application/json' } });
+    if (!res.ok) {
+      return { success: false, error: `Customer #${customerId} not found` };
+    }
+    const data = await res.json();
+    return { success: true, customer: data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchCustomerOrdersDirect(params: {
+  customerId?: number | string;
+  email?: string;
+  page?: number;
+  per_page?: number;
+}): Promise<{
+  success: boolean;
+  orders: Order[];
+  total_orders: number;
+  max_pages: number;
+  error?: string;
+}> {
+  const customerParam = params.customerId && Number(params.customerId) > 0 
+    ? params.customerId 
+    : params.email;
+
+  const result = await fetchOrdersDirect({
+    customer: customerParam,
+    search: !customerParam && params.email ? params.email : undefined,
+    page: params.page || 1,
+    per_page: params.per_page || 50,
+  });
+
+  return result;
 }
 
 // ==========================================
