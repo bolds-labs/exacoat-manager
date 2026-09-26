@@ -81,7 +81,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       description: 'The core bridge between Exacoat Manager ERP, WooCommerce orders, custom status, and fulfillment tracking.',
-      changelog: `### Version ${version}\n- Added 1500x1500px Marketplace Product Image Generator in Configurator Studio\n- Integrated offscreen HTML5 canvas compositor supporting custom backgrounds and Exacoat monogram studio light\n- Added multi-skin batch generation engine with JSZip packaging and customizable layout typography and swatches\n- Preserved natural copywriting and accurate fit feature cards`,
+      changelog: `### Version ${version}\n- Added Customers Analytics Directory with lifetime value, AOV, repeat rate analytics, and customer profile drawer\n- Enhanced Order Details with clickable customer profiles, past order history navigation, and streamlined destination address controls\n- Added Affiliate & Creator Program Engine with commission tracking, payout management, and banking export integration`,
     },
   };
 

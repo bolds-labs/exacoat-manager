@@ -6,7 +6,8 @@ import {
   Shield, 
   ShoppingBag, 
   X,
-  Crown
+  Crown,
+  Share2
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -35,6 +36,12 @@ export const RoleSimulationBanner: React.FC = () => {
       subtitle: 'Customer Orders & Shipping Fulfillment Only',
       icon: ShoppingBag,
       accentColor: 'text-violet-400 bg-violet-500/10 border-violet-500/20'
+    },
+    affiliate: {
+      title: 'Affiliate Partner',
+      subtitle: 'Referral Links, Traffic & Commissions',
+      icon: Share2,
+      accentColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
     }
   };
 

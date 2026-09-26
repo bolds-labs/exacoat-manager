@@ -27,6 +27,8 @@ const ExportShipmentsPage = React.lazy(() => import('./pages/ExportShipmentsPage
 const TrackingPoolPage = React.lazy(() => import('./pages/TrackingPoolPage').then(m => ({ default: m.TrackingPoolPage })));
 const ProductsPage = React.lazy(() => import('./pages/ProductsPage').then(m => ({ default: m.ProductsPage })));
 const CustomersPage = React.lazy(() => import('./pages/CustomersPage').then(m => ({ default: m.CustomersPage })));
+const AffiliatesPage = React.lazy(() => import('./pages/AffiliatesPage').then(m => ({ default: m.AffiliatesPage })));
+const AffiliatePortalApp = React.lazy(() => import('./affiliate/AffiliatePortalApp').then(m => ({ default: m.AffiliatePortalApp })));
 
 const getTabFromUrl = (): NavItemKey => {
   if (typeof window === 'undefined') return 'dashboard';
@@ -37,6 +39,11 @@ const getTabFromUrl = (): NavItemKey => {
   const urlMap: Record<string, NavItemKey> = {
     '': 'dashboard',
     'dashboard': 'dashboard',
+    'affiliates': 'affiliates',
+    'affiliate': 'affiliates',
+    'creators': 'affiliates',
+    'creator': 'affiliates',
+    'payouts': 'affiliates',
     'orders': 'orders',
     'order': 'orders',
     'fulfillment': 'orders',
@@ -221,6 +228,29 @@ export const App: React.FC = () => {
     );
   }
 
+  // Check if current session or host is for the affiliate creator portal (affiliate.exacoat.com)
+  const isAffiliatePortal = typeof window !== 'undefined' && (
+    window.location.hostname.startsWith('affiliate.') ||
+    window.location.search.includes('portal=affiliate') ||
+    window.location.pathname.startsWith('/affiliate') ||
+    user?.role === 'affiliate'
+  );
+
+  if (isAffiliatePortal) {
+    return (
+      <React.Suspense
+        fallback={
+          <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-3 text-white">
+            <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+            <p className="text-xs font-mono text-zinc-400">Loading affiliate creator portal...</p>
+          </div>
+        }
+      >
+        <AffiliatePortalApp />
+      </React.Suspense>
+    );
+  }
+
   // Not logged in -> LoginPage
   if (!user) {
     return <LoginPage />;
@@ -314,6 +344,8 @@ export const App: React.FC = () => {
         return <ReportsPage onNavigate={(tab) => handleTabChange(tab as NavItemKey)} />;
       case 'emails':
         return <EmailTemplatesPage />;
+      case 'affiliates':
+        return <AffiliatesPage />;
       case 'ai_tools':
         return <AiToolsPage />;
       case 'team':

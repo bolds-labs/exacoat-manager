@@ -5,7 +5,23 @@
  */
 
 import { getEnv, getWordPressBaseUrl, getWcCredentials } from './env';
-import { CreateReviewPayload, Order, OrderItem, OrderShipping, OrderTracking, DeviceConfiguratorProfile, MarketplaceDeviceImageSettings, ConfiguratorProfileSummary, DeviceFamily, AdminUser, ExacoatRole } from '../types';
+import { 
+  CreateReviewPayload, 
+  Order, 
+  OrderItem, 
+  OrderShipping, 
+  OrderTracking, 
+  DeviceConfiguratorProfile, 
+  MarketplaceDeviceImageSettings, 
+  ConfiguratorProfileSummary, 
+  DeviceFamily, 
+  AdminUser, 
+  ExacoatRole,
+  AffiliateProfile,
+  AffiliateCommission,
+  AffiliatePayout,
+  AffiliateRegistrationPayload
+} from '../types';
 export type { MarketplaceDeviceImageSettings };
 import { renderEmailHtmlLocally } from './emailRenderer';
 import { extractItemSpecs } from './orderItems';
@@ -6920,4 +6936,305 @@ export async function deleteTikTokProductDirect(
     return { success: false, product_id: productId, error: err.message };
   }
 }
+
+// Affiliate and Creator Program Bridge
+
+export async function registerAffiliateApplicant(
+  payload: AffiliateRegistrationPayload
+): Promise<{ success: boolean; message: string; affiliate_id?: number; slug?: string; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat/v1/affiliate/register`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, message: data.message, affiliate_id: data.affiliate_id, slug: data.slug };
+    }
+    return { success: false, message: data?.message || data?.error || 'Registration failed.', error: data?.code };
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Network error during registration.', error: 'network_error' };
+  }
+}
+
+export async function fetchAffiliatePortalData(): Promise<{
+  success: boolean;
+  profile?: AffiliateProfile;
+  metrics?: {
+    lifetime_earnings: number;
+    unpaid_balance: number;
+    total_clicks: number;
+    total_orders: number;
+    commission_rate: number;
+    min_payout_amount: number;
+    can_request_payout: boolean;
+  };
+  commissions?: AffiliateCommission[];
+  payouts?: AffiliatePayout[];
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat/v1/affiliate/portal`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return data;
+    }
+    return { success: false, error: data?.message || data?.error || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function updateAffiliateSettings(payload: {
+  bank_name?: 'BCA' | 'MANDIRI';
+  bank_account_number?: string;
+  bank_account_name?: string;
+  slug?: string;
+}): Promise<{ success: boolean; message?: string; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat/v1/affiliate/settings`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, message: data.message };
+    }
+    return { success: false, error: data?.message || data?.error || 'Failed to update settings.' };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function requestAffiliatePayout(): Promise<{
+  success: boolean;
+  message?: string;
+  payout_id?: number;
+  amount?: number;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat/v1/affiliate/payout-request`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({}),
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, message: data.message, payout_id: data.payout_id, amount: data.amount };
+    }
+    return { success: false, error: data?.message || data?.error || 'Payout request failed.' };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function searchAffiliateProducts(query: string = ''): Promise<{
+  id: number;
+  name: string;
+  slug: string;
+  price: number;
+  permalink: string;
+  image_url: string;
+}[]> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat/v1/affiliate/products?q=${encodeURIComponent(query)}`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+
+    const data = await res.json();
+    if (res.ok && Array.isArray(data?.products)) {
+      return data.products;
+    }
+    return [];
+  } catch (err: any) {
+    console.warn('Failed to search affiliate products:', err.message);
+    return [];
+  }
+}
+
+export async function fetchAdminAffiliates(status: string = 'all', search: string = ''): Promise<{
+  success: boolean;
+  affiliates: any[];
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const params = new URLSearchParams();
+  if (status && status !== 'all') params.append('status', status);
+  if (search) params.append('search', search);
+
+  const url = `${base}/wp-json/exacoat/v1/affiliate/admin/all?${params.toString()}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, affiliates: data.affiliates || [] };
+    }
+    return { success: false, affiliates: [], error: data?.message || 'Failed to fetch affiliates.' };
+  } catch (err: any) {
+    return { success: false, affiliates: [], error: err.message };
+  }
+}
+
+export async function updateAdminAffiliateStatus(
+  affiliateId: number,
+  status: 'active' | 'rejected' | 'suspended',
+  notes: string = ''
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat/v1/affiliate/admin/update-status`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ affiliate_id: affiliateId, status, notes }),
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, message: data.message };
+    }
+    return { success: false, error: data?.message || 'Failed to update status.' };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchAdminAffiliateCommissions(
+  status: string = 'all',
+  affiliateId: number = 0
+): Promise<{
+  success: boolean;
+  commissions: AffiliateCommission[];
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const params = new URLSearchParams();
+  if (status && status !== 'all') params.append('status', status);
+  if (affiliateId > 0) params.append('affiliate_id', String(affiliateId));
+
+  const url = `${base}/wp-json/exacoat/v1/affiliate/admin/commissions?${params.toString()}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, commissions: data.commissions || [] };
+    }
+    return { success: false, commissions: [], error: data?.message || 'Failed to fetch commissions.' };
+  } catch (err: any) {
+    return { success: false, commissions: [], error: err.message };
+  }
+}
+
+export async function fetchAdminAffiliatePayouts(
+  status: string = 'all'
+): Promise<{
+  success: boolean;
+  payouts: AffiliatePayout[];
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const params = new URLSearchParams();
+  if (status && status !== 'all') params.append('status', status);
+
+  const url = `${base}/wp-json/exacoat/v1/affiliate/admin/payouts?${params.toString()}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, payouts: data.payouts || [] };
+    }
+    return { success: false, payouts: [], error: data?.message || 'Failed to fetch payouts.' };
+  } catch (err: any) {
+    return { success: false, payouts: [], error: err.message };
+  }
+}
+
+export async function updateAdminAffiliatePayout(
+  payoutId: number,
+  status: 'paid' | 'rejected',
+  reference: string = '',
+  notes: string = ''
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat/v1/affiliate/admin/update-payout`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ payout_id: payoutId, status, transfer_reference: reference, admin_notes: notes }),
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true, message: data.message };
+    }
+    return { success: false, error: data?.message || 'Failed to update payout.' };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export function getAdminExportPayoutsUrl(bank: 'BCA' | 'MANDIRI'): string {
+  const base = getWordPressBaseUrl();
+  return `${base}/wp-json/exacoat/v1/affiliate/admin/export-payouts?bank=${bank}`;
+}
+
 

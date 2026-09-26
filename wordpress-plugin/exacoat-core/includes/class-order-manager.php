@@ -547,6 +547,7 @@ class Exacoat_Order_Manager {
 				} else {
 					$args['include'] = $matched_search_ids;
 				}
+			}
 
 			$customer_filter = $request->get_param( 'customer' );
 			if ( ! empty( $customer_filter ) ) {

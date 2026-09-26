@@ -21,6 +21,7 @@ import {
   FileSpreadsheet,
   Package,
   UserCog,
+  Share2,
   LucideIcon
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -44,6 +45,7 @@ export type NavItemKey =
   | 'reports'
   | 'ai_tools'
   | 'emails'
+  | 'affiliates'
   | 'team'
   | 'testing'
   | 'health'
@@ -153,6 +155,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       title: 'Marketing & Tools',
       items: [
+        { key: 'affiliates', label: 'Affiliates', icon: Share2 },
         { key: 'emails', label: 'Email Templates', icon: Mail },
         { key: 'ai_tools', label: 'AI Tools', icon: Bot },
       ]
@@ -184,8 +187,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             { key: 'tracking_pool', label: 'Tracking Pool', icon: Package },
           ]
         },
-        { key: 'customers', label: 'Customers', icon: Users },
         { key: 'reviews', label: 'Reviews', icon: Star, badge: pendingReviewCount > 0 ? pendingReviewCount : undefined, badgeVariant: 'amber' },
+      ]
+    },
+    {
+      title: 'Analytics',
+      items: [
+        { key: 'customers', label: 'Customers', icon: Users },
       ]
     }
   ];

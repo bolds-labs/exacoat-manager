@@ -54,7 +54,7 @@ export type CommissionStatus =
 
 export type PayoutStatus = 'payout_pending' | 'payout_processing' | 'payout_sent' | 'payout_rejected' | 'payout_cancelled';
 
-export type ExacoatRole = 'super_admin' | 'manager' | 'shop_manager';
+export type ExacoatRole = 'super_admin' | 'manager' | 'shop_manager' | 'affiliate';
 
 export interface UserSession {
   id: string;
@@ -648,4 +648,79 @@ export interface ConfiguratorProfileSummary {
   audit_status?: 'clean' | 'issues' | 'unaudited';
   audit_issues?: number;
   audit_details?: string[];
+}
+
+export type AffiliateStatus = 'pending_approval' | 'active' | 'rejected' | 'suspended';
+export type AffiliateCommissionStatus = 'pending' | 'unpaid' | 'paid' | 'rejected';
+export type AffiliatePayoutStatus = 'pending' | 'paid' | 'rejected';
+export type AffiliateBankName = 'BCA' | 'MANDIRI';
+
+export interface AffiliateProfile {
+  id: number;
+  user_id: number;
+  username: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  slug: string;
+  slug_locked: boolean;
+  status: AffiliateStatus;
+  affiliate_type: string;
+  promotion_channel: string;
+  promotion_notes?: string;
+  bank_name: AffiliateBankName | '';
+  bank_account_number: string;
+  bank_account_name: string;
+  lifetime_earnings: number;
+  unpaid_balance: number;
+  total_clicks: number;
+  total_orders: number;
+  referral_url: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface AffiliateCommission {
+  id: number;
+  affiliate_id: number;
+  affiliate_slug?: string;
+  order_id: number;
+  order_number: string;
+  order_subtotal: number;
+  commission_rate: number;
+  commission_amount: number;
+  status: AffiliateCommissionStatus;
+  rejection_reason?: string | null;
+  payout_id?: number | null;
+  customer_email?: string;
+  created_at: string;
+  bank_name?: string;
+  bank_account_number?: string;
+}
+
+export interface AffiliatePayout {
+  id: number;
+  affiliate_id: number;
+  affiliate_slug?: string;
+  amount: number;
+  bank_name: AffiliateBankName;
+  bank_account_number: string;
+  bank_account_name: string;
+  status: AffiliatePayoutStatus;
+  transfer_reference?: string | null;
+  admin_notes?: string | null;
+  created_at: string;
+  paid_at?: string | null;
+  user_email?: string;
+}
+
+export interface AffiliateRegistrationPayload {
+  username: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  password: string;
+  affiliate_type: string[] | string;
+  promotion_channel: string;
+  promotion_notes: string;
 }

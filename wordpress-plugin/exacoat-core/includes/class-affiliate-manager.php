@@ -1,0 +1,1400 @@
+<?php
+/**
+ * Exacoat Affiliate Engine
+ * Manages affiliate registration, attribution tracking, 20% commission ledger,
+ * BCA and Mandiri payout processing, and REST APIs for affiliate.exacoat.com and manager.exacoat.com.
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+if ( ! class_exists( 'Exacoat_Affiliate_Manager' ) ) {
+
+class Exacoat_Affiliate_Manager {
+
+	public const COOKIE_NAME      = 'exacoat_aff_ref';
+	public const COOKIE_DAYS      = 30;
+	public const COMMISSION_RATE  = 20.0;
+	public const MIN_PAYOUT_IDR   = 250000;
+	public const ROLE_AFFILIATE   = 'affiliate';
+
+	public static function init(): void {
+		self::register_role();
+		self::ensure_tables();
+
+		// Cookie tracking across storefront requests
+		add_action( 'init', [ __CLASS__, 'capture_referral_cookie' ], 1 );
+
+		// WooCommerce order integration hooks
+		add_action( 'woocommerce_checkout_order_processed', [ __CLASS__, 'attach_referral_to_order' ], 10, 3 );
+		add_action( 'woocommerce_order_status_processing', [ __CLASS__, 'handle_order_processing' ], 20, 1 );
+		add_action( 'woocommerce_order_status_completed', [ __CLASS__, 'handle_order_completed' ], 20, 1 );
+		add_action( 'woocommerce_order_status_refunded', [ __CLASS__, 'handle_order_clawback' ], 20, 1 );
+		add_action( 'woocommerce_order_status_cancelled', [ __CLASS__, 'handle_order_clawback' ], 20, 1 );
+		add_action( 'woocommerce_order_status_failed', [ __CLASS__, 'handle_order_clawback' ], 20, 1 );
+		add_action( 'woocommerce_order_refunded', [ __CLASS__, 'handle_order_refund_event' ], 20, 2 );
+
+		// Register REST endpoints
+		add_action( 'rest_api_init', [ __CLASS__, 'register_rest_routes' ] );
+	}
+
+	/**
+	 * Register the custom WordPress user role for affiliates.
+	 */
+	public static function register_role(): void {
+		if ( ! get_role( self::ROLE_AFFILIATE ) ) {
+			add_role(
+				self::ROLE_AFFILIATE,
+				'Affiliate',
+				[
+					'read'         => true,
+					'edit_posts'   => false,
+					'delete_posts' => false,
+				]
+			);
+		}
+	}
+
+	/**
+	 * Database migration for affiliate records, commissions, and payout batches.
+	 */
+	public static function ensure_tables(): void {
+		global $wpdb;
+		$installed_ver = get_option( 'exacoat_affiliate_db_version', '0.0.0' );
+		$target_ver    = '1.0.0';
+
+		if ( version_compare( $installed_ver, $target_ver, '>=' ) ) {
+			return;
+		}
+
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		$charset_collate = $wpdb->get_charset_collate();
+
+		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
+		$sql_affiliates   = "CREATE TABLE {$table_affiliates} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			user_id bigint(20) unsigned NOT NULL,
+			slug varchar(60) NOT NULL,
+			slug_locked tinyint(1) NOT NULL DEFAULT 0,
+			status varchar(30) NOT NULL DEFAULT 'pending_approval',
+			affiliate_type varchar(100) NOT NULL DEFAULT '',
+			promotion_channel varchar(255) NOT NULL DEFAULT '',
+			promotion_notes text NULL,
+			bank_name varchar(20) NOT NULL DEFAULT '',
+			bank_account_number varchar(50) NOT NULL DEFAULT '',
+			bank_account_name varchar(100) NOT NULL DEFAULT '',
+			lifetime_earnings decimal(14,2) NOT NULL DEFAULT 0.00,
+			unpaid_balance decimal(14,2) NOT NULL DEFAULT 0.00,
+			total_clicks bigint(20) unsigned NOT NULL DEFAULT 0,
+			total_orders bigint(20) unsigned NOT NULL DEFAULT 0,
+			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			PRIMARY KEY  (id),
+			UNIQUE KEY user_id (user_id),
+			UNIQUE KEY slug (slug),
+			KEY status (status)
+		) {$charset_collate};";
+		dbDelta( $sql_affiliates );
+
+		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
+		$sql_commissions   = "CREATE TABLE {$table_commissions} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			affiliate_id bigint(20) unsigned NOT NULL,
+			order_id bigint(20) unsigned NOT NULL,
+			order_number varchar(60) NOT NULL DEFAULT '',
+			order_subtotal decimal(14,2) NOT NULL DEFAULT 0.00,
+			commission_rate decimal(5,2) NOT NULL DEFAULT 20.00,
+			commission_amount decimal(14,2) NOT NULL DEFAULT 0.00,
+			status varchar(30) NOT NULL DEFAULT 'pending',
+			rejection_reason varchar(255) NULL,
+			payout_id bigint(20) unsigned NULL,
+			customer_email varchar(100) NOT NULL DEFAULT '',
+			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			PRIMARY KEY  (id),
+			KEY affiliate_id (affiliate_id),
+			KEY order_id (order_id),
+			KEY status (status),
+			KEY payout_id (payout_id)
+		) {$charset_collate};";
+		dbDelta( $sql_commissions );
+
+		$table_payouts = $wpdb->prefix . 'exacoat_affiliate_payouts';
+		$sql_payouts   = "CREATE TABLE {$table_payouts} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			affiliate_id bigint(20) unsigned NOT NULL,
+			amount decimal(14,2) NOT NULL DEFAULT 0.00,
+			bank_name varchar(20) NOT NULL DEFAULT '',
+			bank_account_number varchar(50) NOT NULL DEFAULT '',
+			bank_account_name varchar(100) NOT NULL DEFAULT '',
+			status varchar(30) NOT NULL DEFAULT 'pending',
+			transfer_reference varchar(100) NULL,
+			admin_notes text NULL,
+			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			paid_at datetime NULL,
+			updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			PRIMARY KEY  (id),
+			KEY affiliate_id (affiliate_id),
+			KEY status (status)
+		) {$charset_collate};";
+		dbDelta( $sql_payouts );
+
+		update_option( 'exacoat_affiliate_db_version', $target_ver );
+	}
+
+	/**
+	 * Cookie tracking: credit last affiliate for 30 days on .exacoat.com.
+	 */
+	public static function capture_referral_cookie(): void {
+		if ( empty( $_GET['ref'] ) ) {
+			return;
+		}
+
+		$raw_slug = sanitize_title( wp_unslash( $_GET['ref'] ) );
+		if ( empty( $raw_slug ) ) {
+			return;
+		}
+
+		$affiliate = self::get_affiliate_by_slug( $raw_slug );
+		if ( ! $affiliate || 'active' !== $affiliate->status ) {
+			return;
+		}
+
+		// Increment clicks counter asynchronously or directly
+		global $wpdb;
+		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
+		$wpdb->query(
+			$wpdb->prepare(
+				"UPDATE {$table_affiliates} SET total_clicks = total_clicks + 1 WHERE id = %d",
+				$affiliate->id
+			)
+		);
+
+		// Determine cookie domain for cross-subdomain support
+		$cookie_domain = self::get_cookie_domain();
+		$ttl           = time() + ( self::COOKIE_DAYS * DAY_IN_SECONDS );
+		$is_secure     = is_ssl();
+
+		// Credit last affiliate by setting or overwriting existing cookie
+		setcookie(
+			self::COOKIE_NAME,
+			$raw_slug,
+			[
+				'expires'  => $ttl,
+				'path'     => '/',
+				'domain'   => $cookie_domain,
+				'secure'   => $is_secure,
+				'httponly' => true,
+				'samesite' => 'Lax',
+			]
+		);
+		$_COOKIE[ self::COOKIE_NAME ] = $raw_slug;
+	}
+
+	/**
+	 * Attach referral slug to WooCommerce order meta during checkout.
+	 */
+	public static function attach_referral_to_order( int $order_id, array $posted_data, WC_Order $order ): void {
+		$ref_slug = '';
+		if ( ! empty( $_COOKIE[ self::COOKIE_NAME ] ) ) {
+			$ref_slug = sanitize_title( wp_unslash( $_COOKIE[ self::COOKIE_NAME ] ) );
+		}
+
+		if ( empty( $ref_slug ) ) {
+			return;
+		}
+
+		$affiliate = self::get_affiliate_by_slug( $ref_slug );
+		if ( ! $affiliate || 'active' !== $affiliate->status ) {
+			return;
+		}
+
+		$order->update_meta_data( '_exacoat_affiliate_slug', $ref_slug );
+		$order->update_meta_data( '_exacoat_affiliate_id', (int) $affiliate->id );
+		$order->save();
+	}
+
+	/**
+	 * Evaluate order for commission creation when it reaches processing status.
+	 */
+	public static function handle_order_processing( $order_id ): void {
+		self::record_order_commission( (int) $order_id, 'pending' );
+	}
+
+	/**
+	 * Mature commission to unpaid balance when order reaches completed status.
+	 */
+	public static function handle_order_completed( $order_id ): void {
+		self::record_order_commission( (int) $order_id, 'unpaid' );
+	}
+
+	/**
+	 * Calculate net 20% commission, prevent self referral, and record commission.
+	 */
+	public static function record_order_commission( int $order_id, string $target_status = 'pending' ): void {
+		$order = wc_get_order( $order_id );
+		if ( ! $order instanceof WC_Order ) {
+			return;
+		}
+
+		// Check if commission already recorded for this order
+		global $wpdb;
+		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
+		$table_affiliates  = $wpdb->prefix . 'exacoat_affiliates';
+
+		$existing = $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$table_commissions} WHERE order_id = %d LIMIT 1", $order_id )
+		);
+
+		if ( $existing ) {
+			// If transitioning from pending to unpaid on order completion
+			if ( 'pending' === $existing->status && 'unpaid' === $target_status ) {
+				$wpdb->update(
+					$table_commissions,
+					[ 'status' => 'unpaid' ],
+					[ 'id' => $existing->id ]
+				);
+				$wpdb->query(
+					$wpdb->prepare(
+						"UPDATE {$table_affiliates} 
+						SET unpaid_balance = unpaid_balance + %f, 
+						    lifetime_earnings = lifetime_earnings + %f 
+						WHERE id = %d",
+						$existing->commission_amount,
+						$existing->commission_amount,
+						$existing->affiliate_id
+					)
+				);
+				self::dispatch_commission_email( 'confirmed', (int) $existing->affiliate_id, $order, (float) $existing->commission_amount );
+			}
+			return;
+		}
+
+		// Retrieve affiliate slug from order meta or fallback to cookie
+		$ref_slug = $order->get_meta( '_exacoat_affiliate_slug' );
+		if ( empty( $ref_slug ) && ! empty( $_COOKIE[ self::COOKIE_NAME ] ) ) {
+			$ref_slug = sanitize_title( wp_unslash( $_COOKIE[ self::COOKIE_NAME ] ) );
+		}
+
+		if ( empty( $ref_slug ) ) {
+			return;
+		}
+
+		$affiliate = self::get_affiliate_by_slug( $ref_slug );
+		if ( ! $affiliate || 'active' !== $affiliate->status ) {
+			return;
+		}
+
+		// Anti self-referral check: email, user ID, and phone number
+		$affiliate_user = get_userdata( $affiliate->user_id );
+		$affiliate_email = $affiliate_user ? strtolower( trim( $affiliate_user->user_email ) ) : '';
+		$customer_email  = strtolower( trim( $order->get_billing_email() ) );
+		$customer_user_id = (int) $order->get_user_id();
+
+		$is_self_referral = false;
+		if ( $customer_user_id > 0 && $customer_user_id === (int) $affiliate->user_id ) {
+			$is_self_referral = true;
+		}
+		if ( ! empty( $affiliate_email ) && $affiliate_email === $customer_email ) {
+			$is_self_referral = true;
+		}
+
+		// Compute commission base: subtotal minus discounts, strictly excluding tax and shipping
+		$subtotal        = (float) $order->get_subtotal();
+		$discount_total  = (float) $order->get_discount_total();
+		$net_eligible    = max( 0.0, $subtotal - $discount_total );
+		$commission_rate = self::COMMISSION_RATE;
+		$commission_amt  = round( $net_eligible * ( $commission_rate / 100.0 ), 2 );
+
+		if ( $commission_amt <= 0 ) {
+			return;
+		}
+
+		$initial_status   = $is_self_referral ? 'rejected' : $target_status;
+		$rejection_reason = $is_self_referral ? 'Self referral prohibited' : null;
+
+		$wpdb->insert(
+			$table_commissions,
+			[
+				'affiliate_id'      => $affiliate->id,
+				'order_id'          => $order_id,
+				'order_number'      => $order->get_order_number(),
+				'order_subtotal'    => $net_eligible,
+				'commission_rate'   => $commission_rate,
+				'commission_amount' => $commission_amt,
+				'status'            => $initial_status,
+				'rejection_reason'  => $rejection_reason,
+				'customer_email'    => $customer_email,
+				'created_at'        => current_time( 'mysql' ),
+			],
+			[ '%d', '%d', '%s', '%f', '%f', '%f', '%s', '%s', '%s', '%s' ]
+		);
+
+		$commission_id = $wpdb->insert_id;
+		$order->update_meta_data( '_exacoat_affiliate_id', (int) $affiliate->id );
+		$order->update_meta_data( '_exacoat_affiliate_commission_id', (int) $commission_id );
+		$order->save();
+
+		// Update affiliate aggregate counters
+		if ( ! $is_self_referral ) {
+			$balance_increment  = ( 'unpaid' === $initial_status ) ? $commission_amt : 0.0;
+			$lifetime_increment = ( 'unpaid' === $initial_status ) ? $commission_amt : 0.0;
+
+			$wpdb->query(
+				$wpdb->prepare(
+					"UPDATE {$table_affiliates} 
+					SET total_orders = total_orders + 1,
+					    unpaid_balance = unpaid_balance + %f,
+					    lifetime_earnings = lifetime_earnings + %f
+					WHERE id = %d",
+					$balance_increment,
+					$lifetime_increment,
+					$affiliate->id
+				)
+			);
+
+			self::dispatch_commission_email(
+				( 'unpaid' === $initial_status ? 'confirmed' : 'recorded' ),
+				(int) $affiliate->id,
+				$order,
+				$commission_amt
+			);
+		}
+	}
+
+	/**
+	 * Automatically revoke or reject commission on order refund or cancellation.
+	 */
+	public static function handle_order_clawback( $order_id ): void {
+		global $wpdb;
+		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
+		$table_affiliates  = $wpdb->prefix . 'exacoat_affiliates';
+
+		$commissions = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$table_commissions} WHERE order_id = %d AND status IN ('pending', 'unpaid')",
+				(int) $order_id
+			)
+		);
+
+		if ( empty( $commissions ) ) {
+			return;
+		}
+
+		$order = wc_get_order( $order_id );
+
+		foreach ( $commissions as $comm ) {
+			$wpdb->update(
+				$table_commissions,
+				[
+					'status'           => 'rejected',
+					'rejection_reason' => 'Order cancelled or refunded',
+				],
+				[ 'id' => $comm->id ]
+			);
+
+			// Deduct from balance if previously counted in unpaid
+			if ( 'unpaid' === $comm->status ) {
+				$wpdb->query(
+					$wpdb->prepare(
+						"UPDATE {$table_affiliates} 
+						SET unpaid_balance = GREATEST(0.00, unpaid_balance - %f),
+						    lifetime_earnings = GREATEST(0.00, lifetime_earnings - %f)
+						WHERE id = %d",
+						$comm->commission_amount,
+						$comm->commission_amount,
+						$comm->affiliate_id
+					)
+				);
+			}
+
+			if ( $order instanceof WC_Order ) {
+				self::dispatch_commission_email( 'rejected', (int) $comm->affiliate_id, $order, (float) $comm->commission_amount );
+			}
+		}
+	}
+
+	/**
+	 * Handle partial or full refund hook.
+	 */
+	public static function handle_order_refund_event( $order_id, $refund_id ): void {
+		self::handle_order_clawback( $order_id );
+	}
+
+	/**
+	 * Helper: lookup affiliate row by slug.
+	 */
+	public static function get_affiliate_by_slug( string $slug ) {
+		global $wpdb;
+		$table = $wpdb->prefix . 'exacoat_affiliates';
+		return $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$table} WHERE slug = %s LIMIT 1", sanitize_title( $slug ) )
+		);
+	}
+
+	/**
+	 * Helper: lookup affiliate row by user ID.
+	 */
+	public static function get_affiliate_by_user_id( int $user_id ) {
+		global $wpdb;
+		$table = $wpdb->prefix . 'exacoat_affiliates';
+		return $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$table} WHERE user_id = %d LIMIT 1", $user_id )
+		);
+	}
+
+	/**
+	 * Determine cross-subdomain cookie domain.
+	 */
+	private static function get_cookie_domain(): string {
+		$host = $_SERVER['HTTP_HOST'] ?? 'exacoat.com';
+		$host = preg_replace( '/:\d+$/', '', $host );
+
+		if ( 'localhost' === $host || filter_var( $host, FILTER_VALIDATE_IP ) ) {
+			return $host;
+		}
+
+		$parts = explode( '.', $host );
+		if ( count( $parts ) >= 2 ) {
+			return '.' . implode( '.', array_slice( $parts, -2 ) );
+		}
+
+		return '.' . $host;
+	}
+
+	/**
+	 * Register REST API routes for creator portal and manager workstation.
+	 */
+	public static function register_rest_routes(): void {
+		$namespaces = [ 'exacoat/v1', 'exacoat-core/v1' ];
+
+		foreach ( $namespaces as $ns ) {
+			// Public registration
+			register_rest_route( $ns, '/affiliate/register', [
+				'methods'             => 'POST',
+				'callback'            => [ __CLASS__, 'rest_register' ],
+				'permission_callback' => '__return_true',
+			] );
+
+			// Creator portal endpoints (requires authenticated affiliate user)
+			register_rest_route( $ns, '/affiliate/portal', [
+				'methods'             => 'GET',
+				'callback'            => [ __CLASS__, 'rest_get_portal_data' ],
+				'permission_callback' => [ __CLASS__, 'check_affiliate_auth' ],
+			] );
+
+			register_rest_route( $ns, '/affiliate/settings', [
+				'methods'             => 'POST',
+				'callback'            => [ __CLASS__, 'rest_update_settings' ],
+				'permission_callback' => [ __CLASS__, 'check_affiliate_auth' ],
+			] );
+
+			register_rest_route( $ns, '/affiliate/payout-request', [
+				'methods'             => 'POST',
+				'callback'            => [ __CLASS__, 'rest_request_payout' ],
+				'permission_callback' => [ __CLASS__, 'check_affiliate_auth' ],
+			] );
+
+			// Product search for deep link generator
+			register_rest_route( $ns, '/affiliate/products', [
+				'methods'             => 'GET',
+				'callback'            => [ __CLASS__, 'rest_search_products' ],
+				'permission_callback' => '__return_true',
+			] );
+
+			// Admin workstation endpoints (requires manage_woocommerce capability)
+			register_rest_route( $ns, '/affiliate/admin/all', [
+				'methods'             => 'GET',
+				'callback'            => [ __CLASS__, 'rest_admin_get_affiliates' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_auth' ],
+			] );
+
+			register_rest_route( $ns, '/affiliate/admin/update-status', [
+				'methods'             => 'POST',
+				'callback'            => [ __CLASS__, 'rest_admin_update_status' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_auth' ],
+			] );
+
+			register_rest_route( $ns, '/affiliate/admin/commissions', [
+				'methods'             => 'GET',
+				'callback'            => [ __CLASS__, 'rest_admin_get_commissions' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_auth' ],
+			] );
+
+			register_rest_route( $ns, '/affiliate/admin/payouts', [
+				'methods'             => 'GET',
+				'callback'            => [ __CLASS__, 'rest_admin_get_payouts' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_auth' ],
+			] );
+
+			register_rest_route( $ns, '/affiliate/admin/update-payout', [
+				'methods'             => 'POST',
+				'callback'            => [ __CLASS__, 'rest_admin_update_payout' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_auth' ],
+			] );
+
+			register_rest_route( $ns, '/affiliate/admin/export-payouts', [
+				'methods'             => 'GET',
+				'callback'            => [ __CLASS__, 'rest_admin_export_payouts' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_auth' ],
+			] );
+		}
+	}
+
+	/**
+	 * Permission check: verify affiliate is logged in.
+	 */
+	public static function check_affiliate_auth( WP_REST_Request $request ): bool {
+		$user_id = get_current_user_id();
+		if ( ! $user_id ) {
+			// Fallback check: Authorization header or bearer token
+			$user_id = self::extract_authenticated_user_id( $request );
+		}
+		return $user_id > 0;
+	}
+
+	/**
+	 * Permission check: verify administrator or shop_manager access.
+	 */
+	public static function check_admin_auth( WP_REST_Request $request ): bool {
+		$user_id = get_current_user_id();
+		if ( ! $user_id ) {
+			$user_id = self::extract_authenticated_user_id( $request );
+		}
+
+		if ( ! $user_id ) {
+			return false;
+		}
+
+		return user_can( $user_id, 'manage_woocommerce' ) || user_can( $user_id, 'administrator' );
+	}
+
+	/**
+	 * Extract user ID from application passwords or custom auth tokens.
+	 */
+	private static function extract_authenticated_user_id( WP_REST_Request $request ): int {
+		$auth_header = $request->get_header( 'authorization' ) ?: ( $_SERVER['HTTP_AUTHORIZATION'] ?? '' );
+		if ( ! empty( $auth_header ) && preg_match( '/^Basic\s+(.+)$/i', $auth_header, $m ) ) {
+			$decoded = base64_decode( $m[1] );
+			if ( strpos( $decoded, ':' ) !== false ) {
+				list( $u, $p ) = explode( ':', $decoded, 2 );
+				$user = wp_authenticate_application_password( null, $u, $p );
+				if ( $user instanceof WP_User ) {
+					return (int) $user->ID;
+				}
+				$normal_user = wp_authenticate( $u, $p );
+				if ( $normal_user instanceof WP_User ) {
+					return (int) $normal_user->ID;
+				}
+			}
+		}
+		return 0;
+	}
+
+	/**
+	 * Endpoint: Register a new affiliate applicant.
+	 */
+	public static function rest_register( WP_REST_Request $request ) {
+		$params = $request->get_json_params() ?: $request->get_params();
+
+		$username          = sanitize_user( trim( $params['username'] ?? '' ) );
+		$first_name        = sanitize_text_field( trim( $params['first_name'] ?? '' ) );
+		$last_name         = sanitize_text_field( trim( $params['last_name'] ?? '' ) );
+		$email             = sanitize_email( strtolower( trim( $params['email'] ?? '' ) ) );
+		$password          = trim( $params['password'] ?? '' );
+		$affiliate_type    = sanitize_text_field( is_array( $params['affiliate_type'] ?? '' ) ? implode( ', ', $params['affiliate_type'] ) : ( $params['affiliate_type'] ?? '' ) );
+		$promotion_channel = sanitize_text_field( trim( $params['promotion_channel'] ?? '' ) );
+		$promotion_notes   = sanitize_textarea_field( trim( $params['promotion_notes'] ?? '' ) );
+
+		if ( empty( $username ) || empty( $email ) || empty( $password ) || empty( $first_name ) ) {
+			return new WP_Error( 'missing_fields', 'Please complete all required fields.', [ 'status' => 400 ] );
+		}
+
+		if ( ! is_email( $email ) ) {
+			return new WP_Error( 'invalid_email', 'Please provide a valid email address.', [ 'status' => 400 ] );
+		}
+
+		if ( username_exists( $username ) ) {
+			return new WP_Error( 'username_exists', 'This username is already registered.', [ 'status' => 409 ] );
+		}
+
+		if ( email_exists( $email ) ) {
+			return new WP_Error( 'email_exists', 'This email address is already registered.', [ 'status' => 409 ] );
+		}
+
+		// Ensure slug candidate is unique
+		$candidate_slug = sanitize_title( $username );
+		if ( empty( $candidate_slug ) ) {
+			$candidate_slug = 'affiliate-' . wp_generate_password( 6, false, false );
+		}
+
+		global $wpdb;
+		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
+
+		$slug_exists = $wpdb->get_var(
+			$wpdb->prepare( "SELECT id FROM {$table_affiliates} WHERE slug = %s LIMIT 1", $candidate_slug )
+		);
+		if ( $slug_exists ) {
+			$candidate_slug .= '-' . wp_generate_password( 4, false, false );
+		}
+
+		// Create WordPress user
+		$user_id = wp_create_user( $username, $password, $email );
+		if ( is_wp_error( $user_id ) ) {
+			return $user_id;
+		}
+
+		$wp_user = new WP_User( $user_id );
+		$wp_user->set_role( self::ROLE_AFFILIATE );
+
+		wp_update_user( [
+			'ID'         => $user_id,
+			'first_name' => $first_name,
+			'last_name'  => $last_name,
+			'nickname'   => $username,
+		] );
+
+		// Record in affiliate table with pending_approval status
+		$wpdb->insert(
+			$table_affiliates,
+			[
+				'user_id'           => $user_id,
+				'slug'              => $candidate_slug,
+				'slug_locked'       => 0,
+				'status'            => 'pending_approval',
+				'affiliate_type'    => $affiliate_type,
+				'promotion_channel' => $promotion_channel,
+				'promotion_notes'   => $promotion_notes,
+				'created_at'        => current_time( 'mysql' ),
+			],
+			[ '%d', '%s', '%d', '%s', '%s', '%s', '%s', '%s' ]
+		);
+
+		$affiliate_id = $wpdb->insert_id;
+
+		// Dispatch confirmation email to applicant
+		self::dispatch_applicant_email( 'received', $email, $first_name );
+
+		return rest_ensure_response( [
+			'success'      => true,
+			'message'      => 'Application received. Our team will review your application shortly.',
+			'affiliate_id' => $affiliate_id,
+			'status'       => 'pending_approval',
+			'slug'         => $candidate_slug,
+		] );
+	}
+
+	/**
+	 * Endpoint: Get dashboard and financial data for creator portal.
+	 */
+	public static function rest_get_portal_data( WP_REST_Request $request ) {
+		$user_id = get_current_user_id() ?: self::extract_authenticated_user_id( $request );
+		if ( ! $user_id ) {
+			return new WP_Error( 'unauthorized', 'Authentication required.', [ 'status' => 401 ] );
+		}
+
+		$affiliate = self::get_affiliate_by_user_id( $user_id );
+		if ( ! $affiliate ) {
+			return new WP_Error( 'not_found', 'Affiliate profile not found.', [ 'status' => 404 ] );
+		}
+
+		$user = get_userdata( $user_id );
+		global $wpdb;
+		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
+		$table_payouts     = $wpdb->prefix . 'exacoat_affiliate_payouts';
+
+		// Retrieve commissions
+		$commissions = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT id, order_number, order_subtotal, commission_amount, status, rejection_reason, created_at 
+				FROM {$table_commissions} 
+				WHERE affiliate_id = %d 
+				ORDER BY id DESC LIMIT 50",
+				$affiliate->id
+			)
+		);
+
+		// Retrieve payout requests
+		$payouts = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT id, amount, bank_name, bank_account_number, bank_account_name, status, transfer_reference, created_at, paid_at 
+				FROM {$table_payouts} 
+				WHERE affiliate_id = %d 
+				ORDER BY id DESC LIMIT 30",
+				$affiliate->id
+			)
+		);
+
+		$site_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'https://exacoat.com';
+		$referral_url = trailingslashit( $site_url ) . '?ref=' . rawurlencode( $affiliate->slug );
+
+		return rest_ensure_response( [
+			'success' => true,
+			'profile' => [
+				'id'                  => (int) $affiliate->id,
+				'username'            => $user ? $user->user_login : '',
+				'first_name'          => $user ? $user->first_name : '',
+				'last_name'           => $user ? $user->last_name : '',
+				'email'               => $user ? $user->user_email : '',
+				'slug'                => $affiliate->slug,
+				'slug_locked'         => (bool) $affiliate->slug_locked,
+				'status'              => $affiliate->status,
+				'affiliate_type'      => $affiliate->affiliate_type,
+				'promotion_channel'   => $affiliate->promotion_channel,
+				'bank_name'           => $affiliate->bank_name,
+				'bank_account_number' => $affiliate->bank_account_number,
+				'bank_account_name'   => $affiliate->bank_account_name,
+				'referral_url'        => $referral_url,
+			],
+			'metrics' => [
+				'lifetime_earnings' => (float) $affiliate->lifetime_earnings,
+				'unpaid_balance'    => (float) $affiliate->unpaid_balance,
+				'total_clicks'      => (int) $affiliate->total_clicks,
+				'total_orders'      => (int) $affiliate->total_orders,
+				'commission_rate'   => self::COMMISSION_RATE,
+				'min_payout_amount' => self::MIN_PAYOUT_IDR,
+				'can_request_payout'=> ( (float) $affiliate->unpaid_balance >= self::MIN_PAYOUT_IDR && in_array( $affiliate->bank_name, [ 'BCA', 'MANDIRI' ], true ) && ! empty( $affiliate->bank_account_number ) ),
+			],
+			'commissions' => $commissions ?: [],
+			'payouts'     => $payouts ?: [],
+		] );
+	}
+
+	/**
+	 * Endpoint: Save bank settings (BCA / Mandiri only) and lock referral slug.
+	 */
+	public static function rest_update_settings( WP_REST_Request $request ) {
+		$user_id = get_current_user_id() ?: self::extract_authenticated_user_id( $request );
+		if ( ! $user_id ) {
+			return new WP_Error( 'unauthorized', 'Authentication required.', [ 'status' => 401 ] );
+		}
+
+		$affiliate = self::get_affiliate_by_user_id( $user_id );
+		if ( ! $affiliate ) {
+			return new WP_Error( 'not_found', 'Affiliate profile not found.', [ 'status' => 404 ] );
+		}
+
+		$params = $request->get_json_params() ?: $request->get_params();
+		global $wpdb;
+		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
+
+		$updates = [];
+		$formats = [];
+
+		// Bank Account Settings: strictly BCA or MANDIRI
+		if ( isset( $params['bank_name'] ) ) {
+			$raw_bank = strtoupper( trim( sanitize_text_field( $params['bank_name'] ) ) );
+			if ( ! in_array( $raw_bank, [ 'BCA', 'MANDIRI' ], true ) ) {
+				return new WP_Error( 'invalid_bank', 'Only BCA and Bank Mandiri are supported for payouts.', [ 'status' => 400 ] );
+			}
+			$updates['bank_name'] = $raw_bank;
+			$formats[] = '%s';
+		}
+
+		if ( isset( $params['bank_account_number'] ) ) {
+			$account_number = preg_replace( '/[^0-9]/', '', (string) $params['bank_account_number'] );
+			if ( strlen( $account_number ) < 8 || strlen( $account_number ) > 20 ) {
+				return new WP_Error( 'invalid_account_number', 'Please enter a valid bank account number.', [ 'status' => 400 ] );
+			}
+			$updates['bank_account_number'] = $account_number;
+			$formats[] = '%s';
+		}
+
+		if ( isset( $params['bank_account_name'] ) ) {
+			$account_name = sanitize_text_field( trim( $params['bank_account_name'] ) );
+			if ( empty( $account_name ) ) {
+				return new WP_Error( 'invalid_account_name', 'Bank account holder name is required.', [ 'status' => 400 ] );
+			}
+			$updates['bank_account_name'] = $account_name;
+			$formats[] = '%s';
+		}
+
+		// Slug Customization: permitted only if slug_locked is 0, then locked permanently
+		if ( ! empty( $params['slug'] ) && ! $affiliate->slug_locked ) {
+			$new_slug = sanitize_title( trim( $params['slug'] ) );
+			if ( strlen( $new_slug ) < 3 ) {
+				return new WP_Error( 'invalid_slug', 'Referral URL slug must be at least 3 characters.', [ 'status' => 400 ] );
+			}
+
+			// Verify slug uniqueness
+			$existing_slug_owner = $wpdb->get_var(
+				$wpdb->prepare( "SELECT id FROM {$table_affiliates} WHERE slug = %s AND id != %d LIMIT 1", $new_slug, $affiliate->id )
+			);
+			if ( $existing_slug_owner ) {
+				return new WP_Error( 'slug_taken', 'This referral slug is already in use by another affiliate.', [ 'status' => 409 ] );
+			}
+
+			$updates['slug']        = $new_slug;
+			$formats[]              = '%s';
+			$updates['slug_locked'] = 1;
+			$formats[]              = '%d';
+		}
+
+		if ( empty( $updates ) ) {
+			return rest_ensure_response( [ 'success' => true, 'message' => 'No changes submitted.' ] );
+		}
+
+		$wpdb->update( $table_affiliates, $updates, [ 'id' => $affiliate->id ], $formats, [ '%d' ] );
+
+		return rest_ensure_response( [
+			'success' => true,
+			'message' => 'Settings saved successfully.',
+		] );
+	}
+
+	/**
+	 * Endpoint: Submit payout request (minimum Rp 250,000 threshold).
+	 */
+	public static function rest_request_payout( WP_REST_Request $request ) {
+		$user_id = get_current_user_id() ?: self::extract_authenticated_user_id( $request );
+		if ( ! $user_id ) {
+			return new WP_Error( 'unauthorized', 'Authentication required.', [ 'status' => 401 ] );
+		}
+
+		$affiliate = self::get_affiliate_by_user_id( $user_id );
+		if ( ! $affiliate || 'active' !== $affiliate->status ) {
+			return new WP_Error( 'forbidden', 'Only approved active affiliates can request payouts.', [ 'status' => 403 ] );
+		}
+
+		if ( ! in_array( $affiliate->bank_name, [ 'BCA', 'MANDIRI' ], true ) || empty( $affiliate->bank_account_number ) ) {
+			return new WP_Error( 'missing_bank', 'Please configure your BCA or Mandiri account before requesting a payout.', [ 'status' => 400 ] );
+		}
+
+		$unpaid = (float) $affiliate->unpaid_balance;
+		if ( $unpaid < self::MIN_PAYOUT_IDR ) {
+			return new WP_Error(
+				'below_minimum',
+				sprintf( 'Minimum payout threshold is Rp %s.', number_format( self::MIN_PAYOUT_IDR, 0, ',', '.' ) ),
+				[ 'status' => 400 ]
+			);
+		}
+
+		global $wpdb;
+		$table_payouts     = $wpdb->prefix . 'exacoat_affiliate_payouts';
+		$table_affiliates  = $wpdb->prefix . 'exacoat_affiliates';
+		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
+
+		// Prevent multiple concurrent pending requests
+		$active_pending = $wpdb->get_var(
+			$wpdb->prepare( "SELECT id FROM {$table_payouts} WHERE affiliate_id = %d AND status = 'pending' LIMIT 1", $affiliate->id )
+		);
+		if ( $active_pending ) {
+			return new WP_Error( 'pending_request_exists', 'You already have an open payout request under review.', [ 'status' => 409 ] );
+		}
+
+		// Create payout request
+		$wpdb->insert(
+			$table_payouts,
+			[
+				'affiliate_id'        => $affiliate->id,
+				'amount'              => $unpaid,
+				'bank_name'           => $affiliate->bank_name,
+				'bank_account_number' => $affiliate->bank_account_number,
+				'bank_account_name'   => $affiliate->bank_account_name,
+				'status'              => 'pending',
+				'created_at'          => current_time( 'mysql' ),
+			],
+			[ '%d', '%f', '%s', '%s', '%s', '%s', '%s' ]
+		);
+
+		$payout_id = $wpdb->insert_id;
+
+		// Deduct from balance and tag unpaid commissions
+		$wpdb->query(
+			$wpdb->prepare(
+				"UPDATE {$table_affiliates} SET unpaid_balance = GREATEST(0.00, unpaid_balance - %f) WHERE id = %d",
+				$unpaid,
+				$affiliate->id
+			)
+		);
+
+		$wpdb->query(
+			$wpdb->prepare(
+				"UPDATE {$table_commissions} SET payout_id = %d WHERE affiliate_id = %d AND status = 'unpaid' AND payout_id IS NULL",
+				$payout_id,
+				$affiliate->id
+			)
+		);
+
+		$user = get_userdata( $affiliate->user_id );
+		if ( $user ) {
+			self::dispatch_payout_email( 'requested', $user->user_email, $user->first_name, $unpaid, $affiliate->bank_name, $affiliate->bank_account_number );
+		}
+
+		return rest_ensure_response( [
+			'success'   => true,
+			'message'   => 'Payout request submitted. Funds will be transferred on the next scheduled payout cycle.',
+			'payout_id' => $payout_id,
+			'amount'    => $unpaid,
+		] );
+	}
+
+	/**
+	 * Endpoint: Search products on storefront to build referral links.
+	 */
+	public static function rest_search_products( WP_REST_Request $request ) {
+		$query = sanitize_text_field( trim( $request->get_param( 'q' ) ?: '' ) );
+		$args  = [
+			'status'    => 'publish',
+			'limit'     => 20,
+			'orderby'   => 'popularity',
+			'order'     => 'DESC',
+		];
+
+		if ( ! empty( $query ) ) {
+			$args['s'] = $query;
+		}
+
+		$products = wc_get_products( $args );
+		$site_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'https://exacoat.com';
+		$results  = [];
+
+		foreach ( $products as $prod ) {
+			$image_id = $prod->get_image_id();
+			$results[] = [
+				'id'        => $prod->get_id(),
+				'name'      => $prod->get_name(),
+				'slug'      => $prod->get_slug(),
+				'price'     => (float) $prod->get_price(),
+				'permalink' => trailingslashit( $site_url ) . 'products/' . $prod->get_slug(),
+				'image_url' => $image_id ? wp_get_attachment_image_url( $image_id, 'medium' ) : '',
+			];
+		}
+
+		return rest_ensure_response( [ 'success' => true, 'products' => $results ] );
+	}
+
+	/**
+	 * Admin Endpoint: List all affiliates with filters and metrics.
+	 */
+	public static function rest_admin_get_affiliates( WP_REST_Request $request ) {
+		global $wpdb;
+		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
+
+		$status = sanitize_text_field( $request->get_param( 'status' ) ?: '' );
+		$search = sanitize_text_field( $request->get_param( 'search' ) ?: '' );
+
+		$where_clauses = [ '1=1' ];
+		$params        = [];
+
+		if ( ! empty( $status ) && 'all' !== $status ) {
+			$where_clauses[] = 'a.status = %s';
+			$params[]        = $status;
+		}
+
+		if ( ! empty( $search ) ) {
+			$where_clauses[] = '(a.slug LIKE %s OR u.user_email LIKE %s OR u.user_login LIKE %s OR a.bank_account_name LIKE %s)';
+			$like = '%' . $wpdb->esc_like( $search ) . '%';
+			$params[] = $like;
+			$params[] = $like;
+			$params[] = $like;
+			$params[] = $like;
+		}
+
+		$where_sql = implode( ' AND ', $where_clauses );
+		$query = "SELECT a.*, u.user_email, u.user_login, u.display_name 
+			FROM {$table_affiliates} a 
+			LEFT JOIN {$wpdb->users} u ON a.user_id = u.ID 
+			WHERE {$where_sql} 
+			ORDER BY a.id DESC";
+
+		$results = ! empty( $params ) ? $wpdb->get_results( $wpdb->prepare( $query, ...$params ) ) : $wpdb->get_results( $query );
+
+		return rest_ensure_response( [
+			'success'    => true,
+			'affiliates' => $results ?: [],
+		] );
+	}
+
+	/**
+	 * Admin Endpoint: Approve, reject, or suspend affiliate application.
+	 */
+	public static function rest_admin_update_status( WP_REST_Request $request ) {
+		$params = $request->get_json_params() ?: $request->get_params();
+		$affiliate_id = (int) ( $params['affiliate_id'] ?? 0 );
+		$new_status   = sanitize_text_field( $params['status'] ?? '' );
+		$notes        = sanitize_textarea_field( $params['notes'] ?? '' );
+
+		if ( ! in_array( $new_status, [ 'active', 'rejected', 'suspended' ], true ) ) {
+			return new WP_Error( 'invalid_status', 'Invalid status specified.', [ 'status' => 400 ] );
+		}
+
+		global $wpdb;
+		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
+
+		$affiliate = $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$table_affiliates} WHERE id = %d LIMIT 1", $affiliate_id )
+		);
+
+		if ( ! $affiliate ) {
+			return new WP_Error( 'not_found', 'Affiliate not found.', [ 'status' => 404 ] );
+		}
+
+		$wpdb->update(
+			$table_affiliates,
+			[ 'status' => $new_status ],
+			[ 'id' => $affiliate_id ],
+			[ '%s' ],
+			[ '%d' ]
+		);
+
+		$user = get_userdata( $affiliate->user_id );
+		if ( $user ) {
+			if ( 'active' === $new_status ) {
+				self::dispatch_applicant_email( 'approved', $user->user_email, $user->first_name, $affiliate->slug );
+			} elseif ( 'rejected' === $new_status ) {
+				self::dispatch_applicant_email( 'rejected', $user->user_email, $user->first_name, '', $notes );
+			}
+		}
+
+		return rest_ensure_response( [
+			'success' => true,
+			'message' => "Affiliate status updated to {$new_status}.",
+		] );
+	}
+
+	/**
+	 * Admin Endpoint: Commissions list for audit.
+	 */
+	public static function rest_admin_get_commissions( WP_REST_Request $request ) {
+		global $wpdb;
+		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
+		$table_affiliates  = $wpdb->prefix . 'exacoat_affiliates';
+
+		$status = sanitize_text_field( $request->get_param( 'status' ) ?: '' );
+		$aff_id = (int) ( $request->get_param( 'affiliate_id' ) ?: 0 );
+
+		$where_clauses = [ '1=1' ];
+		$params        = [];
+
+		if ( ! empty( $status ) && 'all' !== $status ) {
+			$where_clauses[] = 'c.status = %s';
+			$params[]        = $status;
+		}
+
+		if ( $aff_id > 0 ) {
+			$where_clauses[] = 'c.affiliate_id = %d';
+			$params[]        = $aff_id;
+		}
+
+		$where_sql = implode( ' AND ', $where_clauses );
+		$query = "SELECT c.*, a.slug as affiliate_slug, a.bank_name, a.bank_account_number 
+			FROM {$table_commissions} c 
+			LEFT JOIN {$table_affiliates} a ON c.affiliate_id = a.id 
+			WHERE {$where_sql} 
+			ORDER BY c.id DESC LIMIT 200";
+
+		$results = ! empty( $params ) ? $wpdb->get_results( $wpdb->prepare( $query, ...$params ) ) : $wpdb->get_results( $query );
+
+		return rest_ensure_response( [
+			'success'     => true,
+			'commissions' => $results ?: [],
+		] );
+	}
+
+	/**
+	 * Admin Endpoint: Payout requests ledger.
+	 */
+	public static function rest_admin_get_payouts( WP_REST_Request $request ) {
+		global $wpdb;
+		$table_payouts    = $wpdb->prefix . 'exacoat_affiliate_payouts';
+		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
+
+		$status = sanitize_text_field( $request->get_param( 'status' ) ?: '' );
+
+		$where_clauses = [ '1=1' ];
+		$params        = [];
+
+		if ( ! empty( $status ) && 'all' !== $status ) {
+			$where_clauses[] = 'p.status = %s';
+			$params[]        = $status;
+		}
+
+		$where_sql = implode( ' AND ', $where_clauses );
+		$query = "SELECT p.*, a.slug as affiliate_slug, a.user_id, u.user_email 
+			FROM {$table_payouts} p 
+			LEFT JOIN {$table_affiliates} a ON p.affiliate_id = a.id 
+			LEFT JOIN {$wpdb->users} u ON a.user_id = u.ID 
+			WHERE {$where_sql} 
+			ORDER BY p.id DESC";
+
+		$results = ! empty( $params ) ? $wpdb->get_results( $wpdb->prepare( $query, ...$params ) ) : $wpdb->get_results( $query );
+
+		return rest_ensure_response( [
+			'success' => true,
+			'payouts' => $results ?: [],
+		] );
+	}
+
+	/**
+	 * Admin Endpoint: Update payout request status (mark paid or reject).
+	 */
+	public static function rest_admin_update_payout( WP_REST_Request $request ) {
+		$params    = $request->get_json_params() ?: $request->get_params();
+		$payout_id = (int) ( $params['payout_id'] ?? 0 );
+		$status    = sanitize_text_field( $params['status'] ?? '' );
+		$reference = sanitize_text_field( $params['transfer_reference'] ?? '' );
+		$notes     = sanitize_textarea_field( $params['admin_notes'] ?? '' );
+
+		if ( ! in_array( $status, [ 'paid', 'rejected' ], true ) ) {
+			return new WP_Error( 'invalid_status', 'Status must be paid or rejected.', [ 'status' => 400 ] );
+		}
+
+		global $wpdb;
+		$table_payouts     = $wpdb->prefix . 'exacoat_affiliate_payouts';
+		$table_affiliates  = $wpdb->prefix . 'exacoat_affiliates';
+		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
+
+		$payout = $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$table_payouts} WHERE id = %d LIMIT 1", $payout_id )
+		);
+
+		if ( ! $payout ) {
+			return new WP_Error( 'not_found', 'Payout request not found.', [ 'status' => 404 ] );
+		}
+
+		if ( 'paid' === $status ) {
+			$wpdb->update(
+				$table_payouts,
+				[
+					'status'             => 'paid',
+					'transfer_reference' => $reference,
+					'admin_notes'        => $notes,
+					'paid_at'            => current_time( 'mysql' ),
+				],
+				[ 'id' => $payout_id ]
+			);
+
+			// Mark linked commissions as paid
+			$wpdb->update(
+				$table_commissions,
+				[ 'status' => 'paid' ],
+				[ 'payout_id' => $payout_id ]
+			);
+
+			$affiliate = $wpdb->get_row(
+				$wpdb->prepare( "SELECT * FROM {$table_affiliates} WHERE id = %d LIMIT 1", $payout->affiliate_id )
+			);
+			if ( $affiliate ) {
+				$user = get_userdata( $affiliate->user_id );
+				if ( $user ) {
+					self::dispatch_payout_email( 'completed', $user->user_email, $user->first_name, (float) $payout->amount, $payout->bank_name, $payout->bank_account_number, $reference );
+				}
+			}
+		} elseif ( 'rejected' === $status ) {
+			$wpdb->update(
+				$table_payouts,
+				[
+					'status'      => 'rejected',
+					'admin_notes' => $notes,
+				],
+				[ 'id' => $payout_id ]
+			);
+
+			// Refund balance back to affiliate
+			$wpdb->query(
+				$wpdb->prepare(
+					"UPDATE {$table_affiliates} SET unpaid_balance = unpaid_balance + %f WHERE id = %d",
+					$payout->amount,
+					$payout->affiliate_id
+				)
+			);
+
+			// Unbind commissions so they can be included in future requests
+			$wpdb->query(
+				$wpdb->prepare(
+					"UPDATE {$table_commissions} SET payout_id = NULL WHERE payout_id = %d",
+					$payout_id
+				)
+			);
+		}
+
+		return rest_ensure_response( [
+			'success' => true,
+			'message' => "Payout marked as {$status}.",
+		] );
+	}
+
+	/**
+	 * Admin Endpoint: Export pending payouts to BCA KlikBCA Bisnis or Mandiri MCM CSV.
+	 */
+	public static function rest_admin_export_payouts( WP_REST_Request $request ) {
+		$bank = strtoupper( sanitize_text_field( $request->get_param( 'bank' ) ?: 'BCA' ) );
+		global $wpdb;
+		$table_payouts    = $wpdb->prefix . 'exacoat_affiliate_payouts';
+		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
+
+		$payouts = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT p.*, a.slug 
+				FROM {$table_payouts} p 
+				LEFT JOIN {$table_affiliates} a ON p.affiliate_id = a.id 
+				WHERE p.status = 'pending' AND p.bank_name = %s 
+				ORDER BY p.id ASC",
+				$bank
+			)
+		);
+
+		if ( empty( $payouts ) ) {
+			return new WP_Error( 'empty', 'No pending payouts found for ' . $bank, [ 'status' => 404 ] );
+		}
+
+		$csv_lines = [];
+
+		if ( 'BCA' === $bank ) {
+			// KlikBCA Bisnis Payroll CSV Format
+			$csv_lines[] = 'No,Rekening Tujuan,Nama Penerima,Nomor Referensi,Nominal,Berita';
+			$idx = 1;
+			foreach ( $payouts as $p ) {
+				$csv_lines[] = sprintf(
+					'%d,%s,"%s",EXA-PAY-%d,%d,"Komisi Exacoat @%s"',
+					$idx++,
+					$p->bank_account_number,
+					str_replace( '"', '""', $p->bank_account_name ),
+					$p->id,
+					(int) $p->amount,
+					$p->slug
+				);
+			}
+		} else {
+			// Mandiri Cash Management (MCM) Format
+			$csv_lines[] = 'Debit Account,Beneficiary Account,Beneficiary Name,Amount,Currency,Remark';
+			foreach ( $payouts as $p ) {
+				$csv_lines[] = sprintf(
+					',%s,"%s",%d,IDR,"Komisi Exacoat @%s"',
+					$p->bank_account_number,
+					str_replace( '"', '""', $p->bank_account_name ),
+					(int) $p->amount,
+					$p->slug
+				);
+			}
+		}
+
+		$csv_content = implode( "\r\n", $csv_lines );
+		$filename    = strtolower( $bank ) . '-payouts-' . gmdate( 'Y-m-d' ) . '.csv';
+
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+		echo $csv_content;
+		exit;
+	}
+
+	/**
+	 * Transactional email dispatcher for applicant lifecycle.
+	 */
+	private static function dispatch_applicant_email( string $type, string $email, string $first_name, string $slug = '', string $notes = '' ): void {
+		if ( ! class_exists( 'Exacoat_Email_Engine' ) ) {
+			return;
+		}
+
+		$store_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'https://exacoat.com';
+
+		if ( 'received' === $type ) {
+			$subject = 'We received your Exacoat affiliate application';
+			$body    = "<p>Hi {$first_name},</p><p>Thank you for applying to the Exacoat Creator Affiliate Program. Our team is currently reviewing your application channels and promotion methods. We will notify you via email once approved.</p>";
+		} elseif ( 'approved' === $type ) {
+			$subject      = 'Welcome to the Exacoat Affiliate Program';
+			$affiliate_url = trailingslashit( $store_url ) . '?ref=' . rawurlencode( $slug );
+			$portal_url   = 'https://affiliate.exacoat.com';
+			$body         = "<p>Congratulations {$first_name},</p><p>Your Exacoat affiliate application has been approved. You can now access your creator portal to copy your referral link, create product links, and track your commissions.</p><p><strong>Your Referral Link:</strong> <a href=\"{$affiliate_url}\">{$affiliate_url}</a></p><p><a href=\"{$portal_url}\" style=\"display:inline-block;padding:12px 24px;background:#18181b;color:#fff;border-radius:8px;text-decoration:none;\">Open Creator Portal</a></p>";
+		} else {
+			$subject = 'Update on your Exacoat affiliate application';
+			$reason  = ! empty( $notes ) ? "<p>Feedback: {$notes}</p>" : '';
+			$body    = "<p>Hi {$first_name},</p><p>Thank you for your interest in partnering with Exacoat. At this time, we are unable to accept your affiliate application.</p>{$reason}";
+		}
+
+		// Dispatch via Exacoat Native Email Engine
+		Exacoat_Email_Engine::send_email(
+			'customer_new_account',
+			$email,
+			$first_name,
+			[
+				'subject'      => $subject,
+				'body_primary' => $body,
+			]
+		);
+	}
+
+	/**
+	 * Transactional email dispatcher for commission events.
+	 */
+	private static function dispatch_commission_email( string $type, int $affiliate_id, WC_Order $order, float $amount ): void {
+		$affiliate = self::get_affiliate_by_id( $affiliate_id );
+		if ( ! $affiliate ) {
+			return;
+		}
+
+		$user = get_userdata( $affiliate->user_id );
+		if ( ! $user ) {
+			return;
+		}
+
+		$formatted_amount = 'Rp ' . number_format( $amount, 0, ',', '.' );
+		$order_num        = $order->get_order_number();
+
+		if ( 'confirmed' === $type ) {
+			$subject = "Commission Confirmed: {$formatted_amount} from Order #{$order_num}";
+			$body    = "<p>Hi {$user->first_name},</p><p>Great news. Order #{$order_num} has been completed and your 20% commission of <strong>{$formatted_amount}</strong> has been added to your unpaid balance.</p>";
+		} elseif ( 'recorded' === $type ) {
+			$subject = "New Referral Sale Recorded: Order #{$order_num}";
+			$body    = "<p>Hi {$user->first_name},</p><p>A customer just placed order #{$order_num} using your referral link. A commission of <strong>{$formatted_amount}</strong> is currently pending order fulfillment.</p>";
+		} else {
+			$subject = "Commission Update: Order #{$order_num} Refunded";
+			$body    = "<p>Hi {$user->first_name},</p><p>Order #{$order_num} was refunded or cancelled by the customer. The associated commission of {$formatted_amount} has been adjusted accordingly.</p>";
+		}
+
+		if ( class_exists( 'Exacoat_Email_Engine' ) ) {
+			Exacoat_Email_Engine::send_email(
+				'customer_order_refunded',
+				$user->user_email,
+				$user->first_name,
+				[
+					'subject'      => $subject,
+					'body_primary' => $body,
+				]
+			);
+		}
+	}
+
+	/**
+	 * Transactional email dispatcher for payout notifications.
+	 */
+	private static function dispatch_payout_email( string $type, string $email, string $first_name, float $amount, string $bank, string $acc, string $ref = '' ): void {
+		$formatted = 'Rp ' . number_format( $amount, 0, ',', '.' );
+
+		if ( 'requested' === $type ) {
+			$subject = "Payout Request Received: {$formatted}";
+			$body    = "<p>Hi {$first_name},</p><p>We received your payout request for <strong>{$formatted}</strong> to your {$bank} account ({$acc}). Our finance team processes payouts on a regular schedule and you will receive a confirmation once transferred.</p>";
+		} else {
+			$subject = "Payout Sent: {$formatted} has been transferred";
+			$ref_str = ! empty( $ref ) ? "<p>Bank Transfer Reference: <strong>{$ref}</strong></p>" : '';
+			$body    = "<p>Hi {$first_name},</p><p>Your payout of <strong>{$formatted}</strong> has been transferred to your {$bank} account ({$acc}).</p>{$ref_str}";
+		}
+
+		if ( class_exists( 'Exacoat_Email_Engine' ) ) {
+			Exacoat_Email_Engine::send_email(
+				'customer_order_completed',
+				$email,
+				$first_name,
+				[
+					'subject'      => $subject,
+					'body_primary' => $body,
+				]
+			);
+		}
+	}
+
+	/**
+	 * Helper: lookup affiliate row by internal affiliate table ID.
+	 */
+	public static function get_affiliate_by_id( int $id ) {
+		global $wpdb;
+		$table = $wpdb->prefix . 'exacoat_affiliates';
+		return $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d LIMIT 1", $id )
+		);
+	}
+}
+
+}
