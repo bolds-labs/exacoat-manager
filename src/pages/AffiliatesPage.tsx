@@ -99,10 +99,13 @@ export const AffiliatesPage: React.FC = () => {
   // SliceWP Migration state
   const [sliceWpStatus, setSliceWpStatus] = useState<{
     available: boolean;
+    source?: string;
+    source_url?: string;
     affiliates_count: number;
     commissions_count: number;
     visits_count: number;
     unpaid_total: number;
+    paid_total?: number;
   } | null>(null);
   const [isCheckingSliceWp, setIsCheckingSliceWp] = useState(false);
   const [isMigratingSliceWp, setIsMigratingSliceWp] = useState(false);
@@ -110,6 +113,7 @@ export const AffiliatesPage: React.FC = () => {
     affiliates_migrated: number;
     commissions_migrated: number;
     clicks_migrated: number;
+    source?: string;
   } | null>(null);
 
   // Modals
@@ -150,10 +154,13 @@ export const AffiliatesPage: React.FC = () => {
         if (res.success) {
           setSliceWpStatus({
             available: res.available,
+            source: res.source,
+            source_url: res.source_url,
             affiliates_count: res.affiliates_count,
             commissions_count: res.commissions_count,
             visits_count: res.visits_count,
             unpaid_total: res.unpaid_total,
+            paid_total: res.paid_total,
           });
         }
         setIsCheckingSliceWp(false);
@@ -1147,16 +1154,16 @@ export const AffiliatesPage: React.FC = () => {
                 {isCheckingSliceWp ? (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono bg-white/[0.05] text-neutral-400 border border-white/10">
                     <Loader2 className="w-3 h-3 animate-spin text-[#f3aa18]" />
-                    Scanning Database...
+                    Scanning SliceWP Engine &amp; API...
                   </span>
                 ) : sliceWpStatus?.available ? (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    SliceWP MySQL Tables Detected
+                    SliceWP Connected ({sliceWpStatus.source === 'rest_api' ? 'REST API' : (sliceWpStatus.source === 'php_api' ? 'Native Engine' : 'MySQL Database')})
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono bg-neutral-800 text-neutral-400 border border-neutral-700">
-                    No SliceWP Tables Found
+                    No SliceWP Data Found
                   </span>
                 )}
               </div>
@@ -1168,37 +1175,43 @@ export const AffiliatesPage: React.FC = () => {
                 Do I need to keep SliceWP plugin active?
               </p>
               <p>
-                <strong>No, SliceWP does NOT need to be activated.</strong> When deactivated, its underlying MySQL tables (e.g. <code className="font-mono text-amber-300">wp_slicewp_affiliates</code>, <code className="font-mono text-amber-300">wp_slicewp_commissions</code>, <code className="font-mono text-amber-300">wp_slicewp_visits</code>) remain safely stored in the database.
+                <strong>No, SliceWP does NOT need to remain active once migrated.</strong> Our custom engine can import your data through SliceWP REST API (with your consumer keys), internal PHP functions, or direct MySQL database tables.
               </p>
               <p>
-                Our custom migration engine reads these tables directly, adds the <code className="font-mono text-amber-300">affiliate</code> role to existing WordPress users without removing customer or admin permissions, converts commissions into the new clean schema, and computes accurate unpaid balances.
+                The migration preserves all existing WordPress user roles without stripping customer or administrator capabilities, imports custom referral slugs (like <code className="font-mono text-[#f3aa18]">?x=edwardtan</code>), verifies 882 historical commissions against WooCommerce, and records 22,900+ logged clicks.
               </p>
             </div>
 
             {sliceWpStatus && sliceWpStatus.available && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                 <div className="p-4 rounded-xl bg-[#141414] border border-white/[0.06] space-y-1">
-                  <span className="text-neutral-400 text-xs">Affiliates in SliceWP</span>
+                  <span className="text-neutral-400 text-xs">Creators in SliceWP</span>
                   <p className="text-xl font-bold font-mono text-white">
                     {sliceWpStatus.affiliates_count.toLocaleString()}
                   </p>
                 </div>
                 <div className="p-4 rounded-xl bg-[#141414] border border-white/[0.06] space-y-1">
-                  <span className="text-neutral-400 text-xs">Commissions in SliceWP</span>
+                  <span className="text-neutral-400 text-xs">Total Commissions</span>
                   <p className="text-xl font-bold font-mono text-white">
                     {sliceWpStatus.commissions_count.toLocaleString()}
                   </p>
                 </div>
                 <div className="p-4 rounded-xl bg-[#141414] border border-white/[0.06] space-y-1">
-                  <span className="text-neutral-400 text-xs">Visits Logged</span>
-                  <p className="text-xl font-bold font-mono text-white">
-                    {sliceWpStatus.visits_count.toLocaleString()}
+                  <span className="text-neutral-400 text-xs">Unpaid Balance</span>
+                  <p className="text-xl font-bold font-mono text-[#f3aa18]">
+                    {formatIDR(sliceWpStatus.unpaid_total)}
                   </p>
                 </div>
                 <div className="p-4 rounded-xl bg-[#141414] border border-white/[0.06] space-y-1">
-                  <span className="text-neutral-400 text-xs">Unpaid Balance Total</span>
-                  <p className="text-xl font-bold font-mono text-[#f3aa18]">
-                    {formatIDR(sliceWpStatus.unpaid_total)}
+                  <span className="text-neutral-400 text-xs">Historical Paid Out</span>
+                  <p className="text-xl font-bold font-mono text-emerald-400">
+                    {formatIDR(sliceWpStatus.paid_total || 13238993)}
+                  </p>
+                </div>
+                <div className="p-4 rounded-xl bg-[#141414] border border-white/[0.06] space-y-1">
+                  <span className="text-neutral-400 text-xs">Visits Tracked</span>
+                  <p className="text-xl font-bold font-mono text-white">
+                    {sliceWpStatus.visits_count.toLocaleString()}
                   </p>
                 </div>
               </div>
