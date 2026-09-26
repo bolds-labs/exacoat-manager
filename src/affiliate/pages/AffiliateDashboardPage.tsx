@@ -722,13 +722,13 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
           <div className="flex items-center gap-2 flex-wrap">
             {/* Search Input */}
             <div className="relative">
-              <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search order number..."
-                className="pl-8 pr-3 py-1.5 bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all font-mono"
+                className="pl-9 pr-3 py-1.5 bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all font-mono"
               />
             </div>
 

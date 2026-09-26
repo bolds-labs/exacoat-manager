@@ -208,13 +208,13 @@ export const ManagerLiveAuditLogs: React.FC = () => {
 
           {/* Search Box */}
           <div className="relative flex-1 sm:w-64">
-            <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="Search prompt, model, message..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-black/60 border border-white/10 text-xs text-zinc-200 placeholder:text-zinc-600 font-mono focus:outline-none focus:border-[#f3aa18]"
+              className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-black/60 border border-white/10 text-xs text-zinc-200 placeholder:text-zinc-600 font-mono focus:outline-none focus:border-[#f3aa18]"
             />
           </div>
         </div>

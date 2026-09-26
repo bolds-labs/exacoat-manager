@@ -94,7 +94,7 @@ export const FinancialLedgerTable: React.FC<FinancialLedgerTableProps> = ({
         <div className="flex flex-wrap items-center gap-2.5">
           {/* Search Input */}
           <div className="relative min-w-[200px] sm:min-w-[240px]">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
@@ -103,7 +103,7 @@ export const FinancialLedgerTable: React.FC<FinancialLedgerTableProps> = ({
                 setCurrentPage(1);
               }}
               placeholder="Filter order, customer, city..."
-              className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-[#090a0d] border border-white/[0.08] text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-[#f3aa18]/50"
+              className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-[#090a0d] border border-white/[0.08] text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-[#f3aa18]/50"
             />
           </div>
 

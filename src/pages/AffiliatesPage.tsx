@@ -28,6 +28,15 @@ import {
 } from '../lib/wordpressBridge';
 import { AffiliateCommission, AffiliatePayout } from '../types';
 import { useToast } from '../context/ToastContext';
+import { FilterSelect, FilterSelectOption } from '../components/ui/FilterSelect';
+
+const AFFILIATE_STATUS_OPTIONS: FilterSelectOption[] = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'active', label: 'Active Only' },
+  { value: 'pending_approval', label: 'Pending Approval' },
+  { value: 'suspended', label: 'Suspended' },
+  { value: 'rejected', label: 'Rejected' },
+];
 import { clsx } from 'clsx';
 
 type TabKey = 'applications' | 'affiliates' | 'commissions' | 'payouts';
@@ -387,28 +396,24 @@ export const AffiliatesPage: React.FC = () => {
       {/* Tab 2: Affiliate Directory */}
       {activeTab === 'affiliates' && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <div className="relative flex-1">
-              <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3.5 top-3" />
+              <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by slug, username, email, or account name..."
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-[#f3aa18]/50 focus:border-[#f3aa18]/50 transition-all font-sans"
               />
             </div>
-            <select
+            <FilterSelect
+              label="Status"
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
-            >
-              <option value="all">All Statuses</option>
-              <option value="active">Active Only</option>
-              <option value="pending_approval">Pending Approval</option>
-              <option value="suspended">Suspended</option>
-              <option value="rejected">Rejected</option>
-            </select>
+              onChange={(val) => setStatusFilter(val)}
+              options={AFFILIATE_STATUS_OPTIONS}
+              align="right"
+            />
           </div>
 
           <div className="rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden shadow-sm">

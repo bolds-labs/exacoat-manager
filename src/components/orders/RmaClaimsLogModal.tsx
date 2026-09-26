@@ -354,7 +354,7 @@ export const RmaClaimsLogModal: React.FC<RmaClaimsLogModalProps> = ({
         <div className="p-3 rounded-2xl bg-neutral-900 border border-white/[0.08] flex items-center justify-between flex-wrap gap-2.5">
           <div className="flex items-center gap-2 flex-1 min-w-[220px]">
             <div className="relative flex-1">
-              <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 placeholder="Search order #, invoice, customer, phone..."
@@ -363,7 +363,7 @@ export const RmaClaimsLogModal: React.FC<RmaClaimsLogModalProps> = ({
                   setSearchQuery(e.target.value);
                   setPage(1);
                 }}
-                className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-neutral-950 border border-white/[0.08] text-white text-xs placeholder:text-neutral-500 focus:outline-none focus:border-amber-400"
+                className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-neutral-950 border border-white/[0.08] text-white text-xs placeholder:text-neutral-500 focus:outline-none focus:border-amber-400"
               />
             </div>
           </div>
@@ -668,7 +668,7 @@ export const RmaClaimsLogModal: React.FC<RmaClaimsLogModalProps> = ({
         <div className="p-3 rounded-2xl bg-neutral-900 border border-white/[0.08] flex items-center justify-between flex-wrap gap-2.5">
           <div className="flex items-center gap-2 flex-1 min-w-[220px]">
             <div className="relative flex-1">
-              <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 placeholder="Search order #, customer, email, resi..."
@@ -677,7 +677,7 @@ export const RmaClaimsLogModal: React.FC<RmaClaimsLogModalProps> = ({
                   setSearchQuery(e.target.value);
                   setPage(1);
                 }}
-                className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-neutral-950 border border-white/[0.08] text-white text-xs placeholder:text-neutral-500 focus:outline-none focus:border-purple-400"
+                className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-neutral-950 border border-white/[0.08] text-white text-xs placeholder:text-neutral-500 focus:outline-none focus:border-purple-400"
               />
             </div>
           </div>

@@ -749,7 +749,7 @@ export const ReviewsPage: React.FC<ReviewsPageProps> = ({
           {/* Search & Rating Filter */}
           <div className="flex items-center gap-2 w-full md:w-auto">
             <div className="relative flex-1 md:w-64">
-              <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 placeholder="Search customer, order, product..."
@@ -758,7 +758,7 @@ export const ReviewsPage: React.FC<ReviewsPageProps> = ({
                   setSearchQuery(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full bg-zinc-950/80 border border-white/[0.08] rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 font-sans"
+                className="w-full bg-zinc-950/80 border border-white/[0.08] rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 font-sans"
               />
             </div>
 

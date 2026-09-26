@@ -21,8 +21,44 @@ if ( ! class_exists( 'Exacoat_Customer_Manager' ) ) {
 
 class Exacoat_Customer_Manager {
 
-	private const SUMMARY_CACHE_KEY = 'exacoat_customer_analytics_summary';
+	private const SUMMARY_CACHE_KEY = 'exacoat_customer_analytics_summary_v2';
 	private const SUMMARY_CACHE_TTL = 300; // 5 minutes
+
+	private const EXCLUDED_EMAILS = [
+		'exaorder@gmail.com',
+		'orderexa@gmail.com',
+		'order@exacoat.com',
+	];
+
+	/**
+	 * Get list of excluded internal bridge/test emails
+	 */
+	public static function get_excluded_emails(): array {
+		return self::EXCLUDED_EMAILS;
+	}
+
+	/**
+	 * Get all valid paid order statuses across standard WooCommerce and custom fulfillment states
+	 */
+	public static function get_paid_order_statuses(): array {
+		return [
+			'wc-processing', 'wc-completed', 'wc-in-production', 'wc-quality-check',
+			'wc-awaiting-pickup', 'wc-preparing-order', 'wc-ready-to-ship', 'wc-smb-ready',
+			'wc-smb-picked', 'wc-shipped', 'processing', 'completed', 'in-production',
+			'quality-check', 'awaiting-pickup', 'preparing-order', 'ready-to-ship',
+			'smb-ready', 'smb-picked', 'shipped',
+		];
+	}
+
+	/**
+	 * Generate SQL clause to exclude internal bridge emails
+	 */
+	private static function get_excluded_emails_sql( string $column ): string {
+		$escaped = array_map( function( $email ) {
+			return "'" . esc_sql( strtolower( trim( $email ) ) ) . "'";
+		}, self::EXCLUDED_EMAILS );
+		return "LOWER(TRIM({$column})) NOT IN (" . implode( ',', $escaped ) . ")";
+	}
 
 	public static function init(): void {
 		add_action( 'rest_api_init', [ __CLASS__, 'register_rest_routes' ] );
@@ -103,8 +139,9 @@ class Exacoat_Customer_Manager {
 	public static function compute_storewide_summary(): array {
 		global $wpdb;
 
-		// 1. Total registered WordPress users
-		$total_registered_users = (int) $wpdb->get_var( "SELECT COUNT(ID) FROM {$wpdb->users}" );
+		// 1. Total registered WordPress users (excluding internal bridge emails)
+		$excluded_users_u_sql = self::get_excluded_emails_sql( 'u.user_email' );
+		$total_registered_users = (int) $wpdb->get_var( "SELECT COUNT(u.ID) FROM {$wpdb->users} u WHERE {$excluded_users_u_sql}" );
 
 		// 2. Inactive Users (> 2 years without orders or activity)
 		$two_years_ago = gmdate( 'Y-m-d H:i:s', strtotime( '-2 years' ) );
@@ -117,24 +154,28 @@ class Exacoat_Customer_Manager {
 		$repeat_customers   = 0;
 		$top_customers      = [];
 
-		$valid_statuses = [ 'wc-processing', 'wc-completed', 'wc-in-production', 'wc-quality-check', 'wc-awaiting-pickup', 'wc-preparing-order', 'wc-ready-to-ship', 'wc-smb-ready', 'wc-smb-picked', 'wc-shipped', 'processing', 'completed', 'in-production', 'quality-check', 'awaiting-pickup', 'preparing-order', 'ready-to-ship', 'smb-ready', 'smb-picked', 'shipped' ];
+		$valid_statuses = self::get_paid_order_statuses();
 		$status_placeholders = implode( ',', array_fill( 0, count( $valid_statuses ), '%s' ) );
+
+		$excluded_orders_sql   = self::get_excluded_emails_sql( 'billing_email' );
+		$excluded_orders_o_sql = self::get_excluded_emails_sql( 'o.billing_email' );
 
 		if ( 'hpos' === $mode ) {
 			$orders_table = "{$wpdb->prefix}wc_orders";
 
-			// Revenue & Orders count
+			// Revenue & Orders count (excluding internal bridge emails)
 			$rev_sql = $wpdb->prepare(
 				"SELECT COUNT(id) as total_orders, COALESCE(SUM(total_amount), 0) as total_revenue 
 				 FROM {$orders_table} 
-				 WHERE status IN ({$status_placeholders})",
+				 WHERE status IN ({$status_placeholders})
+				   AND {$excluded_orders_sql}",
 				...$valid_statuses
 			);
 			$rev_row = $wpdb->get_row( $rev_sql, ARRAY_A );
 			$total_orders  = (int) ( $rev_row['total_orders'] ?? 0 );
 			$total_revenue = (float) ( $rev_row['total_revenue'] ?? 0.0 );
 
-			// Unique paying customers & repeat count
+			// Unique paying customers & repeat count (excluding internal bridge emails)
 			$cust_sql = $wpdb->prepare(
 				"SELECT 
 					COUNT(id) as order_count,
@@ -142,6 +183,7 @@ class Exacoat_Customer_Manager {
 				 FROM {$orders_table}
 				 WHERE status IN ({$status_placeholders})
 				   AND billing_email IS NOT NULL AND billing_email != ''
+				   AND {$excluded_orders_sql}
 				 GROUP BY LOWER(TRIM(billing_email))",
 				...$valid_statuses
 			);
@@ -153,22 +195,24 @@ class Exacoat_Customer_Manager {
 				}
 			}
 
-			// Inactive 2+ years: registered users with no orders in last 2 years
+			// Inactive 2+ years: registered users with no orders in last 2 years (excluding internal bridge emails)
 			$inactive_sql = $wpdb->prepare(
 				"SELECT COUNT(u.ID) FROM {$wpdb->users} u
 				 WHERE u.user_registered < %s
+				   AND {$excluded_users_u_sql}
 				   AND LOWER(TRIM(u.user_email)) NOT IN (
 					 SELECT DISTINCT LOWER(TRIM(billing_email)) 
 					 FROM {$orders_table} 
 					 WHERE date_created_gmt >= %s 
 					   AND billing_email IS NOT NULL AND billing_email != ''
+					   AND {$excluded_orders_sql}
 				   )",
 				$two_years_ago,
 				$two_years_ago
 			);
 			$inactive_2yr_users = (int) $wpdb->get_var( $inactive_sql );
 
-			// Top 5 spenders
+			// Top 5 spenders (excluding internal bridge emails)
 			$top_sql = $wpdb->prepare(
 				"SELECT 
 					LOWER(TRIM(o.billing_email)) as email,
@@ -179,6 +223,7 @@ class Exacoat_Customer_Manager {
 				 FROM {$orders_table} o
 				 WHERE o.status IN ({$status_placeholders})
 				   AND o.billing_email IS NOT NULL AND o.billing_email != ''
+				   AND {$excluded_orders_o_sql}
 				 GROUP BY LOWER(TRIM(o.billing_email))
 				 ORDER BY total_spent DESC
 				 LIMIT 5",
@@ -232,21 +277,26 @@ class Exacoat_Customer_Manager {
 			// WooCommerce Analytics Lookup Table
 			$stats_table  = "{$wpdb->prefix}wc_order_stats";
 			$lookup_table = "{$wpdb->prefix}wc_customer_lookup";
+			$excluded_cust_c_sql = self::get_excluded_emails_sql( 'c.email' );
 
 			$rev_row = $wpdb->get_row( $wpdb->prepare(
-				"SELECT COUNT(order_id) as total_orders, COALESCE(SUM(total_sales), 0) as total_revenue
-				 FROM {$stats_table}
-				 WHERE status IN ({$status_placeholders})",
+				"SELECT COUNT(s.order_id) as total_orders, COALESCE(SUM(s.total_sales), 0) as total_revenue
+				 FROM {$stats_table} s
+				 LEFT JOIN {$lookup_table} c ON s.customer_id = c.customer_id
+				 WHERE s.status IN ({$status_placeholders})
+				   AND (c.email IS NULL OR {$excluded_cust_c_sql})",
 				...$valid_statuses
 			), ARRAY_A );
 			$total_orders  = (int) ( $rev_row['total_orders'] ?? 0 );
 			$total_revenue = (float) ( $rev_row['total_revenue'] ?? 0.0 );
 
 			$cust_rows = $wpdb->get_results( $wpdb->prepare(
-				"SELECT customer_id, COUNT(order_id) as order_count 
-				 FROM {$stats_table} 
-				 WHERE status IN ({$status_placeholders}) 
-				 GROUP BY customer_id",
+				"SELECT s.customer_id, COUNT(s.order_id) as order_count 
+				 FROM {$stats_table} s
+				 JOIN {$lookup_table} c ON s.customer_id = c.customer_id
+				 WHERE s.status IN ({$status_placeholders}) 
+				   AND {$excluded_cust_c_sql}
+				 GROUP BY s.customer_id",
 				...$valid_statuses
 			), ARRAY_A ) ?: [];
 			$paying_customers = count( $cust_rows );
@@ -259,10 +309,12 @@ class Exacoat_Customer_Manager {
 			$inactive_sql = $wpdb->prepare(
 				"SELECT COUNT(u.ID) FROM {$wpdb->users} u
 				 WHERE u.user_registered < %s
+				   AND {$excluded_users_u_sql}
 				   AND u.user_email NOT IN (
 					 SELECT DISTINCT c.email FROM {$lookup_table} c
 					 JOIN {$stats_table} s ON c.customer_id = s.customer_id
 					 WHERE s.date_created >= %s
+					   AND {$excluded_cust_c_sql}
 				   )",
 				$two_years_ago,
 				$two_years_ago
@@ -281,6 +333,7 @@ class Exacoat_Customer_Manager {
 				 JOIN {$stats_table} s ON c.customer_id = s.customer_id
 				 WHERE s.status IN ({$status_placeholders})
 				   AND c.email IS NOT NULL AND c.email != ''
+				   AND {$excluded_cust_c_sql}
 				 GROUP BY c.customer_id
 				 ORDER BY total_spent DESC
 				 LIMIT 5",
@@ -302,12 +355,15 @@ class Exacoat_Customer_Manager {
 			}
 		} else {
 			// Classic fallback
+			$excluded_meta_sql = self::get_excluded_emails_sql( 'pm_email.meta_value' );
 			$rev_row = $wpdb->get_row( $wpdb->prepare(
 				"SELECT COUNT(p.ID) as total_orders, COALESCE(SUM(CAST(pm.meta_value AS DECIMAL(12,2))), 0) as total_revenue
 				 FROM {$wpdb->posts} p
 				 LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_order_total'
+				 LEFT JOIN {$wpdb->postmeta} pm_email ON p.ID = pm_email.post_id AND pm_email.meta_key = '_billing_email'
 				 WHERE p.post_type = 'shop_order'
-				   AND p.post_status IN ({$status_placeholders})",
+				   AND p.post_status IN ({$status_placeholders})
+				   AND (pm_email.meta_value IS NULL OR {$excluded_meta_sql})",
 				...$valid_statuses
 			), ARRAY_A );
 			$total_orders  = (int) ( $rev_row['total_orders'] ?? 0 );
@@ -319,12 +375,13 @@ class Exacoat_Customer_Manager {
 				 JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_billing_email'
 				 WHERE p.post_type = 'shop_order'
 				   AND p.post_status IN ({$status_placeholders})
-				   AND pm.meta_value IS NOT NULL AND pm.meta_value != ''",
+				   AND pm.meta_value IS NOT NULL AND pm.meta_value != ''
+				   AND " . self::get_excluded_emails_sql( 'pm.meta_value' ),
 				...$valid_statuses
 			) );
 
 			$inactive_2yr_users = (int) $wpdb->get_var( $wpdb->prepare(
-				"SELECT COUNT(ID) FROM {$wpdb->users} WHERE user_registered < %s",
+				"SELECT COUNT(ID) FROM {$wpdb->users} WHERE user_registered < %s AND " . self::get_excluded_emails_sql( 'user_email' ),
 				$two_years_ago
 			) );
 		}
@@ -374,6 +431,10 @@ class Exacoat_Customer_Manager {
 		// -------------------------------------------------------------
 		// Route Query based on filter and mode
 		// -------------------------------------------------------------
+		$excluded_users_u_sql  = self::get_excluded_emails_sql( 'u.user_email' );
+		$excluded_orders_sql   = self::get_excluded_emails_sql( 'billing_email' );
+		$excluded_orders_o_sql = self::get_excluded_emails_sql( 'o.billing_email' );
+
 		if ( 'inactive_2yr' === $filter ) {
 			// Query users registered > 2 years ago with no recent orders
 			$search_clause = '';
@@ -393,12 +454,14 @@ class Exacoat_Customer_Manager {
 
 				$count_sql = "SELECT COUNT(u.ID) FROM {$wpdb->users} u
 					WHERE u.user_registered < %s
+					  AND {$excluded_users_u_sql}
 					  {$search_clause}
 					  AND LOWER(TRIM(u.user_email)) NOT IN (
 						SELECT DISTINCT LOWER(TRIM(billing_email)) 
 						FROM {$orders_table} 
 						WHERE date_created_gmt >= %s 
 						  AND billing_email IS NOT NULL AND billing_email != ''
+						  AND {$excluded_orders_sql}
 					  )";
 				$total_count = (int) $wpdb->get_var( $wpdb->prepare( $count_sql, ...$params ) );
 
@@ -406,24 +469,27 @@ class Exacoat_Customer_Manager {
 				$data_sql = "SELECT u.ID as user_id, u.user_email as email, u.display_name, u.user_registered as registered_at
 					FROM {$wpdb->users} u
 					WHERE u.user_registered < %s
+					  AND {$excluded_users_u_sql}
 					  {$search_clause}
 					  AND LOWER(TRIM(u.user_email)) NOT IN (
 						SELECT DISTINCT LOWER(TRIM(billing_email)) 
 						FROM {$orders_table} 
 						WHERE date_created_gmt >= %s 
 						  AND billing_email IS NOT NULL AND billing_email != ''
+						  AND {$excluded_orders_sql}
 					  )
 					ORDER BY u.user_registered ASC
 					LIMIT %d OFFSET %d";
 				$rows = $wpdb->get_results( $wpdb->prepare( $data_sql, ...$data_params ), ARRAY_A ) ?: [];
 			} else {
-				$count_sql = "SELECT COUNT(u.ID) FROM {$wpdb->users} u WHERE u.user_registered < %s {$search_clause}";
+				$count_sql = "SELECT COUNT(u.ID) FROM {$wpdb->users} u WHERE u.user_registered < %s AND {$excluded_users_u_sql} {$search_clause}";
 				$total_count = (int) $wpdb->get_var( $wpdb->prepare( $count_sql, ...$params ) );
 
 				$data_params = array_merge( $params, [ $per_page, $offset ] );
 				$data_sql = "SELECT u.ID as user_id, u.user_email as email, u.display_name, u.user_registered as registered_at
 					FROM {$wpdb->users} u
 					WHERE u.user_registered < %s
+					  AND {$excluded_users_u_sql}
 					  {$search_clause}
 					ORDER BY u.user_registered ASC
 					LIMIT %d OFFSET %d";
@@ -468,7 +534,12 @@ class Exacoat_Customer_Manager {
 			$addr_table   = "{$wpdb->prefix}wc_order_addresses";
 			$has_addr     = ( $wpdb->get_var( "SHOW TABLES LIKE '{$addr_table}'" ) === $addr_table );
 
-			$where_clauses = [ "o.status IN ({$status_placeholders})", "o.billing_email IS NOT NULL", "o.billing_email != ''" ];
+			$where_clauses = [
+				"o.status IN ({$status_placeholders})",
+				"o.billing_email IS NOT NULL",
+				"o.billing_email != ''",
+				$excluded_orders_o_sql,
+			];
 			$params = $valid_statuses;
 
 			if ( ! empty( $search ) ) {
@@ -629,11 +700,11 @@ class Exacoat_Customer_Manager {
 
 		} else {
 			// Fallback: Query wp_users combined with orders
-			$search_clause = '';
+			$search_clause = ' WHERE ' . self::get_excluded_emails_sql( 'user_email' );
 			$params = [];
 			if ( ! empty( $search ) ) {
 				$like = '%' . $wpdb->esc_like( $search ) . '%';
-				$search_clause = " WHERE (user_email LIKE %s OR display_name LIKE %s) ";
+				$search_clause .= " AND (user_email LIKE %s OR display_name LIKE %s) ";
 				$params[] = $like;
 				$params[] = $like;
 			}
@@ -744,7 +815,8 @@ class Exacoat_Customer_Manager {
 		foreach ( $raw_orders as $order ) {
 			if ( ! $order instanceof WC_Order ) continue;
 			$st = $order->get_status();
-			if ( ! in_array( $st, [ 'cancelled', 'failed', 'trash' ], true ) ) {
+			$paid_statuses = self::get_paid_order_statuses();
+			if ( in_array( $st, $paid_statuses, true ) || in_array( 'wc-' . $st, $paid_statuses, true ) ) {
 				$total_spent += (float) $order->get_total();
 			}
 
@@ -817,14 +889,19 @@ class Exacoat_Customer_Manager {
 
 		if ( 'hpos' === $mode ) {
 			$orders_table = "{$wpdb->prefix}wc_orders";
+			$excluded_users_u_sql = self::get_excluded_emails_sql( 'u.user_email' );
+			$excluded_orders_sql  = self::get_excluded_emails_sql( 'billing_email' );
+
 			$count = (int) $wpdb->get_var( $wpdb->prepare(
 				"SELECT COUNT(u.ID) FROM {$wpdb->users} u
 				 WHERE u.user_registered < %s
+				   AND {$excluded_users_u_sql}
 				   AND LOWER(TRIM(u.user_email)) NOT IN (
 					 SELECT DISTINCT LOWER(TRIM(billing_email)) 
 					 FROM {$orders_table} 
 					 WHERE date_created_gmt >= %s 
 					   AND billing_email IS NOT NULL AND billing_email != ''
+					   AND {$excluded_orders_sql}
 				   )",
 				$cutoff_date,
 				$cutoff_date
@@ -834,11 +911,13 @@ class Exacoat_Customer_Manager {
 				"SELECT u.ID, u.user_email, u.display_name, u.user_registered 
 				 FROM {$wpdb->users} u
 				 WHERE u.user_registered < %s
+				   AND {$excluded_users_u_sql}
 				   AND LOWER(TRIM(u.user_email)) NOT IN (
 					 SELECT DISTINCT LOWER(TRIM(billing_email)) 
 					 FROM {$orders_table} 
 					 WHERE date_created_gmt >= %s 
 					   AND billing_email IS NOT NULL AND billing_email != ''
+					   AND {$excluded_orders_sql}
 				   )
 				 ORDER BY u.user_registered ASC
 				 LIMIT 20",
@@ -846,8 +925,9 @@ class Exacoat_Customer_Manager {
 				$cutoff_date
 			), ARRAY_A ) ?: [];
 		} else {
+			$excluded_users_sql = self::get_excluded_emails_sql( 'user_email' );
 			$count = (int) $wpdb->get_var( $wpdb->prepare(
-				"SELECT COUNT(ID) FROM {$wpdb->users} WHERE user_registered < %s",
+				"SELECT COUNT(ID) FROM {$wpdb->users} WHERE user_registered < %s AND {$excluded_users_sql}",
 				$cutoff_date
 			) );
 
@@ -855,6 +935,7 @@ class Exacoat_Customer_Manager {
 				"SELECT ID, user_email, display_name, user_registered 
 				 FROM {$wpdb->users} 
 				 WHERE user_registered < %s 
+				   AND {$excluded_users_sql}
 				 ORDER BY user_registered ASC 
 				 LIMIT 20",
 				$cutoff_date

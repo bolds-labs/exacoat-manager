@@ -10,6 +10,7 @@ import {
   CustomerSortOption,
   mapServerCustomerToUnified,
 } from '../lib/customerAnalyticsService';
+import { FilterSelect, FilterSelectOption } from '../components/ui/FilterSelect';
 import {
   fetchCustomersDirect,
   fetchCustomersSummaryDirect,
@@ -46,6 +47,15 @@ import {
 import { clsx } from 'clsx';
 
 export type CustomersDatePreset = 'today' | '7d' | '30d' | 'this_month' | 'all';
+
+const CUSTOMER_SORT_OPTIONS: FilterSelectOption<CustomerSortOption>[] = [
+  { value: 'spent_desc', label: 'Highest Spend' },
+  { value: 'orders_desc', label: 'Most Orders' },
+  { value: 'aov_desc', label: 'Highest AOV' },
+  { value: 'recent', label: 'Most Recent' },
+  { value: 'name_asc', label: 'Name (A-Z)' },
+  { value: 'spent_asc', label: 'Lowest Spend' },
+];
 
 interface CustomersPageProps {
   initialCustomerId?: number | null;
@@ -550,7 +560,7 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
           {/* Search Input and Sort Select */}
           <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
             <div className="relative flex-1 sm:w-64">
-              <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
@@ -558,31 +568,27 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
                   setSearchQuery(e.target.value);
                 }}
                 placeholder="Search name, email, phone, city..."
-                className="w-full pl-8.5 pr-8 py-1.5 rounded-lg bg-[#141414] border border-white/[0.08] focus:border-[#f3aa18]/50 text-xs text-white placeholder-neutral-500 focus:outline-hidden transition-all"
+                className="w-full pl-9 pr-8 h-8 rounded-xl bg-[#141414] border border-white/[0.08] focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/30 text-xs text-white placeholder-neutral-500 focus:outline-none transition-all font-sans"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-white"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white p-0.5 cursor-pointer"
+                  title="Clear search"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
 
-            <select
+            <FilterSelect<CustomerSortOption>
+              label="Sort"
               value={sortBy}
-              onChange={e => setSortBy(e.target.value as CustomerSortOption)}
-              className="px-3 py-1.5 rounded-lg bg-[#141414] border border-white/[0.08] text-xs text-neutral-300 font-sans focus:outline-hidden cursor-pointer"
-            >
-              <option value="spent_desc">Highest Spend</option>
-              <option value="orders_desc">Most Orders</option>
-              <option value="aov_desc">Highest AOV</option>
-              <option value="recent">Most Recent</option>
-              <option value="name_asc">Name (A-Z)</option>
-              <option value="spent_asc">Lowest Spend</option>
-            </select>
+              onChange={setSortBy}
+              options={CUSTOMER_SORT_OPTIONS}
+              align="right"
+            />
           </div>
         </div>
 
