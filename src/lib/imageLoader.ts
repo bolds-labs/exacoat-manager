@@ -81,8 +81,9 @@ export async function loadCorsSafeImageBlobUrl(
     }
   } catch {}
 
-  // Candidate B: Staging proxy (guaranteed running exacoat-core with Access-Control-Allow-Origin: * and remote fetch fallback)
-  proxyCandidates.push(`https://staging.exacoat.com/wp-json/exacoat-core/v1/image-proxy?url=${encodeURIComponent(url)}`);
+  // Candidate B: Active CMS proxy (running exacoat-core with CORS and remote fetch fallback)
+  const activeWp = getWpBaseUrl() || 'https://cms.exacoat.com';
+  proxyCandidates.push(`${activeWp}/wp-json/exacoat-core/v1/image-proxy?url=${encodeURIComponent(url)}`);
 
   // Candidate C: Configured WordPress base URL
   try {
@@ -170,7 +171,8 @@ export async function loadCorsSafeImageElement(
         // If anonymous crossOrigin failed on a remote URL, perform emergency proxy conversion to Blob
         if (!isBlobOrData && url.startsWith('http')) {
           try {
-            const emergencyProxyUrl = `https://staging.exacoat.com/wp-json/exacoat-core/v1/image-proxy?url=${encodeURIComponent(url)}`;
+            const activeWp = getWpBaseUrl() || 'https://cms.exacoat.com';
+            const emergencyProxyUrl = `${activeWp}/wp-json/exacoat-core/v1/image-proxy?url=${encodeURIComponent(url)}`;
             const res = await fetch(emergencyProxyUrl);
             if (res.ok) {
               const blob = await res.blob();

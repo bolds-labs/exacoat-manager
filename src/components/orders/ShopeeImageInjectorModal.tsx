@@ -68,7 +68,7 @@ interface DetectedVariantOption {
 const STORAGE_CUSTOM_BG_KEY = 'exacoat_marketplace_custom_bg';
 const STORAGE_BG_TYPE_KEY = 'exacoat_marketplace_bg_type';
 const DEFAULT_MARKETPLACE_BG_URL =
-  'https://staging.exacoat.com/wp-content/uploads/Marketplace-Product-Background-Plain.png';
+  'https://media.exacoat.com/wp-content/uploads/Marketplace-Product-Background-Plain.png';
 
 export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> = ({
   isOpen,

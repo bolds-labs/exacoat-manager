@@ -853,6 +853,18 @@ export const SettingsPanel: React.FC = () => {
               <div className="flex items-center gap-2 flex-wrap">
                 <button
                   type="button"
+                  onClick={() => handleSaveWpUrl('https://cms.exacoat.com')}
+                  className={clsx(
+                    "px-2.5 py-1 rounded-lg text-xs font-mono font-medium border transition-colors cursor-pointer",
+                    wpBaseUrl === 'https://cms.exacoat.com'
+                      ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18] font-bold"
+                      : "bg-zinc-100 dark:bg-zinc-800/80 border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400"
+                  )}
+                >
+                  cms.exacoat.com (CMS)
+                </button>
+                <button
+                  type="button"
                   onClick={() => handleSaveWpUrl('https://staging.exacoat.com')}
                   className={clsx(
                     "px-2.5 py-1 rounded-lg text-xs font-mono font-medium border transition-colors cursor-pointer",
@@ -883,7 +895,7 @@ export const SettingsPanel: React.FC = () => {
                 type="url"
                 value={wpUrlInput}
                 onChange={(e) => setWpUrlInput(e.target.value)}
-                placeholder="https://staging.exacoat.com"
+                placeholder="https://cms.exacoat.com"
                 className="flex-1 px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs font-mono text-zinc-900 dark:text-white focus:outline-none focus:border-[#f3aa18]"
               />
               <button

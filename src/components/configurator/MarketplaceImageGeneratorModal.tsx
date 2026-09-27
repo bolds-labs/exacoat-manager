@@ -208,7 +208,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   // Background State
   const [bgType, setBgType] = useState<'studio_light' | 'custom'>('custom');
   const [customBgUrl, setCustomBgUrl] = useState<string>(
-    'https://staging.exacoat.com/wp-content/uploads/Marketplace-Product-Background-Plain.png'
+    'https://media.exacoat.com/wp-content/uploads/Marketplace-Product-Background-Plain.png'
   );
 
   // Device & Swatches State (Independent Cover & Variant Positions, save-able per device)
@@ -395,7 +395,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
         setCustomBgUrl(savedBg.trim());
       } else {
         setCustomBgUrl(
-          'https://staging.exacoat.com/wp-content/uploads/Marketplace-Product-Background-Plain.png'
+          'https://media.exacoat.com/wp-content/uploads/Marketplace-Product-Background-Plain.png'
         );
       }
       if (savedBgType === 'studio_light') {
