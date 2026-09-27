@@ -97,6 +97,13 @@ class Exacoat_Checkout_Engine {
 
 		// 12. Terms & Conditions Checked by Default (Seamless Checkout Flow)
 		add_filter( 'woocommerce_terms_is_checked_default', '__return_true' );
+
+		// 13. Headless Checkout Shipping Fee & Midtrans Snap Gross Amount Reconciler
+		add_action( 'woocommerce_store_api_checkout_order_processed', [ __CLASS__, 'attach_headless_shipping_before_payment' ], 5, 1 );
+		add_filter( 'midtrans_snap_params_main_before_charge', [ __CLASS__, 'reconcile_midtrans_snap_parameters' ], 99, 1 );
+		add_filter( 'midtrans_snap_params', [ __CLASS__, 'reconcile_midtrans_snap_parameters' ], 99, 1 );
+		add_filter( 'woocommerce_midtrans_snap_params', [ __CLASS__, 'reconcile_midtrans_snap_parameters' ], 99, 1 );
+		add_filter( 'midtrans_snap_params_sub_before_charge', [ __CLASS__, 'reconcile_midtrans_snap_parameters' ], 99, 1 );
 	}
 
 	/**
@@ -1439,6 +1446,135 @@ class Exacoat_Checkout_Engine {
 		}
 
 		return true;
+	}
+
+	/**
+	 * Attach headless shipping rate to order immediately upon creation in Store API checkout,
+	 * ensuring the shipping fee is included before payment gateways (Midtrans, etc.) calculate gross amount.
+	 * Runs at priority 5 (before BCA unique code runs at priority 20).
+	 *
+	 * @param \WC_Order|mixed $order
+	 */
+	public static function attach_headless_shipping_before_payment( $order ): void {
+		if ( ! $order instanceof \WC_Order ) {
+			return;
+		}
+
+		$shipping_total  = null;
+		$shipping_title  = '';
+		$shipping_method = 'biteship_shipping';
+
+		if ( isset( $_SERVER['HTTP_X_EXACOAT_SHIPPING_TOTAL'] ) && is_numeric( $_SERVER['HTTP_X_EXACOAT_SHIPPING_TOTAL'] ) ) {
+			$shipping_total  = floatval( $_SERVER['HTTP_X_EXACOAT_SHIPPING_TOTAL'] );
+			$shipping_title  = sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_EXACOAT_SHIPPING_TITLE'] ?? '' ) );
+			$shipping_method = sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_EXACOAT_SHIPPING_RATE_ID'] ?? 'biteship_shipping' ) );
+		}
+
+		// Also check customer note if headers were not present or as fallback
+		if ( null === $shipping_total && ! empty( $order->get_customer_note() ) ) {
+			$note = (string) $order->get_customer_note();
+			if ( preg_match( '/Shipping Courier:\s*(.+)/i', $note, $matches ) ) {
+				$shipping_title = trim( $matches[1] );
+			}
+		}
+
+		if ( null === $shipping_total || $shipping_total < 0 ) {
+			return;
+		}
+
+		if ( empty( $shipping_title ) ) {
+			$shipping_title = 'Courier Delivery';
+		}
+
+		// Check existing shipping lines
+		$existing_shipping    = $order->get_items( 'shipping' );
+		$already_attached     = false;
+
+		foreach ( $existing_shipping as $ship_item ) {
+			if (
+				$ship_item->get_method_title() === $shipping_title
+				&& abs( floatval( $ship_item->get_total() ) - $shipping_total ) < 0.01
+			) {
+				$already_attached = true;
+				break;
+			}
+		}
+
+		if ( ! $already_attached ) {
+			// Clear out existing dummy or zero-cost shipping items from headless cart
+			foreach ( $existing_shipping as $ship_id => $ship_item ) {
+				$order->remove_item( $ship_id );
+			}
+
+			// Add the authoritative shipping item
+			$shipping_item = new \WC_Order_Item_Shipping();
+			$shipping_item->set_method_title( $shipping_title );
+			$shipping_item->set_method_id( $shipping_method ?: 'biteship_shipping' );
+			$shipping_item->set_total( (string) $shipping_total );
+			$order->add_item( $shipping_item );
+
+			$order->calculate_totals( false );
+			$order->save();
+		}
+	}
+
+	/**
+	 * Reconcile Midtrans Snap API parameters before charging.
+	 * Guarantees that:
+	 * 1. transaction_details.gross_amount matches the authoritative WooCommerce order total.
+	 * 2. item_details sum strictly equals gross_amount to prevent Midtrans validation rejections.
+	 *
+	 * @param array $params Midtrans Snap payload
+	 * @return array Sanitized payload
+	 */
+	public static function reconcile_midtrans_snap_parameters( $params ): array {
+		if ( ! is_array( $params ) || empty( $params['transaction_details']['order_id'] ) ) {
+			return $params;
+		}
+
+		$raw_order_id = (string) $params['transaction_details']['order_id'];
+		$base_id      = intval( explode( '-', $raw_order_id )[0] );
+
+		if ( $base_id <= 0 || ! function_exists( 'wc_get_order' ) ) {
+			return $params;
+		}
+
+		$order = wc_get_order( $base_id );
+		if ( ! $order instanceof \WC_Order ) {
+			return $params;
+		}
+
+		$order_total = (int) round( (float) $order->get_total() );
+		if ( $order_total <= 0 ) {
+			return $params;
+		}
+
+		// Force gross_amount to match exact order total
+		$params['transaction_details']['gross_amount'] = $order_total;
+
+		// Reconcile item_details so its sum always equals gross_amount
+		if ( isset( $params['item_details'] ) && is_array( $params['item_details'] ) ) {
+			$item_sum = 0;
+			foreach ( $params['item_details'] as $item ) {
+				$price    = intval( round( floatval( $item['price'] ?? 0 ) ) );
+				$qty      = max( 1, intval( $item['quantity'] ?? 1 ) );
+				$item_sum += ( $price * $qty );
+			}
+
+			// If item_details sum does not match order_total, replace with a clean single order line item
+			if ( $item_sum !== $order_total ) {
+				$params['item_details'] = [
+					[
+						'id'       => 'order_' . $order->get_id(),
+						'price'    => $order_total,
+						'quantity' => 1,
+						'name'     => sprintf( 'Exacoat Order #%s', $order->get_id() ),
+					],
+				];
+			}
+		}
+
+		return $params;
 	}
 }
 
