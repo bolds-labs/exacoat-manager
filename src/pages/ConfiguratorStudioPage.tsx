@@ -286,14 +286,20 @@ async function detectDominantColorFromImage(imageUrl: string): Promise<string | 
 
     return await new Promise<string | null>((resolve) => {
       const img = new Image();
+      const timer = setTimeout(() => {
+        resolve(null);
+      }, 8000);
+
+      if (!safeUrl.startsWith('blob:') && !safeUrl.startsWith('data:')) {
+        img.crossOrigin = 'anonymous';
+      }
+
       img.onload = () => {
+        clearTimeout(timer);
         try {
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d', { willReadFrequently: true });
-          if (!ctx) {
-            if (safeUrl.startsWith('blob:')) URL.revokeObjectURL(safeUrl);
-            return resolve(null);
-          }
+          if (!ctx) return resolve(null);
 
           // Downscale to 80x80 for fast processing
           canvas.width = 80;
@@ -319,10 +325,6 @@ async function detectDominantColorFromImage(imageUrl: string): Promise<string | 
             validPixels.push({ r, g, b, luma });
           }
 
-          if (safeUrl.startsWith('blob:')) {
-            URL.revokeObjectURL(safeUrl);
-          }
-
           if (validPixels.length === 0) return resolve(null);
 
           // Sort by luminance and sample the middle 50% interquartile band
@@ -344,13 +346,12 @@ async function detectDominantColorFromImage(imageUrl: string): Promise<string | 
           const hex = `#${toHex(avgR)}${toHex(avgG)}${toHex(avgB)}`;
           resolve(hex);
         } catch (err) {
-          if (safeUrl.startsWith('blob:')) URL.revokeObjectURL(safeUrl);
           console.warn('[COLOR-DETECT] Could not sample image canvas:', err);
           resolve(null);
         }
       };
       img.onerror = () => {
-        if (safeUrl.startsWith('blob:')) URL.revokeObjectURL(safeUrl);
+        clearTimeout(timer);
         resolve(null);
       };
       img.src = safeUrl;
@@ -975,30 +976,105 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [failedColorImages, setFailedColorImages] = useState<Record<string, boolean>>({});
   const [detectingColorIdx, setDetectingColorIdx] = useState<number | null>(null);
 
-  const handleAutoDetectColor = async (colorIdx: number, imgUrl: string) => {
-    if (!imgUrl || !editingProfile) return;
+  const handleUpdateColor = (
+    colorIdx: number,
+    updates: Partial<{
+      name: string;
+      hex: string;
+      body_image_url: string;
+      body_images_by_view: Record<string, string>;
+    }>
+  ) => {
+    setEditingProfile((prev) => {
+      if (!prev) return prev;
+      const colors = [...(prev.device_colors || [])];
+      if (!colors[colorIdx]) return prev;
+      const currentColor = colors[colorIdx];
+      colors[colorIdx] = {
+        ...currentColor,
+        ...updates,
+        ...(updates.body_images_by_view
+          ? {
+              body_images_by_view: {
+                ...(currentColor.body_images_by_view || {}),
+                ...updates.body_images_by_view,
+              },
+            }
+          : {}),
+      };
+      return { ...prev, device_colors: colors };
+    });
+  };
+
+  const handleSetColorImage = (colorIdx: number, url: string, viewId: string, isDefaultView = false) => {
+    const cleanUrl = url.trim();
+    setEditingProfile((prev) => {
+      if (!prev) return prev;
+      const colors = [...(prev.device_colors || [])];
+      if (!colors[colorIdx]) return prev;
+      const currentColor = colors[colorIdx];
+      const updatedByView = {
+        ...(currentColor.body_images_by_view || {}),
+        [viewId]: cleanUrl,
+      };
+      const shouldUpdateDefaultUrl = isDefaultView || viewId === 'main_view' || !currentColor.body_image_url;
+      colors[colorIdx] = {
+        ...currentColor,
+        body_images_by_view: updatedByView,
+        body_image_url: shouldUpdateDefaultUrl ? cleanUrl : currentColor.body_image_url,
+      };
+
+      const colorId = currentColor.id;
+      if (colorId || cleanUrl) {
+        setFailedColorImages((failed) => {
+          if (!failed[colorId] && !failed[cleanUrl]) return failed;
+          const copy = { ...failed };
+          if (colorId) delete copy[colorId];
+          if (cleanUrl) delete copy[cleanUrl];
+          return copy;
+        });
+      }
+
+      return { ...prev, device_colors: colors };
+    });
+  };
+
+  const handleAutoDetectColor = async (colorIdx: number, imgUrl: string, colorId?: string) => {
+    if (!imgUrl) return;
     setDetectingColorIdx(colorIdx);
     try {
       const detectedHex = await detectDominantColorFromImage(imgUrl);
       if (detectedHex) {
-        const nextColors = [...(editingProfile.device_colors || [])];
-        if (nextColors[colorIdx]) {
-          nextColors[colorIdx] = { ...nextColors[colorIdx], hex: detectedHex };
-          setEditingProfile({ ...editingProfile, device_colors: nextColors });
-        }
+        setEditingProfile((prev) => {
+          if (!prev?.device_colors) return prev;
+          const colors = [...prev.device_colors];
+          const targetIdx = colorId
+            ? colors.findIndex((c) => c.id === colorId)
+            : colorIdx;
+          if (targetIdx === -1 || !colors[targetIdx]) return prev;
+          colors[targetIdx] = { ...colors[targetIdx], hex: detectedHex };
+          return { ...prev, device_colors: colors };
+        });
+        showToast('success', 'Color Detected', `Detected swatch ${detectedHex}`);
+      } else {
+        showToast('info', 'No Dominant Color', 'Could not detect a clear dominant hardware color from this image.');
       }
+    } catch (err) {
+      console.warn('[handleAutoDetectColor] Detection error:', err);
     } finally {
       setDetectingColorIdx(null);
     }
   };
 
   const handleMoveColor = (fromIndex: number, toIndex: number) => {
-    if (!editingProfile?.device_colors) return;
-    if (toIndex < 0 || toIndex >= editingProfile.device_colors.length) return;
-    const updated = [...editingProfile.device_colors];
-    const [moved] = updated.splice(fromIndex, 1);
-    updated.splice(toIndex, 0, moved);
-    setEditingProfile({ ...editingProfile, device_colors: updated });
+    setEditingProfile((prev) => {
+      if (!prev?.device_colors) return prev;
+      if (toIndex < 0 || toIndex >= prev.device_colors.length) return prev;
+      const updated = [...prev.device_colors];
+      const [moved] = updated.splice(fromIndex, 1);
+      updated.splice(toIndex, 0, moved);
+      return { ...prev, device_colors: updated };
+    });
   };
 
   const loadData = async (quiet = false, allProducts = showAllProducts) => {
@@ -7969,7 +8045,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 ? activeColor?.body_image_url
                                 : '');
                             const isDedicatedFailing = Boolean(
-                              activeColor?.id && failedColorImages[activeColor.id]
+                              (activeColor?.id && failedColorImages[activeColor.id]) ||
+                              (dedicatedColorImg && failedColorImages[dedicatedColorImg])
                             );
                             const chassisSrc =
                               !isDedicatedFailing && dedicatedColorImg
@@ -7996,9 +8073,18 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   src={chassisSrc}
                                   alt="Hardware Chassis"
                                   className="w-full h-full object-contain pointer-events-none"
+                                  onLoad={() => {
+                                    if (dedicatedColorImg && failedColorImages[dedicatedColorImg]) {
+                                      setFailedColorImages((prev) => {
+                                        const copy = { ...prev };
+                                        delete copy[dedicatedColorImg];
+                                        return copy;
+                                      });
+                                    }
+                                  }}
                                   onError={() => {
-                                    if (activeColor?.id && dedicatedColorImg) {
-                                      setFailedColorImages((prev) => ({ ...prev, [activeColor.id]: true }));
+                                    if (dedicatedColorImg) {
+                                      setFailedColorImages((prev) => ({ ...prev, [dedicatedColorImg]: true }));
                                     }
                                   }}
                                 />
@@ -9895,14 +9981,20 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                             [currentView.id]: currentView.background_url || '',
                                           },
                                         };
-                                        const nextColors = [...(editingProfile.device_colors || []), newColor];
-                                        setEditingProfile({
-                                          ...editingProfile,
-                                          device_colors: nextColors,
+                                        setEditingProfile((prev) => {
+                                          if (!prev) return prev;
+                                          return {
+                                            ...prev,
+                                            device_colors: [...(prev.device_colors || []), newColor],
+                                          };
                                         });
                                         setSelectedSimColor(newColor.id);
                                         if (currentView.background_url) {
-                                          handleAutoDetectColor(nextColors.length - 1, currentView.background_url);
+                                          handleAutoDetectColor(
+                                            editingProfile?.device_colors ? editingProfile.device_colors.length : 0,
+                                            currentView.background_url,
+                                            newColor.id
+                                          );
                                         }
                                       }}
                                       className="px-2.5 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/20 text-[11px] font-medium flex items-center gap-1 cursor-pointer transition-colors"
@@ -9925,17 +10017,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                           (currentView.is_default || currentView.id === 'main_view' ? color.body_image_url : '') ||
                                           '';
                                         const isSimActive = (selectedSimColor || editingProfile.device_colors?.[0]?.id) === color.id;
-                                        const isImageBroken = Boolean(color.id && failedColorImages[color.id]);
+                                        const isImageBroken = Boolean(
+                                          (color.id && failedColorImages[color.id]) ||
+                                          (currentAngleImg && failedColorImages[currentAngleImg])
+                                        );
 
                                         return (
                                           <div
                                             key={color.id || idx}
-                                            draggable
-                                            onDragStart={(e) => {
-                                              setDraggedColorIdx(idx);
-                                              e.dataTransfer.effectAllowed = 'move';
-                                              e.dataTransfer.setData('text/plain', String(idx));
-                                            }}
                                             onDragOver={(e) => {
                                               e.preventDefault();
                                               e.dataTransfer.dropEffect = 'move';
@@ -9949,10 +10038,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                               if (draggedColorIdx !== null && draggedColorIdx !== idx) {
                                                 handleMoveColor(draggedColorIdx, idx);
                                               }
-                                              setDraggedColorIdx(null);
-                                              setDragOverColorIdx(null);
-                                            }}
-                                            onDragEnd={() => {
                                               setDraggedColorIdx(null);
                                               setDragOverColorIdx(null);
                                             }}
@@ -9970,7 +10055,18 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                               {/* Drag Handle & Quick Reorder */}
                                               <div className="flex items-center text-zinc-500 shrink-0">
                                                 <div
-                                                  className="cursor-grab active:cursor-grabbing p-1 hover:text-zinc-300 transition-colors"
+                                                  draggable
+                                                  onDragStart={(e) => {
+                                                    e.stopPropagation();
+                                                    setDraggedColorIdx(idx);
+                                                    e.dataTransfer.effectAllowed = 'move';
+                                                    e.dataTransfer.setData('text/plain', String(idx));
+                                                  }}
+                                                  onDragEnd={() => {
+                                                    setDraggedColorIdx(null);
+                                                    setDragOverColorIdx(null);
+                                                  }}
+                                                  className="cursor-grab active:cursor-grabbing p-1 hover:text-zinc-300 transition-colors select-none"
                                                   title="Drag and drop to reorder"
                                                 >
                                                   <GripVertical className="w-3.5 h-3.5" />
@@ -10012,9 +10108,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                   type="color"
                                                   value={sanitizeHexForColorInput(color.hex)}
                                                   onChange={(e) => {
-                                                    const nextColors = [...(editingProfile.device_colors || [])];
-                                                    nextColors[idx] = { ...nextColors[idx], hex: e.target.value };
-                                                    setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                                    handleUpdateColor(idx, { hex: e.target.value });
                                                   }}
                                                   className="absolute -top-2 -left-2 w-10 h-10 cursor-pointer border-0 p-0"
                                                 />
@@ -10024,11 +10118,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                               <input
                                                 type="text"
                                                 placeholder="Color name (e.g. Natural Titanium)"
-                                                value={color.name}
+                                                value={color.name || ''}
                                                 onChange={(e) => {
-                                                  const nextColors = [...(editingProfile.device_colors || [])];
-                                                  nextColors[idx] = { ...nextColors[idx], name: e.target.value };
-                                                  setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                                  handleUpdateColor(idx, { name: e.target.value });
                                                 }}
                                                 className="flex-1 min-w-0 px-2.5 py-1 text-xs font-medium rounded-lg bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-sky-400 placeholder:text-zinc-600"
                                               />
@@ -10054,7 +10146,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                               <button
                                                 type="button"
                                                 disabled={!currentAngleImg || detectingColorIdx === idx}
-                                                onClick={() => handleAutoDetectColor(idx, currentAngleImg)}
+                                                onClick={() => handleAutoDetectColor(idx, currentAngleImg, color.id)}
                                                 className={clsx(
                                                   'p-1.5 rounded-lg border transition-colors cursor-pointer shrink-0',
                                                   detectingColorIdx === idx
@@ -10074,10 +10166,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                               <button
                                                 type="button"
                                                 onClick={() => {
-                                                  const nextColors = editingProfile.device_colors?.filter((_, i) => i !== idx) || [];
-                                                  setEditingProfile({ ...editingProfile, device_colors: nextColors });
+                                                  setEditingProfile((prev) => {
+                                                    if (!prev) return prev;
+                                                    const nextColors = prev.device_colors?.filter((_, i) => i !== idx) || [];
+                                                    return { ...prev, device_colors: nextColors };
+                                                  });
                                                   if (selectedSimColor === color.id) {
-                                                    setSelectedSimColor(nextColors[0]?.id || '');
+                                                    setEditingProfile((prev) => {
+                                                      setSelectedSimColor(prev?.device_colors?.[0]?.id || '');
+                                                      return prev;
+                                                    });
                                                   }
                                                 }}
                                                 className="p-1.5 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer shrink-0"
@@ -10099,21 +10197,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                     recommendedDimensions: '1000x1000 Transparent PNG',
                                                     currentUrl: currentAngleImg,
                                                     onSelect: (url) => {
-                                                      const nextColors = [...(editingProfile.device_colors || [])];
-                                                      const viewId = currentView.id || 'main_view';
-                                                      const updatedByView = { ...((nextColors[idx] as any).body_images_by_view || {}), [viewId]: url };
-                                                      nextColors[idx] = {
-                                                        ...nextColors[idx],
-                                                        body_images_by_view: updatedByView,
-                                                        body_image_url: currentView.is_default || viewId === 'main_view' ? url : (nextColors[idx].body_image_url || url),
-                                                      };
-                                                      setEditingProfile({ ...editingProfile, device_colors: nextColors });
-                                                      setFailedColorImages((prev) => {
-                                                        const copy = { ...prev };
-                                                        delete copy[nextColors[idx].id];
-                                                        return copy;
-                                                      });
-                                                      handleAutoDetectColor(idx, url);
+                                                      handleSetColorImage(idx, url, currentView.id || 'main_view', currentView.is_default);
+                                                      if (url) {
+                                                        handleAutoDetectColor(idx, url, color.id);
+                                                      }
                                                     },
                                                   })
                                                 }
@@ -10127,11 +10214,23 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                               >
                                                 {currentAngleImg ? (
                                                   <img
+                                                    key={`${color.id || idx}-${currentAngleImg}`}
                                                     src={currentAngleImg}
                                                     alt={color.name}
                                                     className="w-full h-full object-contain p-1"
+                                                    onLoad={() => {
+                                                      if (currentAngleImg && failedColorImages[currentAngleImg]) {
+                                                        setFailedColorImages((prev) => {
+                                                          const copy = { ...prev };
+                                                          delete copy[currentAngleImg];
+                                                          return copy;
+                                                        });
+                                                      }
+                                                    }}
                                                     onError={() => {
-                                                      setFailedColorImages((prev) => ({ ...prev, [color.id]: true }));
+                                                      if (currentAngleImg) {
+                                                        setFailedColorImages((prev) => ({ ...prev, [currentAngleImg]: true }));
+                                                      }
                                                     }}
                                                   />
                                                 ) : (
@@ -10155,25 +10254,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                     placeholder={`Chassis image for ${color.name || 'color'}...`}
                                                     value={currentAngleImg}
                                                     onChange={(e) => {
-                                                      const url = e.target.value.trim();
-                                                      const nextColors = [...(editingProfile.device_colors || [])];
-                                                      const viewId = currentView.id || 'main_view';
-                                                      const updatedByView = { ...((nextColors[idx] as any).body_images_by_view || {}), [viewId]: url };
-                                                      nextColors[idx] = {
-                                                        ...nextColors[idx],
-                                                        body_images_by_view: updatedByView,
-                                                        body_image_url: currentView.is_default || viewId === 'main_view' ? url : (nextColors[idx].body_image_url || url),
-                                                      };
-                                                      setEditingProfile({ ...editingProfile, device_colors: nextColors });
-                                                      setFailedColorImages((prev) => {
-                                                        const copy = { ...prev };
-                                                        delete copy[nextColors[idx].id];
-                                                        return copy;
-                                                      });
+                                                      handleSetColorImage(idx, e.target.value, currentView.id || 'main_view', currentView.is_default);
                                                     }}
                                                     onBlur={() => {
                                                       if (currentAngleImg && (!color.hex || color.hex === '#535559')) {
-                                                        handleAutoDetectColor(idx, currentAngleImg);
+                                                        handleAutoDetectColor(idx, currentAngleImg, color.id);
                                                       }
                                                     }}
                                                     className={clsx(
@@ -10197,21 +10282,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                       recommendedDimensions: '1000x1000 Transparent PNG',
                                                       currentUrl: currentAngleImg,
                                                       onSelect: (url) => {
-                                                        const nextColors = [...(editingProfile.device_colors || [])];
-                                                        const viewId = currentView.id || 'main_view';
-                                                        const updatedByView = { ...((nextColors[idx] as any).body_images_by_view || {}), [viewId]: url };
-                                                        nextColors[idx] = {
-                                                          ...nextColors[idx],
-                                                          body_images_by_view: updatedByView,
-                                                          body_image_url: currentView.is_default || viewId === 'main_view' ? url : (nextColors[idx].body_image_url || url),
-                                                        };
-                                                        setEditingProfile({ ...editingProfile, device_colors: nextColors });
-                                                        setFailedColorImages((prev) => {
-                                                          const copy = { ...prev };
-                                                          delete copy[nextColors[idx].id];
-                                                          return copy;
-                                                        });
-                                                        handleAutoDetectColor(idx, url);
+                                                        handleSetColorImage(idx, url, currentView.id || 'main_view', currentView.is_default);
+                                                        if (url) {
+                                                          handleAutoDetectColor(idx, url, color.id);
+                                                        }
                                                       },
                                                     })
                                                   }
