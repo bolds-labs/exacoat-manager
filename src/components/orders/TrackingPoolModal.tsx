@@ -1,26 +1,28 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../../context/ToastContext';
 import {
   fetchTrackingPoolInventory,
-  addTrackingNumbersToPool,
+  fetchTrackingPoolNumbers,
+  updateTrackingPoolNumbers,
+  takeTrackingNumberFromPool,
   fetchTrackingPoolHistory,
   TrackingPoolInventory,
   TrackingAssignmentRecord,
 } from '../../lib/wordpressBridge';
 import {
   Package,
-  Plus,
   RefreshCw,
   AlertTriangle,
   CheckCircle2,
-  Clock,
   Copy,
   Check,
   Truck,
-  Hash,
   Layers,
   History,
+  ArrowRight,
+  Save,
+  RotateCcw,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -41,10 +43,15 @@ export const TrackingPoolModal: React.FC<TrackingPoolModalProps> = ({
   const [inventory, setInventory] = useState<TrackingPoolInventory | null>(null);
   const [isLoadingInventory, setIsLoadingInventory] = useState(false);
 
-  // Restock form state
+  // Active carrier selection
   const [targetCarrier, setTargetCarrier] = useState<'jne' | 'sicepat'>('jne');
-  const [rawNumbers, setRawNumbers] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Tracking numbers editor state for the active carrier
+  const [editableNumbersText, setEditableNumbersText] = useState('');
+  const [originalNumbersText, setOriginalNumbersText] = useState('');
+  const [isLoadingNumbers, setIsLoadingNumbers] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isTakingResi, setIsTakingResi] = useState(false);
 
   // History state
   const [history, setHistory] = useState<TrackingAssignmentRecord[]>([]);
@@ -67,6 +74,30 @@ export const TrackingPoolModal: React.FC<TrackingPoolModalProps> = ({
     }
   }, [showToast]);
 
+  const loadCarrierNumbers = useCallback(async (carrier: 'jne' | 'sicepat') => {
+    setIsLoadingNumbers(true);
+    try {
+      const res = await fetchTrackingPoolNumbers(carrier);
+      if (res.success && res.numbers) {
+        const text = res.numbers.join('\n');
+        setEditableNumbersText(text);
+        setOriginalNumbersText(text);
+      } else if (inventory && inventory[carrier]?.numbers) {
+        const text = inventory[carrier].numbers.join('\n');
+        setEditableNumbersText(text);
+        setOriginalNumbersText(text);
+      }
+    } catch {
+      if (inventory && inventory[carrier]?.numbers) {
+        const text = inventory[carrier].numbers.join('\n');
+        setEditableNumbersText(text);
+        setOriginalNumbersText(text);
+      }
+    } finally {
+      setIsLoadingNumbers(false);
+    }
+  }, [inventory]);
+
   const loadHistory = useCallback(async () => {
     setIsLoadingHistory(true);
     try {
@@ -88,42 +119,96 @@ export const TrackingPoolModal: React.FC<TrackingPoolModalProps> = ({
     }
   }, [isOpen, loadInventory, loadHistory]);
 
-  const parsedNumbers = rawNumbers
-    .split(/[\r\n,\s]+/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-
-  const handleAddNumbers = async () => {
-    if (parsedNumbers.length === 0) {
-      showToast('warning', 'Missing Input', 'Please paste at least one tracking number');
-      return;
+  useEffect(() => {
+    if (isOpen) {
+      loadCarrierNumbers(targetCarrier);
     }
+  }, [isOpen, targetCarrier, loadCarrierNumbers]);
 
-    setIsSubmitting(true);
+  const isDirty = editableNumbersText.trim() !== originalNumbersText.trim();
+
+  const parsedNumbers = useMemo(() => {
+    return editableNumbersText
+      .split(/[\r\n,]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+  }, [editableNumbersText]);
+
+  const uniqueNumbers = useMemo(() => {
+    return Array.from(new Set(parsedNumbers));
+  }, [parsedNumbers]);
+
+  const duplicateCount = parsedNumbers.length - uniqueNumbers.length;
+
+  const handleCarrierChange = (carrier: 'jne' | 'sicepat') => {
+    if (carrier === targetCarrier) return;
+    if (isDirty) {
+      const proceed = window.confirm('You have unsaved changes in the current tracking list. Do you want to discard them?');
+      if (!proceed) return;
+    }
+    setTargetCarrier(carrier);
+  };
+
+  const handleSavePool = async () => {
+    setIsSaving(true);
     try {
-      const res = await addTrackingNumbersToPool(targetCarrier, parsedNumbers);
+      const res = await updateTrackingPoolNumbers(targetCarrier, uniqueNumbers);
       if (res.success) {
         showToast(
           'success',
-          'Numbers Added',
-          `Added ${res.added_count} ${targetCarrier.toUpperCase()} tracking numbers (Total: ${res.total_pool})`
+          'Tracking Pool Saved',
+          `Saved ${res.total_pool ?? uniqueNumbers.length} tracking numbers to ${targetCarrier.toUpperCase()} pool.`
         );
-        setRawNumbers('');
+        const updatedText = (res.numbers || uniqueNumbers).join('\n');
+        setEditableNumbersText(updatedText);
+        setOriginalNumbersText(updatedText);
         await loadInventory();
         if (onInventoryChanged) onInventoryChanged();
       } else {
-        showToast('error', 'Failed to Add', res.error || 'Failed to add tracking numbers');
+        showToast('error', 'Save Failed', res.error || 'Failed to save tracking numbers');
       }
     } catch (err: any) {
       showToast('error', 'Pool Error', err.message || 'Error communicating with pool');
     } finally {
-      setIsSubmitting(false);
+      setIsSaving(false);
+    }
+  };
+
+  const handleTakeNextResi = async () => {
+    if (uniqueNumbers.length === 0) {
+      showToast('warning', 'Pool Empty', `No tracking numbers available in ${targetCarrier.toUpperCase()} pool.`);
+      return;
+    }
+
+    setIsTakingResi(true);
+    try {
+      const res = await takeTrackingNumberFromPool(targetCarrier);
+      if (res.success && res.number) {
+        navigator.clipboard.writeText(res.number);
+        setCopiedNumber(res.number);
+        showToast(
+          'success',
+          'Resi Taken and Copied',
+          `Copied ${res.number} to clipboard. Removed from ${targetCarrier.toUpperCase()} pool (${res.remaining ?? 0} remaining).`
+        );
+        await loadInventory();
+        await loadHistory();
+        await loadCarrierNumbers(targetCarrier);
+        if (onInventoryChanged) onInventoryChanged();
+      } else {
+        showToast('error', 'Withdrawal Failed', res.error || 'Could not withdraw tracking number');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err?.message || 'Network error while withdrawing number');
+    } finally {
+      setIsTakingResi(false);
     }
   };
 
   const handleCopy = (num: string) => {
     navigator.clipboard.writeText(num);
     setCopiedNumber(num);
+    showToast('info', 'Copied to Clipboard', num);
     setTimeout(() => setCopiedNumber(null), 2000);
   };
 
@@ -152,15 +237,17 @@ export const TrackingPoolModal: React.FC<TrackingPoolModalProps> = ({
       }
       headerActions={
         <button
+          type="button"
           onClick={() => {
             loadInventory();
             loadHistory();
+            loadCarrierNumbers(targetCarrier);
           }}
-          disabled={isLoadingInventory}
-          className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
+          disabled={isLoadingInventory || isLoadingNumbers}
+          className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer"
           title="Refresh Inventory"
         >
-          <RefreshCw className={clsx('h-4 w-4', isLoadingInventory && 'animate-spin')} />
+          <RefreshCw className={clsx('h-4 w-4', (isLoadingInventory || isLoadingNumbers) && 'animate-spin text-amber-400')} />
         </button>
       }
     >
@@ -168,24 +255,23 @@ export const TrackingPoolModal: React.FC<TrackingPoolModalProps> = ({
         {/* Navigation Tabs */}
         <div className="flex items-center gap-2 border-b border-zinc-800 pb-2">
           <button
+            type="button"
             onClick={() => setActiveTab('inventory')}
             className={clsx(
-              'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
+              'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer',
               activeTab === 'inventory'
                 ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
                 : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
             )}
           >
             <Layers className="h-3.5 w-3.5" />
-            <span>Inventory &amp; Restock</span>
-            <span className="ml-1 rounded-full bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-300">
-              {jneCount + sicepatCount}
-            </span>
+            <span>Editable Pool ({targetCarrier.toUpperCase()}: {uniqueNumbers.length})</span>
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('history')}
             className={clsx(
-              'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
+              'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer',
               activeTab === 'history'
                 ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
                 : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
@@ -207,7 +293,7 @@ export const TrackingPoolModal: React.FC<TrackingPoolModalProps> = ({
               <p className="font-semibold">Low tracking number balance detected</p>
               <p className="text-amber-300/80 mt-0.5">
                 {isJneLow && isSicepatLow
-                  ? `JNE (${jneCount}) and SiCepat (${sicepatCount}) are running low. Please paste new pre-allocated air waybills below.`
+                  ? `JNE (${jneCount}) and SiCepat (${sicepatCount}) are running low. Please update or paste new pre-allocated air waybills below.`
                   : isJneLow
                   ? `JNE has only ${jneCount} tracking numbers remaining in the active pool.`
                   : `SiCepat has only ${sicepatCount} tracking numbers remaining in the active pool.`}
@@ -216,23 +302,32 @@ export const TrackingPoolModal: React.FC<TrackingPoolModalProps> = ({
           </div>
         )}
 
-        {/* TAB 1: INVENTORY & RESTOCK */}
+        {/* TAB 1: EDITABLE INVENTORY POOL */}
         {activeTab === 'inventory' && (
           <div className="space-y-5">
             {/* Carrier Status Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {/* JNE */}
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3.5 flex flex-col justify-between">
+              <button
+                type="button"
+                onClick={() => handleCarrierChange('jne')}
+                className={clsx(
+                  'rounded-xl border p-3.5 flex flex-col justify-between text-left transition-all cursor-pointer',
+                  targetCarrier === 'jne'
+                    ? 'border-amber-500/60 bg-amber-500/[0.08] ring-1 ring-amber-500/40'
+                    : 'border-zinc-800 bg-zinc-900/60 hover:border-zinc-700'
+                )}
+              >
                 <div>
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">JNE Express</span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-300">JNE Express</span>
                     <span
                       className={clsx(
                         'text-[10px] font-semibold px-1.5 py-0.5 rounded',
                         isJneLow ? 'bg-amber-500/15 text-amber-400' : 'bg-emerald-500/15 text-emerald-400'
                       )}
                     >
-                      {isJneLow ? 'Low Stock' : 'Active'}
+                      {isJneLow ? 'Low' : 'Active'}
                     </span>
                   </div>
                   <div className="mt-2 text-2xl font-extrabold text-white tracking-tight">
@@ -242,20 +337,29 @@ export const TrackingPoolModal: React.FC<TrackingPoolModalProps> = ({
                 <div className="mt-3 pt-2 border-t border-zinc-800/80 text-[11px] text-zinc-500">
                   Assigned: {inventory?.jne?.assigned_total ?? 0}
                 </div>
-              </div>
+              </button>
 
               {/* SiCepat */}
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3.5 flex flex-col justify-between">
+              <button
+                type="button"
+                onClick={() => handleCarrierChange('sicepat')}
+                className={clsx(
+                  'rounded-xl border p-3.5 flex flex-col justify-between text-left transition-all cursor-pointer',
+                  targetCarrier === 'sicepat'
+                    ? 'border-rose-500/60 bg-rose-500/[0.08] ring-1 ring-rose-500/40'
+                    : 'border-zinc-800 bg-zinc-900/60 hover:border-zinc-700'
+                )}
+              >
                 <div>
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">SiCepat</span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-300">SiCepat</span>
                     <span
                       className={clsx(
                         'text-[10px] font-semibold px-1.5 py-0.5 rounded',
                         isSicepatLow ? 'bg-amber-500/15 text-amber-400' : 'bg-emerald-500/15 text-emerald-400'
                       )}
                     >
-                      {isSicepatLow ? 'Low Stock' : 'Active'}
+                      {isSicepatLow ? 'Low' : 'Active'}
                     </span>
                   </div>
                   <div className="mt-2 text-2xl font-extrabold text-white tracking-tight">
@@ -265,10 +369,10 @@ export const TrackingPoolModal: React.FC<TrackingPoolModalProps> = ({
                 <div className="mt-3 pt-2 border-t border-zinc-800/80 text-[11px] text-zinc-500">
                   Assigned: {inventory?.sicepat?.assigned_total ?? 0}
                 </div>
-              </div>
+              </button>
 
               {/* POS Indonesia */}
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3.5 flex flex-col justify-between">
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3.5 flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">POS Indonesia</span>
@@ -276,17 +380,17 @@ export const TrackingPoolModal: React.FC<TrackingPoolModalProps> = ({
                       Manual
                     </span>
                   </div>
-                  <div className="mt-2 text-2xl font-extrabold text-zinc-400 tracking-tight">
+                  <div className="mt-2 text-xl font-bold text-zinc-400 tracking-tight">
                     Manual
                   </div>
                 </div>
                 <div className="mt-3 pt-2 border-t border-zinc-800/80 text-[11px] text-zinc-500">
-                  Tagged with warning indicator
+                  Tagged with indicator
                 </div>
               </div>
 
               {/* Goorita */}
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3.5 flex flex-col justify-between">
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3.5 flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Goorita</span>
@@ -294,87 +398,127 @@ export const TrackingPoolModal: React.FC<TrackingPoolModalProps> = ({
                       Manual
                     </span>
                   </div>
-                  <div className="mt-2 text-2xl font-extrabold text-zinc-400 tracking-tight">
+                  <div className="mt-2 text-xl font-bold text-zinc-400 tracking-tight">
                     Manual
                   </div>
                 </div>
                 <div className="mt-3 pt-2 border-t border-zinc-800/80 text-[11px] text-zinc-500">
-                  Tagged with warning indicator
+                  Tagged with indicator
                 </div>
               </div>
             </div>
 
-            {/* Bulk Restock Box */}
+            {/* Editable Tracking Pool Box */}
             <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3.5">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <Plus className="h-4 w-4 text-amber-400" />
+                  <Truck className="h-4 w-4 text-amber-400" />
                   <h3 className="text-xs font-bold uppercase tracking-wider text-white">
-                    Bulk Restock Tracking Numbers
+                    {targetCarrier === 'jne' ? 'JNE Express' : 'SiCepat'} Editable Pool
                   </h3>
-                </div>
-                {parsedNumbers.length > 0 && (
-                  <span className="text-xs font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
-                    {parsedNumbers.length} numbers ready
+                  <span className="text-xs font-mono text-zinc-400">
+                    ({uniqueNumbers.length} active numbers)
                   </span>
-                )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Take Next Resi button */}
+                  <button
+                    type="button"
+                    onClick={handleTakeNextResi}
+                    disabled={isTakingResi || uniqueNumbers.length === 0}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Take next resi from pool and copy to clipboard"
+                  >
+                    <ArrowRight className={clsx('w-3.5 h-3.5', isTakingResi && 'animate-spin')} />
+                    <span>{isTakingResi ? 'Taking...' : 'Take Next Resi'}</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Carrier Selector Radio */}
-              <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-zinc-300">
-                  <input
-                    type="radio"
-                    name="carrier"
-                    value="jne"
-                    checked={targetCarrier === 'jne'}
-                    onChange={() => setTargetCarrier('jne')}
-                    className="accent-amber-500"
-                  />
-                  <span>JNE Express</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-zinc-300">
-                  <input
-                    type="radio"
-                    name="carrier"
-                    value="sicepat"
-                    checked={targetCarrier === 'sicepat'}
-                    onChange={() => setTargetCarrier('sicepat')}
-                    className="accent-amber-500"
-                  />
-                  <span>SiCepat</span>
-                </label>
+              {/* Carrier Selector Buttons */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleCarrierChange('jne')}
+                  className={clsx(
+                    'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer',
+                    targetCarrier === 'jne'
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold'
+                      : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white'
+                  )}
+                >
+                  JNE Express Pool
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleCarrierChange('sicepat')}
+                  className={clsx(
+                    'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer',
+                    targetCarrier === 'sicepat'
+                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 font-bold'
+                      : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white'
+                  )}
+                >
+                  SiCepat Pool
+                </button>
               </div>
 
               {/* Textarea */}
-              <div>
+              <div className="relative">
                 <textarea
-                  rows={4}
-                  value={rawNumbers}
-                  onChange={(e) => setRawNumbers(e.target.value)}
-                  placeholder="Paste tracking numbers here (one per line, comma, or space separated)..."
-                  className="w-full rounded-lg border border-zinc-800 bg-zinc-950 p-3 font-mono text-xs text-white placeholder-zinc-600 focus:border-amber-500/50 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                  rows={8}
+                  value={editableNumbersText}
+                  onChange={(e) => setEditableNumbersText(e.target.value)}
+                  placeholder="Paste or edit tracking numbers here (one per line)..."
+                  disabled={isLoadingNumbers}
+                  className="w-full rounded-lg border border-zinc-800 bg-zinc-950 p-3 font-mono text-xs text-white placeholder-zinc-600 focus:border-amber-500/50 focus:outline-hidden focus:ring-1 focus:ring-amber-500/50 leading-relaxed"
                 />
+                {isLoadingNumbers && (
+                  <div className="absolute inset-0 bg-zinc-950/70 backdrop-blur-xs flex items-center justify-center rounded-lg">
+                    <RefreshCw className="w-5 h-5 animate-spin text-amber-400" />
+                  </div>
+                )}
               </div>
 
-              <div className="flex items-center justify-between pt-1">
-                <p className="text-[11px] text-zinc-500">
-                  Numbers already assigned or in the pool are automatically deduplicated.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleAddNumbers}
-                  disabled={isSubmitting || parsedNumbers.length === 0}
-                  className={clsx(
-                    'flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all',
-                    parsedNumbers.length > 0
-                      ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 shadow-md shadow-amber-500/20 hover:brightness-110 active:scale-98'
-                      : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                <div className="text-[11px] text-zinc-400 font-mono flex items-center gap-2">
+                  <span>{uniqueNumbers.length} valid numbers</span>
+                  {duplicateCount > 0 && (
+                    <span className="text-amber-400">({duplicateCount} duplicates found)</span>
                   )}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>{isSubmitting ? 'Adding...' : 'Add Numbers to Pool'}</span>
-                </button>
+                  {isDirty && (
+                    <span className="text-amber-400 font-semibold">• Unsaved edits</span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {isDirty && (
+                    <button
+                      type="button"
+                      onClick={() => setEditableNumbersText(originalNumbersText)}
+                      className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Revert</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleSavePool}
+                    disabled={isSaving || !isDirty}
+                    className={clsx(
+                      'flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer',
+                      isDirty
+                        ? 'bg-[#f3aa18] hover:bg-[#e09b10] text-zinc-950 shadow-md shadow-amber-500/20'
+                        : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                    )}
+                  >
+                    <Save className={clsx('h-3.5 w-3.5', isSaving && 'animate-spin')} />
+                    <span>{isSaving ? 'Saving...' : isDirty ? 'Save Pool Changes' : 'Pool In Sync'}</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -382,11 +526,11 @@ export const TrackingPoolModal: React.FC<TrackingPoolModalProps> = ({
             <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/40 p-3.5 text-xs text-zinc-400 space-y-1 leading-relaxed">
               <div className="flex items-center gap-2 font-semibold text-zinc-200">
                 <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                <span>Zero Google Sheets Dependency</span>
+                <span>Automated Fulfillment Guarantee</span>
               </div>
               <p>
                 When a customer order payment is confirmed (status changes to <code className="text-amber-400 bg-zinc-800/60 px-1 py-0.5 rounded text-[11px]">processing</code>),
-                Exacoat Core immediately checks this internal pool. If JNE or SiCepat shipping was selected, the next air waybill number is popped atomically and stored into order metadata.
+                the next air waybill number is popped sequentially from this internal pool and stored into the order metadata automatically.
               </p>
             </div>
           </div>
@@ -410,7 +554,7 @@ export const TrackingPoolModal: React.FC<TrackingPoolModalProps> = ({
                     <tr>
                       <th className="py-2.5 px-3">Carrier</th>
                       <th className="py-2.5 px-3">Tracking Number</th>
-                      <th className="py-2.5 px-3">Order</th>
+                      <th className="py-2.5 px-3">Order / Note</th>
                       <th className="py-2.5 px-3 text-right">Assigned At</th>
                     </tr>
                   </thead>
@@ -426,8 +570,9 @@ export const TrackingPoolModal: React.FC<TrackingPoolModalProps> = ({
                           <div className="flex items-center gap-1.5">
                             <span>{record.number}</span>
                             <button
+                              type="button"
                               onClick={() => handleCopy(record.number)}
-                              className="text-zinc-500 hover:text-white p-1 rounded transition-colors"
+                              className="text-zinc-500 hover:text-white p-1 rounded transition-colors cursor-pointer"
                               title="Copy Tracking Number"
                             >
                               {copiedNumber === record.number ? (
@@ -439,9 +584,15 @@ export const TrackingPoolModal: React.FC<TrackingPoolModalProps> = ({
                           </div>
                         </td>
                         <td className="py-2.5 px-3">
-                          <span className="rounded bg-zinc-800 px-2 py-0.5 font-semibold text-zinc-200">
-                            #{record.order_id}
-                          </span>
+                          {record.order_id && record.order_id > 0 ? (
+                            <span className="rounded bg-zinc-800 px-2 py-0.5 font-semibold text-zinc-200">
+                              #{record.order_id}
+                            </span>
+                          ) : (
+                            <span className="text-zinc-500 italic text-[11px]">
+                              {record.note || 'Manual withdrawal'}
+                            </span>
+                          )}
                         </td>
                         <td className="py-2.5 px-3 text-right text-zinc-500 text-[11px]">
                           {record.assigned_at}

@@ -56,6 +56,7 @@ import {
   Edit2
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 import { extractItemSpecs } from '../../lib/orderItems';
 import { isStorePickupOrder, toggleLocalStorePickupOrder, resolveOrderCourier } from '../../lib/orderUtils';
 import { getWpBaseUrl } from '../../lib/wordpressBridge';
@@ -69,7 +70,8 @@ import {
   sendReviewInviteDirect,
   fetchOrderReviewDirect,
   syncOrderTrackingDirect,
-  processGuaranteeActionDirect
+  processGuaranteeActionDirect,
+  assignTrackingNumberFromPool
 } from '../../lib/wordpressBridge';
 import { ShippingLabelA6Modal } from './ShippingLabelA6Modal';
 import { CustomerInvoiceModal } from './CustomerInvoiceModal';
@@ -124,6 +126,9 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   onNavigateToCustomer,
 }) => {
   const { showToast } = useToast();
+  const { user, simulatedRole } = useAuth();
+  const effectiveRole = simulatedRole || user?.role;
+  const isShopManager = effectiveRole === 'shop_manager';
 
   const [internalOrder, setInternalOrder] = useState<Order | null>(propOrder);
   useEffect(() => {
@@ -354,6 +359,46 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
       if (res.success) {
         showToast('success', 'Status updated', `Order #${order.id} status changed to ${newStatus}`);
         order.status = newStatus as OrderStatus;
+        if (res.order) {
+          Object.assign(order, res.order);
+        }
+
+        // If confirmed/processing and carrier is JNE or SiCepat but tracking is still missing, ensure pool assignment
+        const cleanStatus = newStatus.replace('wc-', '');
+        if (cleanStatus === 'processing' || cleanStatus === 'confirmed') {
+          const currentTracking = order.tracking?.tracking_number || (order as any).tracking_number;
+          const carrier = (order.tracking?.carrier_id || (order as any).carrier_id || courier || '').toLowerCase();
+          if ((!currentTracking || currentTracking === '⚠️') && (carrier.includes('jne') || carrier.includes('sicepat'))) {
+            try {
+              const assignRes = await assignTrackingNumberFromPool(
+                Number(order.id),
+                carrier.includes('sicepat') ? 'sicepat' : 'jne'
+              );
+              if (assignRes.success && assignRes.tracking_number) {
+                if (!order.tracking) {
+                  order.tracking = {
+                    courier: carrier.includes('sicepat') ? 'SiCepat' : 'JNE Express',
+                    carrier_id: assignRes.carrier || (carrier.includes('sicepat') ? 'sicepat' : 'jne'),
+                    tracking_number: assignRes.tracking_number,
+                    tracking_url: '',
+                  };
+                } else {
+                  order.tracking.tracking_number = assignRes.tracking_number;
+                  order.tracking.courier = carrier.includes('sicepat') ? 'SiCepat' : 'JNE Express';
+                }
+                setTrackingNumber(assignRes.tracking_number);
+                showToast(
+                  'info',
+                  'Tracking Number Allocated',
+                  `Assigned ${assignRes.tracking_number} from ${(assignRes.carrier || 'courier').toUpperCase()} pool.`
+                );
+              }
+            } catch {
+              // Ignore fallback failure
+            }
+          }
+        }
+
         await loadNotes(order.id);
         if (onOrderUpdated) onOrderUpdated();
       } else {
@@ -1008,27 +1053,38 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
               Customer & Delivery
             </h4>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  if (onNavigateToCustomer) {
-                    onNavigateToCustomer(order.customer_id, order.customer_email, order.customer_name);
-                  } else {
-                    window.location.hash = `#customers?id=${order.customer_id || 0}&email=${encodeURIComponent(order.customer_email || '')}`;
-                  }
-                  onClose();
-                }}
-                className="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-neutral-200 hover:text-[#f3aa18] border border-white/10 hover:border-[#f3aa18]/40 text-xs font-sans font-medium flex items-center gap-1.5 transition-all cursor-pointer group"
-                title="View customer profile and past orders"
-              >
-                <span className="w-4 h-4 rounded-full bg-[#f3aa18]/20 text-[#f3aa18] text-[9px] font-bold flex items-center justify-center font-mono">
-                  {order.customer_name ? order.customer_name.charAt(0).toUpperCase() : 'C'}
-                </span>
-                <span className="font-semibold text-white group-hover:text-[#f3aa18] transition-colors truncate max-w-[140px] sm:max-w-[200px]">
-                  {order.customer_name || (order.customer_id ? `Customer #${order.customer_id}` : 'Guest Customer')}
-                </span>
-                <ExternalLink className="w-3 h-3 text-neutral-400 group-hover:text-[#f3aa18] transition-colors shrink-0" />
-              </button>
+              {!isShopManager ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onNavigateToCustomer) {
+                      onNavigateToCustomer(order.customer_id, order.customer_email, order.customer_name);
+                    } else {
+                      window.location.hash = `#customers?id=${order.customer_id || 0}&email=${encodeURIComponent(order.customer_email || '')}`;
+                    }
+                    onClose();
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-neutral-200 hover:text-[#f3aa18] border border-white/10 hover:border-[#f3aa18]/40 text-xs font-sans font-medium flex items-center gap-1.5 transition-all cursor-pointer group"
+                  title="View customer profile and past orders"
+                >
+                  <span className="w-4 h-4 rounded-full bg-[#f3aa18]/20 text-[#f3aa18] text-[9px] font-bold flex items-center justify-center font-mono">
+                    {order.customer_name ? order.customer_name.charAt(0).toUpperCase() : 'C'}
+                  </span>
+                  <span className="font-semibold text-white group-hover:text-[#f3aa18] transition-colors truncate max-w-[140px] sm:max-w-[200px]">
+                    {order.customer_name || (order.customer_id ? `Customer #${order.customer_id}` : 'Guest Customer')}
+                  </span>
+                  <ExternalLink className="w-3 h-3 text-neutral-400 group-hover:text-[#f3aa18] transition-colors shrink-0" />
+                </button>
+              ) : (
+                <div className="px-2.5 py-1 rounded-lg bg-white/[0.04] text-neutral-200 border border-white/10 text-xs font-sans font-medium flex items-center gap-1.5">
+                  <span className="w-4 h-4 rounded-full bg-[#f3aa18]/20 text-[#f3aa18] text-[9px] font-bold flex items-center justify-center font-mono">
+                    {order.customer_name ? order.customer_name.charAt(0).toUpperCase() : 'C'}
+                  </span>
+                  <span className="font-semibold text-white truncate max-w-[140px] sm:max-w-[200px]">
+                    {order.customer_name || (order.customer_id ? `Customer #${order.customer_id}` : 'Guest Customer')}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

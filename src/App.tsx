@@ -111,14 +111,15 @@ const getTabFromUrl = (): NavItemKey => {
 
 };
 
-const SHOP_MANAGER_ALLOWED_TABS: NavItemKey[] = ['orders', 'customers', 'reviews', 'rma', 'warranty', 'export', 'tracking_pool'];
+const SHOP_MANAGER_ALLOWED_TABS: NavItemKey[] = ['orders', 'reviews', 'rma', 'warranty', 'export', 'tracking_pool'];
 
 export const App: React.FC = () => {
-  const { user, isLoading: isAuthLoading } = useAuth();
+  const { user, simulatedRole, isLoading: isAuthLoading } = useAuth();
   const { showToast } = useToast();
 
-  const isShopManager = user?.role === 'shop_manager';
-  const isAffiliate = user?.role === 'affiliate';
+  const effectiveRole = simulatedRole || user?.role;
+  const isShopManager = effectiveRole === 'shop_manager';
+  const isAffiliate = effectiveRole === 'affiliate';
 
   const isAffiliatePortal = typeof window !== 'undefined' && (
     window.location.hostname.startsWith('affiliate.') ||
@@ -138,7 +139,7 @@ export const App: React.FC = () => {
   const [targetCustomerId, setTargetCustomerId] = useState<number | null>(null);
   const [targetCustomerEmail, setTargetCustomerEmail] = useState<string | null>(null);
 
-  // Keep shop_manager strictly locked to orders, rma claims, export, and tracking pool
+  // Keep shop_manager strictly locked to allowed tabs (orders, rma, warranty, export, tracking pool, reviews)
   useEffect(() => {
     if (isShopManager && !SHOP_MANAGER_ALLOWED_TABS.includes(currentTab)) {
       setCurrentTab('orders');
@@ -152,7 +153,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     const handlePopState = () => {
       const tab = getTabFromUrl();
-      if (user?.role === 'shop_manager' && !SHOP_MANAGER_ALLOWED_TABS.includes(tab)) {
+      if (isShopManager && !SHOP_MANAGER_ALLOWED_TABS.includes(tab)) {
         setCurrentTab('orders');
         return;
       }
@@ -164,7 +165,7 @@ export const App: React.FC = () => {
       window.removeEventListener('popstate', handlePopState);
       window.removeEventListener('hashchange', handlePopState);
     };
-  }, [user?.role]);
+  }, [isShopManager]);
 
   // Listen for marketplace OAuth callback params (?code=...&shop_id=...)
   useEffect(() => {
@@ -201,18 +202,19 @@ export const App: React.FC = () => {
   }, [showToast]);
 
   const handleTabChange = useCallback((tab: NavItemKey) => {
-    if (user?.role === 'shop_manager' && !SHOP_MANAGER_ALLOWED_TABS.includes(tab)) {
+    if (isShopManager && !SHOP_MANAGER_ALLOWED_TABS.includes(tab)) {
       return;
     }
     setCurrentTab(tab);
     window.location.hash = `#${tab}`;
-  }, [user?.role]);
+  }, [isShopManager]);
 
   const handleNavigateToCustomer = useCallback((customerId: number, customerEmail?: string) => {
+    if (isShopManager) return;
     setTargetCustomerId(customerId || null);
     setTargetCustomerEmail(customerEmail || null);
     handleTabChange('customers');
-  }, [handleTabChange]);
+  }, [handleTabChange, isShopManager]);
 
   const handleSelectOrder = useCallback((_order: Order) => {
     handleTabChange('orders');
@@ -282,16 +284,7 @@ export const App: React.FC = () => {
   ).length;
 
   const renderActiveTab = () => {
-    if (user?.role === 'shop_manager') {
-      if (currentTab === 'customers') {
-        return (
-          <CustomersPage
-            initialCustomerId={targetCustomerId}
-            initialCustomerEmail={targetCustomerEmail}
-            onNavigate={handleTabChange}
-          />
-        );
-      }
+    if (isShopManager) {
       if (currentTab === 'reviews') {
         return <ReviewsPage />;
       }
@@ -304,7 +297,7 @@ export const App: React.FC = () => {
       if (currentTab === 'tracking_pool') {
         return <TrackingPoolPage />;
       }
-      return <OrdersView initialStatus="all" onNavigateToCustomer={handleNavigateToCustomer} />;
+      return <OrdersView initialStatus="all" onNavigateToCustomer={undefined} />;
     }
     switch (currentTab) {
       case 'dashboard':

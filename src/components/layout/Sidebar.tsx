@@ -122,7 +122,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   }, [isMobileOpen]);
 
-  const isShopManager = user?.role === 'shop_manager';
+  const effectiveRole = simulatedRole || user?.role;
+  const isShopManager = effectiveRole === 'shop_manager';
 
   const fullNavSections: NavSection[] = [
     {
@@ -198,15 +199,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
         { key: 'reviews', label: 'Reviews', icon: Star, badge: pendingReviewCount > 0 ? pendingReviewCount : undefined, badgeVariant: 'amber' },
       ]
-    },
-    {
-      title: 'Analytics',
-      items: [
-        { key: 'customers', label: 'Customers', icon: Users },
-      ]
     }
   ];
-
 
   const navSections: NavSection[] = isShopManager 
     ? shopNavSections 

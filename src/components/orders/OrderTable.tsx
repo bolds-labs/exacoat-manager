@@ -317,6 +317,12 @@ export const OrderTable: React.FC<OrderTableProps> = ({
 
       // Search matching across all orders
       if (hasSearch) {
+        if (onSearchQueryChange) {
+          // Server-side search is already performed across the entire database!
+          // Retain server search results without filtering out matched item metadata or variations.
+          return true;
+        }
+
         const q = activeSearch.toLowerCase().trim();
         const cleanQ = q.replace(/^#+/, '');
         const num = String(order.order_number || order.id || '').toLowerCase().replace(/^#+/, '');
@@ -338,7 +344,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
       }
       return true;
     });
-  }, [orders, activeStatus, activeCourier, printFilter, printedOrderIds, activeSearch, onStatusFilterChange, onCourierFilterChange]);
+  }, [orders, activeStatus, activeCourier, printFilter, printedOrderIds, activeSearch, onStatusFilterChange, onCourierFilterChange, onSearchQueryChange]);
 
   const [lastSelectedId, setLastSelectedId] = useState<number | null>(null);
 
@@ -620,15 +626,36 @@ export const OrderTable: React.FC<OrderTableProps> = ({
 
           {/* Search Input and Refresh */}
           <div className="flex items-center gap-2">
-            <div className="relative flex-1 sm:w-64">
+            <div className="relative flex-1 sm:w-72">
               <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
-                placeholder="Search orders, phone, customer..."
+                placeholder="Search orders, items, resi, phone..."
                 value={internalSearch}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                className="w-full pl-9 pr-3.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-xs text-zinc-900 dark:text-white placeholder-zinc-500 focus:outline-none focus:border-[#f3aa18]"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (onSearchQueryChange) {
+                      onSearchQueryChange(internalSearch);
+                    }
+                  }
+                }}
+                className="w-full pl-9 pr-8 py-1.5 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-xs text-zinc-900 dark:text-white placeholder-zinc-500 focus:outline-none focus:border-[#f3aa18]"
               />
+              {internalSearch && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleSearchChange('');
+                    if (onSearchQueryChange) onSearchQueryChange('');
+                  }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-0.5 cursor-pointer"
+                  title="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             {onRefresh && (
@@ -760,6 +787,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                   const isPickup = isStorePickupOrder(order);
                   const isPrinted = printedOrderIds.has(order.id);
                   const isConfirmed = isOrderConfirmed(order.status);
+                  const isCompleted = String(order.status || '').replace(/^wc-/, '').toLowerCase().trim() === 'completed';
 
                   return (
                     <tr
@@ -843,7 +871,17 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                       {/* Status */}
                       <td className="py-3.5 px-4 text-center">
                         <div className="flex flex-col items-center gap-1">
-                          <Badge type="orderStatus" value={order.status} size="xs" />
+                          {isCompleted ? (
+                            <span
+                              className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shadow-xs"
+                              title="Completed"
+                              aria-label="Completed"
+                            >
+                              <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                            </span>
+                          ) : (
+                            <Badge type="orderStatus" value={order.status} size="xs" />
+                          )}
                           {isPickup && (
                             <span className="inline-flex items-center text-[9px] font-mono font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-1.5 py-0.5 rounded border border-[#f3aa18]/20 whitespace-nowrap">
                               Store Pickup (SMB)
@@ -954,6 +992,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
               const rawTrackingNum = String(order.tracking?.tracking_number || '').trim();
               const hasValidTracking = rawTrackingNum.length > 0 && !rawTrackingNum.startsWith('field_');
               const isConfirmed = isOrderConfirmed(order.status);
+              const isCompleted = String(order.status || '').replace(/^wc-/, '').toLowerCase().trim() === 'completed';
 
               return (
                 <div
@@ -992,7 +1031,17 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                         {formatDateTime(order.created_at)}
                       </span>
                     </div>
-                    <Badge type="orderStatus" value={order.status} size="xs" />
+                    {isCompleted ? (
+                      <span
+                        className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shadow-xs"
+                        title="Completed"
+                        aria-label="Completed"
+                      >
+                        <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                      </span>
+                    ) : (
+                      <Badge type="orderStatus" value={order.status} size="xs" />
+                    )}
                   </div>
 
                   <div className="flex items-center justify-between text-xs">
@@ -1054,6 +1103,11 @@ export const OrderTable: React.FC<OrderTableProps> = ({
               </span>{' '}
               of <span className="font-mono font-bold text-zinc-900 dark:text-white">{totalOrders ?? filteredOrders.length}</span> orders
             </span>
+            {Boolean(activeSearch && activeSearch.trim()) && (
+              <span className="ml-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[#f3aa18]/10 text-amber-600 dark:text-[#f3aa18] border border-[#f3aa18]/20">
+                Search Results
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-3">

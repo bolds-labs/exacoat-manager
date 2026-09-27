@@ -20,6 +20,7 @@ import {
 import { Order } from '../types';
 import { formatCurrency, formatDateTime } from '../lib/formatters';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import {
   Users,
   DollarSign,
@@ -71,6 +72,24 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
   onNavigate,
 }) => {
   const { showToast } = useToast();
+  const { user, simulatedRole } = useAuth();
+  const effectiveRole = simulatedRole || user?.role;
+  const isShopManager = effectiveRole === 'shop_manager';
+
+  useEffect(() => {
+    if (isShopManager && onNavigate) {
+      onNavigate('orders');
+    }
+  }, [isShopManager, onNavigate]);
+
+  if (isShopManager) {
+    return (
+      <div className="p-8 text-center text-zinc-500 font-sans space-y-3">
+        <p className="text-sm font-semibold text-zinc-300">Access Restricted</p>
+        <p className="text-xs text-zinc-400">Shop managers do not have permission to view customer records.</p>
+      </div>
+    );
+  }
 
   const [datePreset, setDatePreset] = useState<CustomersDatePreset>('all');
   const [customers, setCustomers] = useState<UnifiedCustomer[]>([]);

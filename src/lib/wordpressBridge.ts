@@ -5184,6 +5184,8 @@ export interface CarrierInventory {
   assigned_total: number;
   low_stock: boolean;
   sample_available?: string[];
+  sample_pool?: string[];
+  numbers?: string[];
 }
 
 export interface TrackingPoolInventory {
@@ -5199,6 +5201,7 @@ export interface TrackingAssignmentRecord {
   order_id: number;
   assigned_at: string;
   carrier: string;
+  note?: string;
 }
 
 export async function fetchTrackingPoolInventory(): Promise<{
@@ -5216,6 +5219,139 @@ export async function fetchTrackingPoolInventory(): Promise<{
     const data = await res.json();
     if (res.ok && data?.success) {
       return { success: true, inventory: data.inventory };
+    }
+    return { success: false, error: data?.error || data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchTrackingPoolNumbers(carrier: string): Promise<{
+  success: boolean;
+  carrier?: string;
+  total_pool?: number;
+  numbers?: string[];
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/tracking-pool/numbers?carrier=${encodeURIComponent(carrier)}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        carrier: data.carrier,
+        total_pool: data.total_pool,
+        numbers: data.numbers || [],
+      };
+    }
+    return { success: false, error: data?.error || data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function updateTrackingPoolNumbers(
+  carrier: string,
+  numbers: string[] | string
+): Promise<{
+  success: boolean;
+  carrier?: string;
+  total_pool?: number;
+  numbers?: string[];
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/tracking-pool/update`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ carrier, numbers }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        carrier: data.carrier,
+        total_pool: data.total_pool,
+        numbers: data.numbers || [],
+      };
+    }
+    return { success: false, error: data?.error || data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function takeTrackingNumberFromPool(
+  carrier: string,
+  number?: string,
+  note = 'Manual take via Exacoat Manager'
+): Promise<{
+  success: boolean;
+  carrier?: string;
+  number?: string;
+  remaining?: number;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/tracking-pool/take`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ carrier, number, note }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        carrier: data.carrier,
+        number: data.number,
+        remaining: data.remaining,
+      };
+    }
+    return { success: false, error: data?.error || data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function assignTrackingNumberFromPool(
+  orderId: number,
+  carrier?: string,
+  trackingNumber?: string
+): Promise<{
+  success: boolean;
+  order_id?: number;
+  carrier?: string;
+  tracking_number?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/tracking-pool/assign`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ order_id: orderId, carrier, tracking_number: trackingNumber }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        order_id: data.order_id,
+        carrier: data.carrier,
+        tracking_number: data.tracking_number,
+      };
     }
     return { success: false, error: data?.error || data?.message || `HTTP ${res.status}` };
   } catch (err: any) {

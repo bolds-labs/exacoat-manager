@@ -214,7 +214,7 @@ class Exacoat_Order_Manager {
 				 WHERE id = %d 
 				    OR id LIKE %s 
 				    OR billing_email LIKE %s
-				 LIMIT 150",
+				 LIMIT 5000",
 				intval( $clean_num ),
 				$like_num,
 				$like_term
@@ -232,7 +232,7 @@ class Exacoat_Order_Manager {
 					    OR CONCAT(first_name, ' ', last_name) LIKE %s 
 					    OR email LIKE %s 
 					    OR phone LIKE %s
-					 LIMIT 150",
+					 LIMIT 5000",
 					$like_term,
 					$like_term,
 					$like_term,
@@ -258,7 +258,7 @@ class Exacoat_Order_Manager {
 						'_billing_phone_formatted',
 						'_bca_mutation_desc'
 					 ) AND meta_value LIKE %s
-					 LIMIT 150",
+					 LIMIT 5000",
 					$like_term
 				) );
 				if ( ! empty( $hpos_meta_ids ) ) {
@@ -289,7 +289,7 @@ class Exacoat_Order_Manager {
 				'_rma_original_order_id',
 				'_bca_mutation_desc'
 			 ) AND meta_value LIKE %s
-			 LIMIT 150",
+			 LIMIT 5000",
 			$like_term
 		) );
 		if ( ! empty( $meta_ids ) ) {
@@ -308,7 +308,7 @@ class Exacoat_Order_Manager {
 					 INNER JOIN {$wpdb->postmeta} p2 ON p1.post_id = p2.post_id
 					 WHERE p1.meta_key = '_billing_first_name' AND p1.meta_value LIKE %s
 					   AND p2.meta_key = '_billing_last_name' AND p2.meta_value LIKE %s
-					 LIMIT 150",
+					 LIMIT 5000",
 					$w1,
 					$w2
 				) );
@@ -325,7 +325,7 @@ class Exacoat_Order_Manager {
 				"SELECT DISTINCT post_id FROM {$wpdb->postmeta}
 				 WHERE meta_key IN ('_billing_phone', '_shipping_phone', '_billing_phone_formatted')
 				   AND REPLACE(REPLACE(REPLACE(meta_value, '-', ''), ' ', ''), '+', '') LIKE %s
-				 LIMIT 150",
+				 LIMIT 5000",
 				'%' . $wpdb->esc_like( $digits ) . '%'
 			) );
 			if ( ! empty( $phone_ids ) ) {
@@ -333,15 +333,85 @@ class Exacoat_Order_Manager {
 			}
 		}
 
-		// 4. Order line items (searching product names)
+		// 4. Order line items (searching product names, variations, device/finish/skin attributes, SKU)
+		$items_table    = "{$wpdb->prefix}woocommerce_order_items";
+		$itemmeta_table = "{$wpdb->prefix}woocommerce_order_itemmeta";
+
+		// 4a. Order item name direct match
 		$item_order_ids = $wpdb->get_col( $wpdb->prepare(
-			"SELECT DISTINCT order_id FROM {$wpdb->prefix}woocommerce_order_items
+			"SELECT DISTINCT order_id FROM {$items_table}
 			 WHERE order_item_name LIKE %s
-			 LIMIT 150",
+			 LIMIT 5000",
 			$like_term
 		) );
 		if ( ! empty( $item_order_ids ) ) {
 			$matched_ids = array_merge( $matched_ids, array_map( 'intval', $item_order_ids ) );
+		}
+
+		// 4b. Order item name multi-word match (e.g. 'iPhone 15 Pro' where item is 'Apple iPhone 15 Pro')
+		if ( strpos( $term, ' ' ) !== false ) {
+			$item_words = preg_split( '/\s+/', $term, -1, PREG_SPLIT_NO_EMPTY );
+			if ( count( $item_words ) >= 2 && count( $item_words ) <= 6 ) {
+				$where_clauses = [];
+				$params        = [];
+				foreach ( $item_words as $w ) {
+					$where_clauses[] = 'order_item_name LIKE %s';
+					$params[]        = '%' . $wpdb->esc_like( $w ) . '%';
+				}
+				$multi_sql = "SELECT DISTINCT order_id FROM {$items_table} WHERE " . implode( ' AND ', $where_clauses ) . ' LIMIT 5000';
+				$multi_ids = $wpdb->get_col( $wpdb->prepare( $multi_sql, $params ) );
+				if ( ! empty( $multi_ids ) ) {
+					$matched_ids = array_merge( $matched_ids, array_map( 'intval', $multi_ids ) );
+				}
+			}
+		}
+
+		// 4c. Line item metadata search (Device, Finish, Skin, Model, Acowebs fields, custom configurations)
+		if ( $wpdb->get_var( "SHOW TABLES LIKE '{$itemmeta_table}'" ) === $itemmeta_table ) {
+			$itemmeta_order_ids = $wpdb->get_col( $wpdb->prepare(
+				"SELECT DISTINCT items.order_id 
+				 FROM {$items_table} items
+				 INNER JOIN {$itemmeta_table} meta ON items.order_item_id = meta.order_item_id
+				 WHERE items.order_item_type = 'line_item'
+				   AND meta.meta_key NOT IN ('_line_total', '_line_subtotal', '_line_tax', '_line_subtotal_tax', '_tax_class', '_qty')
+				   AND meta.meta_value LIKE %s
+				 LIMIT 5000",
+				$like_term
+			) );
+			if ( ! empty( $itemmeta_order_ids ) ) {
+				$matched_ids = array_merge( $matched_ids, array_map( 'intval', $itemmeta_order_ids ) );
+			}
+
+			// 4d. Product catalog title & variation title match (linking itemmeta _product_id / _variation_id)
+			$product_order_ids = $wpdb->get_col( $wpdb->prepare(
+				"SELECT DISTINCT items.order_id
+				 FROM {$items_table} items
+				 INNER JOIN {$itemmeta_table} meta ON items.order_item_id = meta.order_item_id
+				 INNER JOIN {$wpdb->posts} p ON (meta.meta_key IN ('_product_id', '_variation_id') AND meta.meta_value = CAST(p.ID AS CHAR))
+				 WHERE items.order_item_type = 'line_item'
+				   AND p.post_type IN ('product', 'product_variation')
+				   AND p.post_title LIKE %s
+				 LIMIT 5000",
+				$like_term
+			) );
+			if ( ! empty( $product_order_ids ) ) {
+				$matched_ids = array_merge( $matched_ids, array_map( 'intval', $product_order_ids ) );
+			}
+
+			// 4e. Product SKU match
+			$sku_order_ids = $wpdb->get_col( $wpdb->prepare(
+				"SELECT DISTINCT items.order_id
+				 FROM {$items_table} items
+				 INNER JOIN {$itemmeta_table} meta ON items.order_item_id = meta.order_item_id
+				 INNER JOIN {$wpdb->postmeta} pm_sku ON (meta.meta_key IN ('_product_id', '_variation_id') AND meta.meta_value = CAST(pm_sku.post_id AS CHAR) AND pm_sku.meta_key = '_sku')
+				 WHERE items.order_item_type = 'line_item'
+				   AND pm_sku.meta_value LIKE %s
+				 LIMIT 5000",
+				$like_term
+			) );
+			if ( ! empty( $sku_order_ids ) ) {
+				$matched_ids = array_merge( $matched_ids, array_map( 'intval', $sku_order_ids ) );
+			}
 		}
 
 		// 5. Posts table match for order ID
@@ -349,7 +419,7 @@ class Exacoat_Order_Manager {
 			"SELECT ID FROM {$wpdb->posts}
 			 WHERE post_type IN ('shop_order', 'shop_order_placehold')
 			   AND (ID = %d OR ID LIKE %s)
-			 LIMIT 150",
+			 LIMIT 5000",
 			intval( $clean_num ),
 			$like_num
 		) );
@@ -602,6 +672,15 @@ class Exacoat_Order_Manager {
 				$max_pages    = 1;
 			}
 
+			// If a search query was performed, ensure total_orders and max_pages accurately reflect all matched orders across the store
+			if ( ! empty( $search ) && ! empty( $matched_search_ids ) ) {
+				$search_pool_count = ! empty( $args['include'] ) ? count( $args['include'] ) : count( $matched_search_ids );
+				if ( $total_orders < $search_pool_count || ( 1 === (int) $max_pages && $search_pool_count > $per_page ) ) {
+					$total_orders = $search_pool_count;
+					$max_pages    = max( 1, (int) ceil( $total_orders / $per_page ) );
+				}
+			}
+
 			return rest_ensure_response( [
 				'success'      => true,
 				'total_orders' => (int) $total_orders,
@@ -670,6 +749,17 @@ class Exacoat_Order_Manager {
 		}
 
 		$order->update_status( $clean_status, 'Status updated via Exacoat Manager' );
+
+		// If status is confirmed (processing / preparing-order / ready-to-ship), guarantee tracking number is filled from pool for JNE / SiCepat
+		if ( in_array( $clean_status, [ 'processing', 'confirmed', 'preparing-order', 'ready-to-ship' ], true ) && class_exists( 'Exacoat_Tracking_Pool' ) ) {
+			Exacoat_Tracking_Pool::auto_assign_order_tracking( $order_id );
+		}
+
+		// Re-fetch fresh order to ensure all assigned tracking meta is reflected in response
+		$refreshed_order = wc_get_order( $order_id );
+		if ( $refreshed_order ) {
+			$order = $refreshed_order;
+		}
 
 		if ( class_exists( 'Artmatter_Logger' ) ) {
 			Artmatter_Logger::info( 'orders', "Status for Order #{$order_id} updated to '{$clean_status}' via Manager ERP", [
@@ -1384,6 +1474,25 @@ class Exacoat_Order_Manager {
 		// If carrier_val was empty or was defaulted to generic jne without tracking, use detected carrier
 		if ( ! empty( $detected_carrier ) && ( empty( $carrier_val ) || 'jne' === strtolower( (string) $carrier_val ) ) ) {
 			$carrier_val = $detected_carrier;
+		}
+
+		// Ensure tracking number is filled from pool if order is confirmed (processing / confirmed / preparing-order) and carrier is JNE or SiCepat
+		$order_status_clean = str_replace( 'wc-', '', $order->get_status() );
+		if ( in_array( $order_status_clean, [ 'processing', 'confirmed', 'preparing-order', 'ready-to-ship' ], true ) && empty( $tracking_code ) && class_exists( 'Exacoat_Tracking_Pool' ) ) {
+			$target_c = in_array( strtolower( (string) $carrier_val ), [ 'jne', 'sicepat' ], true )
+				? strtolower( (string) $carrier_val )
+				: ( in_array( strtolower( (string) $detected_carrier ), [ 'jne', 'sicepat' ], true ) ? strtolower( (string) $detected_carrier ) : '' );
+			if ( ! empty( $target_c ) ) {
+				$assigned = Exacoat_Tracking_Pool::auto_assign_order_tracking( $order_id );
+				if ( $assigned ) {
+					$ref_order = wc_get_order( $order_id );
+					if ( $ref_order ) {
+						$order         = $ref_order;
+						$tracking_code = trim( (string) $order->get_meta( 'tracking_number' ) );
+						$carrier_val   = trim( (string) $order->get_meta( 'carrier_id' ) ) ?: $target_c;
+					}
+				}
+			}
 		}
 
 		$carrier_labels = [
