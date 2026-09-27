@@ -50,6 +50,7 @@ class Exacoat_Affiliate_Manager {
 
 		// WooCommerce Cart and Checkout Creator Discount integration
 		add_action( 'woocommerce_cart_calculate_fees', [ __CLASS__, 'apply_creator_discount_to_cart' ], 20, 1 );
+		add_filter( 'woocommerce_coupon_is_valid', [ __CLASS__, 'prevent_coupon_with_creator_discount' ], 20, 3 );
 
 		// Storefront toast for applied creator discount
 		add_action( 'wp_footer', [ __CLASS__, 'render_creator_discount_toast' ] );
@@ -494,6 +495,15 @@ class Exacoat_Affiliate_Manager {
 
 		$creator_name = self::get_creator_display_name( $affiliate );
 
+		// Creator discounts cannot be combined with promotional coupon codes (except customer store credit)
+		$applied_coupons = (array) $cart->get_applied_coupons();
+		$promo_coupons   = array_filter( $applied_coupons, function( $code ) {
+			return ! in_array( strtolower( trim( (string) $code ) ), [ 'store credit', 'store-credit', 'store_credit' ], true );
+		} );
+		if ( ! empty( $promo_coupons ) ) {
+			return;
+		}
+
 		// Calculate eligible product subtotal (excluding shipping and taxes)
 		$subtotal = 0.0;
 		foreach ( $cart->get_cart() as $cart_item ) {
@@ -515,6 +525,23 @@ class Exacoat_Affiliate_Manager {
 		// Native WooCommerce negative fee
 		$fee_label = sprintf( 'Creator Discount (%g%% - %s)', $discount_rate, $creator_name );
 		$cart->add_fee( $fee_label, -$discount_amount, false );
+	}
+
+	/**
+	 * Prevent promotional coupon codes from being used when an active creator discount is applied.
+	 */
+	public static function prevent_coupon_with_creator_discount( bool $is_valid, \WC_Coupon $coupon, ?\WC_Discounts $discounts = null ): bool {
+		$code = strtolower( trim( (string) $coupon->get_code() ) );
+		if ( in_array( $code, [ 'store credit', 'store-credit', 'store_credit' ], true ) ) {
+			return $is_valid;
+		}
+
+		$affiliate = self::get_active_referred_affiliate();
+		if ( $affiliate && ! empty( $affiliate->discount_rate ) && (float) $affiliate->discount_rate > 0 ) {
+			throw new \Exception( __( 'Coupon codes cannot be combined with creator discounts.', 'exacoat-core' ) );
+		}
+
+		return $is_valid;
 	}
 
 	/**
