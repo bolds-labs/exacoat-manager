@@ -2508,9 +2508,7 @@ class Exacoat_Configurator_Engine {
 				}
 				$layer_finish_slugs = array_values( array_unique( $layer_finish_slugs ) );
 
-				$is_primary_layer = in_array( strtolower( trim( $layer_name ) ), [ 'back', 'back skin', 'top', 'top lid', 'device', 'body', 'main', 'base', 'full' ], true )
-					|| in_array( $layer_slug, [ 'back', 'back-skin', 'top', 'top-lid', 'main', 'device' ], true )
-					|| ( $idx === 0 && ! in_array( $layer_slug, [ 'series', 'version', 'connectivity', 'model' ], true ) && ! preg_match( '/\b(series|version|connectivity|model)\b/i', $layer_name ) );
+				$is_primary_layer = ( $idx === 0 );
 
 				$normalized_layers[] = [
 					'id'                    => $layer_slug,
@@ -3051,23 +3049,12 @@ class Exacoat_Configurator_Engine {
 
 				// Ensure ONLY the first skin layer is primary and free (the base skin is already covered by base_price).
 				// All subsequent layers (index > 0) are accents/addons and must retain/have an extra_price.
+				// Only the very first layer (index 0) is the base skin covered by the product base_price (extra_price = 0).
+				// All subsequent layers (index > 0) are additional customizable parts and must never be group primary.
 				foreach ( $profile['layers'] as $idx => &$l ) {
-					$l_name_clean = trim( strtolower( $l['name'] ?? '' ) );
-					$l_id_clean   = trim( strtolower( $l['id'] ?? '' ) );
+					$is_base = ( $idx === 0 );
 
-					$is_addon_or_accent = ( isset( $l['group'] ) && in_array( $l['group'], [ 'accent', 'protection', 'addon', 'secondary' ], true ) )
-						|| ! empty( $l['is_optional'] )
-						|| preg_match( '/\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm|bottom|panel|lens)\b/i', $l_name_clean )
-						|| preg_match( '/\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm|bottom|panel|lens)\b/i', $l_id_clean );
-
-					$is_primary = ( $idx === 0 ) && ! $is_addon_or_accent && (
-						( isset( $l['group'] ) && $l['group'] === 'primary' )
-						|| in_array( $l_id_clean, [ 'back', 'back-skin', 'top', 'top-lid', 'top-bottom', 'device', 'main' ], true )
-						|| in_array( $l_name_clean, [ 'back', 'back skin', 'top', 'top skin', 'top lid', 'top + bottom', 'main body', 'full body', 'device body', 'device' ], true )
-						|| ( ! in_array( $l_id_clean, [ 'series', 'version', 'connectivity', 'model' ], true ) && ! preg_match( '/\b(series|version|connectivity|model)\b/i', $l_name_clean ) )
-					);
-
-					if ( $is_primary ) {
+					if ( $is_base ) {
 						if ( empty( $l['group'] ) || $l['group'] !== 'primary' ) {
 							$l['group'] = 'primary';
 							$layers_modified = true;
@@ -3418,25 +3405,12 @@ class Exacoat_Configurator_Engine {
 			}
 			$profile['layers'] = $pruned_layers;
 
-			// Ensure ONLY the first skin layer is primary and free (the base skin is already covered by base_price).
-			// All subsequent layers (index > 0) are accents/addons and must retain/have an extra_price.
+			// Only the very first layer (index 0) is the base skin covered by base_price (extra_price = 0).
+			// All subsequent layers (index > 0) are additional customizable parts and must never be group primary.
 			foreach ( $profile['layers'] as $idx => &$layer ) {
-				$l_name_clean = trim( strtolower( $layer['name'] ?? '' ) );
-				$l_id_clean   = trim( strtolower( $layer['id'] ?? '' ) );
+				$is_base = ( $idx === 0 );
 
-				$is_addon_or_accent = ( isset( $layer['group'] ) && in_array( $layer['group'], [ 'accent', 'protection', 'addon', 'secondary' ], true ) )
-					|| ! empty( $layer['is_optional'] )
-					|| preg_match( '/\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm|bottom|panel|lens)\b/i', $l_name_clean )
-					|| preg_match( '/\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm|bottom|panel|lens)\b/i', $l_id_clean );
-
-				$is_primary = ( $idx === 0 ) && ! $is_addon_or_accent && (
-					( isset( $layer['group'] ) && $layer['group'] === 'primary' )
-					|| in_array( $l_id_clean, [ 'back', 'back-skin', 'top', 'top-lid', 'top-bottom', 'device', 'main' ], true )
-					|| in_array( $l_name_clean, [ 'back', 'back skin', 'top', 'top skin', 'top lid', 'top + bottom', 'main body', 'full body', 'device body', 'device' ], true )
-					|| ( ! in_array( $l_id_clean, [ 'series', 'version', 'connectivity', 'model' ], true ) && ! preg_match( '/\b(series|version|connectivity|model)\b/i', $l_name_clean ) )
-				);
-
-				if ( $is_primary ) {
+				if ( $is_base ) {
 					$layer['group'] = 'primary';
 					$layer['extra_price'] = 0;
 				} else {

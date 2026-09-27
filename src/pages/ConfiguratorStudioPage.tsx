@@ -4713,24 +4713,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     editingProfile.layers.forEach((layer, idx) => {
       const isSelected = selectedSimLayers[layer.id] ?? (layer.default_selected || layer.is_required);
       if (isSelected) {
-        const isAddonOrAccent =
-          layer.group === 'accent' ||
-          layer.group === 'protection' ||
-          layer.group === 'addon' ||
-          Boolean(layer.is_optional) ||
-          /\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm)\b/i.test(layer.name || '') ||
-          /\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm)\b/i.test(layer.id || '');
-
-        const isPrimary = !isAddonOrAccent && (
-          layer.group === 'primary' ||
-          layer.id === 'back' ||
-          layer.id === 'back-skin' ||
-          layer.id === 'top' ||
-          layer.id === 'top-lid' ||
-          /^(back|back skin|top|top skin|top lid|main body|full body|device body)$/i.test((layer.name || '').trim()) ||
-          (idx === 0 && !/\b(series|version|connectivity|model)\b/i.test(layer.name || '') && layer.id !== 'series' && layer.id !== 'version')
-        );
-
+        const isPrimary = idx === 0;
         const effectiveLayerExtra = isPrimary ? 0 : (Number(layer.extra_price) || 0);
         total += effectiveLayerExtra;
 
@@ -8569,23 +8552,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               const fSlug = finish.slug || finish.id;
                               const currentPartSlug = selectedLayerFinishes[activeTestPartId] || selectedSimFinish;
                               const isSelected = currentPartSlug === fSlug || currentPartSlug === finish.id;
-                              const isAddonOrAccent =
-                                activeTestLayer?.group === 'accent' ||
-                                activeTestLayer?.group === 'protection' ||
-                                activeTestLayer?.group === 'addon' ||
-                                Boolean(activeTestLayer?.is_optional) ||
-                                /\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm)\b/i.test(activeTestLayer?.name || '') ||
-                                /\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm)\b/i.test(activeTestLayer?.id || '');
-
-                              const isPrimary = !isAddonOrAccent && (
-                                activeTestLayer?.group === 'primary' ||
-                                activeTestLayer?.id === 'back' ||
-                                activeTestLayer?.id === 'back-skin' ||
-                                activeTestLayer?.id === 'top' ||
-                                activeTestLayer?.id === 'top-lid' ||
-                                /^(back|back skin|top|top skin|top lid|main body|full body|device body)$/i.test((activeTestLayer?.name || '').trim())
-                              );
-
+                              const isPrimary = skinLayers[0]?.id === activeTestLayer?.id;
                               const effectiveLayerExtra = isPrimary ? 0 : (Number(activeTestLayer?.extra_price) || 0);
 
                               const isCustomDeviceFinish = Boolean(
@@ -9319,19 +9286,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   </label>
 
                                   {(() => {
-                                    const isAddonOrAccent =
-                                      currentActiveLayer.group === 'accent' ||
-                                      currentActiveLayer.group === 'protection' ||
-                                      currentActiveLayer.group === 'addon' ||
-                                      (currentActiveLayer.group as string) === 'secondary' ||
-                                      Boolean(currentActiveLayer.is_optional) ||
-                                      /\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm|bottom|panel|lens)\b/i.test(currentActiveLayer.name || '') ||
-                                      /\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm|bottom|panel|lens)\b/i.test(currentActiveLayer.id || '');
-
-                                    // Only the first skin layer can be primary and included in the base price.
-                                    // All subsequent layers (index > 0) are secondary/addons and must have their own extra price.
-                                    const isFirstSkinPart = skinLayers[0]?.id === currentActiveLayer.id;
-                                    const isPrimaryLayer = isFirstSkinPart && !isAddonOrAccent;
+                                    // Only the first skin layer (index 0) is the base skin covered by the product base price.
+                                    // All subsequent layers (index > 0) are additional customizable parts with their own extra price.
+                                    const isPrimaryLayer = skinLayers[0]?.id === currentActiveLayer.id;
 
                                     return (
                                       <div className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans">
