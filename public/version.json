@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.117",
+  "version": "0.1.118",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.117.zip?v=0.1.117",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.118.zip?v=0.1.118",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-27T20:40:40.378Z",
+  "last_updated": "2026-09-27T20:51:07.405Z",
   "sections": {
-    "changelog": "### Version 0.1.117\n- Fix primary layer detection in configurator engine so optional/accent parts (e.g. Additional Camera & Back Glass, Additional Back Glass) are never coerced into primary base layers with 0 extra price\n- Unify configurator part slug generation to kebab-case hyphens\n- Add Additional Back Glass (IDR 60.000) preset across studio preset packs and common parts"
+    "changelog": "### Version 0.1.118\n- Fix PNG alpha channel stripping on upload: eliminate destructive imagetruecolortopalette quantization in class-image-sizes and class-configurator-engine, strictly preserving full 32-bit RGBA transparency\n- Fix primary layer detection in configurator engine so optional/accent parts are never coerced into primary base layers with 0 extra price"
   }
 }

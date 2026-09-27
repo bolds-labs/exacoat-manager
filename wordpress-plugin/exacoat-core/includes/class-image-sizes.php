@@ -455,43 +455,20 @@ class Exacoat_Image_Sizes {
 				if ( function_exists( 'imagecreatefrompng' ) && function_exists( 'imagepng' ) ) {
 					$im = @imagecreatefrompng( $file_path );
 					if ( $im ) {
+						// Standard PNG level 9 lossless re-compression (strictly preserves full 32-bit RGBA alpha channel)
+						// Never use imagetruecolortopalette() on PNGs as GD palette quantization destroys the alpha channel
 						imagealphablending( $im, false );
 						imagesavealpha( $im, true );
 
-						// For huge PNGs (> 500KB), quantize to 128-color palette while preserving alpha (matches Manager)
-						if ( $orig_size >= $min_size_bytes && imageistruecolor( $im ) && function_exists( 'imagetruecolortopalette' ) && function_exists( 'imagecreatetruecolor' ) ) {
-							$palette_im = imagecreatetruecolor( $orig_w, $orig_h );
-							imagealphablending( $palette_im, false );
-							imagesavealpha( $palette_im, true );
-							imagecopy( $palette_im, $im, 0, 0, 0, 0, $orig_w, $orig_h );
-							imagetruecolortopalette( $palette_im, true, 128 );
-
-							if ( @imagepng( $palette_im, $tmp_file, 9 ) ) {
-								$tmp_size = (int) @filesize( $tmp_file );
-								$tmp_info = @getimagesize( $tmp_file );
-								if ( $tmp_info && (int) $tmp_info[0] === $orig_w && (int) $tmp_info[1] === $orig_h && $tmp_size > 0 && $tmp_size < $orig_size ) {
-									@rename( $tmp_file, $file_path );
-									$master_compressed = true;
-									$saved_bytes       = $orig_size - $tmp_size;
-								} else {
-									@unlink( $tmp_file );
-								}
-							}
-							imagedestroy( $palette_im );
-						}
-
-						// Fallback: standard PNG level 9 lossless re-compression
-						if ( ! $master_compressed ) {
-							if ( @imagepng( $im, $tmp_file, 9 ) ) {
-								$tmp_size = (int) @filesize( $tmp_file );
-								$tmp_info = @getimagesize( $tmp_file );
-								if ( $tmp_info && (int) $tmp_info[0] === $orig_w && (int) $tmp_info[1] === $orig_h && $tmp_size > 0 && $tmp_size < $orig_size ) {
-									@rename( $tmp_file, $file_path );
-									$master_compressed = true;
-									$saved_bytes       = $orig_size - $tmp_size;
-								} else {
-									@unlink( $tmp_file );
-								}
+						if ( @imagepng( $im, $tmp_file, 9 ) ) {
+							$tmp_size = (int) @filesize( $tmp_file );
+							$tmp_info = @getimagesize( $tmp_file );
+							if ( $tmp_info && (int) $tmp_info[0] === $orig_w && (int) $tmp_info[1] === $orig_h && $tmp_size > 0 && $tmp_size < $orig_size ) {
+								@rename( $tmp_file, $file_path );
+								$master_compressed = true;
+								$saved_bytes       = $orig_size - $tmp_size;
+							} else {
+								@unlink( $tmp_file );
 							}
 						}
 						imagedestroy( $im );
@@ -535,7 +512,7 @@ class Exacoat_Image_Sizes {
 						if ( ! imageistruecolor( $im ) && function_exists( 'imagepalettetotruecolor' ) ) {
 							@imagepalettetotruecolor( $im );
 						}
-						imagealphablending( $im, true );
+						imagealphablending( $im, false );
 						imagesavealpha( $im, true );
 						if ( @imagewebp( $im, $webp_path, self::TARGET_QUALITY ) && file_exists( $webp_path ) && filesize( $webp_path ) > 0 ) {
 							$webp_generated = true;

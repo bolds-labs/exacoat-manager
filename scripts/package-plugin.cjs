@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Fix primary layer detection in configurator engine so optional/accent parts (e.g. Additional Camera & Back Glass, Additional Back Glass) are never coerced into primary base layers with 0 extra price\n- Unify configurator part slug generation to kebab-case hyphens\n- Add Additional Back Glass (IDR 60.000) preset across studio preset packs and common parts`,
+      changelog: `### Version ${version}\n- Fix PNG alpha channel stripping on upload: eliminate destructive imagetruecolortopalette quantization in class-image-sizes and class-configurator-engine, strictly preserving full 32-bit RGBA transparency\n- Fix primary layer detection in configurator engine so optional/accent parts are never coerced into primary base layers with 0 extra price`,
     },
   };
 

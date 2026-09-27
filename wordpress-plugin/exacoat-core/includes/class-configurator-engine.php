@@ -1936,28 +1936,20 @@ class Exacoat_Configurator_Engine {
 			if ( 'image/png' === $mime_type && function_exists( 'imagecreatefrompng' ) ) {
 				$im = @imagecreatefrompng( $file_path );
 				if ( $im ) {
-					imageAlphaBlending( $im, false );
+					// Strictly preserve full 32-bit RGBA alpha channel with level 9 lossless compression
+					// Never quantize truecolor PNGs to palette in GD as imagetruecolortopalette strips alpha transparency
+					imagealphablending( $im, false );
 					imagesavealpha( $im, true );
-					if ( imageistruecolor( $im ) && function_exists( 'imagetruecolortopalette' ) ) {
-						$w = imagesx( $im );
-						$h = imagesy( $im );
-						// Preserve full alpha channel while quantizing RGB colors to 128
-						$palette_im = imagecreatetruecolor( $w, $h );
-						imagealphablending( $palette_im, false );
-						imagesavealpha( $palette_im, true );
-						imagecopy( $palette_im, $im, 0, 0, 0, 0, $w, $h );
-						imagetruecolortopalette( $palette_im, true, $png_colors );
-						$tmp_png = $file_path . '.opt.png';
-						if ( @imagepng( $palette_im, $tmp_png, 9 ) ) {
-							$opt_size = @filesize( $tmp_png );
-							if ( $opt_size && $orig_size && $opt_size < $orig_size ) {
-								@rename( $tmp_png, $file_path );
-							} else {
-								@unlink( $tmp_png );
-							}
+					$tmp_png = $file_path . '.opt.png';
+					if ( @imagepng( $im, $tmp_png, 9 ) ) {
+						$opt_size = @filesize( $tmp_png );
+						if ( $opt_size && $orig_size && $opt_size < $orig_size ) {
+							@rename( $tmp_png, $file_path );
+						} else {
+							@unlink( $tmp_png );
 						}
-						imagedestroy( $palette_im );
 					}
+					imagedestroy( $im );
 				}
 			} elseif ( in_array( $mime_type, [ 'image/jpeg', 'image/jpg' ], true ) && function_exists( 'imagecreatefromjpeg' ) ) {
 				$im = @imagecreatefromjpeg( $file_path );
