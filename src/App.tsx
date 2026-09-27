@@ -32,9 +32,36 @@ const AffiliatePortalApp = React.lazy(() => import('./affiliate/AffiliatePortalA
 
 const getTabFromUrl = (): NavItemKey => {
   if (typeof window === 'undefined') return 'dashboard';
-  const path = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase();
-  const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
-  const key = path || hash;
+
+  // 1. Primary routing mechanism: Hash (#tracking_pool, #/rma, #export, etc.)
+  const rawHash = (window.location.hash || '').replace(/^#\/?/, '').trim().toLowerCase();
+  const cleanHash = rawHash.split('?')[0].split('&')[0].replace(/\/+$/, '');
+
+  // 2. Query param fallback (e.g. ?tab=tracking_pool or ?page=exacoat-manager&tab=rma)
+  let queryTab = '';
+  try {
+    const searchParams = new URLSearchParams(window.location.search);
+    const param = searchParams.get('tab') || searchParams.get('page');
+    if (param && param !== 'exacoat-manager' && param !== 'exacoat-core') {
+      queryTab = param.trim().toLowerCase();
+    }
+  } catch {
+    // Ignore query parsing errors
+  }
+
+  // 3. Pathname fallback (e.g. /orders, /customers; filtering out WordPress admin and static files)
+  let pathTab = '';
+  const rawPath = (window.location.pathname || '').replace(/^\/+|\/+$/g, '').trim().toLowerCase();
+  if (rawPath) {
+    const segments = rawPath.split('/').filter(Boolean);
+    const ignoredSegments = ['wp-admin', 'admin.php', 'index.html', 'index.php'];
+    const validSegments = segments.filter(s => !ignoredSegments.includes(s));
+    if (validSegments.length > 0) {
+      pathTab = validSegments[validSegments.length - 1];
+    }
+  }
+
+  const key = cleanHash || queryTab || pathTab || '';
 
   const urlMap: Record<string, NavItemKey> = {
     '': 'dashboard',
@@ -46,6 +73,8 @@ const getTabFromUrl = (): NavItemKey => {
     'payouts': 'affiliates',
     'orders': 'orders',
     'order': 'orders',
+    'all-orders': 'orders',
+    'all_orders': 'orders',
     'fulfillment': 'orders',
     'products': 'products',
     'product': 'products',
@@ -54,6 +83,7 @@ const getTabFromUrl = (): NavItemKey => {
     'tiktok-products': 'products',
     'configurator': 'configurator',
     'configurator-studio': 'configurator',
+    'configurator_studio': 'configurator',
     'studio': 'configurator',
     'devices': 'configurator',
     'skins': 'configurator',
@@ -93,22 +123,34 @@ const getTabFromUrl = (): NavItemKey => {
     'logs': 'audit',
     'rma': 'rma',
     'rma-claims': 'rma',
+    'rma_claims': 'rma',
+    'rma-claim': 'rma',
+    'rma_claim': 'rma',
     'warranty': 'rma',
     'warranty-claims': 'rma',
+    'warranty_claims': 'rma',
     'warranties': 'rma',
     'claims': 'rma',
+    'claim': 'rma',
     'export': 'export',
     'exports': 'export',
     'export-shipments': 'export',
+    'export_shipments': 'export',
+    'export-shipment': 'export',
+    'export_shipment': 'export',
+    'shipments': 'export',
+    'shipment': 'export',
     'tracking': 'tracking_pool',
     'tracking-pool': 'tracking_pool',
     'tracking_pool': 'tracking_pool',
+    'trackingpool': 'tracking_pool',
+    'pool': 'tracking_pool',
+    'resi': 'tracking_pool',
     'settings': 'settings',
     'config': 'settings',
   };
 
   return urlMap[key] || 'dashboard';
-
 };
 
 const SHOP_MANAGER_ALLOWED_TABS: NavItemKey[] = ['orders', 'reviews', 'rma', 'warranty', 'export', 'tracking_pool'];

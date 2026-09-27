@@ -22,6 +22,7 @@ import {
   Package,
   UserCog,
   Share2,
+  ChevronDown,
   LucideIcon
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -102,6 +103,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     isSimulatingRole 
   } = useAuth();
   const handleSelect = onTabChange || onSelectTab || (() => {});
+
+  const [openSections, setOpenSections] = React.useState<Record<string, boolean>>({});
+
+  const toggleSection = (key: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setOpenSections(prev => {
+      const isCurrentlyOpen = prev[key] ?? false;
+      return { ...prev, [key]: !isCurrentlyOpen };
+    });
+  };
 
   const [isRendered, setIsRendered] = React.useState(isMobileOpen);
   const [isVisible, setIsVisible] = React.useState(false);
@@ -257,13 +268,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 const isItemActive = currentTab === item.key;
                 const isChildActive = Boolean(item.children && item.children.some(c => c.key === currentTab));
                 const isSectionActive = isItemActive || isChildActive;
+                const isExpanded = openSections[item.key] ?? isSectionActive;
 
                 return (
                   <div key={item.key} className="space-y-0.5">
                     <button
                       onClick={() => {
                         handleSelect(item.key);
-                        if (isMobile) onMobileClose?.();
+                        if (item.children) {
+                          setOpenSections(prev => ({ ...prev, [item.key]: true }));
+                        } else if (isMobile) {
+                          onMobileClose?.();
+                        }
                       }}
                       className={clsx(
                         'w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group relative border cursor-pointer',
@@ -280,16 +296,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <span className="truncate">{item.label}</span>
                       </div>
 
-                      {item.badge !== undefined && (
-                        <span className={clsx(
-                          'px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold shrink-0',
-                          item.badgeVariant === 'amber'
-                            ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30'
-                            : 'bg-zinc-200 dark:bg-white/[0.06] text-zinc-800 dark:text-[#f3aa18] border border-zinc-300 dark:border-white/[0.1]'
-                        )}>
-                          {item.badge}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {item.badge !== undefined && (
+                          <span className={clsx(
+                            'px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold shrink-0',
+                            item.badgeVariant === 'amber'
+                              ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30'
+                              : 'bg-zinc-200 dark:bg-white/[0.06] text-zinc-800 dark:text-[#f3aa18] border border-zinc-300 dark:border-white/[0.1]'
+                          )}>
+                            {item.badge}
+                          </span>
+                        )}
+
+                        {item.children && (
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`Toggle ${item.label} sub-menu`}
+                            onClick={(e) => toggleSection(item.key, e)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                toggleSection(item.key);
+                              }
+                            }}
+                            className="p-0.5 rounded hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                          >
+                            <ChevronDown className={clsx(
+                              "w-3.5 h-3.5 text-zinc-400 transition-transform duration-200",
+                              isExpanded && "rotate-180"
+                            )} />
+                          </div>
+                        )}
+                      </div>
 
                       {isSectionActive && (
                         <div className="w-1 h-3.5 rounded-full bg-lime-500 dark:bg-[#f3aa18] absolute left-0 top-1/2 -translate-y-1/2" />
@@ -297,7 +336,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </button>
 
                     {/* Sub-menu items for parent containers */}
-                    {item.children && isSectionActive && (
+                    {item.children && isExpanded && (
                       <div className="pl-6 pr-1 py-1 space-y-0.5 border-l border-zinc-200 dark:border-white/[0.06] ml-4 mt-0.5">
                         {item.children.map(child => {
                           const isSubActive = currentTab === child.key;
@@ -309,7 +348,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 if (isMobile) onMobileClose?.();
                               }}
                               className={clsx(
-                'w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] transition-colors cursor-pointer',
+                                'w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] transition-colors cursor-pointer',
                                 isSubActive
                                   ? 'bg-lime-500/10 text-lime-700 dark:text-[#f3aa18] font-bold'
                                   : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 hover:bg-zinc-200/40 dark:hover:bg-white/[0.02]'

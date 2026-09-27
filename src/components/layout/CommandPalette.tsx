@@ -235,7 +235,6 @@ const WORKSPACE_PAGES: WorkspaceAction[] = [
 
 const SHOP_MANAGER_ALLOWED_TABS: NavItemKey[] = [
   'orders', 
-  'customers', 
   'reviews', 
   'rma', 
   'warranty', 
