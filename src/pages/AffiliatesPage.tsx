@@ -1889,7 +1889,7 @@ export const AffiliatesPage: React.FC = () => {
           </GlassCard>
 
           {/* Traffic Ledger & Filter Bar */}
-          <GlassCard className="p-6 border border-white/[0.08] space-y-4">
+          <GlassCard className="p-6 border border-white/[0.08] space-y-4 overflow-visible relative z-20">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.06]">
               <div>
                 <h3 className="text-sm font-bold text-white font-['Chakra_Petch'] uppercase tracking-wider">

@@ -542,7 +542,7 @@ export const AiToolsPage: React.FC = () => {
       {activeSection === 'models' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Google Gemini Card */}
-          <GlassCard className="p-6 space-y-5 flex flex-col justify-between">
+          <GlassCard className="p-6 space-y-5 flex flex-col justify-between overflow-visible relative z-20">
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/[0.06] pb-3">
                 <div className="flex items-center gap-3">
@@ -671,7 +671,7 @@ export const AiToolsPage: React.FC = () => {
           </GlassCard>
 
           {/* OpenAI Card */}
-          <GlassCard className="p-6 space-y-5 flex flex-col justify-between">
+          <GlassCard className="p-6 space-y-5 flex flex-col justify-between overflow-visible relative z-20">
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/[0.06] pb-3">
                 <div className="flex items-center gap-3">

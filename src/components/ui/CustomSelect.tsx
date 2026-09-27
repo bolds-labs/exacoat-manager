@@ -22,6 +22,7 @@ export interface CustomSelectProps {
   className?: string;
   dropdownClassName?: string;
   disabled?: boolean;
+  dropUp?: boolean;
 }
 
 export const CustomSelect: React.FC<CustomSelectProps> = ({
@@ -34,11 +35,29 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   className,
   dropdownClassName,
   disabled = false,
+  dropUp,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [internalDropUp, setInternalDropUp] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const isDropUp = dropUp !== undefined ? dropUp : internalDropUp;
+
+  // Auto-detect viewport collision when opened
+  useEffect(() => {
+    if (isOpen && containerRef.current && dropUp === undefined) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      if (spaceBelow < 260 && spaceAbove > spaceBelow) {
+        setInternalDropUp(true);
+      } else {
+        setInternalDropUp(false);
+      }
+    }
+  }, [isOpen, dropUp]);
 
   const selectedOption = options.find(opt => opt.value === value) || (value ? { value, label: value, subtitle: 'Active selection' } : undefined);
 
@@ -138,7 +157,8 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
       {isOpen && (
         <div
           className={clsx(
-            'absolute left-0 right-0 top-full mt-1.5 z-50 rounded-2xl overflow-hidden shadow-2xl',
+            'absolute left-0 right-0 z-50 rounded-2xl overflow-hidden shadow-2xl',
+            isDropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5',
             'bg-[#0c0c0e] border border-white/[0.14] backdrop-blur-2xl',
             'animate-in fade-in zoom-in-95 duration-150',
             dropdownClassName

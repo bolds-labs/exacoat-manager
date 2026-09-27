@@ -258,7 +258,7 @@ export const TestingSandboxPage: React.FC<TestingSandboxPageProps> = () => {
 
       {/* TAB 1: TRANSACTIONAL EMAILS */}
       {activeTab === 'emails' && (
-        <GlassCard className="p-6 md:p-8 space-y-6">
+        <GlassCard className="p-6 md:p-8 space-y-6 overflow-visible relative z-30">
           <div className="border-b border-zinc-200 dark:border-white/[0.06] pb-4 flex items-center justify-between">
             <div>
               <h3 className="text-base font-bold text-zinc-900 dark:text-white">
@@ -270,7 +270,7 @@ export const TestingSandboxPage: React.FC<TestingSandboxPageProps> = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 font-mono text-xs">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 font-mono text-xs relative z-40">
             <div className="space-y-4">
               <CustomSelect
                 label="Select Email Event Template:"

@@ -2796,7 +2796,7 @@ class Exacoat_Email_Engine {
                   <a href=\"{$unsubscribe_url}\" style=\"color:#71717a;text-decoration:underline;\">Unsubscribe from cart reminders</a>
                 </p>
                 <p style=\"margin:0;font-size:11px;color:#a1a1aa;letter-spacing:0.2px;\">
-                  Exacoat &bull; Ruby Commercial TB-12, Summarecon Bekasi, Bekasi Utara, West Java 17142
+                  &copy; Exacoat
                 </p>
               </td>
             </tr>

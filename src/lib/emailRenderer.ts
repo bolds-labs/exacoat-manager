@@ -1373,7 +1373,7 @@ function renderAbandonedCartEmail(event: string, data: Record<string, any>): Ren
                       <p style="margin:0 0 10px;font-size:11.5px;color:#a1a1aa;">
                         <a href="${unsubscribeUrl}" target="_blank" rel="noopener noreferrer" style="color:#71717a;text-decoration:underline;">Unsubscribe from cart reminders</a>
                       </p>
-                      <p style="margin:0;font-size:11px;color:#a1a1aa;letter-spacing:0.2px;">&copy; Exacoat &bull; Ruby Commercial TB-12, Summarecon Bekasi, Bekasi Utara, West Java 17142</p>
+                      <p style="margin:0;font-size:11px;color:#a1a1aa;letter-spacing:0.2px;">&copy; Exacoat</p>
                     </td>
                   </tr>
                 </table>

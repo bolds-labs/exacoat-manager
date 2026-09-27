@@ -1127,7 +1127,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
         <div className="lg:col-span-7 space-y-4">
 
           {/* AI Copywriter Assistant Drawer / Quick Assist Bar */}
-          <GlassCard className="p-4 md:p-5 space-y-3.5 border-amber-500/25 bg-amber-500/[0.02]">
+          <GlassCard className="p-4 md:p-5 space-y-3.5 border-amber-500/25 bg-amber-500/[0.02] overflow-visible relative z-20">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center shadow-sm">
