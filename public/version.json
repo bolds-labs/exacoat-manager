@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.123",
+  "version": "0.1.124",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.123.zip?v=0.1.123",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.124.zip?v=0.1.124",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-27T21:56:32.191Z",
+  "last_updated": "2026-09-27T22:02:18.475Z",
   "sections": {
-    "changelog": "### Version 0.1.123\n- Automatically extract and trigger category page ISR revalidation on product save/update, targeting production exacoat.com\n- Fix PNG alpha channel stripping on upload with lossless level-9 compression"
+    "changelog": "### Version 0.1.124\n- Automatically extract and trigger category page ISR revalidation on product save/update, targeting production exacoat.com\n- Fix PNG alpha channel stripping on upload with lossless level-9 compression"
   }
 }

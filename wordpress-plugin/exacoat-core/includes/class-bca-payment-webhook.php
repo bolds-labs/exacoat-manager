@@ -41,6 +41,7 @@ class Exacoat_BCA_Payment_Webhook {
 	public static function init() {
 		// 1. Register REST API endpoints
 		add_action( 'rest_api_init', [ __CLASS__, 'register_routes' ] );
+		add_action( 'parse_request', [ __CLASS__, 'handle_direct_query_request' ] );
 
 		// 2. Cron queue processor
 		add_action( self::CRON_ACTION, [ __CLASS__, 'process_queue' ] );
@@ -144,6 +145,30 @@ class Exacoat_BCA_Payment_Webhook {
 	}
 
 	/**
+	 * Direct query param fallback (e.g. https://cms.exacoat.com/?exacoat_bca_webhook=1)
+	 */
+	public static function handle_direct_query_request( $wp ) {
+		if ( ! empty( $_GET['exacoat_bca_webhook'] ) || ( isset( $wp->query_vars['exacoat_bca_webhook'] ) ) ) {
+			if ( 'GET' === ( $_SERVER['REQUEST_METHOD'] ?? 'GET' ) ) {
+				wp_send_json( [
+					'success'          => true,
+					'service'          => 'Exacoat BCA Automated Payment Webhook',
+					'status'           => 'active',
+					'method_supported' => 'POST',
+					'message'          => 'BCA Webhook listener is active. Send POST request with mutation data.',
+					'timestamp'        => current_time( 'mysql' ),
+				], 200 );
+			}
+			$request = new \WP_REST_Request( 'POST', '/exacoat-core/v1/bca-webhook' );
+			foreach ( $_REQUEST as $key => $val ) {
+				$request->set_param( $key, $val );
+			}
+			$res = self::handle_webhook_request( $request );
+			wp_send_json( $res->get_data(), $res->get_status() );
+		}
+	}
+
+	/**
 	 * REST Callback: Get BCA Webhook status and unmatched mutations
 	 */
 	public static function rest_get_status( \WP_REST_Request $request ): \WP_REST_Response {
@@ -220,6 +245,33 @@ class Exacoat_BCA_Payment_Webhook {
 	public static function handle_webhook_request( \WP_REST_Request $request ): \WP_REST_Response {
 		$params = $request->get_params();
 
+		// 1. Balance update from MesinOtomatis ($_POST['target'] == 'balance')
+		$target = strtolower( sanitize_text_field( $params['target'] ?? '' ) );
+		if ( 'balance' === $target ) {
+			$raw_balance = $params['new'] ?? ( $params['balance'] ?? 0 );
+			$balance     = self::parse_amount( $raw_balance );
+			$bank        = sanitize_text_field( $params['bank'] ?? 'bca' );
+			$account     = sanitize_text_field( $params['account'] ?? '' );
+			$date_update = sanitize_text_field( $params['date_update'] ?? current_time( 'mysql' ) );
+
+			update_option( 'exa_bca_last_balance', [
+				'bank'        => $bank,
+				'account'     => $account,
+				'balance'     => $balance,
+				'date_update' => $date_update,
+			], false );
+
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log( 'info', 'bca_webhook', sprintf( 'Received BCA Balance Update: Rp %s for account %s', number_format( $balance, 0, ',', '.' ), $account ), $params );
+			}
+
+			return new \WP_REST_Response( [
+				'success' => true,
+				'message' => 'Balance update received and recorded.',
+				'balance' => $balance,
+			], 200 );
+		}
+
 		// Extract amount from amount, nominal, or kredit
 		$raw_amount = $params['amount'] ?? ( $params['nominal'] ?? ( $params['kredit'] ?? 0 ) );
 		$amount     = self::parse_amount( $raw_amount );
@@ -230,19 +282,21 @@ class Exacoat_BCA_Payment_Webhook {
 			: ( isset( $params['keterangan'] ) ? sanitize_textarea_field( wp_unslash( $params['keterangan'] ) ) : '' );
 
 		// Filter transaction type: skip debits (money out)
+		// MesinOtomatis sends 'D' for Debit and 'K' for Kredit
 		$type = strtoupper( sanitize_text_field( $params['type'] ?? ( $params['tipe'] ?? '' ) ) );
-		if ( 'DB' === $type || 'DEBIT' === $type ) {
+		if ( 'D' === $type || 'DB' === $type || 'DEBIT' === $type ) {
 			return new \WP_REST_Response( [
 				'success' => true,
 				'message' => 'Debit transaction skipped.',
 			], 200 );
 		}
 
+		// Ping / test / zero amount verification from MesinOtomatis URL setup
 		if ( $amount <= 0 ) {
 			return new \WP_REST_Response( [
-				'success' => false,
-				'message' => 'Invalid or zero amount received.',
-			], 400 );
+				'success' => true,
+				'message' => 'Webhook ping / test acknowledged.',
+			], 200 );
 		}
 
 		// Log raw incoming webhook event
