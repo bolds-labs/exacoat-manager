@@ -110,9 +110,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           </div>
 
           <div className="pt-1">
-            <h1 className="text-xl sm:text-2xl font-bold font-['Chakra_Petch'] text-white tracking-tight">
-              {isForgotPassword ? 'Reset Password' : (isAffiliateMode ? 'Creator Sign In' : 'Admin Sign In')}
-            </h1>
+            {isForgotPassword ? (
+              <h1 className="text-xl sm:text-2xl font-bold font-['Chakra_Petch'] text-white tracking-tight">
+                Reset Password
+              </h1>
+            ) : !isAffiliateMode ? (
+              <h1 className="text-xl sm:text-2xl font-bold font-['Chakra_Petch'] text-white tracking-tight">
+                Admin Sign In
+              </h1>
+            ) : null}
             <p className="text-[12px] text-zinc-400 mt-1 leading-relaxed">
               {isForgotPassword
                 ? (isAffiliateMode 
@@ -302,7 +308,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 </>
               ) : (
                 <>
-                  <span>{isAffiliateMode ? 'Sign In to Creator Portal' : 'Sign In to Workstation'}</span>
+                  <span>{isAffiliateMode ? 'Sign In' : 'Sign In to Workstation'}</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}

@@ -3,13 +3,8 @@ import {
   ShieldCheck, 
   Check, 
   ArrowRight, 
-  AlertCircle,
-  ExternalLink,
-  User,
-  Mail,
-  Lock,
-  Globe,
-  FileText
+  AlertCircle, 
+  ExternalLink 
 } from 'lucide-react';
 import { ExacoatLogo } from '../../components/ui/ExacoatLogo';
 import { SectionPill } from '../../components/ui/SectionPill';
@@ -242,11 +237,8 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
               </div>
 
               <div className="pt-1">
-                <h1 className="text-xl sm:text-2xl font-bold font-['Chakra_Petch'] text-white tracking-tight">
-                  Creator Application
-                </h1>
-                <p className="text-xs text-zinc-400 mt-1 leading-relaxed max-w-md mx-auto">
-                  Earn a <strong className="text-white">20% net commission</strong> on verified customer orders with a 30-day cookie window and direct BCA and Mandiri bank transfers.
+                <p className="text-xs text-zinc-400 leading-relaxed max-w-md mx-auto">
+                  Earn a <strong className="text-white">20% net commission</strong> on verified customer orders with a 30-day cookie window.
                 </p>
               </div>
             </div>
@@ -255,10 +247,8 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
               {/* Username */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 text-[#f3aa18]" />
-                  <span>Username</span>
-                  <span className="text-[#f3aa18]">*</span>
+                <label className="text-xs font-semibold text-zinc-300">
+                  Username <span className="text-[#f3aa18]">*</span>
                 </label>
                 <input
                   type="text"
@@ -266,7 +256,7 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
                   value={username}
                   onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
                   placeholder="e.g. techreviewid"
-                  className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs font-mono text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
+                  className="h-11 w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 text-xs sm:text-sm font-mono text-white placeholder:text-zinc-500 outline-none transition-all hover:border-white/[0.16] focus:border-[#f3aa18]/70 focus:bg-white/[0.05] focus:ring-4 focus:ring-[#f3aa18]/[0.08]"
                 />
                 <p className="text-[11px] text-zinc-400">
                   Initial referral URL: <span className="font-mono text-[#f3aa18]">exacoat.com/?x={username || 'username'}</span>
@@ -285,7 +275,7 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
                     placeholder="First Name"
-                    className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
+                    className="h-11 w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 text-xs sm:text-sm text-white placeholder:text-zinc-500 outline-none transition-all hover:border-white/[0.16] focus:border-[#f3aa18]/70 focus:bg-white/[0.05] focus:ring-4 focus:ring-[#f3aa18]/[0.08]"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -298,17 +288,15 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     placeholder="Last Name"
-                    className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
+                    className="h-11 w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 text-xs sm:text-sm text-white placeholder:text-zinc-500 outline-none transition-all hover:border-white/[0.16] focus:border-[#f3aa18]/70 focus:bg-white/[0.05] focus:ring-4 focus:ring-[#f3aa18]/[0.08]"
                   />
                 </div>
               </div>
 
               {/* Email Address */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                  <Mail className="w-3.5 h-3.5 text-[#f3aa18]" />
-                  <span>Email Address</span>
-                  <span className="text-[#f3aa18]">*</span>
+                <label className="text-xs font-semibold text-zinc-300">
+                  Email Address <span className="text-[#f3aa18]">*</span>
                 </label>
                 <input
                   type="email"
@@ -316,16 +304,14 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="creator@gmail.com"
-                  className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
+                  className="h-11 w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 text-xs sm:text-sm text-white placeholder:text-zinc-500 outline-none transition-all hover:border-white/[0.16] focus:border-[#f3aa18]/70 focus:bg-white/[0.05] focus:ring-4 focus:ring-[#f3aa18]/[0.08]"
                 />
               </div>
 
               {/* Password */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-[#f3aa18]" />
-                  <span>Password</span>
-                  <span className="text-[#f3aa18]">*</span>
+                <label className="text-xs font-semibold text-zinc-300">
+                  Password <span className="text-[#f3aa18]">*</span>
                 </label>
                 <input
                   type="password"
@@ -333,7 +319,7 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Minimum 8 characters"
-                  className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
+                  className="h-11 w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 text-xs sm:text-sm text-white placeholder:text-zinc-500 outline-none transition-all hover:border-white/[0.16] focus:border-[#f3aa18]/70 focus:bg-white/[0.05] focus:ring-4 focus:ring-[#f3aa18]/[0.08]"
                 />
               </div>
 
@@ -370,10 +356,8 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
 
               {/* Your channel, username, or website */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                  <Globe className="w-3.5 h-3.5 text-[#f3aa18]" />
-                  <span>Your Channel, Handle, or Website</span>
-                  <span className="text-[#f3aa18]">*</span>
+                <label className="text-xs font-semibold text-zinc-300">
+                  Your Channel, Handle, or Website <span className="text-[#f3aa18]">*</span>
                 </label>
                 <input
                   type="text"
@@ -381,16 +365,14 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
                   value={promotionChannel}
                   onChange={(e) => setPromotionChannel(e.target.value)}
                   placeholder="https://youtube.com/@channel or @tiktok_username"
-                  className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
+                  className="h-11 w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 text-xs sm:text-sm text-white placeholder:text-zinc-500 outline-none transition-all hover:border-white/[0.16] focus:border-[#f3aa18]/70 focus:bg-white/[0.05] focus:ring-4 focus:ring-[#f3aa18]/[0.08]"
                 />
               </div>
 
               {/* How will you promote us? */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-[#f3aa18]" />
-                  <span>How will you promote Exacoat?</span>
-                  <span className="text-[#f3aa18]">*</span>
+                <label className="text-xs font-semibold text-zinc-300">
+                  How will you promote Exacoat? <span className="text-[#f3aa18]">*</span>
                 </label>
                 <textarea
                   rows={3}
@@ -398,7 +380,7 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
                   value={promotionNotes}
                   onChange={(e) => setPromotionNotes(e.target.value)}
                   placeholder="Describe your audience, review formats, or where you will share your referral links..."
-                  className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all resize-none"
+                  className="w-full bg-[#0a0a0c]/80 border border-white/[0.1] rounded-xl p-4 text-xs sm:text-sm text-white placeholder:text-zinc-500 outline-none transition-all hover:border-white/[0.16] focus:border-[#f3aa18]/70 focus:bg-white/[0.05] focus:ring-4 focus:ring-[#f3aa18]/[0.08] resize-none"
                 />
               </div>
 
@@ -409,7 +391,7 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
                   <span>Program Policy Highlights</span>
                 </div>
                 <p className="leading-relaxed">
-                  Commissions are 20% on product subtotal (excluding shipping and taxes). Self referrals are strictly prohibited. Cancelled or refunded orders forfeit commission. Payout minimum is Rp 250.000 via BCA or Mandiri.
+                  Commissions are 20% on product subtotal (excluding shipping and taxes). Self referrals are strictly prohibited. Cancelled or refunded orders forfeit commission. Payout minimum is Rp 250.000.
                 </p>
               </div>
 
