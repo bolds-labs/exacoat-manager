@@ -1783,19 +1783,24 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
     }
   </style>
 </head>
-<body bgcolor="${bgOuter}" style="margin:0;padding:0;background-color:${bgOuter};font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<body bgcolor="${bgOuter}" style="margin:0;padding:24px 0 60px;background-color:${bgOuter};font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
   <!-- Preview Preheader (Hidden snippet) -->
   <div style="display:none;font-size:1px;color:${bgOuter};line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
     ${preheader}
   </div>
 
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${bgOuter}" style="background-color:${bgOuter};padding:48px 12px 64px;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${bgOuter}" style="background-color:${bgOuter};width:100%;margin:0;padding:0;">
+    <!-- Top breathing room spacer before webview link -->
     <tr>
-      <td align="center">
+      <td height="36" style="height:36px;line-height:36px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+    </tr>
+
+    <tr>
+      <td align="center" style="padding:0 16px;">
         <!-- Top Webview Link with generous breathing space -->
-        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;margin-bottom:20px;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;margin:0 auto 20px;">
           <tr>
-            <td align="center" style="font-size:11px;color:#71717a;line-height:1.5;padding:12px 0 8px;">
+            <td align="center" style="font-size:11px;color:#71717a;line-height:1.5;padding:0 0 6px;">
               If you cannot see this email properly, please <a href="{{webview_url}}" target="_blank" rel="noopener noreferrer" style="color:#a1a1aa;text-decoration:underline;">click here</a>.
             </td>
           </tr>
@@ -1869,6 +1874,11 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
           </tbody>
         </table>
       </td>
+    </tr>
+
+    <!-- Bottom breathing room spacer below card so it never touches bottom -->
+    <tr>
+      <td height="60" style="height:60px;line-height:60px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
     </tr>
   </table>
 </body>

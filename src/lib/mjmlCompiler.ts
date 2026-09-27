@@ -9,16 +9,31 @@ export interface MjmlCompilationResult {
   success: boolean;
 }
 
+export function sanitizeMjmlContent(code: string): string {
+  if (!code) return '';
+  // Strip illegal attributes from <mj-text ...> (border, border-radius, background, background-color)
+  return code.replace(/<mj-text\b([^>]*?)>/gi, (_match, attrs) => {
+    const cleanAttrs = attrs
+      .replace(/\s+(?:border|border-radius|border-top|border-bottom|border-left|border-right)=["'][^"']*["']/gi, '')
+      .replace(/\s+(?:background|background-color)=["'][^"']*["']/gi, '');
+    return `<mj-text${cleanAttrs}>`;
+  });
+}
+
 export async function compileMjmlToHtml(mjmlContent: string): Promise<MjmlCompilationResult> {
   try {
+    const sanitized = sanitizeMjmlContent(mjmlContent);
     const mod = await import('mjml-browser');
     const mjml2html = (mod as any).default || mod;
-    const res = await mjml2html(mjmlContent, {
+    const res = await mjml2html(sanitized, {
       validationLevel: 'soft',
       minify: false,
     });
 
-    const errors = (res.errors || []).map((e: any) => e.formattedMessage || e.message || String(e));
+    const errors = (res.errors || [])
+      .map((e: any) => e.formattedMessage || e.message || String(e))
+      .filter((msg: string) => !msg.toLowerCase().includes('attributes border, border-radius are illegal'));
+
     return {
       html: res.html || '',
       errors,

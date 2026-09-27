@@ -25,7 +25,7 @@ import {
   AffiliateDailyStat
 } from '../types';
 export type { MarketplaceDeviceImageSettings };
-import { renderEmailHtmlLocally } from './emailRenderer';
+import { renderEmailHtmlLocally, BRAND_LOGO_WHITE_HTML, BRAND_LOGO_HTML } from './emailRenderer';
 import { extractItemSpecs } from './orderItems';
 import { normalizeDeviceName } from './seoUtils';
 
@@ -2235,44 +2235,65 @@ ${isMjml
   : 'Generate a complete, production-ready, beautifully designed responsive HTML email (<!doctype html>...</html>) with multi-card grids and zero walls of text.'
 }
 
-ARCHITECTURAL SPECIFICATIONS (MJML MULTI-CARD DESIGN):
+ARCHITECTURAL SPECIFICATIONS (${isMjml ? 'MJML' : 'HTML'} DESIGN):
 1. Head Section:
    - <mj-head>
-     <mj-font name="Plus Jakarta Sans" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&display=swap" />
+     <mj-font name="Plus Jakarta Sans" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" />
      <mj-attributes>
        <mj-all font-family="Plus Jakarta Sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" />
        <mj-text font-size="14.5px" color="#a1a1aa" line-height="1.7" />
      </mj-attributes>
    </mj-head>
-2. Body & Wrapper (${isDark ? 'Dark Mode' : 'Light Mode'}):
+2. Top Webview Link & Generous Spacing:
+   - Include top section with generous padding:
+     <mj-section padding="40px 0 16px"><mj-column><mj-text align="center" font-size="11px" color="#71717a" padding="0">If you cannot see this email properly, please <a href="{{webview_url}}" style="color:#a1a1aa;text-decoration:underline;">click here</a>.</mj-text></mj-column></mj-section>
+3. Body & Wrapper (${isDark ? 'Dark Mode' : 'Light Mode'}):
    - <mj-body background-color="${isDark ? '#050507' : '#f7f7f7'}">
-   - <mj-wrapper background-color="${isDark ? '#0e0e11' : '#ffffff'}" border-radius="28px" border="1px solid ${isDark ? '#1f1f24' : '#e5e5e5'}" padding="28px 24px">
-3. Top Header:
-   - Stylized "EXACOAT" text mark (font-size="20px", font-weight="900", color="${isDark ? '#ffffff' : '#000000'}", letter-spacing="1px")
-   - Category badge pill (e.g. background-color="rgba(245,158,11,0.15)", color="#fbbf24", border="1px solid rgba(245,158,11,0.3)", border-radius="999px", font-size="11px", font-weight="700")
-4. Sub-Pill Notice Capsule:
-   - Centered capsule pill (background-color="${isDark ? 'rgba(255,255,255,0.04)' : '#f4f4f5'}", color="${isDark ? '#ffffff' : '#18181b'}", border="1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e4e4e7'}", border-radius="999px", font-size="11.5px", font-weight="600")
-5. Display Headline & Concise Lead:
-   - Bold display headline (font-size="24px", font-weight="800", color="${isDark ? '#ffffff' : '#111111'}")
-   - Short intro text (maximum 2 brief sentences, no wall of text!)
-6. COMPLEX CARD SECTIONS (MANDATORY - MUST INCLUDE RICH CARDS):
-   Include at least one or two rich card sections:
+   - <mj-wrapper background-color="${isDark ? '#0e0e11' : '#ffffff'}" border-radius="28px" border="1px solid ${isDark ? '#1f1f24' : '#e5e5e5'}" padding="36px 28px 32px">
+4. Brand Logo (MANDATORY OFFICIAL EXACOAT LOGO SVG):
+   DO NOT USE PLAIN TEXT "EXACOAT". Use this exact SVG markup:
+   ${(isDark ? BRAND_LOGO_WHITE_HTML : BRAND_LOGO_HTML).trim()}
+   
+   Place it in a raw block above the social links in the footer:
+   <mj-raw>
+     <div style="text-align:center;margin:0 0 20px;">
+       <a href="https://exacoat.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">
+         ${(isDark ? BRAND_LOGO_WHITE_HTML : BRAND_LOGO_HTML).trim()}
+       </a>
+     </div>
+   </mj-raw>
+5. Sub-Pill Notice Capsule:
+   - Left-aligned, borderless pill capsule with subtle typography:
+     <mj-button background-color="${isDark ? 'rgba(255,255,255,0.06)' : '#f1f1f4'}" color="${isDark ? '#a1a1aa' : '#71717a'}" border-radius="9999px" font-size="9.5px" font-weight="500" letter-spacing="1.2px" text-transform="uppercase" align="left" inner-padding="4px 12px" padding="0 0 16px" href="#">LIMITED TIME ONLY &bull; COMPLIMENTARY REPLACEMENT</mj-button>
+6. Display Headline & Witty Story:
+   - Bold display headline: font-size="24px", font-weight="800", color="${isDark ? '#ffffff' : '#111111'}"
+   - 2 brief paragraphs capturing the Exacoat irony: millimeter precision hardware vs bulky cases.
+7. COMPLEX CARD SECTIONS (MANDATORY - RICH 2-COLUMN CARDS):
    - 2-Column Feature / Spec / Comparison Cards:
-     Use <mj-section padding="8px 0 16px"> with <mj-column width="48%" background-color="${isDark ? '#121215' : '#fafafa'}" border="1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e5e5'}" border-radius="20px" padding="16px">, plus <mj-column width="4%"></mj-column> gap, and another 48% column.
-     One column highlighted with border="1px solid rgba(245,158,11,0.55)".
-   - Or Comparison Cards:
-     e.g. Bare Device (Micro-scratch risk) vs Bulky Case (Ruins ergonomics) vs Exacoat Wrap (0.2mm precision, tactile grip).
-   - Or Material Cards:
-     e.g. Matrix Black (3D Hexagon Grip) vs Matte Slate (Anti-Fingerprint).
-7. Promo Box (if applicable):
-   - Box with dashed amber border, monospace promo code pill.
-8. Call to Action:
-   - High-contrast pill button (<mj-button background-color="#f59e0b" color="#000000" font-weight="900" font-size="14.5px" border-radius="999px" inner-padding="15px 38px">)
+     <mj-section padding="8px 0 16px">
+       <mj-column width="48%" background-color="${isDark ? '#121215' : '#fafafa'}" border="1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e5e5'}" border-radius="20px" padding="16px">
+         <mj-text align="center" font-size="13px" font-weight="bold" color="${isDark ? '#fbbf24' : '#111111'}" padding="0 0 6px">Feature Title</mj-text>
+         <mj-text align="center" font-size="11.5px" color="${isDark ? '#a1a1aa' : '#52525b'}" padding="0">Concise feature benefit description.</mj-text>
+       </mj-column>
+       <mj-column width="4%"></mj-column>
+       <mj-column width="48%" background-color="${isDark ? '#121215' : '#fafafa'}" border="1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e5e5'}" border-radius="20px" padding="16px">
+         <mj-text align="center" font-size="13px" font-weight="bold" color="${isDark ? '#ffffff' : '#111111'}" padding="0 0 6px">Tactile Grip</mj-text>
+         <mj-text align="center" font-size="11.5px" color="${isDark ? '#a1a1aa' : '#52525b'}" padding="0">True 3D texture depth, zero bulk added.</mj-text>
+       </mj-column>
+     </mj-section>
+8. Call to Action Button:
+   - High-contrast pill button (<mj-button href="https://exacoat.com/shop" background-color="#f59e0b" color="#000000" font-weight="900" font-size="14.5px" border-radius="999px" inner-padding="15px 38px">ORDER YOUR SKIN</mj-button>)
 9. Footer:
-   - Social links: Instagram, X, YouTube
+   - Social links: Instagram, X, YouTube (<mj-social mode="horizontal" align="center">...)
    - &copy; 2016-2026 Exacoat
    - Acumbamail placeholders: <a href="{{webview_url}}">View in browser</a> and <a href="{{unsubscribe_url}}">Unsubscribe</a>
-10. Language: ${langPrompt}.
+10. Bottom Spacing Spacer:
+   - After the main </mj-wrapper>, include a bottom spacer section so the card never touches the bottom:
+     <mj-section padding="0 0 60px"></mj-section>
+11. CRITICAL MJML VALIDATION RULES:
+   - NEVER use 'border' or 'border-radius' on <mj-text>. It is strictly illegal in MJML.
+   - For buttons or pills, use <mj-button> or HTML <span style="..."> inside <mj-text>.
+12. Language: ${langPrompt}.
 
 USER DESIGN REQUEST:
 ${params.prompt}
@@ -2296,6 +2317,19 @@ Format your response strictly as valid, raw JSON (no markdown formatting, no cod
         .replace(/\belevated\b/gi, 'refined')
         .replace(/\bseamlessly\b/gi, 'cleanly')
         .replace(/\bseamless\b/gi, 'clean');
+
+      // Strip illegal border / border-radius / background-color from mj-text
+      cleanHtml = cleanHtml.replace(/<mj-text\b([^>]*?)>/gi, (_match: string, attrs: string) => {
+        const cleanAttrs = attrs
+          .replace(/\s+(?:border|border-radius|border-top|border-bottom|border-left|border-right)=["'][^"']*["']/gi, '')
+          .replace(/\s+(?:background|background-color)=["'][^"']*["']/gi, '');
+        return `<mj-text${cleanAttrs}>`;
+      });
+
+      // Replace plain-text EXACOAT with official SVG logo if present
+      const logoSvg = (isDark ? BRAND_LOGO_WHITE_HTML : BRAND_LOGO_HTML).trim();
+      cleanHtml = cleanHtml.replace(/<mj-text[^>]*>\s*EXACOAT\s*<\/mj-text>/gi, 
+        `<mj-raw><div style="text-align:center;margin:0 0 20px;"><a href="https://exacoat.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">${logoSvg}</a></div></mj-raw>`);
     }
     return {
       success: true,

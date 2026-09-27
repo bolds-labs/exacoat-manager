@@ -41,6 +41,7 @@ import { GlassCard } from '../ui/GlassCard';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
+import { CustomSelect, SelectOption } from '../ui/CustomSelect';
 import { MediaLibraryModal } from '../modals/MediaLibraryModal';
 import { useToast } from '../../context/ToastContext';
 import { 
@@ -91,13 +92,36 @@ export interface MarketingPreset {
   bannerAspectRatio?: '16:9' | '4:3' | '1:1' | '3:4' | 'auto';
 }
 
+const CAMPAIGN_ANGLE_OPTIONS: SelectOption[] = [
+  { value: 'New Device / Skin Release', label: 'New Device / Texture Drop', subtitle: 'Launch announcement for new hardware' },
+  { value: 'Promotional / Flash Sale', label: 'Flash Sale / Discount Promo', subtitle: 'Limited-time discount with coupon box' },
+  { value: 'Hardware Comparison', label: 'Hardware Dilemma (Bare vs Case vs Wrap)', subtitle: 'Ergonomic comparison and scratch defense' },
+  { value: 'Affiliate Creator Opportunity', label: 'Affiliate Bonus / Creator Opportunity', subtitle: 'Sample kit access and commission boosts' },
+  { value: 'VIP Customer Re-engagement', label: 'VIP Customer Re-engagement', subtitle: 'Exclusive invite for repeat customers' },
+];
+
+const TONE_VOICE_OPTIONS: SelectOption[] = [
+  { value: 'Exacoat Studio Wit (Dry & Observant)', label: 'Exacoat Studio Wit (Dry & Observant)', subtitle: 'Understated, hardware-literate, smart' },
+  { value: 'Hardware Teardown & Tech Wit', label: 'Hardware Teardown & Tech Wit', subtitle: 'Focus on millimeter tolerances and materials' },
+  { value: 'Understated Luxury & Minimalist', label: 'Understated Luxury & Minimalist', subtitle: 'Clean, architectural, subtle elegance' },
+  { value: 'Creator & Partner Exclusive', label: 'Creator & Partner Exclusive', subtitle: 'Direct memo tone for affiliates and reviewers' },
+];
+
+const BADGE_VARIANT_OPTIONS: SelectOption[] = [
+  { value: 'amber', label: 'Amber Gold', badgeVariant: 'amber', badge: 'Amber' },
+  { value: 'emerald', label: 'Emerald Green', badgeVariant: 'lime', badge: 'Emerald' },
+  { value: 'blue', label: 'Electric Blue', badgeVariant: 'zinc', badge: 'Blue' },
+  { value: 'purple', label: 'Royal Purple', badgeVariant: 'rose', badge: 'Purple' },
+  { value: 'zinc', label: 'Subtle Zinc', badgeVariant: 'zinc', badge: 'Zinc' },
+];
+
 const PRESETS_STORAGE_KEY = 'exacoat_marketing_presets';
 
 export const BUILTIN_PRESETS: MarketingPreset[] = [
   {
     id: 'preset_dark_sale',
     name: 'Exacoat Dark Flash Sale (Reference Style)',
-    desc: 'Matches signature dark layout: yellow SHOP NOW button, coupon box, and 4 trust feature cards.',
+    desc: 'Matches signature dark layout: yellow SHOP NOW button, coupon box, and optional trust feature cards.',
     isBuiltIn: true,
     theme: 'dark',
     showHeader: false,
@@ -118,7 +142,7 @@ export const BUILTIN_PRESETS: MarketingPreset[] = [
     ctaText: 'SHOP NOW',
     ctaUrl: 'https://exacoat.com/shop',
     primaryCtaColor: 'amber',
-    showTrustGrid: true,
+    showTrustGrid: false,
     bannerImageUrl: '',
     bannerAspectRatio: '16:9',
   },
@@ -143,7 +167,7 @@ export const BUILTIN_PRESETS: MarketingPreset[] = [
     ctaText: 'ORDER YOUR SKIN',
     ctaUrl: 'https://exacoat.com/shop',
     primaryCtaColor: 'amber',
-    showTrustGrid: true,
+    showTrustGrid: false,
     bannerImageUrl: '',
     bannerAspectRatio: '16:9',
   },
@@ -196,6 +220,23 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
   const [affiliateFilter, setAffiliateFilter] = useState<'all' | 'active' | 'specific'>('all');
   const [selectedAffiliateId, setSelectedAffiliateId] = useState<string>('');
   const [isLoadingAffiliates, setIsLoadingAffiliates] = useState(false);
+
+  // Memoized options for CustomSelect dropdowns
+  const acumbaListOptions: SelectOption[] = useMemo(() => {
+    return acumbaLists.map((list) => ({
+      value: String(list.id),
+      label: list.name,
+      subtitle: `ID: ${list.id}`,
+    }));
+  }, [acumbaLists]);
+
+  const affiliateOptions: SelectOption[] = useMemo(() => {
+    return affiliates.map((aff) => ({
+      value: String(aff.id),
+      label: aff.name || aff.username || `Affiliate #${aff.id}`,
+      subtitle: aff.email || undefined,
+    }));
+  }, [affiliates]);
 
   // Specific customer state
   const [customerEmail, setCustomerEmail] = useState('');
@@ -262,7 +303,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
   const [emailTheme, setEmailTheme] = useState<'dark' | 'light'>('dark');
   const [primaryCtaColor, setPrimaryCtaColor] = useState<'amber' | 'white' | 'emerald'>('amber');
   const [subPillNotice, setSubPillNotice] = useState('Limited Time Only • Complimentary Replacement Guarantee');
-  const [showTrustGrid, setShowTrustGrid] = useState(true);
+  const [showTrustGrid, setShowTrustGrid] = useState(false);
 
   // Header & Brand Placement (Hidden by default for clean, low cognitive load layout)
   const [showHeader, setShowHeader] = useState<boolean>(false);
@@ -1093,14 +1134,9 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                   <Sparkles className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
-                      AI Copywriting Assistant
-                    </h3>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                      Antislop Filter Active
-                    </span>
-                  </div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
+                    AI Copywriting Assistant
+                  </h3>
                   <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
                     Generates witty, observant Exacoat brand copy and multi-card layouts with zero buzzwords.
                   </p>
@@ -1153,40 +1189,29 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                     <label className="font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">
                       Campaign Angle
                     </label>
-                    <select
+                    <CustomSelect
                       value={aiCampaignType}
-                      onChange={(e) => setAiCampaignType(e.target.value)}
-                      className="w-full h-9 px-2.5 rounded-xl bg-zinc-50 dark:bg-white/[0.05] border border-zinc-200 dark:border-white/10 text-xs text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
-                    >
-                      <option value="New Device / Skin Release">New Device / Texture Drop</option>
-                      <option value="Promotional / Flash Sale">Flash Sale / Discount Promo</option>
-                      <option value="Hardware Comparison">Hardware Dilemma (Bare vs Case vs Wrap)</option>
-                      <option value="Affiliate Creator Opportunity">Affiliate Bonus / Creator Opportunity</option>
-                      <option value="VIP Customer Re-engagement">VIP Customer Re-engagement</option>
-                    </select>
+                      onChange={setAiCampaignType}
+                      options={CAMPAIGN_ANGLE_OPTIONS}
+                    />
                   </div>
 
                   <div>
                     <label className="font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">
                       Tone Voice
                     </label>
-                    <select
+                    <CustomSelect
                       value={aiTone}
-                      onChange={(e) => setAiTone(e.target.value)}
-                      className="w-full h-9 px-2.5 rounded-xl bg-zinc-50 dark:bg-white/[0.05] border border-zinc-200 dark:border-white/10 text-xs text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
-                    >
-                      <option value="Exacoat Studio Wit (Dry & Observant)">Exacoat Studio Wit (Dry & Observant)</option>
-                      <option value="Hardware Teardown & Tech Wit">Hardware Teardown & Tech Wit</option>
-                      <option value="Understated Luxury & Minimalist">Understated Luxury & Minimalist</option>
-                      <option value="Creator & Partner Exclusive">Creator & Partner Exclusive</option>
-                    </select>
+                      onChange={setAiTone}
+                      options={TONE_VOICE_OPTIONS}
+                    />
                   </div>
 
                   <div>
                     <label className="font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">
                       Language
                     </label>
-                    <div className="flex items-center gap-1.5 h-9">
+                    <div className="flex items-center gap-1.5 h-10">
                       <button
                         type="button"
                         onClick={() => setAiLanguage('en')}
@@ -1240,42 +1265,28 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2 border-t border-zinc-200/80 dark:border-white/[0.06]">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                      Banned: "elevate", "seamless"
-                    </span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                      No em dashes
-                    </span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                      Structured Cards Support
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => handleGenerateAiCopy('visual')}
-                      disabled={isGeneratingAi}
-                      className="flex-1 sm:flex-initial bg-amber-500 hover:bg-amber-600 text-black font-bold flex items-center justify-center gap-1.5 shadow-sm"
-                    >
-                      <Sparkles className={`w-3.5 h-3.5 ${isGeneratingAi ? 'animate-spin' : ''}`} />
-                      <span>{isGeneratingAi ? 'Generating...' : 'Generate Copy & Cards'}</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleGenerateAiCopy('mjml')}
-                      disabled={isGeneratingAi}
-                      className="flex-1 sm:flex-initial border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 font-bold flex items-center justify-center gap-1.5"
-                      title="Generate a multi-card responsive MJML template"
-                    >
-                      <FileCode className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Full MJML</span>
-                    </Button>
-                  </div>
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-200/80 dark:border-white/[0.06]">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => handleGenerateAiCopy('visual')}
+                    disabled={isGeneratingAi}
+                    className="bg-amber-500 hover:bg-amber-600 text-black font-bold flex items-center justify-center gap-1.5 shadow-sm px-4 py-2"
+                  >
+                    <Sparkles className={`w-3.5 h-3.5 ${isGeneratingAi ? 'animate-spin' : ''}`} />
+                    <span>{isGeneratingAi ? 'Generating...' : 'Generate Copy & Cards'}</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleGenerateAiCopy('mjml')}
+                    disabled={isGeneratingAi}
+                    className="border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 font-bold flex items-center justify-center gap-1.5 px-3 py-2"
+                    title="Generate a multi-card responsive MJML template"
+                  >
+                    <FileCode className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Full MJML</span>
+                  </Button>
                 </div>
 
                 {/* AI Generated Subject Suggestions */}
@@ -1367,7 +1378,6 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                         Email Story &amp; Messaging
                       </h3>
                     </div>
-                    <span className="text-[11px] text-zinc-500 font-mono">Exacoat Editorial Tone</span>
                   </div>
 
                   {/* Subject Line & Preheader */}
@@ -1696,17 +1706,11 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                             </div>
                             <div>
                               <label className="text-[10px] font-semibold text-zinc-500 block mb-1">Badge Variant</label>
-                              <select
+                              <CustomSelect
                                 value={badgeVariant}
-                                onChange={(e: any) => setBadgeVariant(e.target.value)}
-                                className="w-full h-10 px-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 text-xs font-bold text-zinc-800 dark:text-zinc-200"
-                              >
-                                <option value="amber">Amber Gold</option>
-                                <option value="emerald">Emerald Green</option>
-                                <option value="blue">Electric Blue</option>
-                                <option value="purple">Royal Purple</option>
-                                <option value="zinc">Subtle Zinc</option>
-                              </select>
+                                onChange={(val) => setBadgeVariant(val as 'amber' | 'emerald' | 'blue' | 'purple' | 'zinc')}
+                                options={BADGE_VARIANT_OPTIONS}
+                              />
                             </div>
                           </div>
                         )}
@@ -2182,17 +2186,13 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                         </div>
 
                         {acumbaLists.length > 0 ? (
-                          <select
+                          <CustomSelect
                             value={selectedListId}
-                            onChange={(e) => setSelectedListId(e.target.value)}
-                            className="w-full h-10 px-3 rounded-xl bg-zinc-50 dark:bg-white/[0.05] border border-zinc-200 dark:border-white/10 text-xs text-zinc-900 dark:text-white font-medium focus:outline-none focus:ring-1 focus:ring-amber-500"
-                          >
-                            {acumbaLists.map((list) => (
-                              <option key={list.id} value={list.id} className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white">
-                                {list.name} (ID: {list.id})
-                              </option>
-                            ))}
-                          </select>
+                            onChange={setSelectedListId}
+                            options={acumbaListOptions}
+                            placeholder="Select subscriber list..."
+                            searchable={true}
+                          />
                         ) : (
                           <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-300 flex items-center justify-between">
                             <span>No subscriber lists loaded. Please verify Acumbamail token.</span>
@@ -2247,17 +2247,13 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                         </div>
 
                         {affiliateFilter === 'specific' && (
-                          <select
+                          <CustomSelect
                             value={selectedAffiliateId}
-                            onChange={(e) => setSelectedAffiliateId(e.target.value)}
-                            className="w-full h-10 px-3 rounded-xl bg-zinc-50 dark:bg-white/[0.05] border border-zinc-200 dark:border-white/10 text-xs text-zinc-900 dark:text-white font-medium focus:outline-none focus:ring-1 focus:ring-amber-500"
-                          >
-                            {affiliates.map((aff) => (
-                              <option key={aff.id} value={aff.id} className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white">
-                                {aff.name || aff.username} ({aff.email})
-                              </option>
-                            ))}
-                          </select>
+                            onChange={setSelectedAffiliateId}
+                            options={affiliateOptions}
+                            placeholder="Select affiliate..."
+                            searchable={true}
+                          />
                         )}
                       </div>
                     )}
@@ -2405,7 +2401,6 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                       AI Full-Email Template Designer
                     </h3>
                   </div>
-                  <span className="text-[10px] font-mono text-zinc-500">Antislop Responsive HTML</span>
                 </div>
 
                 <div>
@@ -2689,7 +2684,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
             </div>
 
             {/* Preview Frame Container */}
-            <div className={`flex-1 flex justify-center ${emailTheme === 'dark' ? 'bg-[#000000]' : 'bg-zinc-200/50 dark:bg-black/40'} rounded-2xl p-2 md:p-4 overflow-hidden border border-zinc-200 dark:border-white/10 min-h-[580px]`}>
+            <div className={`flex-1 flex justify-center ${emailTheme === 'dark' ? 'bg-[#000000]' : 'bg-zinc-200/50 dark:bg-black/40'} rounded-2xl p-2 md:p-4 overflow-hidden border border-zinc-200 dark:border-white/10 min-h-[640px]`}>
               <div
                 className={`transition-all duration-300 ${emailTheme === 'dark' ? 'bg-[#0c0c0e] border-zinc-800' : 'bg-white border-zinc-300 dark:border-zinc-700'} rounded-2xl shadow-2xl overflow-hidden border ${
                   previewViewport === 'desktop' ? 'w-full max-w-[580px]' : 'w-[375px]'
@@ -2698,7 +2693,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                 <iframe
                   title="Marketing Email Preview"
                   srcDoc={composerMode === 'code' ? (compiledHtml || customHtmlCode) : renderedEmail.html}
-                  className="w-full h-full min-h-[580px] border-0"
+                  className="w-full h-full min-h-[640px] border-0"
                   sandbox="allow-same-origin"
                 />
               </div>
