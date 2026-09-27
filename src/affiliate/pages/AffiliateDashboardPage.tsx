@@ -458,49 +458,65 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
         }
       />
 
-      {/* Referral Link & Sharing Bar */}
-      <GlassCard className="p-5 sm:p-6 border border-white/[0.08] relative overflow-hidden">
+      {/* Referral Link & Sharing Bar (Unified Minimalist Bar) */}
+      <GlassCard className="p-4 sm:p-5 border border-white/[0.08] relative overflow-hidden">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="flex items-center gap-2.5">
-              <span className="text-[11px] font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-2.5 py-0.5 rounded-full border border-[#f3aa18]/25 font-mono">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-white">Your Tracking Link</span>
+              <span className="text-[11px] font-mono text-[#f3aa18] bg-[#f3aa18]/10 px-2 py-0.5 rounded border border-[#f3aa18]/25">
                 @{profile.slug}
               </span>
-              <span className="text-xs font-bold text-white font-['Chakra_Petch'] uppercase tracking-wider">
-                Branded Referral Link
-              </span>
+              {discountRate > 0 && (
+                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/25">
+                  {discountRate}% customer discount active
+                </span>
+              )}
             </div>
             <p className="text-xs text-zinc-400">
-              Share this link across your bio or descriptions to attribute customer purchases for 30 days.
+              {discountRate > 0
+                ? `Visitors get ${discountRate}% off automatically. You earn ${commissionRate}% net commission on every order.`
+                : `Earn your full ${commissionRate}% net commission on orders attributed within 30 days.`}
             </p>
           </div>
 
-          <div className="flex items-center gap-2 flex-1 max-w-xl">
+          <div className="flex items-center gap-2 flex-1 max-w-lg">
             <div className="relative flex-1">
               <input
                 type="text"
                 readOnly
                 value={referralUrl}
-                className="w-full bg-[#050506] border border-white/[0.1] rounded-xl pl-3.5 pr-10 py-2.5 text-xs font-mono text-zinc-200 select-all focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
+                className="w-full bg-[#050506] border border-white/[0.1] rounded-xl pl-3 pr-9 py-2 text-xs font-mono text-zinc-200 select-all focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60"
               />
               <button
                 type="button"
                 onClick={handleCopyLink}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
                 title="Copy referral link"
               >
-                {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
             </div>
 
             <Button
               type="button"
               variant="secondary"
-              size="default"
+              size="sm"
               onClick={() => setShowQrModal(true)}
-              leftIcon={<QrCode className="w-4 h-4" />}
+              leftIcon={<QrCode className="w-3.5 h-3.5" />}
             >
-              QR Code
+              QR
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onNavigateTab('settings')}
+              leftIcon={<Sliders className="w-3.5 h-3.5 text-[#f3aa18]" />}
+              title="Adjust commission split"
+            >
+              Split
             </Button>
 
             <Button
@@ -511,84 +527,39 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
               title="Test referral link in new tab"
             >
               <a href={referralUrl} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="w-4 h-4" />
+                <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </Button>
           </div>
         </div>
       </GlassCard>
 
-      {/* Direct Customer Discount Banner */}
-      <div className="p-4 sm:p-5 rounded-2xl border border-white/[0.08] bg-white/[0.02] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="space-y-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={clsx(
-              "text-[11px] font-semibold px-2.5 py-0.5 rounded-full border font-mono flex items-center gap-1",
-              discountRate > 0 
-                ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
-                : "text-neutral-400 bg-white/[0.05] border-white/10"
-            )}>
-              <Percent className="w-3 h-3 text-neutral-400" />
-              {discountRate > 0 ? `CUSTOMER DISCOUNT: ${discountRate}% OFF` : 'STANDARD CREATOR LINK (0% OFF)'}
-            </span>
-            <span className="text-[11px] font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-2.5 py-0.5 rounded-full border border-[#f3aa18]/25 font-mono">
-              YOUR COMMISSION: {commissionRate}% CASH
-            </span>
-            <span className="text-[10px] font-mono text-zinc-500">
-              (Total Pool: {maxPool}%)
-            </span>
-          </div>
-          <p className="text-xs text-zinc-300">
-            {discountRate > 0 ? (
-              <>
-                Shoppers clicking your link automatically receive a <strong className="text-white">{discountRate}% discount</strong> from <strong className="text-[#f3aa18]">{profile.display_name || profile.username}</strong> without entering any coupon code.
-              </>
-            ) : (
-              <>
-                Shoppers clicking your link shop at standard store prices while you earn your full <strong className="text-white">{commissionRate}% commission</strong> on every order.
-              </>
-            )}
-          </p>
-        </div>
-        <div className="shrink-0 flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => onNavigateTab('settings')}
-            leftIcon={<Sliders className="w-3.5 h-3.5 text-[#f3aa18]" />}
-          >
-            Adjust Split Slider
-          </Button>
-        </div>
-      </div>
-
       {/* 4 Primary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Unpaid Available Balance */}
-        <GlassCard className="p-5 border border-white/[0.08] relative overflow-hidden flex flex-col justify-between">
+        <GlassCard className="p-4 sm:p-5 border border-white/[0.08] relative overflow-hidden flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold tracking-wider uppercase text-zinc-400 font-mono">
+              <span className="text-[11px] font-medium tracking-wider uppercase text-zinc-400 font-mono">
                 Available Balance
               </span>
-              <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-                <Wallet className="w-4 h-4" />
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                <Wallet className="w-3.5 h-3.5" />
               </div>
             </div>
-            <div className="mt-3">
-              <span className="text-2xl font-bold font-['Chakra_Petch'] text-white">
+            <div className="mt-2.5">
+              <span className="text-2xl font-semibold font-mono text-white">
                 {formatIDR(unpaidBalance)}
               </span>
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-white/[0.06]">
+          <div className="mt-3.5 pt-3 border-t border-white/[0.06]">
             {hasPendingPayout ? (
-              <div className="w-full py-2.5 px-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs font-semibold flex items-center justify-between">
+              <div className="w-full py-2 px-3 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs font-medium flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5" />
-                  <span>Request Under Review</span>
+                  <span>Under Review</span>
                 </span>
                 <button
                   type="button"
@@ -602,29 +573,29 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
               <button
                 type="button"
                 onClick={() => onNavigateTab('settings')}
-                className="w-full py-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-2"
-                title="Configure BCA or Mandiri account in settings"
+                className="w-full py-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-medium transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                title="Configure bank account in settings"
               >
                 <Sliders className="w-3.5 h-3.5" />
-                <span>Add Bank Info to Withdraw</span>
+                <span>Add Bank Info</span>
               </button>
             ) : unpaidBalance < minPayout ? (
               <button
                 type="button"
                 disabled
-                className="w-full py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-zinc-500 text-xs font-semibold flex items-center justify-center gap-2 cursor-not-allowed"
+                className="w-full py-2 rounded-lg bg-white/[0.03] border border-white/[0.06] text-zinc-500 text-xs font-medium flex items-center justify-center gap-1.5 cursor-not-allowed"
                 title="Minimum payout threshold is Rp 250.000"
               >
-                <Wallet className="w-4 h-4 text-zinc-600" />
-                <span>Request Payout (Min. Rp 250k)</span>
+                <Wallet className="w-3.5 h-3.5 text-zinc-600" />
+                <span>Payout (Min. Rp 250k)</span>
               </button>
             ) : (
               <button
                 type="button"
                 onClick={() => setShowPayoutModal(true)}
-                className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/15 cursor-pointer flex items-center justify-center gap-2"
+                className="w-full py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-semibold transition-all shadow-sm cursor-pointer flex items-center justify-center gap-1.5"
               >
-                <Wallet className="w-4 h-4 text-zinc-950" />
+                <Wallet className="w-3.5 h-3.5 text-zinc-950" />
                 <span>Request Payout</span>
               </button>
             )}
@@ -632,86 +603,86 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
         </GlassCard>
 
         {/* Card 2: Lifetime Earnings */}
-        <GlassCard className="p-5 border border-white/[0.08] relative overflow-hidden flex flex-col justify-between">
+        <GlassCard className="p-4 sm:p-5 border border-white/[0.08] relative overflow-hidden flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold tracking-wider uppercase text-zinc-400 font-mono">
+              <span className="text-[11px] font-medium tracking-wider uppercase text-zinc-400 font-mono">
                 Lifetime Earnings
               </span>
-              <div className="w-8 h-8 rounded-xl bg-[#f3aa18]/10 border border-[#f3aa18]/20 text-[#f3aa18] flex items-center justify-center shrink-0">
-                <TrendingUp className="w-4 h-4" />
+              <div className="w-7 h-7 rounded-lg bg-[#f3aa18]/10 border border-[#f3aa18]/20 text-[#f3aa18] flex items-center justify-center shrink-0">
+                <TrendingUp className="w-3.5 h-3.5" />
               </div>
             </div>
-            <div className="mt-3">
-              <span className="text-2xl font-bold font-['Chakra_Petch'] text-[#f3aa18]">
+            <div className="mt-2.5">
+              <span className="text-2xl font-semibold font-mono text-[#f3aa18]">
                 {formatIDR(metrics.lifetime_earnings)}
               </span>
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs text-zinc-400">
-            <span>In Selected Window:</span>
-            <span className="font-mono text-zinc-200 font-semibold">
+          <div className="mt-3.5 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs text-zinc-400">
+            <span>In Window:</span>
+            <span className="font-mono text-zinc-200 font-medium">
               {formatIDR(windowEarnings)}
             </span>
           </div>
         </GlassCard>
 
         {/* Card 3: Visits & Clicks */}
-        <GlassCard className="p-5 border border-white/[0.08] relative overflow-hidden flex flex-col justify-between">
+        <GlassCard className="p-4 sm:p-5 border border-white/[0.08] relative overflow-hidden flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold tracking-wider uppercase text-zinc-400 font-mono">
+              <span className="text-[11px] font-medium tracking-wider uppercase text-zinc-400 font-mono">
                 {horizon === 'all' ? 'Total Visits' : 'Window Visits'}
               </span>
-              <div className="w-8 h-8 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
-                <MousePointerClick className="w-4 h-4" />
+              <div className="w-7 h-7 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
+                <MousePointerClick className="w-3.5 h-3.5" />
               </div>
             </div>
-            <div className="mt-3">
-              <span className="text-2xl font-bold font-['Chakra_Petch'] text-white">
+            <div className="mt-2.5">
+              <span className="text-2xl font-semibold font-mono text-white">
                 {windowVisits.toLocaleString('id-ID')}
               </span>
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs text-zinc-400">
-            <span>Cookie Attribution:</span>
-            <span className="font-mono text-zinc-300 font-semibold">30 Days</span>
+          <div className="mt-3.5 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs text-zinc-400">
+            <span>Attribution:</span>
+            <span className="font-mono text-zinc-300 font-medium">30 Days</span>
           </div>
         </GlassCard>
 
         {/* Card 4: Upcoming / Pending Payment */}
-        <GlassCard className="p-5 border border-white/[0.08] relative overflow-hidden flex flex-col justify-between">
+        <GlassCard className="p-4 sm:p-5 border border-white/[0.08] relative overflow-hidden flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold tracking-wider uppercase text-zinc-400 font-mono">
+              <span className="text-[11px] font-medium tracking-wider uppercase text-zinc-400 font-mono">
                 Pending Payment
               </span>
-              <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
-                <Clock className="w-4 h-4" />
+              <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                <Clock className="w-3.5 h-3.5" />
               </div>
             </div>
-            <div className="mt-3 flex items-baseline gap-2">
-              <span className="text-2xl font-bold font-['Chakra_Petch'] text-white">
+            <div className="mt-2.5 flex items-baseline gap-2">
+              <span className="text-2xl font-semibold font-mono text-white">
                 {formatIDR(pendingCommissionsAmount)}
               </span>
-              <span className="text-xs font-semibold text-amber-400 font-mono bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+              <span className="text-xs font-medium text-amber-400 font-mono bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
                 {pendingCommissionsCount} {pendingCommissionsCount === 1 ? 'order' : 'orders'}
               </span>
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs text-zinc-400">
+          <div className="mt-3.5 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs text-zinc-400">
             {pendingPayoutsAmount > 0 ? (
               <>
-                <span>Payout In Review:</span>
-                <span className="font-mono text-amber-300 font-semibold">{formatIDR(pendingPayoutsAmount)}</span>
+                <span>In Review:</span>
+                <span className="font-mono text-amber-300 font-medium">{formatIDR(pendingPayoutsAmount)}</span>
               </>
             ) : (
               <>
                 <span>Grace Period:</span>
-                <span className="font-mono text-zinc-300 font-semibold">7 Days Delivery</span>
+                <span className="font-mono text-zinc-300 font-medium">7 Days Buffer</span>
               </>
             )}
           </div>
