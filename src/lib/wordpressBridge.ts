@@ -2482,18 +2482,13 @@ ARCHITECTURAL SPECIFICATIONS (${isMjml ? 'MJML' : 'HTML'} DESIGN):
 3. Body & Wrapper (${isDark ? 'Dark Mode' : 'Light Mode'}):
    - <mj-body background-color="${isDark ? '#050507' : '#f7f7f7'}">
    - <mj-wrapper background-color="${isDark ? '#0e0e11' : '#ffffff'}" border-radius="28px" border="1px solid ${isDark ? '#1f1f24' : '#e5e5e5'}" padding="36px 28px 32px">
-4. Brand Logo (MANDATORY OFFICIAL EXACOAT LOGO SVG):
-   DO NOT USE PLAIN TEXT "EXACOAT". Use this exact SVG markup:
-   ${(isDark ? BRAND_LOGO_WHITE_HTML : BRAND_LOGO_HTML).trim()}
-   
-   Place it in a raw block above the social links in the footer:
-   <mj-raw>
-     <div style="text-align:center;margin:0 0 20px;">
-       <a href="https://exacoat.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">
-         ${(isDark ? BRAND_LOGO_WHITE_HTML : BRAND_LOGO_HTML).trim()}
-       </a>
-     </div>
-   </mj-raw>
+4. Brand Logo (MANDATORY OFFICIAL EXACOAT LOGO IMAGE):
+   DO NOT USE PLAIN TEXT "EXACOAT". Use an official PNG logo image that renders reliably across all email clients including Gmail:
+   <mj-section padding="0 0 20px">
+     <mj-column>
+       <mj-image src="https://exacoat.com/assets/brand/${isDark ? 'exacoat-logo-white.png' : 'exacoat-logo.png'}" alt="Exacoat" width="136px" href="https://exacoat.com" align="center" padding="0" />
+     </mj-column>
+   </mj-section>
 5. Sub-Pill Notice Capsule:
    - Left-aligned, borderless pill capsule (MUST be wrapped in mj-section and mj-column):
      <mj-section padding="0 0 16px">
@@ -2591,10 +2586,12 @@ Format your response strictly as valid, raw JSON (no markdown formatting, no cod
         return openWrapper + fixedTokens.join('') + closeWrapper;
       });
 
-      // Replace plain-text EXACOAT with official SVG logo if present
-      const logoSvg = (isDark ? BRAND_LOGO_WHITE_HTML : BRAND_LOGO_HTML).trim();
+      // Replace plain-text EXACOAT with official logo image if present
+      const logoUrl = isDark 
+        ? 'https://exacoat.com/assets/brand/exacoat-logo-white.png' 
+        : 'https://exacoat.com/assets/brand/exacoat-logo.png';
       cleanHtml = cleanHtml.replace(/<mj-text[^>]*>\s*EXACOAT\s*<\/mj-text>/gi, 
-        `<mj-raw><div style="text-align:center;margin:0 0 20px;"><a href="https://exacoat.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">${logoSvg}</a></div></mj-raw>`);
+        `<mj-image src="${logoUrl}" alt="Exacoat" width="136px" href="https://exacoat.com" align="center" padding="0 0 20px" />`);
     }
     return {
       success: true,

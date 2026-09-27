@@ -3038,7 +3038,7 @@ class Exacoat_Order_Manager {
 			<div class=\"box\">
 				<div class=\"header\">
 					<div>
-						<img src=\"https://exacoat.com/wp-content/uploads/exacoat-logo.png\" alt=\"Exacoat\" style=\"height:22px;display:block;margin-bottom:6px;\" />
+						<img src=\"https://exacoat.com/assets/brand/exacoat-logo.png\" alt=\"Exacoat\" style=\"height:22px;display:block;margin-bottom:6px;\" />
 						<div style=\"font-size:11px;color:#555;\">Exacoat &bull; Precision Device Skins &amp; Wraps</div>
 						<div style=\"font-size:11px;color:#555;\">support@exacoat.com &bull; https://exacoat.com</div>
 					</div>

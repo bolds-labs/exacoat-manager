@@ -58,13 +58,17 @@ class Exacoat_Email_Engine {
 	 * Configuration Accessor
 	 */
 	/**
-	 * Official Exacoat Brand Logo SVG
+	 * Official Exacoat Brand Logo Image (Universal HTML Email Compatible)
+	 * Resolves to high-res PNG for complete support across all email clients (Gmail, Outlook, Yahoo, Apple Mail).
 	 */
-	public static function get_brand_logo_html(): string {
-		return '<svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" width="136" height="24" viewBox="0 0 1368000 241000" shape-rendering="geometricPrecision" text-rendering="geometricPrecision" style="display:block;border:0;outline:none;width:136px;height:24px;">'
-			. '<path fill="#000000" fill-rule="nonzero" d="M1281000 218000l0 -40000 22000 -23000 43000 0 22000 23000 0 40000 -22000 23000 -43000 0 -22000 -23000zm59000 10000l14000 -14000 0 -32000 -14000 -14000 -31000 0 -14000 14000 0 32000 14000 14000 31000 0zm-33000 -52000l28000 0 8000 8000 0 13000 -5000 5000 6000 6000 0 10000 -12000 0 0 -7000 -4000 -5000 -9000 0 0 12000 -12000 0 0 -42000zm22000 20000l3000 -2000 0 -5000 -3000 -3000 -10000 0 0 10000 10000 0z"/>'
-			. '<path fill="#000000" fill-rule="nonzero" d="M0 202000l0 -108000 36000 -36000 97000 0 37000 36000 0 67000 -129000 0 0 29000 13000 14000 62000 0 13000 -13000 0 -11000 40000 0 0 23000 -35000 35000 -99000 0 -35000 -36000zm129000 -70000l0 -25000 -14000 -15000 -60000 0 -14000 15000 0 25000 88000 0zm180000 106000l-43000 -60000 -44000 60000 -45000 0 66000 -91000 -65000 -89000 46000 0 42000 58000 41000 -58000 46000 0 -64000 89000 66000 91000 -46000 0zm51000 -32000l0 -43000 32000 -31000 93000 0 0 -27000 -14000 -13000 -56000 0 -14000 13000 0 11000 -40000 0 0 -20000 37000 -38000 90000 0 37000 38000 0 142000 -37000 0 0 -28000 -29000 28000 -67000 0 -32000 -32000zm95000 0l30000 -29000 0 -15000 -74000 0 -11000 11000 0 22000 11000 11000 44000 0zm102000 -4000l0 -108000 35000 -36000 95000 0 35000 36000 0 30000 -40000 0 0 -17000 -15000 -14000 -55000 0 -15000 14000 0 82000 15000 14000 55000 0 15000 -14000 0 -17000 40000 0 0 30000 -35000 36000 -95000 0 -35000 -36000zm188000 0l0 -108000 36000 -36000 100000 0 36000 36000 0 108000 -36000 36000 -100000 0 -36000 -36000zm116000 2000l15000 -15000 0 -82000 -15000 -14000 -60000 0 -15000 14000 0 82000 15000 15000 60000 0zm84000 2000l0 -43000 32000 -31000 93000 0 0 -27000 -14000 -13000 -56000 0 -14000 13000 0 11000 -40000 0 0 -20000 37000 -38000 90000 0 37000 38000 0 142000 -37000 0 0 -28000 -29000 28000 -67000 0 -32000 -32000zm95000 0l30000 -29000 0 -15000 -73000 0 -12000 11000 0 22000 11000 11000 44000 0zm118000 -4000l0 -109000 -33000 0 0 -35000 34000 0 0 -58000 40000 0 0 58000 55000 0 0 35000 -55000 0 0 96000 14000 14000 41000 0 0 35000 -60000 0 -36000 -36000z"/>'
-			. '</svg>';
+	public static function get_brand_logo_url( bool $is_white = false ): string {
+		$filename = $is_white ? 'exacoat-logo-white.png' : 'exacoat-logo.png';
+		return 'https://exacoat.com/assets/brand/' . $filename;
+	}
+
+	public static function get_brand_logo_html( bool $is_white = false ): string {
+		$url = self::get_brand_logo_url( $is_white );
+		return '<a href="https://exacoat.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;"><img src="' . esc_url( $url ) . '" alt="Exacoat" width="136" height="24" border="0" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;width:136px;height:24px;max-width:136px;" /></a>';
 	}
 
 	public static function get_config(): array {
@@ -1120,8 +1124,8 @@ class Exacoat_Email_Engine {
             <tbody>
               <!-- 1. Wordmark Header -->
               <tr>
-                <td align=\"center\" style=\"padding:48px 40px 12px;\" class=\"mobile-padding\">
-                  ' . self::get_brand_logo_html() . '
+                <td align=\"center\" style=\"padding:48px 40px 12px;text-align:center;\" class=\"mobile-padding\">
+                  ' . self::get_brand_logo_html( true ) . '
                 </td>
               </tr>
 
@@ -1255,7 +1259,7 @@ class Exacoat_Email_Engine {
 			<div class=\"box\">
 				<div class=\"header\">
 					<div>
-						<img src=\"https://exacoat.com/wp-content/uploads/exacoat-logo.png\" alt=\"Exacoat\" style=\"height:22px;display:block;margin-bottom:6px;\" />
+						<img src=\"" . esc_url( self::get_brand_logo_url() ) . "\" alt=\"Exacoat\" style=\"height:22px;display:block;margin-bottom:6px;\" />
 						<div style=\"font-size:11px;color:#4b5563;font-weight:500;\">Exacoat Operations &bull; Settlement Statement</div>
 						<div style=\"font-size:11px;color:#4b5563;\">support@exacoat.com &bull; https://exacoat.com</div>
 					</div>

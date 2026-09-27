@@ -70,21 +70,18 @@ export function isPriceZero(val: any): boolean {
   return parseInt(digits, 10) === 0;
 }
 
-export const BRAND_LOGO_HTML = `
-  <svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" width="136" height="24" viewBox="0 0 1368000 241000" shape-rendering="geometricPrecision" text-rendering="geometricPrecision" style="display:block;border:0;outline:none;width:136px;height:24px;">
-    <path fill="#000000" fill-rule="nonzero" d="M1281000 218000l0 -40000 22000 -23000 43000 0 22000 23000 0 40000 -22000 23000 -43000 0 -22000 -23000zm59000 10000l14000 -14000 0 -32000 -14000 -14000 -31000 0 -14000 14000 0 32000 14000 14000 31000 0zm-33000 -52000l28000 0 8000 8000 0 13000 -5000 5000 6000 6000 0 10000 -12000 0 0 -7000 -4000 -5000 -9000 0 0 12000 -12000 0 0 -42000zm22000 20000l3000 -2000 0 -5000 -3000 -3000 -10000 0 0 10000 10000 0z"/>
-    <path fill="#000000" fill-rule="nonzero" d="M0 202000l0 -108000 36000 -36000 97000 0 37000 36000 0 67000 -129000 0 0 29000 13000 14000 62000 0 13000 -13000 0 -11000 40000 0 0 23000 -35000 35000 -99000 0 -35000 -36000zm129000 -70000l0 -25000 -14000 -15000 -60000 0 -14000 15000 0 25000 88000 0zm180000 106000l-43000 -60000 -44000 60000 -45000 0 66000 -91000 -65000 -89000 46000 0 42000 58000 41000 -58000 46000 0 -64000 89000 66000 91000 -46000 0zm51000 -32000l0 -43000 32000 -31000 93000 0 0 -27000 -14000 -13000 -56000 0 -14000 13000 0 11000 -40000 0 0 -20000 37000 -38000 90000 0 37000 38000 0 142000 -37000 0 0 -28000 -29000 28000 -67000 0 -32000 -32000zm95000 0l30000 -29000 0 -15000 -74000 0 -11000 11000 0 22000 11000 11000 44000 0zm102000 -4000l0 -108000 35000 -36000 95000 0 35000 36000 0 30000 -40000 0 0 -17000 -15000 -14000 -55000 0 -15000 14000 0 82000 15000 14000 55000 0 15000 -14000 0 -17000 40000 0 0 30000 -35000 36000 -95000 0 -35000 -36000zm188000 0l0 -108000 36000 -36000 100000 0 36000 36000 0 108000 -36000 36000 -100000 0 -36000 -36000zm116000 2000l15000 -15000 0 -82000 -15000 -14000 -60000 0 -15000 14000 0 82000 15000 15000 60000 0zm84000 2000l0 -43000 32000 -31000 93000 0 0 -27000 -14000 -13000 -56000 0 -14000 13000 0 11000 -40000 0 0 -20000 37000 -38000 90000 0 37000 38000 0 142000 -37000 0 0 -28000 -29000 28000 -67000 0 -32000 -32000zm95000 0l30000 -29000 0 -15000 -73000 0 -12000 11000 0 22000 11000 11000 44000 0zm118000 -4000l0 -109000 -33000 0 0 -35000 34000 0 0 -58000 40000 0 0 58000 55000 0 0 35000 -55000 0 0 96000 14000 14000 41000 0 0 35000 -60000 0 -36000 -36000z"/>
-  </svg>
-`;
+export const BRAND_LOGO_URL = 'https://exacoat.com/assets/brand/exacoat-logo.png';
+export const BRAND_LOGO_WHITE_URL = 'https://exacoat.com/assets/brand/exacoat-logo-white.png';
+
+export const BRAND_LOGO_IMG = `<img src="${BRAND_LOGO_URL}" alt="Exacoat" width="136" height="24" border="0" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;width:136px;height:24px;max-width:136px;" />`;
+
+export const BRAND_LOGO_WHITE_IMG = `<img src="${BRAND_LOGO_WHITE_URL}" alt="Exacoat" width="136" height="24" border="0" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;width:136px;height:24px;max-width:136px;" />`;
+
+export const BRAND_LOGO_HTML = `<a href="https://exacoat.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">${BRAND_LOGO_IMG}</a>`;
 
 export const BRAND_WORDMARK_HTML = BRAND_LOGO_HTML;
 
-export const BRAND_LOGO_WHITE_HTML = `
-  <svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" width="136" height="24" viewBox="0 0 1368000 241000" shape-rendering="geometricPrecision" text-rendering="geometricPrecision" style="display:block;border:0;outline:none;width:136px;height:24px;">
-    <path fill="#ffffff" fill-rule="nonzero" d="M1281000 218000l0 -40000 22000 -23000 43000 0 22000 23000 0 40000 -22000 23000 -43000 0 -22000 -23000zm59000 10000l14000 -14000 0 -32000 -14000 -14000 -31000 0 -14000 14000 0 32000 14000 14000 31000 0zm-33000 -52000l28000 0 8000 8000 0 13000 -5000 5000 6000 6000 0 10000 -12000 0 0 -7000 -4000 -5000 -9000 0 0 12000 -12000 0 0 -42000zm22000 20000l3000 -2000 0 -5000 -3000 -3000 -10000 0 0 10000 10000 0z"/>
-    <path fill="#ffffff" fill-rule="nonzero" d="M0 202000l0 -108000 36000 -36000 97000 0 37000 36000 0 67000 -129000 0 0 29000 13000 14000 62000 0 13000 -13000 0 -11000 40000 0 0 23000 -35000 35000 -99000 0 -35000 -36000zm129000 -70000l0 -25000 -14000 -15000 -60000 0 -14000 15000 0 25000 88000 0zm180000 106000l-43000 -60000 -44000 60000 -45000 0 66000 -91000 -65000 -89000 46000 0 42000 58000 41000 -58000 46000 0 -64000 89000 66000 91000 -46000 0zm51000 -32000l0 -43000 32000 -31000 93000 0 0 -27000 -14000 -13000 -56000 0 -14000 13000 0 11000 -40000 0 0 -20000 37000 -38000 90000 0 37000 38000 0 142000 -37000 0 0 -28000 -29000 28000 -67000 0 -32000 -32000zm95000 0l30000 -29000 0 -15000 -74000 0 -11000 11000 0 22000 11000 11000 44000 0zm102000 -4000l0 -108000 35000 -36000 95000 0 35000 36000 0 30000 -40000 0 0 -17000 -15000 -14000 -55000 0 -15000 14000 0 82000 15000 14000 55000 0 15000 -14000 0 -17000 40000 0 0 30000 -35000 36000 -95000 0 -35000 -36000zm188000 0l0 -108000 36000 -36000 100000 0 36000 36000 0 108000 -36000 36000 -100000 0 -36000 -36000zm116000 2000l15000 -15000 0 -82000 -15000 -14000 -60000 0 -15000 14000 0 82000 15000 15000 60000 0zm84000 2000l0 -43000 32000 -31000 93000 0 0 -27000 -14000 -13000 -56000 0 -14000 13000 0 11000 -40000 0 0 -20000 37000 -38000 90000 0 37000 38000 0 142000 -37000 0 0 -28000 -29000 28000 -67000 0 -32000 -32000zm95000 0l30000 -29000 0 -15000 -73000 0 -12000 11000 0 22000 11000 11000 44000 0zm118000 -4000l0 -109000 -33000 0 0 -35000 34000 0 0 -58000 40000 0 0 58000 55000 0 0 35000 -55000 0 0 96000 14000 14000 41000 0 0 35000 -60000 0 -36000 -36000z"/>
-  </svg>
-`;
+export const BRAND_LOGO_WHITE_HTML = `<a href="https://exacoat.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">${BRAND_LOGO_WHITE_IMG}</a>`;
 
 function renderCustomerAccountEmail(event: string, data: Record<string, any>): RenderedEmail {
   const custName = escapeHtml(data.customer_first_name || data.display_name || 'Customer');
@@ -1794,7 +1791,7 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
 
   const unsubscribeUrl = escapeHtml(options.unsubscribeUrl || '{{unsubscribe_url}}');
   const footerNote = options.footerNote ? `<p style="margin:0 0 12px;font-size:13px;line-height:1.6;color:${textBody};text-align:center;">${escapeHtml(options.footerNote)}</p>` : '';
-  const brandLogo = isDark ? BRAND_LOGO_WHITE_HTML : BRAND_LOGO_HTML;
+  const brandLogo = isDark ? BRAND_LOGO_WHITE_IMG : BRAND_LOGO_IMG;
 
   // Header and Logo positioning logic
   let topHeaderHtml = '';
@@ -1923,19 +1920,19 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
                           ${instagramUrl ? `
                           <td style="padding:0 5px;">
                             <a href="${escapeHtml(instagramUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="Instagram">
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="${isDark ? '#e4e4e7' : '#27272a'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+                              <img src="https://exacoat.com/assets/icons/instagram${isDark ? '-white' : ''}.png" width="14" height="14" alt="Instagram" border="0" style="display:block;border:0;outline:none;" />
                             </a>
                           </td>` : ''}
                           ${xUrl ? `
                           <td style="padding:0 5px;">
                             <a href="${escapeHtml(xUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="X">
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="${isDark ? '#e4e4e7' : '#27272a'}" style="display:block;"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                              <img src="https://exacoat.com/assets/icons/x${isDark ? '-white' : ''}.png" width="14" height="14" alt="X" border="0" style="display:block;border:0;outline:none;" />
                             </a>
                           </td>` : ''}
                           ${youtubeUrl ? `
                           <td style="padding:0 5px;">
                             <a href="${escapeHtml(youtubeUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="YouTube">
-                              <svg width="15" height="12" viewBox="0 0 24 24" fill="${isDark ? '#e4e4e7' : '#27272a'}" style="display:block;"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                              <img src="https://exacoat.com/assets/icons/youtube${isDark ? '-white' : ''}.png" width="14" height="14" alt="YouTube" border="0" style="display:block;border:0;outline:none;" />
                             </a>
                           </td>` : ''}
                         </tr>
@@ -2003,7 +2000,7 @@ export function renderMarketingEmailMjml(options: MarketingEmailOptions): string
   const textBody = isDark ? '#a1a1aa' : '#52525b';
   const textMuted = isDark ? '#71717a' : '#a1a1aa';
   const dividerColor = isDark ? '#1a1a1f' : '#e5e7eb';
-  const brandLogo = isDark ? BRAND_LOGO_WHITE_HTML : BRAND_LOGO_HTML;
+  const brandLogo = isDark ? BRAND_LOGO_WHITE_IMG : BRAND_LOGO_IMG;
 
   // Badge Colors
   let badgeBg = isDark ? 'rgba(245,158,11,0.15)' : '#fff8eb';
@@ -2291,19 +2288,19 @@ export function renderMarketingEmailMjml(options: MarketingEmailOptions): string
                 ${instagramUrl ? `
                 <td style="padding:0 5px;">
                   <a href="${escapeHtml(instagramUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="Instagram">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="${isDark ? '#e4e4e7' : '#27272a'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+                    <img src="https://exacoat.com/assets/icons/instagram${isDark ? '-white' : ''}.png" width="14" height="14" alt="Instagram" border="0" style="display:block;border:0;outline:none;" />
                   </a>
                 </td>` : ''}
                 ${xUrl ? `
                 <td style="padding:0 5px;">
                   <a href="${escapeHtml(xUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="X">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="${isDark ? '#e4e4e7' : '#27272a'}" style="display:block;"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                    <img src="https://exacoat.com/assets/icons/x${isDark ? '-white' : ''}.png" width="14" height="14" alt="X" border="0" style="display:block;border:0;outline:none;" />
                   </a>
                 </td>` : ''}
                 ${youtubeUrl ? `
                 <td style="padding:0 5px;">
                   <a href="${escapeHtml(youtubeUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="YouTube">
-                    <svg width="15" height="12" viewBox="0 0 24 24" fill="${isDark ? '#e4e4e7' : '#27272a'}" style="display:block;"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                    <img src="https://exacoat.com/assets/icons/youtube${isDark ? '-white' : ''}.png" width="14" height="14" alt="YouTube" border="0" style="display:block;border:0;outline:none;" />
                   </a>
                 </td>` : ''}
               </tr>

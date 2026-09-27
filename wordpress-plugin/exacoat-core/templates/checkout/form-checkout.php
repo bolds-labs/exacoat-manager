@@ -31,7 +31,7 @@ $item_count    = ( function_exists( 'WC' ) && WC()->cart ) ? WC()->cart->get_car
 <div class="artmatter-checkout-wrapper">
 	<div class="artmatter-co-brand-header">
 		<a href="<?php echo esc_url( home_url( '/' ) ); ?>" class="artmatter-co-brand-link" aria-label="<?php esc_attr_e( 'Return to Exacoat', 'exacoat-core' ); ?>">
-			<img src="https://exacoat.com/wp-content/uploads/exacoat-logo.png" alt="Exacoat" class="artmatter-co-brand-logo" />
+			<img src="https://exacoat.com/assets/brand/exacoat-logo.png" alt="Exacoat" class="artmatter-co-brand-logo" />
 		</a>
 		<div class="artmatter-co-secure-note">
 			<span class="artmatter-co-secure-dot" aria-hidden="true"></span>
