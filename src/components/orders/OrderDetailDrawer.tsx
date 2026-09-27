@@ -118,6 +118,16 @@ const getPublicTrackingUrl = (carrier?: string, trackingNum?: string, customUrl?
   return `https://biteship.com/track/${encodeURIComponent(trackingNum.trim())}`;
 };
 
+const renderNoteHtml = (content: string) => {
+  if (!content) return null;
+  if (!content.includes('<')) return content;
+  const sanitized = content
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+    .replace(/\son\w+="[^"]*"/gi, '');
+  return <span dangerouslySetInnerHTML={{ __html: sanitized }} />;
+};
+
 export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   order: propOrder,
   isOpen,
@@ -2239,7 +2249,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                       : 'bg-[#141414] border-white/[0.04] text-neutral-300'
                   )}
                 >
-                  <p className="leading-relaxed whitespace-pre-wrap">{note.content}</p>
+                  <p className="leading-relaxed whitespace-pre-wrap">{renderNoteHtml(note.content)}</p>
                   
                   {/* Note Creator / Author Attribution */}
                   <div className="flex items-center justify-between text-[10px] text-neutral-400 font-mono pt-2 border-t border-white/[0.04] flex-wrap gap-2">

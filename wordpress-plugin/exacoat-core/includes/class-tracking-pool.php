@@ -50,10 +50,10 @@ class Exacoat_Tracking_Pool {
 	 * Initialize Hooks & REST Endpoints
 	 */
 	public static function init(): void {
-		// 1. Hook WooCommerce order status change to processing (Payment Confirmed) & status transitions
-		add_action( 'woocommerce_order_status_processing', [ __CLASS__, 'on_order_processing' ], 5, 1 );
-		add_action( 'woocommerce_payment_complete', [ __CLASS__, 'on_order_processing' ], 5, 1 );
-		add_action( 'woocommerce_order_status_changed', [ __CLASS__, 'on_order_status_changed' ], 5, 3 );
+		// 1. Hook WooCommerce order status change to processing (Payment Confirmed) & status transitions (Priority 20: run after status transition completes)
+		add_action( 'woocommerce_order_status_processing', [ __CLASS__, 'on_order_processing' ], 20, 1 );
+		add_action( 'woocommerce_payment_complete', [ __CLASS__, 'on_order_processing' ], 20, 1 );
+		add_action( 'woocommerce_order_status_changed', [ __CLASS__, 'on_order_status_changed' ], 20, 3 );
 
 		// 2. Register REST API Routes
 		add_action( 'rest_api_init', [ __CLASS__, 'register_routes' ] );
@@ -589,6 +589,12 @@ class Exacoat_Tracking_Pool {
 			return false;
 		}
 
+		// Guarantee tracking numbers are ONLY auto-assigned when order is confirmed/paid/processing
+		$status = str_replace( 'wc-', '', $order->get_status() );
+		if ( ! in_array( $status, [ 'processing', 'confirmed', 'preparing-order', 'ready-to-ship', 'completed', 'shipped' ], true ) ) {
+			return false;
+		}
+
 		$carrier = self::detect_order_carrier( $order );
 		if ( empty( $carrier ) ) {
 			return false;
@@ -623,6 +629,8 @@ class Exacoat_Tracking_Pool {
 					$order->update_meta_data( '_ywot_tracking_code', $allocated_number );
 					$order->update_meta_data( '_ywot_carrier_id', strtoupper( $carrier ) );
 					$order->update_meta_data( '_exacoat_tracking_number', $allocated_number );
+					$order->update_meta_data( '_exacoat_tracking_note_logged_number', $allocated_number );
+					$order->update_meta_data( '_exacoat_tracking_note_logged_carrier', $carrier );
 
 					// WC Shipment Tracking item structure
 					$shipment_items = [
@@ -652,6 +660,8 @@ class Exacoat_Tracking_Pool {
 					update_post_meta( $order_id, '_ywot_tracking_code', $allocated_number );
 					update_post_meta( $order_id, '_ywot_carrier_id', strtoupper( $carrier ) );
 					update_post_meta( $order_id, '_exacoat_tracking_number', $allocated_number );
+					update_post_meta( $order_id, '_exacoat_tracking_note_logged_number', $allocated_number );
+					update_post_meta( $order_id, '_exacoat_tracking_note_logged_carrier', $carrier );
 					update_post_meta( $order_id, '_wc_shipment_tracking_items', $shipment_items );
 
 					return true;
@@ -766,8 +776,14 @@ class Exacoat_Tracking_Pool {
 		$order->update_meta_data( '_artmatter_tracking_number', $assigned_num );
 		$order->update_meta_data( '_ywot_tracking_code', $assigned_num );
 		$order->update_meta_data( '_ywot_carrier_id', strtoupper( $carrier_clean ) );
+		$order->update_meta_data( '_exacoat_tracking_number', $assigned_num );
+		$order->update_meta_data( '_exacoat_tracking_note_logged_number', $assigned_num );
+		$order->update_meta_data( '_exacoat_tracking_note_logged_carrier', $carrier_clean );
 		$order->add_order_note( sprintf( '%s - %s | Tracking number manually assigned from Exacoat Manager pool.', strtoupper( $carrier_clean ), $assigned_num ) );
 		$order->save();
+
+		update_post_meta( $order_id, '_exacoat_tracking_note_logged_number', $assigned_num );
+		update_post_meta( $order_id, '_exacoat_tracking_note_logged_carrier', $carrier_clean );
 
 		return new \WP_REST_Response( [
 			'success'         => true,

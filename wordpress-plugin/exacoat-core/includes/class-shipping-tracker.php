@@ -22,7 +22,6 @@ class Exacoat_Shipping_Tracker {
 		add_action( 'save_post_shop_order', [ __CLASS__, 'handle_order_save' ], 25, 1 );
 		add_action( 'save_post', [ __CLASS__, 'handle_order_save' ], 25, 1 );
 		add_action( 'acf/save_post', [ __CLASS__, 'handle_acf_save' ], 25, 1 );
-		add_action( 'woocommerce_order_status_changed', [ __CLASS__, 'handle_status_change' ], 25, 4 );
 
 		// 2. Admin Meta Box for WooCommerce Orders (HPOS & Classic CPT)
 		add_action( 'add_meta_boxes', [ __CLASS__, 'register_admin_meta_boxes' ] );
@@ -163,9 +162,7 @@ class Exacoat_Shipping_Tracker {
 	}
 
 	public static function handle_status_change( $order_id, $from = '', $to = '', $order = null ) {
-		if ( is_numeric( $order_id ) && (int) $order_id > 0 ) {
-			self::handle_order_save( (int) $order_id );
-		}
+		// Status changes do not modify tracking numbers. Kept empty for API compatibility.
 	}
 
 	/**
@@ -173,13 +170,15 @@ class Exacoat_Shipping_Tracker {
 	 */
 	public static function handle_order_save( $order_id ) {
 		static $processing_orders = [];
+		static $processed_orders_in_request = [];
 
 		if ( ! is_numeric( $order_id ) || (int) $order_id <= 0 ) {
 			return;
 		}
 		$order_id = (int) $order_id;
 
-		if ( isset( $processing_orders[ $order_id ] ) ) {
+		// Prevent re-entrant recursion while saving
+		if ( ! empty( $processing_orders[ $order_id ] ) ) {
 			return;
 		}
 
@@ -187,8 +186,6 @@ class Exacoat_Shipping_Tracker {
 		if ( ! $order ) {
 			return;
 		}
-
-		$processing_orders[ $order_id ] = true;
 
 		// 1. Resolve Tracking Number from all potential sources (POST, HPOS meta, Postmeta, ACF, Tracking Info)
 		$tracking_number = '';
@@ -243,51 +240,83 @@ class Exacoat_Shipping_Tracker {
 
 		$carrier = trim( strtolower( $carrier ) );
 
-		// 3. Compare with previously registered tracking number
-		$prev_registered = (string) ( $order->get_meta( '_exacoat_trackingmore_registered_number' ) 
+		// In-request deduplication: do not process the same order + tracking combination multiple times in 1 request
+		$request_sig = "{$order_id}_{$tracking_number}_{$carrier}";
+		if ( isset( $processed_orders_in_request[ $request_sig ] ) ) {
+			return;
+		}
+		$processed_orders_in_request[ $request_sig ] = true;
+
+		// 3. Resolve previously logged tracking number
+		$prev_logged = (string) ( $order->get_meta( '_exacoat_tracking_note_logged_number' ) 
+			?: ( $order->get_meta( '_artmatter_tracking_note_logged_number' ) 
+			?: ( $order->get_meta( '_exacoat_trackingmore_registered_number' ) 
 			?: ( $order->get_meta( '_artmatter_trackingmore_registered_number' ) 
 			?: ( $order->get_meta( '_artmatter_17track_registered_number' ) 
+			?: ( get_post_meta( $order_id, '_exacoat_tracking_note_logged_number', true ) 
+			?: ( get_post_meta( $order_id, '_artmatter_tracking_note_logged_number', true ) 
 			?: ( get_post_meta( $order_id, '_exacoat_trackingmore_registered_number', true ) 
 			?: ( get_post_meta( $order_id, '_artmatter_trackingmore_registered_number', true ) 
-			?: ( get_post_meta( $order_id, '_artmatter_17track_registered_number', true ) ?: '' ) ) ) ) ) );
+			?: ( get_post_meta( $order_id, '_artmatter_17track_registered_number', true ) ?: '' ) ) ) ) ) ) ) ) ) );
+
+		// Fallback check against existing order notes to prevent duplicate notes on historical orders
+		if ( empty( $prev_logged ) && ! empty( $tracking_number ) && function_exists( 'wc_get_order_notes' ) ) {
+			$existing_notes = wc_get_order_notes( [ 'order_id' => $order_id, 'limit' => 25 ] );
+			foreach ( $existing_notes as $n ) {
+				if ( isset( $n->content ) && strpos( $n->content, $tracking_number ) !== false ) {
+					$prev_logged = $tracking_number;
+					$order->update_meta_data( '_exacoat_tracking_note_logged_number', $tracking_number );
+					$order->update_meta_data( '_exacoat_tracking_note_logged_carrier', $carrier );
+					update_post_meta( $order_id, '_exacoat_tracking_note_logged_number', $tracking_number );
+					update_post_meta( $order_id, '_exacoat_tracking_note_logged_carrier', $carrier );
+					break;
+				}
+			}
+		}
 
 		if ( ! empty( $tracking_number ) ) {
-			// Ensure consistent metadata across HPOS and postmeta
-			$order->update_meta_data( 'tracking_number', $tracking_number );
-			$order->update_meta_data( '_tracking_number', $tracking_number );
-			$order->update_meta_data( '_exacoat_tracking_number', $tracking_number );
-			$order->update_meta_data( '_artmatter_tracking_number', $tracking_number );
-			if ( ! empty( $carrier ) ) {
-				$order->update_meta_data( 'carrier_id', $carrier );
-				$order->update_meta_data( '_carrier_id', $carrier );
-			}
-			$order->save();
+			$meta_updated = false;
 
-			update_post_meta( $order_id, 'tracking_number', $tracking_number );
-			update_post_meta( $order_id, '_tracking_number', $tracking_number );
-			update_post_meta( $order_id, '_exacoat_tracking_number', $tracking_number );
-			update_post_meta( $order_id, '_artmatter_tracking_number', $tracking_number );
+			// Ensure consistent metadata across HPOS and postmeta only if changed
+			foreach ( [ 'tracking_number', '_tracking_number', '_exacoat_tracking_number', '_artmatter_tracking_number' ] as $mkey ) {
+				if ( (string) $order->get_meta( $mkey ) !== $tracking_number ) {
+					$order->update_meta_data( $mkey, $tracking_number );
+					update_post_meta( $order_id, $mkey, $tracking_number );
+					$meta_updated = true;
+				}
+			}
 			if ( ! empty( $carrier ) ) {
-				update_post_meta( $order_id, 'carrier_id', $carrier );
-				update_post_meta( $order_id, '_carrier_id', $carrier );
+				foreach ( [ 'carrier_id', '_carrier_id' ] as $ckey ) {
+					if ( (string) $order->get_meta( $ckey ) !== $carrier ) {
+						$order->update_meta_data( $ckey, $carrier );
+						update_post_meta( $order_id, $ckey, $carrier );
+						$meta_updated = true;
+					}
+				}
 			}
 
-			// If tracking number changed or has not been registered yet
-			if ( $prev_registered !== $tracking_number ) {
+			// Add note ONLY if tracking number changed or has never been logged
+			if ( $prev_logged !== $tracking_number ) {
 				$carriers = self::get_carrier_registry();
 				$carrier_label = $carriers[ $carrier ]['name'] ?? ( ! empty( $carrier ) ? ucfirst( $carrier ) : 'Auto-Detect' );
 
-				$note_action = empty( $prev_registered ) ? 'added' : 'updated';
+				$note_action = empty( $prev_logged ) ? 'added' : 'updated';
 				$order->add_order_note( sprintf( 'Shipping: Tracking %s <strong>%s</strong> (%s)', esc_html( $note_action ), esc_html( $tracking_number ), esc_html( $carrier_label ) ) );
 
-				// Register with TrackingMore
+				// Persist logged tracking meta immediately so duplicate notes are blocked forever
+				$order->update_meta_data( '_exacoat_tracking_note_logged_number', $tracking_number );
+				$order->update_meta_data( '_exacoat_tracking_note_logged_carrier', $carrier );
+				update_post_meta( $order_id, '_exacoat_tracking_note_logged_number', $tracking_number );
+				update_post_meta( $order_id, '_exacoat_tracking_note_logged_carrier', $carrier );
+				$meta_updated = true;
+
+				// Register with TrackingMore if configured
 				$reg_result = self::register_with_trackingmore( $tracking_number, $carrier, $order_id );
 				if ( ! empty( $reg_result['success'] ) ) {
 					$order->update_meta_data( '_artmatter_trackingmore_registered_number', $tracking_number );
 					$order->update_meta_data( '_artmatter_trackingmore_registered', 1 );
 					$order->update_meta_data( '_artmatter_17track_registered_number', $tracking_number );
 					$order->update_meta_data( '_artmatter_17track_registered', 1 );
-					$order->save();
 					update_post_meta( $order_id, '_artmatter_trackingmore_registered_number', $tracking_number );
 					update_post_meta( $order_id, '_artmatter_trackingmore_registered', 1 );
 					update_post_meta( $order_id, '_artmatter_17track_registered_number', $tracking_number );
@@ -297,20 +326,30 @@ class Exacoat_Shipping_Tracker {
 					self::sync_order_tracking( $order_id );
 				}
 			}
-		} elseif ( ! empty( $prev_registered ) && empty( $tracking_number ) ) {
+
+			if ( $meta_updated ) {
+				$processing_orders[ $order_id ] = true;
+				$order->save();
+				$processing_orders[ $order_id ] = false;
+			}
+		} elseif ( ! empty( $prev_logged ) && empty( $tracking_number ) ) {
 			$order->add_order_note( 'Shipping: Tracking number removed.' );
+			$order->delete_meta_data( '_exacoat_tracking_note_logged_number' );
+			$order->delete_meta_data( '_exacoat_tracking_note_logged_carrier' );
 			$order->delete_meta_data( '_artmatter_trackingmore_registered_number' );
 			$order->delete_meta_data( '_artmatter_trackingmore_registered' );
 			$order->delete_meta_data( '_artmatter_17track_registered_number' );
 			$order->delete_meta_data( '_artmatter_17track_registered' );
-			$order->save();
+			delete_post_meta( $order_id, '_exacoat_tracking_note_logged_number' );
+			delete_post_meta( $order_id, '_exacoat_tracking_note_logged_carrier' );
 			delete_post_meta( $order_id, '_artmatter_trackingmore_registered_number' );
 			delete_post_meta( $order_id, '_artmatter_trackingmore_registered' );
 			delete_post_meta( $order_id, '_artmatter_17track_registered_number' );
 			delete_post_meta( $order_id, '_artmatter_17track_registered' );
+			$processing_orders[ $order_id ] = true;
+			$order->save();
+			$processing_orders[ $order_id ] = false;
 		}
-
-		unset( $processing_orders[ $order_id ] );
 	}
 
 	public static function render_email_tracking_info( $order, $sent_to_admin, $plain_text, $email ) {

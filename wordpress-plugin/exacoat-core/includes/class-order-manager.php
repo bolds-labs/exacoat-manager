@@ -1046,6 +1046,8 @@ class Exacoat_Order_Manager {
 		$order->update_meta_data( '_artmatter_tracking_number', $tracking_number );
 		$order->update_meta_data( '_tracking_number', $tracking_number );
 		$order->update_meta_data( '_tracking_provider', $carrier_display );
+		$order->update_meta_data( '_exacoat_tracking_note_logged_number', $tracking_number );
+		$order->update_meta_data( '_exacoat_tracking_note_logged_carrier', $carrier_id );
 		$order->save();
 
 		// Save to traditional postmeta and ACF fields
@@ -1054,6 +1056,8 @@ class Exacoat_Order_Manager {
 		update_post_meta( $order_id, '_exacoat_tracking_info', $tracking_info );
 		update_post_meta( $order_id, '_exacoat_courier', $carrier_display );
 		update_post_meta( $order_id, '_exacoat_tracking_number', $tracking_number );
+		update_post_meta( $order_id, '_exacoat_tracking_note_logged_number', $tracking_number );
+		update_post_meta( $order_id, '_exacoat_tracking_note_logged_carrier', $carrier_id );
 		update_post_meta( $order_id, '_artmatter_tracking_info', $tracking_info );
 		update_post_meta( $order_id, '_artmatter_courier', $carrier_display );
 		update_post_meta( $order_id, '_artmatter_tracking_number', $tracking_number );
@@ -1944,7 +1948,22 @@ class Exacoat_Order_Manager {
 
 		if ( function_exists( 'wc_get_order_notes' ) ) {
 			$raw_notes = wc_get_order_notes( [ 'order_id' => $order_id ] );
+			$seen_tracking_bursts = [];
 			foreach ( $raw_notes as $n ) {
+				$raw_content = trim( (string) $n->content );
+				$timestamp   = $n->date_created ? $n->date_created->getTimestamp() : 0;
+
+				// Collapse identical duplicate tracking notes generated within a 5-minute burst window
+				if ( false !== strpos( $raw_content, 'Shipping: Tracking' ) ) {
+					$normalized = wp_strip_all_tags( $raw_content );
+					$bucket     = (int) floor( $timestamp / 300 );
+					$burst_key  = $normalized . '_' . $bucket;
+					if ( isset( $seen_tracking_bursts[ $burst_key ] ) ) {
+						continue;
+					}
+					$seen_tracking_bursts[ $burst_key ] = true;
+				}
+
 				$raw_added_by = trim( (string) $n->added_by );
 				$author_name  = $raw_added_by ?: 'System';
 				$author_role  = 'System';
