@@ -3282,6 +3282,7 @@ export const AffiliatesPage: React.FC = () => {
                     {creatorPreviewTab === 'payouts' && (
                       <AffiliatePayoutsPage
                         profile={previewPortalData.profile}
+                        metrics={previewPortalData.metrics}
                         payouts={previewPortalData.payouts}
                         onRefresh={() => handleSeeAsCreator(previewCreatorAffiliate)}
                         onNavigateTab={(tab) => setCreatorPreviewTab(tab as any)}

@@ -22,6 +22,12 @@ import { clsx } from 'clsx';
 
 interface AffiliatePayoutsPageProps {
   profile: AffiliateProfile;
+  metrics?: {
+    unpaid_balance?: number;
+    lifetime_earnings?: number;
+    min_payout_amount?: number;
+    [key: string]: any;
+  };
   payouts: AffiliatePayout[];
   onRefresh: () => void;
   onNavigateTab: (tab: 'dashboard' | 'links' | 'payouts' | 'settings') => void;
@@ -29,6 +35,7 @@ interface AffiliatePayoutsPageProps {
 
 export const AffiliatePayoutsPage: React.FC<AffiliatePayoutsPageProps> = ({
   profile,
+  metrics,
   payouts,
   onRefresh,
   onNavigateTab,
@@ -37,8 +44,8 @@ export const AffiliatePayoutsPage: React.FC<AffiliatePayoutsPageProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-  const minPayout = 250000;
-  const unpaidBalance = Number(profile.unpaid_balance || 0);
+  const minPayout = Number(metrics?.min_payout_amount) || 250000;
+  const unpaidBalance = Number(metrics?.unpaid_balance ?? profile.unpaid_balance ?? 0);
   const hasValidBank = Boolean(profile.bank_name && profile.bank_account_number && profile.bank_account_name);
 
   // Check if open pending payout request exists
@@ -51,7 +58,7 @@ export const AffiliatePayoutsPage: React.FC<AffiliatePayoutsPageProps> = ({
   const handleConfirmPayoutRequest = async () => {
     setIsSubmitting(true);
     try {
-      const res = await requestAffiliatePayout();
+      const res = await requestAffiliatePayout(profile.id);
       if (res.success) {
         showToast('success', 'Payout Requested', res.message || 'Your payout request has been submitted.');
         setShowConfirmModal(false);

@@ -53,6 +53,9 @@ export const AffiliatePortalApp: React.FC = () => {
       const targetAffId = affIdParam && isStaff ? Number(affIdParam) : undefined;
       const res = await fetchAffiliatePortalData(targetAffId);
       if (res.success && res.profile) {
+        if (res.metrics && typeof res.metrics.unpaid_balance === 'number') {
+          res.profile.unpaid_balance = res.metrics.unpaid_balance;
+        }
         setProfile(res.profile);
         if (res.metrics) setMetrics(res.metrics);
         if (res.commissions) setCommissions(res.commissions);
@@ -166,6 +169,7 @@ export const AffiliatePortalApp: React.FC = () => {
       {currentTab === 'payouts' && profile && (
         <AffiliatePayoutsPage
           profile={profile}
+          metrics={metrics}
           payouts={payouts}
           onRefresh={loadPortalData}
           onNavigateTab={setCurrentTab}

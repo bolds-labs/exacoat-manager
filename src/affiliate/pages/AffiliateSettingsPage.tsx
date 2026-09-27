@@ -1,20 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Building2, 
   Lock, 
   Unlock, 
-  AlertCircle, 
   Save, 
-  User, 
-  ShieldCheck, 
-  CreditCard, 
-  AtSign, 
   ExternalLink,
-  Percent,
   Copy,
   Check,
   KeyRound
 } from 'lucide-react';
+import { Tooltip } from '../../components/ui/Tooltip';
 import { AffiliateProfile, AffiliateBankName } from '../../types';
 import { updateAffiliateSettings } from '../../lib/wordpressBridge';
 import { useToast } from '../../context/ToastContext';
@@ -214,18 +208,13 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
           {/* 1. Customer Discount & Split Card */}
           <GlassCard className="p-5 sm:p-6 border border-white/[0.08] space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-white/[0.06]">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[#f3aa18] flex items-center justify-center shrink-0">
-                  <Percent className="w-4 h-4" />
-                </div>
-                <div>
-                  <h2 className="text-xs font-bold text-white font-['Chakra_Petch'] tracking-wide uppercase">
-                    Customer Discount &amp; Split
-                  </h2>
-                  <p className="text-[11px] text-zinc-400 mt-0.5">
-                    Set the discount your followers receive when shopping through your link.
-                  </p>
-                </div>
+              <div>
+                <h2 className="text-xs font-bold text-white font-['Chakra_Petch'] tracking-wide uppercase">
+                  Customer Discount &amp; Split
+                </h2>
+                <p className="text-[11px] text-zinc-400 mt-0.5">
+                  Set the discount your followers receive when shopping through your link.
+                </p>
               </div>
               <span className="self-start sm:self-auto text-xs font-mono text-zinc-400 bg-white/[0.04] px-2.5 py-0.5 rounded-full border border-white/[0.08]">
                 Commission Pool: <strong className="text-white">{maxPool}%</strong>
@@ -315,31 +304,20 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
 
           {/* 2. Indonesian Bank Settings Card */}
           <GlassCard className="p-6 sm:p-7 border border-white/[0.08] space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/[0.06]">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#f3aa18]/10 border border-[#f3aa18]/20 text-[#f3aa18] flex items-center justify-center shrink-0">
-                  <Building2 className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-white font-['Chakra_Petch'] tracking-wide uppercase">
-                    Bank Payout Destination
-                  </h2>
-                  <p className="text-xs text-zinc-400 mt-0.5">
-                    Earnings are disbursed in IDR directly via Indonesian bank transfer.
-                  </p>
-                </div>
-              </div>
-              <span className="self-start sm:self-auto text-[11px] font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-3 py-1 rounded-full border border-[#f3aa18]/25">
-                BCA &amp; Mandiri Supported
-              </span>
+            <div className="pb-4 border-b border-white/[0.06]">
+              <h2 className="text-sm font-bold text-white font-['Chakra_Petch'] tracking-wide uppercase">
+                Bank Payout Destination
+              </h2>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Earnings are disbursed in IDR directly via Indonesian bank transfer.
+              </p>
             </div>
 
             <form onSubmit={handleSaveBankDetails} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Bank Selector */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                    <CreditCard className="w-3.5 h-3.5 text-[#f3aa18]" />
+                  <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1">
                     <span>Destination Bank</span>
                     <span className="text-[#f3aa18]">*</span>
                   </label>
@@ -356,8 +334,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
 
                 {/* Account Number */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                    <CreditCard className="w-3.5 h-3.5 text-[#f3aa18]" />
+                  <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1">
                     <span>Account Number</span>
                     <span className="text-[#f3aa18]">*</span>
                   </label>
@@ -373,11 +350,13 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
 
               {/* Account Holder Name */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 text-[#f3aa18]" />
-                  <span>Account Holder Name</span>
-                  <span className="text-[#f3aa18]">*</span>
-                </label>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1">
+                    <span>Account Holder Name</span>
+                    <span className="text-[#f3aa18]">*</span>
+                  </label>
+                  <Tooltip content="Please ensure the holder name matches your bank account exactly to prevent transfer reversals. Minimum payout threshold is Rp 250.000." />
+                </div>
                 <input
                   type="text"
                   value={accountName}
@@ -385,9 +364,6 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
                   placeholder="Account holder name as registered in bank"
                   className="w-full bg-[#050506] border border-white/[0.1] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
                 />
-                <p className="text-[11px] text-zinc-400">
-                  Please ensure the holder name matches your bank account exactly to prevent transfer reversals. Minimum payout threshold is Rp 250,000.
-                </p>
               </div>
 
               <div className="pt-2 flex justify-end">
@@ -409,26 +385,20 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
         <div className="lg:col-span-5 space-y-6">
           {/* 3. Referral Identity & Custom Slug Card */}
           <GlassCard className="p-6 border border-white/[0.08] space-y-5">
-            <div className="flex items-center gap-3 pb-3.5 border-b border-white/[0.06]">
-              <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[#f3aa18] flex items-center justify-center shrink-0">
-                <User className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-white font-['Chakra_Petch'] tracking-wide uppercase">
-                  Referral Branding
-                </h2>
-                <p className="text-xs text-zinc-400">
-                  Your public creator identity and referral link.
-                </p>
-              </div>
+            <div className="pb-3.5 border-b border-white/[0.06]">
+              <h2 className="text-sm font-bold text-white font-['Chakra_Petch'] tracking-wide uppercase">
+                Referral Branding
+              </h2>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Your public creator identity and referral link.
+              </p>
             </div>
 
             {/* Public Creator Name */}
             <form onSubmit={handleSaveDisplayName} className="space-y-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 text-[#f3aa18]" />
-                  <span>Public Creator Name</span>
+                <label className="text-xs font-semibold text-zinc-300">
+                  Public Creator Name
                 </label>
                 <input
                   type="text"
@@ -455,10 +425,12 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
             {/* Custom Referral Slug */}
             <div className="pt-3 border-t border-white/[0.06] space-y-3">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                  <AtSign className="w-3.5 h-3.5 text-[#f3aa18]" />
-                  <span>Referral URL &amp; Slug</span>
-                </label>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs font-semibold text-zinc-300">
+                    Referral URL &amp; Slug
+                  </label>
+                  <Tooltip content="Customizing your slug locks it permanently to preserve all future traffic and prevent broken links across your shared posts and videos." />
+                </div>
                 {isSlugLocked ? (
                   <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-zinc-300 bg-white/[0.04] px-2 py-0.5 rounded border border-white/[0.08]">
                     <Lock className="w-2.5 h-2.5 text-[#f3aa18]" />
@@ -473,23 +445,18 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
               </div>
 
               {isSlugLocked ? (
-                <div className="space-y-2">
-                  <div className="p-3 rounded-xl bg-[#050506] border border-white/[0.08] flex items-center justify-between gap-2">
-                    <p className="text-xs font-mono text-[#f3aa18] font-bold truncate select-all">
-                      https://exacoat.com/?x={profile.slug}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleCopyReferralUrl}
-                      className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer shrink-0"
-                      title="Copy referral link"
-                    >
-                      {hasCopiedSlug ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-zinc-400 leading-relaxed">
-                    Locked permanently to prevent broken links across your shared posts and videos.
+                <div className="p-3 rounded-xl bg-[#050506] border border-white/[0.08] flex items-center justify-between gap-2">
+                  <p className="text-xs font-mono text-[#f3aa18] font-bold truncate select-all">
+                    https://exacoat.com/?x={profile.slug}
                   </p>
+                  <button
+                    type="button"
+                    onClick={handleCopyReferralUrl}
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer shrink-0"
+                    title="Copy referral link"
+                  >
+                    {hasCopiedSlug ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
                 </div>
               ) : (
                 <form onSubmit={handleLockCustomSlug} className="space-y-3">
@@ -504,12 +471,6 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
                       placeholder="your-referral-slug"
                       className="flex-1 bg-[#050506] border border-white/[0.1] rounded-r-xl px-3 py-2 text-xs font-mono text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/60 focus:ring-1 focus:ring-[#f3aa18]/60 transition-all"
                     />
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-[#f3aa18]/10 border border-[#f3aa18]/20 flex items-start gap-2 text-xs text-[#f3aa18]">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                    <p className="text-[11px] text-zinc-300 leading-relaxed">
-                      Customizing your slug locks it permanently to preserve all future traffic.
-                    </p>
                   </div>
                   <div className="flex justify-end">
                     <Button
@@ -531,18 +492,13 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
 
           {/* 4. Account Details & Security Card */}
           <GlassCard className="p-5 border border-white/[0.08] space-y-4">
-            <div className="flex items-center gap-3 pb-3 border-b border-white/[0.06]">
-              <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
-                <ShieldCheck className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="text-xs font-bold text-white font-['Chakra_Petch'] tracking-wide uppercase">
-                  Account &amp; Security
-                </h2>
-                <p className="text-[11px] text-zinc-400">
-                  Account profile and credential management.
-                </p>
-              </div>
+            <div className="pb-3 border-b border-white/[0.06]">
+              <h2 className="text-xs font-bold text-white font-['Chakra_Petch'] tracking-wide uppercase">
+                Account &amp; Security
+              </h2>
+              <p className="text-[11px] text-zinc-400 mt-0.5">
+                Account profile and credential management.
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-xs">
