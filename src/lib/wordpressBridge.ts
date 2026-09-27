@@ -2303,7 +2303,7 @@ STRICT ANTISLOP COPYWRITING RULES (MANDATORY):
 Campaign Context:
 - Campaign Type: ${params.campaignType}
 - Target Audience: ${params.targetAudience || 'Hardware enthusiasts and customers'}
-- Product / Focus: ${params.productFocus || 'Precision device skins and new textures'}
+- Product / Focus: ${params.productFocus || 'Precision device protection and new releases'}
 - Special Offer / Promo Details: ${params.promoDetails || 'No specific discount, focus on craftsmanship and release details'}
 - Tone Preference: ${params.tone || 'Exacoat Studio Wit (Dry & Observant)'}
 
@@ -2314,7 +2314,7 @@ Format your response strictly as valid, raw JSON (no markdown formatting, no cod
   "headline": "Bold, witty display headline",
   "subPillNotice": "Capsule notice pill (e.g. Free Replacement Guarantee • Sub-Millimeter Fit)",
   "bodyText": "Paragraph 1\\n\\nParagraph 2",
-  "ctaText": "UPPERCASE CTA LABEL (e.g. ORDER YOUR SKIN, EXPLORE MATRIX, CLAIM 15% OFF)",
+  "ctaText": "UPPERCASE CTA LABEL (e.g. EXPLORE CATALOG, ORDER NOW, CLAIM 15% OFF)",
   "cards": [
     {
       "title": "Card 1 Title",
@@ -2365,7 +2365,7 @@ Format your response strictly as valid, raw JSON (no markdown formatting, no cod
       headline: cleanAntiSlopCopy(parsed.headline || ''),
       subPillNotice: cleanAntiSlopCopy(parsed.subPillNotice || ''),
       bodyText: cleanAntiSlopCopy(parsed.bodyText || ''),
-      ctaText: cleanAntiSlopCopy(parsed.ctaText || 'ORDER YOUR SKIN').toUpperCase(),
+      ctaText: cleanAntiSlopCopy(parsed.ctaText || 'EXPLORE CATALOG').toUpperCase(),
       cards: cards.length > 0 ? cards : undefined,
       promoCode: parsed.promoCode ? cleanAntiSlopCopy(parsed.promoCode) : undefined,
       promoTitle: parsed.promoTitle ? cleanAntiSlopCopy(parsed.promoTitle) : undefined,
@@ -2476,9 +2476,9 @@ ARCHITECTURAL SPECIFICATIONS (${isMjml ? 'MJML' : 'HTML'} DESIGN):
        <mj-text font-size="14.5px" color="#a1a1aa" line-height="1.7" />
      </mj-attributes>
    </mj-head>
-2. Top Webview Link & Generous Spacing:
-   - Include top section with generous padding:
-     <mj-section padding="40px 0 16px"><mj-column><mj-text align="center" font-size="11px" color="#71717a" padding="0">If you cannot see this email properly, please <a href="{{webview_url}}" style="color:#a1a1aa;text-decoration:underline;">click here</a>.</mj-text></mj-column></mj-section>
+2. Top Spacing Spacer (MANDATORY EQUAL MARGIN):
+   - Include top section with 48px spacing (matching bottom spacer exactly):
+     <mj-section padding="48px 0 0"></mj-section>
 3. Body & Wrapper (${isDark ? 'Dark Mode' : 'Light Mode'}):
    - <mj-body background-color="${isDark ? '#050507' : '#f7f7f7'}">
    - <mj-wrapper background-color="${isDark ? '#0e0e11' : '#ffffff'}" border-radius="28px" border="1px solid ${isDark ? '#1f1f24' : '#e5e5e5'}" padding="36px 28px 32px">
@@ -2518,7 +2518,7 @@ ARCHITECTURAL SPECIFICATIONS (${isMjml ? 'MJML' : 'HTML'} DESIGN):
    - High-contrast pill button in its own section:
      <mj-section padding="16px 0 28px">
        <mj-column>
-         <mj-button href="https://exacoat.com/shop" background-color="#f59e0b" color="#000000" font-weight="900" font-size="14.5px" border-radius="999px" inner-padding="15px 38px">ORDER YOUR SKIN</mj-button>
+         <mj-button href="https://exacoat.com/shop" background-color="#f59e0b" color="#000000" font-weight="900" font-size="14.5px" border-radius="999px" inner-padding="15px 38px">EXPLORE CATALOG</mj-button>
        </mj-column>
      </mj-section>
 9. Footer:
@@ -2530,9 +2530,9 @@ ARCHITECTURAL SPECIFICATIONS (${isMjml ? 'MJML' : 'HTML'} DESIGN):
      </mj-social>
    - &copy; 2016-2026 Exacoat
    - Acumbamail placeholders: <a href="{{webview_url}}">View in browser</a> and <a href="{{unsubscribe_url}}">Unsubscribe</a>
-10. Bottom Spacing Spacer:
-   - After the main </mj-wrapper>, include a bottom spacer section so the card never touches the bottom:
-     <mj-section padding="0 0 60px"></mj-section>
+10. Bottom Spacing Spacer (MANDATORY EQUAL MARGIN):
+   - After the main </mj-wrapper>, include a bottom spacer section matching the top spacer exactly:
+     <mj-section padding="0 0 48px"></mj-section>
 11. CRITICAL MJML VALIDATION RULES:
    - STRICT HIERARCHY: <mj-wrapper> can ONLY contain <mj-section> or <mj-raw>. NEVER place <mj-button>, <mj-text>, or <mj-social> directly inside <mj-wrapper>! Every content element must be inside an <mj-column> within an <mj-section>.
    - NEVER use 'border' or 'border-radius' on <mj-text>. It is strictly illegal in MJML.

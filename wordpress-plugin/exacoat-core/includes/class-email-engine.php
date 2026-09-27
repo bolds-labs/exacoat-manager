@@ -215,7 +215,7 @@ class Exacoat_Email_Engine {
 				'badge'          => 'In production',
 				'icon'           => 'security',
 				'title'          => 'In production',
-				'body_primary'   => 'Your custom skins for order #{{order_number}} are now on our production line.',
+				'body_primary'   => 'Your order #{{order_number}} is now on our production line.',
 				'body_secondary' => 'We will notify you as soon as your order is packaged and ready to ship.',
 				'type'           => 'customer_order',
 				'defaults'       => self::get_mock_order_defaults( '14589' ),
@@ -256,7 +256,7 @@ class Exacoat_Email_Engine {
 				'icon'           => 'document_verified',
 				'title'          => 'Delivered',
 				'body_primary'   => 'Your order #{{order_number}} has been delivered by the courier.',
-				'body_secondary' => 'We hope you enjoy your new skins. If you need any assistance, our support team is always here to help.',
+				'body_secondary' => 'We hope you enjoy your new products. If you need any assistance, our support team is always here to help.',
 				'type'           => 'customer_order',
 				'defaults'       => self::get_mock_order_defaults( '14589' ),
 			],
@@ -268,7 +268,7 @@ class Exacoat_Email_Engine {
 				'icon'           => 'document_verified',
 				'title'          => 'Delivered',
 				'body_primary'   => 'Your order #{{order_number}} has been delivered by the courier.',
-				'body_secondary' => 'We hope you enjoy your new skins. If you need any assistance, our support team is always here to help.',
+				'body_secondary' => 'We hope you enjoy your new products. If you need any assistance, our support team is always here to help.',
 				'type'           => 'customer_order',
 				'defaults'       => self::get_mock_order_defaults( '14589' ),
 			],
@@ -324,16 +324,16 @@ class Exacoat_Email_Engine {
 				'subject'        => 'Review {{product_title}} and get a special offer on your next order',
 				'badge'          => 'Product Review',
 				'icon'           => 'document_verified',
-				'title'          => 'How do your new skins look?',
-				'body_primary'   => 'Your Exacoat skin was delivered recently. We hope you love your new look.',
-				'body_secondary' => 'Take a moment to share your review and a photo of your skin installed on your device.',
+				'title'          => 'How is your new order?',
+				'body_primary'   => 'Your Exacoat order was delivered recently. We hope you love your new items.',
+				'body_secondary' => 'Take a moment to share your review and a photo of your item to earn store credit for your next order.',
 				'cta_text'       => 'Write a Review',
 				'type'           => 'review_invitation',
 				'defaults'       => [
 					'order_number'        => '14589',
 					'customer_first_name' => 'Alex',
-					'product_title'       => 'iPhone 16 Pro Skins',
-					'artwork_title'       => 'iPhone 16 Pro Skins',
+					'product_title'       => 'iPhone 16 Pro',
+					'artwork_title'       => 'iPhone 16 Pro',
 					'artwork_image'       => 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
 					'review_url'          => 'https://exacoat.com/review?order_id=14589',
 				],
@@ -403,7 +403,7 @@ class Exacoat_Email_Engine {
 				'body_secondary' => '',
 				'type'           => 'customer_order',
 				'defaults'       => self::get_mock_order_defaults( '14589', [
-					'customer_note' => 'Your device skin has completed quality inspection and packaging.',
+					'customer_note' => 'Your order has completed quality inspection and packaging.',
 				] ),
 			],
 			'customer_order_invoice' => [
@@ -427,7 +427,7 @@ class Exacoat_Email_Engine {
 				'title'          => 'Your cashback is ready to use',
 				'body_primary'   => 'Your cashback of {{cashback_amount}} from order #{{order_number}} has been credited to your Exacoat store credit balance.',
 				'body_secondary' => 'Your available store credit balance is now {{store_credit_balance}}. You can apply it directly during checkout on your next order.',
-				'cta_text'       => 'Shop Device Skins',
+				'cta_text'       => 'Explore Catalog',
 				'type'           => 'store_credit',
 				'defaults'       => [
 					'customer_first_name'  => 'Alex',
@@ -446,7 +446,7 @@ class Exacoat_Email_Engine {
 				'icon'           => 'document_verified',
 				'title'          => 'Your store credit is waiting',
 				'body_primary'   => 'You still have {{store_credit_balance}} in store credit available in your Exacoat account.',
-				'body_secondary' => 'Use it on your next precision skin, camera protection, or accessories. Simply log in and apply your balance at checkout.',
+				'body_secondary' => 'Use it on your next order across our entire catalog. Simply log in and apply your balance at checkout.',
 				'cta_text'       => 'Use Your Credit',
 				'type'           => 'store_credit',
 				'defaults'       => [
@@ -464,7 +464,7 @@ class Exacoat_Email_Engine {
 				'icon'           => 'document_verified',
 				'title'          => 'Your store credit is expiring soon',
 				'body_primary'   => 'A friendly reminder that your store credit balance of {{store_credit_balance}} is scheduled to expire in 30 days.',
-				'body_secondary' => 'Apply your balance during checkout on any precision device skin or accessories before it expires.',
+				'body_secondary' => 'Apply your balance during checkout on any items across our catalog before it expires.',
 				'cta_text'       => 'Use Credit Before It Expires',
 				'type'           => 'store_credit',
 				'defaults'       => [
@@ -482,7 +482,7 @@ class Exacoat_Email_Engine {
 				'icon'           => 'document_verified',
 				'title'          => 'Your Exacoat Perks',
 				'body_primary'   => 'Thank you for sharing your experience with the Exacoat community. Here is your exclusive 20% promo code for your next order.',
-				'body_secondary' => 'This promo code applies to any device skin across our entire catalog.',
+				'body_secondary' => 'This promo code applies to any items across our entire catalog.',
 				'cta_text'       => 'Explore The Collection',
 				'type'           => 'review_reward',
 				'defaults'       => [
@@ -491,7 +491,7 @@ class Exacoat_Email_Engine {
 					'discount_percent'    => '20',
 					'discount_amount'     => '20%',
 					'expiry_date'         => date( 'F j, Y', strtotime( '+30 days' ) ),
-					'product_title'       => 'Device Skin',
+					'product_title'       => 'Product',
 					'shop_url'            => 'https://exacoat.com/shop/',
 				],
 			],
@@ -625,7 +625,7 @@ class Exacoat_Email_Engine {
 			'unsubscribe_url'     => trailingslashit( $storefront_base ) . 'cart/?unsubscribe_cart=mock_cart_token_98234',
 			'items'               => [
 				[
-					'name'          => 'iPhone 16 Pro Skins',
+					'name'          => 'iPhone 16 Pro',
 					'image_url'     => 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
 					'quantity'      => 1,
 					'price'         => 'Rp 149.000',
@@ -647,7 +647,7 @@ class Exacoat_Email_Engine {
 			'currency'             => 'IDR',
 			'items'                => [
 				[
-					'name'          => 'iPhone 16 Pro Skins',
+					'name'          => 'iPhone 16 Pro',
 					'image_url'     => 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
 					'quantity'      => 1,
 					'subtotal'      => 'Rp 149.000',
@@ -816,7 +816,7 @@ class Exacoat_Email_Engine {
 			</tr>";
 		} elseif ( $type === 'commission' ) {
 			$art_img   = esc_url( $merged_data['artwork_image'] ?? 'https://media.artmatter.co/2026/08/sample-art.jpg' );
-			$art_title = esc_html( $merged_data['product_title'] ?? ( $merged_data['artwork_title'] ?? 'Precision Skin' ) );
+			$art_title = esc_html( $merged_data['product_title'] ?? ( $merged_data['artwork_title'] ?? 'Exacoat Product' ) );
 			$quantity  = intval( $merged_data['quantity'] ?? 1 );
 			$comm_stat = esc_html( $merged_data['commission_status'] ?? 'Pending' );
 			$comm_amt  = esc_html( $merged_data['commission_amount'] ?? '$15.00' );
@@ -868,7 +868,7 @@ class Exacoat_Email_Engine {
 			</tr>";
 		} elseif ( $type === 'artwork_rejection' ) {
 			$art_img   = esc_url( $merged_data['artwork_image'] ?? '' );
-			$art_title = esc_html( $merged_data['product_title'] ?? ( $merged_data['artwork_title'] ?? 'Precision Skin' ) );
+			$art_title = esc_html( $merged_data['product_title'] ?? ( $merged_data['artwork_title'] ?? 'Exacoat Product' ) );
 			$reason    = esc_html( $merged_data['rejection_reason'] ?? 'Submission does not meet curation criteria.' );
 			$cta_text  = esc_html( $tmpl['cta_text'] ?? 'Go to Studio Dashboard' );
 			$cta_url   = esc_url( $tmpl['cta_url'] ?? 'https://exacoat.com/dashboard' );
@@ -1116,10 +1116,13 @@ class Exacoat_Email_Engine {
   </style>
 </head>
 <body bgcolor=\"#0f0f0f\">
-  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#0f0f0f\" style=\"border-collapse:collapse;\">
+  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#0f0f0f\" style=\"border-collapse:collapse;background-color:#0f0f0f;\">
     <tbody>
       <tr>
-        <td align=\"center\" style=\"padding:48px 16px;\">
+        <td height=\"48\" style=\"height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align=\"center\" style=\"padding:0 16px;\">
           <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:600px;background-color:#1a1a1a;border-radius:16px;overflow:hidden;\" bgcolor=\"#1a1a1a\">
             <tbody>
               <!-- 1. Wordmark Header -->
@@ -1212,7 +1215,12 @@ class Exacoat_Email_Engine {
           </table>
         </td>
       </tr>
+      <tr>
+        <td height=\"48\" style=\"height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
+      </tr>
     </tbody>
+  </table>
+</body>
 </html>";
 
 		// Final Pass: Ensure ZERO raw template tags exist anywhere in output HTML or Subject
@@ -1409,7 +1417,7 @@ class Exacoat_Email_Engine {
 		if ( empty( $items ) || ! is_array( $items ) ) {
 			$items = [
 				[
-					'name'          => 'iPhone 16 Pro Skins',
+					'name'          => 'iPhone 16 Pro',
 					'image_url'     => 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
 					'quantity'      => 1,
 					'subtotal'      => $data['subtotal'] ?? 'Rp 149.000',
@@ -1421,7 +1429,7 @@ class Exacoat_Email_Engine {
 
 		$items_rows = '';
 		foreach ( $items as $item ) {
-			$raw_name = $item['name'] ?? 'Device Skin';
+			$raw_name = $item['name'] ?? 'Exacoat Product';
 			$clean_name = trim( preg_replace( '/\s*\(\s*feelform.*?\s*\)/i', '', (string) $raw_name ) );
 			$i_name = esc_html( $clean_name );
 			$i_img  = esc_url( $item['image_url'] ?? ( $item['image'] ?? 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg' ) );
@@ -1559,11 +1567,15 @@ class Exacoat_Email_Engine {
 </head>
 <body bgcolor=\"#f7f7f7\" style=\"margin:0;padding:0;background-color:#f7f7f7;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;\">
   " . ( ! empty( $preheader ) ? "<div style=\"display:none;font-size:1px;color:#333333;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;mso-hide:all;\">" . esc_html( $preheader ) . "</div>" : "" ) . "
-  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#f7f7f7\" style=\"background-color:#f7f7f7;padding:44px 16px;\">
-    <tr>
-      <td align=\"center\">
-        <!-- Main Card -->
-        <table class=\"container-table\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:600px;background:#ffffff;border:1px solid #e5e5e5;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.04);\">
+  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#f7f7f7\" style=\"border-collapse:collapse;background-color:#f7f7f7;\">
+    <tbody>
+      <tr>
+        <td height=\"48\" style=\"height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align=\"center\" style=\"padding:0 16px;\">
+          <!-- Main Card -->
+          <table class=\"container-table\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:600px;background:#ffffff;border:1px solid #e5e5e5;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.04);\">
           <tbody>
             <!-- Top Header (Logo + Badge) -->
             <tr>
@@ -1672,7 +1684,11 @@ class Exacoat_Email_Engine {
         </table>
       </td>
     </tr>
-  </table>
+    <tr>
+      <td height=\"48\" style=\"height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
+    </tr>
+  </tbody>
+</table>
 </body>
 </html>";
 
@@ -1704,8 +1720,8 @@ class Exacoat_Email_Engine {
 		$order_num     = esc_html( $data['order_number'] ?? '14589' );
 		$cust_name     = esc_html( $data['customer_first_name'] ?? 'Customer' );
 		$badge_text    = esc_html( $data['badge_text'] ?? $tmpl['badge'] ?? 'Product Review' );
-		$title         = esc_html( $data['title'] ?? $tmpl['title'] ?? 'How does your new skin look on your device?' );
-		$art_title     = esc_html( $data['product_title'] ?? ( $data['artwork_title'] ?? 'Precision Device Skin' ) );
+		$title         = esc_html( $data['title'] ?? $tmpl['title'] ?? 'How does your new order look?' );
+		$art_title     = esc_html( $data['product_title'] ?? ( $data['artwork_title'] ?? 'Exacoat Product' ) );
 		$art_img       = esc_url( $data['artwork_image'] ?? 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg' );
 		$artist_name   = esc_html( $data['artist_name'] ?? 'Exacoat' );
 		$review_url    = esc_url( $data['review_url'] ?? ( function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'review?order_id=' . $order_num ) : home_url( '/review?order_id=' . $order_num ) ) );
@@ -1753,10 +1769,14 @@ class Exacoat_Email_Engine {
     }
   </style>
 </head>
-<body style=\"margin:0;padding:40px 10px;background-color:#f8f8fa;\">
-  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">
-    <tr>
-      <td align=\"center\">
+<body style=\"margin:0;padding:0;background-color:#f8f8fa;\">
+  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#f8f8fa\" style=\"border-collapse:collapse;background-color:#f8f8fa;\">
+    <tbody>
+      <tr>
+        <td height=\"48\" style=\"height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align=\"center\" style=\"padding:0 16px;\">
         <table class=\"container-table\" width=\"580\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:580px;background:#ffffff;border:1px solid #eaeaea;border-radius:18px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.03);\">
           <tbody>
             <!-- Header -->
@@ -1791,7 +1811,7 @@ class Exacoat_Email_Engine {
                     </td>
                     <td valign=\"middle\" style=\"padding:12px 16px;\">
                       <p style=\"margin:0 0 4px;font-size:15px;font-weight:600;color:#111111;\">{$art_title}</p>
-                      <p style=\"margin:0;font-size:13px;color:#71717a;\">Exacoat Skin</p>
+                      <p style=\"margin:0;font-size:13px;color:#71717a;\">Exacoat Item</p>
                       <p style=\"margin:6px 0 0;font-size:11px;color:#a1a1aa;text-transform:uppercase;letter-spacing:0.5px;\">Order #{$order_num}</p>
                     </td>
                   </tr>
@@ -1833,7 +1853,11 @@ class Exacoat_Email_Engine {
         </table>
       </td>
     </tr>
-  </table>
+    <tr>
+      <td height=\"48\" style=\"height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
+    </tr>
+  </tbody>
+</table>
 </body>
 </html>";
 
@@ -1897,10 +1921,14 @@ class Exacoat_Email_Engine {
     }
   </style>
 </head>
-<body style=\"margin:0;padding:40px 10px;background-color:#f8f8fa;\">
-  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">
-    <tr>
-      <td align=\"center\">
+<body style=\"margin:0;padding:0;background-color:#f8f8fa;\">
+  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#f8f8fa\" style=\"border-collapse:collapse;background-color:#f8f8fa;\">
+    <tbody>
+      <tr>
+        <td height=\"48\" style=\"height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align=\"center\" style=\"padding:0 16px;\">
         <table class=\"container-table\" width=\"580\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:580px;background:#ffffff;border:1px solid #eaeaea;border-radius:18px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.03);\">
           <tbody>
             <!-- Header -->
@@ -1975,7 +2003,11 @@ class Exacoat_Email_Engine {
         </table>
       </td>
     </tr>
-  </table>
+    <tr>
+      <td height=\"48\" style=\"height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
+    </tr>
+  </tbody>
+</table>
 </body>
 </html>";
 
@@ -2014,7 +2046,7 @@ class Exacoat_Email_Engine {
 		$shop_url        = esc_url( $data['shop_url'] ?? ( function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'shop' ) : home_url( '/shop/' ) ) );
 		$badge_text      = esc_html( $data['badge_text'] ?? ( $tmpl['badge'] ?? 'Store Credit' ) );
 		$title           = esc_html( $data['title'] ?? ( $tmpl['title'] ?? 'Your store credit is ready' ) );
-		$cta_text        = esc_html( $data['cta_text'] ?? ( $tmpl['cta_text'] ?? 'Shop Device Skins' ) );
+		$cta_text        = esc_html( $data['cta_text'] ?? ( $tmpl['cta_text'] ?? 'Explore Catalog' ) );
 
 		$subject        = str_replace( array_keys( $replacements ), array_values( $replacements ), $tmpl['subject'] );
 		$title          = str_replace( array_keys( $replacements ), array_values( $replacements ), $title );
@@ -2055,10 +2087,14 @@ class Exacoat_Email_Engine {
     }
   </style>
 </head>
-<body style=\"margin:0;padding:40px 10px;background-color:#f8f8fa;\">
-  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">
-    <tr>
-      <td align=\"center\">
+<body style=\"margin:0;padding:0;background-color:#f8f8fa;\">
+  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#f8f8fa\" style=\"border-collapse:collapse;background-color:#f8f8fa;\">
+    <tbody>
+      <tr>
+        <td height=\"48\" style=\"height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align=\"center\" style=\"padding:0 16px;\">
         <table class=\"container-table\" width=\"580\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:580px;background:#ffffff;border:1px solid #eaeaea;border-radius:18px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.03);\">
           <tbody>
             <!-- Header -->
@@ -2134,7 +2170,11 @@ class Exacoat_Email_Engine {
         </table>
       </td>
     </tr>
-  </table>
+    <tr>
+      <td height=\"48\" style=\"height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
+    </tr>
+  </tbody>
+</table>
 </body>
 </html>";
 
@@ -2270,10 +2310,14 @@ class Exacoat_Email_Engine {
     }
   </style>
 </head>
-<body style=\"margin:0;padding:40px 10px;background-color:#f8f8fa;\">
-  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">
-    <tr>
-      <td align=\"center\">
+<body style=\"margin:0;padding:0;background-color:#f8f8fa;\">
+  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#f8f8fa\" style=\"border-collapse:collapse;background-color:#f8f8fa;\">
+    <tbody>
+      <tr>
+        <td height=\"48\" style=\"height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align=\"center\" style=\"padding:0 16px;\">
         <table class=\"container-table\" width=\"580\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:580px;background:#ffffff;border:1px solid #eaeaea;border-radius:18px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.03);\">
           <tbody>
             <!-- Header -->
@@ -2342,7 +2386,11 @@ class Exacoat_Email_Engine {
         </table>
       </td>
     </tr>
-  </table>
+    <tr>
+      <td height=\"48\" style=\"height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
+    </tr>
+  </tbody>
+</table>
 </body>
 </html>";
 
@@ -2442,9 +2490,13 @@ class Exacoat_Email_Engine {
   </style>
 </head>
 <body bgcolor=\"#f7f7f7\" style=\"margin:0;padding:0;background-color:#f7f7f7;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;\">
-  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#f7f7f7\" style=\"background-color:#f7f7f7;padding:44px 16px;\">
-    <tr>
-      <td align=\"center\">
+  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#f7f7f7\" style=\"border-collapse:collapse;background-color:#f7f7f7;\">
+    <tbody>
+      <tr>
+        <td height=\"48\" style=\"height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align=\"center\" style=\"padding:0 16px;\">
         <!-- Main Card -->
         <table class=\"container-table\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:600px;background:#ffffff;border:1px solid #e5e5e5;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.04);\">
           <tbody>
@@ -2497,7 +2549,11 @@ class Exacoat_Email_Engine {
         </table>
       </td>
     </tr>
-  </table>
+    <tr>
+      <td height=\"48\" style=\"height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
+    </tr>
+  </tbody>
+</table>
 </body>
 </html>";
 
@@ -2586,9 +2642,13 @@ class Exacoat_Email_Engine {
   </style>
 </head>
 <body bgcolor=\"#f7f7f7\" style=\"margin:0;padding:0;background-color:#f7f7f7;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;\">
-  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#f7f7f7\" style=\"background-color:#f7f7f7;padding:44px 16px;\">
-    <tr>
-      <td align=\"center\">
+  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#f7f7f7\" style=\"border-collapse:collapse;background-color:#f7f7f7;\">
+    <tbody>
+      <tr>
+        <td height=\"48\" style=\"height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align=\"center\" style=\"padding:0 16px;\">
         <!-- Main Card -->
         <table class=\"container-table\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:600px;background:#ffffff;border:1px solid #e5e5e5;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.04);\">
           <tbody>
@@ -2614,10 +2674,10 @@ class Exacoat_Email_Engine {
                 <h1 style=\"margin:0 0 20px;font-size:26px;font-weight:800;color:#111111;letter-spacing:-0.6px;line-height:1.25;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">{$title}</h1>
                 <p style=\"margin:0 0 14px;font-size:15px;font-weight:600;color:#18181b;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">Hi {$cust_name},</p>
                 <p style=\"margin:0 0 16px;font-size:14.5px;line-height:1.7;color:#3f3f46;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">
-                  We’ve prepared your custom device skin order.
+                  We have prepared your private custom order.
                 </p>
                 <p style=\"margin:0 0 20px;font-size:14.5px;line-height:1.7;color:#52525b;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">
-                  This private order link is reserved for your email. Review your device skin options below and complete checkout.
+                  This private order link is reserved for your email. Review your order details below and complete checkout.
                 </p>
 
                 {$img_preview_html}
@@ -2662,7 +2722,11 @@ class Exacoat_Email_Engine {
         </table>
       </td>
     </tr>
-  </table>
+    <tr>
+      <td height=\"48\" style=\"height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
+    </tr>
+  </tbody>
+</table>
 </body>
 </html>";
 
@@ -2792,11 +2856,15 @@ class Exacoat_Email_Engine {
     }
   </style>
 </head>
-<body style=\"margin:0;padding:40px 10px;background-color:#f4f4f5;\">
+<body style=\"margin:0;padding:0;background-color:#f4f4f5;\">
   {$preheader_html}
-  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">
-    <tr>
-      <td align=\"center\">
+  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#f4f4f5\" style=\"border-collapse:collapse;background-color:#f4f4f5;\">
+    <tbody>
+      <tr>
+        <td height=\"48\" style=\"height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align=\"center\" style=\"padding:0 16px;\">
         <table class=\"container-table\" width=\"580\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:580px;background:#ffffff;border:1px solid #e4e4e7;border-radius:18px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.03);\">
           <tbody>
             <!-- Header -->
@@ -2883,7 +2951,11 @@ class Exacoat_Email_Engine {
         </table>
       </td>
     </tr>
-  </table>
+    <tr>
+      <td height=\"48\" style=\"height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
+    </tr>
+  </tbody>
+</table>
 </body>
 </html>";
 

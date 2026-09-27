@@ -31,7 +31,7 @@ export const EMAIL_TEMPLATES_CATALOG: { category: string; items: EmailTemplateIt
           unsubscribe_url: 'https://exacoat.com/cart/?unsubscribe_cart=mock_cart_token_98234',
           items: [
             {
-              name: 'iPhone 16 Pro Skins',
+              name: 'iPhone 16 Pro',
               image_url: 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
               quantity: 1,
               price: 'Rp 149.000',
@@ -62,7 +62,7 @@ export const EMAIL_TEMPLATES_CATALOG: { category: string; items: EmailTemplateIt
           unsubscribe_url: 'https://exacoat.com/cart/?unsubscribe_cart=mock_cart_token_98234',
           items: [
             {
-              name: 'iPhone 16 Pro Skins',
+              name: 'iPhone 16 Pro',
               image_url: 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
               quantity: 1,
               price: 'Rp 149.000',
@@ -99,7 +99,7 @@ export const EMAIL_TEMPLATES_CATALOG: { category: string; items: EmailTemplateIt
         badge: 'In Production',
         badgeVariant: 'amber',
         subject: 'Your Exacoat order #{{order_number}} is in production',
-        trigger: 'Dispatched when order moves to custom precision-cut skin manufacturing.',
+        trigger: 'Dispatched when order moves to custom precision manufacturing.',
         payload: '{ "event": "customer_order_in_production", "recipient_email": "customer@gmail.com", "order_number": "14589", "customer_first_name": "William" }',
         defaults: { order_number: '14589', customer_first_name: 'William' }
       },
@@ -219,8 +219,8 @@ export const EMAIL_TEMPLATES_CATALOG: { category: string; items: EmailTemplateIt
         badgeVariant: 'zinc',
         subject: 'Update regarding your Exacoat order #{{order_number}}',
         trigger: 'Dispatched when support staff appends a customer-visible update note.',
-        payload: '{ "event": "customer_order_note", "recipient_email": "customer@gmail.com", "order_number": "14589", "customer_first_name": "William", "customer_note": "Your custom device skin has completed precision-cut inspection." }',
-        defaults: { order_number: '14589', customer_first_name: 'William', customer_note: 'Your custom device skin has completed precision-cut inspection.' }
+        payload: '{ "event": "customer_order_note", "recipient_email": "customer@gmail.com", "order_number": "14589", "customer_first_name": "William", "customer_note": "Your custom order has completed precision inspection." }',
+        defaults: { order_number: '14589', customer_first_name: 'William', customer_note: 'Your custom order has completed precision inspection.' }
       },
       {
         key: 'customer_order_invoice',
@@ -244,10 +244,10 @@ export const EMAIL_TEMPLATES_CATALOG: { category: string; items: EmailTemplateIt
         category: '⭐ Customer Reviews & Rewards',
         badge: 'Review Invite',
         badgeVariant: 'zinc',
-        subject: 'How is your new Exacoat skin? Review {{product_title}}',
+        subject: 'How is your new order? Review {{product_title}}',
         trigger: 'Dispatched after order delivery, inviting the customer to review their product and share photos.',
-        payload: '{ "event": "customer_order_review_invitation", "recipient_email": "customer@gmail.com", "order_number": "14589", "customer_first_name": "William", "product_title": "iPhone 16 Pro Full Skin - Matrix Black" }',
-        defaults: { order_number: '14589', customer_first_name: 'William', product_title: 'iPhone 16 Pro Full Skin - Matrix Black', review_url: 'https://exacoat.com/review?order_id=14589' }
+        payload: '{ "event": "customer_order_review_invitation", "recipient_email": "customer@gmail.com", "order_number": "14589", "customer_first_name": "William", "product_title": "iPhone 16 Pro - Matrix Black" }',
+        defaults: { order_number: '14589', customer_first_name: 'William', product_title: 'iPhone 16 Pro - Matrix Black', review_url: 'https://exacoat.com/review?order_id=14589' }
       },
       {
         key: 'customer_order_review_reward',
@@ -258,7 +258,7 @@ export const EMAIL_TEMPLATES_CATALOG: { category: string; items: EmailTemplateIt
         subject: 'Your Exacoat perks promo code is here 🎁',
         trigger: 'Dispatched immediately when a customer submits a verified review with device photo.',
         payload: '{ "event": "customer_order_review_reward", "recipient_email": "customer@gmail.com", "customer_first_name": "William", "coupon_code": "EXAPERK-20-X8K9P", "discount_percent": "20", "expiry_date": "October 6, 2026" }',
-        defaults: { customer_first_name: 'William', coupon_code: 'EXAPERK-20-X8K9P', discount_percent: '20', discount_amount: '20%', expiry_date: 'October 6, 2026', product_title: 'iPhone 16 Pro Full Skin - Matrix Black', shop_url: 'https://exacoat.com/shop/' }
+        defaults: { customer_first_name: 'William', coupon_code: 'EXAPERK-20-X8K9P', discount_percent: '20', discount_amount: '20%', expiry_date: 'October 6, 2026', product_title: 'iPhone 16 Pro - Matrix Black', shop_url: 'https://exacoat.com/shop/' }
       }
     ]
   },

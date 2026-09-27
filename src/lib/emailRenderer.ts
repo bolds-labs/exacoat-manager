@@ -114,9 +114,13 @@ function renderCustomerAccountEmail(event: string, data: Record<string, any>): R
   </style>
 </head>
 <body bgcolor="#f7f7f7" style="margin:0;padding:0;background-color:#f7f7f7;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f7f7" style="background-color:#f7f7f7;padding:44px 16px;">
-    <tr>
-      <td align="center">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f7f7" style="border-collapse:collapse;background-color:#f7f7f7;">
+    <tbody>
+      <tr>
+        <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align="center" style="padding:0 16px;">
         <!-- Main Card -->
         <table class="container-table" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #e5e5e5;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.04);">
           <tbody>
@@ -177,6 +181,10 @@ function renderCustomerAccountEmail(event: string, data: Record<string, any>): R
         </table>
       </td>
     </tr>
+    <tr>
+      <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+    </tr>
+  </tbody>
   </table>
 </body>
 </html>`;
@@ -209,9 +217,13 @@ function renderCustomerAccountEmail(event: string, data: Record<string, any>): R
   </style>
 </head>
 <body bgcolor="#f7f7f7" style="margin:0;padding:0;background-color:#f7f7f7;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f7f7" style="background-color:#f7f7f7;padding:44px 16px;">
-    <tr>
-      <td align="center">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f7f7" style="border-collapse:collapse;background-color="#f7f7f7;">
+    <tbody>
+      <tr>
+        <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align="center" style="padding:0 16px;">
         <!-- Main Card -->
         <table class="container-table" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #e5e5e5;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.04);">
           <tbody>
@@ -265,6 +277,10 @@ function renderCustomerAccountEmail(event: string, data: Record<string, any>): R
         </table>
       </td>
     </tr>
+    <tr>
+      <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+    </tr>
+  </tbody>
   </table>
 </body>
 </html>`;
@@ -280,7 +296,7 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
     customer_email: 'customer@gmail.com',
     items: [
       {
-        name: 'iPhone 16 Pro Skins',
+        name: 'iPhone 16 Pro',
         image_url: 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
         quantity: 1,
         price: 'Rp 149.000',
@@ -322,7 +338,7 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
     subject = `Your Exacoat order #${orderNum} is in production`;
     badgeText = 'In production';
     title = 'In production';
-    bodyPrimary = `Your custom skins for order #${orderNum} are now on our production line.`;
+    bodyPrimary = `Your order #${orderNum} is now on our production line.`;
     bodySecondary = 'We will notify you as soon as your order is packaged and ready to ship.';
   } else if (event === 'customer_order_store_pickup_ready') {
     subject = `${custName}, your order (#${orderNum}) is ready for pick up`;
@@ -354,7 +370,7 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
     badgeText = 'Delivered';
     title = 'Delivered';
     bodyPrimary = `Your order #${orderNum} has been delivered by the courier.`;
-    bodySecondary = 'We hope you enjoy your new skins. If you need any assistance, our support team is always here to help.';
+    bodySecondary = 'We hope you enjoy your new products. If you need any assistance, our support team is always here to help.';
   } else if (event === 'customer_order_refunded') {
     const refundAmt = escapeHtml(cleanEmailPrice(merged.refund_amount || 'Rp 149.000'));
     subject = `Refund confirmation for order #${orderNum}`;
@@ -455,7 +471,7 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
   // Items rows with 80px thumbnail (supporting configured composite skin renders or regular products)
   const items = Array.isArray(merged.items) && merged.items.length > 0 ? merged.items : defaults.items;
   const itemsHtml = items.map((item: any) => {
-    const rawName = String(item.name || 'Device Skin');
+    const rawName = String(item.name || 'Exacoat Product');
     const cleanName = escapeHtml(rawName.trim());
     
     // Parse specs/configuration (supports parsed_configurator array, meta string, or device_model)
@@ -580,9 +596,13 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
   </style>
 </head>
 <body bgcolor="#f7f7f7" style="margin:0;padding:0;background-color:#f7f7f7;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f7f7" style="background-color:#f7f7f7;padding:44px 16px;">
-    <tr>
-      <td align="center">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f7f7" style="border-collapse:collapse;background-color:#f7f7f7;">
+    <tbody>
+      <tr>
+        <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align="center" style="padding:0 16px;">
         <!-- Main Card -->
         <table class="container-table" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #e5e5e5;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.04);">
           <tbody>
@@ -692,6 +712,10 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
         </table>
       </td>
     </tr>
+    <tr>
+      <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+    </tr>
+  </tbody>
   </table>
 </body>
 </html>`;
@@ -700,9 +724,9 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
 
 function renderReviewInvitationEmail(data: Record<string, any>): RenderedEmail {
   const custName = escapeHtml(data.customer_first_name || 'Customer');
-  const prodTitle = escapeHtml(data.product_title || 'iPhone 16 Pro Skin');
+  const prodTitle = escapeHtml(data.product_title || 'iPhone 16 Pro');
   const reviewUrl = escapeHtml(data.review_url || 'https://exacoat.com/review?order_id=14589');
-  const subject = `How is your new Exacoat skin? Review ${prodTitle}`;
+  const subject = `How is your new order? Review ${prodTitle}`;
 
   const html = `<!doctype html>
 <html lang="en">
@@ -719,9 +743,13 @@ function renderReviewInvitationEmail(data: Record<string, any>): RenderedEmail {
   </style>
 </head>
 <body bgcolor="#f7f7f7" style="margin:0;padding:0;background-color:#f7f7f7;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="padding:44px 16px;">
-    <tr>
-      <td align="center">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f7f7" style="border-collapse:collapse;background-color:#f7f7f7;">
+    <tbody>
+      <tr>
+        <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align="center" style="padding:0 16px;">
         <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #e5e5e5;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.04);">
           <tbody>
             <tr>
@@ -738,17 +766,17 @@ function renderReviewInvitationEmail(data: Record<string, any>): RenderedEmail {
             </tr>
             <tr>
               <td style="padding:36px 40px 32px;">
-                <h1 style="margin:0 0 16px;font-size:24px;font-weight:800;color:#111111;letter-spacing:-0.5px;">How does your device look?</h1>
+                <h1 style="margin:0 0 16px;font-size:24px;font-weight:800;color:#111111;letter-spacing:-0.5px;">How does your new order look?</h1>
                 <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:#18181b;">Hi ${custName},</p>
                 <p style="margin:0 0 20px;font-size:14.5px;line-height:1.7;color:#3f3f46;">
-                  Your Exacoat skin was delivered recently. We'd love to know how your installation went and see your setup with <strong>${prodTitle}</strong>.
+                  Your Exacoat order was delivered recently. We would love to know how your experience was and see your setup with <strong>${prodTitle}</strong>.
                 </p>
                 <p style="margin:0 0 24px;font-size:14px;line-height:1.7;color:#52525b;">
-                  Leave a review with photos of your device and we will send you an exclusive discount code for your next order.
+                  Leave a review with photos of your item and we will send you an exclusive discount code for your next order.
                 </p>
                 <div style="margin:28px 0;">
                   <a href="${reviewUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:14px 28px;background:#f3aa18;color:#0a0a0a;font-size:14px;font-weight:800;border-radius:100px;text-decoration:none;letter-spacing:0.2px;box-shadow:0 4px 14px rgba(243,170,24,0.35);">
-                    Review Your Skin & Get Reward &rarr;
+                    Review Your Item & Get Reward &rarr;
                   </a>
                 </div>
 
@@ -775,6 +803,10 @@ function renderReviewInvitationEmail(data: Record<string, any>): RenderedEmail {
         </table>
       </td>
     </tr>
+    <tr>
+      <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+    </tr>
+  </tbody>
   </table>
 </body>
 </html>`;
@@ -802,10 +834,14 @@ function renderReviewRewardEmail(data: Record<string, any>): RenderedEmail {
     }
   </style>
 </head>
-<body bgcolor="#f7f7f7" style="margin:0;padding:0;background-color:#f7f7f7;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="padding:44px 16px;">
-    <tr>
-      <td align="center">
+<body bgcolor="#f7f7f7" style="margin:0;padding:0;background-color:#f7f7f7;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f7f7" style="border-collapse:collapse;background-color:#f7f7f7;">
+    <tbody>
+      <tr>
+        <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align="center" style="padding:0 16px;">
         <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #e5e5e5;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.04);">
           <tbody>
             <tr>
@@ -864,6 +900,10 @@ function renderReviewRewardEmail(data: Record<string, any>): RenderedEmail {
         </table>
       </td>
     </tr>
+    <tr>
+      <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+    </tr>
+  </tbody>
   </table>
 </body>
 </html>`;
@@ -894,10 +934,10 @@ function renderStoreCreditEmail(event: string, data: Record<string, any>): Rende
 
   const bodySecondary = isCashback
     ? `Your available store credit balance is now ${balance}. You can apply it directly during checkout on your next order.`
-    : (isPreExpiry ? 'Apply your balance during checkout on any precision device skin or accessories before it expires.' : 'Use it on your next precision skin, camera protection, or accessories. Simply log in and apply your balance at checkout.');
+    : (isPreExpiry ? 'Apply your balance during checkout on any item or accessories before it expires.' : 'Use it on your next order, protection, or accessories. Simply log in and apply your balance at checkout.');
 
   const ctaText = isCashback
-    ? 'Shop Device Skins'
+    ? 'Explore Catalog'
     : (isPreExpiry ? 'Use Credit Before It Expires' : 'Use Your Credit');
 
   const cashbackPill = isCashback && cashbackAmount && !isPriceZero(cashbackAmount)
@@ -927,10 +967,14 @@ function renderStoreCreditEmail(event: string, data: Record<string, any>): Rende
     }
   </style>
 </head>
-<body bgcolor="#f7f7f7" style="margin:0;padding:0;background-color:#f7f7f7;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="padding:44px 16px;">
-    <tr>
-      <td align="center">
+<body bgcolor="#f7f7f7" style="margin:0;padding:0;background-color:#f7f7f7;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f7f7" style="border-collapse:collapse;background-color:#f7f7f7;">
+    <tbody>
+      <tr>
+        <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align="center" style="padding:0 16px;">
         <table class="container-table" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #e5e5e5;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.04);">
           <tbody>
             <tr>
@@ -1006,6 +1050,10 @@ function renderStoreCreditEmail(event: string, data: Record<string, any>): Rende
         </table>
       </td>
     </tr>
+    <tr>
+      <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+    </tr>
+  </tbody>
   </table>
 </body>
 </html>`;
@@ -1136,10 +1184,14 @@ function renderCreatorEmail(event: string, data: Record<string, any>): RenderedE
     }
   </style>
 </head>
-<body bgcolor="#f7f7f7" style="margin:0;padding:0;background-color:#f7f7f7;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="padding:44px 16px;">
-    <tr>
-      <td align="center">
+<body bgcolor="#f7f7f7" style="margin:0;padding:0;background-color:#f7f7f7;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f7f7" style="border-collapse:collapse;background-color:#f7f7f7;">
+    <tbody>
+      <tr>
+        <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align="center" style="padding:0 16px;">
         <table class="container-table" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:24px;border:1px solid #eaeaea;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,0.04);">
           <tbody>
             <tr>
@@ -1203,6 +1255,10 @@ function renderCreatorEmail(event: string, data: Record<string, any>): RenderedE
         </table>
       </td>
     </tr>
+    <tr>
+      <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+    </tr>
+  </tbody>
   </table>
 </body>
 </html>`;
@@ -1247,7 +1303,7 @@ function renderAbandonedCartEmail(event: string, data: Record<string, any>): Ren
 
   const rawItems = Array.isArray(data.items) && data.items.length > 0 ? data.items : [
     {
-      name: 'iPhone 16 Pro Skins',
+      name: 'iPhone 16 Pro',
       image_url: 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
       quantity: 1,
       price: 'Rp 149.000',
@@ -1329,9 +1385,13 @@ function renderAbandonedCartEmail(event: string, data: Record<string, any>): Ren
   </style>
 </head>
 <body bgcolor="#f7f7f7" style="margin:0;padding:0;background-color:#f7f7f7;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f7f7" style="background-color:#f7f7f7;padding:44px 16px;">
-    <tr>
-      <td align="center">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f7f7" style="border-collapse:collapse;background-color:#f7f7f7;">
+    <tbody>
+      <tr>
+        <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align="center" style="padding:0 16px;">
         <!-- Main Card -->
         <table class="container-table" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #e5e5e5;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.04);">
           <tbody>
@@ -1422,6 +1482,10 @@ function renderAbandonedCartEmail(event: string, data: Record<string, any>): Ren
         </table>
       </td>
     </tr>
+    <tr>
+      <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+    </tr>
+  </tbody>
   </table>
 </body>
 </html>`;
@@ -1524,7 +1588,7 @@ const DEFAULT_TRUST_CARDS: TrustFeatureCard[] = [
   },
   {
     title: 'Money Back Guarantee',
-    desc: 'Not satisfied with your skin within 30 days? Enjoy a hassle-free refund.',
+    desc: 'Not satisfied with your order within 30 days? Enjoy a hassle-free refund.',
     highlighted: false,
   },
   {
@@ -1553,7 +1617,7 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
   const resolvedSubject = replaceNamePlaceholders(rawSubject, options.recipientName);
   const subject = escapeHtml(resolvedSubject);
 
-  const rawPreheader = options.preheaderText || 'Precision crafted device skins and exclusive announcements.';
+  const rawPreheader = options.preheaderText || 'Precision crafted essentials and exclusive announcements.';
   const resolvedPreheader = replaceNamePlaceholders(rawPreheader, options.recipientName);
   const preheader = escapeHtml(resolvedPreheader);
 
@@ -1854,29 +1918,20 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
     }
   </style>
 </head>
-<body bgcolor="${bgOuter}" style="margin:0;padding:24px 0 60px;background-color:${bgOuter};font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+<body bgcolor="${bgOuter}" style="margin:0;padding:0;background-color:${bgOuter};font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
   <!-- Preview Preheader (Hidden snippet) -->
   <div style="display:none;font-size:1px;color:${bgOuter};line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
     ${preheader}
   </div>
 
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${bgOuter}" style="background-color:${bgOuter};width:100%;margin:0;padding:0;">
-    <!-- Top breathing room spacer before webview link -->
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${bgOuter}" style="border-collapse:collapse;background-color:${bgOuter};width:100%;margin:0;padding:0;">
+    <!-- Top breathing room spacer matching bottom exactly -->
     <tr>
-      <td height="36" style="height:36px;line-height:36px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+      <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
     </tr>
 
     <tr>
       <td align="center" style="padding:0 20px;">
-        <!-- Top Webview Link with generous breathing space -->
-        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:550px;margin:0 auto 20px;">
-          <tr>
-            <td align="center" style="font-size:11px;color:#71717a;line-height:1.5;padding:0 0 6px;">
-              If you cannot see this email properly, please <a href="{{webview_url}}" target="_blank" rel="noopener noreferrer" style="color:#a1a1aa;text-decoration:underline;">click here</a>.
-            </td>
-          </tr>
-        </table>
-
         <!-- Main Card Container (Rounded 28px with left/right breathing margin) -->
         <table class="container-table" width="550" cellpadding="0" cellspacing="0" border="0" style="max-width:550px;width:100%;margin:0 auto;background:${bgCard};border:1px solid ${cardBorder};border-radius:28px;border-collapse:separate;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,0.5);">
           <tbody>
@@ -1956,9 +2011,9 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
       </td>
     </tr>
 
-    <!-- Bottom breathing room spacer below card so it never touches bottom -->
+    <!-- Bottom breathing room spacer below card matching top exactly -->
     <tr>
-      <td height="60" style="height:60px;line-height:60px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+      <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
     </tr>
   </table>
 </body>
@@ -2240,14 +2295,8 @@ export function renderMarketingEmailMjml(options: MarketingEmailOptions): string
     </mj-style>
   </mj-head>
   <mj-body background-color="${outerBg}" width="560px">
-    <!-- Top Webview Link -->
-    <mj-section padding="36px 0 16px">
-      <mj-column>
-        <mj-text align="center" font-size="11px" color="${textMuted}" line-height="1.5">
-          If you cannot see this email properly, please <a href="{{webview_url}}" style="color:${isDark ? '#d4d4d8' : '#71717a'};text-decoration:underline;">click here</a>.
-        </mj-text>
-      </mj-column>
-    </mj-section>
+    <!-- Top Spacing Spacer (Matches bottom spacer exactly) -->
+    <mj-section padding="48px 0 0"></mj-section>
 
     <!-- Main Container Card (Rounded 28px with left/right breathing margin) -->
     <mj-wrapper css-class="outer-card-wrapper" background-color="${cardBg}" border-radius="28px" border="1px solid ${cardBorder}" padding="36px 24px 32px">
@@ -2317,6 +2366,8 @@ export function renderMarketingEmailMjml(options: MarketingEmailOptions): string
         </mj-column>
       </mj-section>
     </mj-wrapper>
+    <!-- Bottom Spacing Spacer (Matches top spacer exactly) -->
+    <mj-section padding="0 0 48px"></mj-section>
   </mj-body>
 </mjml>`;
 }
