@@ -1518,6 +1518,13 @@ class Exacoat_Affiliate_Manager {
 				'permission_callback' => '__return_true',
 			] );
 
+			// Public affiliate referral lookup for headless storefront (web.exacoat.com)
+			register_rest_route( $ns, '/affiliate/lookup', [
+				'methods'             => 'GET',
+				'callback'            => [ __CLASS__, 'rest_lookup_affiliate' ],
+				'permission_callback' => '__return_true',
+			] );
+
 			// Admin workstation endpoints (requires manage_woocommerce capability)
 			register_rest_route( $ns, '/affiliate/admin/all', [
 				'methods'             => 'GET',
@@ -2480,6 +2487,53 @@ class Exacoat_Affiliate_Manager {
 		}
 
 		return rest_ensure_response( [ 'success' => true, 'products' => $results ] );
+	}
+
+	/**
+	 * Public Endpoint: Lookup affiliate referral details for headless storefront (web.exacoat.com).
+	 */
+	public static function rest_lookup_affiliate( WP_REST_Request $request ) {
+		$raw_slug = sanitize_text_field( trim( $request->get_param( 'slug' ) ?: $request->get_param( 'ref' ) ?: '' ) );
+		if ( empty( $raw_slug ) ) {
+			return rest_ensure_response( [
+				'success' => true,
+				'found'   => false,
+			] );
+		}
+
+		$clean_slug = sanitize_title( $raw_slug );
+		$affiliate  = self::get_affiliate_by_slug( $clean_slug );
+
+		if ( ! $affiliate && is_numeric( $raw_slug ) ) {
+			$affiliate = self::get_affiliate_by_id( (int) $raw_slug );
+			if ( ! $affiliate ) {
+				$affiliate = self::get_affiliate_by_user_id( (int) $raw_slug );
+			}
+		}
+
+		if ( ! $affiliate || 'active' !== $affiliate->status ) {
+			return rest_ensure_response( [
+				'success' => true,
+				'found'   => false,
+			] );
+		}
+
+		$creator_name  = self::get_creator_display_name( $affiliate );
+		$discount_rate = ( ! empty( $affiliate->discount_rate ) && (float) $affiliate->discount_rate > 0 )
+			? (float) $affiliate->discount_rate
+			: 0.00;
+		$comm_rate     = ( ! empty( $affiliate->commission_rate ) )
+			? (float) $affiliate->commission_rate
+			: 0.00;
+
+		return rest_ensure_response( [
+			'success'         => true,
+			'found'           => true,
+			'slug'            => $affiliate->slug,
+			'creator_name'    => $creator_name,
+			'discount_rate'   => $discount_rate,
+			'commission_rate' => $comm_rate,
+		] );
 	}
 
 	/**

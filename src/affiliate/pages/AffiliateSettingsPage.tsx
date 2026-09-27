@@ -13,7 +13,7 @@ import {
   Percent,
   Copy,
   Check,
-  Sparkles
+  KeyRound
 } from 'lucide-react';
 import { AffiliateProfile, AffiliateBankName } from '../../types';
 import { updateAffiliateSettings } from '../../lib/wordpressBridge';
@@ -199,7 +199,7 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
   };
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-16">
+    <div className="space-y-5 max-w-5xl mx-auto pb-12">
       {/* Page Header */}
       <PageHeroHeader
         title="Creator Preferences"
@@ -208,31 +208,31 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
       />
 
       {/* 2-Column Workstation Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* Left Column: Financials & Offer Split */}
-        <div className="lg:col-span-7 space-y-6">
+        <div className="lg:col-span-7 space-y-5">
           {/* 1. Customer Discount & Split Card */}
-          <GlassCard className="p-6 sm:p-7 border border-white/[0.08] space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/[0.06]">
+          <GlassCard className="p-5 sm:p-6 border border-white/[0.08] space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-white/[0.06]">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[#f3aa18] flex items-center justify-center shrink-0">
-                  <Percent className="w-5 h-5" />
+                <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[#f3aa18] flex items-center justify-center shrink-0">
+                  <Percent className="w-4 h-4" />
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-white font-['Chakra_Petch'] tracking-wide uppercase">
+                  <h2 className="text-xs font-bold text-white font-['Chakra_Petch'] tracking-wide uppercase">
                     Customer Discount &amp; Split
                   </h2>
-                  <p className="text-xs text-zinc-400 mt-0.5">
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
                     Set the discount your followers receive when shopping through your link.
                   </p>
                 </div>
               </div>
-              <span className="self-start sm:self-auto text-xs font-mono text-zinc-400 bg-white/[0.04] px-3 py-1 rounded-full border border-white/[0.08]">
+              <span className="self-start sm:self-auto text-xs font-mono text-zinc-400 bg-white/[0.04] px-2.5 py-0.5 rounded-full border border-white/[0.08]">
                 Commission Pool: <strong className="text-white">{maxPool}%</strong>
               </span>
             </div>
 
-            <form onSubmit={handleSaveDiscount} className="space-y-6">
+            <form onSubmit={handleSaveDiscount} className="space-y-5">
               {/* Real-time Split Display */}
               <div className="grid grid-cols-2 gap-4 p-5 rounded-2xl bg-[#050506] border border-white/[0.08]">
                 <div>
@@ -526,77 +526,51 @@ export const AffiliateSettingsPage: React.FC<AffiliateSettingsPageProps> = ({ pr
                 </form>
               )}
 
-              {/* Storefront Toast Live Preview */}
-              <div className="pt-2">
-                <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider block mb-1.5">
-                  Storefront Toast Preview
-                </span>
-                <div className="p-3 rounded-xl bg-[#050506] border border-white/[0.06] flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[#f3aa18] flex items-center justify-center shrink-0">
-                    <Sparkles className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold text-white leading-tight">Exacoat Partner</p>
-                    <p className="text-[10px] text-zinc-400 truncate">
-                      {discountRate > 0
-                        ? `${discountRate}% off from ${displayName.trim() || 'Your Name'}`
-                        : `Shopping via ${displayName.trim() || 'Your Name'}`}
-                    </p>
-                  </div>
-                </div>
-              </div>
             </div>
           </GlassCard>
 
           {/* 4. Account Details & Security Card */}
-          <GlassCard className="p-6 border border-white/[0.08] space-y-4">
+          <GlassCard className="p-5 border border-white/[0.08] space-y-4">
             <div className="flex items-center gap-3 pb-3 border-b border-white/[0.06]">
-              <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
                 <ShieldCheck className="w-4 h-4" />
               </div>
               <div>
-                <h2 className="text-sm font-bold text-white font-['Chakra_Petch'] tracking-wide uppercase">
+                <h2 className="text-xs font-bold text-white font-['Chakra_Petch'] tracking-wide uppercase">
                   Account &amp; Security
                 </h2>
-                <p className="text-xs text-zinc-400">
+                <p className="text-[11px] text-zinc-400">
                   Account profile and credential management.
                 </p>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="p-3 rounded-xl bg-[#050506] border border-white/[0.06] space-y-0.5">
+              <div className="p-2.5 rounded-lg bg-[#050506] border border-white/[0.06] space-y-0.5">
                 <span className="text-[10px] text-zinc-500 uppercase font-mono">Username</span>
                 <p className="font-mono text-zinc-200 font-semibold truncate">{profile.username}</p>
               </div>
-              <div className="p-3 rounded-xl bg-[#050506] border border-white/[0.06] space-y-0.5">
+              <div className="p-2.5 rounded-lg bg-[#050506] border border-white/[0.06] space-y-0.5">
                 <span className="text-[10px] text-zinc-500 uppercase font-mono">Channel</span>
                 <p className="text-zinc-200 font-medium truncate">{profile.promotion_channel || 'General'}</p>
               </div>
-              <div className="col-span-2 p-3 rounded-xl bg-[#050506] border border-white/[0.06] space-y-0.5">
+              <div className="col-span-2 p-2.5 rounded-lg bg-[#050506] border border-white/[0.06] space-y-0.5">
                 <span className="text-[10px] text-zinc-500 uppercase font-mono">Email Address</span>
                 <p className="font-mono text-zinc-200 truncate">{profile.email}</p>
               </div>
             </div>
 
             <div className="pt-1">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                asChild
-                className="w-full justify-center border-white/[0.12] hover:border-[#f3aa18]/50 hover:text-[#f3aa18]"
+              <a
+                href="https://exacoat.com/my-account/edit-account/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-[#f3aa18]/40 text-xs font-medium text-zinc-300 hover:text-white transition-all cursor-pointer"
               >
-                <a
-                  href="https://exacoat.com/my-account/edit-account/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5"
-                >
-                  <span>Manage Password &amp; Login on Exacoat.com</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-              </Button>
+                <KeyRound className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Manage Password &amp; Login</span>
+                <ExternalLink className="w-3 h-3 text-zinc-500" />
+              </a>
             </div>
           </GlassCard>
         </div>

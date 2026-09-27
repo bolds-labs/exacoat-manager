@@ -39,7 +39,6 @@ export const AffiliatePayoutsPage: React.FC<AffiliatePayoutsPageProps> = ({
   const minPayout = 250000;
   const unpaidBalance = Number(profile.unpaid_balance || 0);
   const hasValidBank = Boolean(profile.bank_name && profile.bank_account_number && profile.bank_account_name);
-  const canRequestPayout = unpaidBalance >= minPayout && hasValidBank && profile.status === 'active';
 
   // Check if open pending payout request exists
   const hasPendingPayout = payouts.some((p) => p.status === 'pending');
@@ -98,26 +97,12 @@ export const AffiliatePayoutsPage: React.FC<AffiliatePayoutsPageProps> = ({
     }
   };
 
-  // Progress to minimum payout threshold
-  const progressPercent = Math.min(100, Math.round((unpaidBalance / minPayout) * 100));
-
   return (
     <div className="space-y-6">
       {/* Top Banner */}
       <PageHeroHeader
         title="Payouts & Balance"
         subtitle="Review withdrawable earnings, request transfers to your registered bank account, and audit historical payments."
-        actions={
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={!canRequestPayout || hasPendingPayout}
-            onClick={() => setShowConfirmModal(true)}
-            leftIcon={<Wallet className="w-3.5 h-3.5" />}
-          >
-            {hasPendingPayout ? 'Payout Under Review' : 'Request Payout'}
-          </Button>
-        }
       />
 
       {/* Primary Balance and Action Card */}
@@ -134,37 +119,52 @@ export const AffiliatePayoutsPage: React.FC<AffiliatePayoutsPageProps> = ({
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <Button
-              type="button"
-              variant="primary"
-              size="lg"
-              disabled={!canRequestPayout || hasPendingPayout}
-              onClick={() => setShowConfirmModal(true)}
-              leftIcon={<Wallet className="w-4 h-4" />}
-            >
-              {hasPendingPayout ? 'Payout Request Pending' : 'Request Payout'}
-            </Button>
+            {!hasValidBank ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                onClick={() => onNavigateTab('settings')}
+                className="border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+                leftIcon={<Building2 className="w-4 h-4" />}
+              >
+                Add Bank Info to Withdraw
+              </Button>
+            ) : unpaidBalance < minPayout ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                disabled
+                className="border-white/[0.08] bg-white/[0.03] text-zinc-500 cursor-not-allowed"
+                leftIcon={<Wallet className="w-4 h-4 text-zinc-600" />}
+              >
+                Payout Disabled (Min. Rp 250.000)
+              </Button>
+            ) : hasPendingPayout ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                disabled
+                className="border-amber-500/30 bg-amber-500/10 text-amber-400 cursor-not-allowed"
+                leftIcon={<Clock className="w-4 h-4 text-amber-400" />}
+              >
+                Payout Request Pending
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="primary"
+                size="lg"
+                onClick={() => setShowConfirmModal(true)}
+                leftIcon={<Wallet className="w-4 h-4" />}
+              >
+                Request Payout
+              </Button>
+            )}
           </div>
         </div>
-
-        {/* Progress Bar toward Rp 250.000 */}
-        {unpaidBalance < minPayout && (
-          <div className="space-y-2 pt-3 border-t border-white/[0.06]">
-            <div className="flex items-center justify-between text-xs text-zinc-400">
-              <span>Progress to next payout threshold</span>
-              <span className="font-mono text-[#f3aa18] font-bold">{progressPercent}%</span>
-            </div>
-            <div className="w-full bg-black/60 rounded-full h-2 overflow-hidden border border-white/[0.08]">
-              <div
-                className="bg-[#f3aa18] h-full rounded-full transition-all duration-500"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-            <p className="text-[11px] text-zinc-400">
-              You need {formatIDR(minPayout - unpaidBalance)} more in cleared commissions to request your next payout.
-            </p>
-          </div>
-        )}
 
         {/* Bank Account Overview or Missing Warning */}
         <div className="pt-3 border-t border-white/[0.06]">
