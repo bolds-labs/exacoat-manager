@@ -56,7 +56,32 @@ class Exacoat_WhatsApp_Service {
 			$saved['phone_number_id'] = $env_phone_id;
 		}
 
-		return wp_parse_args( $saved, self::get_defaults() );
+		$settings = wp_parse_args( $saved, self::get_defaults() );
+
+		// Fallback telegram credentials to central Exacoat_Telegram_Service if unset
+		if ( class_exists( 'Exacoat_Telegram_Service' ) ) {
+			$tg_config = Exacoat_Telegram_Service::get_config();
+			if ( empty( $settings['telegram_bot_token'] ) && ! empty( $tg_config['bot_token'] ) ) {
+				$settings['telegram_bot_token'] = $tg_config['bot_token'];
+			}
+			if ( empty( $settings['telegram_chat_id'] ) && ! empty( $tg_config['chat_id'] ) ) {
+				$settings['telegram_chat_id'] = $tg_config['chat_id'];
+			}
+			if ( empty( $settings['telegram_thread_id'] ) && ! empty( $tg_config['thread_id'] ) ) {
+				$settings['telegram_thread_id'] = $tg_config['thread_id'];
+			}
+		}
+
+		// Ensure events object structure exists for REST and React consumers
+		$settings['events'] = [
+			'processing' => ! empty( $settings['notify_processing'] ),
+			'completed'  => ! empty( $settings['notify_completed'] ),
+			'smb_ready'  => ! empty( $settings['notify_smb_ready'] ),
+			'smb_picked' => ! empty( $settings['notify_smb_picked'] ),
+		];
+		$settings['telegram_alerts_enabled'] = ! empty( $settings['telegram_enabled'] );
+
+		return $settings;
 	}
 
 	/**
@@ -64,7 +89,38 @@ class Exacoat_WhatsApp_Service {
 	 */
 	public static function update_settings( array $new_settings ): bool {
 		$current = self::get_settings();
+
+		// Handle events object if supplied from React
+		if ( isset( $new_settings['events'] ) && is_array( $new_settings['events'] ) ) {
+			$new_settings['notify_processing'] = ! empty( $new_settings['events']['processing'] ) ? 1 : 0;
+			$new_settings['notify_completed']  = ! empty( $new_settings['events']['completed'] ) ? 1 : 0;
+			$new_settings['notify_smb_ready']  = ! empty( $new_settings['events']['smb_ready'] ) ? 1 : 0;
+			$new_settings['notify_smb_picked'] = ! empty( $new_settings['events']['smb_picked'] ) ? 1 : 0;
+		}
+
+		// Handle telegram_alerts_enabled
+		if ( isset( $new_settings['telegram_alerts_enabled'] ) ) {
+			$new_settings['telegram_enabled'] = ! empty( $new_settings['telegram_alerts_enabled'] ) ? 1 : 0;
+		}
+
+		// Don't overwrite access_token if masked or empty
+		if ( isset( $new_settings['access_token'] ) ) {
+			$token = trim( (string) $new_settings['access_token'] );
+			if ( empty( $token ) || strpos( $token, '...' ) !== false ) {
+				unset( $new_settings['access_token'] );
+			} else {
+				$new_settings['access_token'] = $token;
+			}
+		}
+
 		$updated = wp_parse_args( $new_settings, $current );
+		$updated['enabled']           = ! empty( $updated['enabled'] ) ? 1 : 0;
+		$updated['notify_processing'] = ! empty( $updated['notify_processing'] ) ? 1 : 0;
+		$updated['notify_completed']  = ! empty( $updated['notify_completed'] ) ? 1 : 0;
+		$updated['notify_smb_ready']  = ! empty( $updated['notify_smb_ready'] ) ? 1 : 0;
+		$updated['notify_smb_picked'] = ! empty( $updated['notify_smb_picked'] ) ? 1 : 0;
+		$updated['telegram_enabled']  = ! empty( $updated['telegram_enabled'] ) ? 1 : 0;
+
 		return update_option( self::SETTINGS_OPTION, $updated, false );
 	}
 

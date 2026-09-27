@@ -84,7 +84,7 @@ class Exacoat_Admin_Settings {
 		if ( isset( $input['currency_global_markup'] ) ) {
 			$settings['currency_global_markup'] = floatval( $input['currency_global_markup'] );
 			if ( $settings['currency_global_markup'] <= 0 ) {
-				$settings['currency_global_markup'] = 1.15;
+				$settings['currency_global_markup'] = 1.8;
 			}
 		}
 

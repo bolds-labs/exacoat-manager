@@ -880,6 +880,24 @@ class Exacoat_Core {
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 
+		$register( '/redirects', [
+			'methods'             => 'GET',
+			'callback'            => [ $this, 'rest_get_redirects' ],
+			'permission_callback' => '__return_true',
+		] );
+
+		$register( '/redirects', [
+			'methods'             => 'POST',
+			'callback'            => [ $this, 'rest_save_redirects' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/redirects/track', [
+			'methods'             => 'POST',
+			'callback'            => [ $this, 'rest_track_redirect' ],
+			'permission_callback' => '__return_true',
+		] );
+
 		// User Taste Profile REST Endpoints
 		$register( '/user/taste-profile', [
 			'methods'             => [ 'GET', 'POST' ],
@@ -2260,7 +2278,7 @@ class Exacoat_Core {
 			$settings['currency_rates'] = Exacoat_Store_Enhancements::get_currency_rates();
 		}
 		if ( ! isset( $settings['currency_global_markup'] ) ) {
-			$settings['currency_global_markup'] = 1.15;
+			$settings['currency_global_markup'] = 1.8;
 		}
 		if ( ( empty( $settings['shipping_zones'] ) || empty( $settings['shipping_target_method_ids'] ) ) && class_exists( 'Exacoat_Store_Enhancements' ) ) {
 			$ship_cfg = Exacoat_Store_Enhancements::get_shipping_config();
@@ -2314,7 +2332,7 @@ class Exacoat_Core {
 			self::clear_settings_cache();
 
 			$rates = $current['currency_rates'] ?? ( class_exists( 'Exacoat_Store_Enhancements' ) ? Exacoat_Store_Enhancements::get_currency_rates() : [] );
-			$markup = floatval( $current['currency_global_markup'] ?? 1.15 );
+			$markup = floatval( $current['currency_global_markup'] ?? 1.8 );
 
 			return rest_ensure_response( [
 				'success'                    => true,
@@ -2328,7 +2346,7 @@ class Exacoat_Core {
 
 		$current = self::get_settings();
 		$rates = $current['currency_rates'] ?? ( class_exists( 'Exacoat_Store_Enhancements' ) ? Exacoat_Store_Enhancements::get_currency_rates() : [] );
-		$markup = floatval( $current['currency_global_markup'] ?? 1.15 );
+		$markup = floatval( $current['currency_global_markup'] ?? 1.8 );
 
 		$aelia_rates = class_exists( 'Exacoat_Store_Enhancements' ) ? Exacoat_Store_Enhancements::get_aelia_exchange_rates() : [];
 
@@ -2419,6 +2437,152 @@ class Exacoat_Core {
 			'shipping_target_method_ids' => $current['shipping_target_method_ids'] ?? implode( ', ', $ship_cfg['target_method_ids'] ),
 			'logistics_carriers'         => $current['logistics_carriers'] ?? $carriers,
 		] );
+	}
+
+	/**
+	 * Retrieve registered URL redirections with fallback seeds
+	 */
+	public static function get_redirections(): array {
+		$redirects = get_option( 'exacoat_redirections', null );
+		if ( ! is_array( $redirects ) ) {
+			// Seed default redirections
+			$redirects = [
+				[
+					'id'          => 'red_cs',
+					'source'      => '/cs',
+					'target'      => 'https://api.whatsapp.com/send?phone=628975556000',
+					'status_code' => 307,
+					'enabled'     => true,
+					'label'       => 'Customer Service WhatsApp',
+					'hits'        => 0,
+					'created_at'  => current_time( 'mysql' ),
+					'updated_at'  => current_time( 'mysql' ),
+				],
+				[
+					'id'          => 'red_care',
+					'source'      => '/care',
+					'target'      => 'https://api.whatsapp.com/send?phone=628975556000',
+					'status_code' => 307,
+					'enabled'     => true,
+					'label'       => 'Exacoat Care WhatsApp',
+					'hits'        => 0,
+					'created_at'  => current_time( 'mysql' ),
+					'updated_at'  => current_time( 'mysql' ),
+				],
+				[
+					'id'          => 'red_wa',
+					'source'      => '/wa',
+					'target'      => 'https://api.whatsapp.com/send?phone=628975556000',
+					'status_code' => 307,
+					'enabled'     => true,
+					'label'       => 'WhatsApp Direct',
+					'hits'        => 0,
+					'created_at'  => current_time( 'mysql' ),
+					'updated_at'  => current_time( 'mysql' ),
+				],
+			];
+			update_option( 'exacoat_redirections', $redirects );
+		}
+		return $redirects;
+	}
+
+	public function rest_get_redirects( WP_REST_Request $request ) {
+		$redirects = self::get_redirections();
+		$response = rest_ensure_response( [
+			'success'   => true,
+			'redirects' => $redirects,
+		] );
+		$response->header( 'Cache-Control', 'public, max-age=30, stale-while-revalidate=120' );
+		return $response;
+	}
+
+	public function rest_save_redirects( WP_REST_Request $request ) {
+		$params = $request->get_json_params() ?: $request->get_params();
+		$raw_list = $params['redirects'] ?? $params;
+
+		if ( ! is_array( $raw_list ) ) {
+			return new WP_Error( 'invalid_data', 'Redirects payload must be an array of rules.', [ 'status' => 400 ] );
+		}
+
+		$clean_redirects = [];
+		foreach ( $raw_list as $index => $item ) {
+			if ( ! is_array( $item ) ) continue;
+
+			$source = trim( (string) ( $item['source'] ?? '' ) );
+			$target = trim( (string) ( $item['target'] ?? '' ) );
+
+			if ( empty( $source ) || empty( $target ) ) {
+				continue;
+			}
+
+			// Ensure source starts with /
+			if ( ! str_starts_with( $source, '/' ) ) {
+				$source = '/' . $source;
+			}
+			// Disallow redirecting root / itself
+			if ( $source === '/' ) {
+				continue;
+			}
+
+			$id = sanitize_text_field( $item['id'] ?? ( 'red_' . substr( md5( $source . microtime() ), 0, 8 ) ) );
+			$status_code = in_array( (int) ( $item['status_code'] ?? 307 ), [ 301, 302, 307, 308 ], true ) ? (int) $item['status_code'] : 307;
+			$enabled = isset( $item['enabled'] ) ? (bool) $item['enabled'] : true;
+			$label = sanitize_text_field( $item['label'] ?? '' );
+			$hits = max( 0, (int) ( $item['hits'] ?? 0 ) );
+			$created_at = sanitize_text_field( $item['created_at'] ?? current_time( 'mysql' ) );
+
+			$clean_redirects[] = [
+				'id'          => $id,
+				'source'      => $source,
+				'target'      => $target,
+				'status_code' => $status_code,
+				'enabled'     => $enabled,
+				'label'       => $label,
+				'hits'        => $hits,
+				'created_at'  => $created_at,
+				'updated_at'  => current_time( 'mysql' ),
+			];
+		}
+
+		update_option( 'exacoat_redirections', $clean_redirects );
+
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log( 'info', 'redirects', 'Updated URL redirections from Exacoat Manager ERP: ' . count( $clean_redirects ) . ' rules' );
+		}
+
+		return rest_ensure_response( [
+			'success'   => true,
+			'message'   => 'Redirections updated successfully.',
+			'redirects' => $clean_redirects,
+		] );
+	}
+
+	public function rest_track_redirect( WP_REST_Request $request ) {
+		$params = $request->get_json_params() ?: $request->get_params();
+		$source = trim( (string) ( $params['source'] ?? '' ) );
+		$id = trim( (string) ( $params['id'] ?? '' ) );
+
+		if ( empty( $source ) && empty( $id ) ) {
+			return rest_ensure_response( [ 'success' => false ] );
+		}
+
+		$redirects = self::get_redirections();
+		$updated = false;
+
+		foreach ( $redirects as &$r ) {
+			if ( ( ! empty( $id ) && $r['id'] === $id ) || ( ! empty( $source ) && strtolower( $r['source'] ) === strtolower( $source ) ) ) {
+				$r['hits'] = ( $r['hits'] ?? 0 ) + 1;
+				$r['last_accessed_at'] = current_time( 'mysql' );
+				$updated = true;
+				break;
+			}
+		}
+
+		if ( $updated ) {
+			update_option( 'exacoat_redirections', $redirects );
+		}
+
+		return rest_ensure_response( [ 'success' => true ] );
 	}
 
 	public function rest_get_public_feelform_settings() {

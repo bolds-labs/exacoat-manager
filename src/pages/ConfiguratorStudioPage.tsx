@@ -45,6 +45,7 @@ import {
   ConfiguratorVariant,
   GeneratedShadowConfig,
 } from '../types';
+import { decodeHtmlEntities, decodeDeep } from '../lib/utils';
 import {
   Layers,
   Search,
@@ -1182,7 +1183,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
           ? 2.0
           : (devFamily === 'foldable' ? 1.3 : (res.profile.size_multiplier || 1.0));
 
-        const devName = res.profile.device_name || summary?.name || `Device #${productId}`;
+        const devName = decodeHtmlEntities(res.profile.device_name || summary?.name || `Device #${productId}`);
         const devSlug = res.profile.device_slug || summary?.slug || '';
         const cleanVariants = sanitizeDeviceVariants(
           res.profile.variants,
@@ -1219,7 +1220,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
           ...(normalizedCoverage ? { coverage_and_cutouts: normalizedCoverage } : {}),
         };
 
-        setEditingProfile(profile);
+        setEditingProfile(decodeDeep(profile));
 
         // Select first layer by default
         if (cleanedLayers.length > 0) {

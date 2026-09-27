@@ -80,7 +80,7 @@ class Exacoat_Store_Enhancements {
 	}
 
 	/**
-	 * Shortlink redirect handler: /cs, /wa, /whatsapp -> WhatsApp customer support
+	 * Shortlink redirect handler: dynamically checks registered redirections with fallback
 	 */
 	public static function handle_shortlink_redirects() {
 		if ( is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
@@ -88,10 +88,24 @@ class Exacoat_Store_Enhancements {
 		}
 
 		$request_uri = untrailingslashit( strtolower( parse_url( $_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH ) ?: '' ) );
+		if ( empty( $request_uri ) ) {
+			return;
+		}
 
-		if ( in_array( $request_uri, [ '/cs', '/wa', '/whatsapp' ], true ) ) {
+		$rules = class_exists( 'Exacoat_Core' ) ? Exacoat_Core::get_redirections() : [];
+		foreach ( $rules as $rule ) {
+			if ( empty( $rule['enabled'] ) ) continue;
+			$source = untrailingslashit( strtolower( $rule['source'] ?? '' ) );
+			if ( $source === $request_uri && ! empty( $rule['target'] ) ) {
+				$status = in_array( (int) ( $rule['status_code'] ?? 307 ), [ 301, 302, 307, 308 ], true ) ? (int) $rule['status_code'] : 307;
+				wp_redirect( $rule['target'], $status );
+				exit;
+			}
+		}
+
+		if ( in_array( $request_uri, [ '/cs', '/care', '/wa', '/whatsapp' ], true ) ) {
 			$wa_url = 'https://api.whatsapp.com/send?phone=628975556000';
-			wp_redirect( $wa_url, 302 );
+			wp_redirect( $wa_url, 307 );
 			exit;
 		}
 	}
@@ -608,14 +622,14 @@ class Exacoat_Store_Enhancements {
 	/**
 	 * Calculate rounded price for a given IDR base amount in any target currency using decimal or psychological rounding
 	 */
-	public static function calculate_price_for_currency( $amount_idr, $currency_code = 'IDR' ): float {
+	public static function calculate_price_for_currency( $amount_idr, $currency_code = 'IDR', $is_addon = false ): float {
 		$currency_code = strtoupper( trim( (string) $currency_code ) );
 		if ( empty( $currency_code ) || 'IDR' === $currency_code ) {
 			return (float) $amount_idr;
 		}
 
 		$settings   = Exacoat_Core::get_settings();
-		$markup     = floatval( $settings['currency_global_markup'] ?? 1.15 );
+		$markup     = floatval( $settings['currency_global_markup'] ?? 1.8 );
 		$currencies = self::get_currency_rates();
 
 		if ( ! isset( $currencies[ $currency_code ] ) ) {
@@ -631,6 +645,19 @@ class Exacoat_Store_Enhancements {
 		}
 
 		$raw = $amount_idr * $rate * $markup;
+
+		if ( $is_addon ) {
+			if ( '500_step' === $rounding_type || 'KRW' === $currency_code ) {
+				return (float) max( 0, ceil( $raw / 500 ) * 500 );
+			}
+			if ( '50_step' === $rounding_type || 'JPY' === $currency_code ) {
+				return (float) max( 0, ceil( $raw / 50 ) * 50 );
+			}
+			if ( '90_end' === $rounding_type || 'THB' === $currency_code ) {
+				return (float) max( 0, round( $raw / 10 ) * 10 );
+			}
+			return (float) max( 0, round( $raw ) );
+		}
 
 		switch ( $rounding_type ) {
 			case '90_decimal':

@@ -42,8 +42,9 @@ import { TeamRolesManager } from './TeamRolesManager';
 import { WhatsAppAutomationSection } from './WhatsAppAutomationSection';
 import { CurrencySettingsSection } from './CurrencySettingsSection';
 import { ShippingSettingsSection } from './ShippingSettingsSection';
+import { RedirectionSettingsSection } from './RedirectionSettingsSection';
 
-type SettingsTab = 'general' | 'currency' | 'shipping' | 'team' | 'automation' | 'integrations' | 'database';
+type SettingsTab = 'general' | 'redirections' | 'currency' | 'shipping' | 'team' | 'automation' | 'integrations' | 'database';
 
 export const SettingsPanel: React.FC = () => {
   const { showToast } = useToast();
@@ -390,6 +391,7 @@ export const SettingsPanel: React.FC = () => {
 
   const tabs: { id: SettingsTab; label: string }[] = [
     { id: 'general', label: 'General' },
+    { id: 'redirections', label: 'Redirections' },
     { id: 'currency', label: 'Store & Currency' },
     { id: 'shipping', label: 'Shipping & Carriers' },
     { id: 'team', label: 'Team Roles' },
@@ -420,6 +422,11 @@ export const SettingsPanel: React.FC = () => {
       />
 
       <Tabs tabs={tabs} activeTab={activeTab} onChange={tab => setActiveTab(tab as SettingsTab)} className="w-full" />
+
+      {/* TAB: Storefront URL Redirections */}
+      {activeTab === 'redirections' && (
+        <RedirectionSettingsSection />
+      )}
 
       {/* TAB: Store & Currency Exchange */}
       {activeTab === 'currency' && (

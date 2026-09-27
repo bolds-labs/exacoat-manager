@@ -6,7 +6,7 @@
  * dynamic configurator data injection, and composable device profiles.
  *
  * @package Exacoat_Core
- * @version 0.0.9
+ * @version 0.0.10
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -31,6 +31,44 @@ class Exacoat_Configurator_Engine {
 	const SURCHARGE_TIERS_OPTION_KEY = 'exacoat_finish_surcharge_tiers';
 
 	private static $cached_finishes = null;
+
+	/**
+	 * Recursively decode HTML entities from strings, arrays, or objects.
+	 * Resolves &amp;, &#038;, &#38;, &quot;, &#039;, &apos;, &lt;, &gt;, &nbsp;, and others.
+	 * Performs up to 3 passes to unwrap nested or double-encoded entities (e.g. &amp;amp;).
+	 *
+	 * @param mixed $data
+	 * @return mixed
+	 */
+	public static function decode_entities( $data ) {
+		if ( is_string( $data ) ) {
+			if ( strpos( $data, '&' ) === false ) {
+				return $data;
+			}
+			$decoded = $data;
+			for ( $i = 0; $i < 3; $i++ ) {
+				$prev = $decoded;
+				$decoded = html_entity_decode( $decoded, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+				$decoded = str_replace( [ '&#038;', '&#38;' ], '&', $decoded );
+				if ( $decoded === $prev ) {
+					break;
+				}
+			}
+			return $decoded;
+		}
+
+		if ( is_array( $data ) ) {
+			$cleaned = [];
+			foreach ( $data as $key => $val ) {
+				$clean_key = is_string( $key ) ? self::decode_entities( $key ) : $key;
+				$clean_val = self::decode_entities( $val );
+				$cleaned[ $clean_key ] = $clean_val;
+			}
+			return $cleaned;
+		}
+
+		return $data;
+	}
 
 	public static function get_finish_groups(): array {
 		$groups = get_option( self::GROUPS_OPTION_KEY, null );
@@ -65,11 +103,12 @@ class Exacoat_Configurator_Engine {
 			$valid_groups = [ 'Limited', 'Signature skins', 'Colors', 'Natural' ];
 		}
 
-		return $valid_groups;
+		return self::decode_entities( $valid_groups );
 	}
 
 	public static function save_finish_groups( array $groups ): bool {
-		$sanitized = array_values( array_unique( array_filter( array_map( 'sanitize_text_field', $groups ) ) ) );
+		$decoded   = array_map( [ __CLASS__, 'decode_entities' ], $groups );
+		$sanitized = array_values( array_unique( array_filter( array_map( 'sanitize_text_field', $decoded ) ) ) );
 		update_option( self::GROUPS_OPTION_KEY, $sanitized );
 		return true;
 	}
@@ -86,13 +125,13 @@ class Exacoat_Configurator_Engine {
 				],
 			];
 		}
-		return $settings;
+		return self::decode_entities( $settings );
 	}
 
 	public static function save_finish_group_settings( array $settings ): bool {
 		$sanitized = [];
 		foreach ( $settings as $grp => $cfg ) {
-			$clean_grp = sanitize_text_field( $grp );
+			$clean_grp = sanitize_text_field( self::decode_entities( $grp ) );
 			if ( empty( $clean_grp ) || ! is_array( $cfg ) ) {
 				continue;
 			}
@@ -139,7 +178,7 @@ class Exacoat_Configurator_Engine {
 				],
 			];
 		}
-		return $presets;
+		return self::decode_entities( $presets );
 	}
 
 	public static function save_configurator_presets( array $presets ): bool {
@@ -164,9 +203,9 @@ class Exacoat_Configurator_Engine {
 			}
 			$sanitized[] = [
 				'id'          => $id,
-				'title'       => sanitize_text_field( $p['title'] ?? '' ),
-				'tagline'     => sanitize_text_field( $p['tagline'] ?? '' ),
-				'badge'       => sanitize_text_field( $p['badge'] ?? '' ),
+				'title'       => sanitize_text_field( self::decode_entities( $p['title'] ?? '' ) ),
+				'tagline'     => sanitize_text_field( self::decode_entities( $p['tagline'] ?? '' ) ),
+				'badge'       => sanitize_text_field( self::decode_entities( $p['badge'] ?? '' ) ),
 				'coverage'    => in_array( $p['coverage'] ?? '', [ 'model_360', 'model_cut' ], true ) ? $p['coverage'] : 'model_360',
 				'logo_cutout' => ! empty( $p['logo_cutout'] ),
 				'layers'      => $clean_layers,
@@ -206,9 +245,9 @@ class Exacoat_Configurator_Engine {
 	public static function get_surcharge_tiers(): array {
 		$tiers = get_option( self::SURCHARGE_TIERS_OPTION_KEY, null );
 		if ( ! is_array( $tiers ) || empty( $tiers ) ) {
-			return self::get_default_surcharge_tiers();
+			return self::decode_entities( self::get_default_surcharge_tiers() );
 		}
-		return $tiers;
+		return self::decode_entities( $tiers );
 	}
 
 	public static function save_surcharge_tiers( array $tiers ): bool {
@@ -220,7 +259,7 @@ class Exacoat_Configurator_Engine {
 			$id = ! empty( $t['id'] ) ? sanitize_key( $t['id'] ) : 'tier_' . ( $idx + 1 );
 			$sanitized[] = [
 				'id'        => $id,
-				'label'     => sanitize_text_field( $t['label'] ?? ( 'Tier ' . ( $idx + 1 ) ) ),
+				'label'     => sanitize_text_field( self::decode_entities( $t['label'] ?? ( 'Tier ' . ( $idx + 1 ) ) ) ),
 				'min_price' => max( 0, (float) ( $t['min_price'] ?? 0 ) ),
 				'max_price' => max( 0, (float) ( $t['max_price'] ?? 0 ) ),
 				'surcharge' => max( 0, (float) ( $t['surcharge'] ?? 0 ) ),
@@ -514,7 +553,7 @@ class Exacoat_Configurator_Engine {
 			$idx++;
 		}
 
-		self::$cached_finishes = $finishes;
+		self::$cached_finishes = self::decode_entities( $finishes );
 		return self::$cached_finishes;
 	}
 
@@ -522,6 +561,7 @@ class Exacoat_Configurator_Engine {
 	 * Save global finishes list
 	 */
 	public static function save_finishes( array $finishes ): bool {
+		$finishes = self::decode_entities( $finishes );
 		self::$cached_finishes = $finishes;
 		update_option( self::OPTION_KEY, $finishes );
 		update_option( self::LEGACY_OPTION_KEY, $finishes );
@@ -2227,7 +2267,7 @@ class Exacoat_Configurator_Engine {
 		if ( ! empty( $angles ) && is_array( $angles ) ) {
 			$order_idx = 0;
 			foreach ( $angles as $a ) {
-				$name = trim( $a['name'] ?? '' );
+				$name = trim( self::decode_entities( $a['name'] ?? '' ) );
 				if ( empty( $name ) ) continue;
 				$slug = strtolower( preg_replace( '/[^a-z0-9]+/i', '_', $name ) );
 				$slug = trim( $slug, '_' );
@@ -2322,7 +2362,7 @@ class Exacoat_Configurator_Engine {
 
 		if ( is_array( $layers ) ) {
 			foreach ( $layers as $idx => $l ) {
-				$layer_name = trim( $l['name'] ?? '' );
+				$layer_name = trim( self::decode_entities( $l['name'] ?? '' ) );
 				if ( empty( $layer_name ) ) continue;
 				$layer_name_lower = strtolower( $layer_name );
 
@@ -2342,7 +2382,7 @@ class Exacoat_Configurator_Engine {
 				$is_coverage = ( strpos( $layer_name_lower, 'coverage' ) !== false || strpos( $layer_name_lower, 'model cut' ) !== false || strpos( $layer_name_lower, 'model 360' ) !== false );
 				if ( ! $is_coverage && ( $layer_name_lower === 'model' || strpos( $layer_name_lower, 'cut' ) !== false ) ) {
 					foreach ( $raw_choices as $ch ) {
-						$ch_name_l = strtolower( $ch['name'] ?? '' );
+						$ch_name_l = strtolower( self::decode_entities( $ch['name'] ?? '' ) );
 						if ( strpos( $ch_name_l, 'model cut' ) !== false || strpos( $ch_name_l, 'model 360' ) !== false || strpos( $ch_name_l, '360' ) !== false ) {
 							$is_coverage = true;
 							break;
@@ -2353,7 +2393,7 @@ class Exacoat_Configurator_Engine {
 				if ( $is_coverage ) {
 					$has_coverage_layer = true;
 					foreach ( $raw_choices as $ch ) {
-						$ch_name_l = strtolower( $ch['name'] ?? '' );
+						$ch_name_l = strtolower( self::decode_entities( $ch['name'] ?? '' ) );
 						if ( strpos( $ch_name_l, 'model cut' ) !== false && ! empty( $ch['images'] ) && is_array( $ch['images'] ) ) {
 							foreach ( $ch['images'] as $img_obj ) {
 								$url = $img_obj['image']['url'] ?? '';
@@ -2388,6 +2428,7 @@ class Exacoat_Configurator_Engine {
 					$options = [];
 					foreach ( $raw_choices as $ch ) {
 						if ( empty( $ch['is_group'] ) && ! empty( $ch['name'] ) ) {
+							$ch_name = self::decode_entities( $ch['name'] );
 							$opt_img = '';
 							if ( ! empty( $ch['images'] ) && is_array( $ch['images'] ) ) {
 								foreach ( $ch['images'] as $img_obj ) {
@@ -2399,8 +2440,8 @@ class Exacoat_Configurator_Engine {
 							}
 							$price_val = isset( $ch['price'] ) ? (float) $ch['price'] : ( isset( $ch['extra_price'] ) ? (float) $ch['extra_price'] : 0 );
 							$options[] = [
-								'id'         => sanitize_title( $ch['name'] ),
-								'name'       => $ch['name'],
+								'id'         => sanitize_title( $ch_name ),
+								'name'       => $ch_name,
 								'price_diff' => $price_val,
 								'image_url'  => $opt_img,
 							];
@@ -2433,7 +2474,7 @@ class Exacoat_Configurator_Engine {
 
 				foreach ( $raw_choices as $ch ) {
 					if ( ! empty( $ch['is_group'] ) ) continue;
-					$ch_name = $ch['name'] ?? '';
+					$ch_name = self::decode_entities( $ch['name'] ?? '' );
 					$ch_slug = sanitize_title( $ch_name );
 					$ch_price = isset( $ch['price'] ) ? (float) $ch['price'] : ( isset( $ch['extra_price'] ) ? (float) $ch['extra_price'] : 0 );
 					if ( $ch_price > 0 && $layer_extra_price === 0 ) {
@@ -2470,7 +2511,7 @@ class Exacoat_Configurator_Engine {
 				$layer_finish_slugs = [];
 				foreach ( $raw_choices as $ch ) {
 					if ( empty( $ch['is_group'] ) && ! empty( $ch['name'] ) ) {
-						$layer_finish_slugs[] = sanitize_title( $ch['name'] );
+						$layer_finish_slugs[] = sanitize_title( self::decode_entities( $ch['name'] ) );
 					}
 				}
 				$layer_finish_slugs = array_values( array_unique( $layer_finish_slugs ) );
@@ -2535,7 +2576,7 @@ class Exacoat_Configurator_Engine {
 
 		$base_price = self::get_product_base_price( $product );
 
-		return [
+		return self::decode_entities( [
 			'product_id'           => $product_id,
 			'device_slug'          => $product->get_slug(),
 			'device_name'          => $product->get_name(),
@@ -2554,7 +2595,7 @@ class Exacoat_Configurator_Engine {
 			'coverage_and_cutouts' => $coverage_and_cutouts,
 			'presets'              => [],
 			'updated_at'           => current_time( 'mysql' ),
-		];
+		] );
 	}
 
 	/**
@@ -2738,7 +2779,7 @@ class Exacoat_Configurator_Engine {
 				$audit_details = is_array( $raw_audit_details ) ? $raw_audit_details : json_decode( $raw_audit_details, true );
 			}
 
-			$p_name = $product ? $product->get_name() : $p->post_title;
+			$p_name = self::decode_entities( $product ? $product->get_name() : $p->post_title );
 			$p_slug = $product ? $product->get_slug() : $p->post_name;
 
 			// Auto-infer and heal device family and size multiplier
@@ -2795,7 +2836,7 @@ class Exacoat_Configurator_Engine {
 
 		return rest_ensure_response( [
 			'success'     => true,
-			'profiles'    => $profiles,
+			'profiles'    => self::decode_entities( $profiles ),
 			'total'       => count( $profiles ),
 			'total_pages' => (int) $query->max_num_pages,
 			'page'        => $page,
@@ -3099,7 +3140,7 @@ class Exacoat_Configurator_Engine {
 
 		return rest_ensure_response( [
 			'success'        => true,
-			'profile'        => $profile,
+			'profile'        => self::decode_entities( $profile ),
 			'finishes'       => self::get_finishes(),
 			'groups'         => self::get_finish_groups(),
 			'group_settings' => self::get_finish_group_settings(),
@@ -3204,7 +3245,7 @@ class Exacoat_Configurator_Engine {
 		$post_obj = get_post( $product_id );
 		$wc_product = wc_get_product( $product_id );
 		$dev_slug = ! empty( $params['device_slug'] ) ? sanitize_title( $params['device_slug'] ) : ( $post_obj ? $post_obj->post_name : '' );
-		$dev_name = ! empty( $params['device_name'] ) ? sanitize_text_field( $params['device_name'] ) : ( $post_obj ? $post_obj->post_title : '' );
+		$dev_name = ! empty( $params['device_name'] ) ? sanitize_text_field( self::decode_entities( $params['device_name'] ) ) : ( $post_obj ? self::decode_entities( $post_obj->post_title ) : '' );
 
 		$raw_price = isset( $params['base_price'] ) ? (float) $params['base_price'] : 0;
 		if ( $raw_price <= 0 && $wc_product ) {
@@ -3372,6 +3413,9 @@ class Exacoat_Configurator_Engine {
 				$val = str_replace( [ '360u00b0', '360\\u00b0' ], '360°', $val );
 			}
 		} );
+
+		// Recursively decode entities to prevent saving raw entities (&amp;, &#038;, etc.) into database
+		$profile = self::decode_entities( $profile );
 
 		// Use wp_slash and JSON_UNESCAPED_UNICODE so WordPress update_metadata does not strip quotes or slashes, and degree signs (°) are preserved directly
 		$json_str = wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
@@ -3861,7 +3905,11 @@ class Exacoat_Configurator_Engine {
 		$profile_raw = get_post_meta( $data['id'], self::PROFILE_META_KEY, true );
 		if ( ! empty( $profile_raw ) ) {
 			$profile = is_string( $profile_raw ) ? json_decode( $profile_raw, true ) : $profile_raw;
-			$data['configurator_profile'] = $profile;
+			$data['configurator_profile'] = self::decode_entities( $profile );
+		}
+
+		if ( ! empty( $data['name'] ) && is_string( $data['name'] ) ) {
+			$data['name'] = self::decode_entities( $data['name'] );
 		}
 
 		$response->set_data( $data );

@@ -28,6 +28,7 @@ export type { MarketplaceDeviceImageSettings };
 import { renderEmailHtmlLocally, BRAND_LOGO_WHITE_HTML, BRAND_LOGO_HTML } from './emailRenderer';
 import { extractItemSpecs } from './orderItems';
 import { normalizeDeviceName } from './seoUtils';
+import { decodeHtmlEntities, decodeDeep } from './utils';
 
 
 // ==========================================
@@ -48,6 +49,19 @@ export interface Customer {
   total_spent?: string;
   avatar_url?: string;
   [key: string]: any;
+}
+
+export interface RedirectionRule {
+  id: string;
+  source: string;
+  target: string;
+  status_code: 301 | 302 | 307 | 308;
+  enabled: boolean;
+  label?: string;
+  hits?: number;
+  last_accessed_at?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Product {
@@ -849,6 +863,42 @@ export async function savePluginSettings(settings: Partial<WordPressPluginSettin
     if (res.ok) {
       setCachedPluginSettings(settings);
       return { success: true };
+    }
+    return { success: false, error: `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchRedirections(): Promise<{ success: boolean; redirects: RedirectionRule[]; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/redirects?_t=${Date.now()}`;
+
+  try {
+    const res = await authenticatedFetch(url, { headers: { Accept: 'application/json' } });
+    if (res.ok) {
+      const data = await res.json();
+      return { success: true, redirects: data.redirects || [] };
+    }
+    return { success: false, redirects: [], error: `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, redirects: [], error: err.message };
+  }
+}
+
+export async function saveRedirections(redirects: RedirectionRule[]): Promise<{ success: boolean; redirects?: RedirectionRule[]; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/redirects`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ redirects }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { success: true, redirects: data.redirects || redirects };
     }
     return { success: false, error: `HTTP ${res.status}` };
   } catch (err: any) {
@@ -3187,11 +3237,11 @@ export async function fetchGlobalFinishesDirect(): Promise<{
       try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(data.finishes)); } catch {}
       return {
         success: true,
-        finishes: data.finishes,
-        groups: Array.isArray(data?.groups) ? data.groups : undefined,
-        group_settings: data?.group_settings,
-        presets: Array.isArray(data?.presets) ? data.presets : undefined,
-        surcharge_tiers: Array.isArray(data?.surcharge_tiers) ? data.surcharge_tiers : undefined,
+        finishes: decodeDeep(data.finishes),
+        groups: Array.isArray(data?.groups) ? decodeDeep(data.groups) : undefined,
+        group_settings: data?.group_settings ? decodeDeep(data.group_settings) : undefined,
+        presets: Array.isArray(data?.presets) ? decodeDeep(data.presets) : undefined,
+        surcharge_tiers: Array.isArray(data?.surcharge_tiers) ? decodeDeep(data.surcharge_tiers) : undefined,
       };
     }
   } catch {}
@@ -3204,11 +3254,11 @@ export async function fetchGlobalFinishesDirect(): Promise<{
         try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(nextData.finishes)); } catch {}
         return {
           success: true,
-          finishes: nextData.finishes,
-          groups: Array.isArray(nextData?.groups) ? nextData.groups : undefined,
-          group_settings: nextData?.group_settings,
-          presets: Array.isArray(nextData?.presets) ? nextData.presets : undefined,
-          surcharge_tiers: Array.isArray(nextData?.surcharge_tiers) ? nextData.surcharge_tiers : undefined,
+          finishes: decodeDeep(nextData.finishes),
+          groups: Array.isArray(nextData?.groups) ? decodeDeep(nextData.groups) : undefined,
+          group_settings: nextData?.group_settings ? decodeDeep(nextData.group_settings) : undefined,
+          presets: Array.isArray(nextData?.presets) ? decodeDeep(nextData.presets) : undefined,
+          surcharge_tiers: Array.isArray(nextData?.surcharge_tiers) ? decodeDeep(nextData.surcharge_tiers) : undefined,
         };
       }
     }
@@ -4052,7 +4102,7 @@ export async function fetchConfiguratorProfilesDirect(params?: {
     if (res.ok && data?.success && Array.isArray(data?.profiles) && data.profiles.length > 0) {
       return {
         success: true,
-        profiles: data.profiles,
+        profiles: decodeDeep(data.profiles),
         total: data.total || data.profiles.length,
         total_pages: data.total_pages || 1,
       };
@@ -4398,8 +4448,8 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
 
       return {
         success: true,
-        profile: resolvedProfile,
-        finishes: data.finishes || [],
+        profile: decodeDeep(resolvedProfile),
+        finishes: decodeDeep(data.finishes || []),
       };
     }
   } catch {}
@@ -4725,7 +4775,7 @@ export async function saveProductConfiguratorProfileDirect(profile: Partial<Devi
     const res = await authenticatedFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(decodeDeep(payload)),
     });
     const data = await res.json();
     return {
@@ -5243,15 +5293,38 @@ export interface WhatsAppSettings {
   enabled: boolean;
   phone_number_id: string;
   access_token: string;
+  access_token_masked?: string;
   business_account_id: string;
   telegram_bot_token: string;
   telegram_chat_id: string;
+  telegram_thread_id?: string;
   telegram_alerts_enabled: boolean;
   events: {
     processing: boolean;
     completed: boolean;
     smb_ready: boolean;
     smb_picked: boolean;
+  };
+}
+
+function normalizeWhatsAppSettings(raw: any): WhatsAppSettings {
+  const safe = raw || {};
+  return {
+    enabled: Boolean(safe.enabled),
+    phone_number_id: safe.phone_number_id || '',
+    access_token: safe.access_token || '',
+    access_token_masked: safe.access_token_masked || '',
+    business_account_id: safe.business_account_id || '',
+    telegram_bot_token: safe.telegram_bot_token || '',
+    telegram_chat_id: safe.telegram_chat_id || '',
+    telegram_thread_id: safe.telegram_thread_id || '',
+    telegram_alerts_enabled: Boolean(safe.telegram_alerts_enabled ?? safe.telegram_enabled),
+    events: {
+      processing: Boolean(safe.events?.processing ?? safe.notify_processing ?? true),
+      completed: Boolean(safe.events?.completed ?? safe.notify_completed ?? true),
+      smb_ready: Boolean(safe.events?.smb_ready ?? safe.notify_smb_ready ?? true),
+      smb_picked: Boolean(safe.events?.smb_picked ?? safe.notify_smb_picked ?? true),
+    },
   };
 }
 
@@ -5269,7 +5342,7 @@ export async function fetchWhatsAppSettings(): Promise<{
     });
     const data = await res.json();
     if (res.ok && data?.success) {
-      return { success: true, settings: data.settings };
+      return { success: true, settings: normalizeWhatsAppSettings(data.settings) };
     }
     return { success: false, error: data?.error || data?.message || `HTTP ${res.status}` };
   } catch (err: any) {
@@ -5296,7 +5369,7 @@ export async function saveWhatsAppSettings(
     });
     const data = await res.json();
     if (res.ok && data?.success) {
-      return { success: true, settings: data.settings, message: data.message };
+      return { success: true, settings: normalizeWhatsAppSettings(data.settings), message: data.message };
     }
     return { success: false, error: data?.error || data?.message || `HTTP ${res.status}` };
   } catch (err: any) {
