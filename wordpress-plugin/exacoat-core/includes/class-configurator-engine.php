@@ -4228,7 +4228,16 @@ class Exacoat_Configurator_Engine {
 			return;
 		}
 		$slug = $post->post_name;
-		self::trigger_storefront_revalidation( [ 'slug' => $slug ] );
+		$category_slug = '';
+		$cats = wp_get_post_terms( $post_id, 'product_cat', [ 'fields' => 'slugs' ] );
+		if ( ! empty( $cats ) && ! is_wp_error( $cats ) ) {
+			$category_slug = (string) $cats[0];
+		}
+		self::trigger_storefront_revalidation( [
+			'slug'     => $slug,
+			'category' => $category_slug,
+			'tag'      => 'products',
+		] );
 	}
 
 	/**
@@ -4246,10 +4255,14 @@ class Exacoat_Configurator_Engine {
 			'cloudflare' => null,
 		];
 
-		// 1. Next.js storefront revalidation (web.exacoat.com)
-		$storefront_base = defined( 'EXACOAT_STOREFRONT_URL' ) ? EXACOAT_STOREFRONT_URL : 'https://web.exacoat.com';
-		$secret = defined( 'EXACOAT_REVALIDATE_SECRET' ) ? EXACOAT_REVALIDATE_SECRET : 'exacoat_revalidate_secret_2026';
-		$revalidate_url = trailingslashit( $storefront_base ) . 'api/revalidate?secret=' . rawurlencode( $secret );
+		// 1. Next.js storefront revalidation (targets both production exacoat.com and configured base)
+		$targets = [
+			'https://exacoat.com',
+			defined( 'EXACOAT_STOREFRONT_URL' ) ? EXACOAT_STOREFRONT_URL : 'https://web.exacoat.com',
+			defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : '',
+		];
+		$targets = array_unique( array_filter( $targets ) );
+		$secret  = defined( 'EXACOAT_REVALIDATE_SECRET' ) ? EXACOAT_REVALIDATE_SECRET : 'exacoat_revalidate_secret_2026';
 
 		$payload = [
 			'tag'      => $tag,
@@ -4258,25 +4271,29 @@ class Exacoat_Configurator_Engine {
 			'path'     => $path,
 		];
 
-		$response = wp_remote_post( $revalidate_url, [
-			'headers' => [ 'Content-Type' => 'application/json' ],
-			'body'    => wp_json_encode( $payload ),
-			'timeout' => 8,
-		] );
+		foreach ( $targets as $storefront_base ) {
+			$revalidate_url = trailingslashit( $storefront_base ) . 'api/revalidate?secret=' . rawurlencode( $secret );
 
-		if ( is_wp_error( $response ) ) {
-			$results['nextjs'] = [
-				'success' => false,
-				'error'   => $response->get_error_message(),
-			];
-		} else {
-			$status_code = wp_remote_retrieve_response_code( $response );
-			$body = json_decode( wp_remote_retrieve_body( $response ), true );
-			$results['nextjs'] = [
-				'success'     => ( 200 === $status_code && ! empty( $body['success'] ) ),
-				'status_code' => $status_code,
-				'details'     => $body,
-			];
+			$response = wp_remote_post( $revalidate_url, [
+				'headers' => [ 'Content-Type' => 'application/json' ],
+				'body'    => wp_json_encode( $payload ),
+				'timeout' => 8,
+			] );
+
+			if ( is_wp_error( $response ) ) {
+				$results['nextjs'][ $storefront_base ] = [
+					'success' => false,
+					'error'   => $response->get_error_message(),
+				];
+			} else {
+				$status_code = wp_remote_retrieve_response_code( $response );
+				$body = json_decode( wp_remote_retrieve_body( $response ), true );
+				$results['nextjs'][ $storefront_base ] = [
+					'success'     => ( 200 === $status_code && ! empty( $body['success'] ) ),
+					'status_code' => $status_code,
+					'details'     => $body,
+				];
+			}
 		}
 
 		// 2. Cloudflare Edge Cache Purge (if credentials configured)

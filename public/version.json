@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.121",
+  "version": "0.1.122",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.121.zip?v=0.1.121",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.122.zip?v=0.1.122",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-27T21:47:37.916Z",
+  "last_updated": "2026-09-27T21:50:23.714Z",
   "sections": {
-    "changelog": "### Version 0.1.121\n- Fix PNG alpha channel stripping on upload: eliminate destructive imagetruecolortopalette quantization in class-image-sizes and class-configurator-engine, strictly preserving full 32-bit RGBA transparency\n- Fix primary layer detection in configurator engine so optional/accent parts are never coerced into primary base layers with 0 extra price"
+    "changelog": "### Version 0.1.122\n- Automatically extract and trigger category page ISR revalidation on product save/update, targeting production exacoat.com\n- Fix PNG alpha channel stripping on upload with lossless level-9 compression"
   }
 }

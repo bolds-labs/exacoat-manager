@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Fix PNG alpha channel stripping on upload: eliminate destructive imagetruecolortopalette quantization in class-image-sizes and class-configurator-engine, strictly preserving full 32-bit RGBA transparency\n- Fix primary layer detection in configurator engine so optional/accent parts are never coerced into primary base layers with 0 extra price`,
+      changelog: `### Version ${version}\n- Automatically extract and trigger category page ISR revalidation on product save/update, targeting production exacoat.com\n- Fix PNG alpha channel stripping on upload with lossless level-9 compression`,
     },
   };
 
