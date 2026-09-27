@@ -2012,7 +2012,7 @@ Exacoat crafts precision-cut skins and wraps for smartphones (iPhone, Samsung Ga
 Exacoat is known for authentic textures (Carbon Fiber, Black Camo, Matrix, Swarm, Slate, Patina, Honeycomb), 360-degree millimeter precision, bubble-free installation, and sleek minimalist aesthetics.
 
 CRITICAL ANTISLOP COPYWRITING RULES (MANDATORY):
-1. FORBIDDEN: Do NOT use any em dashes ("—"). Use commas, periods, colons, or parentheses instead.
+1. FORBIDDEN: Do NOT use any em dashes (the character \u2014). Use commas, periods, colons, or parentheses instead.
 2. FORBIDDEN: Do NOT use generic AI marketing buzzwords like "revolutionary", "cutting-edge", "game-changing", "seamless", "effortless", "ultimate", "state-of-the-art".
 3. Write with genuine craftsmanship, high-intent tone, and concise clarity. Keep paragraphs brief (2 to 3 sentences maximum each).
 4. Language: ${params.language === 'id' ? 'Indonesian (Bahasa Indonesia)' : 'English'}.
@@ -2105,6 +2105,7 @@ export async function generateMarketingFullHtmlEmailDirect(params: {
   subject?: string;
   theme?: 'dark' | 'light';
   language?: string;
+  format?: 'html' | 'mjml';
 }): Promise<{
   success: boolean;
   html?: string;
@@ -2122,38 +2123,41 @@ export async function generateMarketingFullHtmlEmailDirect(params: {
   }
 
   const isDark = (params.theme ?? 'dark') === 'dark';
+  const isMjml = params.format === 'mjml';
   const langPrompt = params.language === 'id' ? 'Bahasa Indonesia' : 'English';
 
   const systemInstructions = `You are an elite email template designer and developer for Exacoat (exacoat.com), a luxury precision device skins and wraps manufacturer.
 Exacoat products: authentic 3M/cast vinyl skins for iPhones, Samsung Galaxy, Pixel, MacBooks, gaming consoles. Key features: bubble-free air release, scratch & mold resistant, zero adhesive residue, 360-degree precision fit.
 
 TASK:
-Generate a complete, production-ready, beautifully designed HTML email based on the user's design request.
+${isMjml 
+  ? 'Generate a complete, production-ready, beautifully designed MJML semantic email template (<mjml>...</mjml>). Include <mj-head> with Plus Jakarta Sans font, <mj-body background-color="#050507">, <mj-wrapper background-color="#0e0e11" border-radius="28px" border="1px solid #1f1f24" padding="28px 24px">, rounded card elements, Exacoat branding, headline, copy, and CTAs.'
+  : 'Generate a complete, production-ready, beautifully designed responsive HTML email (<!doctype html>...</html>). Table-based responsive layout with max-width 560px, rounded container (border-radius: 28px), rounded cards (border-radius: 20px), pill capsules (border-radius: 9999px).'
+}
 
 CRITICAL DESIGN & CODING SPECIFICATIONS:
-1. Complete Document: Start with <!doctype html> and end with </html>.
-2. Responsive Architecture: Max-width 560px or 600px centered container, table-based layout with border-collapse: separate.
-3. Rounded Aesthetics:
-   - Outer container: border-radius: 28px
+1. Format: ${isMjml ? 'Valid MJML root tag <mjml> to </mjml>' : 'Valid HTML5 <!doctype html> to </html>'}.
+2. Rounded Aesthetics:
+   - Outer container / wrapper: border-radius: 28px
    - Internal cards, product boxes, or grids: border-radius: 20px
    - Buttons, badges, and pill tags: border-radius: 9999px (capsules)
-4. Color Palette (${isDark ? 'Dark Mode' : 'Light Mode'}):
+3. Color Palette (${isDark ? 'Dark Mode' : 'Light Mode'}):
    - Outer background: ${isDark ? '#060608' : '#f5f5f7'}
-   - Card container background: ${isDark ? '#0f0f13' : '#ffffff'}
+   - Card container background: ${isDark ? '#0e0e11' : '#ffffff'}
    - Card border: ${isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e4e4e7'}
    - Headings: ${isDark ? '#ffffff' : '#111111'}
    - Body text: ${isDark ? '#a1a1aa' : '#3f3f46'}
    - Accents / Primary CTA: Amber #f59e0b (or gold #eab308) with bold black text (#000000), or sleek white pill
-5. Font: Plus Jakarta Sans, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif.
-6. Header & Branding:
+4. Font: Plus Jakarta Sans, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif.
+5. Header & Branding:
    - Exacoat logo or bold stylized "EXACOAT" text mark
    - Category badge pill
-7. Footer Requirements:
+6. Footer Requirements:
    - Social links: Instagram, X (do not write Twitter), YouTube
    - Copyright: &copy; 2016-2026 Exacoat (do not add Precision device skins)
    - Mandatory Acumbamail placeholders: <a href="{{webview_url}}">View in browser</a> and <a href="{{unsubscribe_url}}">Unsubscribe</a>
-8. ANTISLOP RULES (MANDATORY):
-   - DO NOT use any em dashes ("—"). Use commas, colons, or parentheses.
+7. ANTISLOP RULES (MANDATORY):
+   - DO NOT use any em dashes (the character \u2014). Use commas, colons, or parentheses.
    - DO NOT use generic AI marketing buzzwords like "revolutionary", "cutting-edge", "game-changing", "seamless", "effortless", "state-of-the-art".
    - Keep copy sharp, tactile, confident, and focused on device protection and aesthetic feel.
    - Language: ${langPrompt}.
@@ -2165,7 +2169,7 @@ ${params.subject ? `Subject Context: ${params.subject}` : ''}
 Format your response strictly as valid, raw JSON (no markdown formatting, no code fences):
 {
   "subject": "Compelling subject line",
-  "html": "<!doctype html>..."
+  "html": "${isMjml ? '<mjml>...</mjml>' : '<!doctype html>...'}"
 }`;
 
   if (geminiKey) {

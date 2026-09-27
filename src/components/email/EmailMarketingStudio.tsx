@@ -54,6 +54,7 @@ import {
   WordPressPluginSettings 
 } from '../../lib/wordpressBridge';
 import { renderMarketingEmailHtml, MarketingEmailOptions, TrustFeatureCard } from '../../lib/emailRenderer';
+import { compileMjmlToHtml, isMjmlMarkup } from '../../lib/mjmlCompiler';
 
 export type AudienceType = 'subscribers' | 'affiliates' | 'customer';
 
@@ -262,26 +263,154 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
   const [composerMode, setComposerMode] = useState<'visual' | 'code'>('visual');
   const [showMediaModal, setShowMediaModal] = useState<boolean>(false);
 
-  // Custom HTML / Code Studio State
+  // Custom Code Studio State (Supports MJML and HTML)
+  const [codeFormat, setCodeFormat] = useState<'mjml' | 'html'>('mjml');
   const [customHtmlCode, setCustomHtmlCode] = useState<string>(() => {
-    return renderMarketingEmailHtml({
-      theme: 'dark',
-      subject: 'Special Announcement from Exacoat',
-      preheaderText: 'Exclusive drop & precision crafted skins.',
-      badgeText: 'ANNOUNCEMENT',
-      badgeVariant: 'amber',
-      headline: 'Engineered Precision. Pure Tactile Feel.',
-      recipientGreeting: 'Hi there,',
-      subPillNotice: 'All Items - Limited Time Only • Free Worldwide Shipping',
-      bodyText: 'We measured every curve, bezel, and port to create a skin that fits like a second skin.\n\nChoose from our signature textured materials: Matrix, Black Camo, Slate, Honeycomb, and Matte Black.\n\nOrder today to protect your device against daily micro-scratches.',
-      ctaText: 'SHOP NOW',
-      ctaUrl: 'https://exacoat.com/shop',
-      primaryCtaColor: 'amber',
-      showTrustGrid: true,
-    }).html;
+    return `<mjml>
+  <mj-head>
+    <mj-font name="Plus Jakarta Sans" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&display=swap" />
+    <mj-attributes>
+      <mj-all font-family="Plus Jakarta Sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" />
+      <mj-text font-size="14.5px" color="#a1a1aa" line-height="1.7" />
+    </mj-attributes>
+  </mj-head>
+  <mj-body background-color="#050507">
+    <!-- Top Webview Link -->
+    <mj-section padding="24px 0 10px">
+      <mj-column>
+        <mj-text align="center" font-size="11px" color="#71717a">
+          If you cannot see this email properly, please <a href="{{webview_url}}" style="color:#a1a1aa;text-decoration:underline;">click here</a>.
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Main Container Card (Rounded 28px) -->
+    <mj-wrapper background-color="#0e0e11" border-radius="28px" border="1px solid #1f1f24" padding="28px 24px">
+      <!-- Top Header -->
+      <mj-section padding="0 0 20px">
+        <mj-column width="60%">
+          <mj-text font-size="20px" font-weight="900" color="#ffffff" letter-spacing="1px" padding="0">
+            EXACOAT
+          </mj-text>
+        </mj-column>
+        <mj-column width="40%">
+          <mj-button background-color="rgba(245,158,11,0.15)" color="#fbbf24" border="1px solid rgba(245,158,11,0.3)" border-radius="999px" font-size="11px" font-weight="700" align="right" inner-padding="5px 14px" padding="0">
+            NEW DROP
+          </mj-button>
+        </mj-column>
+      </mj-section>
+
+      <!-- Sub-Pill Notice Capsule (Single-Line) -->
+      <mj-section padding="0 0 18px">
+        <mj-column>
+          <mj-button background-color="rgba(255,255,255,0.04)" color="#ffffff" border="1px solid rgba(255,255,255,0.12)" border-radius="999px" font-size="11.5px" font-weight="600" align="center" inner-padding="6px 20px" padding="0">
+            All Items - Limited Time Only &bull; Free Replacement Guarantee
+          </mj-button>
+        </mj-column>
+      </mj-section>
+
+      <!-- Message Content -->
+      <mj-section padding="0 0 16px">
+        <mj-column>
+          <mj-text font-size="24px" font-weight="800" color="#ffffff" line-height="1.3" padding="0 0 12px">
+            Engineered Precision. Pure Tactile Feel.
+          </mj-text>
+          <mj-text font-size="15px" font-weight="600" color="#e4e4e7" padding="0 0 12px">
+            Hi Customer,
+          </mj-text>
+          <mj-text padding="0 0 12px">
+            We measured every curve, bezel, and port to create a skin that fits like a second skin.
+          </mj-text>
+          <mj-text padding="0 0 12px">
+            Choose from our signature textured materials: Matrix, Black Camo, Slate, Honeycomb, and Matte Black.
+          </mj-text>
+        </mj-column>
+      </mj-section>
+
+      <!-- Trust Cards (Rounded 20px) -->
+      <mj-section padding="8px 0 16px">
+        <mj-column width="48%" background-color="#121215" border="1px solid rgba(245,158,11,0.55)" border-radius="20px" padding="16px">
+          <mj-text align="center" font-size="13px" font-weight="bold" color="#fbbf24" padding="0 0 4px">
+            Installation Warranty
+          </mj-text>
+          <mj-text align="center" font-size="11.5px" padding="0">
+            If installation fails within 2 days after receipt, we replace it with a new one.
+          </mj-text>
+        </mj-column>
+        <mj-column width="4%"></mj-column>
+        <mj-column width="48%" background-color="#121215" border="1px solid rgba(255,255,255,0.08)" border-radius="20px" padding="16px">
+          <mj-text align="center" font-size="13px" font-weight="bold" color="#ffffff" padding="0 0 4px">
+            Scratch &amp; Mold Resistant
+          </mj-text>
+          <mj-text align="center" font-size="11.5px" padding="0">
+            Shields surfaces from scratches and moisture buildup that degrade gadget finishes.
+          </mj-text>
+        </mj-column>
+      </mj-section>
+
+      <!-- CTA Button -->
+      <mj-section padding="16px 0 24px">
+        <mj-column>
+          <mj-button href="https://exacoat.com/shop" background-color="#f59e0b" color="#000000" font-weight="900" font-size="14.5px" border-radius="999px" inner-padding="15px 38px">
+            ORDER YOUR SKIN
+          </mj-button>
+        </mj-column>
+      </mj-section>
+
+      <!-- Footer -->
+      <mj-section border-top="1px solid #1a1a1f" padding="22px 0 0">
+        <mj-column>
+          <mj-social font-size="12px" icon-size="0" mode="horizontal" align="center">
+            <mj-social-element href="https://instagram.com/exacoat" background-color="rgba(255,255,255,0.06)" color="#e4e4e7" border-radius="999px" padding="5px 14px">Instagram</mj-social-element>
+            <mj-social-element href="https://x.com/exacoat" background-color="rgba(255,255,255,0.06)" color="#e4e4e7" border-radius="999px" padding="5px 14px">X</mj-social-element>
+            <mj-social-element href="https://youtube.com/@exacoat" background-color="rgba(255,255,255,0.06)" color="#e4e4e7" border-radius="999px" padding="5px 14px">YouTube</mj-social-element>
+          </mj-social>
+          <mj-text align="center" font-size="11.5px" color="#71717a" padding="12px 0 0">
+            &copy; 2016-2026 Exacoat
+          </mj-text>
+          <mj-text align="center" font-size="11px" color="#71717a" padding="6px 0 0">
+            <a href="{{webview_url}}" style="color:#a1a1aa;text-decoration:underline;">View in browser</a> &bull;
+            <a href="{{unsubscribe_url}}" style="color:#a1a1aa;text-decoration:underline;">Unsubscribe</a>
+          </mj-text>
+        </mj-column>
+      </mj-section>
+    </mj-wrapper>
+  </mj-body>
+</mjml>`;
   });
+  const [compiledHtml, setCompiledHtml] = useState<string>('');
+  const [mjmlErrors, setMjmlErrors] = useState<string[]>([]);
+  const [isCompilingMjml, setIsCompilingMjml] = useState<boolean>(false);
   const [aiCodePrompt, setAiCodePrompt] = useState<string>('');
   const [isGeneratingFullHtml, setIsGeneratingFullHtml] = useState<boolean>(false);
+
+  // Live MJML to HTML Compilation Effect
+  useEffect(() => {
+    if (composerMode !== 'code') return;
+    const isMjml = codeFormat === 'mjml' || isMjmlMarkup(customHtmlCode);
+    if (!isMjml) {
+      setCompiledHtml(customHtmlCode);
+      setMjmlErrors([]);
+      return;
+    }
+
+    let isMounted = true;
+    setIsCompilingMjml(true);
+    compileMjmlToHtml(customHtmlCode).then((res) => {
+      if (!isMounted) return;
+      setIsCompilingMjml(false);
+      if (res.success && res.html) {
+        setCompiledHtml(res.html);
+        setMjmlErrors(res.errors || []);
+      } else {
+        setMjmlErrors(res.errors || ['Compilation error']);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [customHtmlCode, codeFormat, composerMode]);
 
   // Load Acumbamail Lists on Mount
   const loadAcumbamailLists = async () => {
@@ -394,20 +523,21 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     }
   };
 
-  // Generate Full Email Template with AI (Pure HTML Studio)
+  // Generate Full Email Template with AI (Pure HTML & MJML Studio)
   const handleGenerateAiFullHtml = async () => {
     if (!aiCodePrompt.trim()) {
       showToast('error', 'Prompt Required', 'Please describe the email design you want.');
       return;
     }
     setIsGeneratingFullHtml(true);
-    showToast('info', 'AI Designing Email', 'Crafting custom responsive HTML template...');
+    showToast('info', 'AI Designing Email', `Crafting custom responsive ${codeFormat.toUpperCase()} template...`);
 
     const res = await generateMarketingFullHtmlEmailDirect({
       prompt: aiCodePrompt,
       subject: subject || undefined,
       theme: emailTheme,
       language: aiLanguage,
+      format: codeFormat,
     });
 
     setIsGeneratingFullHtml(false);
@@ -415,7 +545,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     if (res.success && res.html) {
       setCustomHtmlCode(res.html);
       if (res.subject) setSubject(res.subject);
-      showToast('success', 'AI Template Created', 'Custom responsive HTML ready in editor and live preview.');
+      showToast('success', 'AI Template Created', `Custom ${codeFormat.toUpperCase()} template ready in editor and live preview.`);
     } else {
       showToast('error', 'Generation Failed', res.error || 'Could not generate email template.');
     }
@@ -612,7 +742,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
       return;
     }
 
-    const contentToSend = composerMode === 'code' ? customHtmlCode : renderedEmail.html;
+    const contentToSend = composerMode === 'code' ? (compiledHtml || customHtmlCode) : renderedEmail.html;
     setIsSendingTest(true);
     const fromEmail = settings.acumbamail_from_email || 'sales@exacoat.com';
     const fromName = settings.acumbamail_from_name || 'Exacoat';
@@ -638,7 +768,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
   const handleDispatchCampaign = async () => {
     const fromEmail = settings.acumbamail_from_email || 'sales@exacoat.com';
     const fromName = settings.acumbamail_from_name || 'Exacoat';
-    const contentToSend = composerMode === 'code' ? customHtmlCode : renderedEmail.html;
+    const contentToSend = composerMode === 'code' ? (compiledHtml || customHtmlCode) : renderedEmail.html;
 
     setIsSending(true);
 
@@ -1716,12 +1846,12 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                   />
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[10px] text-zinc-400 font-semibold">Quick Ideas:</span>
                     <button
                       type="button"
-                      onClick={() => setAiCodePrompt('Flagship Device Drop: Dark tactile theme for new iPhone 17 skins with 2 comparison cards and replacement warranty guarantee.')}
+                      onClick={() => setAiCodePrompt('Flagship Device Drop: Dark tactical theme for new iPhone 17 skins with 2 comparison cards and replacement warranty guarantee.')}
                       className="text-[10px] px-2 py-0.5 rounded-lg bg-zinc-100 dark:bg-white/[0.06] text-zinc-600 dark:text-zinc-300 hover:text-amber-500 transition-colors"
                     >
                       Product Drop
@@ -1742,34 +1872,106 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                     </button>
                   </div>
 
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={handleGenerateAiFullHtml}
-                    disabled={isGeneratingFullHtml || !aiCodePrompt.trim()}
-                    className="bg-amber-500 hover:bg-amber-600 text-black font-bold flex items-center gap-1.5 shadow-sm"
-                  >
-                    <Sparkles className={`w-3.5 h-3.5 ${isGeneratingFullHtml ? 'animate-spin' : ''}`} />
-                    <span>{isGeneratingFullHtml ? 'Designing Email...' : 'AI Generate HTML'}</span>
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center bg-zinc-100 dark:bg-white/[0.05] p-0.5 rounded-lg border border-zinc-200 dark:border-white/10">
+                      <button
+                        type="button"
+                        onClick={() => setCodeFormat('mjml')}
+                        className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all ${
+                          codeFormat === 'mjml'
+                            ? 'bg-amber-500 text-black shadow-sm font-extrabold'
+                            : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
+                        }`}
+                      >
+                        MJML
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCodeFormat('html')}
+                        className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all ${
+                          codeFormat === 'html'
+                            ? 'bg-amber-500 text-black shadow-sm font-extrabold'
+                            : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
+                        }`}
+                      >
+                        HTML
+                      </button>
+                    </div>
+
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={handleGenerateAiFullHtml}
+                      disabled={isGeneratingFullHtml || !aiCodePrompt.trim()}
+                      className="bg-amber-500 hover:bg-amber-600 text-black font-bold flex items-center gap-1.5 shadow-sm"
+                    >
+                      <Sparkles className={`w-3.5 h-3.5 ${isGeneratingFullHtml ? 'animate-spin' : ''}`} />
+                      <span>{isGeneratingFullHtml ? 'Designing...' : `AI Generate ${codeFormat.toUpperCase()}`}</span>
+                    </Button>
+                  </div>
                 </div>
               </GlassCard>
 
-              {/* Raw HTML Code Editor Card */}
+              {/* Code Editor Card */}
               <GlassCard className="p-5 md:p-6 space-y-4">
-                <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/[0.06] pb-3">
+                <div className="flex flex-wrap items-center justify-between border-b border-zinc-200 dark:border-white/[0.06] pb-3 gap-2">
                   <div className="flex items-center gap-2">
                     <FileCode className="w-4 h-4 text-amber-500" />
                     <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200">
-                      Pure HTML Source Code Editor
+                      {codeFormat === 'mjml' ? 'MJML Semantic Source' : 'Pure HTML Source'}
                     </h3>
+
+                    {/* Language Switcher */}
+                    <div className="flex items-center bg-zinc-100 dark:bg-white/[0.06] p-0.5 rounded-lg border border-zinc-200 dark:border-white/10 ml-2">
+                      <button
+                        type="button"
+                        onClick={() => setCodeFormat('mjml')}
+                        className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all ${
+                          codeFormat === 'mjml'
+                            ? 'bg-amber-500 text-black font-extrabold'
+                            : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
+                        }`}
+                      >
+                        MJML
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCodeFormat('html')}
+                        className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all ${
+                          codeFormat === 'html'
+                            ? 'bg-amber-500 text-black font-extrabold'
+                            : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
+                        }`}
+                      >
+                        HTML
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {codeFormat === 'mjml' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (compiledHtml) {
+                            setCustomHtmlCode(compiledHtml);
+                            setCodeFormat('html');
+                            showToast('success', 'Compiled to HTML', 'Replaced MJML with compiled HTML code.');
+                          }
+                        }}
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-zinc-100 dark:bg-white/[0.05] text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors flex items-center gap-1"
+                        title="Compile MJML and paste raw HTML into editor"
+                      >
+                        <Sparkles className="w-3 h-3 text-amber-500" />
+                        <span>Compile to Raw HTML</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => {
                         navigator.clipboard.writeText(customHtmlCode);
-                        showToast('success', 'Copied', 'HTML copied to clipboard.');
+                        showToast('success', 'Copied', `${codeFormat.toUpperCase()} code copied to clipboard.`);
                       }}
                       className="text-[11px] font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-white flex items-center gap-1 transition-colors"
                     >
@@ -1793,10 +1995,43 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                   />
                 </div>
 
+                {/* Live Compilation Status Banner */}
+                {codeFormat === 'mjml' && (
+                  <div className={`p-2.5 rounded-xl border text-xs flex items-center justify-between ${
+                    isCompilingMjml 
+                      ? 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400'
+                      : mjmlErrors.length === 0
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                      : 'bg-rose-500/10 border-rose-500/20 text-rose-700 dark:text-rose-400'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {isCompilingMjml ? (
+                        <RotateCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : mjmlErrors.length === 0 ? (
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      ) : (
+                        <AlertCircle className="w-3.5 h-3.5" />
+                      )}
+                      <span className="font-semibold">
+                        {isCompilingMjml
+                          ? 'Compiling MJML in real-time...'
+                          : mjmlErrors.length === 0
+                          ? 'MJML 4.x compiled successfully into cross-client HTML'
+                          : `MJML Validation: ${mjmlErrors[0]}`}
+                      </span>
+                    </div>
+                    {compiledHtml && (
+                      <span className="text-[10px] font-mono opacity-70">
+                        {compiledHtml.length} compiled bytes
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
-                      Custom Responsive HTML
+                      {codeFormat === 'mjml' ? 'MJML Markup' : 'Responsive HTML'}
                     </label>
                     <span className="text-[10px] text-zinc-400 font-mono">
                       {customHtmlCode.length} characters &bull; Live Preview synced
@@ -1812,7 +2047,9 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                 </div>
 
                 <div className="p-3 rounded-xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200 dark:border-white/05 text-[11px] text-zinc-500 space-y-1">
-                  <p className="font-semibold text-zinc-700 dark:text-zinc-300">Supported Acumbamail placeholders:</p>
+                  <p className="font-semibold text-zinc-700 dark:text-zinc-300">
+                    {codeFormat === 'mjml' ? 'Supported MJML Placeholders & Tags:' : 'Supported Acumbamail placeholders:'}
+                  </p>
                   <p className="font-mono text-[10px]">
                     <code className="text-amber-500">{`{{webview_url}}`}</code> - View in browser link &nbsp;&bull;&nbsp; 
                     <code className="text-amber-500">{`{{unsubscribe_url}}`}</code> - Required Unsubscribe link
@@ -1885,7 +2122,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
               >
                 <iframe
                   title="Marketing Email Preview"
-                  srcDoc={composerMode === 'code' ? customHtmlCode : renderedEmail.html}
+                  srcDoc={composerMode === 'code' ? (compiledHtml || customHtmlCode) : renderedEmail.html}
                   className="w-full h-full min-h-[580px] border-0"
                   sandbox="allow-same-origin"
                 />
