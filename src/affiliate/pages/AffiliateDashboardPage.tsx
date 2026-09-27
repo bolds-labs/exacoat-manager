@@ -176,6 +176,23 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
     return windowOrders > 0 ? '100%' : '0.0%';
   }, [windowOrders, windowVisits]);
 
+  // Upcoming / Pending Commissions (clearing in 7-day grace period)
+  const pendingCommissionsAmount = useMemo(() => {
+    return commissions
+      .filter(c => c.status === 'pending')
+      .reduce((sum, c) => sum + (Number(c.commission_amount) || 0), 0);
+  }, [commissions]);
+
+  const pendingCommissionsCount = useMemo(() => {
+    return commissions.filter(c => c.status === 'pending').length;
+  }, [commissions]);
+
+  const pendingPayoutsAmount = useMemo(() => {
+    return payouts
+      .filter(p => p.status === 'pending')
+      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  }, [payouts]);
+
   const [showPayoutModal, setShowPayoutModal] = useState(false);
   const [isSubmittingPayout, setIsSubmittingPayout] = useState(false);
 
@@ -282,21 +299,21 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
     return sorted;
   }, [dailyStats, horizonCommissions, horizonClicks, horizonCutoffMs]);
 
-  // Filtered Commission Ledger Rows
+  // Filtered Commission Ledger Rows - Full creator history, filtered by status and search
   const displayedCommissions = useMemo(() => {
-    return horizonCommissions.filter(c => {
+    return commissions.filter(c => {
       if (statusFilter !== 'all' && c.status !== statusFilter) {
         return false;
       }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const matchNum = (c.order_number || '').toLowerCase().includes(q);
+        const matchNum = (c.order_number || (c as any).order_id || '').toString().toLowerCase().includes(q);
         const matchEmail = (c.customer_email || '').toLowerCase().includes(q);
         if (!matchNum && !matchEmail) return false;
       }
       return true;
     });
-  }, [horizonCommissions, statusFilter, searchQuery]);
+  }, [commissions, statusFilter, searchQuery]);
 
   // Derive traffic sources from clicks
   const creatorTrafficSources = useMemo(() => {
@@ -614,12 +631,12 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
           </div>
         </GlassCard>
 
-        {/* Card 2: Horizon Earnings */}
+        {/* Card 2: Lifetime Earnings */}
         <GlassCard className="p-5 border border-white/[0.08] relative overflow-hidden flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-semibold tracking-wider uppercase text-zinc-400 font-mono">
-                {horizon === 'all' ? 'Lifetime Earnings' : 'Window Earnings'}
+                Lifetime Earnings
               </span>
               <div className="w-8 h-8 rounded-xl bg-[#f3aa18]/10 border border-[#f3aa18]/20 text-[#f3aa18] flex items-center justify-center shrink-0">
                 <TrendingUp className="w-4 h-4" />
@@ -627,15 +644,15 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
             </div>
             <div className="mt-3">
               <span className="text-2xl font-bold font-['Chakra_Petch'] text-[#f3aa18]">
-                {formatIDR(windowEarnings)}
+                {formatIDR(metrics.lifetime_earnings)}
               </span>
             </div>
           </div>
 
           <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs text-zinc-400">
-            <span>Lifetime:</span>
+            <span>In Selected Window:</span>
             <span className="font-mono text-zinc-200 font-semibold">
-              {formatIDR(metrics.lifetime_earnings)}
+              {formatIDR(windowEarnings)}
             </span>
           </div>
         </GlassCard>
@@ -664,30 +681,39 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
           </div>
         </GlassCard>
 
-        {/* Card 4: Orders & Conversion Rate */}
+        {/* Card 4: Upcoming / Pending Payment */}
         <GlassCard className="p-5 border border-white/[0.08] relative overflow-hidden flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-semibold tracking-wider uppercase text-zinc-400 font-mono">
-                Orders &amp; Rate
+                Pending Payment
               </span>
-              <div className="w-8 h-8 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
-                <ShoppingBag className="w-4 h-4" />
+              <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                <Clock className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-3 flex items-baseline gap-2">
               <span className="text-2xl font-bold font-['Chakra_Petch'] text-white">
-                {windowOrders}
+                {formatIDR(pendingCommissionsAmount)}
               </span>
-              <span className="text-xs font-semibold text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                {conversionRate}
+              <span className="text-xs font-semibold text-amber-400 font-mono bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                {pendingCommissionsCount} {pendingCommissionsCount === 1 ? 'order' : 'orders'}
               </span>
             </div>
           </div>
 
           <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs text-zinc-400">
-            <span>Commission Rate:</span>
-            <span className="font-mono text-[#f3aa18] font-bold">{commissionRate}% Net</span>
+            {pendingPayoutsAmount > 0 ? (
+              <>
+                <span>Payout In Review:</span>
+                <span className="font-mono text-amber-300 font-semibold">{formatIDR(pendingPayoutsAmount)}</span>
+              </>
+            ) : (
+              <>
+                <span>Grace Period:</span>
+                <span className="font-mono text-zinc-300 font-semibold">7 Days Delivery</span>
+              </>
+            )}
           </div>
         </GlassCard>
       </div>
@@ -965,9 +991,9 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
               <ShieldCheck className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-semibold text-white">No commissions recorded in this window</p>
+              <p className="text-sm font-semibold text-white">No commissions recorded yet</p>
               <p className="text-xs text-zinc-400 max-w-sm mx-auto">
-                Customer purchases made via your referral links will appear here after orders reach processing.
+                Customer purchases made via your referral links will appear here after orders are placed.
               </p>
             </div>
           </div>
@@ -988,7 +1014,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
                 {displayedCommissions.map((comm) => (
                   <tr key={comm.id} className="hover:bg-white/[0.02] transition-colors">
                     <td className="py-3.5 px-3 font-mono text-white font-medium">
-                      #{comm.order_number || comm.order_id}
+                      #{comm.order_number || (comm as any).order_id || comm.id}
                     </td>
                     <td className="py-3.5 px-3 text-zinc-400 font-mono text-[11px]">
                       {new Date(comm.created_at).toLocaleDateString('id-ID', {
@@ -1001,7 +1027,7 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
                       {formatIDR(Number(comm.order_subtotal))}
                     </td>
                     <td className="py-3.5 px-3 font-mono text-zinc-400">
-                      {comm.commission_rate}%
+                      {comm.commission_rate != null ? `${comm.commission_rate}%` : `${commissionRate}%`}
                     </td>
                     <td className="py-3.5 px-3 font-mono font-bold text-[#f3aa18]">
                       {formatIDR(Number(comm.commission_amount))}

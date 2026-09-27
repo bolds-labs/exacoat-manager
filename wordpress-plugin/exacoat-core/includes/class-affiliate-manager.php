@@ -2012,11 +2012,12 @@ class Exacoat_Affiliate_Manager {
 		// Retrieve commissions with grace period delivery timestamps (expanded limit for complete history)
 		$commissions = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT id, order_number, order_subtotal, commission_amount, status, delivered_at, matures_at, rejection_reason, created_at 
+				"SELECT id, order_id, order_number, order_subtotal, commission_rate, commission_amount, coupon_code, status, delivered_at, matures_at, rejection_reason, payout_id, customer_email, created_at 
 				FROM {$table_commissions} 
-				WHERE affiliate_id = %d 
+				WHERE affiliate_id = %d OR affiliate_id = %d 
 				ORDER BY id DESC LIMIT 500",
-				$affiliate->id
+				$affiliate->id,
+				$affiliate->user_id
 			)
 		);
 
@@ -2025,9 +2026,10 @@ class Exacoat_Affiliate_Manager {
 			$wpdb->prepare(
 				"SELECT id, amount, bank_name, bank_account_number, bank_account_name, status, transfer_reference, created_at, paid_at 
 				FROM {$table_payouts} 
-				WHERE affiliate_id = %d 
+				WHERE affiliate_id = %d OR affiliate_id = %d 
 				ORDER BY id DESC LIMIT 50",
-				$affiliate->id
+				$affiliate->id,
+				$affiliate->user_id
 			)
 		);
 
@@ -2037,9 +2039,10 @@ class Exacoat_Affiliate_Manager {
 			$wpdb->prepare(
 				"SELECT id, landing_url, referrer_url, created_at 
 				FROM {$table_clicks} 
-				WHERE affiliate_id = %d 
+				WHERE affiliate_id = %d OR affiliate_id = %d 
 				ORDER BY id DESC LIMIT 300",
-				$affiliate->id
+				$affiliate->id,
+				$affiliate->user_id
 			)
 		);
 
@@ -2080,9 +2083,10 @@ class Exacoat_Affiliate_Manager {
 			$wpdb->prepare(
 				"SELECT DATE(created_at) as stat_date, COUNT(*) as visit_count 
 				FROM {$table_clicks} 
-				WHERE affiliate_id = %d
+				WHERE affiliate_id = %d OR affiliate_id = %d
 				GROUP BY DATE(created_at)",
-				$affiliate->id
+				$affiliate->id,
+				$affiliate->user_id
 			),
 			OBJECT_K
 		);
@@ -2091,9 +2095,10 @@ class Exacoat_Affiliate_Manager {
 			$wpdb->prepare(
 				"SELECT DATE(created_at) as stat_date, COUNT(*) as order_count, SUM(commission_amount) as total_earnings 
 				FROM {$table_commissions} 
-				WHERE affiliate_id = %d AND status != 'rejected'
+				WHERE (affiliate_id = %d OR affiliate_id = %d) AND status != 'rejected'
 				GROUP BY DATE(created_at)",
-				$affiliate->id
+				$affiliate->id,
+				$affiliate->user_id
 			),
 			OBJECT_K
 		);
