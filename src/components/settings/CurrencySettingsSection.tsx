@@ -5,6 +5,7 @@ import { useToast } from '../../context/ToastContext';
 import {
   fetchCurrencySettingsDirect,
   saveCurrencySettingsDirect,
+  syncCurrencyRatesFromAeliaDirect,
   calculateSimulatedPrice,
   CurrencyRateConfig,
   CurrencySettings,
@@ -19,24 +20,29 @@ import {
   Calculator,
   Check,
   Sparkles,
+  RefreshCw,
+  CheckCircle2,
 } from 'lucide-react';
 import clsx from 'clsx';
 
 const DEFAULT_CURRENCIES: Record<string, CurrencyRateConfig> = {
-  USD: { symbol: '$', rate: 0.000059, rounding: '9_end' },
-  EUR: { symbol: '€', rate: 0.000051, rounding: '9_end' },
-  AUD: { symbol: 'A$', rate: 0.000089, rounding: '9_end' },
-  SGD: { symbol: 'S$', rate: 0.000076, rounding: '9_end' },
+  USD: { symbol: '$', rate: 0.000059, rounding: '90_decimal' },
+  EUR: { symbol: '€', rate: 0.000051, rounding: '90_decimal' },
+  AUD: { symbol: 'A$', rate: 0.000089, rounding: '90_decimal' },
+  SGD: { symbol: 'S$', rate: 0.000076, rounding: '90_decimal' },
   JPY: { symbol: '¥', rate: 0.00935, rounding: '50_step' },
-  GBP: { symbol: '£', rate: 0.000044, rounding: '9_end' },
-  CAD: { symbol: 'CA$', rate: 0.000082, rounding: '9_end' },
-  CHF: { symbol: 'CHF', rate: 0.000047, rounding: '9_end' },
-  HKD: { symbol: 'HK$', rate: 0.000462, rounding: '9_end' },
+  GBP: { symbol: '£', rate: 0.000044, rounding: '90_decimal' },
+  CAD: { symbol: 'CA$', rate: 0.000082, rounding: '90_decimal' },
+  CHF: { symbol: 'CHF', rate: 0.000047, rounding: '90_decimal' },
+  HKD: { symbol: 'HK$', rate: 0.000462, rounding: '90_decimal' },
   THB: { symbol: '฿', rate: 0.001866, rounding: '90_end' },
   KRW: { symbol: '₩', rate: 0.0864, rounding: '500_step' },
 };
 
 const ROUNDING_OPTIONS: { id: CurrencyRateConfig['rounding']; label: string; example: string }[] = [
+  { id: '90_decimal', label: 'End in .90', example: '$19.90, €14.90' },
+  { id: '99_decimal', label: 'End in .99', example: '$19.99, €14.99' },
+  { id: '50_decimal', label: 'Step 0.50', example: '$19.50, €14.00' },
   { id: '9_end', label: 'End in 9', example: '$89, $29' },
   { id: '90_end', label: 'End in 90', example: '2,790฿' },
   { id: '50_step', label: 'Step 50', example: '¥13,900' },
@@ -48,9 +54,13 @@ export const CurrencySettingsSection: React.FC = () => {
   const { showToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSyncingAelia, setIsSyncingAelia] = useState(false);
 
   const [rates, setRates] = useState<Record<string, CurrencyRateConfig>>(DEFAULT_CURRENCIES);
   const [markup, setMarkup] = useState<number>(1.15);
+  const [autoSyncAelia, setAutoSyncAelia] = useState<boolean>(false);
+  const [lastSyncedAelia, setLastSyncedAelia] = useState<string | null>(null);
+  const [aeliaDetected, setAeliaDetected] = useState<boolean>(false);
 
   // Live Simulator state
   const [simPrice, setSimPrice] = useState<number>(450000);
@@ -59,7 +69,7 @@ export const CurrencySettingsSection: React.FC = () => {
   const [newCode, setNewCode] = useState('');
   const [newSymbol, setNewSymbol] = useState('$');
   const [newRate, setNewRate] = useState('0.00006');
-  const [newRounding, setNewRounding] = useState<CurrencyRateConfig['rounding']>('9_end');
+  const [newRounding, setNewRounding] = useState<CurrencyRateConfig['rounding']>('90_decimal');
   const [isAddingCurrency, setIsAddingCurrency] = useState(false);
 
   const loadCurrencySettings = async () => {
@@ -72,6 +82,15 @@ export const CurrencySettingsSection: React.FC = () => {
         }
         if (typeof res.currency_global_markup === 'number') {
           setMarkup(res.currency_global_markup);
+        }
+        if (typeof res.currency_auto_sync_aelia === 'boolean') {
+          setAutoSyncAelia(res.currency_auto_sync_aelia);
+        }
+        if (res.currency_last_synced_aelia) {
+          setLastSyncedAelia(res.currency_last_synced_aelia);
+        }
+        if (typeof res.aelia_detected === 'boolean') {
+          setAeliaDetected(res.aelia_detected);
         }
       } else {
         showToast('error', 'Could Not Load Currency Settings', res.error || 'Check server connection');
@@ -93,11 +112,14 @@ export const CurrencySettingsSection: React.FC = () => {
       const res = await saveCurrencySettingsDirect({
         currency_rates: rates,
         currency_global_markup: markup,
+        currency_auto_sync_aelia: autoSyncAelia,
       });
       if (res.success) {
         showToast('success', 'Currency Settings Saved', 'Exchange rates and price matrix updated.');
         if (res.currency_rates) setRates(res.currency_rates);
         if (res.currency_global_markup) setMarkup(res.currency_global_markup);
+        if (typeof res.currency_auto_sync_aelia === 'boolean') setAutoSyncAelia(res.currency_auto_sync_aelia);
+        if (res.currency_last_synced_aelia) setLastSyncedAelia(res.currency_last_synced_aelia);
       } else {
         showToast('error', 'Save Failed', res.error || 'Failed saving currency settings');
       }
@@ -105,6 +127,33 @@ export const CurrencySettingsSection: React.FC = () => {
       showToast('error', 'Save Error', err.message || 'Network error saving currencies');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSyncAelia = async () => {
+    setIsSyncingAelia(true);
+    try {
+      const res = await syncCurrencyRatesFromAeliaDirect();
+      if (res.success) {
+        if (res.currency_rates) {
+          setRates(res.currency_rates);
+        }
+        if (res.synced_at) {
+          setLastSyncedAelia(res.synced_at);
+        }
+        setAeliaDetected(true);
+        showToast(
+          'success',
+          'Synced from Aelia',
+          res.message || 'Updated exchange rates vs IDR from Aelia Currency Switcher.'
+        );
+      } else {
+        showToast('error', 'Aelia Sync Failed', res.error || res.message || 'Could not fetch rates from Aelia');
+      }
+    } catch (err: any) {
+      showToast('error', 'Sync Error', err.message || 'Failed connecting to WordPress Aelia bridge');
+    } finally {
+      setIsSyncingAelia(false);
     }
   };
 
@@ -197,9 +246,16 @@ export const CurrencySettingsSection: React.FC = () => {
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30">
                   {Object.keys(rates).length} FX Pairs
                 </span>
+                {aeliaDetected && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                    Aelia Active
+                  </span>
+                )}
               </div>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono mt-0.5">
                 Real-time exchange rates against IDR base, safety markup buffer, and ISO rounding rules.
+                {lastSyncedAelia && ` (Last synced with Aelia: ${lastSyncedAelia})`}
               </p>
             </div>
           </div>
@@ -216,6 +272,17 @@ export const CurrencySettingsSection: React.FC = () => {
             </Button>
             <Button
               type="button"
+              variant="secondary"
+              size="sm"
+              onClick={handleSyncAelia}
+              isLoading={isSyncingAelia}
+              leftIcon={<RefreshCw className={clsx("w-3.5 h-3.5", isSyncingAelia && "animate-spin")} />}
+              title="Pull active exchange rates from Aelia Currency Switcher"
+            >
+              Sync from Aelia
+            </Button>
+            <Button
+              type="button"
               size="sm"
               onClick={handleSave}
               isLoading={isSaving}
@@ -228,6 +295,53 @@ export const CurrencySettingsSection: React.FC = () => {
 
         {/* Global Markup & Simulator Control Bar */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-5 rounded-2xl bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/[0.06]">
+          {/* Aelia Currency Switcher Synchronization Bar */}
+          <div className="lg:col-span-12 flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-white/10">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-zinc-900 dark:text-white">
+                  Aelia Currency Switcher Integration
+                </span>
+                {aeliaDetected ? (
+                  <span className="text-[10px] font-mono font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
+                    Connected
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono font-medium text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">
+                    Available
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                Synchronize exchange rates vs IDR with Aelia. Custom psychological roundings (e.g. .90 decimal, step 50) and symbols are preserved.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 shrink-0">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={autoSyncAelia}
+                  onChange={e => setAutoSyncAelia(e.target.checked)}
+                  className="rounded border-zinc-300 text-[#f3aa18] focus:ring-[#f3aa18] w-4 h-4 cursor-pointer"
+                />
+                <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Auto-sync rates in real time
+                </span>
+              </label>
+
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleSyncAelia}
+                isLoading={isSyncingAelia}
+                leftIcon={<RefreshCw className={clsx("w-3 h-3", isSyncingAelia && "animate-spin")} />}
+              >
+                Sync Now
+              </Button>
+            </div>
+          </div>
           {/* Markup Multiplier */}
           <div className="lg:col-span-4 space-y-2">
             <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">

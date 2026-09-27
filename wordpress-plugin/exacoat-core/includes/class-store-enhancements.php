@@ -419,6 +419,140 @@ class Exacoat_Store_Enhancements {
 	}
 
 	/**
+	 * Extract exchange rates directly from Aelia Currency Switcher
+	 *
+	 * Returns an associative array of currency codes to their rate vs 1 IDR (or shop base currency):
+	 * e.g. [ 'USD' => 0.000062, 'EUR' => 0.000058, ... ]
+	 */
+	public static function get_aelia_exchange_rates(): array {
+		$shop_base_currency = function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'IDR';
+		$rates = [];
+
+		$aelia_settings = get_option( 'woocommerce_aelia_currencyswitcher', [] );
+		if ( empty( $aelia_settings ) || ! is_array( $aelia_settings ) ) {
+			$aelia_settings = get_option( 'wc_aelia_currency_switcher', [] );
+		}
+
+		$aelia_raw_rates = [];
+		if ( ! empty( $aelia_settings['exchange_rates'] ) && is_array( $aelia_settings['exchange_rates'] ) ) {
+			$aelia_raw_rates = $aelia_settings['exchange_rates'];
+		} elseif ( class_exists( 'WC_Aelia_CurrencyPrices_Manager' ) && method_exists( 'WC_Aelia_CurrencyPrices_Manager', 'get_exchange_rates' ) ) {
+			$aelia_raw_rates = (array) \WC_Aelia_CurrencyPrices_Manager::get_exchange_rates();
+		}
+
+		$enabled_currencies = apply_filters( 'wc_aelia_cs_enabled_currencies', [] );
+		if ( empty( $enabled_currencies ) && ! empty( $aelia_settings['enabled_currencies'] ) && is_array( $aelia_settings['enabled_currencies'] ) ) {
+			$enabled_currencies = $aelia_settings['enabled_currencies'];
+		}
+		if ( empty( $enabled_currencies ) ) {
+			$enabled_currencies = [ 'USD', 'EUR', 'AUD', 'SGD', 'JPY', 'GBP', 'CAD', 'CHF', 'HKD', 'THB', 'KRW', 'MYR' ];
+		}
+
+		foreach ( $enabled_currencies as $currency_code ) {
+			$curr = strtoupper( trim( (string) $currency_code ) );
+			if ( empty( $curr ) || $curr === $shop_base_currency ) {
+				continue;
+			}
+
+			$rate = 0.0;
+
+			// Method A: Check Aelia convert filter with 1,000,000 base units for high decimal accuracy
+			$test_base = 1000000.0;
+			$converted = (float) apply_filters( 'wc_aelia_cs_convert', $test_base, $shop_base_currency, $curr );
+			if ( $converted > 0 && abs( $converted - $test_base ) > 0.0001 ) {
+				$rate = $converted / $test_base;
+			}
+
+			// Method B: Parse raw exchange rate matrix from Aelia settings
+			if ( $rate <= 0 && ! empty( $aelia_raw_rates[ $curr ] ) ) {
+				$entry = $aelia_raw_rates[ $curr ];
+				$raw_val = floatval( is_array( $entry ) ? ( $entry['rate'] ?? 0 ) : $entry );
+				if ( $raw_val > 0 ) {
+					if ( $raw_val < 1.0 ) {
+						$rate = $raw_val;
+					} else {
+						// 1 USD = 16,129.03 IDR => 1 IDR = 1 / 16129.03 = 0.000062 USD
+						$rate = 1.0 / $raw_val;
+					}
+				}
+			}
+
+			if ( $rate > 0 ) {
+				$rates[ $curr ] = $rate;
+			}
+		}
+
+		return $rates;
+	}
+
+	/**
+	 * Synchronize Exacoat Core currency registry with active Aelia Currency Switcher rates.
+	 * Preserves custom symbols and rounding engines, updating only the numeric FX rates.
+	 */
+	public static function sync_rates_from_aelia(): array {
+		$aelia_rates = self::get_aelia_exchange_rates();
+		if ( empty( $aelia_rates ) ) {
+			return [
+				'success' => false,
+				'message' => 'No active exchange rates could be retrieved from Aelia Currency Switcher.',
+				'rates'   => self::get_currency_rates(),
+			];
+		}
+
+		$current_rates = self::get_currency_rates();
+		$synced_count  = 0;
+		$synced_codes  = [];
+
+		$default_symbols = [
+			'USD' => '$',   'EUR' => '€',   'AUD' => 'A$',  'SGD' => 'S$',
+			'JPY' => '¥',   'GBP' => '£',   'CAD' => 'CA$', 'CHF' => 'CHF',
+			'HKD' => 'HK$', 'THB' => '฿',   'KRW' => '₩',   'MYR' => 'RM',
+			'NZD' => 'NZ$', 'PHP' => '₱',   'INR' => '₹',   'TWD' => 'NT$',
+		];
+
+		$default_roundings = [
+			'JPY' => '50_step',
+			'KRW' => '500_step',
+			'THB' => '90_end',
+		];
+
+		foreach ( $aelia_rates as $code => $rate ) {
+			$rate = (float) $rate;
+			if ( $rate <= 0 ) continue;
+
+			if ( isset( $current_rates[ $code ] ) ) {
+				$current_rates[ $code ]['rate'] = $rate;
+			} else {
+				$current_rates[ $code ] = [
+					'code'     => $code,
+					'symbol'   => $default_symbols[ $code ] ?? $code,
+					'rate'     => $rate,
+					'rounding' => $default_roundings[ $code ] ?? '90_decimal',
+				];
+			}
+			$synced_count++;
+			$synced_codes[] = $code;
+		}
+
+		$settings = Exacoat_Core::get_settings();
+		$settings['currency_rates'] = $current_rates;
+		$settings['currency_last_synced_aelia'] = current_time( 'mysql' );
+
+		update_option( 'exacoat_core_settings', $settings );
+		update_option( 'artmatter_core_settings', $settings );
+		Exacoat_Core::clear_settings_cache();
+
+		return [
+			'success'        => true,
+			'message'        => sprintf( 'Successfully synchronized %d currency rates from Aelia (%s).', $synced_count, implode( ', ', $synced_codes ) ),
+			'synced_count'   => $synced_count,
+			'synced_codes'   => $synced_codes,
+			'synced_at'      => $settings['currency_last_synced_aelia'],
+			'currency_rates' => $current_rates,
+		];
+	}
+
+	/**
 	 * Dynamic Currency Registry (#11889)
 	 */
 	public static function get_currency_rates(): array {
@@ -446,6 +580,18 @@ class Exacoat_Store_Enhancements {
 				foreach ( [ 'USD', 'EUR', 'AUD', 'SGD', 'GBP', 'CAD', 'CHF', 'HKD' ] as $c ) {
 					if ( isset( $default_currencies[ $c ] ) ) {
 						$currencies[ $c ] = $default_currencies[ $c ];
+					}
+				}
+			}
+		}
+
+		// Optional: Apply real-time Aelia exchange rates if auto-sync is enabled
+		if ( ! empty( $settings['currency_auto_sync_aelia'] ) ) {
+			$aelia_rates = self::get_aelia_exchange_rates();
+			if ( ! empty( $aelia_rates ) ) {
+				foreach ( $aelia_rates as $code => $rate ) {
+					if ( isset( $currencies[ $code ] ) && $rate > 0 ) {
+						$currencies[ $code ]['rate'] = (float) $rate;
 					}
 				}
 			}

@@ -127,12 +127,16 @@ export interface CurrencyRateConfig {
   code?: string;
   symbol: string;
   rate: number;
-  rounding: '9_end' | '90_end' | '50_step' | '500_step' | 'none';
+  rounding: '90_decimal' | '99_decimal' | '50_decimal' | '9_end' | '90_end' | '50_step' | '500_step' | 'none';
 }
 
 export interface CurrencySettings {
   currency_rates: Record<string, CurrencyRateConfig>;
   currency_global_markup: number;
+  currency_auto_sync_aelia?: boolean;
+  currency_last_synced_aelia?: string | null;
+  aelia_detected?: boolean;
+  aelia_rates?: Record<string, number>;
 }
 
 export interface ShippingZoneConfig {
@@ -848,6 +852,19 @@ export function calculateSimulatedPrice(
   if (amountIdr <= 0 || rate <= 0) return 0;
   const raw = amountIdr * rate * markup;
   switch (rounding) {
+    case '90_decimal': {
+      let val = Math.ceil(raw) - 0.10;
+      if (val < raw) val += 1.0;
+      return Math.max(0, Number(val.toFixed(2)));
+    }
+    case '99_decimal': {
+      let val = Math.ceil(raw) - 0.01;
+      if (val < raw) val += 1.0;
+      return Math.max(0, Number(val.toFixed(2)));
+    }
+    case '50_decimal': {
+      return Math.max(0, Number((Math.ceil(raw * 2) / 2).toFixed(2)));
+    }
     case '90_end':
       return Math.max(0, Math.ceil(raw / 100) * 100 - 10);
     case '500_step':
@@ -866,6 +883,10 @@ export async function fetchCurrencySettingsDirect(): Promise<{
   success: boolean;
   currency_rates?: Record<string, CurrencyRateConfig>;
   currency_global_markup?: number;
+  currency_auto_sync_aelia?: boolean;
+  currency_last_synced_aelia?: string | null;
+  aelia_detected?: boolean;
+  aelia_rates?: Record<string, number>;
   error?: string;
 }> {
   const base = getWordPressBaseUrl();
@@ -879,6 +900,10 @@ export async function fetchCurrencySettingsDirect(): Promise<{
         success: true,
         currency_rates: data.currency_rates,
         currency_global_markup: data.currency_global_markup,
+        currency_auto_sync_aelia: data.currency_auto_sync_aelia,
+        currency_last_synced_aelia: data.currency_last_synced_aelia,
+        aelia_detected: data.aelia_detected,
+        aelia_rates: data.aelia_rates,
       };
     }
     return { success: false, error: data?.message || `HTTP ${res.status}` };
@@ -892,6 +917,8 @@ export async function saveCurrencySettingsDirect(payload: Partial<CurrencySettin
   message?: string;
   currency_rates?: Record<string, CurrencyRateConfig>;
   currency_global_markup?: number;
+  currency_auto_sync_aelia?: boolean;
+  currency_last_synced_aelia?: string | null;
   error?: string;
 }> {
   const base = getWordPressBaseUrl();
@@ -910,6 +937,42 @@ export async function saveCurrencySettingsDirect(payload: Partial<CurrencySettin
         message: data.message,
         currency_rates: data.currency_rates,
         currency_global_markup: data.currency_global_markup,
+        currency_auto_sync_aelia: data.currency_auto_sync_aelia,
+        currency_last_synced_aelia: data.currency_last_synced_aelia,
+      };
+    }
+    return { success: false, error: data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function syncCurrencyRatesFromAeliaDirect(): Promise<{
+  success: boolean;
+  message?: string;
+  synced_count?: number;
+  synced_codes?: string[];
+  synced_at?: string;
+  currency_rates?: Record<string, CurrencyRateConfig>;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/settings/currency/sync-aelia`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        message: data.message,
+        synced_count: data.synced_count,
+        synced_codes: data.synced_codes,
+        synced_at: data.synced_at,
+        currency_rates: data.currency_rates,
       };
     }
     return { success: false, error: data?.message || `HTTP ${res.status}` };

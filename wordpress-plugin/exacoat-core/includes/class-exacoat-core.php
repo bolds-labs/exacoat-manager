@@ -856,6 +856,12 @@ class Exacoat_Core {
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 
+		$register( '/settings/currency/sync-aelia', [
+			'methods'             => [ 'GET', 'POST' ],
+			'callback'            => [ $this, 'rest_sync_currency_aelia' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
 		$register( '/settings/shipping', [
 			'methods'             => [ 'GET', 'POST' ],
 			'callback'            => [ $this, 'rest_handle_shipping_settings' ],
@@ -2235,6 +2241,10 @@ class Exacoat_Core {
 				$current['currency_global_markup'] = max( 1.0, floatval( $params['currency_global_markup'] ) );
 			}
 
+			if ( isset( $params['currency_auto_sync_aelia'] ) ) {
+				$current['currency_auto_sync_aelia'] = ! empty( $params['currency_auto_sync_aelia'] );
+			}
+
 			update_option( 'exacoat_core_settings', $current );
 			update_option( 'artmatter_core_settings', $current );
 			self::clear_settings_cache();
@@ -2243,10 +2253,12 @@ class Exacoat_Core {
 			$markup = floatval( $current['currency_global_markup'] ?? 1.15 );
 
 			return rest_ensure_response( [
-				'success'                => true,
-				'message'                => 'Currency settings saved successfully',
-				'currency_rates'         => $rates,
-				'currency_global_markup' => $markup,
+				'success'                    => true,
+				'message'                    => 'Currency settings saved successfully',
+				'currency_rates'             => $rates,
+				'currency_global_markup'     => $markup,
+				'currency_auto_sync_aelia'   => ! empty( $current['currency_auto_sync_aelia'] ),
+				'currency_last_synced_aelia' => $current['currency_last_synced_aelia'] ?? null,
 			] );
 		}
 
@@ -2254,11 +2266,29 @@ class Exacoat_Core {
 		$rates = $current['currency_rates'] ?? ( class_exists( 'Exacoat_Store_Enhancements' ) ? Exacoat_Store_Enhancements::get_currency_rates() : [] );
 		$markup = floatval( $current['currency_global_markup'] ?? 1.15 );
 
+		$aelia_rates = class_exists( 'Exacoat_Store_Enhancements' ) ? Exacoat_Store_Enhancements::get_aelia_exchange_rates() : [];
+
 		return rest_ensure_response( [
-			'success'                => true,
-			'currency_rates'         => $rates,
-			'currency_global_markup' => $markup,
+			'success'                    => true,
+			'currency_rates'             => $rates,
+			'currency_global_markup'     => $markup,
+			'currency_auto_sync_aelia'   => ! empty( $current['currency_auto_sync_aelia'] ),
+			'currency_last_synced_aelia' => $current['currency_last_synced_aelia'] ?? null,
+			'aelia_detected'             => ! empty( $aelia_rates ),
+			'aelia_rates'                => $aelia_rates,
 		] );
+	}
+
+	public function rest_sync_currency_aelia( WP_REST_Request $request ) {
+		if ( ! class_exists( 'Exacoat_Store_Enhancements' ) ) {
+			return rest_ensure_response( [
+				'success' => false,
+				'message' => 'Store Enhancements module is not loaded.',
+			] );
+		}
+
+		$result = Exacoat_Store_Enhancements::sync_rates_from_aelia();
+		return rest_ensure_response( $result );
 	}
 
 	public function rest_handle_shipping_settings( WP_REST_Request $request ) {
