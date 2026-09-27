@@ -3073,6 +3073,191 @@ class Exacoat_Email_Engine {
 			'html'    => $rendered['html'],
 		] );
 	}
+
+	/**
+	 * Acumbamail Configuration Accessor
+	 */
+	public static function get_acumbamail_config(): array {
+		$settings = Exacoat_Core::get_settings();
+		return [
+			'auth_token'   => trim( $settings['acumbamail_token'] ?? 'c7b494d1f2354a7aadb7aba0e260364b' ),
+			'from_email'   => trim( $settings['acumbamail_from_email'] ?? 'sales@exacoat.com' ),
+			'from_name'    => trim( $settings['acumbamail_from_name'] ?? 'Exacoat' ),
+			'default_list' => trim( $settings['acumbamail_default_list'] ?? '678690' ),
+		];
+	}
+
+	/**
+	 * Fetch subscriber lists from Acumbamail
+	 */
+	public static function get_acumbamail_lists( string $token = '' ): array {
+		$config = self::get_acumbamail_config();
+		$auth_token = $token ?: $config['auth_token'];
+		if ( empty( $auth_token ) ) {
+			return [ 'success' => false, 'error' => 'Acumbamail auth token is missing' ];
+		}
+
+		$response = wp_remote_post( 'https://acumbamail.com/api/1/getLists/', [
+			'body'    => [
+				'auth_token'    => $auth_token,
+				'response_type' => 'json',
+			],
+			'timeout' => 15,
+		] );
+
+		if ( is_wp_error( $response ) ) {
+			return [ 'success' => false, 'error' => $response->get_error_message() ];
+		}
+
+		$body = wp_remote_retrieve_body( $response );
+		$data = json_decode( $body, true );
+
+		if ( ! is_array( $data ) ) {
+			return [ 'success' => false, 'error' => 'Invalid response from Acumbamail' ];
+		}
+
+		$formatted = [];
+		foreach ( $data as $id => $item ) {
+			$formatted[] = [
+				'id'          => (string) $id,
+				'name'        => $item['name'] ?? "List #{$id}",
+				'description' => $item['description'] ?? '',
+			];
+		}
+
+		return [ 'success' => true, 'lists' => $formatted ];
+	}
+
+	/**
+	 * Send bulk campaign via Acumbamail
+	 */
+	public static function create_acumbamail_campaign( array $args ): array {
+		$config = self::get_acumbamail_config();
+		$auth_token = ! empty( $args['auth_token'] ) ? $args['auth_token'] : $config['auth_token'];
+
+		if ( empty( $auth_token ) ) {
+			return [ 'success' => false, 'error' => 'Acumbamail auth token missing' ];
+		}
+
+		$name       = sanitize_text_field( $args['name'] ?? 'Marketing Campaign ' . gmdate( 'Y-m-d H:i' ) );
+		$from_name  = sanitize_text_field( $args['from_name'] ?? $config['from_name'] );
+		$from_email = sanitize_email( $args['from_email'] ?? $config['from_email'] );
+		$subject    = sanitize_text_field( $args['subject'] ?? 'Exacoat Update' );
+		$content    = $args['content'] ?? $args['html'] ?? '';
+		$lists      = $args['lists'] ?? ( ! empty( $config['default_list'] ) ? [ $config['default_list'] ] : [] );
+
+		if ( empty( $content ) ) {
+			return [ 'success' => false, 'error' => 'Email content cannot be empty' ];
+		}
+		if ( empty( $lists ) ) {
+			return [ 'success' => false, 'error' => 'At least one subscriber list must be selected' ];
+		}
+
+		$post_data = [
+			'auth_token'    => $auth_token,
+			'response_type' => 'json',
+			'name'          => $name,
+			'from_name'     => $from_name,
+			'from_email'    => $from_email,
+			'subject'       => $subject,
+			'content'       => $content,
+			'https'         => 1,
+		];
+
+		if ( is_array( $lists ) ) {
+			foreach ( $lists as $idx => $lid ) {
+				$post_data["lists[{$idx}]"] = $lid;
+			}
+		}
+
+		$start = microtime( true );
+		$response = wp_remote_post( 'https://acumbamail.com/api/1/createCampaign/', [
+			'body'    => $post_data,
+			'timeout' => 25,
+		] );
+		$latency = (int) round( ( microtime( true ) - $start ) * 1000 );
+
+		if ( is_wp_error( $response ) ) {
+			return [ 'success' => false, 'error' => $response->get_error_message(), 'latency_ms' => $latency ];
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		$body = wp_remote_retrieve_body( $response );
+		$data = json_decode( $body, true );
+
+		if ( $code >= 200 && $code < 300 ) {
+			return [
+				'success'     => true,
+				'campaign_id' => is_numeric( $body ) ? (int) $body : ( $data['campaign_id'] ?? $body ),
+				'latency_ms'  => $latency,
+				'message'     => 'Campaign successfully created and queued in Acumbamail',
+			];
+		}
+
+		return [
+			'success'    => false,
+			'error'      => is_array( $data ) && ! empty( $data['error'] ) ? ( is_string( $data['error'] ) ? $data['error'] : wp_json_encode( $data['error'] ) ) : ( $body ?: "HTTP {$code}" ),
+			'latency_ms' => $latency,
+		];
+	}
+
+	/**
+	 * Send single 1-to-1 email via Acumbamail
+	 */
+	public static function send_acumbamail_single( string $to_email, string $subject, string $html, string $from_email = '', string $from_name = '' ): array {
+		$config = self::get_acumbamail_config();
+		$auth_token = $config['auth_token'];
+
+		if ( empty( $auth_token ) ) {
+			return [ 'success' => false, 'error' => 'Acumbamail auth token missing' ];
+		}
+		if ( ! is_email( $to_email ) ) {
+			return [ 'success' => false, 'error' => 'Invalid recipient email address' ];
+		}
+
+		$sender_email = $from_email ?: $config['from_email'];
+		$sender_name  = $from_name ?: ( $config['from_name'] ?: 'Exacoat' );
+
+		$post_data = [
+			'auth_token'    => $auth_token,
+			'response_type' => 'json',
+			'from_email'    => $sender_email,
+			'from_name'     => $sender_name,
+			'to_email'      => $to_email,
+			'subject'       => $subject,
+			'body'          => $html,
+		];
+
+		$start = microtime( true );
+		$response = wp_remote_post( 'https://acumbamail.com/api/1/sendOne/', [
+			'body'    => $post_data,
+			'timeout' => 20,
+		] );
+		$latency = (int) round( ( microtime( true ) - $start ) * 1000 );
+
+		if ( is_wp_error( $response ) ) {
+			return [ 'success' => false, 'error' => $response->get_error_message(), 'latency_ms' => $latency ];
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		$body = wp_remote_retrieve_body( $response );
+		$data = json_decode( $body, true );
+
+		if ( $code >= 200 && $code < 300 ) {
+			return [
+				'success'    => true,
+				'result'     => $data ?: $body,
+				'latency_ms' => $latency,
+				'message'    => 'Email dispatched via Acumbamail successfully',
+			];
+		}
+
+		return [
+			'success'    => false,
+			'error'      => is_array( $data ) && ! empty( $data['error'] ) ? ( is_string( $data['error'] ) ? $data['error'] : wp_json_encode( $data['error'] ) ) : ( $body ?: "HTTP {$code}" ),
+			'latency_ms' => $latency,
+		];
+	}
 }
 
 }

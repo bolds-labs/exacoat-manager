@@ -16,7 +16,8 @@ import {
   Clock, 
   Layers, 
   ExternalLink,
-  RotateCw 
+  RotateCw,
+  AlertCircle 
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { Modal } from '../components/ui/Modal';
@@ -29,21 +30,30 @@ import {
   savePluginSettings, 
   sendDirectZeptoMailEmail, 
   previewEmailHtml,
+  fetchAcumbamailListsDirect,
   WordPressPluginSettings 
 } from '../lib/wordpressBridge';
+import { EmailMarketingStudio } from '../components/email/EmailMarketingStudio';
 
 export const EmailTemplatesPage: React.FC = () => {
   const { showToast } = useToast();
-  const [activeSection, setActiveSection] = useState('templates');
+  const [activeSection, setActiveSection] = useState('marketing');
 
   // Settings State
   const [settings, setSettings] = useState<WordPressPluginSettings>({
     zeptomail_token: '',
     email_from_address: 'orders@exacoat.com',
     email_from_name: 'Exacoat',
+    acumbamail_token: 'c7b494d1f2354a7aadb7aba0e260364b',
+    acumbamail_from_email: 'sales@exacoat.com',
+    acumbamail_from_name: 'Exacoat',
+    acumbamail_default_list: '678690',
   });
   const [isSaving, setIsSaving] = useState(false);
   const [showToken, setShowToken] = useState(false);
+  const [showAcumbaToken, setShowAcumbaToken] = useState(false);
+  const [isTestingAcumba, setIsTestingAcumba] = useState(false);
+  const [acumbaConnectionStatus, setAcumbaConnectionStatus] = useState<string | null>(null);
 
   // Dispatcher State
   const [selectedEvent, setSelectedEvent] = useState('customer_order_processing');
@@ -78,12 +88,25 @@ export const EmailTemplatesPage: React.FC = () => {
     setIsSaving(true);
     const res = await savePluginSettings(settings);
     if (res.success) {
-      showToast('success', 'ZeptoMail Settings Saved', 'Send token and sender info stored in WordPress.');
+      showToast('success', 'ESP Settings Saved', 'Acumbamail and ZeptoMail configurations saved to WordPress.');
       await loadSettings();
     } else {
-      showToast('error', 'Save Failed', res.error || 'Failed updating ZeptoMail settings.');
+      showToast('error', 'Save Failed', res.error || 'Failed updating email settings.');
     }
     setIsSaving(false);
+  };
+
+  const handleTestAcumbamailConnection = async () => {
+    setIsTestingAcumba(true);
+    const res = await fetchAcumbamailListsDirect(settings.acumbamail_token);
+    setIsTestingAcumba(false);
+    if (res.success && res.lists) {
+      setAcumbaConnectionStatus(`Connected: ${res.lists.length} subscriber lists available.`);
+      showToast('success', 'Acumbamail Connected', `Successfully connected. Found ${res.lists.length} lists.`);
+    } else {
+      setAcumbaConnectionStatus(`Failed: ${res.error || 'Connection error'}`);
+      showToast('error', 'Acumbamail Connection Failed', res.error || 'Check auth token.');
+    }
   };
 
   const handlePreview = async (eventKey?: string) => {
@@ -137,85 +160,231 @@ export const EmailTemplatesPage: React.FC = () => {
   return (
     <div className="space-y-6 font-sans">
       <PageHeroHeader
-        title="Email Templates"
-        subtitle="Manage previews, test emails, and delivery settings."
-        badge={{ label: `${ALL_EMAIL_TEMPLATES.length} templates`, variant: 'lime' }}
+        title="Email Hub"
+        subtitle="Manage marketing campaigns, customer broadcasts, and transactional templates."
+        badge={{ label: 'Acumbamail & ZeptoMail', variant: 'lime' }}
       />
 
       <Tabs
-        tabs={[{ id: 'templates', label: 'Templates' }, { id: 'test', label: 'Send Test' }, { id: 'delivery', label: 'Delivery' }]}
+        tabs={[
+          { id: 'marketing', label: 'Marketing Studio' },
+          { id: 'templates', label: 'Transactional Catalog' },
+          { id: 'test', label: 'Transactional Sandbox' },
+          { id: 'delivery', label: 'Delivery & ESP Settings' },
+        ]}
         activeTab={activeSection}
         onChange={setActiveSection}
         className="w-full sm:w-fit"
       />
 
-      {/* 2. Zoho ZeptoMail API Configuration */}
-      {activeSection === 'delivery' && <GlassCard className="p-6 md:p-8 space-y-5">
-        <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/[0.06] pb-4">
-          <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-[#f3aa18]" />
-            <strong className="text-sm font-bold text-zinc-900 dark:text-white">
-              Delivery Settings
-            </strong>
-          </div>
-          <span className="inline-flex h-5 items-center whitespace-nowrap text-[10px] leading-none text-[#f3aa18] bg-lime-500/10 px-2 rounded-full border border-lime-500/20">
-            ZeptoMail
-          </span>
+      {/* 1. Marketing Studio */}
+      {activeSection === 'marketing' && (
+        <EmailMarketingStudio 
+          settings={settings} 
+          onNavigateSettings={() => setActiveSection('delivery')} 
+        />
+      )}
+
+      {/* 2. ESP Delivery Settings */}
+      {activeSection === 'delivery' && (
+        <div className="space-y-6">
+          {/* Acumbamail Marketing ESP Configuration */}
+          <GlassCard className="p-6 md:p-8 space-y-5">
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/[0.06] pb-4">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-500" />
+                <strong className="text-sm font-bold text-zinc-900 dark:text-white">
+                  Acumbamail Marketing Engine
+                </strong>
+              </div>
+              <span className="inline-flex h-5 items-center whitespace-nowrap text-[10px] leading-none text-amber-500 bg-amber-500/10 px-2 rounded-full border border-amber-500/20">
+                Marketing &amp; Broadcasts
+              </span>
+            </div>
+
+            <form onSubmit={handleSaveSettings} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono text-xs">
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
+                    Acumbamail Auth Token (API Key)
+                  </label>
+                  <Input
+                    type={showAcumbaToken ? 'text' : 'password'}
+                    value={settings.acumbamail_token || ''}
+                    onChange={e => setSettings({ ...settings, acumbamail_token: e.target.value })}
+                    placeholder="Acumbamail auth token"
+                    className="font-mono"
+                    rightElement={
+                      <button 
+                        type="button" 
+                        onClick={() => setShowAcumbaToken(!showAcumbaToken)} 
+                        className="p-1 text-zinc-400 hover:text-zinc-900 dark:hover:text-white" 
+                        aria-label={showAcumbaToken ? 'Hide token' : 'Show token'}
+                      >
+                        {showAcumbaToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    }
+                  />
+                  <span className="text-[10px] text-zinc-500 block">Acumbamail &gt; My Account &gt; API &gt; Auth Token</span>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
+                    Sender Email
+                  </label>
+                  <Input
+                    type="email"
+                    value={settings.acumbamail_from_email || 'sales@exacoat.com'}
+                    onChange={e => setSettings({ ...settings, acumbamail_from_email: e.target.value })}
+                    placeholder="sales@exacoat.com"
+                    className="font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono text-xs">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
+                    Sender Name
+                  </label>
+                  <Input
+                    type="text"
+                    value={settings.acumbamail_from_name || 'Exacoat'}
+                    onChange={e => setSettings({ ...settings, acumbamail_from_name: e.target.value })}
+                    placeholder="Exacoat"
+                    className="font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
+                    Default List ID
+                  </label>
+                  <Input
+                    type="text"
+                    value={settings.acumbamail_default_list || '678690'}
+                    onChange={e => setSettings({ ...settings, acumbamail_default_list: e.target.value })}
+                    placeholder="678690"
+                    className="font-mono"
+                  />
+                  <span className="text-[10px] text-zinc-500 block">e.g. 678690 (Exacoat Mailing List)</span>
+                </div>
+              </div>
+
+              {acumbaConnectionStatus && (
+                <div className={`p-3 rounded-xl text-xs font-mono flex items-center gap-2 ${
+                  acumbaConnectionStatus.startsWith('Connected') 
+                    ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-300'
+                }`}>
+                  {acumbaConnectionStatus.startsWith('Connected') ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                  <span>{acumbaConnectionStatus}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  type="button"
+                  onClick={handleTestAcumbamailConnection}
+                  disabled={isTestingAcumba}
+                  className="px-4 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <RotateCw className={`w-3.5 h-3.5 ${isTestingAcumba ? 'animate-spin' : ''}`} />
+                  <span>{isTestingAcumba ? 'Testing...' : 'Test Acumbamail Connection'}</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={loadSettings}
+                    disabled={isLoadingSettings}
+                    className="px-4 py-2.5 rounded-xl bg-zinc-100 dark:bg-white/[0.06] hover:bg-zinc-200 dark:hover:bg-white/[0.1] text-xs font-bold text-zinc-900 dark:text-white flex items-center gap-2 border border-zinc-200 dark:border-white/10 transition-colors font-mono"
+                  >
+                    <RotateCw className={`w-3.5 h-3.5 ${isLoadingSettings ? 'animate-spin' : ''}`} />
+                    <span>Refresh</span>
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="px-6 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs tracking-wider uppercase transition-all shadow-md flex items-center gap-2 active:scale-95 disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{isSaving ? 'Saving' : 'Save Changes'}</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </GlassCard>
+
+          {/* Zoho ZeptoMail Transactional Configuration */}
+          <GlassCard className="p-6 md:p-8 space-y-5">
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/[0.06] pb-4">
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-[#f3aa18]" />
+                <strong className="text-sm font-bold text-zinc-900 dark:text-white">
+                  ZeptoMail Transactional Engine
+                </strong>
+              </div>
+              <span className="inline-flex h-5 items-center whitespace-nowrap text-[10px] leading-none text-[#f3aa18] bg-lime-500/10 px-2 rounded-full border border-lime-500/20">
+                Transactional Only
+              </span>
+            </div>
+
+            <form onSubmit={handleSaveSettings} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono text-xs">
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
+                    ZeptoMail Send Token
+                  </label>
+                  <Input
+                    type={showToken ? 'text' : 'password'}
+                    value={settings.zeptomail_token || ''}
+                    onChange={e => setSettings({ ...settings, zeptomail_token: e.target.value })}
+                    placeholder="Zoho send token"
+                    className="font-mono"
+                    rightElement={
+                      <button 
+                        type="button" 
+                        onClick={() => setShowToken(!showToken)} 
+                        className="p-1 text-zinc-400 hover:text-zinc-900 dark:hover:text-white" 
+                        aria-label={showToken ? 'Hide token' : 'Show token'}
+                      >
+                        {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    }
+                  />
+                  <span className="text-[10px] text-zinc-500 block">Zoho ZeptoMail &gt; Mail Agents &gt; Setup Info &gt; Send Mail Token</span>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
+                    Sender Address
+                  </label>
+                  <Input
+                    type="email"
+                    value={settings.email_from_address || 'orders@exacoat.com'}
+                    onChange={e => setSettings({ ...settings, email_from_address: e.target.value })}
+                    placeholder="orders@exacoat.com"
+                    className="font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="px-6 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs tracking-wider uppercase transition-all shadow-md flex items-center gap-2 active:scale-95 disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{isSaving ? 'Saving' : 'Save Changes'}</span>
+                </button>
+              </div>
+            </form>
+          </GlassCard>
         </div>
-
-        <form onSubmit={handleSaveSettings} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono text-xs">
-            <div className="space-y-1 sm:col-span-2">
-              <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
-                Send token
-              </label>
-              <Input
-                type={showToken ? 'text' : 'password'}
-                value={settings.zeptomail_token || ''}
-                onChange={e => setSettings({ ...settings, zeptomail_token: e.target.value })}
-                placeholder="Zoho send token"
-                className="font-mono"
-                rightElement={<button type="button" onClick={() => setShowToken(!showToken)} className="p-1 text-zinc-400 hover:text-zinc-900 dark:hover:text-white" aria-label={showToken ? 'Hide token' : 'Show token'}>{showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>}
-              />
-              <span className="text-[10px] text-zinc-500 block">Zoho ZeptoMail &gt; Mail Agents &gt; Setup Info &gt; Send Mail Token</span>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
-                Sender address
-              </label>
-              <Input
-                type="email"
-                value={settings.email_from_address || 'support@exacoat.com'}
-                onChange={e => setSettings({ ...settings, email_from_address: e.target.value })}
-                placeholder="support@exacoat.com"
-                className="font-mono"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={loadSettings}
-              disabled={isLoadingSettings}
-              className="px-4 py-2.5 rounded-xl bg-zinc-100 dark:bg-white/[0.06] hover:bg-zinc-200 dark:hover:bg-white/[0.1] text-xs font-bold text-zinc-900 dark:text-white flex items-center gap-2 border border-zinc-200 dark:border-white/10 transition-colors font-mono"
-            >
-              <RotateCw className={`w-3.5 h-3.5 ${isLoadingSettings ? 'animate-spin' : ''}`} />
-              <span>Refresh</span>
-            </button>
-
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="px-6 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs tracking-wider uppercase transition-all shadow-md flex items-center gap-2 active:scale-95 disabled:opacity-50"
-            >
-              <Save className="w-4 h-4" />
-              <span>{isSaving ? 'Saving' : 'Save Changes'}</span>
-            </button>
-          </div>
-        </form>
-      </GlassCard>}
+      )}
 
       {/* 3. Live Email Dispatcher */}
       {activeSection === 'test' && <GlassCard className="p-6 md:p-8 space-y-6 overflow-visible relative z-30">

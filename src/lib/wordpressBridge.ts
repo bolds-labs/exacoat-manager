@@ -116,6 +116,10 @@ export interface WordPressPluginSettings {
   jne_email_cc?: string;
   jne_email_subject?: string;
   jne_email_body?: string;
+  acumbamail_token?: string;
+  acumbamail_from_email?: string;
+  acumbamail_from_name?: string;
+  acumbamail_default_list?: string;
   [key: string]: any;
 }
 
@@ -1599,11 +1603,393 @@ export async function previewEmailHtml(
     // 3. If remote fails, attempt local render again as safeguard
     try {
       const local = renderEmailHtmlLocally(templateKey, sampleData);
-      return { success: true, subject: local.subject, html: local.html };
+      if (local && local.html) {
+        return { success: true, subject: local.subject, html: local.html };
+      }
     } catch {
       return { success: false, error: err.message };
     }
   }
+  return { success: false, error: 'Preview failed' };
+}
+
+// ==========================================
+// Acumbamail Email Marketing & AI Studio
+// ==========================================
+
+export interface AcumbamailList {
+  id: string;
+  name: string;
+  description?: string;
+  total_subscribers?: number;
+}
+
+export async function fetchAcumbamailListsDirect(tokenOverride?: string): Promise<{ success: boolean; lists: AcumbamailList[]; error?: string }> {
+  const token = tokenOverride || getCachedPluginSettings().acumbamail_token || 'c7b494d1f2354a7aadb7aba0e260364b';
+  if (!token) {
+    return { success: false, lists: [], error: 'Acumbamail Auth Token is required' };
+  }
+
+  // 1. Try direct call to Acumbamail API
+  try {
+    const formData = new URLSearchParams();
+    formData.append('auth_token', token);
+    formData.append('response_type', 'json');
+
+    const res = await fetch('https://acumbamail.com/api/1/getLists/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+      },
+      body: formData.toString(),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data === 'object' && !data.error) {
+        const lists: AcumbamailList[] = Object.entries(data).map(([id, item]: [string, any]) => ({
+          id,
+          name: item.name || `List #${id}`,
+          description: item.description || '',
+        }));
+        return { success: true, lists };
+      }
+    }
+  } catch (err: any) {
+    console.warn('[fetchAcumbamailListsDirect] Direct fetch failed, trying WordPress bridge fallback:', err);
+  }
+
+  // 2. Fallback to WordPress backend bridge endpoint
+  try {
+    const base = getWordPressBaseUrl();
+    const url = `${base}/wp-json/exacoat-core/v1/acumbamail/lists?auth_token=${encodeURIComponent(token)}`;
+    const res = await authenticatedFetch(url, { headers: { Accept: 'application/json' } });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.lists)) {
+        return { success: true, lists: data.lists };
+      }
+      return { success: false, lists: [], error: data.error || 'Failed to retrieve subscriber lists' };
+    }
+    return { success: false, lists: [], error: `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, lists: [], error: err.message };
+  }
+}
+
+export async function sendAcumbamailCampaignDirect(params: {
+  name: string;
+  fromName: string;
+  fromEmail: string;
+  subject: string;
+  contentHtml: string;
+  listIds: string[];
+  tokenOverride?: string;
+}): Promise<{ success: boolean; campaign_id?: number | string; latency_ms?: number; message?: string; error?: string }> {
+  const start = performance.now();
+  const token = params.tokenOverride || getCachedPluginSettings().acumbamail_token || 'c7b494d1f2354a7aadb7aba0e260364b';
+  if (!token) {
+    return { success: false, error: 'Acumbamail Auth Token is missing' };
+  }
+
+  // Attempt direct call first
+  try {
+    const formData = new URLSearchParams();
+    formData.append('auth_token', token);
+    formData.append('response_type', 'json');
+    formData.append('name', params.name);
+    formData.append('from_name', params.fromName);
+    formData.append('from_email', params.fromEmail);
+    formData.append('subject', params.subject);
+    formData.append('content', params.contentHtml);
+    formData.append('https', '1');
+
+    params.listIds.forEach((lid, idx) => {
+      formData.append(`lists[${idx}]`, lid);
+    });
+
+    const res = await fetch('https://acumbamail.com/api/1/createCampaign/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+      },
+      body: formData.toString(),
+    });
+
+    const latency = Math.round(performance.now() - start);
+    const text = await res.text();
+    let data: any = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+
+    if (res.ok) {
+      const campaignId = typeof data === 'number' || typeof data === 'string' ? data : (data.campaign_id || text);
+      return {
+        success: true,
+        campaign_id: campaignId,
+        latency_ms: latency,
+        message: 'Campaign created and queued for delivery via Acumbamail.',
+      };
+    }
+  } catch (err: any) {
+    console.warn('[sendAcumbamailCampaignDirect] Direct dispatch failed, trying bridge:', err);
+  }
+
+  // Fallback to WordPress plugin bridge
+  try {
+    const base = getWordPressBaseUrl();
+    const url = `${base}/wp-json/exacoat-core/v1/acumbamail/campaign`;
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        auth_token: token,
+        name: params.name,
+        from_name: params.fromName,
+        from_email: params.fromEmail,
+        subject: params.subject,
+        content: params.contentHtml,
+        lists: params.listIds,
+      }),
+    });
+    const latency = Math.round(performance.now() - start);
+    const data = await res.json();
+    return { ...data, latency_ms: data.latency_ms || latency };
+  } catch (err: any) {
+    const latency = Math.round(performance.now() - start);
+    return { success: false, latency_ms: latency, error: err.message };
+  }
+}
+
+export async function sendAcumbamailSingleEmailDirect(params: {
+  toEmail: string;
+  subject: string;
+  bodyHtml: string;
+  fromEmail?: string;
+  fromName?: string;
+  tokenOverride?: string;
+}): Promise<{ success: boolean; result?: any; latency_ms?: number; message?: string; error?: string }> {
+  const start = performance.now();
+  const token = params.tokenOverride || getCachedPluginSettings().acumbamail_token || 'c7b494d1f2354a7aadb7aba0e260364b';
+  const fromEmail = params.fromEmail || getCachedPluginSettings().acumbamail_from_email || 'sales@exacoat.com';
+
+  if (!token) {
+    return { success: false, error: 'Acumbamail Auth Token is missing' };
+  }
+
+  try {
+    const fromName = params.fromName || getCachedPluginSettings().acumbamail_from_name || 'Exacoat';
+
+    const formData = new URLSearchParams();
+    formData.append('auth_token', token);
+    formData.append('response_type', 'json');
+    formData.append('from_email', fromEmail);
+    formData.append('from_name', fromName);
+    formData.append('to_email', params.toEmail);
+    formData.append('subject', params.subject);
+    formData.append('body', params.bodyHtml);
+
+    const res = await fetch('https://acumbamail.com/api/1/sendOne/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+      },
+      body: formData.toString(),
+    });
+
+    const latency = Math.round(performance.now() - start);
+    const text = await res.text();
+    let data: any = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+
+    if (res.ok && !data.error) {
+      return {
+        success: true,
+        result: data,
+        latency_ms: latency,
+        message: `Email dispatched to ${params.toEmail} via Acumbamail.`,
+      };
+    }
+  } catch (err: any) {
+    console.warn('[sendAcumbamailSingleEmailDirect] Direct send failed, trying bridge:', err);
+  }
+
+  // Fallback to WordPress backend bridge
+  try {
+    const base = getWordPressBaseUrl();
+    const url = `${base}/wp-json/exacoat-core/v1/acumbamail/send-one`;
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        to_email: params.toEmail,
+        subject: params.subject,
+        body: params.bodyHtml,
+        from_email: fromEmail,
+        from_name: params.fromName || 'Exacoat',
+      }),
+    });
+    const latency = Math.round(performance.now() - start);
+    const data = await res.json();
+    return { ...data, latency_ms: data.latency_ms || latency };
+  } catch (err: any) {
+    const latency = Math.round(performance.now() - start);
+    return { success: false, latency_ms: latency, error: err.message };
+  }
+}
+
+export async function uploadMarketingImageDirect(file: File): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    const base = getWordPressBaseUrl();
+    const url = `${base}/wp-json/exacoat-core/v1/email/upload-image`;
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.url) {
+        return { success: true, url: data.url };
+      }
+      return { success: false, error: data.error || 'Failed to upload image' };
+    }
+    return { success: false, error: `Upload returned status ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function generateMarketingEmailCopyDirect(params: {
+  campaignType: string;
+  productFocus?: string;
+  promoDetails?: string;
+  tone?: string;
+  language?: string;
+  targetAudience?: string;
+}): Promise<{
+  success: boolean;
+  subjectLines?: string[];
+  preheader?: string;
+  headline?: string;
+  bodyText?: string;
+  ctaText?: string;
+  error?: string;
+}> {
+  const geminiKey = getCachedPluginSettings().gemini_api_key || '';
+  const openAiKey = getCachedPluginSettings().openai_api_key || '';
+
+  if (!geminiKey && !openAiKey) {
+    return {
+      success: false,
+      error: 'No AI key configured. Please add Gemini or OpenAI API key in Settings.',
+    };
+  }
+
+  const prompt = `You are a world-class e-commerce copywriter for Exacoat (exacoat.com), a premium precision device skin manufacturer.
+Exacoat crafts precision-cut skins and wraps for smartphones (iPhone, Samsung Galaxy, Pixel), gaming consoles, laptops (MacBook), and accessories.
+Exacoat is known for authentic textures (Carbon Fiber, Black Camo, Matrix, Swarm, Slate, Patina, Honeycomb), 360-degree millimeter precision, bubble-free installation, and sleek minimalist aesthetics.
+
+CRITICAL ANTISLOP COPYWRITING RULES (MANDATORY):
+1. FORBIDDEN: Do NOT use any em dashes ("—"). Use commas, periods, colons, or parentheses instead.
+2. FORBIDDEN: Do NOT use generic AI marketing buzzwords like "revolutionary", "cutting-edge", "game-changing", "seamless", "effortless", "ultimate", "state-of-the-art".
+3. Write with genuine craftsmanship, high-intent tone, and concise clarity. Keep paragraphs brief (2 to 3 sentences maximum each).
+4. Language: ${params.language === 'id' ? 'Indonesian (Bahasa Indonesia)' : 'English'}.
+5. Campaign Type: ${params.campaignType}.
+6. Target Audience: ${params.targetAudience || 'General Subscribers'}.
+7. Product / Focus: ${params.productFocus || 'Precision device skins and new textures'}.
+8. Special Offer / Promo Details: ${params.promoDetails || 'No specific discount, focus on craftsmanship and release details'}.
+9. Tone: ${params.tone || 'Confident, modern, sleek'}.
+
+Format your response strictly as valid, raw JSON (no markdown formatting, no code fences):
+{
+  "subjectLines": ["Subject Option 1", "Subject Option 2", "Subject Option 3"],
+  "preheader": "Short preview snippet text under 90 characters",
+  "headline": "Bold, captivating email headline",
+  "bodyText": "Paragraph 1\\n\\nParagraph 2\\n\\nParagraph 3",
+  "ctaText": "Active CTA button label (e.g. Explore Collection, Claim 20% Off, Order Now)"
+}`;
+
+  if (geminiKey) {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: 'application/json' },
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const cleanJson = rawText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+        const parsed = JSON.parse(cleanJson);
+        return {
+          success: true,
+          subjectLines: parsed.subjectLines || [],
+          preheader: parsed.preheader || '',
+          headline: parsed.headline || '',
+          bodyText: parsed.bodyText || '',
+          ctaText: parsed.ctaText || 'Shop Now',
+        };
+      }
+    } catch (err: any) {
+      console.warn('[generateMarketingEmailCopyDirect] Gemini failed, checking OpenAI:', err);
+    }
+  }
+
+  if (openAiKey) {
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${openAiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: 'You are an expert e-commerce copywriter. Output raw JSON only.' },
+            { role: 'user', content: prompt },
+          ],
+          response_format: { type: 'json_object' },
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const rawContent = data.choices?.[0]?.message?.content || '{}';
+        const parsed = JSON.parse(rawContent);
+        return {
+          success: true,
+          subjectLines: parsed.subjectLines || [],
+          preheader: parsed.preheader || '',
+          headline: parsed.headline || '',
+          bodyText: parsed.bodyText || '',
+          ctaText: parsed.ctaText || 'Shop Now',
+        };
+      }
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  return { success: false, error: 'AI copy generation failed. Check your API key connection.' };
 }
 
 // ==========================================

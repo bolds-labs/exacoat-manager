@@ -1763,6 +1763,107 @@ class Exacoat_Core {
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 
+		// Acumbamail Email Marketing REST Endpoints
+		$register( '/acumbamail/lists', [
+			'methods'             => 'GET',
+			'callback'            => function( WP_REST_Request $request ) {
+				$token = sanitize_text_field( $request->get_param( 'auth_token' ) ?? '' );
+				$email_class = class_exists( 'Exacoat_Email_Engine' ) ? 'Exacoat_Email_Engine' : ( class_exists( 'Artmatter_Email_Engine' ) ? 'Artmatter_Email_Engine' : false );
+				if ( $email_class && method_exists( $email_class, 'get_acumbamail_lists' ) ) {
+					$res = $email_class::get_acumbamail_lists( $token );
+					return rest_ensure_response( $res );
+				}
+				return rest_ensure_response( [ 'success' => false, 'error' => 'Email engine not available' ] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/acumbamail/campaign', [
+			'methods'             => 'POST',
+			'callback'            => function( WP_REST_Request $request ) {
+				$params = $request->get_json_params() ?: $request->get_params();
+				$email_class = class_exists( 'Exacoat_Email_Engine' ) ? 'Exacoat_Email_Engine' : ( class_exists( 'Artmatter_Email_Engine' ) ? 'Artmatter_Email_Engine' : false );
+				if ( $email_class && method_exists( $email_class, 'create_acumbamail_campaign' ) ) {
+					$res = $email_class::create_acumbamail_campaign( is_array( $params ) ? $params : [] );
+					return rest_ensure_response( $res );
+				}
+				return rest_ensure_response( [ 'success' => false, 'error' => 'Email engine not available' ] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/acumbamail/send-one', [
+			'methods'             => 'POST',
+			'callback'            => function( WP_REST_Request $request ) {
+				$params    = $request->get_json_params() ?: $request->get_params();
+				$to_email  = sanitize_email( $params['to_email'] ?? $params['recipient_email'] ?? '' );
+				$subject   = sanitize_text_field( $params['subject'] ?? 'Exacoat Update' );
+				$html      = $params['body'] ?? $params['html'] ?? '';
+				$from_email = sanitize_email( $params['from_email'] ?? '' );
+				$from_name  = sanitize_text_field( $params['from_name'] ?? '' );
+
+				if ( empty( $to_email ) || empty( $html ) ) {
+					return new WP_Error( 'missing_params', 'to_email and body are required', [ 'status' => 400 ] );
+				}
+
+				$email_class = class_exists( 'Exacoat_Email_Engine' ) ? 'Exacoat_Email_Engine' : ( class_exists( 'Artmatter_Email_Engine' ) ? 'Artmatter_Email_Engine' : false );
+				if ( $email_class && method_exists( $email_class, 'send_acumbamail_single' ) ) {
+					$res = $email_class::send_acumbamail_single( $to_email, $subject, $html, $from_email, $from_name );
+					return rest_ensure_response( $res );
+				}
+				return rest_ensure_response( [ 'success' => false, 'error' => 'Email engine not available' ] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/email/upload-image', [
+			'methods'             => 'POST',
+			'callback'            => function( WP_REST_Request $request ) {
+				if ( empty( $_FILES['file'] ) && empty( $_FILES['image'] ) ) {
+					$json = $request->get_json_params();
+					if ( ! empty( $json['image_base64'] ) ) {
+						$base64_data = $json['image_base64'];
+						$filename    = sanitize_file_name( $json['filename'] ?? ( 'marketing-' . time() . '.jpg' ) );
+						if ( preg_match( '/^data:image\/(\w+);base64,/', $base64_data, $type ) ) {
+							$base64_data = substr( $base64_data, strpos( $base64_data, ',' ) + 1 );
+							$base64_data = base64_decode( $base64_data );
+							if ( false === $base64_data ) {
+								return new WP_Error( 'invalid_image', 'Base64 decoding failed', [ 'status' => 400 ] );
+							}
+							$upload = wp_upload_bits( $filename, null, $base64_data );
+							if ( ! empty( $upload['error'] ) ) {
+								return new WP_Error( 'upload_failed', $upload['error'], [ 'status' => 500 ] );
+							}
+							return rest_ensure_response( [
+								'success' => true,
+								'url'     => $upload['url'],
+								'file'    => $upload['file'],
+							] );
+						}
+					}
+					return new WP_Error( 'no_file', 'No image file uploaded', [ 'status' => 400 ] );
+				}
+
+				require_once ABSPATH . 'wp-admin/includes/image.php';
+				require_once ABSPATH . 'wp-admin/includes/file.php';
+				require_once ABSPATH . 'wp-admin/includes/media.php';
+
+				$file_key = ! empty( $_FILES['image'] ) ? 'image' : 'file';
+				$attachment_id = media_handle_upload( $file_key, 0 );
+				if ( is_wp_error( $attachment_id ) ) {
+					return new WP_Error( 'upload_error', $attachment_id->get_error_message(), [ 'status' => 500 ] );
+				}
+
+				$url = wp_get_attachment_url( $attachment_id );
+				return rest_ensure_response( [
+					'success'       => true,
+					'url'           => $url,
+					'attachment_id' => $attachment_id,
+				] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
 		// System Maintenance Endpoints
 		$register( '/system/flush-permalinks', [
 			'methods'             => 'POST',
@@ -2225,6 +2326,7 @@ class Exacoat_Core {
 			'drime_access_token',
 			'drime_secret_key',
 			'zeptomail_token',
+			'acumbamail_token',
 			'pushover_app_token',
 			'pushover_user_key',
 		];

@@ -1402,3 +1402,224 @@ function renderFallbackEmail(event: string, data: Record<string, any>): Rendered
 </html>`;
   return { subject, html, isLightMode: true };
 }
+
+export interface MarketingEmailOptions {
+  subject: string;
+  badgeText?: string;
+  badgeVariant?: 'amber' | 'emerald' | 'blue' | 'purple' | 'zinc';
+  headline: string;
+  recipientGreeting?: string;
+  bannerImageUrl?: string;
+  bannerImageAlt?: string;
+  bannerLinkUrl?: string;
+  bodyText: string;
+  highlightTitle?: string;
+  highlightText?: string;
+  promoCode?: string;
+  ctaText?: string;
+  ctaUrl?: string;
+  secondaryCtaText?: string;
+  secondaryCtaUrl?: string;
+  footerNote?: string;
+  unsubscribeUrl?: string;
+}
+
+export function renderMarketingEmailHtml(options: MarketingEmailOptions): RenderedEmail {
+  const subject = escapeHtml(options.subject || 'Special Update from Exacoat');
+  const headline = escapeHtml(options.headline || 'Exclusive Announcement');
+  const greeting = escapeHtml(options.recipientGreeting || 'Hi Customer,');
+  const badgeText = escapeHtml(options.badgeText || 'Announcement');
+  const badgeVariant = options.badgeVariant || 'amber';
+
+  let badgeBg = '#fff8eb';
+  let badgeColor = '#d97706';
+  let badgeBorder = '#fef3c7';
+
+  if (badgeVariant === 'emerald') {
+    badgeBg = '#ecfdf5';
+    badgeColor = '#059669';
+    badgeBorder = '#a7f3d0';
+  } else if (badgeVariant === 'blue') {
+    badgeBg = '#eff6ff';
+    badgeColor = '#2563eb';
+    badgeBorder = '#bfdbfe';
+  } else if (badgeVariant === 'purple') {
+    badgeBg = '#faf5ff';
+    badgeColor = '#7c3aed';
+    badgeBorder = '#e9d5ff';
+  } else if (badgeVariant === 'zinc') {
+    badgeBg = '#f4f4f5';
+    badgeColor = '#3f3f46';
+    badgeBorder = '#e4e4e7';
+  }
+
+  // Parse body text paragraphs
+  const rawBody = options.bodyText || '';
+  const paragraphs = rawBody
+    .split(/\n\s*\n/)
+    .map(p => p.trim())
+    .filter(Boolean);
+
+  const bodyHtml = paragraphs.map(p => {
+    const formatted = escapeHtml(p).replace(/\n/g, '<br />');
+    return `<p style="margin:0 0 16px;font-size:14.5px;line-height:1.75;color:#3f3f46;">${formatted}</p>`;
+  }).join('');
+
+  // Banner image section
+  let bannerHtml = '';
+  if (options.bannerImageUrl) {
+    const imgUrl = escapeHtml(options.bannerImageUrl);
+    const altText = escapeHtml(options.bannerImageAlt || headline);
+    const imgTag = `<img src="${imgUrl}" alt="${altText}" width="520" style="width:100%;max-width:520px;height:auto;border-radius:14px;border:1px solid #e5e5e5;display:block;margin:0 0 24px;object-fit:cover;" />`;
+    if (options.bannerLinkUrl) {
+      const linkUrl = escapeHtml(options.bannerLinkUrl);
+      bannerHtml = `<div style="margin-bottom:20px;"><a href="${linkUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:block;">${imgTag}</a></div>`;
+    } else {
+      bannerHtml = `<div style="margin-bottom:20px;">${imgTag}</div>`;
+    }
+  }
+
+  // Highlight / Promo box
+  let highlightHtml = '';
+  if (options.promoCode || options.highlightTitle || options.highlightText) {
+    const hTitle = escapeHtml(options.highlightTitle || (options.promoCode ? 'Exclusive Perk' : 'Special Highlight'));
+    const hText = options.highlightText ? `<p style="margin:0 0 10px;font-size:13.5px;line-height:1.6;color:#52525b;">${escapeHtml(options.highlightText)}</p>` : '';
+    const codeHtml = options.promoCode ? `
+      <div style="margin-top:12px;">
+        <span style="display:inline-block;padding:8px 18px;background:#ffffff;border:1.5px dashed #111111;color:#111111;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:16px;font-weight:800;letter-spacing:1px;border-radius:8px;">
+          ${escapeHtml(options.promoCode)}
+        </span>
+      </div>` : '';
+
+    highlightHtml = `
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #e4e4e7;border-radius:14px;margin:24px 0 28px;">
+        <tr>
+          <td style="padding:22px 24px;text-align:center;">
+            <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:#111111;">${hTitle}</p>
+            ${hText}
+            ${codeHtml}
+          </td>
+        </tr>
+      </table>`;
+  }
+
+  // Action CTA buttons
+  let ctaButtonsHtml = '';
+  if (options.ctaText && options.ctaUrl) {
+    const ctaText = escapeHtml(options.ctaText);
+    const ctaUrl = escapeHtml(options.ctaUrl);
+    let secondaryHtml = '';
+    if (options.secondaryCtaText && options.secondaryCtaUrl) {
+      const secText = escapeHtml(options.secondaryCtaText);
+      const secUrl = escapeHtml(options.secondaryCtaUrl);
+      secondaryHtml = `
+        <a href="${secUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:13px 24px;background:#f4f4f5;color:#18181b;font-size:13.5px;font-weight:600;border-radius:100px;text-decoration:none;letter-spacing:0.2px;border:1px solid #e4e4e7;margin-left:10px;margin-top:6px;">
+          ${secText}
+        </a>`;
+    }
+
+    ctaButtonsHtml = `
+      <div style="margin:28px 0 20px;">
+        <a href="${ctaUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:14px 30px;background:#111111;color:#ffffff;font-size:14px;font-weight:700;border-radius:100px;text-decoration:none;letter-spacing:0.2px;box-shadow:0 3px 12px rgba(0,0,0,0.12);margin-top:6px;">
+          ${ctaText} &rarr;
+        </a>
+        ${secondaryHtml}
+      </div>`;
+  }
+
+  const unsubscribeUrl = escapeHtml(options.unsubscribeUrl || '{{unsubscribe_url}}');
+  const footerNote = options.footerNote ? `<p style="margin:0 0 12px;font-size:13px;line-height:1.6;color:#71717a;">${escapeHtml(options.footerNote)}</p>` : '';
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100% !important;
+      background-color: #f7f7f7;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    table { border-collapse: collapse; }
+    img { border: 0; display: block; }
+    @media only screen and (max-width: 620px) {
+      .container-table { width: 100% !important; border-radius: 0 !important; }
+      .mobile-padding { padding-left: 20px !important; padding-right: 20px !important; }
+    }
+  </style>
+</head>
+<body bgcolor="#f7f7f7" style="margin:0;padding:0;background-color:#f7f7f7;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f7f7" style="background-color:#f7f7f7;padding:44px 16px;">
+    <tr>
+      <td align="center">
+        <!-- Main Card -->
+        <table class="container-table" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #e5e5e5;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.04);">
+          <tbody>
+            <!-- Top Header (Logo + Badge) -->
+            <tr>
+              <td style="padding:28px 40px 22px;border-bottom:1px solid #f0f0f0;" class="mobile-padding">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td valign="middle">
+                      ${BRAND_LOGO_HTML}
+                    </td>
+                    <td align="right" valign="middle">
+                      <span style="display:inline-block;padding:5px 13px;background:${badgeBg};color:${badgeColor};font-size:11px;font-weight:700;border-radius:999px;border:1px solid ${badgeBorder};letter-spacing:0.3px;text-transform:uppercase;">${badgeText}</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Message Headline & Body -->
+            <tr>
+              <td style="padding:36px 40px 32px;" class="mobile-padding">
+                ${bannerHtml}
+                <h1 style="margin:0 0 16px;font-size:25px;font-weight:800;color:#111111;letter-spacing:-0.5px;line-height:1.25;">${headline}</h1>
+                <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:#18181b;">${greeting}</p>
+                ${bodyHtml}
+                ${highlightHtml}
+                ${ctaButtonsHtml}
+                ${footerNote}
+
+                <!-- Dedicated Spacer above Support -->
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td height="36" style="height:36px;font-size:0;line-height:0;">&nbsp;</td>
+                  </tr>
+                </table>
+
+                <!-- Support, Address & Unsubscribe Footer -->
+                <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #f0f0f0;text-align:center;">
+                  <tr>
+                    <td align="center" style="padding-top:28px;">
+                      <p style="margin:0 0 10px;font-size:12px;line-height:1.65;color:#71717a;">
+                        Have questions or feedback? Reach our team directly at <a href="mailto:support@exacoat.com" style="color:#111111;text-decoration:underline;font-weight:500;">support@exacoat.com</a>
+                      </p>
+                      <p style="margin:0 0 10px;font-size:11.5px;color:#a1a1aa;">
+                        You are receiving this email because you opted in to updates from Exacoat. <br />
+                        <a href="${unsubscribeUrl}" target="_blank" rel="noopener noreferrer" style="color:#71717a;text-decoration:underline;">Unsubscribe from these emails</a>
+                      </p>
+                      <p style="margin:0;font-size:11px;color:#a1a1aa;letter-spacing:0.2px;">&copy; Exacoat &bull; Ruby Commercial TB-12, Summarecon Bekasi, Bekasi Utara, West Java 17142</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return { subject: options.subject, html, isLightMode: true };
+}
+
