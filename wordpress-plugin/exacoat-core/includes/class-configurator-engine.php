@@ -4056,6 +4056,13 @@ class Exacoat_Configurator_Engine {
 				}
 			}
 		}
+		if ( ! empty( $cart_item['exacoat_custom_image'] ) ) {
+			$item_data[] = [
+				'key'    => '_configured_image_url',
+				'value'  => esc_url_raw( $cart_item['exacoat_custom_image'] ),
+				'hidden' => true,
+			];
+		}
 		return $item_data;
 	}
 

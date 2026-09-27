@@ -1448,6 +1448,21 @@ export interface MarketingEmailOptions {
   footerNote?: string;
   unsubscribeUrl?: string;
   viewInBrowserUrl?: string;
+  recipientName?: string;
+}
+
+/**
+ * Replaces personalization tags like {name}, {name|fallback}, {{name|there}}, {first_name}, etc.
+ */
+export function replaceNamePlaceholders(text: string, name?: string | null): string {
+  if (!text) return '';
+  const trimmedName = (name || '').trim();
+  return text.replace(/\{\{?\s*(?:name|first_name|creator_name|customer_name)(?:\|([^}]+))?\s*\}\}?/gi, (_match, fallback) => {
+    if (trimmedName) {
+      return trimmedName;
+    }
+    return fallback !== undefined ? fallback.trim() : 'there';
+  });
 }
 
 const DEFAULT_TRUST_CARDS: TrustFeatureCard[] = [
@@ -1488,10 +1503,22 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
   const showHeader = Boolean(options.showHeader);
   const showBadge = Boolean(options.showBadge);
   const logoPosition = options.logoPosition ?? 'top';
-  const subject = escapeHtml(options.subject || 'Special Update from Exacoat');
-  const preheader = escapeHtml(options.preheaderText || 'Precision crafted device skins and exclusive announcements.');
-  const headline = escapeHtml(options.headline || 'Exclusive Announcement');
-  const greeting = escapeHtml(options.recipientGreeting || 'Hi Customer,');
+  const rawSubject = options.subject || 'Special Update from Exacoat';
+  const resolvedSubject = replaceNamePlaceholders(rawSubject, options.recipientName);
+  const subject = escapeHtml(resolvedSubject);
+
+  const rawPreheader = options.preheaderText || 'Precision crafted device skins and exclusive announcements.';
+  const resolvedPreheader = replaceNamePlaceholders(rawPreheader, options.recipientName);
+  const preheader = escapeHtml(resolvedPreheader);
+
+  const rawHeadline = options.headline || 'Exclusive Announcement';
+  const resolvedHeadline = replaceNamePlaceholders(rawHeadline, options.recipientName);
+  const headline = escapeHtml(resolvedHeadline);
+
+  const rawGreeting = options.recipientGreeting || 'Hi {name|there},';
+  const resolvedGreeting = replaceNamePlaceholders(rawGreeting, options.recipientName);
+  const greeting = escapeHtml(resolvedGreeting);
+
   const badgeText = escapeHtml(options.badgeText || 'Announcement');
   const badgeVariant = options.badgeVariant || 'amber';
 
@@ -1528,7 +1555,7 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
   const headerDivider = isDark ? '#1a1a1f' : '#f0f0f0';
 
   // Body text paragraphs
-  const rawBody = options.bodyText || '';
+  const rawBody = replaceNamePlaceholders(options.bodyText || '', options.recipientName);
   const paragraphs = rawBody
     .split(/\n\s*\n/)
     .map(p => p.trim())
@@ -1837,22 +1864,22 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
                   <tr>
                     <td align="center" style="padding-top:32px;padding-bottom:24px;">
                       ${bottomLogoHtml}
-                      <!-- Social Links -->
+                      <!-- Social Links (Compact, small icons) -->
                       <table cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 18px;">
                         <tr>
-                          <td style="padding:0 8px;">
-                            <a href="https://instagram.com/exacoat" target="_blank" rel="noopener noreferrer" style="font-size:12px;font-weight:600;color:${isDark ? '#e4e4e7' : '#3f3f46'};text-decoration:none;padding:6px 14px;border-radius:999px;background:${isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f5'};border:1px solid ${cardBorder};">
-                              Instagram
+                          <td style="padding:0 5px;">
+                            <a href="https://instagram.com/exacoat" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="Instagram">
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="${isDark ? '#e4e4e7' : '#27272a'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
                             </a>
                           </td>
-                          <td style="padding:0 8px;">
-                            <a href="https://x.com/exacoat" target="_blank" rel="noopener noreferrer" style="font-size:12px;font-weight:600;color:${isDark ? '#e4e4e7' : '#3f3f46'};text-decoration:none;padding:6px 14px;border-radius:999px;background:${isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f5'};border:1px solid ${cardBorder};">
-                              X
+                          <td style="padding:0 5px;">
+                            <a href="https://x.com/exacoat" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="X">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="${isDark ? '#e4e4e7' : '#27272a'}" style="display:block;"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
                             </a>
                           </td>
-                          <td style="padding:0 8px;">
-                            <a href="https://youtube.com/@exacoat" target="_blank" rel="noopener noreferrer" style="font-size:12px;font-weight:600;color:${isDark ? '#e4e4e7' : '#3f3f46'};text-decoration:none;padding:6px 14px;border-radius:999px;background:${isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f5'};border:1px solid ${cardBorder};">
-                              YouTube
+                          <td style="padding:0 5px;">
+                            <a href="https://youtube.com/@exacoat" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="YouTube">
+                              <svg width="15" height="12" viewBox="0 0 24 24" fill="${isDark ? '#e4e4e7' : '#27272a'}" style="display:block;"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
                             </a>
                           </td>
                         </tr>
@@ -1886,4 +1913,322 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
 
   return { subject: options.subject, html, isLightMode: !isDark };
 }
+
+/**
+ * Compiles marketing email options into clean, valid, responsive MJML markup.
+ * This acts as the single source of truth for the Visual Marketing Studio.
+ */
+export function renderMarketingEmailMjml(options: MarketingEmailOptions): string {
+  const isDark = (options.theme ?? 'dark') === 'dark';
+  const showHeader = Boolean(options.showHeader);
+  const showBadge = Boolean(options.showBadge);
+  const logoPosition = options.logoPosition ?? 'top';
+
+  const headline = options.headline || 'Engineered Precision. Pure Tactile Feel.';
+  const greeting = options.recipientGreeting || 'Hi {name|there},';
+  const bodyText = options.bodyText || '';
+  const subPillNotice = options.subPillNotice || '';
+  const badgeText = options.badgeText || 'ANNOUNCEMENT';
+  const badgeVariant = options.badgeVariant || 'amber';
+
+  // Colors based on theme
+  const outerBg = isDark ? '#050507' : '#f5f5f7';
+  const cardBg = isDark ? '#0e0e11' : '#ffffff';
+  const cardBorder = isDark ? '#1f1f24' : '#e4e4e7';
+  const textHeading = isDark ? '#ffffff' : '#111111';
+  const textGreeting = isDark ? '#e4e4e7' : '#18181b';
+  const textBody = isDark ? '#a1a1aa' : '#52525b';
+  const textMuted = isDark ? '#71717a' : '#a1a1aa';
+  const dividerColor = isDark ? '#1a1a1f' : '#e5e7eb';
+
+  // Badge Colors
+  let badgeBg = isDark ? 'rgba(245,158,11,0.15)' : '#fff8eb';
+  let badgeColor = isDark ? '#fbbf24' : '#d97706';
+  let badgeBorder = isDark ? '1px solid rgba(245,158,11,0.3)' : '1px solid #fef3c7';
+
+  if (badgeVariant === 'emerald') {
+    badgeBg = isDark ? 'rgba(16,185,129,0.15)' : '#ecfdf5';
+    badgeColor = isDark ? '#34d399' : '#059669';
+    badgeBorder = isDark ? '1px solid rgba(16,185,129,0.3)' : '1px solid #a7f3d0';
+  } else if (badgeVariant === 'blue') {
+    badgeBg = isDark ? 'rgba(59,130,246,0.15)' : '#eff6ff';
+    badgeColor = isDark ? '#60a5fa' : '#2563eb';
+    badgeBorder = isDark ? '1px solid rgba(59,130,246,0.3)' : '1px solid #bfdbfe';
+  } else if (badgeVariant === 'purple') {
+    badgeBg = isDark ? 'rgba(168,85,247,0.15)' : '#faf5ff';
+    badgeColor = isDark ? '#c084fc' : '#7c3aed';
+    badgeBorder = isDark ? '1px solid rgba(168,85,247,0.3)' : '1px solid #e9d5ff';
+  } else if (badgeVariant === 'zinc') {
+    badgeBg = isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f5';
+    badgeColor = isDark ? '#d4d4d8' : '#52525b';
+    badgeBorder = isDark ? '1px solid rgba(255,255,255,0.12)' : '1px solid #e4e4e7';
+  }
+
+  // CTA Colors
+  let btnBg = '#f59e0b';
+  let btnColor = '#000000';
+  if (options.primaryCtaColor === 'white') {
+    btnBg = '#ffffff';
+    btnColor = '#000000';
+  } else if (options.primaryCtaColor === 'emerald') {
+    btnBg = '#10b981';
+    btnColor = '#ffffff';
+  } else if (!isDark) {
+    btnBg = '#111111';
+    btnColor = '#ffffff';
+  }
+
+  // Sub-pill capsule
+  let subPillMjml = '';
+  if (subPillNotice) {
+    const pillBg = isDark ? 'rgba(255,255,255,0.06)' : '#f1f1f4';
+    const pillColor = isDark ? '#a1a1aa' : '#71717a';
+    subPillMjml = `
+      <!-- Sub-Pill Notice Capsule -->
+      <mj-section padding="0 0 16px">
+        <mj-column>
+          <mj-button background-color="${pillBg}" color="${pillColor}" border-radius="9999px" font-size="9.5px" font-weight="600" letter-spacing="1.2px" text-transform="uppercase" align="left" inner-padding="5px 14px" padding="0">
+            ${escapeHtml(subPillNotice)}
+          </mj-button>
+        </mj-column>
+      </mj-section>`;
+  }
+
+  // Header / Logo
+  let headerMjml = '';
+  if (showHeader) {
+    const badgeCol = showBadge ? `
+        <mj-column width="40%" vertical-align="middle">
+          <mj-button background-color="${badgeBg}" color="${badgeColor}" border="${badgeBorder}" border-radius="9999px" font-size="9.5px" font-weight="700" letter-spacing="1.5px" align="right" inner-padding="4px 10px" padding="0">
+            ${escapeHtml(badgeText)}
+          </mj-button>
+        </mj-column>` : '';
+
+    headerMjml = `
+      <!-- Top Header -->
+      <mj-section padding="0 0 20px" border-bottom="1px solid ${dividerColor}">
+        <mj-column width="${showBadge ? '60%' : '100%'}" vertical-align="middle">
+          <mj-text align="left" font-size="16px" font-weight="900" color="${textHeading}" letter-spacing="2px" padding="0">
+            EXACOAT
+          </mj-text>
+        </mj-column>
+        ${badgeCol}
+      </mj-section>
+      <mj-section padding="12px 0 0"><mj-column></mj-column></mj-section>`;
+  } else if (logoPosition === 'top') {
+    headerMjml = `
+      <!-- Top Brand Logo -->
+      <mj-section padding="0 0 24px">
+        <mj-column>
+          <mj-text align="center" font-size="17px" font-weight="900" color="${textHeading}" letter-spacing="2px" padding="0">
+            EXACOAT
+          </mj-text>
+        </mj-column>
+      </mj-section>`;
+  }
+
+  // Banner image
+  let bannerMjml = '';
+  if (options.bannerImageUrl) {
+    bannerMjml = `
+      <!-- Hero Banner Image -->
+      <mj-section padding="0 0 24px">
+        <mj-column>
+          <mj-image src="${escapeHtml(options.bannerImageUrl)}" alt="${escapeHtml(options.bannerImageAlt || 'Exacoat')}" href="${options.bannerLinkUrl ? escapeHtml(options.bannerLinkUrl) : 'https://exacoat.com'}" border-radius="20px" padding="0" width="560px" />
+        </mj-column>
+      </mj-section>`;
+  }
+
+  // Body paragraphs
+  const paragraphs = bodyText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  const bodyParagraphsMjml = paragraphs.map(p => {
+    return `<mj-text font-size="14px" line-height="1.7" color="${textBody}" padding="0 0 12px">
+            ${escapeHtml(p).replace(/\n/g, '<br />')}
+          </mj-text>`;
+  }).join('\n          ');
+
+  // Promo Box
+  let promoMjml = '';
+  if (options.promoCode || options.highlightTitle || options.highlightText) {
+    const pTitle = escapeHtml(options.highlightTitle || (options.promoCode ? 'Exclusive Perk' : 'Special Highlight'));
+    const pText = options.highlightText ? `
+          <mj-text align="center" font-size="13px" line-height="1.6" color="${textBody}" padding="0 0 10px">
+            ${escapeHtml(options.highlightText)}
+          </mj-text>` : '';
+    const pCode = options.promoCode ? `
+          <mj-button background-color="${isDark ? '#1f1f24' : '#ffffff'}" color="${isDark ? '#fbbf24' : '#111111'}" border="${isDark ? '1px solid rgba(245,158,11,0.4)' : '1px solid #e4e4e7'}" font-size="16px" font-weight="800" letter-spacing="2px" border-radius="999px" inner-padding="8px 22px" padding="10px 0 0">
+            ${escapeHtml(options.promoCode)}
+          </mj-button>` : '';
+
+    promoMjml = `
+      <!-- Promo Box -->
+      <mj-section padding="12px 0 24px">
+        <mj-column background-color="${isDark ? '#141419' : '#f9fafb'}" border="${isDark ? '1.5px dashed #f59e0b' : '1.5px dashed #111111'}" border-radius="20px" padding="22px 24px">
+          <mj-text align="center" font-size="15px" font-weight="700" color="${textHeading}" padding="0 0 6px">
+            ${pTitle}
+          </mj-text>
+          ${pText}
+          ${pCode}
+        </mj-column>
+      </mj-section>`;
+  }
+
+  // Feature / Trust Cards Grid
+  let cardsMjml = '';
+  const showGrid = options.showTrustGrid ?? isDark;
+  if (showGrid) {
+    const cards = options.trustCards && options.trustCards.length > 0 ? options.trustCards : DEFAULT_TRUST_CARDS;
+    let cardSections = '';
+
+    for (let i = 0; i < cards.length; i += 2) {
+      const left = cards[i];
+      const right = cards[i + 1];
+
+      const renderCardCol = (c?: TrustFeatureCard) => {
+        if (!c) return '<mj-column width="48%"></mj-column>';
+        const isHighlight = Boolean(c.highlighted);
+        const cardColBg = isDark ? '#121215' : '#fafafa';
+        const cardColBorder = isHighlight
+          ? (isDark ? 'rgba(245,158,11,0.55)' : '#d97706')
+          : (isDark ? 'rgba(255,255,255,0.08)' : '#e5e5e5');
+        const cardTitleColor = isHighlight && isDark ? '#fbbf24' : textHeading;
+
+        return `
+        <mj-column width="48%" background-color="${cardColBg}" border="1px solid ${cardColBorder}" border-radius="20px" padding="18px 16px">
+          <mj-text align="center" font-size="13px" font-weight="bold" color="${cardTitleColor}" padding="0 0 4px">
+            ${escapeHtml(c.title)}
+          </mj-text>
+          <mj-text align="center" font-size="11.5px" line-height="1.6" color="${textBody}" padding="0">
+            ${escapeHtml(c.desc)}
+          </mj-text>
+        </mj-column>`;
+      };
+
+      cardSections += `
+      <mj-section padding="0 0 14px">
+        ${renderCardCol(left)}
+        <mj-column width="4%"></mj-column>
+        ${renderCardCol(right)}
+      </mj-section>`;
+    }
+
+    cardsMjml = `
+      <!-- Trust Feature Grid -->
+      ${cardSections}`;
+  }
+
+  // CTA Buttons
+  let ctaMjml = '';
+  if (options.ctaText && options.ctaUrl) {
+    let secondaryBtn = '';
+    if (options.secondaryCtaText && options.secondaryCtaUrl) {
+      const secBg = isDark ? '#1a1a20' : '#f4f4f5';
+      const secColor = isDark ? '#e4e4e7' : '#18181b';
+      const secBorder = isDark ? '1px solid #27272a' : '1px solid #e4e4e7';
+      secondaryBtn = `
+          <mj-button href="${escapeHtml(options.secondaryCtaUrl)}" background-color="${secBg}" color="${secColor}" border="${secBorder}" font-weight="700" font-size="13.5px" border-radius="999px" inner-padding="12px 26px" padding="12px 0 0">
+            ${escapeHtml(options.secondaryCtaText)}
+          </mj-button>`;
+    }
+
+    ctaMjml = `
+      <!-- Action CTA -->
+      <mj-section padding="16px 0 28px">
+        <mj-column>
+          <mj-button href="${escapeHtml(options.ctaUrl)}" background-color="${btnBg}" color="${btnColor}" font-weight="900" font-size="14.5px" border-radius="999px" inner-padding="15px 38px" text-transform="uppercase" letter-spacing="0.5px">
+            ${escapeHtml(options.ctaText)}
+          </mj-button>
+          ${secondaryBtn}
+        </mj-column>
+      </mj-section>`;
+  }
+
+  // Bottom Logo if logoPosition is bottom
+  let bottomLogoMjml = '';
+  if (!showHeader && logoPosition === 'bottom') {
+    bottomLogoMjml = `
+      <!-- Bottom Logo -->
+      <mj-section padding="0 0 20px">
+        <mj-column>
+          <mj-text align="center" font-size="16px" font-weight="900" color="${textHeading}" letter-spacing="2px" padding="0">
+            EXACOAT
+          </mj-text>
+        </mj-column>
+      </mj-section>`;
+  }
+
+  const unsubscribeUrl = escapeHtml(options.unsubscribeUrl || '{{unsubscribe_url}}');
+  const footerNoteMjml = options.footerNote ? `
+          <mj-text align="center" font-size="12.5px" line-height="1.6" color="${textBody}" padding="0 0 12px">
+            ${escapeHtml(options.footerNote)}
+          </mj-text>` : '';
+
+  return `<mjml>
+  <mj-head>
+    <mj-font name="Plus Jakarta Sans" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&display=swap" />
+    <mj-attributes>
+      <mj-all font-family="Plus Jakarta Sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" />
+      <mj-text font-size="14.5px" color="${textBody}" line-height="1.7" />
+    </mj-attributes>
+  </mj-head>
+  <mj-body background-color="${outerBg}">
+    <!-- Top Webview Link -->
+    <mj-section padding="36px 0 16px">
+      <mj-column>
+        <mj-text align="center" font-size="11px" color="${textMuted}" line-height="1.5">
+          If you cannot see this email properly, please <a href="{{webview_url}}" style="color:${isDark ? '#d4d4d8' : '#71717a'};text-decoration:underline;">click here</a>.
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Main Container Card -->
+    <mj-wrapper background-color="${cardBg}" border-radius="28px" border="1px solid ${cardBorder}" padding="36px 24px 32px">
+      ${headerMjml}
+      ${subPillMjml}
+      ${bannerMjml}
+
+      <!-- Message Content -->
+      <mj-section padding="0 0 8px">
+        <mj-column>
+          <mj-text font-size="26px" font-weight="900" color="${textHeading}" line-height="1.25" letter-spacing="-0.5px" padding="0 0 16px">
+            ${escapeHtml(headline)}
+          </mj-text>
+          <mj-text font-size="15px" font-weight="600" color="${textGreeting}" padding="0 0 12px">
+            ${escapeHtml(greeting)}
+          </mj-text>
+          ${bodyParagraphsMjml}
+        </mj-column>
+      </mj-section>
+
+      ${promoMjml}
+      ${cardsMjml}
+      ${ctaMjml}
+      ${bottomLogoMjml}
+
+      <!-- Footer with Logo on top of Social Links -->
+      <mj-section border-top="1px solid ${dividerColor}" padding="32px 0 16px">
+        <mj-column>
+          <mj-text align="center" font-size="15px" font-weight="900" color="${textHeading}" letter-spacing="2px" padding="0 0 18px">
+            EXACOAT
+          </mj-text>
+          <mj-social font-size="0px" icon-size="16px" mode="horizontal" align="center" padding="0 0 16px" inner-padding="4px">
+            <mj-social-element name="instagram" href="https://instagram.com/exacoat" background-color="#0e0e11" color="#ffffff" padding="4px 8px" />
+            <mj-social-element name="x" href="https://x.com/exacoat" background-color="#0e0e11" color="#ffffff" padding="4px 8px" />
+            <mj-social-element name="youtube" href="https://youtube.com/exacoat" background-color="#0e0e11" color="#ffffff" padding="4px 8px" />
+          </mj-social>
+          ${footerNoteMjml}
+          <mj-text align="center" font-size="11.5px" color="${textMuted}" padding="8px 0 0">
+            &copy; 2016-2026 Exacoat
+          </mj-text>
+          <mj-text align="center" font-size="11px" color="${textMuted}" padding="6px 0 0">
+            <a href="{{webview_url}}" style="color:${isDark ? '#d4d4d8' : '#71717a'};text-decoration:underline;">View in browser</a> &bull;
+            <a href="${unsubscribeUrl}" style="color:${isDark ? '#d4d4d8' : '#71717a'};text-decoration:underline;">Unsubscribe</a>
+          </mj-text>
+        </mj-column>
+      </mj-section>
+    </mj-wrapper>
+  </mj-body>
+</mjml>`;
+}
+
 

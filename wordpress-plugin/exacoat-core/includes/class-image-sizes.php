@@ -589,13 +589,17 @@ class Exacoat_Image_Sizes {
 
 		$res = self::optimize_master_file( $source_file, $force_compress, $min_size_bytes, true );
 
-		if ( $res['success'] && $res['master_compressed'] ) {
-			$metadata = wp_get_attachment_metadata( $attachment_id );
-			if ( is_array( $metadata ) ) {
-				$metadata['filesize'] = $res['current_size'];
-				wp_update_attachment_metadata( $attachment_id, $metadata );
+		if ( $res['success'] ) {
+			update_post_meta( $attachment_id, '_exacoat_optimized_at', current_time( 'mysql' ) );
+			if ( ! empty( $res['master_compressed'] ) ) {
+				update_post_meta( $attachment_id, '_exacoat_master_compressed', 1 );
+				$metadata = wp_get_attachment_metadata( $attachment_id );
+				if ( is_array( $metadata ) ) {
+					$metadata['filesize'] = $res['current_size'];
+					wp_update_attachment_metadata( $attachment_id, $metadata );
+				}
+				clean_post_cache( $attachment_id );
 			}
-			clean_post_cache( $attachment_id );
 		}
 
 		return $res;
@@ -664,14 +668,31 @@ class Exacoat_Image_Sizes {
 		$has_webp      = $webp_file && file_exists( $webp_file );
 		$webp_size_fmt = $has_webp ? size_format( (int) @filesize( $webp_file ), 1 ) : '';
 
-		$master_status_html = sprintf(
-			'<span style="color:%s;font-weight:600;font-size:11px;background:%s;padding:2px 7px;border-radius:4px;border:1px solid %s;">%s%s</span>',
-			$is_large ? '#b45309' : '#059669',
-			$is_large ? '#fffbeb' : '#ecfdf5',
-			$is_large ? '#fde68a' : '#a7f3d0',
-			esc_html( $master_size_fmt ),
-			$is_large ? ' (>500KB)' : ''
-		);
+		if ( $has_webp ) {
+			if ( $is_large ) {
+				$master_status_html = sprintf(
+					'<span style="color:#059669;font-weight:600;font-size:11px;background:#ecfdf5;padding:2px 7px;border-radius:4px;border:1px solid #a7f3d0;" title="Full resolution master preserved. Companion WebP is active for web delivery.">%s (Full-Res Master)</span>',
+					esc_html( $master_size_fmt )
+				);
+			} else {
+				$master_status_html = sprintf(
+					'<span style="color:#059669;font-weight:600;font-size:11px;background:#ecfdf5;padding:2px 7px;border-radius:4px;border:1px solid #a7f3d0;" title="Master file is under 500KB threshold.">%s (Optimal)</span>',
+					esc_html( $master_size_fmt )
+				);
+			}
+		} else {
+			if ( $is_large ) {
+				$master_status_html = sprintf(
+					'<span style="color:#b45309;font-weight:600;font-size:11px;background:#fffbeb;padding:2px 7px;border-radius:4px;border:1px solid #fde68a;" title="File exceeds 500KB and companion WebP is missing. Click Optimize & WebP below.">%s (Needs Optimization)</span>',
+					esc_html( $master_size_fmt )
+				);
+			} else {
+				$master_status_html = sprintf(
+					'<span style="color:#b45309;font-weight:600;font-size:11px;background:#fffbeb;padding:2px 7px;border-radius:4px;border:1px solid #fde68a;" title="WebP companion is missing. Click Optimize & WebP below.">%s (No WebP)</span>',
+					esc_html( $master_size_fmt )
+				);
+			}
+		}
 
 		$webp_status_html = $has_webp
 			? sprintf(
@@ -753,6 +774,7 @@ class Exacoat_Image_Sizes {
 		}
 
 		$regen_btn_text = $has_missing_thumbs ? 'Generate sm & md' : 'Regen sm & md';
+		$opt_btn_text   = $has_webp ? 'Re-optimize & WebP' : 'Optimize & WebP';
 
 		return sprintf(
 			'<div id="exacoat-thumb-status-%1$d" class="exacoat-thumb-status-container" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:9px 11px;margin-top:4px;max-width:340px;">' .
@@ -760,7 +782,7 @@ class Exacoat_Image_Sizes {
 				'<div style="margin-top:8px;padding-top:7px;border-top:1px solid #e5e7eb;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' .
 					'<button type="button" class="button button-small button-primary exacoat-opt-master-btn" data-attachment-id="%1$d" data-nonce="%3$s" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;height:26px;line-height:24px;">' .
 						'<span class="dashicons dashicons-performance" style="font-size:13px;width:13px;height:13px;line-height:13px;"></span>' .
-						'<span>Optimize & WebP</span>' .
+						'<span>%5$s</span>' .
 					'</button>' .
 					'<button type="button" class="button button-small exacoat-regen-thumb-btn" data-attachment-id="%1$d" data-nonce="%3$s" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;height:26px;line-height:24px;">' .
 						'<span class="dashicons dashicons-update" style="font-size:13px;width:13px;height:13px;line-height:13px;"></span>' .
@@ -773,7 +795,8 @@ class Exacoat_Image_Sizes {
 			$attachment_id,
 			$rows_html,
 			esc_attr( $nonce ),
-			esc_html( $regen_btn_text )
+			esc_html( $regen_btn_text ),
+			esc_html( $opt_btn_text )
 		);
 	}
 

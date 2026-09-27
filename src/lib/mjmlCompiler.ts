@@ -11,13 +11,47 @@ export interface MjmlCompilationResult {
 
 export function sanitizeMjmlContent(code: string): string {
   if (!code) return '';
-  // Strip illegal attributes from <mj-text ...> (border, border-radius, background, background-color)
-  return code.replace(/<mj-text\b([^>]*?)>/gi, (_match, attrs) => {
+  let sanitized = code;
+
+  // 1. Strip illegal attributes from <mj-text ...> (border, border-radius, background, background-color)
+  sanitized = sanitized.replace(/<mj-text\b([^>]*?)>/gi, (_match, attrs) => {
     const cleanAttrs = attrs
       .replace(/\s+(?:border|border-radius|border-top|border-bottom|border-left|border-right)=["'][^"']*["']/gi, '')
       .replace(/\s+(?:background|background-color)=["'][^"']*["']/gi, '');
     return `<mj-text${cleanAttrs}>`;
   });
+
+  // 2. Fix illegal direct children of <mj-wrapper>:
+  // In MJML, <mj-wrapper> can only contain <mj-section> or <mj-raw>.
+  // If an AI or user writes <mj-button>, <mj-text>, <mj-image>, <mj-social>, or <mj-divider> directly
+  // inside <mj-wrapper>, auto-wrap it into <mj-section padding="0 0 16px"><mj-column>...</mj-column></mj-section>!
+  sanitized = sanitized.replace(/(<mj-wrapper\b[^>]*>)([\s\S]*?)(<\/mj-wrapper>)/gi, (_match, openWrapper, innerContent, closeWrapper) => {
+    const tokens = innerContent.split(/(<mj-section\b[\s\S]*?<\/mj-section>|<mj-raw\b[\s\S]*?<\/mj-raw>)/gi);
+    const fixedTokens = tokens.map((token: string) => {
+      const trimmed = token.trim();
+      if (!trimmed || trimmed.startsWith('<mj-section') || trimmed.startsWith('<mj-raw')) {
+        return token;
+      }
+      return token.replace(/(<(?:mj-button|mj-text|mj-image|mj-social|mj-divider)\b[\s\S]*?<\/(?:mj-button|mj-text|mj-image|mj-social|mj-divider)>)/gi, (elem) => {
+        return `\n<mj-section padding="0 0 16px">\n  <mj-column>\n    ${elem}\n  </mj-column>\n</mj-section>\n`;
+      });
+    });
+    return openWrapper + fixedTokens.join('') + closeWrapper;
+  });
+
+  // 3. Compact social icons so they are sleek, small (16px), and elegantly spaced
+  sanitized = sanitized.replace(/<mj-social\b([^>]*?)>/gi, (_match, attrs) => {
+    let cleanAttrs = attrs;
+    if (!/icon-size=["'][^"']+["']/i.test(cleanAttrs) || /icon-size=["']0(?:px)?["']/i.test(cleanAttrs)) {
+      cleanAttrs = `${cleanAttrs} icon-size="16px"`;
+    }
+    if (!/font-size=["'][^"']+["']/i.test(cleanAttrs)) {
+      cleanAttrs = `${cleanAttrs} font-size="0px"`;
+    }
+    return `<mj-social${cleanAttrs}>`;
+  });
+
+  return sanitized;
 }
 
 export async function compileMjmlToHtml(mjmlContent: string): Promise<MjmlCompilationResult> {

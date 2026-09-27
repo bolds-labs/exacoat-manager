@@ -58,7 +58,7 @@ import {
   AcumbamailList,
   WordPressPluginSettings 
 } from '../../lib/wordpressBridge';
-import { renderMarketingEmailHtml, MarketingEmailOptions, TrustFeatureCard } from '../../lib/emailRenderer';
+import { renderMarketingEmailHtml, renderMarketingEmailMjml, replaceNamePlaceholders, MarketingEmailOptions, TrustFeatureCard } from '../../lib/emailRenderer';
 import { compileMjmlToHtml, isMjmlMarkup } from '../../lib/mjmlCompiler';
 
 export type AudienceType = 'subscribers' | 'affiliates' | 'customer';
@@ -185,7 +185,7 @@ export const BUILTIN_PRESETS: MarketingPreset[] = [
     badgeText: 'PARTNER UPDATE',
     badgeVariant: 'purple',
     headline: 'Exclusive Creator Preview',
-    recipientGreeting: 'Hi Creator,',
+    recipientGreeting: 'Hi {name|Creator},',
     subPillNotice: 'Exacoat Creator Hub • Priority Dispatch Active',
     bodyText: 'As an official Exacoat partner, you get early access to our upcoming texture line before public release.\n\nReply directly to this email or visit your creator dashboard to request complimentary sample units for your upcoming content.\n\nWe have also enabled a seasonal 5% commission booster across all sales through your custom code.',
     showPromoBox: true,
@@ -251,7 +251,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
   const [preheader, setPreheader] = useState('Explore our new precision skins cut to the millimeter.');
   const [badgeText, setBadgeText] = useState('NEW RELEASE');
   const [badgeVariant, setBadgeVariant] = useState<'amber' | 'emerald' | 'blue' | 'purple' | 'zinc'>('amber');
-  const [recipientGreeting, setRecipientGreeting] = useState('Hi there,');
+  const [recipientGreeting, setRecipientGreeting] = useState('Hi {name|there},');
   const [headline, setHeadline] = useState('Precision Fit for Your Setup');
   const [bodyText, setBodyText] = useState(
     'You spent weeks choosing a device engineered to the sub-millimeter, only to face two frustrating options: bury it inside an awkward plastic case, or leave it bare to collect scratches from desk grit and pocket keys.\n\nExacoat gives you a clean third path. Authentic cast vinyl, 360-degree millimeter precision, and real tactile texture that keeps your device looking pristine without adding bulk.\n\nProtect your hardware while keeping the exact ergonomics you bought it for.'
@@ -345,106 +345,20 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
   // Custom Code Studio State (Supports MJML and HTML)
   const [codeFormat, setCodeFormat] = useState<'mjml' | 'html'>('mjml');
   const [customHtmlCode, setCustomHtmlCode] = useState<string>(() => {
-    return `<mjml>
-  <mj-head>
-    <mj-font name="Plus Jakarta Sans" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&display=swap" />
-    <mj-attributes>
-      <mj-all font-family="Plus Jakarta Sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" />
-      <mj-text font-size="14.5px" color="#a1a1aa" line-height="1.7" />
-    </mj-attributes>
-  </mj-head>
-  <mj-body background-color="#050507">
-    <!-- Top Webview Link with generous spacing -->
-    <mj-section padding="40px 0 18px">
-      <mj-column>
-        <mj-text align="center" font-size="11px" color="#71717a" line-height="1.5">
-          If you cannot see this email properly, please <a href="{{webview_url}}" style="color:#a1a1aa;text-decoration:underline;">click here</a>.
-        </mj-text>
-      </mj-column>
-    </mj-section>
-
-    <!-- Main Container Card (Rounded 28px) -->
-    <mj-wrapper background-color="#0e0e11" border-radius="28px" border="1px solid #1f1f24" padding="36px 24px 32px">
-      <!-- Sub-Pill Notice Capsule (Left-aligned, Borderless, Subtle, Centered) -->
-      <mj-section padding="0 0 16px">
-        <mj-column>
-          <mj-button background-color="rgba(255,255,255,0.06)" color="#a1a1aa" border-radius="9999px" font-size="9.5px" font-weight="500" letter-spacing="1.2px" text-transform="uppercase" align="left" inner-padding="4px 12px" padding="0">
-            Limited Time Only &bull; Free Replacement Guarantee
-          </mj-button>
-        </mj-column>
-      </mj-section>
-
-      <!-- Message Content -->
-      <mj-section padding="0 0 16px">
-        <mj-column>
-          <mj-text font-size="24px" font-weight="800" color="#ffffff" line-height="1.3" padding="0 0 12px">
-            Engineered Precision. Pure Tactile Feel.
-          </mj-text>
-          <mj-text font-size="15px" font-weight="600" color="#e4e4e7" padding="0 0 12px">
-            Hi Customer,
-          </mj-text>
-          <mj-text padding="0 0 12px">
-            We measured every curve, bezel, and port to create a skin that fits like a second skin.
-          </mj-text>
-          <mj-text padding="0 0 12px">
-            Choose from our signature textured materials: Matrix, Black Camo, Slate, Honeycomb, and Matte Black.
-          </mj-text>
-        </mj-column>
-      </mj-section>
-
-      <!-- Trust Cards (Rounded 20px) -->
-      <mj-section padding="8px 0 16px">
-        <mj-column width="48%" background-color="#121215" border="1px solid rgba(245,158,11,0.55)" border-radius="20px" padding="16px">
-          <mj-text align="center" font-size="13px" font-weight="bold" color="#fbbf24" padding="0 0 4px">
-            Installation Warranty
-          </mj-text>
-          <mj-text align="center" font-size="11.5px" padding="0">
-            If installation fails within 2 days after receipt, we replace it with a new one.
-          </mj-text>
-        </mj-column>
-        <mj-column width="4%"></mj-column>
-        <mj-column width="48%" background-color="#121215" border="1px solid rgba(255,255,255,0.08)" border-radius="20px" padding="16px">
-          <mj-text align="center" font-size="13px" font-weight="bold" color="#ffffff" padding="0 0 4px">
-            Scratch &amp; Mold Resistant
-          </mj-text>
-          <mj-text align="center" font-size="11.5px" padding="0">
-            Shields surfaces from scratches and moisture buildup that degrade gadget finishes.
-          </mj-text>
-        </mj-column>
-      </mj-section>
-
-      <!-- CTA Button -->
-      <mj-section padding="16px 0 28px">
-        <mj-column>
-          <mj-button href="https://exacoat.com/shop" background-color="#f59e0b" color="#000000" font-weight="900" font-size="14.5px" border-radius="999px" inner-padding="15px 38px">
-            ORDER YOUR SKIN
-          </mj-button>
-        </mj-column>
-      </mj-section>
-
-      <!-- Footer with Logo on top of Social Links -->
-      <mj-section border-top="1px solid #1a1a1f" padding="32px 0 16px">
-        <mj-column>
-          <mj-text align="center" font-size="16px" font-weight="900" color="#ffffff" letter-spacing="2px" padding="0 0 20px">
-            EXACOAT
-          </mj-text>
-          <mj-social font-size="12px" icon-size="0" mode="horizontal" align="center" padding="0 0 16px">
-            <mj-social-element href="https://instagram.com/exacoat" background-color="rgba(255,255,255,0.06)" color="#e4e4e7" border-radius="999px" padding="5px 14px">Instagram</mj-social-element>
-            <mj-social-element href="https://x.com/exacoat" background-color="rgba(255,255,255,0.06)" color="#e4e4e7" border-radius="999px" padding="5px 14px">X</mj-social-element>
-            <mj-social-element href="https://youtube.com/@exacoat" background-color="rgba(255,255,255,0.06)" color="#e4e4e7" border-radius="999px" padding="5px 14px">YouTube</mj-social-element>
-          </mj-social>
-          <mj-text align="center" font-size="11.5px" color="#71717a" padding="8px 0 0">
-            &copy; 2016-2026 Exacoat
-          </mj-text>
-          <mj-text align="center" font-size="11px" color="#71717a" padding="6px 0 0">
-            <a href="{{webview_url}}" style="color:#a1a1aa;text-decoration:underline;">View in browser</a> &bull;
-            <a href="{{unsubscribe_url}}" style="color:#a1a1aa;text-decoration:underline;">Unsubscribe</a>
-          </mj-text>
-        </mj-column>
-      </mj-section>
-    </mj-wrapper>
-  </mj-body>
-</mjml>`;
+    return renderMarketingEmailMjml({
+      theme: 'dark',
+      subject: 'The ultimate skin for your new device is here',
+      preheaderText: 'Explore millimeter-precise protection for the latest flagship releases.',
+      headline: 'Engineered Precision. Pure Tactile Feel.',
+      recipientGreeting: 'Hi {name|there},',
+      subPillNotice: 'Limited Time Only • Free Replacement Guarantee',
+      bodyText: 'We measured every curve, bezel, and port to create a skin that fits like a second skin.\n\nChoose from our signature textured materials: Matrix, Black Camo, Slate, Honeycomb, and Matte Black.\n\nOrder today to protect your device against daily micro-scratches from day one.',
+      ctaText: 'ORDER YOUR SKIN',
+      ctaUrl: 'https://exacoat.com/shop',
+      primaryCtaColor: 'amber',
+      showTrustGrid: true,
+      unsubscribeUrl: '{{unsubscribe_url}}',
+    });
   });
   const [compiledHtml, setCompiledHtml] = useState<string>('');
   const [mjmlErrors, setMjmlErrors] = useState<string[]>([]);
@@ -720,6 +634,35 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     setShowTrustGrid(p.showTrustGrid);
     if (p.bannerImageUrl) setBannerImageUrl(p.bannerImageUrl);
     if (p.bannerAspectRatio) setBannerAspectRatio(p.bannerAspectRatio);
+
+    if (composerMode === 'code') {
+      const presetMjml = renderMarketingEmailMjml({
+        theme: p.theme,
+        subject: p.subject,
+        preheaderText: p.preheader,
+        showHeader: p.showHeader,
+        showBadge: p.showBadge,
+        logoPosition: p.logoPosition,
+        badgeText: p.badgeText,
+        badgeVariant: p.badgeVariant,
+        headline: p.headline,
+        recipientGreeting: p.recipientGreeting,
+        subPillNotice: p.subPillNotice,
+        bodyText: p.bodyText,
+        highlightTitle: p.promoTitle,
+        highlightText: p.promoText,
+        promoCode: p.promoCode,
+        ctaText: p.ctaText,
+        ctaUrl: p.ctaUrl,
+        primaryCtaColor: p.primaryCtaColor,
+        showTrustGrid: p.showTrustGrid,
+        bannerImageUrl: p.bannerImageUrl,
+        bannerAspectRatio: p.bannerAspectRatio,
+      });
+      setCustomHtmlCode(presetMjml);
+      setCodeFormat('mjml');
+    }
+
     setShowReferencesModal(false);
     showToast('success', 'Preset Applied', `Loaded "${p.name}".`);
   };
@@ -780,6 +723,26 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     } catch {}
   };
 
+  // Dynamic recipient first name for live studio preview
+  const previewRecipientName = useMemo(() => {
+    if (audienceType === 'affiliates') {
+      if (selectedAffiliateId) {
+        const aff = affiliates.find(a => String(a.id) === selectedAffiliateId);
+        if (aff) {
+          return (aff.first_name || aff.name?.split(' ')[0] || aff.username?.split(' ')[0] || 'William').trim();
+        }
+      }
+      if (affiliates.length > 0) {
+        const first = affiliates[0];
+        return (first.first_name || first.name?.split(' ')[0] || first.username?.split(' ')[0] || 'William').trim();
+      }
+      return 'William';
+    } else if (audienceType === 'customer') {
+      return (customerName?.split(' ')[0] || 'William').trim();
+    }
+    return 'William';
+  }, [audienceType, affiliates, selectedAffiliateId, customerName]);
+
   // Computed Marketing Email HTML Options
   const emailOptions: MarketingEmailOptions = useMemo(() => ({
     theme: emailTheme,
@@ -791,7 +754,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     badgeText,
     badgeVariant,
     headline,
-    recipientGreeting: audienceType === 'affiliates' ? 'Hi Creator,' : recipientGreeting,
+    recipientGreeting: recipientGreeting || (audienceType === 'affiliates' ? 'Hi {name|Creator},' : 'Hi {name|there},'),
     bannerImageUrl: bannerImageUrl || undefined,
     bannerImageAlt,
     bannerLinkUrl: bannerLinkUrl || undefined,
@@ -809,6 +772,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     trustCards: customCards.length > 0 ? customCards : undefined,
     showTrustGrid,
     unsubscribeUrl: '{{unsubscribe_url}}',
+    recipientName: previewRecipientName,
   }), [
     emailTheme,
     subject,
@@ -839,11 +803,40 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     secondaryCtaUrl,
     customCards,
     showTrustGrid,
+    previewRecipientName,
   ]);
 
+  // 1. Single source of truth: generate semantic MJML from visual studio options
+  const visualMjml = useMemo(() => {
+    return renderMarketingEmailMjml(emailOptions);
+  }, [emailOptions]);
+
+  // 2. Real-time compilation of Visual MJML to responsive HTML
+  const [visualCompiledHtml, setVisualCompiledHtml] = useState<string>('');
+  const [isCompilingVisualMjml, setIsCompilingVisualMjml] = useState<boolean>(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    setIsCompilingVisualMjml(true);
+    compileMjmlToHtml(visualMjml).then((res) => {
+      if (!isMounted) return;
+      setIsCompilingVisualMjml(false);
+      if (res.success && res.html) {
+        setVisualCompiledHtml(res.html);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [visualMjml]);
+
+  // Fast fallback renderer during initial mount/compile
   const renderedEmail = useMemo(() => {
     return renderMarketingEmailHtml(emailOptions);
   }, [emailOptions]);
+
+  // Primary HTML for preview & dispatch: compiled MJML HTML with graceful fallback
+  const activeVisualHtml = visualCompiledHtml || renderedEmail.html;
 
   // Recipient Count Calculator
   const recipientCountLabel = useMemo(() => {
@@ -870,15 +863,19 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
       return;
     }
 
-    const contentToSend = composerMode === 'code' ? (compiledHtml || customHtmlCode) : renderedEmail.html;
+    const contentToSend = composerMode === 'code' ? (compiledHtml || customHtmlCode) : activeVisualHtml;
     setIsSendingTest(true);
     const fromEmail = settings.acumbamail_from_email || 'sales@exacoat.com';
     const fromName = settings.acumbamail_from_name || 'Exacoat';
 
+    const testName = 'William';
+    const personalizedSubject = replaceNamePlaceholders(`[TEST] ${subject}`, testName);
+    const personalizedBody = replaceNamePlaceholders(contentToSend, testName);
+
     const res = await sendAcumbamailSingleEmailDirect({
       toEmail: testEmailAddress,
-      subject: `[TEST] ${subject}`,
-      bodyHtml: contentToSend,
+      subject: personalizedSubject,
+      bodyHtml: personalizedBody,
       fromEmail,
       fromName,
       tokenOverride: settings.acumbamail_token,
@@ -896,7 +893,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
   const handleDispatchCampaign = async () => {
     const fromEmail = settings.acumbamail_from_email || 'sales@exacoat.com';
     const fromName = settings.acumbamail_from_name || 'Exacoat';
-    const contentToSend = composerMode === 'code' ? (compiledHtml || customHtmlCode) : renderedEmail.html;
+    const contentToSend = composerMode === 'code' ? (compiledHtml || customHtmlCode) : activeVisualHtml;
 
     setIsSending(true);
 
@@ -907,12 +904,15 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
         return;
       }
 
+      const acumbaSubject = replaceNamePlaceholders(subject, '*|FNAME|*');
+      const acumbaContent = replaceNamePlaceholders(contentToSend, '*|FNAME|*');
+
       const res = await sendAcumbamailCampaignDirect({
         name: campaignName,
         fromName,
         fromEmail,
-        subject,
-        contentHtml: contentToSend,
+        subject: acumbaSubject,
+        contentHtml: acumbaContent,
         listIds: [selectedListId],
         tokenOverride: settings.acumbamail_token,
       });
@@ -926,17 +926,17 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
         showToast('error', 'Campaign Failed', res.error || 'Acumbamail campaign dispatch failed.');
       }
     } else if (audienceType === 'affiliates') {
-      let targets: string[] = [];
+      let targetAffiliates: any[] = [];
       if (affiliateFilter === 'all') {
-        targets = affiliates.map(a => a.email).filter(Boolean);
+        targetAffiliates = affiliates.filter(a => Boolean(a.email));
       } else if (affiliateFilter === 'active') {
-        targets = affiliates.filter(a => a.status === 'active').map(a => a.email).filter(Boolean);
+        targetAffiliates = affiliates.filter(a => a.status === 'active' && Boolean(a.email));
       } else {
         const aff = affiliates.find(a => String(a.id) === selectedAffiliateId);
-        if (aff?.email) targets = [aff.email];
+        if (aff?.email) targetAffiliates = [aff];
       }
 
-      if (targets.length === 0) {
+      if (targetAffiliates.length === 0) {
         showToast('error', 'No Affiliates Found', 'No affiliate email addresses available for dispatch.');
         setIsSending(false);
         return;
@@ -945,11 +945,15 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
       let sentCount = 0;
       let failCount = 0;
 
-      for (const email of targets) {
+      for (const aff of targetAffiliates) {
+        const creatorFirstName = (aff.first_name || aff.name?.split(' ')[0] || aff.username?.split(' ')[0] || '').trim();
+        const personalizedSubject = replaceNamePlaceholders(subject, creatorFirstName);
+        const personalizedBody = replaceNamePlaceholders(contentToSend, creatorFirstName);
+
         const res = await sendAcumbamailSingleEmailDirect({
-          toEmail: email,
-          subject,
-          bodyHtml: contentToSend,
+          toEmail: aff.email,
+          subject: personalizedSubject,
+          bodyHtml: personalizedBody,
           fromEmail,
           fromName,
           tokenOverride: settings.acumbamail_token,
@@ -974,10 +978,14 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
         return;
       }
 
+      const custFirstName = (customerName?.split(' ')[0] || '').trim();
+      const personalizedSubject = replaceNamePlaceholders(subject, custFirstName);
+      const personalizedBody = replaceNamePlaceholders(contentToSend, custFirstName);
+
       const res = await sendAcumbamailSingleEmailDirect({
         toEmail: customerEmail,
-        subject,
-        bodyHtml: contentToSend,
+        subject: personalizedSubject,
+        bodyHtml: personalizedBody,
         fromEmail,
         fromName,
         tokenOverride: settings.acumbamail_token,
@@ -1028,14 +1036,16 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
           >
             <Palette className="w-3.5 h-3.5" />
             <span>Visual Studio</span>
+            <span className="hidden sm:inline-block text-[9.5px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-black/10 dark:bg-black/20 text-black dark:text-zinc-900">
+              MJML 4
+            </span>
           </button>
           <button
             type="button"
             onClick={() => {
               setComposerMode('code');
-              if (!customHtmlCode || customHtmlCode.trim() === '') {
-                setCustomHtmlCode(renderedEmail.html);
-              }
+              setCodeFormat('mjml');
+              setCustomHtmlCode(visualMjml);
             }}
             className={`flex-1 lg:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
               composerMode === 'code'
@@ -1044,7 +1054,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
             }`}
           >
             <Code className="w-3.5 h-3.5" />
-            <span>MJML / Code</span>
+            <span>MJML Code</span>
           </button>
         </div>
 
@@ -1104,18 +1114,34 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
           ))}
         </div>
 
-        {composerMode === 'code' && (
+        {composerMode === 'code' ? (
           <button
             type="button"
             onClick={() => {
-              setCustomHtmlCode(renderedEmail.html);
-              showToast('info', 'Code Synced', 'Overwrote HTML code with current visual layout.');
+              setCustomHtmlCode(visualMjml);
+              setCodeFormat('mjml');
+              showToast('info', 'MJML Synced', 'Synced current visual layout into the MJML editor.');
             }}
             className="text-[11px] font-semibold text-zinc-500 hover:text-amber-500 flex items-center gap-1 transition-colors shrink-0"
-            title="Sync current visual builder layout into the HTML editor"
+            title="Sync current visual builder layout into the MJML editor"
           >
             <RotateCw className="w-3 h-3" />
-            <span>Sync from Visual</span>
+            <span>Sync MJML from Visual</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              setCustomHtmlCode(visualMjml);
+              setCodeFormat('mjml');
+              setComposerMode('code');
+              showToast('info', 'MJML Editor Opened', 'Loaded visual layout into the MJML code studio.');
+            }}
+            className="text-[11px] font-semibold text-zinc-500 hover:text-amber-500 flex items-center gap-1 transition-colors shrink-0"
+            title="Open and edit the generated MJML markup directly"
+          >
+            <Code className="w-3 h-3" />
+            <span>Inspect &amp; Edit MJML</span>
           </button>
         )}
       </div>
@@ -1435,16 +1461,38 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                     </div>
 
                     <div>
-                      <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">
-                        Greeting
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
+                          Greeting
+                        </label>
+                        <span className="text-[10px] text-zinc-400 font-mono">
+                          Supports {'{name|fallback}'}
+                        </span>
+                      </div>
                       <Input
                         type="text"
                         value={recipientGreeting}
                         onChange={(e) => setRecipientGreeting(e.target.value)}
-                        placeholder="Hi there,"
+                        placeholder="Hi {name|there},"
                         className="text-xs"
                       />
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        <span className="text-[10px] text-zinc-400">Quick insert:</span>
+                        <button
+                          type="button"
+                          onClick={() => setRecipientGreeting('Hi {name|there},')}
+                          className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-zinc-100 hover:bg-zinc-200 dark:bg-white/10 dark:hover:bg-white/15 text-amber-600 dark:text-amber-400 transition-colors"
+                        >
+                          Hi {'{name|there}'},
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRecipientGreeting('Hi {name|Creator},')}
+                          className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-zinc-100 hover:bg-zinc-200 dark:bg-white/10 dark:hover:bg-white/15 text-amber-600 dark:text-amber-400 transition-colors"
+                        >
+                          Hi {'{name|Creator}'},
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -2618,11 +2666,12 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
 
                 <div className="p-3 rounded-xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200 dark:border-white/05 text-[11px] text-zinc-500 space-y-1">
                   <p className="font-semibold text-zinc-700 dark:text-zinc-300">
-                    {codeFormat === 'mjml' ? 'Supported MJML Placeholders & Tags:' : 'Supported Acumbamail placeholders:'}
+                    Supported Personalization &amp; Merge Tags:
                   </p>
-                  <p className="font-mono text-[10px]">
-                    <code className="text-amber-500">{`{{webview_url}}`}</code> - View in browser link &nbsp;&bull;&nbsp; 
-                    <code className="text-amber-500">{`{{unsubscribe_url}}`}</code> - Required Unsubscribe link
+                  <p className="font-mono text-[10px] flex flex-wrap gap-x-3 gap-y-1">
+                    <span><code className="text-amber-500 font-semibold">{`{name|there}`}</code> &ndash; Recipient first name with fallback</span>
+                    <span><code className="text-amber-500 font-semibold">{`{{webview_url}}`}</code> &ndash; Browser view link</span>
+                    <span><code className="text-amber-500 font-semibold">{`{{unsubscribe_url}}`}</code> &ndash; Required Unsubscribe link</span>
                   </p>
                 </div>
               </GlassCard>
@@ -2638,6 +2687,10 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
               <div className="flex items-center gap-2">
                 <Eye className="w-4 h-4 text-amber-500" />
                 <span className="text-xs font-bold text-zinc-900 dark:text-white">Live Email Preview</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold border border-emerald-500/20 flex items-center gap-1">
+                  <span className={`w-1.5 h-1.5 rounded-full ${isCompilingVisualMjml || isCompilingMjml ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
+                  <span>{isCompilingVisualMjml || isCompilingMjml ? 'Compiling MJML...' : 'MJML 4 Engine'}</span>
+                </span>
               </div>
 
               {/* Viewport Switcher */}
@@ -2673,12 +2726,16 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
             <div className="bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200 dark:border-white/05 rounded-xl p-2.5 text-xs mb-3 space-y-1">
               <div className="flex items-center gap-2">
                 <span className="text-zinc-400 font-semibold text-[10px] uppercase">Subject:</span>
-                <span className="font-bold text-zinc-900 dark:text-white truncate">{subject}</span>
+                <span className="font-bold text-zinc-900 dark:text-white truncate">
+                  {replaceNamePlaceholders(subject, previewRecipientName)}
+                </span>
               </div>
               {preheader && (
                 <div className="flex items-center gap-2">
                   <span className="text-zinc-400 font-semibold text-[10px] uppercase">Preview:</span>
-                  <span className="text-zinc-500 dark:text-zinc-400 truncate text-[11px]">{preheader}</span>
+                  <span className="text-zinc-500 dark:text-zinc-400 truncate text-[11px]">
+                    {replaceNamePlaceholders(preheader, previewRecipientName)}
+                  </span>
                 </div>
               )}
             </div>
@@ -2692,7 +2749,10 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
               >
                 <iframe
                   title="Marketing Email Preview"
-                  srcDoc={composerMode === 'code' ? (compiledHtml || customHtmlCode) : renderedEmail.html}
+                  srcDoc={replaceNamePlaceholders(
+                    composerMode === 'code' ? (compiledHtml || customHtmlCode) : activeVisualHtml,
+                    previewRecipientName
+                  )}
                   className="w-full h-full min-h-[640px] border-0"
                   sandbox="allow-same-origin"
                 />

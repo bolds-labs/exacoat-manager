@@ -2444,36 +2444,54 @@ ARCHITECTURAL SPECIFICATIONS (${isMjml ? 'MJML' : 'HTML'} DESIGN):
      </div>
    </mj-raw>
 5. Sub-Pill Notice Capsule:
-   - Left-aligned, borderless pill capsule with subtle typography:
-     <mj-button background-color="${isDark ? 'rgba(255,255,255,0.06)' : '#f1f1f4'}" color="${isDark ? '#a1a1aa' : '#71717a'}" border-radius="9999px" font-size="9.5px" font-weight="500" letter-spacing="1.2px" text-transform="uppercase" align="left" inner-padding="4px 12px" padding="0 0 16px" href="#">LIMITED TIME ONLY &bull; COMPLIMENTARY REPLACEMENT</mj-button>
-6. Display Headline & Witty Story:
-   - Bold display headline: font-size="24px", font-weight="800", color="${isDark ? '#ffffff' : '#111111'}"
-   - 2 brief paragraphs capturing the Exacoat irony: millimeter precision hardware vs bulky cases.
+   - Left-aligned, borderless pill capsule (MUST be wrapped in mj-section and mj-column):
+     <mj-section padding="0 0 16px">
+       <mj-column>
+         <mj-button background-color="${isDark ? 'rgba(255,255,255,0.06)' : '#f1f1f4'}" color="${isDark ? '#a1a1aa' : '#71717a'}" border-radius="9999px" font-size="9.5px" font-weight="500" letter-spacing="1.2px" text-transform="uppercase" align="left" inner-padding="4px 12px" padding="0" href="#">LIMITED TIME ONLY &bull; COMPLIMENTARY REPLACEMENT</mj-button>
+       </mj-column>
+     </mj-section>
+6. Display Headline & Clean Story Typography:
+   - Bold display headline: font-size="26px", font-weight="900", color="${isDark ? '#ffffff' : '#111111'}", line-height="1.25", letter-spacing="-0.5px", padding="0 0 16px"
+   - Recipient greeting supporting first-name personalization:
+     <mj-text font-size="15px" font-weight="600" color="${isDark ? '#ffffff' : '#111111'}" padding="0 0 12px">Hi {name|there},</mj-text>
+   - Breathable, high-contrast paragraphs (CRITICAL: each paragraph MUST be its own separate <mj-text font-size="14px" line-height="1.7" color="${isDark ? '#a1a1aa' : '#52525b'}" padding="0 0 14px"> block, NEVER a single squished wall of text!).
 7. COMPLEX CARD SECTIONS (MANDATORY - RICH 2-COLUMN CARDS):
    - 2-Column Feature / Spec / Comparison Cards:
      <mj-section padding="8px 0 16px">
        <mj-column width="48%" background-color="${isDark ? '#121215' : '#fafafa'}" border="1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e5e5'}" border-radius="20px" padding="16px">
          <mj-text align="center" font-size="13px" font-weight="bold" color="${isDark ? '#fbbf24' : '#111111'}" padding="0 0 6px">Feature Title</mj-text>
-         <mj-text align="center" font-size="11.5px" color="${isDark ? '#a1a1aa' : '#52525b'}" padding="0">Concise feature benefit description.</mj-text>
+         <mj-text align="center" font-size="11.5px" color="${isDark ? '#a1a1aa' : '#52525b'}" line-height="1.6" padding="0">Concise feature benefit description.</mj-text>
        </mj-column>
        <mj-column width="4%"></mj-column>
        <mj-column width="48%" background-color="${isDark ? '#121215' : '#fafafa'}" border="1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e5e5'}" border-radius="20px" padding="16px">
          <mj-text align="center" font-size="13px" font-weight="bold" color="${isDark ? '#ffffff' : '#111111'}" padding="0 0 6px">Tactile Grip</mj-text>
-         <mj-text align="center" font-size="11.5px" color="${isDark ? '#a1a1aa' : '#52525b'}" padding="0">True 3D texture depth, zero bulk added.</mj-text>
+         <mj-text align="center" font-size="11.5px" color="${isDark ? '#a1a1aa' : '#52525b'}" line-height="1.6" padding="0">True 3D texture depth, zero bulk added.</mj-text>
        </mj-column>
      </mj-section>
 8. Call to Action Button:
-   - High-contrast pill button (<mj-button href="https://exacoat.com/shop" background-color="#f59e0b" color="#000000" font-weight="900" font-size="14.5px" border-radius="999px" inner-padding="15px 38px">ORDER YOUR SKIN</mj-button>)
+   - High-contrast pill button in its own section:
+     <mj-section padding="16px 0 28px">
+       <mj-column>
+         <mj-button href="https://exacoat.com/shop" background-color="#f59e0b" color="#000000" font-weight="900" font-size="14.5px" border-radius="999px" inner-padding="15px 38px">ORDER YOUR SKIN</mj-button>
+       </mj-column>
+     </mj-section>
 9. Footer:
-   - Social links: Instagram, X, YouTube (<mj-social mode="horizontal" align="center">...)
+   - Brand logo SVG followed by small, compact social links:
+     <mj-social font-size="0px" icon-size="16px" mode="horizontal" align="center" padding="0 0 16px" inner-padding="4px">
+       <mj-social-element name="instagram" href="https://instagram.com/exacoat" background-color="${isDark ? '#0e0e11' : '#ffffff'}" color="${isDark ? '#ffffff' : '#111111'}" padding="4px 8px" />
+       <mj-social-element name="x" href="https://x.com/exacoat" background-color="${isDark ? '#0e0e11' : '#ffffff'}" color="${isDark ? '#ffffff' : '#111111'}" padding="4px 8px" />
+       <mj-social-element name="youtube" href="https://youtube.com/exacoat" background-color="${isDark ? '#0e0e11' : '#ffffff'}" color="${isDark ? '#ffffff' : '#111111'}" padding="4px 8px" />
+     </mj-social>
    - &copy; 2016-2026 Exacoat
    - Acumbamail placeholders: <a href="{{webview_url}}">View in browser</a> and <a href="{{unsubscribe_url}}">Unsubscribe</a>
 10. Bottom Spacing Spacer:
    - After the main </mj-wrapper>, include a bottom spacer section so the card never touches the bottom:
      <mj-section padding="0 0 60px"></mj-section>
 11. CRITICAL MJML VALIDATION RULES:
+   - STRICT HIERARCHY: <mj-wrapper> can ONLY contain <mj-section> or <mj-raw>. NEVER place <mj-button>, <mj-text>, or <mj-social> directly inside <mj-wrapper>! Every content element must be inside an <mj-column> within an <mj-section>.
    - NEVER use 'border' or 'border-radius' on <mj-text>. It is strictly illegal in MJML.
    - For buttons or pills, use <mj-button> or HTML <span style="..."> inside <mj-text>.
+   - Always ensure every story paragraph is in its own <mj-text> with line-height="1.7" so text never looks cramped or squished.
 12. Language: ${langPrompt}.
 
 USER DESIGN REQUEST:
@@ -2505,6 +2523,21 @@ Format your response strictly as valid, raw JSON (no markdown formatting, no cod
           .replace(/\s+(?:border|border-radius|border-top|border-bottom|border-left|border-right)=["'][^"']*["']/gi, '')
           .replace(/\s+(?:background|background-color)=["'][^"']*["']/gi, '');
         return `<mj-text${cleanAttrs}>`;
+      });
+
+      // Auto-wrap any orphaned mj-button, mj-text, mj-social directly inside mj-wrapper
+      cleanHtml = cleanHtml.replace(/(<mj-wrapper\b[^>]*>)([\s\S]*?)(<\/mj-wrapper>)/gi, (_match: string, openWrapper: string, innerContent: string, closeWrapper: string) => {
+        const tokens = innerContent.split(/(<mj-section\b[\s\S]*?<\/mj-section>|<mj-raw\b[\s\S]*?<\/mj-raw>)/gi);
+        const fixedTokens = tokens.map((token: string) => {
+          const trimmed = token.trim();
+          if (!trimmed || trimmed.startsWith('<mj-section') || trimmed.startsWith('<mj-raw')) {
+            return token;
+          }
+          return token.replace(/(<(?:mj-button|mj-text|mj-image|mj-social|mj-divider)\b[\s\S]*?<\/(?:mj-button|mj-text|mj-image|mj-social|mj-divider)>)/gi, (elem) => {
+            return `\n<mj-section padding="0 0 16px">\n  <mj-column>\n    ${elem}\n  </mj-column>\n</mj-section>\n`;
+          });
+        });
+        return openWrapper + fixedTokens.join('') + closeWrapper;
       });
 
       // Replace plain-text EXACOAT with official SVG logo if present

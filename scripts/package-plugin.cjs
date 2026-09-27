@@ -62,8 +62,23 @@ async function createPluginZip() {
 
   targets.forEach((target) => {
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, content);
-    console.log(`[ZIP BUILDER] Wrote archive to: ${path.basename(target)}`);
+    let written = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        fs.writeFileSync(target, content);
+        written = true;
+        console.log(`[ZIP BUILDER] Wrote archive to: ${path.basename(target)}`);
+        break;
+      } catch (err) {
+        if (attempt === 3) {
+          console.warn(`[ZIP BUILDER WARNING] Could not write to ${target}: ${err.message}`);
+        } else {
+          // Brief pause for Windows file system lock release
+          const waitTill = new Date(new Date().getTime() + 150);
+          while (waitTill > new Date()) {}
+        }
+      }
+    }
   });
 
   // Write version manifest to public/version.json for automated WordPress updates
