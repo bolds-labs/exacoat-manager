@@ -1416,6 +1416,8 @@ export interface TrustFeatureCard {
   highlighted?: boolean;
 }
 
+export type BannerAspectRatio = '16:9' | '4:3' | '1:1' | '3:4' | 'auto';
+
 export interface MarketingEmailOptions {
   theme?: 'dark' | 'light';
   subject: string;
@@ -1430,6 +1432,7 @@ export interface MarketingEmailOptions {
   bannerImageUrl?: string;
   bannerImageAlt?: string;
   bannerLinkUrl?: string;
+  bannerAspectRatio?: BannerAspectRatio;
   subPillNotice?: string;
   bodyText: string;
   highlightTitle?: string;
@@ -1542,7 +1545,20 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
     const imgUrl = escapeHtml(options.bannerImageUrl);
     const altText = escapeHtml(options.bannerImageAlt || headline);
     const imgBorder = isDark ? '1px solid #27272a' : '1px solid #e5e5e5';
-    const imgTag = `<img src="${imgUrl}" alt="${altText}" width="520" style="width:100%;max-width:520px;height:auto;border-radius:20px;border:${imgBorder};display:block;margin:0 auto 20px;object-fit:cover;box-shadow:0 8px 30px rgba(0,0,0,0.35);" />`;
+    const ratio = options.bannerAspectRatio || '16:9';
+
+    let ratioStyle = 'aspect-ratio:16/9;';
+    if (ratio === '4:3') {
+      ratioStyle = 'aspect-ratio:4/3;';
+    } else if (ratio === '1:1') {
+      ratioStyle = 'aspect-ratio:1/1;';
+    } else if (ratio === '3:4') {
+      ratioStyle = 'aspect-ratio:3/4;max-height:560px;';
+    } else if (ratio === 'auto') {
+      ratioStyle = '';
+    }
+
+    const imgTag = `<img src="${imgUrl}" alt="${altText}" width="520" style="width:100%;max-width:520px;${ratioStyle}height:auto;border-radius:20px;border:${imgBorder};display:block;margin:0 auto 20px;object-fit:cover;box-shadow:0 8px 30px rgba(0,0,0,0.35);" />`;
     if (options.bannerLinkUrl) {
       const linkUrl = escapeHtml(options.bannerLinkUrl);
       bannerHtml = `<div style="margin-bottom:20px;text-align:center;"><a href="${linkUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:block;">${imgTag}</a></div>`;
@@ -1551,27 +1567,17 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
     }
   }
 
-  // Sub-pill Capsule Notice (Compact, Single-Line, Wide Letter-Spacing, Clean Upper)
+  // Sub-pill Capsule Notice (Left-aligned, Borderless, Subtle, Centered)
   let subPillHtml = '';
   if (options.subPillNotice) {
-    const pillBg = isDark ? 'rgba(255,255,255,0.04)' : '#f4f4f5';
-    const pillBorderColor = isDark ? 'rgba(255,255,255,0.12)' : '#e4e4e7';
+    const pillBg = isDark ? 'rgba(255,255,255,0.06)' : '#f1f1f4';
+    const pillColor = isDark ? '#a1a1aa' : '#71717a';
     subPillHtml = `
-      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px;">
-        <tr>
-          <td align="center">
-            <table cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;background:${pillBg};border:1px solid ${pillBorderColor};border-radius:9999px;">
-              <tr>
-                <td style="padding:4px 14px;text-align:center;white-space:nowrap;">
-                  <span style="font-size:10px;font-weight:700;color:${textHeading};letter-spacing:1.5px;text-transform:uppercase;white-space:nowrap;display:inline-block;">
-                    ${escapeHtml(options.subPillNotice)}
-                  </span>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>`;
+      <div style="margin:0 0 16px;text-align:left;">
+        <span style="display:inline-block;padding:4px 12px;background:${pillBg};border-radius:9999px;font-size:9.5px;font-weight:500;color:${pillColor};letter-spacing:1.2px;text-transform:uppercase;line-height:13px;vertical-align:middle;">
+          ${escapeHtml(options.subPillNotice)}
+        </span>
+      </div>`;
   }
 
   // Highlight / Promo coupon box
@@ -1746,7 +1752,7 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
   let bottomLogoHtml = '';
   if (!showHeader && logoPosition === 'bottom') {
     bottomLogoHtml = `
-      <div style="margin:28px 0 16px;text-align:center;">
+      <div style="margin:0 0 20px;text-align:center;">
         <a href="https://exacoat.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">
           ${brandLogo}
         </a>
@@ -1783,13 +1789,13 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
     ${preheader}
   </div>
 
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${bgOuter}" style="background-color:${bgOuter};padding:36px 12px;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${bgOuter}" style="background-color:${bgOuter};padding:48px 12px 64px;">
     <tr>
       <td align="center">
-        <!-- Top Webview Link -->
-        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;margin-bottom:12px;">
+        <!-- Top Webview Link with generous breathing space -->
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;margin-bottom:20px;">
           <tr>
-            <td align="center" style="font-size:11px;color:#71717a;line-height:1.4;">
+            <td align="center" style="font-size:11px;color:#71717a;line-height:1.5;padding:12px 0 8px;">
               If you cannot see this email properly, please <a href="{{webview_url}}" target="_blank" rel="noopener noreferrer" style="color:#a1a1aa;text-decoration:underline;">click here</a>.
             </td>
           </tr>
@@ -1802,7 +1808,7 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
 
             <!-- Message Headline & Body -->
             <tr>
-              <td style="padding:32px 36px 28px;" class="mobile-padding">
+              <td style="padding:36px 36px 32px;" class="mobile-padding">
                 ${topLogoHtml}
                 ${bannerHtml}
                 ${subPillHtml}
@@ -1812,22 +1818,22 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
                 ${highlightHtml}
                 ${trustGridHtml}
                 ${ctaButtonsHtml}
-                ${bottomLogoHtml}
                 ${footerNote}
 
                 <!-- Dedicated Spacer above Footer -->
                 <table width="100%" cellpadding="0" cellspacing="0">
                   <tr>
-                    <td height="28" style="height:28px;font-size:0;line-height:0;">&nbsp;</td>
+                    <td height="36" style="height:36px;font-size:0;line-height:0;">&nbsp;</td>
                   </tr>
                 </table>
 
                 <!-- Social Links & Unsubscribe Footer -->
                 <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid ${headerDivider};text-align:center;">
                   <tr>
-                    <td align="center" style="padding-top:24px;">
+                    <td align="center" style="padding-top:32px;padding-bottom:24px;">
+                      ${bottomLogoHtml}
                       <!-- Social Links -->
-                      <table cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 16px;">
+                      <table cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 18px;">
                         <tr>
                           <td style="padding:0 8px;">
                             <a href="https://instagram.com/exacoat" target="_blank" rel="noopener noreferrer" style="font-size:12px;font-weight:600;color:${isDark ? '#e4e4e7' : '#3f3f46'};text-decoration:none;padding:6px 14px;border-radius:999px;background:${isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f5'};border:1px solid ${cardBorder};">

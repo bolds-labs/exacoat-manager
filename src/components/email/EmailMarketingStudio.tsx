@@ -88,6 +88,7 @@ export interface MarketingPreset {
   primaryCtaColor: 'amber' | 'white' | 'emerald';
   showTrustGrid: boolean;
   bannerImageUrl?: string;
+  bannerAspectRatio?: '16:9' | '4:3' | '1:1' | '3:4' | 'auto';
 }
 
 const PRESETS_STORAGE_KEY = 'exacoat_marketing_presets';
@@ -119,6 +120,7 @@ export const BUILTIN_PRESETS: MarketingPreset[] = [
     primaryCtaColor: 'amber',
     showTrustGrid: true,
     bannerImageUrl: '',
+    bannerAspectRatio: '16:9',
   },
   {
     id: 'preset_flagship_drop',
@@ -143,6 +145,7 @@ export const BUILTIN_PRESETS: MarketingPreset[] = [
     primaryCtaColor: 'amber',
     showTrustGrid: true,
     bannerImageUrl: '',
+    bannerAspectRatio: '16:9',
   },
   {
     id: 'preset_affiliate_blast',
@@ -170,6 +173,7 @@ export const BUILTIN_PRESETS: MarketingPreset[] = [
     primaryCtaColor: 'amber',
     showTrustGrid: false,
     bannerImageUrl: '',
+    bannerAspectRatio: '16:9',
   },
 ];
 
@@ -237,6 +241,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
   const [bannerImageUrl, setBannerImageUrl] = useState('');
   const [bannerLinkUrl, setBannerLinkUrl] = useState('https://exacoat.com/shop');
   const [bannerImageAlt, setBannerImageAlt] = useState('Exacoat Precision Skin');
+  const [bannerAspectRatio, setBannerAspectRatio] = useState<'16:9' | '4:3' | '1:1' | '3:4' | 'auto'>('16:9');
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -308,30 +313,21 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     </mj-attributes>
   </mj-head>
   <mj-body background-color="#050507">
-    <!-- Top Webview Link -->
-    <mj-section padding="24px 0 10px">
+    <!-- Top Webview Link with generous spacing -->
+    <mj-section padding="40px 0 18px">
       <mj-column>
-        <mj-text align="center" font-size="11px" color="#71717a">
+        <mj-text align="center" font-size="11px" color="#71717a" line-height="1.5">
           If you cannot see this email properly, please <a href="{{webview_url}}" style="color:#a1a1aa;text-decoration:underline;">click here</a>.
         </mj-text>
       </mj-column>
     </mj-section>
 
     <!-- Main Container Card (Rounded 28px) -->
-    <mj-wrapper background-color="#0e0e11" border-radius="28px" border="1px solid #1f1f24" padding="32px 24px">
-      <!-- Brand Logo (Clean, Minimal, No Bulky Border Bar) -->
-      <mj-section padding="0 0 24px">
+    <mj-wrapper background-color="#0e0e11" border-radius="28px" border="1px solid #1f1f24" padding="36px 24px 32px">
+      <!-- Sub-Pill Notice Capsule (Left-aligned, Borderless, Subtle, Centered) -->
+      <mj-section padding="0 0 16px">
         <mj-column>
-          <mj-text align="center" font-size="18px" font-weight="900" color="#ffffff" letter-spacing="2px" padding="0">
-            EXACOAT
-          </mj-text>
-        </mj-column>
-      </mj-section>
-
-      <!-- Sub-Pill Notice Capsule (Compact, Wide Letter-Spacing) -->
-      <mj-section padding="0 0 20px">
-        <mj-column>
-          <mj-button background-color="rgba(255,255,255,0.04)" color="#ffffff" border="1px solid rgba(255,255,255,0.12)" border-radius="9999px" font-size="10px" font-weight="700" letter-spacing="1.5px" text-transform="uppercase" align="center" inner-padding="4px 14px" padding="0">
+          <mj-button background-color="rgba(255,255,255,0.06)" color="#a1a1aa" border-radius="9999px" font-size="9.5px" font-weight="500" letter-spacing="1.2px" text-transform="uppercase" align="left" inner-padding="4px 12px" padding="0">
             Limited Time Only &bull; Free Replacement Guarantee
           </mj-button>
         </mj-column>
@@ -377,7 +373,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
       </mj-section>
 
       <!-- CTA Button -->
-      <mj-section padding="16px 0 24px">
+      <mj-section padding="16px 0 28px">
         <mj-column>
           <mj-button href="https://exacoat.com/shop" background-color="#f59e0b" color="#000000" font-weight="900" font-size="14.5px" border-radius="999px" inner-padding="15px 38px">
             ORDER YOUR SKIN
@@ -385,15 +381,18 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
         </mj-column>
       </mj-section>
 
-      <!-- Footer -->
-      <mj-section border-top="1px solid #1a1a1f" padding="22px 0 0">
+      <!-- Footer with Logo on top of Social Links -->
+      <mj-section border-top="1px solid #1a1a1f" padding="32px 0 16px">
         <mj-column>
-          <mj-social font-size="12px" icon-size="0" mode="horizontal" align="center">
+          <mj-text align="center" font-size="16px" font-weight="900" color="#ffffff" letter-spacing="2px" padding="0 0 20px">
+            EXACOAT
+          </mj-text>
+          <mj-social font-size="12px" icon-size="0" mode="horizontal" align="center" padding="0 0 16px">
             <mj-social-element href="https://instagram.com/exacoat" background-color="rgba(255,255,255,0.06)" color="#e4e4e7" border-radius="999px" padding="5px 14px">Instagram</mj-social-element>
             <mj-social-element href="https://x.com/exacoat" background-color="rgba(255,255,255,0.06)" color="#e4e4e7" border-radius="999px" padding="5px 14px">X</mj-social-element>
             <mj-social-element href="https://youtube.com/@exacoat" background-color="rgba(255,255,255,0.06)" color="#e4e4e7" border-radius="999px" padding="5px 14px">YouTube</mj-social-element>
           </mj-social>
-          <mj-text align="center" font-size="11.5px" color="#71717a" padding="12px 0 0">
+          <mj-text align="center" font-size="11.5px" color="#71717a" padding="8px 0 0">
             &copy; 2016-2026 Exacoat
           </mj-text>
           <mj-text align="center" font-size="11px" color="#71717a" padding="6px 0 0">
@@ -679,6 +678,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     setPrimaryCtaColor(p.primaryCtaColor);
     setShowTrustGrid(p.showTrustGrid);
     if (p.bannerImageUrl) setBannerImageUrl(p.bannerImageUrl);
+    if (p.bannerAspectRatio) setBannerAspectRatio(p.bannerAspectRatio);
     setShowReferencesModal(false);
     showToast('success', 'Preset Applied', `Loaded "${p.name}".`);
   };
@@ -714,6 +714,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
       primaryCtaColor,
       showTrustGrid,
       bannerImageUrl,
+      bannerAspectRatio,
     };
 
     const userCreated = savedTemplates.filter(p => !p.isBuiltIn);
@@ -753,6 +754,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     bannerImageUrl: bannerImageUrl || undefined,
     bannerImageAlt,
     bannerLinkUrl: bannerLinkUrl || undefined,
+    bannerAspectRatio,
     subPillNotice: subPillNotice.trim() || undefined,
     bodyText,
     highlightTitle: showPromoBox ? promoTitle : undefined,
@@ -781,6 +783,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     bannerImageUrl,
     bannerImageAlt,
     bannerLinkUrl,
+    bannerAspectRatio,
     subPillNotice,
     bodyText,
     showPromoBox,
@@ -1737,16 +1740,16 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
 
                       {/* Live Mini Preview of the Refined Pill */}
                       {subPillNotice && (
-                        <div className="pt-1 flex items-center justify-center">
-                          <div className="inline-flex items-center px-3.5 py-1 rounded-full border border-zinc-300/80 dark:border-white/15 bg-zinc-100/80 dark:bg-white/[0.05] shadow-sm">
-                            <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-zinc-800 dark:text-zinc-200">
+                        <div className="pt-1 flex items-center justify-start">
+                          <div className="inline-flex items-center px-3 py-1 rounded-full bg-zinc-100 dark:bg-white/[0.06] text-zinc-500 dark:text-zinc-400">
+                            <span className="text-[9.5px] font-medium uppercase tracking-[0.12em] leading-none">
                               {subPillNotice}
                             </span>
                           </div>
                         </div>
                       )}
                       <span className="text-[10px] text-zinc-400 block">
-                        Renders as a compact, refined pill with wide tracking under the banner.
+                        Renders as a left-aligned, borderless capsule with subtle typography above the headline.
                       </span>
                     </div>
                   </GlassCard>
@@ -1894,6 +1897,41 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                       </div>
                     </div>
 
+                    {/* Aspect Ratio Selector Chips */}
+                    <div className="pt-1">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-[10px] font-semibold text-zinc-700 dark:text-zinc-300">
+                          Banner Aspect Ratio
+                        </label>
+                        <span className="text-[10px] font-mono text-zinc-400">
+                          Current: {bannerAspectRatio}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-5 gap-1.5">
+                        {[
+                          { id: '16:9', label: '16:9', desc: 'Landscape' },
+                          { id: '4:3', label: '4:3', desc: 'Standard' },
+                          { id: '1:1', label: '1:1', desc: 'Square' },
+                          { id: '3:4', label: '3:4', desc: 'Portrait' },
+                          { id: 'auto', label: 'Auto', desc: 'Natural' },
+                        ].map((r) => (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => setBannerAspectRatio(r.id as any)}
+                            className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all border flex flex-col items-center justify-center gap-0.5 ${
+                              bannerAspectRatio === r.id
+                                ? 'bg-amber-500/15 border-amber-500 text-amber-600 dark:text-amber-400 shadow-sm'
+                                : 'bg-zinc-50 dark:bg-white/[0.03] border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
+                            }`}
+                          >
+                            <span>{r.label}</span>
+                            <span className="text-[9px] font-normal text-zinc-400 hidden sm:inline">{r.desc}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     {bannerImageUrl && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                         <div>
@@ -1907,9 +1945,33 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                             placeholder="https://exacoat.com/shop"
                             className="text-xs"
                           />
+                          <p className="text-[10px] text-zinc-400 mt-1">
+                            Optional URL when recipient clicks the banner image.
+                          </p>
                         </div>
-                        <div className="relative aspect-[16/7] rounded-xl overflow-hidden border border-zinc-200 dark:border-white/10 bg-zinc-900 shadow-sm">
-                          <img src={bannerImageUrl} alt="Banner preview" className="w-full h-full object-cover" />
+                        <div className="flex flex-col items-center justify-center">
+                          <div
+                            className={`relative w-full rounded-xl overflow-hidden border border-zinc-200 dark:border-white/10 bg-zinc-900 shadow-sm flex items-center justify-center ${
+                              bannerAspectRatio === '16:9'
+                                ? 'aspect-[16/9]'
+                                : bannerAspectRatio === '4:3'
+                                ? 'aspect-[4/3]'
+                                : bannerAspectRatio === '1:1'
+                                ? 'aspect-square max-h-48'
+                                : bannerAspectRatio === '3:4'
+                                ? 'aspect-[3/4] max-h-48'
+                                : 'max-h-48'
+                            }`}
+                          >
+                            <img
+                              src={bannerImageUrl}
+                              alt="Banner preview"
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/70 backdrop-blur text-[9px] font-mono font-bold text-white uppercase">
+                              {bannerAspectRatio}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}
