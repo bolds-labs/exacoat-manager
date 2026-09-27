@@ -2268,6 +2268,7 @@ export const ProductsPage: React.FC = () => {
         isOpen={isBatchSeoModalOpen}
         onClose={() => setIsBatchSeoModalOpen(false)}
         products={wpProducts}
+        totalCatalogProducts={wpTotal}
         onProductsUpdated={(updated) => {
           setWpProducts(updated);
         }}
