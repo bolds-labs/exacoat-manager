@@ -208,9 +208,9 @@ export const DEVICE_FAMILY_PRESET_PACKS: Record<string, { label: string; family:
     family: 'laptop',
     parts: [
       { name: 'Top Lid', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
-      { name: 'Bottom Base', group: 'primary', is_required: false, is_optional: true, extra_price: 120000 },
-      { name: 'Trackpad', group: 'accent', is_required: false, is_optional: true, extra_price: 40000 },
-      { name: 'Palm Rest', group: 'accent', is_required: false, is_optional: true, extra_price: 80000 },
+      { name: 'Bottom Base', group: 'accent', is_required: false, is_optional: true, extra_price: 260000 },
+      { name: 'Trackpad', group: 'accent', is_required: false, is_optional: true, extra_price: 45000 },
+      { name: 'Palm Rest', group: 'accent', is_required: false, is_optional: true, extra_price: 60000 },
     ],
   },
   tablet: {
@@ -227,7 +227,7 @@ export const DEVICE_FAMILY_PRESET_PACKS: Record<string, { label: string; family:
     family: 'keyboard',
     parts: [
       { name: 'Top Outer Cover', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
-      { name: 'Bottom Outer Cover', group: 'primary', is_required: false, is_optional: true, extra_price: 60000 },
+      { name: 'Bottom Outer Cover', group: 'accent', is_required: false, is_optional: true, extra_price: 60000 },
       { name: 'Inner Keyboard Surround', group: 'accent', is_required: false, is_optional: true, extra_price: 60000 },
     ],
   },
@@ -236,14 +236,14 @@ export const DEVICE_FAMILY_PRESET_PACKS: Record<string, { label: string; family:
 const COMMON_PRESET_LAYERS: SkinPartPreset[] = [
   { name: 'Back Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
   { name: 'Top Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
-  { name: 'Additional Accents', group: 'accent', is_required: false, is_optional: true, extra_price: 30000 },
+  { name: 'Additional Accents', group: 'accent', is_required: false, is_optional: true, extra_price: 35000 },
   { name: 'Additional Camera', group: 'accent', is_required: false, is_optional: true, extra_price: 25000 },
   { name: 'Additional Back Glass', group: 'accent', is_required: false, is_optional: true, extra_price: 60000 },
   { name: 'Additional Camera & Back Glass', group: 'accent', is_required: false, is_optional: true, extra_price: 85000 },
   { name: 'Frame / Sides', group: 'protection', is_required: false, is_optional: true, extra_price: 30000 },
-  { name: 'Bottom Base', group: 'primary', is_required: false, is_optional: true, extra_price: 120000 },
-  { name: 'Trackpad', group: 'accent', is_required: false, is_optional: true, extra_price: 40000 },
-  { name: 'Palm Rest', group: 'accent', is_required: false, is_optional: true, extra_price: 80000 },
+  { name: 'Bottom Base', group: 'accent', is_required: false, is_optional: true, extra_price: 260000 },
+  { name: 'Trackpad', group: 'accent', is_required: false, is_optional: true, extra_price: 45000 },
+  { name: 'Palm Rest', group: 'accent', is_required: false, is_optional: true, extra_price: 60000 },
   { name: 'Hinge / Spine', group: 'accent', is_required: false, is_optional: true, extra_price: 25000 },
 ];
 
@@ -3539,8 +3539,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
   const handleMoveLayer = (layerId: string, direction: 'up' | 'down') => {
     if (!editingProfile) return;
-    // Layers displayed from Front to Back (descending z_index)
-    const sorted = [...editingProfile.layers].sort((a, b) => (b.z_index || 1) - (a.z_index || 1));
+    // Layers displayed from Base to Accents (ascending z_index so base layer is on top)
+    const sorted = [...editingProfile.layers].sort((a, b) => (a.z_index || 1) - (b.z_index || 1));
     const idx = sorted.findIndex((l) => l.id === layerId);
     if (idx === -1) return;
     const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
@@ -3551,18 +3551,17 @@ export const ConfiguratorStudioPage: React.FC = () => {
     sorted[idx] = sorted[targetIdx];
     sorted[targetIdx] = temp;
 
-    // Reassign z_index: index 0 (top of list) gets highest z-index, last element gets 1
-    const total = sorted.length;
+    // Reassign z_index: index 0 (top of list / base layer) gets z_index 1, next gets 2, etc.
     const reindexed = sorted.map((l, i) => ({
       ...l,
-      z_index: total - i,
+      z_index: i + 1,
     }));
 
     setEditingProfile({
       ...editingProfile,
       layers: reindexed,
     });
-    showToast('info', 'Priority Updated', `Moved "${temp.name}" ${direction === 'up' ? 'forward (higher)' : 'backward (lower)'}.`);
+    showToast('info', 'Priority Updated', `Moved "${temp.name}" ${direction === 'up' ? 'up' : 'down'}.`);
   };
 
   const handleUpdateLayer = (layerId: string, patch: Partial<ConfiguratorLayer>) => {
@@ -9125,10 +9124,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 </div>
                               </div>
 
-                              {/* Vertical Layer Stack (Front to Back) */}
+                              {/* Vertical Layer Stack (Base Layer at Top, Accents Below) */}
                               <div className="space-y-1.5">
                                 {(() => {
-                                  const displayLayers = [...skinLayers].sort((a, b) => (b.z_index || 1) - (a.z_index || 1));
+                                  const displayLayers = [...skinLayers].sort((a, b) => (a.z_index || 1) - (b.z_index || 1));
                                   if (displayLayers.length === 0) {
                                     return (
                                       <div className="p-6 text-center rounded-2xl bg-zinc-900/40 border border-dashed border-white/10 space-y-2">
@@ -9169,7 +9168,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                 'p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer',
                                                 isFirst ? 'opacity-20 cursor-not-allowed' : 'text-zinc-400 hover:text-white'
                                               )}
-                                              title="Bring Forward (Higher Render Priority)"
+                                              title="Move Up"
                                             >
                                               <ChevronUp className="w-3.5 h-3.5" />
                                             </button>
@@ -9181,7 +9180,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                 'p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer',
                                                 isLast ? 'opacity-20 cursor-not-allowed' : 'text-zinc-400 hover:text-white'
                                               )}
-                                              title="Send Backward (Lower Render Priority)"
+                                              title="Move Down"
                                             >
                                               <ChevronDown className="w-3.5 h-3.5" />
                                             </button>
@@ -9324,18 +9323,15 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       currentActiveLayer.group === 'accent' ||
                                       currentActiveLayer.group === 'protection' ||
                                       currentActiveLayer.group === 'addon' ||
+                                      (currentActiveLayer.group as string) === 'secondary' ||
                                       Boolean(currentActiveLayer.is_optional) ||
-                                      /\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm)\b/i.test(currentActiveLayer.name || '') ||
-                                      /\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm)\b/i.test(currentActiveLayer.id || '');
+                                      /\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm|bottom|panel|lens)\b/i.test(currentActiveLayer.name || '') ||
+                                      /\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm|bottom|panel|lens)\b/i.test(currentActiveLayer.id || '');
 
-                                    const isPrimaryLayer = !isAddonOrAccent && (
-                                      currentActiveLayer.group === 'primary' ||
-                                      currentActiveLayer.id === 'back' ||
-                                      currentActiveLayer.id === 'back-skin' ||
-                                      currentActiveLayer.id === 'top' ||
-                                      currentActiveLayer.id === 'top-lid' ||
-                                      /^(back|back skin|top|top skin|top lid|main body|full body|device body)$/i.test((currentActiveLayer.name || '').trim())
-                                    );
+                                    // Only the first skin layer can be primary and included in the base price.
+                                    // All subsequent layers (index > 0) are secondary/addons and must have their own extra price.
+                                    const isFirstSkinPart = skinLayers[0]?.id === currentActiveLayer.id;
+                                    const isPrimaryLayer = isFirstSkinPart && !isAddonOrAccent;
 
                                     return (
                                       <div className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans">

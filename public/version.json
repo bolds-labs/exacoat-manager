@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.118.zip?v=0.1.118",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-27T20:51:07.405Z",
+  "last_updated": "2026-09-27T21:00:39.519Z",
   "sections": {
     "changelog": "### Version 0.1.118\n- Fix PNG alpha channel stripping on upload: eliminate destructive imagetruecolortopalette quantization in class-image-sizes and class-configurator-engine, strictly preserving full 32-bit RGBA transparency\n- Fix primary layer detection in configurator engine so optional/accent parts are never coerced into primary base layers with 0 extra price"
   }

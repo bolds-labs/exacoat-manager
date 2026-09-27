@@ -3049,21 +3049,22 @@ class Exacoat_Configurator_Engine {
 				}
 				$profile['layers'] = $pruned_layers;
 
-				// Ensure primary layers never carry extra_price (the base skin is already covered by base_price)
+				// Ensure ONLY the first skin layer is primary and free (the base skin is already covered by base_price).
+				// All subsequent layers (index > 0) are accents/addons and must retain/have an extra_price.
 				foreach ( $profile['layers'] as $idx => &$l ) {
 					$l_name_clean = trim( strtolower( $l['name'] ?? '' ) );
 					$l_id_clean   = trim( strtolower( $l['id'] ?? '' ) );
 
-					$is_addon_or_accent = ( isset( $l['group'] ) && in_array( $l['group'], [ 'accent', 'protection', 'addon' ], true ) )
+					$is_addon_or_accent = ( isset( $l['group'] ) && in_array( $l['group'], [ 'accent', 'protection', 'addon', 'secondary' ], true ) )
 						|| ! empty( $l['is_optional'] )
-						|| preg_match( '/\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm)\b/i', $l_name_clean )
-						|| preg_match( '/\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm)\b/i', $l_id_clean );
+						|| preg_match( '/\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm|bottom|panel|lens)\b/i', $l_name_clean )
+						|| preg_match( '/\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm|bottom|panel|lens)\b/i', $l_id_clean );
 
-					$is_primary = ! $is_addon_or_accent && (
+					$is_primary = ( $idx === 0 ) && ! $is_addon_or_accent && (
 						( isset( $l['group'] ) && $l['group'] === 'primary' )
-						|| in_array( $l_id_clean, [ 'back', 'back-skin', 'top', 'top-lid', 'device', 'main' ], true )
-						|| in_array( $l_name_clean, [ 'back', 'back skin', 'top', 'top skin', 'top lid', 'main body', 'full body', 'device body', 'device' ], true )
-						|| ( $idx === 0 && ! in_array( $l_id_clean, [ 'series', 'version', 'connectivity', 'model' ], true ) && ! preg_match( '/\b(series|version|connectivity|model)\b/i', $l_name_clean ) )
+						|| in_array( $l_id_clean, [ 'back', 'back-skin', 'top', 'top-lid', 'top-bottom', 'device', 'main' ], true )
+						|| in_array( $l_name_clean, [ 'back', 'back skin', 'top', 'top skin', 'top lid', 'top + bottom', 'main body', 'full body', 'device body', 'device' ], true )
+						|| ( ! in_array( $l_id_clean, [ 'series', 'version', 'connectivity', 'model' ], true ) && ! preg_match( '/\b(series|version|connectivity|model)\b/i', $l_name_clean ) )
 					);
 
 					if ( $is_primary ) {
@@ -3075,18 +3076,76 @@ class Exacoat_Configurator_Engine {
 							$l['extra_price'] = 0;
 							$layers_modified = true;
 						}
+					} else {
+						// Secondary skin parts must NEVER be group primary
+						if ( ( $l['group'] ?? '' ) === 'primary' ) {
+							$l['group'] = 'accent';
+							$layers_modified = true;
+						}
 					}
 				}
 				unset( $l );
 
-				// Auto-heal phone accents from legacy 40000 to 35000
-				$dev_fam = $profile['family'] ?? '';
-				if ( $dev_fam === 'phone' || $dev_fam === 'foldable' ) {
-					foreach ( $profile['layers'] as &$l ) {
+				$dev_fam  = $profile['family'] ?? '';
+				$dev_cat  = strtolower( $profile['category'] ?? '' );
+				$dev_name = strtolower( $profile['device_name'] ?? '' );
+
+				// Auto-heal MacBook / Laptop secondary layers (Bottom = 260,000 IDR, Trackpad = 45,000 IDR)
+				$is_laptop = ( $dev_fam === 'laptop' ) || stripos( $dev_cat, 'macbook' ) !== false || stripos( $dev_name, 'macbook' ) !== false || stripos( $dev_cat, 'laptop' ) !== false;
+				if ( $is_laptop ) {
+					foreach ( $profile['layers'] as $idx => &$l ) {
+						if ( $idx === 0 ) continue;
 						$l_id = strtolower( $l['id'] ?? '' );
 						$l_name = strtolower( $l['name'] ?? '' );
-						if ( ( $l_id === 'accents' || strpos( $l_name, 'accent' ) !== false ) && (float) ( $l['extra_price'] ?? 0 ) == 40000 ) {
+						if ( ( $l_id === 'bottom' || strpos( $l_name, 'bottom' ) !== false ) && (float) ( $l['extra_price'] ?? 0 ) == 0 ) {
+							$l['extra_price'] = 260000;
+							$l['group'] = 'accent';
+							$layers_modified = true;
+						}
+						if ( ( $l_id === 'trackpad' || strpos( $l_name, 'trackpad' ) !== false ) && (float) ( $l['extra_price'] ?? 0 ) == 0 ) {
+							$l['extra_price'] = 45000;
+							$l['group'] = 'accent';
+							$layers_modified = true;
+						}
+					}
+					unset( $l );
+				}
+
+				// Auto-heal Magic Keyboard secondary layers (Palm Rest / Middle = 60,000 IDR)
+				$is_keyboard = ( $dev_fam === 'keyboard' ) || stripos( $dev_cat, 'keyboard' ) !== false || stripos( $dev_name, 'keyboard' ) !== false;
+				if ( $is_keyboard ) {
+					foreach ( $profile['layers'] as $idx => &$l ) {
+						if ( $idx === 0 ) continue;
+						$l_id = strtolower( $l['id'] ?? '' );
+						$l_name = strtolower( $l['name'] ?? '' );
+						if ( ( $l_id === 'palm-rest' || $l_id === 'middle' || strpos( $l_name, 'palm' ) !== false || strpos( $l_name, 'middle' ) !== false ) && (float) ( $l['extra_price'] ?? 0 ) == 0 ) {
+							$l['extra_price'] = 60000;
+							$l['group'] = 'accent';
+							$layers_modified = true;
+						}
+					}
+					unset( $l );
+				}
+
+				// Auto-heal phone accents, cameras, and panels
+				if ( $dev_fam === 'phone' || $dev_fam === 'foldable' || stripos( $dev_cat, 'phone' ) !== false || stripos( $dev_name, 'iphone' ) !== false ) {
+					foreach ( $profile['layers'] as $idx => &$l ) {
+						if ( $idx === 0 ) continue;
+						$l_id = strtolower( $l['id'] ?? '' );
+						$l_name = strtolower( $l['name'] ?? '' );
+						if ( ( $l_id === 'accents' || strpos( $l_name, 'accent' ) !== false ) && ( (float) ( $l['extra_price'] ?? 0 ) == 40000 || empty( $l['extra_price'] ) ) ) {
 							$l['extra_price'] = 35000;
+							$l['group'] = 'accent';
+							$layers_modified = true;
+						}
+						if ( ( $l_id === 'additional-camera' || strpos( $l_name, 'additional camera' ) !== false ) && empty( $l['extra_price'] ) ) {
+							$l['extra_price'] = 25000;
+							$l['group'] = 'accent';
+							$layers_modified = true;
+						}
+						if ( ( $l_id === 'back-panel' || $l_id === 'camera-panel' || strpos( $l_name, 'panel' ) !== false ) && (float) ( $l['extra_price'] ?? 0 ) == 0 ) {
+							$l['extra_price'] = 60000;
+							$l['group'] = 'accent';
 							$layers_modified = true;
 						}
 					}
@@ -3094,16 +3153,19 @@ class Exacoat_Configurator_Engine {
 				}
 
 				// Auto-heal tablet / iPad sides and accents from 0 to 50000
-				if ( $dev_fam === 'tablet' || stripos( $profile['category'] ?? '', 'ipad' ) !== false || stripos( $profile['device_name'] ?? '', 'ipad' ) !== false ) {
-					foreach ( $profile['layers'] as &$l ) {
+				if ( $dev_fam === 'tablet' || stripos( $dev_cat, 'ipad' ) !== false || stripos( $dev_name, 'ipad' ) !== false ) {
+					foreach ( $profile['layers'] as $idx => &$l ) {
+						if ( $idx === 0 ) continue;
 						$l_id = strtolower( $l['id'] ?? '' );
 						$l_name = strtolower( $l['name'] ?? '' );
 						if ( ( $l_id === 'sides' || $l_id === 'side' || strpos( $l_name, 'side' ) !== false ) && (float) ( $l['extra_price'] ?? 0 ) == 0 ) {
 							$l['extra_price'] = 50000;
+							$l['group'] = 'accent';
 							$layers_modified = true;
 						}
 						if ( ( $l_id === 'accents' || strpos( $l_name, 'accent' ) !== false ) && (float) ( $l['extra_price'] ?? 0 ) == 0 ) {
 							$l['extra_price'] = 50000;
+							$l['group'] = 'accent';
 							$layers_modified = true;
 						}
 					}
@@ -3356,53 +3418,109 @@ class Exacoat_Configurator_Engine {
 			}
 			$profile['layers'] = $pruned_layers;
 
-			// Ensure primary layers never carry extra_price on the layer itself (covered by base_price)
+			// Ensure ONLY the first skin layer is primary and free (the base skin is already covered by base_price).
+			// All subsequent layers (index > 0) are accents/addons and must retain/have an extra_price.
 			foreach ( $profile['layers'] as $idx => &$layer ) {
 				$l_name_clean = trim( strtolower( $layer['name'] ?? '' ) );
 				$l_id_clean   = trim( strtolower( $layer['id'] ?? '' ) );
 
-				$is_addon_or_accent = ( isset( $layer['group'] ) && in_array( $layer['group'], [ 'accent', 'protection', 'addon' ], true ) )
+				$is_addon_or_accent = ( isset( $layer['group'] ) && in_array( $layer['group'], [ 'accent', 'protection', 'addon', 'secondary' ], true ) )
 					|| ! empty( $layer['is_optional'] )
-					|| preg_match( '/\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm)\b/i', $l_name_clean )
-					|| preg_match( '/\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm)\b/i', $l_id_clean );
+					|| preg_match( '/\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm|bottom|panel|lens)\b/i', $l_name_clean )
+					|| preg_match( '/\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm|bottom|panel|lens)\b/i', $l_id_clean );
 
-				$is_primary = ! $is_addon_or_accent && (
+				$is_primary = ( $idx === 0 ) && ! $is_addon_or_accent && (
 					( isset( $layer['group'] ) && $layer['group'] === 'primary' )
-					|| in_array( $l_id_clean, [ 'back', 'back-skin', 'top', 'top-lid', 'device', 'main' ], true )
-					|| in_array( $l_name_clean, [ 'back', 'back skin', 'top', 'top skin', 'top lid', 'main body', 'full body', 'device body', 'device' ], true )
-					|| ( $idx === 0 && ! in_array( $l_id_clean, [ 'series', 'version', 'connectivity', 'model' ], true ) && ! preg_match( '/\b(series|version|connectivity|model)\b/i', $l_name_clean ) )
+					|| in_array( $l_id_clean, [ 'back', 'back-skin', 'top', 'top-lid', 'top-bottom', 'device', 'main' ], true )
+					|| in_array( $l_name_clean, [ 'back', 'back skin', 'top', 'top skin', 'top lid', 'top + bottom', 'main body', 'full body', 'device body', 'device' ], true )
+					|| ( ! in_array( $l_id_clean, [ 'series', 'version', 'connectivity', 'model' ], true ) && ! preg_match( '/\b(series|version|connectivity|model)\b/i', $l_name_clean ) )
 				);
 
 				if ( $is_primary ) {
 					$layer['group'] = 'primary';
 					$layer['extra_price'] = 0;
+				} else {
+					// Secondary skin parts must NEVER be group primary
+					if ( ( $layer['group'] ?? '' ) === 'primary' ) {
+						$layer['group'] = 'accent';
+					}
 				}
 			}
 			unset( $layer );
 
-			// Auto-heal phone accents from legacy 40000 to 35000
-			$dev_fam = $profile['family'] ?? '';
-			if ( $dev_fam === 'phone' || $dev_fam === 'foldable' ) {
-				foreach ( $profile['layers'] as &$layer ) {
+			$dev_fam  = $profile['family'] ?? '';
+			$dev_cat  = strtolower( $profile['category'] ?? '' );
+			$dev_name = strtolower( $profile['device_name'] ?? '' );
+
+			// Auto-heal MacBook / Laptop secondary layers (Bottom = 260,000 IDR, Trackpad = 45,000 IDR)
+			$is_laptop = ( $dev_fam === 'laptop' ) || stripos( $dev_cat, 'macbook' ) !== false || stripos( $dev_name, 'macbook' ) !== false || stripos( $dev_cat, 'laptop' ) !== false;
+			if ( $is_laptop ) {
+				foreach ( $profile['layers'] as $idx => &$layer ) {
+					if ( $idx === 0 ) continue;
 					$l_id = strtolower( $layer['id'] ?? '' );
 					$l_name = strtolower( $layer['name'] ?? '' );
-					if ( ( $l_id === 'accents' || strpos( $l_name, 'accent' ) !== false ) && (float) ( $layer['extra_price'] ?? 0 ) == 40000 ) {
+					if ( ( $l_id === 'bottom' || strpos( $l_name, 'bottom' ) !== false ) && (float) ( $layer['extra_price'] ?? 0 ) == 0 ) {
+						$layer['extra_price'] = 260000;
+						$layer['group'] = 'accent';
+					}
+					if ( ( $l_id === 'trackpad' || strpos( $l_name, 'trackpad' ) !== false ) && (float) ( $layer['extra_price'] ?? 0 ) == 0 ) {
+						$layer['extra_price'] = 45000;
+						$layer['group'] = 'accent';
+					}
+				}
+				unset( $layer );
+			}
+
+			// Auto-heal Magic Keyboard secondary layers (Palm Rest / Middle = 60,000 IDR)
+			$is_keyboard = ( $dev_fam === 'keyboard' ) || stripos( $dev_cat, 'keyboard' ) !== false || stripos( $dev_name, 'keyboard' ) !== false;
+			if ( $is_keyboard ) {
+				foreach ( $profile['layers'] as $idx => &$layer ) {
+					if ( $idx === 0 ) continue;
+					$l_id = strtolower( $layer['id'] ?? '' );
+					$l_name = strtolower( $layer['name'] ?? '' );
+					if ( ( $l_id === 'palm-rest' || $l_id === 'middle' || strpos( $l_name, 'palm' ) !== false || strpos( $l_name, 'middle' ) !== false ) && (float) ( $layer['extra_price'] ?? 0 ) == 0 ) {
+						$layer['extra_price'] = 60000;
+						$layer['group'] = 'accent';
+					}
+				}
+				unset( $layer );
+			}
+
+			// Auto-heal phone accents, cameras, and panels
+			if ( $dev_fam === 'phone' || $dev_fam === 'foldable' || stripos( $dev_cat, 'phone' ) !== false || stripos( $dev_name, 'iphone' ) !== false ) {
+				foreach ( $profile['layers'] as $idx => &$layer ) {
+					if ( $idx === 0 ) continue;
+					$l_id = strtolower( $layer['id'] ?? '' );
+					$l_name = strtolower( $layer['name'] ?? '' );
+					if ( ( $l_id === 'accents' || strpos( $l_name, 'accent' ) !== false ) && ( (float) ( $layer['extra_price'] ?? 0 ) == 40000 || empty( $layer['extra_price'] ) ) ) {
 						$layer['extra_price'] = 35000;
+						$layer['group'] = 'accent';
+					}
+					if ( ( $l_id === 'additional-camera' || strpos( $l_name, 'additional camera' ) !== false ) && empty( $layer['extra_price'] ) ) {
+						$layer['extra_price'] = 25000;
+						$layer['group'] = 'accent';
+					}
+					if ( ( $l_id === 'back-panel' || $l_id === 'camera-panel' || strpos( $l_name, 'panel' ) !== false ) && (float) ( $layer['extra_price'] ?? 0 ) == 0 ) {
+						$layer['extra_price'] = 60000;
+						$layer['group'] = 'accent';
 					}
 				}
 				unset( $layer );
 			}
 
 			// Auto-heal tablet / iPad sides and accents from 0 to 50000
-			if ( $dev_fam === 'tablet' || stripos( $profile['category'] ?? '', 'ipad' ) !== false || stripos( $profile['device_name'] ?? '', 'ipad' ) !== false ) {
-				foreach ( $profile['layers'] as &$layer ) {
+			if ( $dev_fam === 'tablet' || stripos( $dev_cat, 'ipad' ) !== false || stripos( $dev_name, 'ipad' ) !== false ) {
+				foreach ( $profile['layers'] as $idx => &$layer ) {
+					if ( $idx === 0 ) continue;
 					$l_id = strtolower( $layer['id'] ?? '' );
 					$l_name = strtolower( $layer['name'] ?? '' );
 					if ( ( $l_id === 'sides' || $l_id === 'side' || strpos( $l_name, 'side' ) !== false ) && (float) ( $layer['extra_price'] ?? 0 ) == 0 ) {
 						$layer['extra_price'] = 50000;
+						$layer['group'] = 'accent';
 					}
 					if ( ( $l_id === 'accents' || strpos( $l_name, 'accent' ) !== false ) && (float) ( $layer['extra_price'] ?? 0 ) == 0 ) {
 						$layer['extra_price'] = 50000;
+						$layer['group'] = 'accent';
 					}
 				}
 				unset( $layer );
