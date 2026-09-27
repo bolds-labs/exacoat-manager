@@ -78,6 +78,43 @@ class Exacoat_Email_Engine {
 	}
 
 	/**
+	 * Helper: Clean price string for transactional emails (strips HTML tags & entities, normalizes spacing)
+	 */
+	public static function clean_email_price( $val ): string {
+		if ( null === $val || '' === $val ) {
+			return '';
+		}
+		$str = is_scalar( $val ) ? (string) $val : '';
+		if ( '' === $str ) {
+			return '';
+		}
+		$clean = html_entity_decode( wp_strip_all_tags( $str ), ENT_QUOTES, 'UTF-8' );
+		$clean = str_replace( [ "\xc2\xa0", "\u{00A0}", "&nbsp;" ], ' ', $clean );
+		return trim( preg_replace( '/\s+/', ' ', $clean ) );
+	}
+
+	/**
+	 * Helper: Determine if a price value is zero, empty, or effectively zero
+	 */
+	public static function is_price_zero( $val ): bool {
+		if ( null === $val || '' === $val ) {
+			return true;
+		}
+		if ( is_numeric( $val ) ) {
+			return (float) $val == 0.0;
+		}
+		$clean = self::clean_email_price( $val );
+		if ( '' === $clean || '0' === $clean || '0.00' === $clean || '-' === $clean || 'free' === strtolower( $clean ) ) {
+			return true;
+		}
+		$digits = preg_replace( '/[^\d]/', '', $clean );
+		if ( '' === $digits || intval( $digits ) === 0 ) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
 	 * Standard Icon URL Resolver (Supports official Artmatter PNGs + Lucide Icons fallback)
 	 */
 	public static function resolve_icon_url( string $icon_name_or_url ): string {
@@ -1250,6 +1287,13 @@ class Exacoat_Email_Engine {
 	 * Render Professional Light-Mode Customer Order Transactional Email
 	 */
 	public static function render_customer_order_html( string $event, array $data, array $tmpl ): array {
+		$price_keys = [ 'subtotal', 'discount_total', 'discount_tax', 'shipping_total', 'shipping_tax', 'total_tax', 'total', 'total_refunded', 'refund_amount' ];
+		foreach ( $price_keys as $pk ) {
+			if ( isset( $data[ $pk ] ) ) {
+				$data[ $pk ] = self::clean_email_price( $data[ $pk ] );
+			}
+		}
+
 		$replacements = [];
 		foreach ( $data as $k => $v ) {
 			if ( is_scalar( $v ) ) {
@@ -1359,6 +1403,7 @@ class Exacoat_Email_Engine {
 					'name'          => 'iPhone 16 Pro Skins',
 					'image_url'     => 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
 					'quantity'      => 1,
+					'subtotal'      => $data['subtotal'] ?? 'Rp 149.000',
 					'total'         => $data['total'] ?? 'Rp 149.000',
 					'meta'          => "Variant: Full Body\nTexture: Matrix Black",
 				]
@@ -1372,7 +1417,8 @@ class Exacoat_Email_Engine {
 			$i_name = esc_html( $clean_name );
 			$i_img  = esc_url( $item['image_url'] ?? ( $item['image'] ?? 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg' ) );
 			$i_qty  = intval( $item['quantity'] ?? ( $item['qty'] ?? 1 ) );
-			$i_tot  = esc_html( $item['total'] ?? ( $item['price'] ?? ( $item['subtotal'] ?? 'Rp 149.000' ) ) );
+			$raw_item_price = $item['subtotal'] ?? ( $item['price'] ?? ( $item['total'] ?? 'Rp 149.000' ) );
+			$i_tot  = esc_html( self::clean_email_price( $raw_item_price ) );
 			
 			$specs = [];
 			if ( ! empty( $item['parsed_configurator'] ) && is_array( $item['parsed_configurator'] ) ) {
@@ -1423,29 +1469,32 @@ class Exacoat_Email_Engine {
 			</tr>";
 		}
 
-		$subtotal       = esc_html( $data['subtotal'] ?? 'Rp 149.000' );
-		$discount_total = esc_html( $data['discount_total'] ?? '' );
+		$subtotal_clean = self::clean_email_price( $data['subtotal'] ?? 'Rp 149.000' );
+		$subtotal       = esc_html( $subtotal_clean ?: 'Rp 149.000' );
+		$discount_total = esc_html( self::clean_email_price( $data['discount_total'] ?? '' ) );
 		$coupons        = $data['coupon_codes'] ?? [];
-		$shipping_total = esc_html( $data['shipping_total'] ?? 'Rp 15.000' );
-		$shipping_name  = esc_html( $data['shipping_method_name'] ?? 'JNE Reguler' );
-		$total_tax      = esc_html( $data['total_tax'] ?? '' );
-		$total          = esc_html( $data['total'] ?? 'Rp 164.000' );
-		$total_refunded = esc_html( $data['total_refunded'] ?? '' );
+		$shipping_clean = self::clean_email_price( $data['shipping_total'] ?? 'Rp 15.000' );
+		$shipping_total = esc_html( self::is_price_zero( $shipping_clean ) ? 'Free' : $shipping_clean );
+		$shipping_name  = esc_html( $data['shipping_method_name'] ?? 'Standard Tracked Delivery' );
+		$total_tax      = esc_html( self::clean_email_price( $data['total_tax'] ?? '' ) );
+		$total_clean    = self::clean_email_price( $data['total'] ?? 'Rp 164.000' );
+		$total          = esc_html( $total_clean ?: 'Rp 164.000' );
+		$total_refunded = esc_html( self::clean_email_price( $data['total_refunded'] ?? '' ) );
 		$payment_meth   = esc_html( $data['payment_method_title'] ?? 'Midtrans / QRIS' );
 		$shipping_addr  = nl2br( esc_html( $data['shipping_address'] ?? "William Vance\nJl. Sudirman No. 42\nJakarta Selatan 12190\nIndonesia" ) );
 
 		$coupons_row = '';
-		if ( ! empty( $discount_total ) && '$0.00' !== $discount_total && '0' !== $discount_total && 'Rp 0' !== $discount_total ) {
-			$c_code = ! empty( $coupons ) ? '(' . implode( ', ', array_map( 'esc_html', (array) $coupons ) ) . ')' : '';
+		if ( ! empty( $discount_total ) && ! self::is_price_zero( $discount_total ) ) {
+			$c_code = ! empty( $coupons ) ? ' (' . implode( ', ', array_map( 'esc_html', (array) $coupons ) ) . ')' : '';
 			$coupons_row = "
 			<tr>
-				<td style=\"padding:8px 0;font-size:13.5px;color:#52525b;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">Discount {$c_code}</td>
+				<td style=\"padding:8px 0;font-size:13.5px;color:#52525b;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">Discount{$c_code}</td>
 				<td align=\"right\" style=\"padding:8px 0;font-size:13.5px;color:#059669;font-weight:600;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">-{$discount_total}</td>
 			</tr>";
 		}
 
 		$tax_row = '';
-		if ( ! empty( $total_tax ) && '$0.00' !== $total_tax && '0' !== $total_tax && 'Rp 0' !== $total_tax ) {
+		if ( ! empty( $total_tax ) && ! self::is_price_zero( $total_tax ) ) {
 			$tax_row = "
 			<tr>
 				<td style=\"padding:8px 0;font-size:13.5px;color:#52525b;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">Taxes / DDP</td>
@@ -1454,7 +1503,7 @@ class Exacoat_Email_Engine {
 		}
 
 		$refund_row = '';
-		if ( ! empty( $total_refunded ) && '$0.00' !== $total_refunded && '0' !== $total_refunded && 'Rp 0' !== $total_refunded ) {
+		if ( ! empty( $total_refunded ) && ! self::is_price_zero( $total_refunded ) ) {
 			$refund_row = "
 			<tr>
 				<td style=\"padding:8px 0;font-size:13.5px;color:#dc2626;font-weight:600;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">Refunded Amount</td>
@@ -1932,6 +1981,13 @@ class Exacoat_Email_Engine {
 	 * Render Professional Light-Mode Store Credit & Cashback Notification Email
 	 */
 	public static function render_store_credit_html( string $event, array $data, array $tmpl ): array {
+		$price_keys = [ 'store_credit_balance', 'cashback_amount' ];
+		foreach ( $price_keys as $pk ) {
+			if ( isset( $data[ $pk ] ) ) {
+				$data[ $pk ] = self::clean_email_price( $data[ $pk ] );
+			}
+		}
+
 		$replacements = [];
 		foreach ( $data as $k => $v ) {
 			if ( is_scalar( $v ) ) {
@@ -1942,8 +1998,8 @@ class Exacoat_Email_Engine {
 		}
 
 		$cust_name       = esc_html( $data['customer_first_name'] ?? ( $data['customer_name'] ?? 'Customer' ) );
-		$balance         = esc_html( $data['store_credit_balance'] ?? 'Rp 25.000' );
-		$cashback_amount = esc_html( $data['cashback_amount'] ?? '' );
+		$balance         = esc_html( self::clean_email_price( $data['store_credit_balance'] ?? 'Rp 25.000' ) );
+		$cashback_amount = esc_html( self::clean_email_price( $data['cashback_amount'] ?? '' ) );
 		$order_num       = esc_html( $data['order_number'] ?? '' );
 		$expiry_date     = esc_html( $data['expiry_date'] ?? '' );
 		$shop_url        = esc_url( $data['shop_url'] ?? ( function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'shop' ) : home_url( '/shop/' ) ) );
@@ -1965,7 +2021,7 @@ class Exacoat_Email_Engine {
 		$body_secondary = preg_replace( $tag_pattern, '', $body_secondary );
 
 		$cashback_pill = '';
-		if ( ! empty( $cashback_amount ) ) {
+		if ( ! empty( $cashback_amount ) && ! self::is_price_zero( $cashback_amount ) ) {
 			$order_label = ! empty( $order_num ) ? " from Order #{$order_num}" : '';
 			$cashback_pill = "<div style=\"display:inline-block;padding:4px 12px;background:#ecfdf5;color:#047857;font-size:12px;font-weight:700;border-radius:9999px;border:1px solid #a7f3d0;margin-top:10px;\">
 				+{$cashback_amount} Cashback{$order_label}
@@ -2084,6 +2140,13 @@ class Exacoat_Email_Engine {
 	 * Render Professional Light-Mode Affiliate & Creator Program Email Notifications
 	 */
 	public static function render_creator_email_html( string $event, array $data, array $tmpl ): array {
+		$price_keys = [ 'commission_amount', 'payout_amount', 'unpaid_balance' ];
+		foreach ( $price_keys as $pk ) {
+			if ( isset( $data[ $pk ] ) ) {
+				$data[ $pk ] = self::clean_email_price( $data[ $pk ] );
+			}
+		}
+
 		$replacements = [];
 		foreach ( $data as $k => $v ) {
 			if ( is_scalar( $v ) ) {
@@ -2094,10 +2157,10 @@ class Exacoat_Email_Engine {
 		}
 
 		$creator_name      = esc_html( $data['creator_name'] ?? ( $data['display_name'] ?? ( $data['customer_name'] ?? 'Creator' ) ) );
-		$commission_amount = esc_html( $data['commission_amount'] ?? 'Rp 74.500' );
-		$payout_amount     = esc_html( $data['payout_amount'] ?? 'Rp 500.000' );
+		$commission_amount = esc_html( self::clean_email_price( $data['commission_amount'] ?? 'Rp 74.500' ) );
+		$payout_amount     = esc_html( self::clean_email_price( $data['payout_amount'] ?? 'Rp 500.000' ) );
 		$order_number      = esc_html( $data['order_number'] ?? '' );
-		$unpaid_balance    = esc_html( $data['unpaid_balance'] ?? '' );
+		$unpaid_balance    = esc_html( self::clean_email_price( $data['unpaid_balance'] ?? '' ) );
 		$bank_name         = esc_html( $data['bank_name'] ?? 'BCA' );
 		$bank_acc          = esc_html( $data['bank_account_number'] ?? '' );
 		$bank_acc_name     = esc_html( $data['bank_account_name'] ?? '' );
@@ -2607,6 +2670,13 @@ class Exacoat_Email_Engine {
 	 * genuine trust factors, and zero generic AI buzzwords.
 	 */
 	public static function render_abandoned_cart_html( string $event, array $data, array $tmpl ): array {
+		$price_keys = [ 'subtotal', 'total' ];
+		foreach ( $price_keys as $pk ) {
+			if ( isset( $data[ $pk ] ) ) {
+				$data[ $pk ] = self::clean_email_price( $data[ $pk ] );
+			}
+		}
+
 		$replacements = [];
 		foreach ( $data as $k => $v ) {
 			if ( is_scalar( $v ) ) {
@@ -2651,7 +2721,7 @@ class Exacoat_Email_Engine {
 				$name      = esc_html( $item['name'] ?? 'Exacoat Device Protection' );
 				$img       = esc_url( $item['image_url'] ?? 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg' );
 				$qty       = (int) ( $item['quantity'] ?? 1 );
-				$price     = esc_html( $item['price'] ?? $item['subtotal'] ?? '' );
+				$price     = esc_html( self::clean_email_price( $item['price'] ?? ( $item['subtotal'] ?? '' ) ) );
 				$meta_raw  = $item['meta'] ?? '';
 				$meta_html = '';
 				if ( ! empty( $meta_raw ) ) {
@@ -2689,7 +2759,7 @@ class Exacoat_Email_Engine {
 			}
 		}
 
-		$subtotal = esc_html( $data['subtotal'] ?? $data['total'] ?? '' );
+		$subtotal = esc_html( self::clean_email_price( $data['subtotal'] ?? ( $data['total'] ?? '' ) ) );
 
 		$logo_html = self::get_brand_logo_html();
 		$preheader_html = $preheader ? '<div style="display:none;font-size:1px;color:#f4f4f5;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">' . esc_html( $preheader ) . '</div>' : '';

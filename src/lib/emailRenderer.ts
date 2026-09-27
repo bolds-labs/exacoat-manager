@@ -41,6 +41,35 @@ function escapeHtml(str: string | number | undefined | null): string {
     .replace(/'/g, '&#039;');
 }
 
+export function cleanEmailPrice(val: any): string {
+  if (val === null || val === undefined || val === '') return '';
+  let str = String(val);
+  // Strip HTML tags
+  str = str.replace(/<[^>]*>/g, '');
+  // Decode HTML entities
+  str = str
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#160;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'");
+  // Normalize whitespace and non-breaking spaces
+  str = str.replace(/[\u00A0\s]+/g, ' ').trim();
+  return str;
+}
+
+export function isPriceZero(val: any): boolean {
+  if (val === null || val === undefined || val === '') return true;
+  if (typeof val === 'number') return val === 0;
+  const clean = cleanEmailPrice(val);
+  if (!clean || clean === '0' || clean === '0.00' || clean.toLowerCase() === 'free' || clean === '-') return true;
+  const digits = clean.replace(/[^\d]/g, '');
+  if (digits.length === 0) return true;
+  return parseInt(digits, 10) === 0;
+}
+
 export const BRAND_LOGO_HTML = `
   <svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" width="136" height="24" viewBox="0 0 1368000 241000" shape-rendering="geometricPrecision" text-rendering="geometricPrecision" style="display:block;border:0;outline:none;width:136px;height:24px;">
     <path fill="#000000" fill-rule="nonzero" d="M1281000 218000l0 -40000 22000 -23000 43000 0 22000 23000 0 40000 -22000 23000 -43000 0 -22000 -23000zm59000 10000l14000 -14000 0 -32000 -14000 -14000 -31000 0 -14000 14000 0 32000 14000 14000 31000 0zm-33000 -52000l28000 0 8000 8000 0 13000 -5000 5000 6000 6000 0 10000 -12000 0 0 -7000 -4000 -5000 -9000 0 0 12000 -12000 0 0 -42000zm22000 20000l3000 -2000 0 -5000 -3000 -3000 -10000 0 0 10000 10000 0z"/>
@@ -330,11 +359,18 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
     bodyPrimary = `Your order #${orderNum} has been delivered by the courier.`;
     bodySecondary = 'We hope you enjoy your new skins. If you need any assistance, our support team is always here to help.';
   } else if (event === 'customer_order_refunded') {
-    const refundAmt = escapeHtml(merged.refund_amount || 'Rp 149.000');
+    const refundAmt = escapeHtml(cleanEmailPrice(merged.refund_amount || 'Rp 149.000'));
     subject = `Refund confirmation for order #${orderNum}`;
     badgeText = 'Refund processed';
     title = 'Refund processed';
     bodyPrimary = `We have processed a refund of ${refundAmt} for order #${orderNum}.`;
+    bodySecondary = 'Depending on your payment method or bank, the funds will reflect in your account within 3 to 5 business days.';
+  } else if (event === 'customer_order_partially_refunded') {
+    const refundAmt = escapeHtml(cleanEmailPrice(merged.refund_amount || 'Rp 50.000'));
+    subject = `Partial refund for order #${orderNum}`;
+    badgeText = 'Partial refund';
+    title = 'Partial refund processed';
+    bodyPrimary = `We have processed a partial refund of ${refundAmt} for order #${orderNum}.`;
     bodySecondary = 'Depending on your payment method or bank, the funds will reflect in your account within 3 to 5 business days.';
   } else if (event === 'customer_order_on_hold') {
     subject = `Your Exacoat order #${orderNum} is on hold`;
@@ -454,7 +490,8 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
 
     const iImg = escapeHtml(item.image_url || item.image || 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg');
     const iQty = item.quantity || item.qty || 1;
-    const iTot = escapeHtml(item.total || item.price || item.subtotal || 'Rp 149.000');
+    const rawItemPrice = item.subtotal || item.price || item.total || 'Rp 149.000';
+    const iTot = escapeHtml(cleanEmailPrice(rawItemPrice));
 
     return `
     <tr>
@@ -478,36 +515,42 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
     </tr>`;
   }).join('');
 
-  const subtotal = escapeHtml(merged.subtotal || 'Rp 149.000');
-  const discountTotal = escapeHtml(merged.discount_total || '');
-  const shippingTotal = escapeHtml(isStorePickup ? (merged.shipping_total || 'Rp 0') : (merged.shipping_total || 'Rp 15.000'));
+  const subtotal = escapeHtml(cleanEmailPrice(merged.subtotal || 'Rp 149.000'));
+  const discountTotal = escapeHtml(cleanEmailPrice(merged.discount_total || ''));
+  const rawShipping = isStorePickup ? (merged.shipping_total || 'Rp 0') : (merged.shipping_total || 'Rp 15.000');
+  const cleanShipping = cleanEmailPrice(rawShipping);
+  const shippingTotal = escapeHtml(isPriceZero(cleanShipping) ? 'Free' : cleanShipping);
   const shippingName = escapeHtml(isStorePickup ? (merged.shipping_method_name || 'Store Pickup (Summarecon Bekasi)') : (merged.shipping_method_name || 'Standard'));
-  const totalTax = escapeHtml(merged.total_tax || '');
-  const total = escapeHtml(isStorePickup && !data.total ? (merged.subtotal || 'Rp 149.000') : (merged.total || (isStorePickup ? 'Rp 149.000' : 'Rp 164.000')));
-  const totalRefunded = escapeHtml(merged.total_refunded || '');
+  const totalTax = escapeHtml(cleanEmailPrice(merged.total_tax || ''));
+  const rawTotal = isStorePickup && !data.total ? (merged.subtotal || 'Rp 149.000') : (merged.total || (isStorePickup ? 'Rp 149.000' : 'Rp 164.000'));
+  const total = escapeHtml(cleanEmailPrice(rawTotal) || 'Rp 164.000');
+  const totalRefunded = escapeHtml(cleanEmailPrice(merged.total_refunded || ''));
   const paymentMeth = escapeHtml(merged.payment_method_title || 'Midtrans / QRIS');
   const shippingAddr = escapeHtml(merged.shipping_address || 'William Vance\nJl. Sudirman No. 42\nJakarta Selatan 12190\nIndonesia').replace(/\n/g, '<br>');
 
   let couponsRow = '';
-  if (discountTotal && discountTotal !== 'Rp 0' && discountTotal !== '$0.00' && discountTotal !== '0') {
+  if (discountTotal && !isPriceZero(discountTotal)) {
+    const couponList = Array.isArray(merged.coupon_codes) && merged.coupon_codes.length > 0
+      ? ` (${merged.coupon_codes.map((c: any) => escapeHtml(String(c))).join(', ')})`
+      : '';
     couponsRow = `
     <tr>
-      <td style="padding:8px 0;font-size:13.5px;color:#52525b;">Discount</td>
+      <td style="padding:8px 0;font-size:13.5px;color:#52525b;">Discount${couponList}</td>
       <td align="right" style="padding:8px 0;font-size:13.5px;color:#059669;font-weight:600;">-${discountTotal}</td>
     </tr>`;
   }
 
   let taxRow = '';
-  if (totalTax && totalTax !== 'Rp 0' && totalTax !== '$0.00' && totalTax !== '0') {
+  if (totalTax && !isPriceZero(totalTax)) {
     taxRow = `
     <tr>
-      <td style="padding:8px 0;font-size:13.5px;color:#52525b;">Tax</td>
+      <td style="padding:8px 0;font-size:13.5px;color:#52525b;">Taxes / DDP</td>
       <td align="right" style="padding:8px 0;font-size:13.5px;color:#111111;font-weight:500;">${totalTax}</td>
     </tr>`;
   }
 
   let refundRow = '';
-  if (totalRefunded && totalRefunded !== 'Rp 0' && totalRefunded !== '$0.00' && totalRefunded !== '0') {
+  if (totalRefunded && !isPriceZero(totalRefunded)) {
     refundRow = `
     <tr>
       <td style="padding:8px 0;font-size:13.5px;color:#dc2626;font-weight:600;">Refunded Amount</td>
@@ -833,8 +876,8 @@ function renderReviewRewardEmail(data: Record<string, any>): RenderedEmail {
 
 function renderStoreCreditEmail(event: string, data: Record<string, any>): RenderedEmail {
   const custName = escapeHtml(data.customer_first_name || data.customer_name || 'Customer');
-  const balance = escapeHtml(data.store_credit_balance || 'Rp 50.000');
-  const cashbackAmount = escapeHtml(data.cashback_amount || 'Rp 25.000');
+  const balance = escapeHtml(cleanEmailPrice(data.store_credit_balance || 'Rp 50.000'));
+  const cashbackAmount = escapeHtml(cleanEmailPrice(data.cashback_amount || 'Rp 25.000'));
   const expiryDate = escapeHtml(data.expiry_date || '');
   const orderNum = escapeHtml(data.order_number || '14589');
   const shopUrl = escapeHtml(data.shop_url || 'https://exacoat.com/shop/');
@@ -861,7 +904,7 @@ function renderStoreCreditEmail(event: string, data: Record<string, any>): Rende
     ? 'Shop Device Skins'
     : (isPreExpiry ? 'Use Credit Before It Expires' : 'Use Your Credit');
 
-  const cashbackPill = isCashback && cashbackAmount
+  const cashbackPill = isCashback && cashbackAmount && !isPriceZero(cashbackAmount)
     ? `<div style="display:inline-block;padding:4px 12px;background:#ecfdf5;color:#047857;font-size:12px;font-weight:700;border-radius:9999px;border:1px solid #a7f3d0;margin-top:10px;">
         +${cashbackAmount} Cashback from Order #${orderNum}
       </div>`
@@ -976,10 +1019,10 @@ function renderStoreCreditEmail(event: string, data: Record<string, any>): Rende
 
 function renderCreatorEmail(event: string, data: Record<string, any>): RenderedEmail {
   const creatorName = escapeHtml(data.creator_name || data.display_name || data.customer_first_name || 'Creator');
-  const commissionAmount = escapeHtml(data.commission_amount || 'Rp 74.500');
-  const payoutAmount = escapeHtml(data.payout_amount || 'Rp 500.000');
+  const commissionAmount = escapeHtml(cleanEmailPrice(data.commission_amount || 'Rp 74.500'));
+  const payoutAmount = escapeHtml(cleanEmailPrice(data.payout_amount || 'Rp 500.000'));
   const orderNumber = escapeHtml(data.order_number || '14890');
-  const unpaidBalance = escapeHtml(data.unpaid_balance || 'Rp 324.500');
+  const unpaidBalance = escapeHtml(cleanEmailPrice(data.unpaid_balance || 'Rp 324.500'));
   const bankName = escapeHtml(data.bank_name || 'BCA');
   const bankAcc = escapeHtml(data.bank_account_number || '8830192831');
   const bankAccName = escapeHtml(data.bank_account_name || '');
@@ -1238,7 +1281,7 @@ function renderAbandonedCartEmail(event: string, data: Record<string, any>): Ren
 
     const iImg = escapeHtml(item.image_url || item.image || 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg');
     const iQty = item.quantity || item.qty || 1;
-    const iPrice = escapeHtml(item.price || item.total || item.subtotal || 'Rp 149.000');
+    const iPrice = escapeHtml(cleanEmailPrice(item.subtotal || item.price || item.total || 'Rp 149.000'));
 
     return `
     <tr>
@@ -1262,7 +1305,7 @@ function renderAbandonedCartEmail(event: string, data: Record<string, any>): Ren
     </tr>`;
   }).join('');
 
-  const subtotal = escapeHtml(data.subtotal || data.total || 'Rp 149.000');
+  const subtotal = escapeHtml(cleanEmailPrice(data.subtotal || data.total || 'Rp 149.000'));
 
   const html = `<!doctype html>
 <html lang="en">
@@ -1519,7 +1562,7 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
   const preheader = escapeHtml(resolvedPreheader);
 
   const contentAlign = options.contentAlign || 'left';
-  const showFooterLogo = options.showFooterLogo ?? true;
+  const showFooterLogo = options.showFooterLogo ?? false;
   const showSocialLinks = options.showSocialLinks ?? true;
   const instagramUrl = (options.instagramUrl || 'https://instagram.com/exacoat').trim();
   const xUrl = (options.xUrl || 'https://x.com/exacoat').trim();
@@ -1896,12 +1939,6 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
                               <svg width="15" height="12" viewBox="0 0 24 24" fill="${isDark ? '#e4e4e7' : '#27272a'}" style="display:block;"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
                             </a>
                           </td>` : ''}
-                          ${tiktokUrl ? `
-                          <td style="padding:0 5px;">
-                            <a href="${escapeHtml(tiktokUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="TikTok">
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="${isDark ? '#e4e4e7' : '#27272a'}" style="display:block;"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.86.12V9.35a6.33 6.33 0 0 0-.86-.06 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.52a8.27 8.27 0 0 0 4.86 1.57v-3.4z"/></svg>
-                            </a>
-                          </td>` : ''}
                         </tr>
                       </table>` : ''}
 
@@ -1944,7 +1981,7 @@ export function renderMarketingEmailMjml(options: MarketingEmailOptions): string
   const showBadge = Boolean(options.showBadge);
   const logoPosition = options.logoPosition ?? 'top';
   const contentAlign = options.contentAlign || 'left';
-  const showFooterLogo = options.showFooterLogo ?? true;
+  const showFooterLogo = options.showFooterLogo ?? false;
   const showSocialLinks = options.showSocialLinks ?? true;
   const instagramUrl = options.instagramUrl ?? 'https://instagram.com/exacoat';
   const xUrl = options.xUrl ?? 'https://x.com/exacoat';
@@ -2268,12 +2305,6 @@ export function renderMarketingEmailMjml(options: MarketingEmailOptions): string
                 <td style="padding:0 5px;">
                   <a href="${escapeHtml(youtubeUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="YouTube">
                     <svg width="15" height="12" viewBox="0 0 24 24" fill="${isDark ? '#e4e4e7' : '#27272a'}" style="display:block;"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-                  </a>
-                </td>` : ''}
-                ${tiktokUrl ? `
-                <td style="padding:0 5px;">
-                  <a href="${escapeHtml(tiktokUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="TikTok">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="${isDark ? '#e4e4e7' : '#27272a'}" style="display:block;"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.86.12V9.35a6.33 6.33 0 0 0-.86-.06 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.52a8.27 8.27 0 0 0 4.86 1.57v-3.4z"/></svg>
                   </a>
                 </td>` : ''}
               </tr>

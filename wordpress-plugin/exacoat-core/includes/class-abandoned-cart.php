@@ -295,8 +295,12 @@ class Exacoat_Abandoned_Cart {
 					'name'         => $product->get_name(),
 					'image_url'    => $image_url ?: 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
 					'quantity'     => (int) ( $item['quantity'] ?? 1 ),
-					'price'        => wc_price( (float) $product->get_price() ),
-					'subtotal'     => wc_price( (float) $item['line_total'] ),
+					'price'        => function_exists( 'wc_price' )
+						? trim( preg_replace( '/\s+/', ' ', str_replace( [ "\xc2\xa0", "\u{00A0}", "&nbsp;" ], ' ', html_entity_decode( wp_strip_all_tags( wc_price( (float) $product->get_price() ) ), ENT_QUOTES, 'UTF-8' ) ) ) )
+						: number_format( (float) $product->get_price(), 0, ',', '.' ),
+					'subtotal'     => function_exists( 'wc_price' )
+						? trim( preg_replace( '/\s+/', ' ', str_replace( [ "\xc2\xa0", "\u{00A0}", "&nbsp;" ], ' ', html_entity_decode( wp_strip_all_tags( wc_price( (float) $item['line_total'] ) ), ENT_QUOTES, 'UTF-8' ) ) ) )
+						: number_format( (float) $item['line_total'], 0, ',', '.' ),
 					'meta'         => implode( "\n", $specs ),
 					'item_data'    => $item,
 				];
@@ -634,6 +638,10 @@ class Exacoat_Abandoned_Cart {
 		$items           = json_decode( $cart->cart_contents, true ) ?: [];
 		$storefront_base = function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url() : home_url();
 
+		$clean_total = function_exists( 'wc_price' )
+			? trim( preg_replace( '/\s+/', ' ', str_replace( [ "\xc2\xa0", "\u{00A0}", "&nbsp;" ], ' ', html_entity_decode( wp_strip_all_tags( wc_price( (float) $cart->cart_total, [ 'currency' => $cart->currency ?: 'IDR' ] ) ), ENT_QUOTES, 'UTF-8' ) ) ) )
+			: number_format( (float) $cart->cart_total, 0, ',', '.' );
+
 		$payload = [
 			'customer_first_name' => $cart->customer_first_name ?: 'there',
 			'customer_email'      => $cart->customer_email,
@@ -641,8 +649,8 @@ class Exacoat_Abandoned_Cart {
 			'restore_url'         => trailingslashit( $storefront_base ) . 'checkout/?restore_cart=' . rawurlencode( $cart->restore_token ),
 			'unsubscribe_url'     => trailingslashit( $storefront_base ) . 'cart/?unsubscribe_cart=' . rawurlencode( $cart->restore_token ),
 			'items'               => $items,
-			'subtotal'            => function_exists( 'wc_price' ) ? wc_price( $cart->cart_total ) : number_format( $cart->cart_total, 0, ',', '.' ),
-			'total'               => function_exists( 'wc_price' ) ? wc_price( $cart->cart_total ) : number_format( $cart->cart_total, 0, ',', '.' ),
+			'subtotal'            => $clean_total,
+			'total'               => $clean_total,
 			'currency'            => $cart->currency,
 			'sequence'            => $sequence,
 		];

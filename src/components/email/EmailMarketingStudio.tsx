@@ -138,7 +138,7 @@ export const BUILTIN_PRESETS: MarketingPreset[] = [
     showBadge: false,
     logoPosition: 'top',
     contentAlign: 'left',
-    showFooterLogo: true,
+    showFooterLogo: false,
     showSocialLinks: true,
     instagramUrl: 'https://instagram.com/exacoat',
     xUrl: 'https://x.com/exacoat',
@@ -172,7 +172,7 @@ export const BUILTIN_PRESETS: MarketingPreset[] = [
     showBadge: false,
     logoPosition: 'top',
     contentAlign: 'left',
-    showFooterLogo: true,
+    showFooterLogo: false,
     showSocialLinks: true,
     instagramUrl: 'https://instagram.com/exacoat',
     xUrl: 'https://x.com/exacoat',
@@ -203,7 +203,7 @@ export const BUILTIN_PRESETS: MarketingPreset[] = [
     showBadge: false,
     logoPosition: 'top',
     contentAlign: 'left',
-    showFooterLogo: true,
+    showFooterLogo: false,
     showSocialLinks: true,
     instagramUrl: 'https://instagram.com/exacoat',
     xUrl: 'https://x.com/exacoat',
@@ -315,7 +315,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // AI Copywriter State
-  const [showAiPanel, setShowAiPanel] = useState(true);
+  const [showAiPanel, setShowAiPanel] = useState(false);
   const [aiCampaignType, setAiCampaignType] = useState('New Device / Skin Release');
   const [aiTone, setAiTone] = useState('Exacoat Studio Wit (Dry & Observant)');
   const [aiProductFocus, setAiProductFocus] = useState('iPhone 17 and Samsung Galaxy skins in Matrix and Black Camo');
@@ -340,12 +340,12 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
 
   // Content Alignment & Footer Brand Controls
   const [contentAlign, setContentAlign] = useState<'left' | 'center'>('left');
-  const [showFooterLogo, setShowFooterLogo] = useState<boolean>(true);
+  const [showFooterLogo, setShowFooterLogo] = useState<boolean>(false);
   const [showSocialLinks, setShowSocialLinks] = useState<boolean>(true);
   const [instagramUrl, setInstagramUrl] = useState<string>('https://instagram.com/exacoat');
   const [xUrl, setXUrl] = useState<string>('https://x.com/exacoat');
   const [youtubeUrl, setYoutubeUrl] = useState<string>('https://youtube.com/@exacoat');
-  const [tiktokUrl, setTiktokUrl] = useState<string>('https://tiktok.com/@exacoat');
+  const [tiktokUrl, setTiktokUrl] = useState<string>('');
 
   // Active Composer Section Tab ('content' | 'visuals' | 'audience')
   const [activeTab, setActiveTab] = useState<'content' | 'visuals' | 'audience'>('content');
@@ -654,7 +654,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     setShowBadge(p.showBadge ?? false);
     setLogoPosition(p.logoPosition ?? 'top');
     setContentAlign(p.contentAlign || 'left');
-    setShowFooterLogo(p.showFooterLogo ?? true);
+    setShowFooterLogo(p.showFooterLogo ?? false);
     setShowSocialLinks(p.showSocialLinks ?? true);
     if (p.instagramUrl) setInstagramUrl(p.instagramUrl);
     if (p.xUrl) setXUrl(p.xUrl);
@@ -688,7 +688,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
         showBadge: p.showBadge,
         logoPosition: p.logoPosition,
         contentAlign: p.contentAlign || 'left',
-        showFooterLogo: p.showFooterLogo ?? true,
+        showFooterLogo: p.showFooterLogo ?? false,
         showSocialLinks: p.showSocialLinks ?? true,
         instagramUrl: p.instagramUrl,
         xUrl: p.xUrl,
@@ -1478,44 +1478,6 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                     </div>
                   </div>
 
-                  {/* Content Alignment Selector */}
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200/80 dark:border-white/[0.06]">
-                    <div>
-                      <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
-                        Content Alignment
-                      </span>
-                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
-                        Align headline, greeting, sub-pill notice, and story copy
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1 bg-zinc-200/60 dark:bg-white/10 p-1 rounded-xl">
-                      <button
-                        type="button"
-                        onClick={() => setContentAlign('left')}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          contentAlign === 'left'
-                            ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm ring-1 ring-zinc-200 dark:ring-white/10'
-                            : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-                        }`}
-                      >
-                        <AlignLeft className="w-3.5 h-3.5 text-amber-500" />
-                        <span>Left</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setContentAlign('center')}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          contentAlign === 'center'
-                            ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm ring-1 ring-zinc-200 dark:ring-white/10'
-                            : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-                        }`}
-                      >
-                        <AlignCenter className="w-3.5 h-3.5 text-amber-500" />
-                        <span>Centered</span>
-                      </button>
-                    </div>
-                  </div>
-
                   {/* Subject Line & Preheader */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
@@ -1617,11 +1579,11 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                       </span>
                     </div>
                     <textarea
-                      rows={6}
+                      rows={10}
                       value={bodyText}
                       onChange={(e) => setBodyText(e.target.value)}
                       placeholder="Write your email story..."
-                      className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-white/[0.05] border border-zinc-200 dark:border-white/10 text-xs text-zinc-900 dark:text-white leading-relaxed focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans"
+                      className="w-full p-3.5 rounded-xl border border-zinc-200 dark:border-white/[0.09] bg-white/90 dark:bg-black/25 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]/70 focus:ring-2 focus:ring-[#f3aa18]/10 transition-all font-sans shadow-sm min-h-[220px] leading-relaxed resize-y"
                     />
                   </div>
 
@@ -1748,7 +1710,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
               {activeTab === 'visuals' && (
                 <div className="space-y-4">
                   {/* Header Bar & Logo Placement Card */}
-                  <GlassCard className="p-5 md:p-6 space-y-4">
+                  <GlassCard className="p-5 md:p-6 space-y-4 overflow-visible relative z-20">
                     <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/[0.06] pb-3">
                       <div>
                         <h3 className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
@@ -1760,7 +1722,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                       </div>
                     </div>
 
-                    {/* Show Top Header Bar Toggle (Hidden by Default!) */}
+                    {/* Show Top Header Bar Toggle */}
                     <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200/80 dark:border-white/[0.06] flex items-center justify-between">
                       <div>
                         <div className="flex items-center gap-2">
@@ -1768,7 +1730,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                             Show Top Header Bar
                           </span>
                           <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-zinc-200/60 dark:bg-white/10 text-zinc-600 dark:text-zinc-400">
-                            {showHeader ? 'Visible' : 'Hidden by Default'}
+                            {showHeader ? 'Visible' : 'Hidden'}
                           </span>
                         </div>
                         <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
@@ -1776,14 +1738,30 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                         </p>
                       </div>
 
-                      <label className="flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={showHeader}
-                          onChange={(e) => setShowHeader(e.target.checked)}
-                          className="rounded text-amber-500 w-4 h-4"
-                        />
-                      </label>
+                      <div className="flex items-center gap-1 bg-zinc-200/60 dark:bg-white/10 p-1 rounded-xl">
+                        <button
+                          type="button"
+                          onClick={() => setShowHeader(true)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            showHeader
+                              ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm ring-1 ring-zinc-200 dark:ring-white/10'
+                              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+                          }`}
+                        >
+                          Visible
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowHeader(false)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            !showHeader
+                              ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm ring-1 ring-zinc-200 dark:ring-white/10'
+                              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+                          }`}
+                        >
+                          Hidden
+                        </button>
+                      </div>
                     </div>
 
                     {!showHeader ? (
@@ -1840,15 +1818,69 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                         </p>
                       </div>
 
-                      <label className="flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={showFooterLogo}
-                          onChange={(e) => setShowFooterLogo(e.target.checked)}
-                          className="rounded text-amber-500 w-4 h-4 cursor-pointer"
-                        />
-                      </label>
+                      <div className="flex items-center gap-1 bg-zinc-200/60 dark:bg-white/10 p-1 rounded-xl">
+                        <button
+                          type="button"
+                          onClick={() => setShowFooterLogo(true)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            showFooterLogo
+                              ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm ring-1 ring-zinc-200 dark:ring-white/10'
+                              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+                          }`}
+                        >
+                          Visible
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowFooterLogo(false)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            !showFooterLogo
+                              ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm ring-1 ring-zinc-200 dark:ring-white/10'
+                              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+                          }`}
+                        >
+                          Hidden
+                        </button>
+                      </div>
                     </div>
+                    {/* Content Alignment Selector */}
+                    <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200/80 dark:border-white/[0.06] flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
+                          Content Alignment
+                        </span>
+                        <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                          Align headline, greeting, sub-pill notice, and story copy
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 bg-zinc-200/60 dark:bg-white/10 p-1 rounded-xl">
+                        <button
+                          type="button"
+                          onClick={() => setContentAlign('left')}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            contentAlign === 'left'
+                              ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm ring-1 ring-zinc-200 dark:ring-white/10'
+                              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+                          }`}
+                        >
+                          <AlignLeft className="w-3.5 h-3.5 text-amber-500" />
+                          <span>Left</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setContentAlign('center')}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            contentAlign === 'center'
+                              ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm ring-1 ring-zinc-200 dark:ring-white/10'
+                              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+                          }`}
+                        >
+                          <AlignCenter className="w-3.5 h-3.5 text-amber-500" />
+                          <span>Centered</span>
+                        </button>
+                      </div>
+                    </div>
+
 
                     {showHeader && (
                       /* When Top Header is Visible: Show Category Badge Option */
@@ -2386,7 +2418,6 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                               />
                             </div>
                           </div>
-
                           <p className="text-[10px] text-zinc-400">
                             Icons link directly to brand profiles and adapt to dark and light email themes automatically.
                           </p>
@@ -2404,7 +2435,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
               {activeTab === 'audience' && (
                 <div className="space-y-4">
                   {/* Audience Selector Card */}
-                  <GlassCard className="p-5 md:p-6 space-y-4">
+                  <GlassCard className="p-5 md:p-6 space-y-4 overflow-visible relative z-30">
                     <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/[0.06] pb-3">
                       <div className="flex items-center gap-2">
                         <Users className="w-4 h-4 text-amber-500" />

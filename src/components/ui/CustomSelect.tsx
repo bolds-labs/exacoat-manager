@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Check, Search } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -40,37 +41,69 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [internalDropUp, setInternalDropUp] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number; width: number; isDropUp: boolean } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const isDropUp = dropUp !== undefined ? dropUp : internalDropUp;
 
-  // Auto-detect viewport collision when opened
+  // Calculate and sync position for Portal
+  const updatePosition = () => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const shouldDropUp = dropUp !== undefined ? dropUp : (spaceBelow < 280 && spaceAbove > spaceBelow);
+
+    setInternalDropUp(shouldDropUp);
+    setCoords({
+      top: shouldDropUp ? rect.top : rect.bottom,
+      left: rect.left,
+      width: rect.width,
+      isDropUp: shouldDropUp,
+    });
+  };
+
   useEffect(() => {
-    if (isOpen && containerRef.current && dropUp === undefined) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
-      if (spaceBelow < 260 && spaceAbove > spaceBelow) {
-        setInternalDropUp(true);
-      } else {
-        setInternalDropUp(false);
-      }
+    if (isOpen) {
+      updatePosition();
+      const handleScroll = (e: Event) => {
+        const target = e.target as HTMLElement;
+        if (target && target.closest && target.closest('.custom-select-popover')) {
+          return;
+        }
+        updatePosition();
+      };
+      window.addEventListener('scroll', handleScroll, true);
+      window.addEventListener('resize', updatePosition);
+      return () => {
+        window.removeEventListener('scroll', handleScroll, true);
+        window.removeEventListener('resize', updatePosition);
+      };
+    } else {
+      setCoords(null);
     }
   }, [isOpen, dropUp]);
 
   const selectedOption = options.find(opt => opt.value === value) || (value ? { value, label: value, subtitle: 'Active selection' } : undefined);
 
-  // Close on outside click
+  // Close on outside click (checks both trigger container and portal popover)
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        (!popoverRef.current || !popoverRef.current.contains(target))
+      ) {
         setIsOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [isOpen]);
 
   // Focus search when opened
   useEffect(() => {
@@ -100,7 +133,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   const hasCategories = Object.keys(groupedOptions).length > 1 || !groupedOptions['Standard Options'];
 
   return (
-    <div className={clsx('relative space-y-1.5 font-sans', className)} ref={containerRef}>
+    <div className={clsx('relative space-y-1.5 font-sans', isOpen && 'z-50', className)} ref={containerRef}>
       {label && (
         <label className="text-xs font-semibold text-zinc-300 block font-mono">
           {label}
@@ -153,12 +186,21 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         </div>
       </button>
 
-      {/* Floating Dropdown Popover */}
-      {isOpen && (
+      {/* Floating Dropdown Popover (rendered via Portal to prevent any container clipping) */}
+      {isOpen && coords && typeof document !== 'undefined' && createPortal(
         <div
+          ref={popoverRef}
+          style={{
+            position: 'fixed',
+            left: `${coords.left}px`,
+            width: `${coords.width}px`,
+            ...(coords.isDropUp
+              ? { bottom: `${window.innerHeight - coords.top + 6}px` }
+              : { top: `${coords.top + 6}px` }),
+            zIndex: 99999,
+          }}
           className={clsx(
-            'absolute left-0 right-0 z-50 rounded-2xl overflow-hidden shadow-2xl',
-            isDropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5',
+            'custom-select-popover rounded-2xl overflow-hidden shadow-2xl',
             'bg-[#0c0c0e] border border-white/[0.14] backdrop-blur-2xl',
             'animate-in fade-in zoom-in-95 duration-150',
             dropdownClassName
@@ -313,7 +355,8 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
               })
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

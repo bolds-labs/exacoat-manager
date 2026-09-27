@@ -1744,6 +1744,57 @@ export async function sendDirectZeptoMailEmail(
   }
 }
 
+export async function resendOrderEmail(
+  orderId: number,
+  templateKey: string = 'customer_order_processing',
+  recipientEmail?: string,
+  recipientName?: string
+): Promise<{ success: boolean; latency_ms?: number; message?: string; error?: string }> {
+  const start = performance.now();
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/orders/${orderId}/resend-email`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        template_key: templateKey,
+        recipient_email: recipientEmail,
+        recipient_name: recipientName,
+      }),
+    });
+
+    const latency = Math.round(performance.now() - start);
+
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        ...data,
+        latency_ms: data.latency_ms || latency,
+      };
+    }
+
+    // Fallback: If the dedicated endpoint returns 404, dispatch via /email/send
+    if (res.status === 404 && recipientEmail) {
+      return sendDirectZeptoMailEmail(recipientEmail, templateKey, recipientName, {
+        order_number: String(orderId),
+      });
+    }
+
+    const errData = await res.json().catch(() => ({}));
+    return {
+      success: false,
+      latency_ms: latency,
+      message: errData.message || `HTTP ${res.status}`,
+      error: errData.message || `Failed resending email (HTTP ${res.status})`,
+    };
+  } catch (err: any) {
+    const latency = Math.round(performance.now() - start);
+    return { success: false, latency_ms: latency, error: err.message, message: err.message };
+  }
+}
+
 export async function previewEmailHtml(
   templateKey: string,
   sampleData: Record<string, any> = {}

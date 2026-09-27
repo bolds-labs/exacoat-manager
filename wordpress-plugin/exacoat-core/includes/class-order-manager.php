@@ -1253,8 +1253,8 @@ class Exacoat_Order_Manager {
 
 			if ( $email_class && ! empty( $customer_email ) ) {
 				$email_payload = self::get_email_order_payload( $updated_order, [
-					'refund_amount'  => wc_price( $refund_amount, [ 'currency' => $updated_order->get_currency() ] ),
-					'total_refunded' => wc_price( $updated_order->get_total_refunded(), [ 'currency' => $updated_order->get_currency() ] ),
+					'refund_amount'  => self::format_email_clean_price( $refund_amount, $updated_order->get_currency() ),
+					'total_refunded' => self::format_email_clean_price( $updated_order->get_total_refunded(), $updated_order->get_currency() ),
 				] );
 
 				$email_class::send_email(
@@ -2035,6 +2035,21 @@ class Exacoat_Order_Manager {
 	}
 
 	/**
+	 * Helper: Format clean plain-text price for transactional emails (no raw HTML spans)
+	 */
+	public static function format_email_clean_price( $amount, string $currency = 'IDR' ): string {
+		if ( null === $amount || '' === $amount ) {
+			return '';
+		}
+		if ( function_exists( 'wc_price' ) ) {
+			$raw = wc_price( (float) $amount, [ 'currency' => $currency ] );
+			$clean = html_entity_decode( wp_strip_all_tags( $raw ), ENT_QUOTES, 'UTF-8' );
+			$clean = str_replace( [ "\xc2\xa0", "\u{00A0}", "&nbsp;" ], ' ', $clean );
+			return trim( preg_replace( '/\s+/', ' ', $clean ) );
+		}
+		return trim( ( $currency ? $currency . ' ' : '' ) . number_format( (float) $amount, 0, ',', '.' ) );
+	}
+
 	/**
 	 * Helper: Build Structured Order Payload for Customer Transactional Emails
 	 */
@@ -2100,13 +2115,17 @@ class Exacoat_Order_Manager {
 				}
 			}
 
+			$subtotal_raw = (float) $item->get_subtotal();
+			$total_raw    = (float) $item->get_total();
+
 			$items_data[] = [
 				'name'                => $item->get_name(),
 				'product_id'          => $item->get_product_id(),
 				'image_url'           => $image_url,
 				'quantity'            => $item->get_quantity(),
-				'subtotal'            => wc_price( $item->get_subtotal(), [ 'currency' => $currency ] ),
-				'total'               => wc_price( $item->get_total(), [ 'currency' => $currency ] ),
+				'price'               => self::format_email_clean_price( $subtotal_raw > 0 ? $subtotal_raw : $total_raw, $currency ),
+				'subtotal'            => self::format_email_clean_price( $subtotal_raw > 0 ? $subtotal_raw : $total_raw, $currency ),
+				'total'               => self::format_email_clean_price( $total_raw, $currency ),
 				'parsed_configurator' => $parsed_config,
 				'meta'                => $meta_str,
 				'device_model'        => $item->get_meta( 'device_model' ) ?: ( $item->get_meta( 'pa_device' ) ?: '' ),
@@ -2139,22 +2158,31 @@ class Exacoat_Order_Manager {
 			$coupons[] = $code;
 		}
 
+		$subtotal_val     = (float) $order->get_subtotal();
+		$discount_val     = (float) $order->get_discount_total();
+		$discount_tax_val = (float) $order->get_discount_tax();
+		$shipping_val     = (float) $order->get_shipping_total();
+		$shipping_tax_val = (float) $order->get_shipping_tax();
+		$tax_val          = (float) $order->get_total_tax();
+		$total_val        = (float) $order->get_total();
+		$refunded_val     = (float) $order->get_total_refunded();
+
 		$base = [
 			'order_number'         => (string) $order_id,
 			'customer_first_name'  => $order->get_billing_first_name() ?: ( $order->get_formatted_billing_full_name() ?: 'Valued Customer' ),
 			'currency'             => $currency,
 			'items'                => $items_data,
 			'item_count'           => count( $items_data ),
-			'subtotal'             => wc_price( $order->get_subtotal(), [ 'currency' => $currency ] ),
-			'discount_total'       => wc_price( $order->get_discount_total(), [ 'currency' => $currency ] ),
-			'discount_tax'         => wc_price( $order->get_discount_tax(), [ 'currency' => $currency ] ),
+			'subtotal'             => self::format_email_clean_price( $subtotal_val, $currency ),
+			'discount_total'       => $discount_val > 0 ? self::format_email_clean_price( $discount_val, $currency ) : '',
+			'discount_tax'         => $discount_tax_val > 0 ? self::format_email_clean_price( $discount_tax_val, $currency ) : '',
 			'coupon_codes'         => $coupons,
-			'shipping_total'       => wc_price( $order->get_shipping_total(), [ 'currency' => $currency ] ),
-			'shipping_tax'         => wc_price( $order->get_shipping_tax(), [ 'currency' => $currency ] ),
+			'shipping_total'       => $shipping_val > 0 ? self::format_email_clean_price( $shipping_val, $currency ) : 'Free',
+			'shipping_tax'         => $shipping_tax_val > 0 ? self::format_email_clean_price( $shipping_tax_val, $currency ) : '',
 			'shipping_method_name' => $order->get_shipping_method() ?: 'Standard Tracked Delivery',
-			'total_tax'            => wc_price( $order->get_total_tax(), [ 'currency' => $currency ] ),
-			'total'                => wc_price( $order->get_total(), [ 'currency' => $currency ] ),
-			'total_refunded'       => wc_price( $order->get_total_refunded(), [ 'currency' => $currency ] ),
+			'total_tax'            => $tax_val > 0 ? self::format_email_clean_price( $tax_val, $currency ) : '',
+			'total'                => self::format_email_clean_price( $total_val, $currency ),
+			'total_refunded'       => $refunded_val > 0 ? self::format_email_clean_price( $refunded_val, $currency ) : '',
 			'payment_method_title' => $order->get_payment_method_title() ?: ucfirst( $order->get_payment_method() ?: 'Online Payment' ),
 			'shipping_address'     => $formatted_shipping,
 			'billing_address'      => $formatted_billing,
@@ -2404,7 +2432,7 @@ class Exacoat_Order_Manager {
 			} elseif ( class_exists( 'Artmatter_Review_Manager' ) ) {
 				Artmatter_Review_Manager::cancel_scheduled_invitation( $order_id );
 			}
-			$ref_amt = wc_price( $order->get_total_refunded() ?: $order->get_total(), [ 'currency' => $order->get_currency() ] );
+			$ref_amt = self::format_email_clean_price( $order->get_total_refunded() ?: $order->get_total(), $order->get_currency() );
 			Artmatter_Email_Engine::send_email(
 				'customer_order_refunded',
 				$customer_email,

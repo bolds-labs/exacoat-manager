@@ -71,7 +71,8 @@ import {
   fetchOrderReviewDirect,
   syncOrderTrackingDirect,
   processGuaranteeActionDirect,
-  assignTrackingNumberFromPool
+  assignTrackingNumberFromPool,
+  resendOrderEmail
 } from '../../lib/wordpressBridge';
 import { ShippingLabelA6Modal } from './ShippingLabelA6Modal';
 import { CustomerInvoiceModal } from './CustomerInvoiceModal';
@@ -204,6 +205,20 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   // Track Order timeline modal state
   const [isTrackOrderModalOpen, setIsTrackOrderModalOpen] = useState(false);
 
+  // Resend Transactional Email state
+  const [selectedEmailTemplate, setSelectedEmailTemplate] = useState('customer_order_processing');
+  const [resendRecipientEmail, setResendRecipientEmail] = useState('');
+  const [isEditingRecipientEmail, setIsEditingRecipientEmail] = useState(false);
+  const [isSendingOrderEmail, setIsSendingOrderEmail] = useState(false);
+  const [lastEmailSentResult, setLastEmailSentResult] = useState<{ template: string; latency_ms: number; message: string } | null>(null);
+
+  useEffect(() => {
+    if (order) {
+      setResendRecipientEmail(order.customer_email || order.billing?.email || '');
+      setLastEmailSentResult(null);
+    }
+  }, [order?.id, order?.customer_email, order?.billing?.email]);
+
   // Printed tracking state
   const [isPrinted, setIsPrinted] = useState<boolean>(() => {
     if (!order) return false;
@@ -331,6 +346,38 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
       showToast('error', 'Error', err.message || 'Failed dispatching invitation');
     } finally {
       setIsSendingReviewInvite(false);
+    }
+  };
+
+  const handleResendEmail = async () => {
+    if (!order) return;
+    const targetEmail = resendRecipientEmail.trim() || order.customer_email || order.billing?.email;
+    if (!targetEmail || !targetEmail.includes('@')) {
+      showToast('error', 'Invalid Email', 'Please provide a valid recipient email address.');
+      return;
+    }
+
+    try {
+      setIsSendingOrderEmail(true);
+      const recipientName = order.customer_name || `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`.trim() || 'Customer';
+      const res = await resendOrderEmail(order.id, selectedEmailTemplate, targetEmail, recipientName);
+
+      if (res.success) {
+        setLastEmailSentResult({
+          template: selectedEmailTemplate,
+          latency_ms: res.latency_ms || 0,
+          message: res.message || 'Delivered successfully via ZeptoMail',
+        });
+        showToast('success', 'Email Sent', `Transactional email delivered in ${res.latency_ms || 0}ms.`);
+        await loadNotes(order.id);
+        if (onOrderUpdated) onOrderUpdated();
+      } else {
+        showToast('error', 'Send Failed', res.message || res.error || 'Failed sending email.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Send Failed', err.message || 'Unexpected email error.');
+    } finally {
+      setIsSendingOrderEmail(false);
     }
   };
 
@@ -2229,6 +2276,107 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   </div>
                 </div>
               ))
+            )}
+          </div>
+        </div>
+
+        {/* Section 5.5: Resend Transactional Email */}
+        <div className="p-5 rounded-2xl border border-white/[0.06] bg-[#111111] space-y-4">
+          <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Mail className="w-4 h-4 text-[#f3aa18]" />
+              <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans">
+                Resend Transactional Email
+              </h4>
+            </div>
+            {order.meta_data?.some(m => m.key === '_artmatter_confirmation_email_sent' && m.value === 'yes') && (
+              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1">
+                <Check className="w-3 h-3" />
+                <span>Confirmation Sent</span>
+              </span>
+            )}
+          </div>
+
+          <div className="space-y-3 font-sans text-xs">
+            {/* Recipient Address Row */}
+            <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[#141414] border border-white/[0.04]">
+              <div className="space-y-0.5 flex-1 min-w-0">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-500 block">Recipient Address</span>
+                {isEditingRecipientEmail ? (
+                  <input
+                    type="email"
+                    value={resendRecipientEmail}
+                    onChange={e => setResendRecipientEmail(e.target.value)}
+                    placeholder="customer@domain.com"
+                    className="w-full px-2.5 py-1 text-xs font-mono bg-neutral-900 border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#f3aa18]"
+                    autoFocus
+                  />
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs text-white font-medium truncate">
+                      {resendRecipientEmail || order.customer_email || order.billing?.email || 'No email provided'}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditingRecipientEmail(!isEditingRecipientEmail)}
+                className="text-[11px] text-[#f3aa18] hover:text-[#e09a10] font-medium transition-colors shrink-0 cursor-pointer"
+              >
+                {isEditingRecipientEmail ? 'Done' : 'Change'}
+              </button>
+            </div>
+
+            {/* Template Selector & Dispatch Action */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <div className="sm:col-span-2">
+                <select
+                  value={selectedEmailTemplate}
+                  onChange={e => setSelectedEmailTemplate(e.target.value)}
+                  className="w-full h-10 px-3 rounded-xl bg-[#141414] border border-white/[0.08] text-xs font-sans text-neutral-200 focus:outline-none focus:border-[#f3aa18] transition-colors"
+                >
+                  <option value="customer_order_processing">Order Confirmation (Processing)</option>
+                  <option value="customer_order_invoice">Order Invoice / Summary</option>
+                  <option value="customer_order_in_production">In Production Update</option>
+                  <option value="customer_order_awaiting_pickup">Ready for Courier Pickup</option>
+                  <option value="customer_order_shipped">Shipped &amp; Tracking Code</option>
+                  <option value="customer_order_on_hold">Order On Hold (Awaiting Payment)</option>
+                  <option value="customer_order_delivered">Order Delivered</option>
+                  {isStorePickup && (
+                    <option value="customer_order_store_pickup_ready">Store Pickup Ready (Bekasi)</option>
+                  )}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleResendEmail}
+                disabled={isSendingOrderEmail || !(resendRecipientEmail || order.customer_email || order.billing?.email)}
+                className="h-10 px-4 rounded-xl bg-[#f3aa18] hover:bg-[#e09a10] disabled:opacity-50 text-neutral-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer whitespace-nowrap"
+              >
+                {isSendingOrderEmail ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Sending...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Resend Email</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {lastEmailSentResult && (
+              <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[11px] font-mono text-emerald-300 flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>{lastEmailSentResult.message}</span>
+                </div>
+                <span className="text-emerald-400 font-bold">{lastEmailSentResult.latency_ms}ms</span>
+              </div>
             )}
           </div>
         </div>
