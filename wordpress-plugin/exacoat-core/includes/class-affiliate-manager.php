@@ -3512,7 +3512,7 @@ class Exacoat_Affiliate_Manager {
 
 		// 5. Try REST API if still not found and credentials exist
 		if ( ! $affiliates_count && ! empty( $consumer_key ) && ! empty( $consumer_secret ) ) {
-			$rest_hosts = array_unique( array_filter( [ $source_url, 'https://staging.exacoat.com', 'https://exacoat.com' ] ) );
+			$rest_hosts = array_unique( array_filter( [ $source_url, 'https://cms.exacoat.com', 'https://staging.exacoat.com', 'https://exacoat.com' ] ) );
 			foreach ( $rest_hosts as $h ) {
 				$test_url = trailingslashit( $h ) . 'wp-json/slicewp/v1/affiliates?number=1000';
 				$resp = wp_remote_get( $test_url, [
@@ -3663,7 +3663,7 @@ class Exacoat_Affiliate_Manager {
 		$rest_payouts     = [];
 
 		if ( ( empty( $aff_table ) && empty( $comm_table ) ) || ! empty( $params['use_rest'] ) ) {
-			$rest_hosts = array_unique( array_filter( [ $source_url, 'https://staging.exacoat.com', 'https://exacoat.com' ] ) );
+			$rest_hosts = array_unique( array_filter( [ $source_url, 'https://cms.exacoat.com', 'https://staging.exacoat.com', 'https://exacoat.com' ] ) );
 			foreach ( $rest_hosts as $h ) {
 				$aff_url = trailingslashit( $h ) . 'wp-json/slicewp/v1/affiliates?number=1000';
 				$resp = wp_remote_get( $aff_url, [
@@ -5737,6 +5737,7 @@ class Exacoat_Affiliate_Manager {
 		if ( empty( $payments ) ) {
 			$hosts = [
 				site_url(),
+				'https://cms.exacoat.com',
 				'https://staging.exacoat.com',
 				'https://exacoat.com',
 			];

@@ -8388,12 +8388,12 @@ export async function fetchAdminSliceWpStatus(): Promise<{
     console.warn('Backend SliceWP status check failed, checking SliceWP REST API fallback...', err.message);
   }
 
-  // Client-side fallback check directly against SliceWP REST API on staging.exacoat.com
+  // Client-side fallback check directly against SliceWP REST API
   try {
     const ck = 'ck_tzL8mw8a3BI1y2ypr2x7D6lnsmkkof';
     const cs = 'cs_fbqylIFi6Zi29Zmnmir8km2wv4mJRb';
     const authHeader = 'Basic ' + btoa(`${ck}:${cs}`);
-    const restHost = 'https://staging.exacoat.com';
+    const restHost = getWordPressBaseUrl() || 'https://cms.exacoat.com';
 
     const affRes = await fetch(`${restHost}/wp-json/slicewp/v1/affiliates?number=1000`, {
       headers: { Authorization: authHeader, Accept: 'application/json' },
@@ -8476,7 +8476,7 @@ export async function runAdminSliceWpMigration(options: {
     use_rest: options.use_rest ?? true,
     consumer_key: options.consumer_key || 'ck_tzL8mw8a3BI1y2ypr2x7D6lnsmkkof',
     consumer_secret: options.consumer_secret || 'cs_fbqylIFi6Zi29Zmnmir8km2wv4mJRb',
-    source_url: options.source_url || 'https://staging.exacoat.com',
+    source_url: options.source_url || getWordPressBaseUrl() || 'https://cms.exacoat.com',
   };
 
   const queryParams = new URLSearchParams({
