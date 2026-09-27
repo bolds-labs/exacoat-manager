@@ -47,6 +47,24 @@ class Exacoat_Store_Credit_Manager {
 		add_action( 'wp_ajax_exacoat_test_cashback_email', [ __CLASS__, 'ajax_test_cashback_email' ] );
 		add_action( 'wp_ajax_exacoat_test_store_credit_reminder', [ __CLASS__, 'ajax_test_store_credit_reminder' ] );
 		add_action( 'wp_ajax_exacoat_test_store_credit_pre_expiry', [ __CLASS__, 'ajax_test_store_credit_pre_expiry' ] );
+
+		// 6. REST API routes for wallet migration
+		add_action( 'rest_api_init', [ __CLASS__, 'register_rest_routes' ] );
+	}
+
+	/**
+	 * Register REST routes for store credit operations.
+	 */
+	public static function register_rest_routes() {
+		$perm = class_exists( 'Exacoat_Core' ) && method_exists( 'Exacoat_Core', 'verify_bridge_permission' )
+			? [ 'Exacoat_Core', 'verify_bridge_permission' ]
+			: '__return_true';
+
+		register_rest_route( 'exacoat-core/v1', '/wallet/migrate-wpswings', [
+			'methods'             => [ 'GET', 'POST' ],
+			'callback'            => [ __CLASS__, 'rest_migrate_wpswings_wallets' ],
+			'permission_callback' => $perm,
+		] );
 	}
 
 	/**
@@ -649,6 +667,157 @@ class Exacoat_Store_Credit_Manager {
 		} else {
 			wp_send_json_error( $res );
 		}
+	}
+
+	/**
+	 * REST Handler: Migrate WPSwings Wallets to Advanced Coupons Store Credit
+	 */
+	public static function rest_migrate_wpswings_wallets( WP_REST_Request $request ) {
+		$params  = $request->get_json_params() ?: $request->get_params();
+		$dry_run = isset( $params['dry_run'] ) ? filter_var( $params['dry_run'], FILTER_VALIDATE_BOOLEAN ) : ( 'GET' === $request->get_method() );
+
+		$res = self::migrate_wpswings_wallets( $dry_run );
+		return rest_ensure_response( $res );
+	}
+
+	/**
+	 * Scan and migrate all positive WPSwings wallet balances into Advanced Coupons Store Credits.
+	 */
+	public static function migrate_wpswings_wallets( bool $dry_run = false ): array {
+		global $wpdb;
+
+		$wallet_keys = [ 'wps_wallet', 'wps_wallet_cashback_bal', 'wallet_amount', '_current_wallet_amount', '_wallet_balance' ];
+		$keys_placeholder = "'" . implode( "','", array_map( 'esc_sql', $wallet_keys ) ) . "'";
+
+		$meta_results = $wpdb->get_results( "
+			SELECT user_id, meta_key, meta_value 
+			FROM {$wpdb->usermeta} 
+			WHERE meta_key IN ({$keys_placeholder}) 
+			  AND meta_value IS NOT NULL 
+			  AND meta_value != '' 
+			  AND meta_value != '0' 
+			  AND meta_value != '0.00'
+		" );
+
+		$users_to_migrate = [];
+
+		if ( ! empty( $meta_results ) ) {
+			foreach ( $meta_results as $row ) {
+				$uid = (int) $row->user_id;
+				$val = floatval( $row->meta_value );
+				if ( $val > 0 ) {
+					if ( ! isset( $users_to_migrate[ $uid ] ) || $val > $users_to_migrate[ $uid ] ) {
+						$users_to_migrate[ $uid ] = $val;
+					}
+				}
+			}
+		}
+
+		// Check custom WPSwings tables if present
+		$all_tables = $wpdb->get_col( "SHOW TABLES LIKE '%wallet%'" );
+		foreach ( $all_tables as $tbl ) {
+			if ( preg_match( '/(wsfw_wallet|wps_wallet)$/i', $tbl ) ) {
+				$columns = $wpdb->get_col( "SHOW COLUMNS FROM {$tbl}" );
+				$has_user = in_array( 'user_id', $columns, true );
+				$amount_col = in_array( 'balance', $columns, true ) ? 'balance' : ( in_array( 'amount', $columns, true ) ? 'amount' : null );
+
+				if ( $has_user && $amount_col ) {
+					$custom_rows = $wpdb->get_results( "SELECT user_id, {$amount_col} AS bal FROM {$tbl} WHERE {$amount_col} > 0" );
+					if ( ! empty( $custom_rows ) ) {
+						foreach ( $custom_rows as $cr ) {
+							$uid = (int) $cr->user_id;
+							$bal = floatval( $cr->bal );
+							if ( $bal > 0 ) {
+								if ( ! isset( $users_to_migrate[ $uid ] ) || $bal > $users_to_migrate[ $uid ] ) {
+									$users_to_migrate[ $uid ] = $bal;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		$expiry_ts       = strtotime( '+1 year' );
+		$expiry_date_str = date_i18n( get_option( 'date_format', 'F j, Y' ), $expiry_ts );
+		$total_migrated  = 0;
+		$migrated_list   = [];
+
+		foreach ( $users_to_migrate as $user_id => $amount ) {
+			$user = get_userdata( $user_id );
+			$email = $user ? $user->user_email : "(User #{$user_id} deleted)";
+
+			$migrated_list[] = [
+				'user_id'     => $user_id,
+				'email'       => $email,
+				'amount'      => $amount,
+				'expiry_date' => $expiry_date_str,
+			];
+
+			$total_migrated += $amount;
+
+			if ( ! $dry_run && $user ) {
+				// 1. Add credit in Advanced Coupons
+				$acfw_added = false;
+				if ( class_exists( 'ACFW_Store_Credits' ) && method_exists( 'ACFW_Store_Credits', 'add_credit' ) ) {
+					try {
+						\ACFW_Store_Credits::add_credit(
+							$user_id,
+							$amount,
+							sprintf( 'Migrated from WPSwings Wallet (Expires %s)', $expiry_date_str )
+						);
+						$acfw_added = true;
+					} catch ( \Throwable $e ) {
+						// Fallback to direct user meta
+					}
+				}
+
+				// 2. Direct user meta sync
+				$current_acfw = floatval( get_user_meta( $user_id, 'acfw_store_credit_balance', true ) );
+				$new_acfw_bal = $current_acfw + ( $acfw_added ? 0 : $amount );
+				update_user_meta( $user_id, 'acfw_store_credit_balance', $new_acfw_bal );
+
+				// 3. 1-year expiry metadata
+				update_user_meta( $user_id, '_exacoat_cashback_expiry_ts', $expiry_ts );
+				update_user_meta( $user_id, '_exacoat_cashback_expiry_date', $expiry_date_str );
+				update_user_meta( $user_id, '_exacoat_last_credit_grant_ts', time() );
+				update_user_meta( $user_id, '_wpswings_wallet_migrated_at', current_time( 'mysql' ) );
+				update_user_meta( $user_id, '_wpswings_original_balance', $amount );
+
+				// 4. Archive old WPSwings balance
+				update_user_meta( $user_id, 'wps_wallet_migrated_backup', $amount );
+				update_user_meta( $user_id, 'wps_wallet', '0' );
+				update_user_meta( $user_id, 'wps_wallet_cashback_bal', '0' );
+				if ( metadata_exists( 'user', $user_id, 'wallet_amount' ) ) {
+					update_user_meta( $user_id, 'wallet_amount', '0' );
+				}
+
+				// 5. Schedule 335-day pre-expiry Action Scheduler reminder
+				if ( function_exists( 'as_schedule_single_action' ) ) {
+					as_schedule_single_action(
+						time() + ( 335 * DAY_IN_SECONDS ),
+						self::REMINDER_ACTION,
+						[
+							'customer_id' => $user_id,
+							'type'        => 'pre_expiry_30d',
+						],
+						self::QUEUE_GROUP
+					);
+				}
+			}
+		}
+
+		return [
+			'success'               => true,
+			'dry_run'               => $dry_run,
+			'total_users'           => count( $users_to_migrate ),
+			'total_migrated_amount' => $total_migrated,
+			'expiry_date'           => $expiry_date_str,
+			'users'                 => $migrated_list,
+			'message'               => $dry_run
+				? sprintf( 'Dry run completed: %d user(s) found with a total of Rp %s.', count( $users_to_migrate ), number_format( $total_migrated, 0, ',', '.' ) )
+				: sprintf( 'Successfully migrated %d user(s) with a total of Rp %s to Advanced Coupons Store Credits.', count( $users_to_migrate ), number_format( $total_migrated, 0, ',', '.' ) ),
+		];
 	}
 }
 
