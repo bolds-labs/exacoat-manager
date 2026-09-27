@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.117.zip?v=0.1.117",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-27T20:17:49.765Z",
+  "last_updated": "2026-09-27T20:40:40.378Z",
   "sections": {
     "changelog": "### Version 0.1.117\n- Fix primary layer detection in configurator engine so optional/accent parts (e.g. Additional Camera & Back Glass, Additional Back Glass) are never coerced into primary base layers with 0 extra price\n- Unify configurator part slug generation to kebab-case hyphens\n- Add Additional Back Glass (IDR 60.000) preset across studio preset packs and common parts"
   }

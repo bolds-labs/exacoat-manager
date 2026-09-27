@@ -112,6 +112,7 @@ import { MarketplaceImageGeneratorModal } from '../components/configurator/Marke
 import { WpMediaItem } from '../lib/wordpressBridge';
 import { loadCorsSafeImageBlobUrl } from '../lib/imageLoader';
 import { isBaseSkinLayer } from '../components/configurator/V2SkinCanvasLayer';
+import { SearchableFinishSelect } from '../components/configurator/SearchableFinishSelect';
 
 export interface AssetAuditItem {
   id: string;
@@ -550,20 +551,30 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
     let isCancelled = false;
 
     // Helper: load image safely without crossOrigin blocking
-    const loadImage = (src?: string): Promise<HTMLImageElement | null> => {
-      return new Promise((resolve) => {
-        if (!src || !src.trim()) return resolve(null);
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => resolve(img);
-        img.onerror = () => {
-          const retryImg = new Image();
-          retryImg.onload = () => resolve(retryImg);
-          retryImg.onerror = () => resolve(null);
-          retryImg.src = src.trim();
-        };
-        img.src = src.trim();
-      });
+    const loadImage = async (src?: string): Promise<HTMLImageElement | null> => {
+      if (!src || !src.trim()) return null;
+      try {
+        const safeUrl = await loadCorsSafeImageBlobUrl(src.trim());
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => resolve(img);
+          img.onerror = () => {
+            const retryImg = new Image();
+            retryImg.onload = () => resolve(retryImg);
+            retryImg.onerror = () => resolve(null);
+            retryImg.src = safeUrl || src.trim();
+          };
+          img.src = safeUrl || src.trim();
+        });
+      } catch {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+          img.src = src.trim();
+        });
+      }
     };
 
     Promise.all([
@@ -1611,7 +1622,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
     if (!editingProfile) return;
     const initialLayers: Record<string, string> = {};
     activeSkinLayers.forEach((l) => {
-      initialLayers[l.id] = selectedLayerFinishes[l.id] || selectedSimFinish || 'swarm';
+      const isVisible = selectedSimLayers[l.id] ?? (l.default_selected ?? (l.is_required || l.group === 'primary'));
+      if (isVisible) {
+        initialLayers[l.id] = selectedLayerFinishes[l.id] || selectedSimFinish || 'swarm';
+      } else {
+        initialLayers[l.id] = '';
+      }
     });
 
     setEditingDevicePreset({
@@ -1628,6 +1644,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
   };
 
   const handleOpenEditDevicePreset = (preset: ConfiguratorPreset) => {
+    const initialLayers: Record<string, string> = {};
+    activeSkinLayers.forEach((l) => {
+      const val = preset.layers?.[l.id] ?? '';
+      initialLayers[l.id] = val;
+    });
+
     setEditingDevicePreset({
       id: preset.id,
       title: preset.title,
@@ -1635,7 +1657,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
       badge: (preset.badge === 'POPULAR' || preset.badge === 'STAFF PICK') ? preset.badge : '',
       coverage: preset.coverage || 'model_360',
       logo_cutout: preset.logo_cutout !== false,
-      layers: { ...(preset.layers || {}) },
+      layers: initialLayers,
       image_url: preset.image_url || '',
       isNew: false,
     });
@@ -1693,7 +1715,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
     if (!editingProfile || !editingDevicePreset) return;
     const captured: Record<string, string> = {};
     activeSkinLayers.forEach((l) => {
-      captured[l.id] = selectedLayerFinishes[l.id] || selectedSimFinish || 'swarm';
+      const isVisible = selectedSimLayers[l.id] ?? (l.default_selected ?? (l.is_required || l.group === 'primary'));
+      if (isVisible) {
+        captured[l.id] = selectedLayerFinishes[l.id] || selectedSimFinish || 'swarm';
+      } else {
+        captured[l.id] = '';
+      }
     });
     setEditingDevicePreset({
       ...editingDevicePreset,
@@ -1712,22 +1739,54 @@ export const ConfiguratorStudioPage: React.FC = () => {
     if (preset.logo_cutout !== undefined) {
       setSelectedLogoCutout(preset.logo_cutout);
     }
-    if (preset.layers && typeof preset.layers === 'object') {
-      const nextFinishes: Record<string, string> = { ...selectedLayerFinishes };
-      for (const [key, slug] of Object.entries(preset.layers)) {
-        const matching = editingProfile.layers.find(
-          (l) =>
-            l.id === key ||
-            l.id.toLowerCase() === key.toLowerCase() ||
-            l.name.toLowerCase() === key.toLowerCase() ||
-            l.name.toLowerCase().replace(/\s+/g, '-') === key.toLowerCase()
+
+    const nextFinishes: Record<string, string> = {};
+    const nextSimLayers: Record<string, boolean> = {};
+
+    editingProfile.layers.forEach((layer) => {
+      let assignedFinishSlug = '';
+      if (preset.layers && typeof preset.layers === 'object') {
+        const matchingKey = Object.keys(preset.layers).find(
+          (k) =>
+            k === layer.id ||
+            k.toLowerCase() === layer.id.toLowerCase() ||
+            k.toLowerCase() === layer.name.toLowerCase() ||
+            k.toLowerCase() === layer.name.toLowerCase().replace(/\s+/g, '-')
         );
-        if (matching) {
-          nextFinishes[matching.id] = slug;
+        if (matchingKey && preset.layers[matchingKey]) {
+          assignedFinishSlug = preset.layers[matchingKey].trim();
         }
       }
-      setSelectedLayerFinishes(nextFinishes);
+
+      if (assignedFinishSlug) {
+        // Layer is explicitly assigned a finish in this preset look
+        nextSimLayers[layer.id] = true;
+        nextFinishes[layer.id] = assignedFinishSlug;
+      } else {
+        // Layer has no finish in this look (unassigned / none)
+        const isBasePrimary = isBaseSkinLayer(layer.name, layer.group, layer.id) || layer.group === 'primary';
+        if (isBasePrimary) {
+          // Keep base primary skin active
+          nextSimLayers[layer.id] = true;
+          nextFinishes[layer.id] = selectedSimFinish || 'swarm';
+        } else {
+          // Explicitly turn off unselected optional / accent / addon layers so they don't leak into preview!
+          nextSimLayers[layer.id] = false;
+          nextFinishes[layer.id] = '';
+        }
+      }
+    });
+
+    setSelectedSimLayers(nextSimLayers);
+    setSelectedLayerFinishes(nextFinishes);
+
+    if (editingProfile.views && editingProfile.views.length > 0) {
+      const defaultView = editingProfile.views.find((v) => v.is_default) || editingProfile.views[0];
+      if (defaultView && activeSimView !== defaultView.id) {
+        setActiveSimView(defaultView.id);
+      }
     }
+
     showToast('success', 'Look Applied', `Look "${preset.title}" applied to live canvas preview.`);
   };
 
@@ -8111,7 +8170,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           {[...skinLayers]
                             .sort((a, b) => (a.z_index || 1) - (b.z_index || 1))
                             .map((l) => {
-                              const isChecked = selectedSimLayers[l.id] ?? true;
+                              const isChecked = selectedSimLayers[l.id] ?? (l.default_selected ?? (l.is_required || l.group === 'primary'));
                               if (!isChecked) return null;
 
                             // Resolve effective assets for this layer and current view
@@ -8189,32 +8248,89 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 return null;
                               }
 
-                              const targetLogoViewId = editingProfile.coverage_and_cutouts?.logo_cutout_view_id || 'main_view';
-                              const isCurrentViewForLogo = currentView?.id === targetLogoViewId || (!editingProfile.coverage_and_cutouts?.logo_cutout_view_id && (currentView?.is_default || currentView?.id === editingProfile.views?.[0]?.id));
-                              const logoMaskUrl =
-                                currentView?.logo_cutout_mask_url ||
-                                (isCurrentViewForLogo ? (editingProfile.coverage_and_cutouts?.logo_cutout_mask_url || assets.logo_cutout_url) : undefined);
-                              const pencilMaskUrl =
-                                currentView?.pencil_cutout_mask_url ||
-                                editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url ||
-                                assets.pencil_cutout_url;
-                              const targetModelCutViewId = editingProfile.coverage_and_cutouts?.model_cut_view_id || 'main_view';
-                              const isCurrentViewForModelCut = currentView?.id === targetModelCutViewId || (!editingProfile.coverage_and_cutouts?.model_cut_view_id && (currentView?.is_default || currentView?.id === editingProfile.views?.[0]?.id));
-                              const modelCutMaskUrl =
-                                currentView?.model_cut_mask_url ||
-                                (isCurrentViewForModelCut ? (editingProfile.coverage_and_cutouts?.model_cut_mask_url || assets.model_cutout_url) : undefined);
+                              // View-level logo cutout resolution:
+                              // Logo cutout applies to EVERY skin layer on this view when logo cutout is enabled
+                              const allViews = editingProfile.views || [];
+                              const targetLogoViewId = editingProfile.coverage_and_cutouts?.logo_cutout_view_id;
+                              const isSingleAngleView = allViews.length <= 1;
+                              const isExplicitLogoViewMatch = Boolean(targetLogoViewId && currentView?.id === targetLogoViewId);
+                              const isLikelyLogoBackView = Boolean(
+                                currentView?.is_default ||
+                                currentView?.id === allViews[0]?.id ||
+                                currentView?.id === 'main_view' ||
+                                currentView?.id === 'view' ||
+                                currentView?.id === 'back'
+                              );
+
+                              // Resolve the logo cutout mask URL across current view, profile cutouts, or any layer (e.g. back skin)
+                              let resolvedLogoMask = currentView?.logo_cutout_mask_url || assets.logo_cutout_url;
+                              if (!resolvedLogoMask && (isSingleAngleView || isExplicitLogoViewMatch || isLikelyLogoBackView)) {
+                                resolvedLogoMask = editingProfile.coverage_and_cutouts?.logo_cutout_mask_url;
+                              }
+                              if (!resolvedLogoMask) {
+                                for (const otherLayer of editingProfile.layers) {
+                                  const oAssets =
+                                    otherLayer.assets_by_view?.[currentView?.id || ''] ||
+                                    otherLayer.assets_by_view?.['main_view'] ||
+                                    otherLayer.assets_by_view?.['view'];
+                                  if (oAssets?.logo_cutout_url) {
+                                    resolvedLogoMask = oAssets.logo_cutout_url;
+                                    break;
+                                  }
+                                  if (isSingleAngleView && otherLayer.assets_by_view) {
+                                    const anyAssetWithLogo = Object.values(otherLayer.assets_by_view).find((a) => a.logo_cutout_url);
+                                    if (anyAssetWithLogo?.logo_cutout_url) {
+                                      resolvedLogoMask = anyAssetWithLogo.logo_cutout_url;
+                                      break;
+                                    }
+                                  }
+                                }
+                              }
+
+                              const isCurrentViewForLogo = Boolean(
+                                resolvedLogoMask &&
+                                (isSingleAngleView || isExplicitLogoViewMatch || isLikelyLogoBackView || currentView?.logo_cutout_mask_url || assets.logo_cutout_url)
+                              );
+                              const shouldApplyLogoCutout = selectedLogoCutout && (editingProfile.coverage_and_cutouts?.has_logo_cutout ?? true);
+                              const effectiveLogoCutout = (shouldApplyLogoCutout && isCurrentViewForLogo) ? resolvedLogoMask : undefined;
+
+                              // Model Cut Resolution
+                              const targetModelCutViewId = editingProfile.coverage_and_cutouts?.model_cut_view_id;
+                              const isExplicitModelCutView = Boolean(targetModelCutViewId && currentView?.id === targetModelCutViewId);
+                              const isLikelyModelCutView = !targetModelCutViewId || targetModelCutViewId === 'main_view' || targetModelCutViewId === 'view'
+                                ? Boolean(currentView?.is_default || currentView?.id === allViews[0]?.id || currentView?.id === 'main_view' || currentView?.id === 'view' || currentView?.id === 'back')
+                                : false;
+
+                              let resolvedModelCutMask = currentView?.model_cut_mask_url || assets.model_cutout_url;
+                              if (!resolvedModelCutMask && (isSingleAngleView || isExplicitModelCutView || isLikelyModelCutView)) {
+                                resolvedModelCutMask = editingProfile.coverage_and_cutouts?.model_cut_mask_url;
+                              }
+                              if (!resolvedModelCutMask) {
+                                for (const otherLayer of editingProfile.layers) {
+                                  const oAssets =
+                                    otherLayer.assets_by_view?.[currentView?.id || ''] ||
+                                    otherLayer.assets_by_view?.['main_view'] ||
+                                    otherLayer.assets_by_view?.['view'];
+                                  if (oAssets?.model_cutout_url) {
+                                    resolvedModelCutMask = oAssets.model_cutout_url;
+                                    break;
+                                  }
+                                }
+                              }
 
                               const covMode = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none');
                               const isModelCutOnly = covMode === 'model_cut_only';
                               const hasCoverageOptions = covMode === 'model_cut_and_360';
-
                               const shouldApplyModelCut = isModelCutOnly || (hasCoverageOptions && selectedCoverage === 'model_cut');
-                              const shouldApplyLogoCutout = selectedLogoCutout && (editingProfile.coverage_and_cutouts?.has_logo_cutout ?? true);
-                              const shouldApplyPencilCutout = selectedPencilCutout && Boolean(editingProfile.coverage_and_cutouts?.has_pencil_cutout);
+                              const isCurrentViewForModelCut = Boolean(resolvedModelCutMask && (isSingleAngleView || isExplicitModelCutView || isLikelyModelCutView || currentView?.model_cut_mask_url || assets.model_cutout_url));
+                              const effectiveModelCutout = (shouldApplyModelCut && isCurrentViewForModelCut) ? resolvedModelCutMask : undefined;
 
-                              const effectiveLogoCutout = shouldApplyLogoCutout ? logoMaskUrl : undefined;
+                              const pencilMaskUrl =
+                                currentView?.pencil_cutout_mask_url ||
+                                editingProfile.coverage_and_cutouts?.pencil_cutout_mask_url ||
+                                assets.pencil_cutout_url;
+                              const shouldApplyPencilCutout = selectedPencilCutout && Boolean(editingProfile.coverage_and_cutouts?.has_pencil_cutout);
                               const effectivePencilCutout = shouldApplyPencilCutout ? pencilMaskUrl : undefined;
-                              const effectiveModelCutout = shouldApplyModelCut ? modelCutMaskUrl : undefined;
 
                               const hasViewShadow = Boolean(
                                 currentView?.shadow_png_url ||
@@ -8367,7 +8483,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               const partFinishSlug = selectedLayerFinishes[l.id] || selectedSimFinish;
                               const partFinish = finishes.find((f) => (f.slug || f.id) === partFinishSlug || f.id === partFinishSlug);
                               const isTesting = activeTestPartId === l.id;
-                              const isChecked = selectedSimLayers[l.id] ?? true;
+                              const isChecked = selectedSimLayers[l.id] ?? (l.default_selected ?? (l.is_required || l.group === 'primary'));
                               return (
                                 <button
                                   key={l.id}
@@ -8541,9 +8657,27 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-white/5 text-xs">
                           {/* Logo Cutout Toggle */}
                           {(() => {
-                            const targetLogoViewId = editingProfile.coverage_and_cutouts?.logo_cutout_view_id || 'main_view';
-                            const isViewForLogo = currentView?.id === targetLogoViewId || (!editingProfile.coverage_and_cutouts?.logo_cutout_view_id && (currentView?.is_default || currentView?.id === editingProfile.views?.[0]?.id));
-                            if (!isViewForLogo && !currentView?.logo_cutout_mask_url) return null;
+                            const allViews = editingProfile.views || [];
+                            const targetLogoViewId = editingProfile.coverage_and_cutouts?.logo_cutout_view_id;
+                            const isSingleView = allViews.length <= 1;
+                            const isExplicitLogoView = Boolean(targetLogoViewId && currentView?.id === targetLogoViewId);
+                            const isLikelyLogoBackView = !targetLogoViewId || targetLogoViewId === 'main_view' || targetLogoViewId === 'view'
+                              ? Boolean(currentView?.is_default || currentView?.id === allViews[0]?.id || currentView?.id === 'main_view' || currentView?.id === 'view' || currentView?.id === 'back')
+                              : false;
+
+                            const hasLogoMaskOnView = Boolean(
+                              currentView?.logo_cutout_mask_url ||
+                              editingProfile.coverage_and_cutouts?.logo_cutout_mask_url ||
+                              editingProfile.layers.some((l) =>
+                                l.assets_by_view?.[currentView?.id || '']?.logo_cutout_url ||
+                                l.assets_by_view?.['main_view']?.logo_cutout_url ||
+                                l.assets_by_view?.['view']?.logo_cutout_url ||
+                                (isSingleView && Object.values(l.assets_by_view || {}).some((a) => Boolean(a.logo_cutout_url)))
+                              )
+                            );
+
+                            const isViewForLogo = isSingleView || isExplicitLogoView || isLikelyLogoBackView || Boolean(currentView?.logo_cutout_mask_url);
+                            if (!isViewForLogo || !hasLogoMaskOnView) return null;
                             if (editingProfile.coverage_and_cutouts?.has_logo_cutout === false && !currentView?.logo_cutout_mask_url) return null;
 
                             return (
@@ -11573,10 +11707,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                             type="button"
                                             onClick={() => handleTestPresetInSimulator(preset)}
                                             className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/15 text-zinc-300 hover:text-white text-[10px] font-medium flex items-center gap-1 transition-all cursor-pointer"
-                                            title="Apply preset to simulator canvas"
+                                            title="View look on simulator canvas"
                                           >
                                             <Eye className="w-3 h-3 text-[#f3aa18]" />
-                                            <span>Test</span>
+                                            <span>View</span>
                                           </button>
                                           <button
                                             type="button"
@@ -13696,24 +13830,36 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                 {/* Per-Layer Finishes */}
                 <div className="space-y-2">
-                  <label className="text-[11px] font-medium text-zinc-300">
-                    Layer Finishes for this Look
-                  </label>
-                  <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/10 space-y-2.5 max-h-52 overflow-y-auto">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-medium text-zinc-300">
+                      Layer Finishes for this Look
+                    </label>
+                    <span className="text-[10px] text-zinc-500 font-mono">
+                      {activeSkinLayers.length} parts configurable
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-zinc-900/60 border border-white/10 space-y-3 max-h-72 overflow-y-auto divide-y divide-white/5">
                     {activeSkinLayers.map((layer) => {
                       const currentSlug = editingDevicePreset.layers[layer.id] || '';
                       return (
                         <div
                           key={layer.id}
-                          className="flex items-center justify-between gap-3 text-xs"
+                          className="pt-2 first:pt-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
                         >
-                          <span className="font-medium text-zinc-300 truncate max-w-[140px]">
-                            {layer.name}
-                          </span>
-                          <select
+                          <div className="flex items-center gap-2 truncate">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#f3aa18]/80 shrink-0" />
+                            <span className="font-medium text-zinc-200 truncate">
+                              {layer.name}
+                            </span>
+                            {layer.group && (
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-white/5 text-zinc-400 font-mono">
+                                {layer.group}
+                              </span>
+                            )}
+                          </div>
+                          <SearchableFinishSelect
                             value={currentSlug}
-                            onChange={(e) => {
-                              const val = e.target.value;
+                            onChange={(val) => {
                               setEditingDevicePreset({
                                 ...editingDevicePreset,
                                 layers: {
@@ -13722,15 +13868,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 },
                               });
                             }}
-                            className="px-2.5 py-1 rounded-lg bg-zinc-800 border border-white/10 text-white text-[11px] focus:border-[#f3aa18] outline-none max-w-[200px]"
-                          >
-                            <option value="">(None / unassigned)</option>
-                            {finishes.map((f) => (
-                              <option key={f.id} value={f.slug || f.id}>
-                                {f.name} ({f.group})
-                              </option>
-                            ))}
-                          </select>
+                            finishes={finishes}
+                            placeholder="None / unassigned"
+                            className="w-full sm:w-[220px]"
+                          />
                         </div>
                       );
                     })}

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import type { DeviceFamily } from '../../types';
+import { loadCorsSafeImageBlobUrl } from '../../lib/imageLoader';
 
 export interface GeneratedShadowConfig {
   enabled?: boolean;
@@ -234,20 +235,30 @@ export const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
     let isCancelled = false;
 
     // Helper: load image safely without crossOrigin blocking
-    const loadImage = (src?: string): Promise<HTMLImageElement | null> => {
-      return new Promise((resolve) => {
-        if (!src || !src.trim()) return resolve(null);
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => resolve(img);
-        img.onerror = () => {
-          const retryImg = new Image();
-          retryImg.onload = () => resolve(retryImg);
-          retryImg.onerror = () => resolve(null);
-          retryImg.src = src.trim();
-        };
-        img.src = src.trim();
-      });
+    const loadImage = async (src?: string): Promise<HTMLImageElement | null> => {
+      if (!src || !src.trim()) return null;
+      try {
+        const safeUrl = await loadCorsSafeImageBlobUrl(src.trim());
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => resolve(img);
+          img.onerror = () => {
+            const retryImg = new Image();
+            retryImg.onload = () => resolve(retryImg);
+            retryImg.onerror = () => resolve(null);
+            retryImg.src = safeUrl || src.trim();
+          };
+          img.src = safeUrl || src.trim();
+        });
+      } catch {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+          img.src = src.trim();
+        });
+      }
     };
 
     Promise.all([
