@@ -45,6 +45,7 @@ export type NavItemKey =
   | 'reports'
   | 'ai_tools'
   | 'emails'
+  | 'marketing_emails'
   | 'affiliates'
   | 'team'
   | 'testing'
@@ -156,7 +157,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       title: 'Marketing & Tools',
       items: [
         { key: 'affiliates', label: 'Affiliates', icon: Share2 },
-        { key: 'emails', label: 'Email Templates', icon: Mail },
+        { 
+          key: 'marketing_emails', 
+          label: 'Email Hub', 
+          icon: Mail,
+          children: [
+            { key: 'marketing_emails', label: 'Marketing Studio' },
+            { key: 'emails', label: 'Transactional Templates' },
+          ]
+        },
         { key: 'ai_tools', label: 'AI Tools', icon: Bot },
       ]
     },

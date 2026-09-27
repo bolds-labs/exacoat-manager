@@ -21,7 +21,14 @@ import {
   ChevronDown,
   ChevronUp,
   Tag,
-  Gift
+  Gift,
+  Bookmark,
+  History,
+  BookOpen,
+  Palette,
+  ShieldCheck,
+  CheckCheck,
+  Plus
 } from 'lucide-react';
 import { GlassCard } from '../ui/GlassCard';
 import { Input } from '../ui/Input';
@@ -34,14 +41,115 @@ import {
   sendAcumbamailSingleEmailDirect, 
   generateMarketingEmailCopyDirect, 
   uploadMarketingImageDirect,
+  fetchAcumbamailCampaignsDirect,
+  fetchAcumbamailCampaignDetailDirect,
   fetchAdminAffiliates,
   fetchCustomersDirect,
   AcumbamailList,
   WordPressPluginSettings 
 } from '../../lib/wordpressBridge';
-import { renderMarketingEmailHtml, MarketingEmailOptions } from '../../lib/emailRenderer';
+import { renderMarketingEmailHtml, MarketingEmailOptions, TrustFeatureCard } from '../../lib/emailRenderer';
 
 export type AudienceType = 'subscribers' | 'affiliates' | 'customer';
+
+export interface MarketingPreset {
+  id: string;
+  name: string;
+  desc?: string;
+  isBuiltIn?: boolean;
+  theme: 'dark' | 'light';
+  subject: string;
+  preheader: string;
+  badgeText: string;
+  badgeVariant: 'amber' | 'emerald' | 'blue' | 'purple' | 'zinc';
+  headline: string;
+  recipientGreeting: string;
+  subPillNotice?: string;
+  bodyText: string;
+  showPromoBox: boolean;
+  promoCode?: string;
+  promoTitle?: string;
+  promoText?: string;
+  ctaText: string;
+  ctaUrl: string;
+  primaryCtaColor: 'amber' | 'white' | 'emerald';
+  showTrustGrid: boolean;
+  bannerImageUrl?: string;
+}
+
+const PRESETS_STORAGE_KEY = 'exacoat_marketing_presets';
+
+export const BUILTIN_PRESETS: MarketingPreset[] = [
+  {
+    id: 'preset_dark_sale',
+    name: 'Exacoat Dark Flash Sale (Reference Style)',
+    desc: 'Matches your signature dark layout: yellow SHOP NOW button, coupon pill, and 6 trust feature cards.',
+    isBuiltIn: true,
+    theme: 'dark',
+    subject: '7.7 FLASH SALE: 17% OFF Everything',
+    preheader: 'Precision device skins cut to the millimeter with authentic tactile textures.',
+    badgeText: '7.7 FLASH SALE',
+    badgeVariant: 'amber',
+    headline: 'Upgrade Your Everyday Carry',
+    recipientGreeting: 'Hi there,',
+    subPillNotice: 'All Items - Limited Time Only\nCoupon code will be applied automatically by pressing the button',
+    bodyText: 'Refresh your gadget setup with millimeter-precise skins engineered for uncompromising grip and scratch defense.\n\nCrafted from authentic cast vinyl with air release channels, every wrap provides full back, frame, and camera protection without adding bulk.\n\nTake advantage of our storewide seasonal discount today.',
+    showPromoBox: true,
+    promoCode: 'SALE17',
+    promoTitle: 'Limited Time Storewide Perk',
+    promoText: '17% OFF all skins and wraps applied automatically at checkout.',
+    ctaText: 'SHOP NOW',
+    ctaUrl: 'https://exacoat.com/shop',
+    primaryCtaColor: 'amber',
+    showTrustGrid: true,
+    bannerImageUrl: '',
+  },
+  {
+    id: 'preset_flagship_drop',
+    name: 'Flagship Device Drop (Dark Edition)',
+    desc: 'Sleek product launch announcement for newly released phone/laptop skins.',
+    isBuiltIn: true,
+    theme: 'dark',
+    subject: 'The ultimate skin for your new device is here',
+    preheader: 'Explore millimeter-precise protection for the latest flagship releases.',
+    badgeText: 'NEW RELEASE',
+    badgeVariant: 'blue',
+    headline: 'Engineered Precision. Pure Tactile Feel.',
+    recipientGreeting: 'Hi there,',
+    subPillNotice: 'Now Shipping Worldwide • Free Replacement Guarantee on all orders',
+    bodyText: 'We spent weeks micro-measuring every curve, bezel, and port to create a skin that fits like a second skin.\n\nChoose from our signature textured materials: Matrix, Black Camo, Slate, Honeycomb, and Matte Black.\n\nOrder today to protect your device against daily micro-scratches from day one.',
+    showPromoBox: false,
+    ctaText: 'ORDER YOUR SKIN',
+    ctaUrl: 'https://exacoat.com/shop',
+    primaryCtaColor: 'amber',
+    showTrustGrid: true,
+    bannerImageUrl: '',
+  },
+  {
+    id: 'preset_affiliate_blast',
+    name: 'Creator & Affiliate Exclusive (Dark)',
+    desc: 'Private memo for affiliates with sample access and commission boosts.',
+    isBuiltIn: true,
+    theme: 'dark',
+    subject: 'Exclusive Partner Memo: Upcoming Drop Sample Kits',
+    preheader: 'Special update and early access reserved for Exacoat creator partners.',
+    badgeText: 'PARTNER UPDATE',
+    badgeVariant: 'purple',
+    headline: 'Exclusive Creator Preview',
+    recipientGreeting: 'Hi Creator,',
+    subPillNotice: 'Exacoat Creator Hub • Priority Dispatch Active',
+    bodyText: 'As an official Exacoat partner, you get early access to our upcoming texture line before public release.\n\nReply directly to this email or visit your creator dashboard to request complimentary sample units for your upcoming content.\n\nWe have also enabled a seasonal 5% commission booster across all sales through your custom code.',
+    showPromoBox: true,
+    promoCode: 'CREATORVIP',
+    promoTitle: 'Your Exclusive Partner Code',
+    promoText: 'Share with your audience for extra perks.',
+    ctaText: 'OPEN CREATOR HUB',
+    ctaUrl: 'https://exacoat.com/affiliate-portal',
+    primaryCtaColor: 'amber',
+    showTrustGrid: false,
+    bannerImageUrl: '',
+  },
+];
 
 interface EmailMarketingStudioProps {
   settings: WordPressPluginSettings;
@@ -113,6 +221,31 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
 
   // Preview Mode
   const [previewViewport, setPreviewViewport] = useState<'desktop' | 'mobile'>('desktop');
+
+  // Dark / Light Theme & Brand Style (Defaults to Sleek Dark)
+  const [emailTheme, setEmailTheme] = useState<'dark' | 'light'>('dark');
+  const [primaryCtaColor, setPrimaryCtaColor] = useState<'amber' | 'white' | 'emerald'>('amber');
+  const [subPillNotice, setSubPillNotice] = useState('All Items - Limited Time Only\nCoupon applied automatically by pressing the button');
+  const [showTrustGrid, setShowTrustGrid] = useState(true);
+
+  // References & Past Campaigns Modal
+  const [showReferencesModal, setShowReferencesModal] = useState(false);
+  const [referencesTab, setReferencesTab] = useState<'presets' | 'acumbamail'>('presets');
+  const [acumbaCampaigns, setAcumbaCampaigns] = useState<Array<{ id: string; name: string }>>([]);
+  const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
+  const [viewingCampaignHtml, setViewingCampaignHtml] = useState<string | null>(null);
+  const [viewingCampaignTitle, setViewingCampaignTitle] = useState<string>('');
+  const [customPresetName, setCustomPresetName] = useState('');
+  const [savedTemplates, setSavedTemplates] = useState<MarketingPreset[]>(() => {
+    try {
+      const stored = localStorage.getItem(PRESETS_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return [...BUILTIN_PRESETS, ...parsed];
+      }
+    } catch {}
+    return BUILTIN_PRESETS;
+  });
 
   // Dispatch & Test Send Modal
   const [showSendModal, setShowSendModal] = useState(false);
@@ -231,9 +364,122 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     }
   };
 
+  // Past Campaigns & Preset Handlers
+  const loadPastCampaigns = async () => {
+    setIsLoadingCampaigns(true);
+    const res = await fetchAcumbamailCampaignsDirect(settings.acumbamail_token);
+    setIsLoadingCampaigns(false);
+    if (res.success && Array.isArray(res.campaigns)) {
+      setAcumbaCampaigns(res.campaigns);
+    } else {
+      showToast('error', 'Campaigns Load Failed', res.error || 'Could not fetch campaigns from Acumbamail.');
+    }
+  };
+
+  const handlePreviewCampaign = async (campaignId: string, name: string) => {
+    showToast('info', 'Loading Campaign', `Fetching ${name}...`);
+    const res = await fetchAcumbamailCampaignDetailDirect(campaignId, settings.acumbamail_token);
+    if (res.success && res.html) {
+      setViewingCampaignHtml(res.html);
+      setViewingCampaignTitle(name);
+    } else {
+      showToast('error', 'Preview Error', res.error || 'Could not load campaign HTML.');
+    }
+  };
+
+  const handleUseCampaignAsReference = async (campaignId: string, name: string) => {
+    showToast('info', 'Importing Reference', `Loading details for ${name}...`);
+    const res = await fetchAcumbamailCampaignDetailDirect(campaignId, settings.acumbamail_token);
+    if (res.success) {
+      if (res.subject) setSubject(res.subject);
+      setCampaignName(`${name} (Reference)`);
+      setShowReferencesModal(false);
+      showToast('success', 'Reference Imported', `Loaded subject and title from ${name}.`);
+    } else {
+      showToast('error', 'Import Error', res.error || 'Failed to import campaign.');
+    }
+  };
+
+  const handleApplyPreset = (p: MarketingPreset) => {
+    setEmailTheme(p.theme);
+    setSubject(p.subject);
+    setPreheader(p.preheader);
+    setBadgeText(p.badgeText);
+    setBadgeVariant(p.badgeVariant);
+    setHeadline(p.headline);
+    setRecipientGreeting(p.recipientGreeting);
+    setSubPillNotice(p.subPillNotice || '');
+    setBodyText(p.bodyText);
+    setShowPromoBox(p.showPromoBox);
+    if (p.promoCode) setPromoCode(p.promoCode);
+    if (p.promoTitle) setPromoTitle(p.promoTitle);
+    if (p.promoText) setPromoText(p.promoText);
+    setCtaText(p.ctaText);
+    setCtaUrl(p.ctaUrl);
+    setPrimaryCtaColor(p.primaryCtaColor);
+    setShowTrustGrid(p.showTrustGrid);
+    if (p.bannerImageUrl) setBannerImageUrl(p.bannerImageUrl);
+    setShowReferencesModal(false);
+    showToast('success', 'Preset Applied', `Loaded "${p.name}".`);
+  };
+
+  const handleSaveCurrentAsPreset = () => {
+    if (!customPresetName.trim()) {
+      showToast('error', 'Name Required', 'Please enter a name for your custom preset.');
+      return;
+    }
+    const newPreset: MarketingPreset = {
+      id: `custom_${Date.now()}`,
+      name: customPresetName.trim(),
+      desc: `Saved on ${new Date().toLocaleDateString()}`,
+      isBuiltIn: false,
+      theme: emailTheme,
+      subject,
+      preheader,
+      badgeText,
+      badgeVariant,
+      headline,
+      recipientGreeting,
+      subPillNotice,
+      bodyText,
+      showPromoBox,
+      promoCode,
+      promoTitle,
+      promoText,
+      ctaText,
+      ctaUrl,
+      primaryCtaColor,
+      showTrustGrid,
+      bannerImageUrl,
+    };
+
+    const userCreated = savedTemplates.filter(p => !p.isBuiltIn);
+    const updatedUserCreated = [newPreset, ...userCreated];
+    try {
+      localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(updatedUserCreated));
+      setSavedTemplates([...BUILTIN_PRESETS, ...updatedUserCreated]);
+      setCustomPresetName('');
+      showToast('success', 'Reference Saved', `Saved "${newPreset.name}" to your reference library.`);
+    } catch {
+      showToast('error', 'Storage Error', 'Could not save preset to browser storage.');
+    }
+  };
+
+  const handleDeleteCustomPreset = (id: string) => {
+    const remaining = savedTemplates.filter(p => p.id !== id);
+    const userOnly = remaining.filter(p => !p.isBuiltIn);
+    try {
+      localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(userOnly));
+      setSavedTemplates(remaining);
+      showToast('info', 'Preset Removed', 'Reference removed from your library.');
+    } catch {}
+  };
+
   // Computed Marketing Email HTML Options
   const emailOptions: MarketingEmailOptions = useMemo(() => ({
+    theme: emailTheme,
     subject,
+    preheaderText: preheader,
     badgeText,
     badgeVariant,
     headline,
@@ -241,17 +487,22 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     bannerImageUrl: bannerImageUrl || undefined,
     bannerImageAlt,
     bannerLinkUrl: bannerLinkUrl || undefined,
+    subPillNotice: subPillNotice.trim() || undefined,
     bodyText,
     highlightTitle: showPromoBox ? promoTitle : undefined,
     highlightText: showPromoBox ? promoText : undefined,
     promoCode: showPromoBox ? promoCode : undefined,
     ctaText: ctaText || undefined,
     ctaUrl: ctaUrl || undefined,
+    primaryCtaColor,
     secondaryCtaText: showSecondaryCta ? secondaryCtaText : undefined,
     secondaryCtaUrl: showSecondaryCta ? secondaryCtaUrl : undefined,
+    showTrustGrid,
     unsubscribeUrl: '{{unsubscribe_url}}',
   }), [
+    emailTheme,
     subject,
+    preheader,
     badgeText,
     badgeVariant,
     headline,
@@ -260,6 +511,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     bannerImageUrl,
     bannerImageAlt,
     bannerLinkUrl,
+    subPillNotice,
     bodyText,
     showPromoBox,
     promoTitle,
@@ -267,9 +519,11 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     promoCode,
     ctaText,
     ctaUrl,
+    primaryCtaColor,
     showSecondaryCta,
     secondaryCtaText,
     secondaryCtaUrl,
+    showTrustGrid,
   ]);
 
   const renderedEmail = useMemo(() => {
@@ -447,6 +701,18 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
         <div className="flex items-center gap-2 w-full md:w-auto justify-end flex-wrap">
           <button
             type="button"
+            onClick={() => {
+              setShowReferencesModal(true);
+              if (acumbaCampaigns.length === 0) loadPastCampaigns();
+            }}
+            className="px-3 py-2 rounded-xl text-xs font-bold border transition-colors flex items-center gap-1.5 bg-zinc-100 dark:bg-white/[0.05] border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-300 hover:text-amber-500 hover:border-amber-500/30"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-amber-500" />
+            <span>References &amp; Past Campaigns</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setShowAiPanel(!showAiPanel)}
             className={`px-3 py-2 rounded-xl text-xs font-bold border transition-colors flex items-center gap-1.5 ${
               showAiPanel 
@@ -480,6 +746,36 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
           </Button>
         </div>
       </GlassCard>
+
+      {/* Quick Reference Presets Bar */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 shrink-0 flex items-center gap-1.5">
+          <Bookmark className="w-3.5 h-3.5 text-amber-500" />
+          Quick Presets:
+        </span>
+        {savedTemplates.slice(0, 3).map(p => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => handleApplyPreset(p)}
+            className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:text-amber-500 hover:border-amber-500/50 border border-zinc-200 dark:border-white/10 shrink-0 transition-all shadow-sm flex items-center gap-1.5"
+          >
+            <span className={`w-2 h-2 rounded-full ${p.theme === 'dark' ? 'bg-amber-500' : 'bg-blue-500'}`} />
+            <span>{p.name.split(' (')[0]}</span>
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => {
+            setShowReferencesModal(true);
+            if (acumbaCampaigns.length === 0) loadPastCampaigns();
+          }}
+          className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 shrink-0 transition-all flex items-center gap-1.5"
+        >
+          <BookOpen className="w-3.5 h-3.5" />
+          <span>Browse Library &amp; Past Campaigns</span>
+        </button>
+      </div>
 
       {/* Main Studio Grid: 2 Columns (Composer & Live Dual Preview) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -848,7 +1144,139 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
             </GlassCard>
           )}
 
-          {/* 3. Campaign Email Content Composer */}
+          {/* 3. Email Style & Brand Aesthetics Card */}
+          <GlassCard className="p-5 md:p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/[0.06] pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500">
+                  <Palette className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider">
+                    Email Style &amp; Brand Aesthetics
+                  </h3>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    Sleek dark layout, capsule pill notices, and guarantee feature cards
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-900 text-white dark:bg-white dark:text-black">
+                {emailTheme === 'dark' ? 'Dark Edition' : 'Light Edition'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Theme Selector */}
+              <div>
+                <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">
+                  Theme Appearance
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEmailTheme('dark')}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all ${
+                      emailTheme === 'dark'
+                        ? 'bg-zinc-950 text-white border-amber-500/50 shadow-md ring-1 ring-amber-500/30'
+                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-transparent hover:border-zinc-300'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    <span>Dark (Default)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEmailTheme('light')}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all ${
+                      emailTheme === 'light'
+                        ? 'bg-white text-zinc-950 border-zinc-400 shadow-md'
+                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-transparent hover:border-zinc-300'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-zinc-400" />
+                    <span>Light Mode</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Primary CTA Color */}
+              <div>
+                <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">
+                  Primary Action Button Style
+                </label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setPrimaryCtaColor('amber')}
+                    className={`py-2 px-1.5 rounded-xl text-[11px] font-bold border transition-all text-center ${
+                      primaryCtaColor === 'amber'
+                        ? 'bg-amber-500 text-black border-amber-600 font-extrabold shadow-sm'
+                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-transparent'
+                    }`}
+                  >
+                    Amber Gold
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPrimaryCtaColor('white')}
+                    className={`py-2 px-1.5 rounded-xl text-[11px] font-bold border transition-all text-center ${
+                      primaryCtaColor === 'white'
+                        ? 'bg-white text-black border-zinc-300 font-extrabold shadow-sm'
+                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-transparent'
+                    }`}
+                  >
+                    Pure White
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPrimaryCtaColor('emerald')}
+                    className={`py-2 px-1.5 rounded-xl text-[11px] font-bold border transition-all text-center ${
+                      primaryCtaColor === 'emerald'
+                        ? 'bg-emerald-500 text-white border-emerald-600 font-extrabold shadow-sm'
+                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-transparent'
+                    }`}
+                  >
+                    Emerald
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Sub-Pill Notice Capsule */}
+            <div>
+              <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">
+                Sub-Banner Capsule Notice (Optional)
+              </label>
+              <Input
+                type="text"
+                value={subPillNotice}
+                onChange={(e) => setSubPillNotice(e.target.value)}
+                placeholder="All Items - Limited Time Only • Coupon applied automatically"
+                className="text-xs"
+              />
+              <span className="text-[10px] text-zinc-400 block mt-1">
+                Displays as a sleek pill under the hero banner for event dates or auto-applied code reminders.
+              </span>
+            </div>
+
+            {/* Trust & Feature Grid Toggle */}
+            <div className="pt-1">
+              <label className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showTrustGrid}
+                  onChange={(e) => setShowTrustGrid(e.target.checked)}
+                  className="rounded text-amber-500"
+                />
+                <span>Include 6-Card Trust &amp; Guarantee Grid</span>
+                <span className="text-[10px] font-normal text-zinc-400">
+                  (Installation Warranty, Scratch Resistant, Residue-free, Durability)
+                </span>
+              </label>
+            </div>
+          </GlassCard>
+
+          {/* 4. Campaign Email Content Composer */}
           <GlassCard className="p-5 md:p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/[0.06] pb-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200">
@@ -1204,10 +1632,10 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
             </div>
 
             {/* Preview Frame Container */}
-            <div className="flex-1 flex justify-center bg-zinc-200/50 dark:bg-black/40 rounded-2xl p-2 md:p-4 overflow-hidden border border-zinc-200 dark:border-white/10 min-h-[580px]">
+            <div className={`flex-1 flex justify-center ${emailTheme === 'dark' ? 'bg-[#000000]' : 'bg-zinc-200/50 dark:bg-black/40'} rounded-2xl p-2 md:p-4 overflow-hidden border border-zinc-200 dark:border-white/10 min-h-[580px]`}>
               <div
-                className={`transition-all duration-300 bg-white rounded-xl shadow-lg overflow-hidden border border-zinc-300 dark:border-zinc-700 ${
-                  previewViewport === 'desktop' ? 'w-full max-w-[620px]' : 'w-[375px]'
+                className={`transition-all duration-300 ${emailTheme === 'dark' ? 'bg-[#0c0c0e] border-zinc-800' : 'bg-white border-zinc-300 dark:border-zinc-700'} rounded-2xl shadow-2xl overflow-hidden border ${
+                  previewViewport === 'desktop' ? 'w-full max-w-[580px]' : 'w-[375px]'
                 }`}
               >
                 <iframe
@@ -1297,6 +1725,233 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
           </div>
         </div>
       </Modal>
+
+      {/* References & Past Campaigns Library Modal */}
+      <Modal
+        isOpen={showReferencesModal}
+        onClose={() => setShowReferencesModal(false)}
+        title="Email References & Past Campaigns"
+      >
+        <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+          {/* Modal Tab Switcher */}
+          <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-white/10 pb-3">
+            <button
+              type="button"
+              onClick={() => setReferencesTab('presets')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                referencesTab === 'presets'
+                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-black shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900'
+              }`}
+            >
+              <Bookmark className="w-3.5 h-3.5" />
+              <span>Saved Presets &amp; Templates ({savedTemplates.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setReferencesTab('acumbamail');
+                if (acumbaCampaigns.length === 0) loadPastCampaigns();
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                referencesTab === 'acumbamail'
+                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-black shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900'
+              }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>Past Acumbamail Campaigns ({acumbaCampaigns.length})</span>
+            </button>
+          </div>
+
+          {/* TAB 1: Saved Templates & Presets */}
+          {referencesTab === 'presets' && (
+            <div className="space-y-4">
+              {/* Save current form as custom preset */}
+              <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/[0.02] space-y-2">
+                <span className="text-xs font-bold text-zinc-900 dark:text-white block">
+                  Save Current Composer as a Reusable Reference
+                </span>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="text"
+                    value={customPresetName}
+                    onChange={(e) => setCustomPresetName(e.target.value)}
+                    placeholder="Reference name (e.g. 8.8 Dark Drop, VIP Exclusive)..."
+                    className="text-xs"
+                  />
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handleSaveCurrentAsPreset}
+                    className="whitespace-nowrap bg-amber-500 hover:bg-amber-600 text-black font-bold flex items-center gap-1.5"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Save Current</span>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Presets List */}
+              <div className="grid grid-cols-1 gap-3">
+                {savedTemplates.map((p) => (
+                  <div
+                    key={p.id}
+                    className="p-4 rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-900/80 hover:border-amber-500/40 transition-all space-y-2 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2.5 h-2.5 rounded-full ${p.theme === 'dark' ? 'bg-amber-500' : 'bg-blue-500'}`} />
+                        <h4 className="text-xs font-bold text-zinc-900 dark:text-white">{p.name}</h4>
+                        <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-zinc-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-300 uppercase">
+                          {p.theme}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleApplyPreset(p)}
+                          className="px-3 py-1 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-600 text-black transition-colors"
+                        >
+                          Load Reference
+                        </button>
+                        {!p.isBuiltIn && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCustomPreset(p.id)}
+                            className="p-1 rounded-lg text-zinc-400 hover:text-rose-500 transition-colors"
+                            title="Delete Preset"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {p.desc && (
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                        {p.desc}
+                      </p>
+                    )}
+
+                    <div className="p-2 rounded-lg bg-zinc-50 dark:bg-white/[0.03] text-[11px] space-y-0.5 border border-zinc-100 dark:border-white/[0.04]">
+                      <div className="truncate text-zinc-700 dark:text-zinc-300">
+                        <strong>Subject:</strong> {p.subject}
+                      </div>
+                      <div className="truncate text-zinc-500">
+                        <strong>Headline:</strong> {p.headline}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: Past Acumbamail Campaigns */}
+          {referencesTab === 'acumbamail' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-zinc-500">
+                  Broadcast campaigns retrieved directly from your connected Acumbamail account:
+                </span>
+                <button
+                  type="button"
+                  onClick={loadPastCampaigns}
+                  disabled={isLoadingCampaigns}
+                  className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1 hover:underline"
+                >
+                  <RotateCw className={`w-3 h-3 ${isLoadingCampaigns ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+              </div>
+
+              {isLoadingCampaigns ? (
+                <div className="p-8 text-center text-xs text-zinc-500">
+                  <RotateCw className="w-5 h-5 animate-spin mx-auto mb-2 text-amber-500" />
+                  <span>Fetching past campaigns from Acumbamail...</span>
+                </div>
+              ) : acumbaCampaigns.length === 0 ? (
+                <div className="p-6 text-center text-xs text-zinc-500 border border-dashed rounded-xl">
+                  No past campaigns returned or Acumbamail token needs verification.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-2.5">
+                  {acumbaCampaigns.map((camp) => (
+                    <div
+                      key={camp.id}
+                      className="p-3 rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-900/60 flex items-center justify-between gap-3 text-xs"
+                    >
+                      <div className="min-w-0">
+                        <span className="font-bold text-zinc-900 dark:text-white block truncate">
+                          {camp.name}
+                        </span>
+                        <span className="text-[10px] text-zinc-400 font-mono">
+                          Campaign ID: {camp.id}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handlePreviewCampaign(camp.id, camp.name)}
+                          className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-zinc-100 dark:bg-white/10 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 transition-colors flex items-center gap-1"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span>Preview HTML</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleUseCampaignAsReference(camp.id, camp.name)}
+                          className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-600 text-black transition-colors"
+                        >
+                          Use as Reference
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Past Campaign Full HTML Viewer Modal */}
+      {viewingCampaignHtml && (
+        <Modal
+          isOpen={Boolean(viewingCampaignHtml)}
+          onClose={() => setViewingCampaignHtml(null)}
+          title={`Original Campaign: ${viewingCampaignTitle}`}
+        >
+          <div className="space-y-4">
+            <div className="border border-zinc-300 dark:border-zinc-700 rounded-xl overflow-hidden h-[540px] bg-black">
+              <iframe
+                title="Historical Campaign Preview"
+                srcDoc={viewingCampaignHtml}
+                className="w-full h-full border-0"
+                sandbox="allow-same-origin"
+              />
+            </div>
+            <div className="flex items-center justify-between text-xs pt-1">
+              <span className="text-zinc-500">Rendered from Acumbamail archive</span>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setSubject(viewingCampaignTitle);
+                  setViewingCampaignHtml(null);
+                  setShowReferencesModal(false);
+                  showToast('success', 'Applied to Composer', `Set subject to "${viewingCampaignTitle}".`);
+                }}
+                className="bg-amber-500 hover:bg-amber-600 text-black font-bold"
+              >
+                Use This Title in Composer
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

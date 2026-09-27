@@ -50,6 +50,13 @@ export const BRAND_LOGO_HTML = `
 
 export const BRAND_WORDMARK_HTML = BRAND_LOGO_HTML;
 
+export const BRAND_LOGO_WHITE_HTML = `
+  <svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" width="136" height="24" viewBox="0 0 1368000 241000" shape-rendering="geometricPrecision" text-rendering="geometricPrecision" style="display:block;border:0;outline:none;width:136px;height:24px;">
+    <path fill="#ffffff" fill-rule="nonzero" d="M1281000 218000l0 -40000 22000 -23000 43000 0 22000 23000 0 40000 -22000 23000 -43000 0 -22000 -23000zm59000 10000l14000 -14000 0 -32000 -14000 -14000 -31000 0 -14000 14000 0 32000 14000 14000 31000 0zm-33000 -52000l28000 0 8000 8000 0 13000 -5000 5000 6000 6000 0 10000 -12000 0 0 -7000 -4000 -5000 -9000 0 0 12000 -12000 0 0 -42000zm22000 20000l3000 -2000 0 -5000 -3000 -3000 -10000 0 0 10000 10000 0z"/>
+    <path fill="#ffffff" fill-rule="nonzero" d="M0 202000l0 -108000 36000 -36000 97000 0 37000 36000 0 67000 -129000 0 0 29000 13000 14000 62000 0 13000 -13000 0 -11000 40000 0 0 23000 -35000 35000 -99000 0 -35000 -36000zm129000 -70000l0 -25000 -14000 -15000 -60000 0 -14000 15000 0 25000 88000 0zm180000 106000l-43000 -60000 -44000 60000 -45000 0 66000 -91000 -65000 -89000 46000 0 42000 58000 41000 -58000 46000 0 -64000 89000 66000 91000 -46000 0zm51000 -32000l0 -43000 32000 -31000 93000 0 0 -27000 -14000 -13000 -56000 0 -14000 13000 0 11000 -40000 0 0 -20000 37000 -38000 90000 0 37000 38000 0 142000 -37000 0 0 -28000 -29000 28000 -67000 0 -32000 -32000zm95000 0l30000 -29000 0 -15000 -74000 0 -11000 11000 0 22000 11000 11000 44000 0zm102000 -4000l0 -108000 35000 -36000 95000 0 35000 36000 0 30000 -40000 0 0 -17000 -15000 -14000 -55000 0 -15000 14000 0 82000 15000 14000 55000 0 15000 -14000 0 -17000 40000 0 0 30000 -35000 36000 -95000 0 -35000 -36000zm188000 0l0 -108000 36000 -36000 100000 0 36000 36000 0 108000 -36000 36000 -100000 0 -36000 -36000zm116000 2000l15000 -15000 0 -82000 -15000 -14000 -60000 0 -15000 14000 0 82000 15000 15000 60000 0zm84000 2000l0 -43000 32000 -31000 93000 0 0 -27000 -14000 -13000 -56000 0 -14000 13000 0 11000 -40000 0 0 -20000 37000 -38000 90000 0 37000 38000 0 142000 -37000 0 0 -28000 -29000 28000 -67000 0 -32000 -32000zm95000 0l30000 -29000 0 -15000 -73000 0 -12000 11000 0 22000 11000 11000 44000 0zm118000 -4000l0 -109000 -33000 0 0 -35000 34000 0 0 -58000 40000 0 0 58000 55000 0 0 35000 -55000 0 0 96000 14000 14000 41000 0 0 35000 -60000 0 -36000 -36000z"/>
+  </svg>
+`;
+
 function renderCustomerAccountEmail(event: string, data: Record<string, any>): RenderedEmail {
   const custName = escapeHtml(data.customer_first_name || data.display_name || 'Customer');
 
@@ -1403,8 +1410,16 @@ function renderFallbackEmail(event: string, data: Record<string, any>): Rendered
   return { subject, html, isLightMode: true };
 }
 
+export interface TrustFeatureCard {
+  title: string;
+  desc: string;
+  highlighted?: boolean;
+}
+
 export interface MarketingEmailOptions {
+  theme?: 'dark' | 'light';
   subject: string;
+  preheaderText?: string;
   badgeText?: string;
   badgeVariant?: 'amber' | 'emerald' | 'blue' | 'purple' | 'zinc';
   headline: string;
@@ -1412,48 +1427,98 @@ export interface MarketingEmailOptions {
   bannerImageUrl?: string;
   bannerImageAlt?: string;
   bannerLinkUrl?: string;
+  subPillNotice?: string;
   bodyText: string;
   highlightTitle?: string;
   highlightText?: string;
   promoCode?: string;
+  showTrustGrid?: boolean;
+  trustCards?: TrustFeatureCard[];
   ctaText?: string;
   ctaUrl?: string;
+  primaryCtaColor?: 'amber' | 'white' | 'emerald';
   secondaryCtaText?: string;
   secondaryCtaUrl?: string;
   footerNote?: string;
   unsubscribeUrl?: string;
+  viewInBrowserUrl?: string;
 }
 
+const DEFAULT_TRUST_CARDS: TrustFeatureCard[] = [
+  {
+    title: 'Installation Warranty',
+    desc: 'If installation fails within 2 days after receipt, we replace it with a new one.',
+    highlighted: true,
+  },
+  {
+    title: 'Scratch &amp; Mold Resistant',
+    desc: 'Shields surfaces from scratches and moisture buildup that degrade gadget finishes.',
+    highlighted: false,
+  },
+  {
+    title: 'Money Back Guarantee',
+    desc: 'Not satisfied with your skin within 30 days? Enjoy a hassle-free refund.',
+    highlighted: false,
+  },
+  {
+    title: 'No Residue, Like New',
+    desc: 'Engineered adhesive leaves zero residue, preserving your device in factory mint condition.',
+    highlighted: false,
+  },
+  {
+    title: 'Bubble Airways Tech',
+    desc: 'Micro-channeled air release matrix guarantees a clean, 100% bubble-free fit.',
+    highlighted: false,
+  },
+  {
+    title: '3+ Years Durability',
+    desc: 'Industrial-grade cast vinyl retains exact fit, tactile texture, and vibrant color.',
+    highlighted: false,
+  },
+];
+
 export function renderMarketingEmailHtml(options: MarketingEmailOptions): RenderedEmail {
+  const isDark = (options.theme ?? 'dark') === 'dark';
   const subject = escapeHtml(options.subject || 'Special Update from Exacoat');
+  const preheader = escapeHtml(options.preheaderText || 'Precision crafted device skins and exclusive announcements.');
   const headline = escapeHtml(options.headline || 'Exclusive Announcement');
   const greeting = escapeHtml(options.recipientGreeting || 'Hi Customer,');
   const badgeText = escapeHtml(options.badgeText || 'Announcement');
   const badgeVariant = options.badgeVariant || 'amber';
 
-  let badgeBg = '#fff8eb';
-  let badgeColor = '#d97706';
-  let badgeBorder = '#fef3c7';
+  // Badge Colors
+  let badgeBg = isDark ? 'rgba(245,158,11,0.15)' : '#fff8eb';
+  let badgeColor = isDark ? '#fbbf24' : '#d97706';
+  let badgeBorder = isDark ? 'rgba(245,158,11,0.3)' : '#fef3c7';
 
   if (badgeVariant === 'emerald') {
-    badgeBg = '#ecfdf5';
-    badgeColor = '#059669';
-    badgeBorder = '#a7f3d0';
+    badgeBg = isDark ? 'rgba(16,185,129,0.15)' : '#ecfdf5';
+    badgeColor = isDark ? '#34d399' : '#059669';
+    badgeBorder = isDark ? 'rgba(16,185,129,0.3)' : '#a7f3d0';
   } else if (badgeVariant === 'blue') {
-    badgeBg = '#eff6ff';
-    badgeColor = '#2563eb';
-    badgeBorder = '#bfdbfe';
+    badgeBg = isDark ? 'rgba(59,130,246,0.15)' : '#eff6ff';
+    badgeColor = isDark ? '#60a5fa' : '#2563eb';
+    badgeBorder = isDark ? 'rgba(59,130,246,0.3)' : '#bfdbfe';
   } else if (badgeVariant === 'purple') {
-    badgeBg = '#faf5ff';
-    badgeColor = '#7c3aed';
-    badgeBorder = '#e9d5ff';
+    badgeBg = isDark ? 'rgba(168,85,247,0.15)' : '#faf5ff';
+    badgeColor = isDark ? '#c084fc' : '#7c3aed';
+    badgeBorder = isDark ? 'rgba(168,85,247,0.3)' : '#e9d5ff';
   } else if (badgeVariant === 'zinc') {
-    badgeBg = '#f4f4f5';
-    badgeColor = '#3f3f46';
-    badgeBorder = '#e4e4e7';
+    badgeBg = isDark ? 'rgba(255,255,255,0.08)' : '#f4f4f5';
+    badgeColor = isDark ? '#e4e4e7' : '#3f3f46';
+    badgeBorder = isDark ? 'rgba(255,255,255,0.15)' : '#e4e4e7';
   }
 
-  // Parse body text paragraphs
+  // Theme palettes
+  const bgOuter = isDark ? '#050507' : '#f7f7f7';
+  const bgCard = isDark ? '#0e0e11' : '#ffffff';
+  const cardBorder = isDark ? '#1f1f24' : '#e5e5e5';
+  const textHeading = isDark ? '#ffffff' : '#111111';
+  const textBody = isDark ? '#a1a1aa' : '#3f3f46';
+  const textGreeting = isDark ? '#e4e4e7' : '#18181b';
+  const headerDivider = isDark ? '#1a1a1f' : '#f0f0f0';
+
+  // Body text paragraphs
   const rawBody = options.bodyText || '';
   const paragraphs = rawBody
     .split(/\n\s*\n/)
@@ -1462,7 +1527,7 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
 
   const bodyHtml = paragraphs.map(p => {
     const formatted = escapeHtml(p).replace(/\n/g, '<br />');
-    return `<p style="margin:0 0 16px;font-size:14.5px;line-height:1.75;color:#3f3f46;">${formatted}</p>`;
+    return `<p style="margin:0 0 16px;font-size:14.5px;line-height:1.75;color:${textBody};">${formatted}</p>`;
   }).join('');
 
   // Banner image section
@@ -1470,32 +1535,59 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
   if (options.bannerImageUrl) {
     const imgUrl = escapeHtml(options.bannerImageUrl);
     const altText = escapeHtml(options.bannerImageAlt || headline);
-    const imgTag = `<img src="${imgUrl}" alt="${altText}" width="520" style="width:100%;max-width:520px;height:auto;border-radius:14px;border:1px solid #e5e5e5;display:block;margin:0 0 24px;object-fit:cover;" />`;
+    const imgBorder = isDark ? '1px solid #27272a' : '1px solid #e5e5e5';
+    const imgTag = `<img src="${imgUrl}" alt="${altText}" width="520" style="width:100%;max-width:520px;height:auto;border-radius:16px;border:${imgBorder};display:block;margin:0 auto 20px;object-fit:cover;" />`;
     if (options.bannerLinkUrl) {
       const linkUrl = escapeHtml(options.bannerLinkUrl);
-      bannerHtml = `<div style="margin-bottom:20px;"><a href="${linkUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:block;">${imgTag}</a></div>`;
+      bannerHtml = `<div style="margin-bottom:20px;text-align:center;"><a href="${linkUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:block;">${imgTag}</a></div>`;
     } else {
-      bannerHtml = `<div style="margin-bottom:20px;">${imgTag}</div>`;
+      bannerHtml = `<div style="margin-bottom:20px;text-align:center;">${imgTag}</div>`;
     }
   }
 
-  // Highlight / Promo box
+  // Sub-pill Capsule Notice
+  let subPillHtml = '';
+  if (options.subPillNotice) {
+    const pillBg = isDark ? 'rgba(255,255,255,0.04)' : '#f4f4f5';
+    const pillBorderColor = isDark ? 'rgba(255,255,255,0.12)' : '#e4e4e7';
+    const pillText = escapeHtml(options.subPillNotice).replace(/\n/g, '<br />');
+    subPillHtml = `
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
+        <tr>
+          <td align="center">
+            <div style="display:inline-block;width:94%;max-width:500px;padding:12px 20px;border-radius:9999px;background:${pillBg};border:1px solid ${pillBorderColor};text-align:center;box-sizing:border-box;">
+              <span style="font-size:12.5px;font-weight:600;color:${textHeading};line-height:1.5;letter-spacing:0.2px;">
+                ${pillText}
+              </span>
+            </div>
+          </td>
+        </tr>
+      </table>`;
+  }
+
+  // Highlight / Promo coupon box
   let highlightHtml = '';
   if (options.promoCode || options.highlightTitle || options.highlightText) {
     const hTitle = escapeHtml(options.highlightTitle || (options.promoCode ? 'Exclusive Perk' : 'Special Highlight'));
-    const hText = options.highlightText ? `<p style="margin:0 0 10px;font-size:13.5px;line-height:1.6;color:#52525b;">${escapeHtml(options.highlightText)}</p>` : '';
+    const hText = options.highlightText ? `<p style="margin:0 0 10px;font-size:13px;line-height:1.6;color:${textBody};">${escapeHtml(options.highlightText)}</p>` : '';
+    const boxBg = isDark ? '#141419' : '#fafafa';
+    const boxBorder = isDark ? '1.5px dashed #f59e0b' : '1.5px dashed #111111';
+    const codeBg = isDark ? '#1f1f24' : '#ffffff';
+    const codeColor = isDark ? '#fbbf24' : '#111111';
+    const codeBorder = isDark ? '1px solid rgba(245,158,11,0.4)' : '1px solid #e4e4e7';
+
     const codeHtml = options.promoCode ? `
       <div style="margin-top:12px;">
-        <span style="display:inline-block;padding:8px 18px;background:#ffffff;border:1.5px dashed #111111;color:#111111;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:16px;font-weight:800;letter-spacing:1px;border-radius:8px;">
+        <span style="display:inline-block;padding:8px 20px;background:${codeBg};border:${codeBorder};color:${codeColor};font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:16px;font-weight:800;letter-spacing:1.5px;border-radius:8px;">
           ${escapeHtml(options.promoCode)}
         </span>
       </div>` : '';
 
     highlightHtml = `
-      <table width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #e4e4e7;border-radius:14px;margin:24px 0 28px;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:${boxBg};border:${boxBorder};border-radius:14px;margin:24px 0 28px;">
         <tr>
           <td style="padding:22px 24px;text-align:center;">
-            <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:#111111;">${hTitle}</p>
+            <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:${textHeading};">${hTitle}</p>
             ${hText}
             ${codeHtml}
           </td>
@@ -1503,32 +1595,107 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
       </table>`;
   }
 
+  // Trust / Feature Cards Grid (2-column layout)
+  let trustGridHtml = '';
+  const showGrid = options.showTrustGrid ?? isDark;
+  if (showGrid) {
+    const cards = options.trustCards && options.trustCards.length > 0 ? options.trustCards : DEFAULT_TRUST_CARDS;
+    let cardRowsHtml = '';
+
+    for (let i = 0; i < cards.length; i += 2) {
+      const left = cards[i];
+      const right = cards[i + 1];
+
+      const renderCardCell = (c?: TrustFeatureCard) => {
+        if (!c) return '<td width="48%"></td>';
+        const isHighlight = Boolean(c.highlighted);
+        const cardBg = isDark ? '#121216' : '#fafafa';
+        const cardBorderColor = isHighlight 
+          ? (isDark ? '#f59e0b' : '#d97706') 
+          : (isDark ? '#222227' : '#e5e5e5');
+        const cardTitleColor = isHighlight && isDark ? '#fbbf24' : textHeading;
+
+        return `
+          <td width="48%" valign="top" style="padding-bottom:12px;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${cardBg};border:1px solid ${cardBorderColor};border-radius:14px;height:100%;">
+              <tr>
+                <td style="padding:16px 14px;text-align:center;">
+                  <div style="display:inline-block;width:24px;height:24px;line-height:24px;border-radius:999px;background:${isHighlight ? 'rgba(245,158,11,0.2)' : 'rgba(255,255,255,0.06)'};color:#f59e0b;font-size:11px;font-weight:bold;margin-bottom:8px;">
+                    ${isHighlight ? '&#9733;' : '&#10003;'}
+                  </div>
+                  <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:${cardTitleColor};letter-spacing:-0.2px;">
+                    ${escapeHtml(c.title)}
+                  </p>
+                  <p style="margin:0;font-size:11px;line-height:1.5;color:${textBody};">
+                    ${escapeHtml(c.desc)}
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>`;
+      };
+
+      cardRowsHtml += `
+        <tr>
+          ${renderCardCell(left)}
+          <td width="4%"></td>
+          ${renderCardCell(right)}
+        </tr>`;
+    }
+
+    trustGridHtml = `
+      <div style="margin:28px 0 20px;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0">
+          ${cardRowsHtml}
+        </table>
+      </div>`;
+  }
+
   // Action CTA buttons
   let ctaButtonsHtml = '';
   if (options.ctaText && options.ctaUrl) {
     const ctaText = escapeHtml(options.ctaText);
     const ctaUrl = escapeHtml(options.ctaUrl);
+
+    let btnBg = '#f59e0b';
+    let btnColor = '#000000';
+    if (options.primaryCtaColor === 'white') {
+      btnBg = '#ffffff';
+      btnColor = '#000000';
+    } else if (options.primaryCtaColor === 'emerald') {
+      btnBg = '#10b981';
+      btnColor = '#ffffff';
+    } else if (!isDark) {
+      btnBg = '#111111';
+      btnColor = '#ffffff';
+    }
+
     let secondaryHtml = '';
     if (options.secondaryCtaText && options.secondaryCtaUrl) {
       const secText = escapeHtml(options.secondaryCtaText);
       const secUrl = escapeHtml(options.secondaryCtaUrl);
+      const secBg = isDark ? '#1a1a20' : '#f4f4f5';
+      const secColor = isDark ? '#e4e4e7' : '#18181b';
+      const secBorder = isDark ? '#27272a' : '#e4e4e7';
+
       secondaryHtml = `
-        <a href="${secUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:13px 24px;background:#f4f4f5;color:#18181b;font-size:13.5px;font-weight:600;border-radius:100px;text-decoration:none;letter-spacing:0.2px;border:1px solid #e4e4e7;margin-left:10px;margin-top:6px;">
+        <a href="${secUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:14px 26px;background:${secBg};color:${secColor};font-size:13.5px;font-weight:700;border-radius:999px;text-decoration:none;letter-spacing:0.3px;border:1px solid ${secBorder};margin-left:10px;margin-top:6px;">
           ${secText}
         </a>`;
     }
 
     ctaButtonsHtml = `
-      <div style="margin:28px 0 20px;">
-        <a href="${ctaUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:14px 30px;background:#111111;color:#ffffff;font-size:14px;font-weight:700;border-radius:100px;text-decoration:none;letter-spacing:0.2px;box-shadow:0 3px 12px rgba(0,0,0,0.12);margin-top:6px;">
-          ${ctaText} &rarr;
+      <div style="margin:30px 0 24px;text-align:center;">
+        <a href="${ctaUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:15px 38px;background:${btnBg};color:${btnColor};font-size:14.5px;font-weight:900;border-radius:999px;text-decoration:none;letter-spacing:0.5px;text-transform:uppercase;box-shadow:0 4px 18px rgba(0,0,0,0.25);margin-top:6px;">
+          ${ctaText}
         </a>
         ${secondaryHtml}
       </div>`;
   }
 
   const unsubscribeUrl = escapeHtml(options.unsubscribeUrl || '{{unsubscribe_url}}');
-  const footerNote = options.footerNote ? `<p style="margin:0 0 12px;font-size:13px;line-height:1.6;color:#71717a;">${escapeHtml(options.footerNote)}</p>` : '';
+  const footerNote = options.footerNote ? `<p style="margin:0 0 12px;font-size:13px;line-height:1.6;color:${textBody};text-align:center;">${escapeHtml(options.footerNote)}</p>` : '';
+  const brandLogo = isDark ? BRAND_LOGO_WHITE_HTML : BRAND_LOGO_HTML;
 
   const html = `<!doctype html>
 <html lang="en">
@@ -1542,7 +1709,7 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
       margin: 0;
       padding: 0;
       width: 100% !important;
-      background-color: #f7f7f7;
+      background-color: ${bgOuter};
       font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       -webkit-font-smoothing: antialiased;
     }
@@ -1554,23 +1721,37 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
     }
   </style>
 </head>
-<body bgcolor="#f7f7f7" style="margin:0;padding:0;background-color:#f7f7f7;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f7f7" style="background-color:#f7f7f7;padding:44px 16px;">
+<body bgcolor="${bgOuter}" style="margin:0;padding:0;background-color:${bgOuter};font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <!-- Preview Preheader (Hidden snippet) -->
+  <div style="display:none;font-size:1px;color:${bgOuter};line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
+    ${preheader}
+  </div>
+
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${bgOuter}" style="background-color:${bgOuter};padding:36px 12px;">
     <tr>
       <td align="center">
+        <!-- Top Webview Link -->
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;margin-bottom:12px;">
+          <tr>
+            <td align="center" style="font-size:11px;color:#71717a;line-height:1.4;">
+              If you cannot see this email properly, please <a href="{{webview_url}}" target="_blank" rel="noopener noreferrer" style="color:#a1a1aa;text-decoration:underline;">click here</a>.
+            </td>
+          </tr>
+        </table>
+
         <!-- Main Card -->
-        <table class="container-table" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #e5e5e5;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.04);">
+        <table class="container-table" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:${bgCard};border:1px solid ${cardBorder};border-radius:24px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,0.4);">
           <tbody>
             <!-- Top Header (Logo + Badge) -->
             <tr>
-              <td style="padding:28px 40px 22px;border-bottom:1px solid #f0f0f0;" class="mobile-padding">
+              <td style="padding:28px 36px 20px;border-bottom:1px solid ${headerDivider};" class="mobile-padding">
                 <table width="100%" cellpadding="0" cellspacing="0">
                   <tr>
                     <td valign="middle">
-                      ${BRAND_LOGO_HTML}
+                      ${brandLogo}
                     </td>
                     <td align="right" valign="middle">
-                      <span style="display:inline-block;padding:5px 13px;background:${badgeBg};color:${badgeColor};font-size:11px;font-weight:700;border-radius:999px;border:1px solid ${badgeBorder};letter-spacing:0.3px;text-transform:uppercase;">${badgeText}</span>
+                      <span style="display:inline-block;padding:5px 13px;background:${badgeBg};color:${badgeColor};font-size:11px;font-weight:700;border-radius:999px;border:1px solid ${badgeBorder};letter-spacing:0.4px;text-transform:uppercase;">${badgeText}</span>
                     </td>
                   </tr>
                 </table>
@@ -1579,34 +1760,57 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
 
             <!-- Message Headline & Body -->
             <tr>
-              <td style="padding:36px 40px 32px;" class="mobile-padding">
+              <td style="padding:32px 36px 28px;" class="mobile-padding">
                 ${bannerHtml}
-                <h1 style="margin:0 0 16px;font-size:25px;font-weight:800;color:#111111;letter-spacing:-0.5px;line-height:1.25;">${headline}</h1>
-                <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:#18181b;">${greeting}</p>
+                ${subPillHtml}
+                <h1 style="margin:0 0 16px;font-size:24px;font-weight:800;color:${textHeading};letter-spacing:-0.5px;line-height:1.3;">${headline}</h1>
+                <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:${textGreeting};">${greeting}</p>
                 ${bodyHtml}
                 ${highlightHtml}
+                ${trustGridHtml}
                 ${ctaButtonsHtml}
                 ${footerNote}
 
-                <!-- Dedicated Spacer above Support -->
+                <!-- Dedicated Spacer above Footer -->
                 <table width="100%" cellpadding="0" cellspacing="0">
                   <tr>
-                    <td height="36" style="height:36px;font-size:0;line-height:0;">&nbsp;</td>
+                    <td height="28" style="height:28px;font-size:0;line-height:0;">&nbsp;</td>
                   </tr>
                 </table>
 
-                <!-- Support, Address & Unsubscribe Footer -->
-                <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #f0f0f0;text-align:center;">
+                <!-- Social Links & Unsubscribe Footer -->
+                <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid ${headerDivider};text-align:center;">
                   <tr>
-                    <td align="center" style="padding-top:28px;">
-                      <p style="margin:0 0 10px;font-size:12px;line-height:1.65;color:#71717a;">
-                        Have questions or feedback? Reach our team directly at <a href="mailto:support@exacoat.com" style="color:#111111;text-decoration:underline;font-weight:500;">support@exacoat.com</a>
+                    <td align="center" style="padding-top:24px;">
+                      <!-- Social Links -->
+                      <table cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 16px;">
+                        <tr>
+                          <td style="padding:0 8px;">
+                            <a href="https://instagram.com/exacoat" target="_blank" rel="noopener noreferrer" style="font-size:12px;font-weight:600;color:${isDark ? '#e4e4e7' : '#3f3f46'};text-decoration:none;padding:6px 12px;border-radius:999px;background:${isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f5'};border:1px solid ${cardBorder};">
+                              Instagram
+                            </a>
+                          </td>
+                          <td style="padding:0 8px;">
+                            <a href="https://x.com/exacoat" target="_blank" rel="noopener noreferrer" style="font-size:12px;font-weight:600;color:${isDark ? '#e4e4e7' : '#3f3f46'};text-decoration:none;padding:6px 12px;border-radius:999px;background:${isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f5'};border:1px solid ${cardBorder};">
+                              X (Twitter)
+                            </a>
+                          </td>
+                          <td style="padding:0 8px;">
+                            <a href="https://youtube.com/@exacoat" target="_blank" rel="noopener noreferrer" style="font-size:12px;font-weight:600;color:${isDark ? '#e4e4e7' : '#3f3f46'};text-decoration:none;padding:6px 12px;border-radius:999px;background:${isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f5'};border:1px solid ${cardBorder};">
+                              YouTube
+                            </a>
+                          </td>
+                        </tr>
+                      </table>
+
+                      <p style="margin:0 0 8px;font-size:11.5px;color:#71717a;">
+                        &copy; 2016-2026 Exacoat &bull; Precision Device Skins
                       </p>
-                      <p style="margin:0 0 10px;font-size:11.5px;color:#a1a1aa;">
-                        You are receiving this email because you opted in to updates from Exacoat. <br />
-                        <a href="${unsubscribeUrl}" target="_blank" rel="noopener noreferrer" style="color:#71717a;text-decoration:underline;">Unsubscribe from these emails</a>
+                      <p style="margin:0;font-size:11px;color:#71717a;line-height:1.5;">
+                        <a href="{{webview_url}}" target="_blank" rel="noopener noreferrer" style="color:#a1a1aa;text-decoration:underline;">View in browser</a>
+                        &nbsp;&bull;&nbsp;
+                        <a href="${unsubscribeUrl}" target="_blank" rel="noopener noreferrer" style="color:#a1a1aa;text-decoration:underline;">Unsubscribe</a>
                       </p>
-                      <p style="margin:0;font-size:11px;color:#a1a1aa;letter-spacing:0.2px;">&copy; Exacoat &bull; Ruby Commercial TB-12, Summarecon Bekasi, Bekasi Utara, West Java 17142</p>
                     </td>
                   </tr>
                 </table>
@@ -1620,6 +1824,6 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
 </body>
 </html>`;
 
-  return { subject: options.subject, html, isLightMode: true };
+  return { subject: options.subject, html, isLightMode: !isDark };
 }
 

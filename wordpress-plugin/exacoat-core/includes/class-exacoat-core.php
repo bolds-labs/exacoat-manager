@@ -1816,6 +1816,36 @@ class Exacoat_Core {
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 
+		$register( '/acumbamail/campaigns', [
+			'methods'             => 'GET',
+			'callback'            => function( WP_REST_Request $request ) {
+				$email_class = class_exists( 'Exacoat_Email_Engine' ) ? 'Exacoat_Email_Engine' : ( class_exists( 'Artmatter_Email_Engine' ) ? 'Artmatter_Email_Engine' : false );
+				if ( $email_class && method_exists( $email_class, 'get_acumbamail_campaigns' ) ) {
+					$res = $email_class::get_acumbamail_campaigns();
+					return rest_ensure_response( $res );
+				}
+				return rest_ensure_response( [ 'success' => false, 'error' => 'Email engine not available' ] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
+		$register( '/acumbamail/campaign-detail', [
+			'methods'             => 'GET',
+			'callback'            => function( WP_REST_Request $request ) {
+				$campaign_id = sanitize_text_field( $request->get_param( 'campaign_id' ) ?? '' );
+				if ( empty( $campaign_id ) ) {
+					return new WP_Error( 'missing_id', 'campaign_id is required', [ 'status' => 400 ] );
+				}
+				$email_class = class_exists( 'Exacoat_Email_Engine' ) ? 'Exacoat_Email_Engine' : ( class_exists( 'Artmatter_Email_Engine' ) ? 'Artmatter_Email_Engine' : false );
+				if ( $email_class && method_exists( $email_class, 'get_acumbamail_campaign_detail' ) ) {
+					$res = $email_class::get_acumbamail_campaign_detail( $campaign_id );
+					return rest_ensure_response( $res );
+				}
+				return rest_ensure_response( [ 'success' => false, 'error' => 'Email engine not available' ] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
 		$register( '/email/upload-image', [
 			'methods'             => 'POST',
 			'callback'            => function( WP_REST_Request $request ) {

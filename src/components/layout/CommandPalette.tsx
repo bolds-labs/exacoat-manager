@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, ArrowRight, X, LayoutDashboard, ShoppingBag, Star, FileText, Bot, Mail, Users, FlaskConical, Activity, ShieldCheck, Settings } from 'lucide-react';
+import { Search, ArrowRight, X, LayoutDashboard, ShoppingBag, Star, FileText, Bot, Mail, Users, FlaskConical, Activity, ShieldCheck, Settings, Sparkles } from 'lucide-react';
 import { NavItemKey } from './Sidebar';
 import { useAuth } from '../../context/AuthContext';
 
@@ -23,7 +23,8 @@ const WORKSPACE_PAGES: WorkspaceAction[] = [
   { id: 'orders', label: 'Orders & Fulfillment', description: 'Review, process and track customer orders', tab: 'orders', icon: ShoppingBag },
   { id: 'reviews', label: 'Product Reviews', description: 'Moderate customer skin photos and testimonials', tab: 'reviews', icon: Star },
   { id: 'reports', label: 'Sales & Analytics', description: 'Financial trends, volume breakdown and exports', tab: 'reports', icon: FileText },
-  { id: 'emails', label: 'Email Templates', description: 'Customer transactional email previews and tests', tab: 'emails', icon: Mail },
+  { id: 'marketing_emails', label: 'Marketing Studio', description: 'AI marketing campaigns, broadcasts, and Acumbamail dispatch', tab: 'marketing_emails', icon: Sparkles },
+  { id: 'emails', label: 'Email Hub & Templates', description: 'Customer transactional email previews, catalog, and delivery settings', tab: 'emails', icon: Mail },
   { id: 'ai_tools', label: 'AI Copy & SEO Tools', description: 'Generate product descriptions and social copy', tab: 'ai_tools', icon: Bot },
   { id: 'team', label: 'Team Roles', description: 'Manage staff roles and access control', tab: 'team', icon: Users, roleRestricted: true },
   { id: 'testing', label: 'Testing Sandbox', description: 'Validate endpoints and simulated customer events', tab: 'testing', icon: FlaskConical, roleRestricted: true },

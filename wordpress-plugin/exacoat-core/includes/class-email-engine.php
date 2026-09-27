@@ -3258,6 +3258,104 @@ class Exacoat_Email_Engine {
 			'latency_ms' => $latency,
 		];
 	}
+
+	/**
+	 * Get past campaigns from Acumbamail
+	 */
+	public static function get_acumbamail_campaigns(): array {
+		$config = self::get_acumbamail_config();
+		$auth_token = $config['auth_token'];
+
+		if ( empty( $auth_token ) ) {
+			return [ 'success' => false, 'error' => 'Acumbamail auth token missing' ];
+		}
+
+		$start = microtime( true );
+		$response = wp_remote_post( 'https://acumbamail.com/api/1/getCampaigns/', [
+			'body'    => [
+				'auth_token'    => $auth_token,
+				'response_type' => 'json',
+			],
+			'timeout' => 15,
+		] );
+		$latency = (int) round( ( microtime( true ) - $start ) * 1000 );
+
+		if ( is_wp_error( $response ) ) {
+			return [ 'success' => false, 'error' => $response->get_error_message(), 'latency_ms' => $latency ];
+		}
+
+		$body = wp_remote_retrieve_body( $response );
+		$data = json_decode( $body, true );
+
+		if ( is_array( $data ) ) {
+			$campaigns = [];
+			foreach ( $data as $item ) {
+				if ( is_array( $item ) ) {
+					foreach ( $item as $id => $name ) {
+						$campaigns[] = [ 'id' => (string) $id, 'name' => (string) $name ];
+					}
+				}
+			}
+			return [ 'success' => true, 'campaigns' => $campaigns, 'latency_ms' => $latency ];
+		}
+
+		return [ 'success' => false, 'error' => $body ?: 'Failed to parse Acumbamail campaigns', 'latency_ms' => $latency ];
+	}
+
+	/**
+	 * Get specific campaign detail and HTML from Acumbamail
+	 */
+	public static function get_acumbamail_campaign_detail( string $campaign_id ): array {
+		$config = self::get_acumbamail_config();
+		$auth_token = $config['auth_token'];
+
+		if ( empty( $auth_token ) ) {
+			return [ 'success' => false, 'error' => 'Acumbamail auth token missing' ];
+		}
+
+		// 1. Basic info
+		$info_res = wp_remote_post( 'https://acumbamail.com/api/1/getCampaignBasicInformation/', [
+			'body'    => [
+				'auth_token'    => $auth_token,
+				'response_type' => 'json',
+				'campaign_id'   => $campaign_id,
+			],
+			'timeout' => 15,
+		] );
+
+		$info_data = [];
+		if ( ! is_wp_error( $info_res ) ) {
+			$info_body = wp_remote_retrieve_body( $info_res );
+			$info_data = json_decode( $info_body, true ) ?: [];
+		}
+
+		// 2. HTML content
+		$html_res = wp_remote_post( 'https://acumbamail.com/api/1/getCampaignHTML/', [
+			'body'    => [
+				'auth_token'    => $auth_token,
+				'response_type' => 'json',
+				'campaign_id'   => $campaign_id,
+			],
+			'timeout' => 15,
+		] );
+
+		$html_content = '';
+		if ( ! is_wp_error( $html_res ) ) {
+			$html_body = wp_remote_retrieve_body( $html_res );
+			$html_parsed = json_decode( $html_body, true );
+			$html_content = $html_parsed['html'] ?? ( is_string( $html_body ) ? $html_body : '' );
+		}
+
+		return [
+			'success' => true,
+			'id'      => $campaign_id,
+			'name'    => $info_data['name'] ?? '',
+			'subject' => $info_data['subject'] ?? '',
+			'sent'    => $info_data['total_sent'] ?? 0,
+			'date'    => $info_data['date_sent'] ?? $info_data['date'] ?? '',
+			'html'    => $html_content,
+		];
+	}
 }
 
 }

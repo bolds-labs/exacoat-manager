@@ -72,6 +72,13 @@ const getTabFromUrl = (): NavItemKey => {
     'emails': 'emails',
     'email': 'emails',
     'templates': 'emails',
+    'marketing_emails': 'marketing_emails',
+    'marketing-emails': 'marketing_emails',
+    'marketing': 'marketing_emails',
+    'marketing_email': 'marketing_emails',
+    'marketing-studio': 'marketing_emails',
+    'email-hub': 'marketing_emails',
+    'email_hub': 'marketing_emails',
     'customers': 'customers',
     'customer': 'customers',
     'users': 'customers',
@@ -343,8 +350,10 @@ export const App: React.FC = () => {
         return <ReviewsPage />;
       case 'reports':
         return <ReportsPage onNavigate={(tab) => handleTabChange(tab as NavItemKey)} />;
+      case 'marketing_emails':
+        return <EmailTemplatesPage defaultTab="marketing" />;
       case 'emails':
-        return <EmailTemplatesPage />;
+        return <EmailTemplatesPage defaultTab="templates" />;
       case 'affiliates':
         return <AffiliatesPage />;
       case 'ai_tools':

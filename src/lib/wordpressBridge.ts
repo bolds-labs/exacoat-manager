@@ -1873,6 +1873,114 @@ export async function uploadMarketingImageDirect(file: File): Promise<{ success:
   }
 }
 
+export async function fetchAcumbamailCampaignsDirect(tokenOverride?: string): Promise<{
+  success: boolean;
+  campaigns?: Array<{ id: string; name: string }>;
+  error?: string;
+}> {
+  const token = tokenOverride || getCachedPluginSettings().acumbamail_token || 'c7b494d1f2354a7aadb7aba0e260364b';
+  if (!token) return { success: false, error: 'Acumbamail token missing' };
+
+  try {
+    const formData = new URLSearchParams();
+    formData.append('auth_token', token);
+    formData.append('response_type', 'json');
+
+    const res = await fetch('https://acumbamail.com/api/1/getCampaigns/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formData.toString(),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const campaigns: Array<{ id: string; name: string }> = [];
+        data.forEach(item => {
+          if (typeof item === 'object' && item !== null) {
+            Object.entries(item).forEach(([id, name]) => {
+              campaigns.push({ id, name: String(name) });
+            });
+          }
+        });
+        return { success: true, campaigns };
+      }
+    }
+  } catch (err: any) {
+    console.warn('[fetchAcumbamailCampaignsDirect] Direct failed, trying bridge:', err);
+  }
+
+  try {
+    const base = getWordPressBaseUrl();
+    const url = `${base}/wp-json/exacoat-core/v1/acumbamail/campaigns`;
+    const res = await authenticatedFetch(url);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+
+  return { success: false, error: 'Could not fetch campaigns from Acumbamail' };
+}
+
+export async function fetchAcumbamailCampaignDetailDirect(campaignId: string, tokenOverride?: string): Promise<{
+  success: boolean;
+  id?: string;
+  name?: string;
+  subject?: string;
+  sent?: number;
+  date?: string;
+  html?: string;
+  error?: string;
+}> {
+  const token = tokenOverride || getCachedPluginSettings().acumbamail_token || 'c7b494d1f2354a7aadb7aba0e260364b';
+  if (!token) return { success: false, error: 'Acumbamail token missing' };
+
+  try {
+    const [infoRes, htmlRes] = await Promise.all([
+      fetch('https://acumbamail.com/api/1/getCampaignBasicInformation/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ auth_token: token, response_type: 'json', campaign_id: campaignId }).toString(),
+      }),
+      fetch('https://acumbamail.com/api/1/getCampaignHTML/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ auth_token: token, response_type: 'json', campaign_id: campaignId }).toString(),
+      }),
+    ]);
+
+    const infoData = infoRes.ok ? await infoRes.json() : {};
+    const htmlData = htmlRes.ok ? await htmlRes.json() : {};
+
+    return {
+      success: true,
+      id: campaignId,
+      name: infoData.name || '',
+      subject: infoData.subject || '',
+      sent: infoData.total_sent || 0,
+      date: infoData.date_sent || infoData.date || '',
+      html: htmlData.html || '',
+    };
+  } catch (err: any) {
+    console.warn('[fetchAcumbamailCampaignDetailDirect] Direct failed, trying bridge:', err);
+  }
+
+  try {
+    const base = getWordPressBaseUrl();
+    const url = `${base}/wp-json/exacoat-core/v1/acumbamail/campaign-detail?campaign_id=${encodeURIComponent(campaignId)}`;
+    const res = await authenticatedFetch(url);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+
+  return { success: false, error: 'Failed to fetch campaign detail' };
+}
+
 export async function generateMarketingEmailCopyDirect(params: {
   campaignType: string;
   productFocus?: string;

@@ -35,9 +35,19 @@ import {
 } from '../lib/wordpressBridge';
 import { EmailMarketingStudio } from '../components/email/EmailMarketingStudio';
 
-export const EmailTemplatesPage: React.FC = () => {
+interface EmailTemplatesPageProps {
+  defaultTab?: 'marketing' | 'templates' | 'test' | 'delivery';
+}
+
+export const EmailTemplatesPage: React.FC<EmailTemplatesPageProps> = ({ defaultTab = 'marketing' }) => {
   const { showToast } = useToast();
-  const [activeSection, setActiveSection] = useState('marketing');
+  const [activeSection, setActiveSection] = useState<string>(defaultTab);
+
+  useEffect(() => {
+    if (defaultTab) {
+      setActiveSection(defaultTab);
+    }
+  }, [defaultTab]);
 
   // Settings State
   const [settings, setSettings] = useState<WordPressPluginSettings>({
