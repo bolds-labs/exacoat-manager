@@ -168,12 +168,20 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
     return Math.max(rawVisits, windowOrders);
   }, [horizon, metrics.total_clicks, horizonClicks, windowOrders]);
 
-  const conversionRate = useMemo(() => {
-    if (windowVisits > 0) {
-      return ((windowOrders / windowVisits) * 100).toFixed(1) + '%';
+  const totalCapturedOrders = useMemo(() => {
+    if (horizon === 'all') {
+      return Number(metrics.total_orders) || windowOrders;
     }
-    return windowOrders > 0 ? '100%' : '0.0%';
-  }, [windowOrders, windowVisits]);
+    return windowOrders;
+  }, [horizon, metrics.total_orders, windowOrders]);
+
+  const conversionRate = useMemo(() => {
+    const orders = totalCapturedOrders;
+    if (windowVisits > 0) {
+      return ((orders / windowVisits) * 100).toFixed(1) + '%';
+    }
+    return orders > 0 ? '100%' : '0.0%';
+  }, [totalCapturedOrders, windowVisits]);
 
   // Upcoming / Pending Commissions (clearing in 7-day grace period)
   const pendingCommissionsAmount = useMemo(() => {
@@ -191,6 +199,10 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
       .filter(p => p.status === 'pending')
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
   }, [payouts]);
+
+  const pendingPaymentTotal = useMemo(() => {
+    return pendingCommissionsAmount + pendingPayoutsAmount;
+  }, [pendingCommissionsAmount, pendingPayoutsAmount]);
 
   const unpaidBalance = Number(metrics.unpaid_balance) || 0;
   const minPayout = Number(metrics.min_payout_amount) || 250000;
@@ -526,8 +538,10 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
           </div>
 
           <div className="mt-3.5 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs text-zinc-400">
-            <span>Threshold:</span>
-            <span className="font-mono text-zinc-300 font-medium">Min. {formatIDR(minPayout)}</span>
+            <span>Pending Payment:</span>
+            <span className={clsx("font-mono font-medium", pendingPaymentTotal > 0 ? "text-amber-400" : "text-zinc-300")}>
+              {formatIDR(pendingPaymentTotal)}
+            </span>
           </div>
         </GlassCard>
 
@@ -575,36 +589,29 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
           </div>
         </GlassCard>
 
-        {/* Card 4: Upcoming / Pending Payment */}
+        {/* Card 4: Captured Orders */}
         <GlassCard className="p-4 sm:p-5 border border-white/[0.08] relative overflow-hidden flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-medium tracking-wider uppercase text-zinc-400 font-mono">
-                Pending Payment
+                {horizon === 'all' ? 'Total Orders' : 'Captured Orders'}
               </span>
             </div>
             <div className="mt-2.5 flex items-baseline gap-2">
               <span className="text-2xl font-semibold font-mono text-white">
-                {formatIDR(pendingCommissionsAmount)}
+                {totalCapturedOrders.toLocaleString('id-ID')}
               </span>
-              <span className="text-xs font-medium text-amber-400 font-mono bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                {pendingCommissionsCount} {pendingCommissionsCount === 1 ? 'order' : 'orders'}
-              </span>
+              {pendingCommissionsCount > 0 && (
+                <span className="text-xs font-medium text-amber-400 font-mono bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                  {pendingCommissionsCount} pending
+                </span>
+              )}
             </div>
           </div>
 
           <div className="mt-3.5 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs text-zinc-400">
-            {pendingPayoutsAmount > 0 ? (
-              <>
-                <span>In Review:</span>
-                <span className="font-mono text-amber-300 font-medium">{formatIDR(pendingPayoutsAmount)}</span>
-              </>
-            ) : (
-              <>
-                <span>Review Cycle:</span>
-                <span className="font-mono text-zinc-300 font-medium">Order Clearing</span>
-              </>
-            )}
+            <span>Conversion Rate:</span>
+            <span className="font-mono text-zinc-300 font-medium">{conversionRate}</span>
           </div>
         </GlassCard>
       </div>
