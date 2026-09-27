@@ -10,7 +10,7 @@ import { ShippingLabelA6Modal } from './ShippingLabelA6Modal';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../../context/ToastContext';
 import { FilterSelect } from '../ui/FilterSelect';
-import { isStorePickupOrder, getOrderCourierDisplay } from '../../lib/orderUtils';
+import { isStorePickupOrder, getOrderCourierDisplay, matchesOrderSearch } from '../../lib/orderUtils';
 import {
   Search,
   RefreshCw,
@@ -351,30 +351,10 @@ export const OrderTable: React.FC<OrderTableProps> = ({
 
       // Search matching across all orders
       if (hasSearch) {
-        if (onSearchQueryChange) {
-          // Server-side search is already performed across the entire database!
-          // Retain server search results without filtering out matched item metadata or variations.
+        if (onSearchQueryChange && propSearchQuery && propSearchQuery.trim() === activeSearch.trim()) {
           return true;
         }
-
-        const q = activeSearch.toLowerCase().trim();
-        const cleanQ = q.replace(/^#+/, '');
-        const num = String(order.order_number || order.id || '').toLowerCase().replace(/^#+/, '');
-        const custName = String(order.customer_name || '').toLowerCase();
-        const custEmail = String(order.customer_email || '').toLowerCase();
-        const trackNum = String(order.tracking?.tracking_number || '').toLowerCase();
-        const phone = order.customer_phone || order.billing?.phone || order.shipping?.phone;
-        const phoneMatch = matchesPhoneQuery(phone, q);
-        const itemNames = (order.items || []).map((i) => i.name.toLowerCase()).join(' ');
-
-        return (
-          num.includes(cleanQ) ||
-          custName.includes(q) ||
-          custEmail.includes(q) ||
-          trackNum.includes(q) ||
-          phoneMatch ||
-          itemNames.includes(q)
-        );
+        return matchesOrderSearch(order, activeSearch);
       }
       return true;
     });

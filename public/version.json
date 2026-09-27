@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.126.zip?v=0.1.126",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-27T23:09:54.776Z",
+  "last_updated": "2026-09-27T23:14:37.234Z",
   "sections": {
     "changelog": "### Version 0.1.126\n- Automatically extract and trigger category page ISR revalidation on product save/update, targeting production exacoat.com\n- Fix PNG alpha channel stripping on upload with lossless level-9 compression"
   }

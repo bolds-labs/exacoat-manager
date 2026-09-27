@@ -158,6 +158,7 @@ export interface DeviceAuditSummary {
   emptyCount: number;
   ghostAngles: GhostAngleReport[];
   brokenItems: AssetAuditItem[];
+  emptyItems?: AssetAuditItem[];
 }
 
 export interface GlobalCatalogAuditReport {
@@ -2840,7 +2841,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     setIsAuditingAssets(false);
 
     // Persist single device audit record to WooCommerce post meta
-    const totalIssues = brokenCount + ghostAngles.length;
+    const totalIssues = brokenCount + ghostAngles.length + emptyCount;
     const auditStatus = totalIssues > 0 ? 'issues' : 'clean';
     const nowIso = new Date().toISOString();
 
@@ -2848,6 +2849,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
     ghostAngles.forEach((g) => {
       issueDetails.push(`Ghost Angle: ${g.viewName} (0 skin cut masks, missing chassis)`);
     });
+    auditedItems
+      .filter((i) => i.status === 'empty')
+      .forEach((e) => {
+        const targetLabel = e.layerName
+          ? `${e.layerName} • ${e.finishName || e.type}`
+          : `${e.viewName} • ${e.type}`;
+        issueDetails.push(`Missing Mask (${targetLabel}): No cut mask assigned for view "${e.viewName}"`);
+      });
     auditedItems
       .filter((i) => i.status === 'broken')
       .forEach((b) => {
@@ -3185,7 +3194,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
         totalGhostAngles += ghostAngles.length;
         totalEmptyMappings += emptyCount;
 
-        if (brokenCount > 0 || ghostAngles.length > 0) {
+        if (brokenCount > 0 || ghostAngles.length > 0 || emptyCount > 0) {
           devicesWithIssues++;
         }
 
@@ -3200,6 +3209,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
           emptyCount,
           ghostAngles,
           brokenItems,
+          emptyItems: auditedItems.filter((it) => it.status === 'empty'),
         });
 
         // Modest 40ms pacing pause between devices to prevent browser socket pool starvation
@@ -3232,10 +3242,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
     // Persist all audit results to WooCommerce post meta
     const nowIso = new Date().toISOString();
     const auditRowsToPersist = deviceSummaries.map((ds) => {
-      const issues = ds.brokenCount + ds.ghostAngles.length;
+      const issues = ds.brokenCount + ds.ghostAngles.length + ds.emptyCount;
       const issueDetails: string[] = [];
       ds.ghostAngles.forEach((g) => {
         issueDetails.push(`Ghost Angle: ${g.viewName} (0 skin cut masks, missing chassis)`);
+      });
+      (ds.emptyItems || []).forEach((e) => {
+        const targetLabel = e.layerName
+          ? `${e.layerName} • ${e.finishName || e.type}`
+          : `${e.viewName} • ${e.type}`;
+        issueDetails.push(`Missing Mask (${targetLabel}): No cut mask assigned for view "${e.viewName}"`);
       });
       ds.brokenItems.forEach((b) => {
         const targetLabel = b.layerName
@@ -5705,7 +5721,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           key: 'clean',
                           label: 'Healthy / Clean',
                           count: globalAuditReport.deviceSummaries.filter(
-                            (d) => d.brokenCount === 0 && d.ghostAngles.length === 0
+                            (d) => d.brokenCount === 0 && d.ghostAngles.length === 0 && d.emptyCount === 0
                           ).length,
                         },
                       ] as const
@@ -5771,13 +5787,20 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </span>
                             )}
 
+                            {d.emptyCount > 0 && (
+                              <span className="text-[11px] px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 font-medium flex items-center gap-1.5">
+                                <AlertCircle className="w-3.5 h-3.5" />
+                                <span>{d.emptyCount} Missing Mask{d.emptyCount > 1 ? 's' : ''}</span>
+                              </span>
+                            )}
+
                             {d.brokenCount > 0 ? (
                               <span className="text-[11px] px-2.5 py-1 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-400 font-medium flex items-center gap-1.5">
                                 <AlertTriangle className="w-3.5 h-3.5" />
                                 <span>{d.brokenCount} Broken URLs</span>
                               </span>
                             ) : (
-                              d.ghostAngles.length === 0 && (
+                              d.ghostAngles.length === 0 && d.emptyCount === 0 && (
                                 <span className="text-[11px] px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-medium flex items-center gap-1.5">
                                   <CheckCircle2 className="w-3.5 h-3.5" />
                                   <span>All Assets Healthy</span>
@@ -5808,6 +5831,19 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 <span>
                                   • {g.viewName} (ID: {g.viewId}) - Chassis: {g.chassisStatus}, Skin Masks: {g.hasSkinMasks ? 'Present' : 'None'}, Textures: {g.mappedTexturesCount}
                                 </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Missing skin masks breakdown for this device */}
+                        {d.emptyItems && d.emptyItems.length > 0 && (
+                          <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 space-y-1 font-mono text-[11px]">
+                            <span className="font-sans font-bold block text-amber-400">Missing Skin Masks ({d.emptyItems.length}):</span>
+                            {d.emptyItems.map((item) => (
+                              <div key={item.id} className="text-[11px] text-zinc-300 flex items-center gap-1.5">
+                                <span className="text-amber-400 font-bold">•</span>
+                                <span>{item.layerName || item.type} ({item.viewName}): No alpha cut mask assigned</span>
                               </div>
                             ))}
                           </div>

@@ -1,4 +1,5 @@
 import { Order } from '../types';
+import { matchesPhoneQuery } from './phoneUtils';
 
 const STORE_PICKUP_STORAGE_KEY = '_exacoat_store_pickup_orders';
 
@@ -418,4 +419,114 @@ export function getOrderCourierDisplay(order: any): string {
   if (resolved.courierId === 'jne') return 'JNE';
   return resolved.courierName || order.shipping_method_name || 'Courier';
 }
+
+/**
+ * Comprehensive client-side order search matching across:
+ * - Order number & ID (#1234, 1234)
+ * - Customer name (customer_name, billing first/last, shipping first/last)
+ * - Customer email (customer_email, billing email)
+ * - Phone numbers (with digit normalization via matchesPhoneQuery)
+ * - Tracking / resi numbers (tracking object and metadata)
+ * - Destination & billing address (address_1, address_2, city, state, postcode, country)
+ * - Ordered items (item names, variations, attributes, finish, SKU)
+ * - Courier and service tier (JNE - REG, SiCepat - BEST, etc.)
+ * - Customer note
+ */
+export function matchesOrderSearch(order: any, query: string): boolean {
+  if (!order || !query || !query.trim()) return true;
+
+  const q = query.toLowerCase().trim();
+  const cleanQ = q.replace(/^#+/, '');
+
+  // 1. Order ID & Order Number
+  const num = String(order.order_number || order.id || '').toLowerCase().replace(/^#+/, '');
+  if (num.includes(cleanQ)) return true;
+
+  // 2. Customer Name (direct, shipping, billing)
+  const custName = String(order.customer_name || '').toLowerCase();
+  const billFirst = String(order.billing?.first_name || '').toLowerCase();
+  const billLast = String(order.billing?.last_name || '').toLowerCase();
+  const shipFirst = String(order.shipping?.first_name || '').toLowerCase();
+  const shipLast = String(order.shipping?.last_name || '').toLowerCase();
+  if (
+    custName.includes(q) ||
+    billFirst.includes(q) ||
+    billLast.includes(q) ||
+    `${billFirst} ${billLast}`.trim().includes(q) ||
+    shipFirst.includes(q) ||
+    shipLast.includes(q) ||
+    `${shipFirst} ${shipLast}`.trim().includes(q)
+  ) {
+    return true;
+  }
+
+  // 3. Customer Email
+  const custEmail = String(order.customer_email || order.billing?.email || '').toLowerCase();
+  if (custEmail.includes(q)) return true;
+
+  // 4. Phone (using matchesPhoneQuery for international/local format tolerance)
+  const phone = order.customer_phone || order.billing?.phone || order.shipping?.phone;
+  if (phone) {
+    const rawPhone = String(phone).toLowerCase();
+    if (rawPhone.includes(q) || matchesPhoneQuery(phone, q)) return true;
+  }
+
+  // 5. Tracking / Resi
+  const trackNum = String(order.tracking?.tracking_number || '').toLowerCase();
+  if (trackNum && trackNum.includes(q)) return true;
+  if (Array.isArray(order.meta_data)) {
+    const hasTrackMeta = order.meta_data.some((m: any) => {
+      const k = String(m?.key || '').toLowerCase();
+      if (k.includes('tracking') || k.includes('carrier') || k === '_ywot_tracking_code') {
+        return String(m?.value || '').toLowerCase().includes(q);
+      }
+      return false;
+    });
+    if (hasTrackMeta) return true;
+  }
+
+  // 6. Destination & Billing Address
+  const addrFields = [
+    order.shipping?.address_1,
+    order.shipping?.address_2,
+    order.shipping?.city,
+    order.shipping?.state,
+    order.shipping?.postcode,
+    order.shipping?.country,
+    order.billing?.address_1,
+    order.billing?.address_2,
+    order.billing?.city,
+    order.billing?.state,
+    order.billing?.postcode,
+    order.billing?.country,
+  ];
+  if (addrFields.some((f) => f && String(f).toLowerCase().includes(q))) {
+    return true;
+  }
+
+  // 7. Items (Name, SKU, variation metadata, custom options)
+  const items = Array.isArray(order.items) && order.items.length > 0
+    ? order.items
+    : (Array.isArray(order.line_items) ? order.line_items : []);
+
+  const itemsMatched = items.some((item: any) => {
+    const itemName = String(item.name || '').toLowerCase();
+    const itemSku = String(item.sku || '').toLowerCase();
+    const itemMeta = String(item.meta || (Array.isArray(item.meta_data) ? JSON.stringify(item.meta_data) : '')).toLowerCase();
+    return itemName.includes(q) || itemSku.includes(q) || itemMeta.includes(q);
+  });
+  if (itemsMatched) return true;
+
+  // 8. Courier & Shipping Method
+  const courierDisplay = getOrderCourierDisplay(order).toLowerCase();
+  const shipMethod = String(order.shipping_method_name || order.shipping_method || '').toLowerCase();
+  if (courierDisplay.includes(q) || shipMethod.includes(q)) return true;
+
+  // 9. Customer Note
+  const custNote = String(order.customer_note || '').toLowerCase();
+  if (custNote.includes(q)) return true;
+
+  return false;
+}
+
 

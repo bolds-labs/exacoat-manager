@@ -214,9 +214,11 @@ class Exacoat_Order_Manager {
 				 WHERE id = %d 
 				    OR id LIKE %s 
 				    OR billing_email LIKE %s
+				    OR customer_note LIKE %s
 				 LIMIT 5000",
 				intval( $clean_num ),
 				$like_num,
+				$like_term,
 				$like_term
 			) );
 			if ( ! empty( $hpos_ids ) ) {
@@ -232,7 +234,19 @@ class Exacoat_Order_Manager {
 					    OR CONCAT(first_name, ' ', last_name) LIKE %s 
 					    OR email LIKE %s 
 					    OR phone LIKE %s
+					    OR address_1 LIKE %s
+					    OR address_2 LIKE %s
+					    OR city LIKE %s
+					    OR state LIKE %s
+					    OR postcode LIKE %s
+					    OR country LIKE %s
 					 LIMIT 5000",
+					$like_term,
+					$like_term,
+					$like_term,
+					$like_term,
+					$like_term,
+					$like_term,
 					$like_term,
 					$like_term,
 					$like_term,
@@ -253,10 +267,33 @@ class Exacoat_Order_Manager {
 						'_order_number_formatted',
 						'tracking_number',
 						'_tracking_number',
+						'_ywot_tracking_code',
+						'_exacoat_tracking_number',
+						'_artmatter_tracking_number',
+						'_artmatter_tracking_info',
+						'_wc_shipment_tracking_items',
+						'carrier_id',
+						'_carrier_id',
+						'_tracking_provider',
+						'_ywot_carrier_id',
 						'_rma_original_invoice',
 						'_rma_original_order_id',
 						'_billing_phone_formatted',
-						'_bca_mutation_desc'
+						'_bca_mutation_desc',
+						'customer_note',
+						'_customer_note',
+						'_billing_address_1',
+						'_billing_address_2',
+						'_billing_city',
+						'_billing_state',
+						'_billing_postcode',
+						'_billing_country',
+						'_shipping_address_1',
+						'_shipping_address_2',
+						'_shipping_city',
+						'_shipping_state',
+						'_shipping_postcode',
+						'_shipping_country'
 					 ) AND meta_value LIKE %s
 					 LIMIT 5000",
 					$like_term
@@ -276,18 +313,39 @@ class Exacoat_Order_Manager {
 				'_billing_email',
 				'_billing_phone',
 				'_billing_phone_formatted',
+				'_billing_address_1',
+				'_billing_address_2',
+				'_billing_city',
+				'_billing_state',
+				'_billing_postcode',
+				'_billing_country',
 				'_shipping_first_name',
 				'_shipping_last_name',
 				'_shipping_phone',
+				'_shipping_address_1',
+				'_shipping_address_2',
+				'_shipping_city',
+				'_shipping_state',
+				'_shipping_postcode',
+				'_shipping_country',
 				'_order_number',
 				'_order_number_formatted',
 				'tracking_number',
 				'_tracking_number',
-				'carrier_id',
+				'_ywot_tracking_code',
+				'_exacoat_tracking_number',
+				'_artmatter_tracking_number',
 				'_artmatter_tracking_info',
+				'_wc_shipment_tracking_items',
+				'carrier_id',
+				'_carrier_id',
+				'_tracking_provider',
+				'_ywot_carrier_id',
 				'_rma_original_invoice',
 				'_rma_original_order_id',
-				'_bca_mutation_desc'
+				'_bca_mutation_desc',
+				'customer_note',
+				'_customer_note'
 			 ) AND meta_value LIKE %s
 			 LIMIT 5000",
 			$like_term
@@ -582,7 +640,8 @@ class Exacoat_Order_Manager {
 					$args['post__in'] = [ 0 ];
 					$args['include']  = [ 0 ];
 				} else {
-					$args['include'] = $matched_ids;
+					$args['post__in'] = $matched_ids;
+					$args['include']  = $matched_ids;
 				}
 			}
 
@@ -603,9 +662,10 @@ class Exacoat_Order_Manager {
 					] );
 				}
 
-				if ( ! empty( $args['include'] ) ) {
-					$args['include'] = array_values( array_intersect( $args['include'], $matched_search_ids ) );
-					if ( empty( $args['include'] ) ) {
+				$active_existing = ! empty( $args['post__in'] ) ? $args['post__in'] : ( ! empty( $args['include'] ) ? $args['include'] : [] );
+				if ( ! empty( $active_existing ) ) {
+					$intersected = array_values( array_intersect( $active_existing, $matched_search_ids ) );
+					if ( empty( $intersected ) ) {
 						return rest_ensure_response( [
 							'success'      => true,
 							'orders'       => [],
@@ -614,8 +674,11 @@ class Exacoat_Order_Manager {
 							'current_page' => $page,
 						] );
 					}
+					$args['post__in'] = $intersected;
+					$args['include']  = $intersected;
 				} else {
-					$args['include'] = $matched_search_ids;
+					$args['post__in'] = $matched_search_ids;
+					$args['include']  = $matched_search_ids;
 				}
 			}
 
@@ -667,6 +730,16 @@ class Exacoat_Order_Manager {
 				}
 				$total_orders = count( $orders_data );
 				$max_pages    = 1;
+			}
+
+			// Extra safety: strictly filter orders_data to matched_search_ids if search was active
+			if ( ! empty( $search ) && ! empty( $matched_search_ids ) ) {
+				$search_id_map = array_flip( array_map( 'intval', $matched_search_ids ) );
+				$orders_data = array_values( array_filter( $orders_data, function( $od ) use ( $search_id_map ) {
+					return isset( $search_id_map[ intval( $od['id'] ) ] );
+				} ) );
+				$total_orders = count( $matched_search_ids );
+				$max_pages    = max( 1, ceil( $total_orders / $per_page ) );
 			} else {
 				$total_orders = 0;
 				$max_pages    = 1;
