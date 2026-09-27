@@ -76,11 +76,23 @@ class Exacoat_BCA_Payment_Webhook {
 			],
 		];
 
+		$get_endpoint_args = [
+			'methods'             => \WP_REST_Server::READABLE,
+			'callback'            => [ __CLASS__, 'handle_webhook_get_info' ],
+			'permission_callback' => '__return_true',
+		];
+
 		// Route 1: Exact legacy route for existing MesinOtomatis forwarder configurations
-		register_rest_route( 'exawebhook/v1', '/endpoint', $endpoint_args );
+		register_rest_route( 'exawebhook/v1', '/endpoint', [
+			$endpoint_args,
+			$get_endpoint_args,
+		] );
 
 		// Route 2: Dedicated Exacoat Core REST endpoint
-		register_rest_route( 'exacoat-core/v1', '/bca-webhook', $endpoint_args );
+		register_rest_route( 'exacoat-core/v1', '/bca-webhook', [
+			$endpoint_args,
+			$get_endpoint_args,
+		] );
 
 		// Route 3: Status and unmatched mutations inspector
 		register_rest_route( 'exacoat-core/v1', '/bca/status', [
@@ -90,6 +102,20 @@ class Exacoat_BCA_Payment_Webhook {
 				'permission_callback' => [ __CLASS__, 'check_permission' ],
 			],
 		] );
+	}
+
+	/**
+	 * Informational GET handler for health-check / browser verification
+	 */
+	public static function handle_webhook_get_info( \WP_REST_Request $request ): \WP_REST_Response {
+		return new \WP_REST_Response( [
+			'success'          => true,
+			'service'          => 'Exacoat BCA Automated Payment Webhook',
+			'status'           => 'active',
+			'method_supported' => 'POST',
+			'message'          => 'BCA Webhook listener is active. Send POST request with JSON or form-encoded amount and description.',
+			'timestamp'        => current_time( 'mysql' ),
+		], 200 );
 	}
 
 	/**
