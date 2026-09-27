@@ -2042,6 +2042,12 @@ class Exacoat_Core {
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 
+		$register( '/orders/(?P<id>\d+)/resend-email', [
+			'methods'             => [ 'POST' ],
+			'callback'            => [ 'Exacoat_Order_Manager', 'resend_order_email' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
 		// Staff and Team Role Management Routes
 		$register( '/team', [
 			'methods'             => 'GET',

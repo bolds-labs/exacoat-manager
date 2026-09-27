@@ -1518,6 +1518,14 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
   const resolvedPreheader = replaceNamePlaceholders(rawPreheader, options.recipientName);
   const preheader = escapeHtml(resolvedPreheader);
 
+  const contentAlign = options.contentAlign || 'left';
+  const showFooterLogo = options.showFooterLogo ?? true;
+  const showSocialLinks = options.showSocialLinks ?? true;
+  const instagramUrl = (options.instagramUrl || 'https://instagram.com/exacoat').trim();
+  const xUrl = (options.xUrl || 'https://x.com/exacoat').trim();
+  const youtubeUrl = (options.youtubeUrl || 'https://youtube.com/@exacoat').trim();
+  const tiktokUrl = (options.tiktokUrl || 'https://tiktok.com/@exacoat').trim();
+
   const rawHeadline = options.headline || 'Exclusive Announcement';
   const resolvedHeadline = replaceNamePlaceholders(rawHeadline, options.recipientName);
   const headline = escapeHtml(resolvedHeadline);
@@ -1570,7 +1578,7 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
 
   const bodyHtml = paragraphs.map(p => {
     const formatted = escapeHtml(p).replace(/\n/g, '<br />');
-    return `<p style="margin:0 0 16px;font-size:14.5px;line-height:1.75;color:${textBody};">${formatted}</p>`;
+    return `<p style="margin:0 0 16px;font-size:14.5px;line-height:1.75;color:${textBody};text-align:${contentAlign};">${formatted}</p>`;
   }).join('');
 
   // Banner image section
@@ -1601,13 +1609,13 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
     }
   }
 
-  // Sub-pill Capsule Notice (Left-aligned, Borderless, Subtle, Centered)
+  // Sub-pill Capsule Notice (Left-aligned or Centered, Borderless, Subtle)
   let subPillHtml = '';
   if (options.subPillNotice) {
     const pillBg = isDark ? 'rgba(255,255,255,0.06)' : '#f1f1f4';
     const pillColor = isDark ? '#a1a1aa' : '#71717a';
     subPillHtml = `
-      <div style="margin:0 0 16px;text-align:left;">
+      <div style="margin:0 0 16px;text-align:${contentAlign};">
         <span style="display:inline-block;padding:4px 12px;background:${pillBg};border-radius:9999px;font-size:9.5px;font-weight:500;color:${pillColor};letter-spacing:1.2px;text-transform:uppercase;line-height:13px;vertical-align:middle;">
           ${escapeHtml(options.subPillNotice)}
         </span>
@@ -1776,17 +1784,7 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
   let topLogoHtml = '';
   if (!showHeader && logoPosition === 'top') {
     topLogoHtml = `
-      <div style="margin:0 0 24px;text-align:center;">
-        <a href="https://exacoat.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">
-          ${brandLogo}
-        </a>
-      </div>`;
-  }
-
-  let bottomLogoHtml = '';
-  if (!showHeader && logoPosition === 'bottom') {
-    bottomLogoHtml = `
-      <div style="margin:0 0 20px;text-align:center;">
+      <div style="margin:0 0 24px;text-align:${contentAlign};">
         <a href="https://exacoat.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">
           ${brandLogo}
         </a>
@@ -1830,9 +1828,9 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
     </tr>
 
     <tr>
-      <td align="center" style="padding:0 16px;">
+      <td align="center" style="padding:0 20px;">
         <!-- Top Webview Link with generous breathing space -->
-        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;margin:0 auto 20px;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:550px;margin:0 auto 20px;">
           <tr>
             <td align="center" style="font-size:11px;color:#71717a;line-height:1.5;padding:0 0 6px;">
               If you cannot see this email properly, please <a href="{{webview_url}}" target="_blank" rel="noopener noreferrer" style="color:#a1a1aa;text-decoration:underline;">click here</a>.
@@ -1840,8 +1838,8 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
           </tr>
         </table>
 
-        <!-- Main Card Container (Rounded 28px) -->
-        <table class="container-table" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:${bgCard};border:1px solid ${cardBorder};border-radius:28px;border-collapse:separate;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,0.5);">
+        <!-- Main Card Container (Rounded 28px with left/right breathing margin) -->
+        <table class="container-table" width="550" cellpadding="0" cellspacing="0" border="0" style="max-width:550px;width:100%;margin:0 auto;background:${bgCard};border:1px solid ${cardBorder};border-radius:28px;border-collapse:separate;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,0.5);">
           <tbody>
             ${topHeaderHtml}
 
@@ -1851,8 +1849,8 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
                 ${topLogoHtml}
                 ${bannerHtml}
                 ${subPillHtml}
-                <h1 style="margin:0 0 16px;font-size:24px;font-weight:800;color:${textHeading};letter-spacing:-0.5px;line-height:1.3;">${headline}</h1>
-                <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:${textGreeting};">${greeting}</p>
+                <h1 style="margin:0 0 16px;font-size:24px;font-weight:800;color:${textHeading};letter-spacing:-0.5px;line-height:1.3;text-align:${contentAlign};">${headline}</h1>
+                <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:${textGreeting};text-align:${contentAlign};">${greeting}</p>
                 ${bodyHtml}
                 ${highlightHtml}
                 ${trustGridHtml}
@@ -1866,31 +1864,46 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
                   </tr>
                 </table>
 
-                <!-- Social Links & Unsubscribe Footer -->
+                <!-- Footer with Logo and Social Links -->
                 <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid ${headerDivider};text-align:center;">
                   <tr>
                     <td align="center" style="padding-top:32px;padding-bottom:24px;">
-                      ${bottomLogoHtml}
+                      ${showFooterLogo ? `
+                      <div style="margin:0 0 18px;text-align:center;">
+                        <a href="https://exacoat.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">
+                          ${brandLogo}
+                        </a>
+                      </div>` : ''}
+                      ${showSocialLinks ? `
                       <!-- Social Links (Compact, small icons) -->
                       <table cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 18px;">
                         <tr>
+                          ${instagramUrl ? `
                           <td style="padding:0 5px;">
-                            <a href="https://instagram.com/exacoat" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="Instagram">
+                            <a href="${escapeHtml(instagramUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="Instagram">
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="${isDark ? '#e4e4e7' : '#27272a'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
                             </a>
-                          </td>
+                          </td>` : ''}
+                          ${xUrl ? `
                           <td style="padding:0 5px;">
-                            <a href="https://x.com/exacoat" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="X">
+                            <a href="${escapeHtml(xUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="X">
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="${isDark ? '#e4e4e7' : '#27272a'}" style="display:block;"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
                             </a>
-                          </td>
+                          </td>` : ''}
+                          ${youtubeUrl ? `
                           <td style="padding:0 5px;">
-                            <a href="https://youtube.com/@exacoat" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="YouTube">
+                            <a href="${escapeHtml(youtubeUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="YouTube">
                               <svg width="15" height="12" viewBox="0 0 24 24" fill="${isDark ? '#e4e4e7' : '#27272a'}" style="display:block;"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
                             </a>
-                          </td>
+                          </td>` : ''}
+                          ${tiktokUrl ? `
+                          <td style="padding:0 5px;">
+                            <a href="${escapeHtml(tiktokUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="TikTok">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="${isDark ? '#e4e4e7' : '#27272a'}" style="display:block;"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.86.12V9.35a6.33 6.33 0 0 0-.86-.06 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.52a8.27 8.27 0 0 0 4.86 1.57v-3.4z"/></svg>
+                            </a>
+                          </td>` : ''}
                         </tr>
-                      </table>
+                      </table>` : ''}
 
                       <p style="margin:0 0 8px;font-size:11.5px;color:#71717a;">
                         &copy; 2016-2026 Exacoat
@@ -1930,6 +1943,13 @@ export function renderMarketingEmailMjml(options: MarketingEmailOptions): string
   const showHeader = Boolean(options.showHeader);
   const showBadge = Boolean(options.showBadge);
   const logoPosition = options.logoPosition ?? 'top';
+  const contentAlign = options.contentAlign || 'left';
+  const showFooterLogo = options.showFooterLogo ?? true;
+  const showSocialLinks = options.showSocialLinks ?? true;
+  const instagramUrl = options.instagramUrl ?? 'https://instagram.com/exacoat';
+  const xUrl = options.xUrl ?? 'https://x.com/exacoat';
+  const youtubeUrl = options.youtubeUrl ?? 'https://youtube.com/@exacoat';
+  const tiktokUrl = options.tiktokUrl ?? '';
 
   const headline = options.headline || 'Engineered Precision. Pure Tactile Feel.';
   const greeting = options.recipientGreeting || 'Hi {name|there},';
@@ -1947,6 +1967,7 @@ export function renderMarketingEmailMjml(options: MarketingEmailOptions): string
   const textBody = isDark ? '#a1a1aa' : '#52525b';
   const textMuted = isDark ? '#71717a' : '#a1a1aa';
   const dividerColor = isDark ? '#1a1a1f' : '#e5e7eb';
+  const brandLogo = isDark ? BRAND_LOGO_WHITE_HTML : BRAND_LOGO_HTML;
 
   // Badge Colors
   let badgeBg = isDark ? 'rgba(245,158,11,0.15)' : '#fff8eb';
@@ -1994,7 +2015,7 @@ export function renderMarketingEmailMjml(options: MarketingEmailOptions): string
       <!-- Sub-Pill Notice Capsule -->
       <mj-section padding="0 0 16px">
         <mj-column>
-          <mj-button background-color="${pillBg}" color="${pillColor}" border-radius="9999px" font-size="9.5px" font-weight="600" letter-spacing="1.2px" text-transform="uppercase" align="left" inner-padding="5px 14px" padding="0">
+          <mj-button background-color="${pillBg}" color="${pillColor}" border-radius="9999px" font-size="9.5px" font-weight="600" letter-spacing="1.2px" text-transform="uppercase" align="${contentAlign === 'center' ? 'center' : 'left'}" inner-padding="5px 14px" padding="0">
             ${escapeHtml(subPillNotice)}
           </mj-button>
         </mj-column>
@@ -2015,8 +2036,10 @@ export function renderMarketingEmailMjml(options: MarketingEmailOptions): string
       <!-- Top Header -->
       <mj-section padding="0 0 20px" border-bottom="1px solid ${dividerColor}">
         <mj-column width="${showBadge ? '60%' : '100%'}" vertical-align="middle">
-          <mj-text align="left" font-size="16px" font-weight="900" color="${textHeading}" letter-spacing="2px" padding="0">
-            EXACOAT
+          <mj-text align="${contentAlign === 'center' ? 'center' : 'left'}" padding="0">
+            <a href="https://exacoat.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">
+              ${brandLogo}
+            </a>
           </mj-text>
         </mj-column>
         ${badgeCol}
@@ -2027,8 +2050,10 @@ export function renderMarketingEmailMjml(options: MarketingEmailOptions): string
       <!-- Top Brand Logo -->
       <mj-section padding="0 0 24px">
         <mj-column>
-          <mj-text align="center" font-size="17px" font-weight="900" color="${textHeading}" letter-spacing="2px" padding="0">
-            EXACOAT
+          <mj-text align="${contentAlign === 'center' ? 'center' : 'left'}" padding="0">
+            <a href="https://exacoat.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">
+              ${brandLogo}
+            </a>
           </mj-text>
         </mj-column>
       </mj-section>`;
@@ -2049,7 +2074,7 @@ export function renderMarketingEmailMjml(options: MarketingEmailOptions): string
   // Body paragraphs
   const paragraphs = bodyText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
   const bodyParagraphsMjml = paragraphs.map(p => {
-    return `<mj-text font-size="14px" line-height="1.7" color="${textBody}" padding="0 0 12px">
+    return `<mj-text align="${contentAlign === 'center' ? 'center' : 'left'}" font-size="14px" line-height="1.7" color="${textBody}" padding="0 0 12px">
             ${escapeHtml(p).replace(/\n/g, '<br />')}
           </mj-text>`;
   }).join('\n          ');
@@ -2150,20 +2175,6 @@ export function renderMarketingEmailMjml(options: MarketingEmailOptions): string
       </mj-section>`;
   }
 
-  // Bottom Logo if logoPosition is bottom
-  let bottomLogoMjml = '';
-  if (!showHeader && logoPosition === 'bottom') {
-    bottomLogoMjml = `
-      <!-- Bottom Logo -->
-      <mj-section padding="0 0 20px">
-        <mj-column>
-          <mj-text align="center" font-size="16px" font-weight="900" color="${textHeading}" letter-spacing="2px" padding="0">
-            EXACOAT
-          </mj-text>
-        </mj-column>
-      </mj-section>`;
-  }
-
   const unsubscribeUrl = escapeHtml(options.unsubscribeUrl || '{{unsubscribe_url}}');
   const footerNoteMjml = options.footerNote ? `
           <mj-text align="center" font-size="12.5px" line-height="1.6" color="${textBody}" padding="0 0 12px">
@@ -2177,8 +2188,25 @@ export function renderMarketingEmailMjml(options: MarketingEmailOptions): string
       <mj-all font-family="Plus Jakarta Sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" />
       <mj-text font-size="14.5px" color="${textBody}" line-height="1.7" />
     </mj-attributes>
+    <mj-style>
+      .outer-card-wrapper {
+        width: calc(100% - 32px) !important;
+        max-width: 550px !important;
+        margin: 0 auto !important;
+      }
+      .outer-card-wrapper > table {
+        width: 100% !important;
+        margin: 0 auto !important;
+      }
+      @media only screen and (max-width: 600px) {
+        .outer-card-wrapper {
+          width: calc(100% - 24px) !important;
+          margin: 0 auto !important;
+        }
+      }
+    </mj-style>
   </mj-head>
-  <mj-body background-color="${outerBg}">
+  <mj-body background-color="${outerBg}" width="560px">
     <!-- Top Webview Link -->
     <mj-section padding="36px 0 16px">
       <mj-column>
@@ -2188,8 +2216,8 @@ export function renderMarketingEmailMjml(options: MarketingEmailOptions): string
       </mj-column>
     </mj-section>
 
-    <!-- Main Container Card -->
-    <mj-wrapper background-color="${cardBg}" border-radius="28px" border="1px solid ${cardBorder}" padding="36px 24px 32px">
+    <!-- Main Container Card (Rounded 28px with left/right breathing margin) -->
+    <mj-wrapper css-class="outer-card-wrapper" background-color="${cardBg}" border-radius="28px" border="1px solid ${cardBorder}" padding="36px 24px 32px">
       ${headerMjml}
       ${subPillMjml}
       ${bannerMjml}
@@ -2197,10 +2225,10 @@ export function renderMarketingEmailMjml(options: MarketingEmailOptions): string
       <!-- Message Content -->
       <mj-section padding="0 0 8px">
         <mj-column>
-          <mj-text font-size="26px" font-weight="900" color="${textHeading}" line-height="1.25" letter-spacing="-0.5px" padding="0 0 16px">
+          <mj-text align="${contentAlign === 'center' ? 'center' : 'left'}" font-size="26px" font-weight="900" color="${textHeading}" line-height="1.25" letter-spacing="-0.5px" padding="0 0 16px">
             ${escapeHtml(headline)}
           </mj-text>
-          <mj-text font-size="15px" font-weight="600" color="${textGreeting}" padding="0 0 12px">
+          <mj-text align="${contentAlign === 'center' ? 'center' : 'left'}" font-size="15px" font-weight="600" color="${textGreeting}" padding="0 0 12px">
             ${escapeHtml(greeting)}
           </mj-text>
           ${bodyParagraphsMjml}
@@ -2210,19 +2238,47 @@ export function renderMarketingEmailMjml(options: MarketingEmailOptions): string
       ${promoMjml}
       ${cardsMjml}
       ${ctaMjml}
-      ${bottomLogoMjml}
 
-      <!-- Footer with Logo on top of Social Links -->
+      <!-- Footer with Logo and Social Links -->
       <mj-section border-top="1px solid ${dividerColor}" padding="32px 0 16px">
         <mj-column>
-          <mj-text align="center" font-size="15px" font-weight="900" color="${textHeading}" letter-spacing="2px" padding="0 0 18px">
-            EXACOAT
-          </mj-text>
-          <mj-social font-size="0px" icon-size="16px" mode="horizontal" align="center" padding="0 0 16px" inner-padding="4px">
-            <mj-social-element name="instagram" href="https://instagram.com/exacoat" background-color="#0e0e11" color="#ffffff" padding="4px 8px" />
-            <mj-social-element name="x" href="https://x.com/exacoat" background-color="#0e0e11" color="#ffffff" padding="4px 8px" />
-            <mj-social-element name="youtube" href="https://youtube.com/exacoat" background-color="#0e0e11" color="#ffffff" padding="4px 8px" />
-          </mj-social>
+          ${showFooterLogo ? `
+          <mj-text align="center" padding="0 0 18px">
+            <a href="https://exacoat.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">
+              ${brandLogo}
+            </a>
+          </mj-text>` : ''}
+          ${showSocialLinks ? `
+          <mj-text align="center" padding="0 0 16px">
+            <table cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
+              <tr>
+                ${instagramUrl ? `
+                <td style="padding:0 5px;">
+                  <a href="${escapeHtml(instagramUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="Instagram">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="${isDark ? '#e4e4e7' : '#27272a'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+                  </a>
+                </td>` : ''}
+                ${xUrl ? `
+                <td style="padding:0 5px;">
+                  <a href="${escapeHtml(xUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="X">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="${isDark ? '#e4e4e7' : '#27272a'}" style="display:block;"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                  </a>
+                </td>` : ''}
+                ${youtubeUrl ? `
+                <td style="padding:0 5px;">
+                  <a href="${escapeHtml(youtubeUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="YouTube">
+                    <svg width="15" height="12" viewBox="0 0 24 24" fill="${isDark ? '#e4e4e7' : '#27272a'}" style="display:block;"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                  </a>
+                </td>` : ''}
+                ${tiktokUrl ? `
+                <td style="padding:0 5px;">
+                  <a href="${escapeHtml(tiktokUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:7px;border-radius:50%;background:${isDark ? '#141418' : '#f4f4f5'};border:1px solid ${cardBorder};text-decoration:none;" title="TikTok">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="${isDark ? '#e4e4e7' : '#27272a'}" style="display:block;"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.86.12V9.35a6.33 6.33 0 0 0-.86-.06 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.52a8.27 8.27 0 0 0 4.86 1.57v-3.4z"/></svg>
+                  </a>
+                </td>` : ''}
+              </tr>
+            </table>
+          </mj-text>` : ''}
           ${footerNoteMjml}
           <mj-text align="center" font-size="11.5px" color="${textMuted}" padding="8px 0 0">
             &copy; 2016-2026 Exacoat

@@ -346,42 +346,16 @@ class Exacoat_WhatsApp_Service {
 	}
 
 	/**
-	 * Send Telegram Notification
+	 * Send Telegram Notification (Delegates to centralized Exacoat_Telegram_Service)
 	 */
 	public static function send_telegram_alert( string $text, array $buttons = [] ): bool {
-		$settings   = self::get_settings();
-		$bot_token  = trim( (string) ( $settings['telegram_bot_token'] ?? '' ) );
-		$chat_id    = trim( (string) ( $settings['telegram_chat_id'] ?? '-1002257662366' ) );
-		$thread_id  = trim( (string) ( $settings['telegram_thread_id'] ?? '774' ) );
-
-		if ( empty( $bot_token ) || empty( $chat_id ) ) {
-			return false;
+		if ( class_exists( 'Exacoat_Telegram_Service' ) ) {
+			$res = Exacoat_Telegram_Service::send( $text, [
+				'buttons' => $buttons,
+			] );
+			return ! empty( $res['success'] );
 		}
-
-		$payload = [
-			'chat_id' => $chat_id,
-			'text'    => $text,
-		];
-
-		if ( ! empty( $thread_id ) ) {
-			$payload['message_thread_id'] = (int) $thread_id;
-		}
-
-		if ( ! empty( $buttons ) ) {
-			$payload['reply_markup'] = [
-				'inline_keyboard' => $buttons,
-			];
-		}
-
-		$url = "https://api.telegram.org/bot{$bot_token}/sendMessage";
-
-		$response = wp_remote_post( $url, [
-			'headers' => [ 'Content-Type' => 'application/json' ],
-			'body'    => wp_json_encode( $payload ),
-			'timeout' => 8,
-		] );
-
-		return ! is_wp_error( $response ) && wp_remote_retrieve_response_code( $response ) === 200;
+		return false;
 	}
 
 	/**
@@ -498,33 +472,6 @@ class Exacoat_WhatsApp_Service {
 				];
 
 				self::send_template_message( $billing_phone, 'notif_order_confirmed', $language, $body_params, $button_params );
-			}
-
-			// Optional Telegram Alert
-			if ( ! empty( $settings['telegram_enabled'] ) ) {
-				$total_formatted = wp_strip_all_tags( wc_price( $order->get_total(), [ 'currency' => $order->get_currency() ] ) );
-				$payment_title   = $order->get_payment_method_title() ?: 'Bank Transfer';
-
-				$tg_text = sprintf(
-					"🟢 New order confirmed on exacoat.com\n\nName: %s\nCountry: %s\nOrder Number: #%d\nTotal: %s\nPayment Method: %s\nItems: %s",
-					$customer_name,
-					$country,
-					$order_id_num,
-					$total_formatted,
-					$payment_title,
-					$items_text
-				);
-
-				$tg_buttons = [
-					[
-						[
-							'text' => 'See the order',
-							'url'  => admin_url( 'post.php?post=' . $order_id_num . '&action=edit' ),
-						],
-					],
-				];
-
-				self::send_telegram_alert( $tg_text, $tg_buttons );
 			}
 
 			$order->update_meta_data( '_whatsapp_last_notification', $clean_new_status );

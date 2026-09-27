@@ -35,7 +35,10 @@ import {
   Layers,
   PenLine,
   FileText,
-  SlidersHorizontal
+  SlidersHorizontal,
+  AlignLeft,
+  AlignCenter,
+  Share2
 } from 'lucide-react';
 import { GlassCard } from '../ui/GlassCard';
 import { Input } from '../ui/Input';
@@ -72,6 +75,13 @@ export interface MarketingPreset {
   showHeader?: boolean;
   showBadge?: boolean;
   logoPosition?: 'top' | 'bottom' | 'none';
+  contentAlign?: 'left' | 'center';
+  showFooterLogo?: boolean;
+  showSocialLinks?: boolean;
+  instagramUrl?: string;
+  xUrl?: string;
+  youtubeUrl?: string;
+  tiktokUrl?: string;
   subject: string;
   preheader: string;
   badgeText: string;
@@ -127,6 +137,12 @@ export const BUILTIN_PRESETS: MarketingPreset[] = [
     showHeader: false,
     showBadge: false,
     logoPosition: 'top',
+    contentAlign: 'left',
+    showFooterLogo: true,
+    showSocialLinks: true,
+    instagramUrl: 'https://instagram.com/exacoat',
+    xUrl: 'https://x.com/exacoat',
+    youtubeUrl: 'https://youtube.com/@exacoat',
     subject: '7.7 FLASH SALE: 17% OFF Everything',
     preheader: 'Precision device skins cut to the millimeter with authentic tactile textures.',
     badgeText: '7.7 FLASH SALE',
@@ -155,6 +171,12 @@ export const BUILTIN_PRESETS: MarketingPreset[] = [
     showHeader: false,
     showBadge: false,
     logoPosition: 'top',
+    contentAlign: 'left',
+    showFooterLogo: true,
+    showSocialLinks: true,
+    instagramUrl: 'https://instagram.com/exacoat',
+    xUrl: 'https://x.com/exacoat',
+    youtubeUrl: 'https://youtube.com/@exacoat',
     subject: 'The ultimate skin for your new device is here',
     preheader: 'Explore millimeter-precise protection for the latest flagship releases.',
     badgeText: 'NEW RELEASE',
@@ -180,6 +202,12 @@ export const BUILTIN_PRESETS: MarketingPreset[] = [
     showHeader: false,
     showBadge: false,
     logoPosition: 'top',
+    contentAlign: 'left',
+    showFooterLogo: true,
+    showSocialLinks: true,
+    instagramUrl: 'https://instagram.com/exacoat',
+    xUrl: 'https://x.com/exacoat',
+    youtubeUrl: 'https://youtube.com/@exacoat',
     subject: 'Exclusive Partner Memo: Upcoming Drop Sample Kits',
     preheader: 'Special update and early access reserved for Exacoat creator partners.',
     badgeText: 'PARTNER UPDATE',
@@ -309,6 +337,15 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
   const [showHeader, setShowHeader] = useState<boolean>(false);
   const [showBadge, setShowBadge] = useState<boolean>(false);
   const [logoPosition, setLogoPosition] = useState<'top' | 'bottom' | 'none'>('top');
+
+  // Content Alignment & Footer Brand Controls
+  const [contentAlign, setContentAlign] = useState<'left' | 'center'>('left');
+  const [showFooterLogo, setShowFooterLogo] = useState<boolean>(true);
+  const [showSocialLinks, setShowSocialLinks] = useState<boolean>(true);
+  const [instagramUrl, setInstagramUrl] = useState<string>('https://instagram.com/exacoat');
+  const [xUrl, setXUrl] = useState<string>('https://x.com/exacoat');
+  const [youtubeUrl, setYoutubeUrl] = useState<string>('https://youtube.com/@exacoat');
+  const [tiktokUrl, setTiktokUrl] = useState<string>('https://tiktok.com/@exacoat');
 
   // Active Composer Section Tab ('content' | 'visuals' | 'audience')
   const [activeTab, setActiveTab] = useState<'content' | 'visuals' | 'audience'>('content');
@@ -616,6 +653,13 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     setShowHeader(p.showHeader ?? false);
     setShowBadge(p.showBadge ?? false);
     setLogoPosition(p.logoPosition ?? 'top');
+    setContentAlign(p.contentAlign || 'left');
+    setShowFooterLogo(p.showFooterLogo ?? true);
+    setShowSocialLinks(p.showSocialLinks ?? true);
+    if (p.instagramUrl) setInstagramUrl(p.instagramUrl);
+    if (p.xUrl) setXUrl(p.xUrl);
+    if (p.youtubeUrl) setYoutubeUrl(p.youtubeUrl);
+    if (p.tiktokUrl) setTiktokUrl(p.tiktokUrl);
     setSubject(p.subject);
     setPreheader(p.preheader);
     setBadgeText(p.badgeText);
@@ -643,6 +687,13 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
         showHeader: p.showHeader,
         showBadge: p.showBadge,
         logoPosition: p.logoPosition,
+        contentAlign: p.contentAlign || 'left',
+        showFooterLogo: p.showFooterLogo ?? true,
+        showSocialLinks: p.showSocialLinks ?? true,
+        instagramUrl: p.instagramUrl,
+        xUrl: p.xUrl,
+        youtubeUrl: p.youtubeUrl,
+        tiktokUrl: p.tiktokUrl,
         badgeText: p.badgeText,
         badgeVariant: p.badgeVariant,
         headline: p.headline,
@@ -681,6 +732,13 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
       showHeader,
       showBadge,
       logoPosition,
+      contentAlign,
+      showFooterLogo,
+      showSocialLinks,
+      instagramUrl,
+      xUrl,
+      youtubeUrl,
+      tiktokUrl,
       subject,
       preheader,
       badgeText,
@@ -751,6 +809,13 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     showHeader,
     showBadge,
     logoPosition,
+    contentAlign,
+    showFooterLogo,
+    showSocialLinks,
+    instagramUrl: instagramUrl.trim() || undefined,
+    xUrl: xUrl.trim() || undefined,
+    youtubeUrl: youtubeUrl.trim() || undefined,
+    tiktokUrl: tiktokUrl.trim() || undefined,
     badgeText,
     badgeVariant,
     headline,
@@ -780,6 +845,13 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     showHeader,
     showBadge,
     logoPosition,
+    contentAlign,
+    showFooterLogo,
+    showSocialLinks,
+    instagramUrl,
+    xUrl,
+    youtubeUrl,
+    tiktokUrl,
     badgeText,
     badgeVariant,
     headline,
@@ -1406,6 +1478,44 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                     </div>
                   </div>
 
+                  {/* Content Alignment Selector */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200/80 dark:border-white/[0.06]">
+                    <div>
+                      <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
+                        Content Alignment
+                      </span>
+                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                        Align headline, greeting, sub-pill notice, and story copy
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 bg-zinc-200/60 dark:bg-white/10 p-1 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setContentAlign('left')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          contentAlign === 'left'
+                            ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm ring-1 ring-zinc-200 dark:ring-white/10'
+                            : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+                        }`}
+                      >
+                        <AlignLeft className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Left</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setContentAlign('center')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          contentAlign === 'center'
+                            ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm ring-1 ring-zinc-200 dark:ring-white/10'
+                            : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+                        }`}
+                      >
+                        <AlignCenter className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Centered</span>
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Subject Line & Preheader */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
@@ -1677,48 +1787,70 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                     </div>
 
                     {!showHeader ? (
-                      /* When Top Header is Hidden: Choose Logo Placement */
-                      <div className="space-y-2 pt-1">
-                        <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 block">
-                          Brand Logo Position
-                        </label>
-                        <div className="grid grid-cols-3 gap-2">
+                      /* When Top Header is Hidden: Choose Top Logo Placement */
+                      <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200/80 dark:border-white/[0.06] flex items-center justify-between">
+                        <div>
+                          <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
+                            Top Brand Logo
+                          </span>
+                          <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                            Display the Exacoat logo at the top inside the card
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 bg-zinc-200/60 dark:bg-white/10 p-1 rounded-xl">
                           <button
                             type="button"
                             onClick={() => setLogoPosition('top')}
-                            className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                               logoPosition === 'top'
-                                ? 'bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-400 shadow-sm'
-                                : 'bg-zinc-50 dark:bg-white/[0.03] border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
+                                ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm ring-1 ring-zinc-200 dark:ring-white/10'
+                                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
                             }`}
                           >
-                            Top of Card
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setLogoPosition('bottom')}
-                            className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
-                              logoPosition === 'bottom'
-                                ? 'bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-400 shadow-sm'
-                                : 'bg-zinc-50 dark:bg-white/[0.03] border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
-                            }`}
-                          >
-                            Bottom (Above Footer)
+                            Visible
                           </button>
                           <button
                             type="button"
                             onClick={() => setLogoPosition('none')}
-                            className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
-                              logoPosition === 'none'
-                                ? 'bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-400 shadow-sm'
-                                : 'bg-zinc-50 dark:bg-white/[0.03] border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                              logoPosition === 'none' || logoPosition === 'bottom'
+                                ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm ring-1 ring-zinc-200 dark:ring-white/10'
+                                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
                             }`}
                           >
-                            Hidden (Footer Only)
+                            Hidden
                           </button>
                         </div>
                       </div>
-                    ) : (
+                    ) : null}
+
+                    {/* Hideable Bottom Footer Logo Toggle */}
+                    <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200/80 dark:border-white/[0.06] flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                            Footer Brand Logo
+                          </span>
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-zinc-200/60 dark:bg-white/10 text-zinc-600 dark:text-zinc-400">
+                            {showFooterLogo ? 'Visible' : 'Hidden'}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                          Shows the official Exacoat logo just under the divider line, directly above social media.
+                        </p>
+                      </div>
+
+                      <label className="flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={showFooterLogo}
+                          onChange={(e) => setShowFooterLogo(e.target.checked)}
+                          className="rounded text-amber-500 w-4 h-4 cursor-pointer"
+                        />
+                      </label>
+                    </div>
+
+                    {showHeader && (
                       /* When Top Header is Visible: Show Category Badge Option */
                       <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200/80 dark:border-white/[0.06] space-y-3">
                         <div className="flex items-center justify-between">
@@ -2153,6 +2285,118 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                       </div>
                     )}
                   </GlassCard>
+
+                  {/* Footer & Social Media Channels Card */}
+                  <GlassCard className="p-5 md:p-6 space-y-4">
+                    <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/[0.06] pb-3">
+                        <div className="flex items-center gap-2">
+                          <Share2 className="w-4 h-4 text-amber-500" />
+                          <div>
+                            <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200">
+                              Footer &amp; Social Channels
+                            </h3>
+                            <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                              Brand social profiles linked beneath the footer divider line
+                            </p>
+                          </div>
+                        </div>
+                        <label className="flex items-center gap-2 text-xs font-medium text-zinc-700 dark:text-zinc-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={showSocialLinks}
+                            onChange={(e) => setShowSocialLinks(e.target.checked)}
+                            className="rounded text-amber-500 w-4 h-4 cursor-pointer"
+                          />
+                          <span>Show Social Icons</span>
+                        </label>
+                      </div>
+
+                      {showSocialLinks ? (
+                        <div className="space-y-3 pt-1">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                                  <span className="w-4 h-4 rounded-full bg-zinc-200/80 dark:bg-white/10 flex items-center justify-center text-[9px] font-bold text-zinc-700 dark:text-zinc-200">
+                                    IG
+                                  </span>
+                                  <span>Instagram URL</span>
+                                </label>
+                              </div>
+                              <Input
+                                type="text"
+                                value={instagramUrl}
+                                onChange={(e) => setInstagramUrl(e.target.value)}
+                                placeholder="https://instagram.com/exacoat"
+                                className="text-xs font-mono"
+                              />
+                            </div>
+
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                                  <span className="w-4 h-4 rounded-full bg-zinc-200/80 dark:bg-white/10 flex items-center justify-center text-[9px] font-bold text-zinc-700 dark:text-zinc-200">
+                                    X
+                                  </span>
+                                  <span>X (Twitter) URL</span>
+                                </label>
+                              </div>
+                              <Input
+                                type="text"
+                                value={xUrl}
+                                onChange={(e) => setXUrl(e.target.value)}
+                                placeholder="https://x.com/exacoat"
+                                className="text-xs font-mono"
+                              />
+                            </div>
+
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                                  <span className="w-4 h-4 rounded-full bg-zinc-200/80 dark:bg-white/10 flex items-center justify-center text-[9px] font-bold text-zinc-700 dark:text-zinc-200">
+                                    YT
+                                  </span>
+                                  <span>YouTube URL</span>
+                                </label>
+                              </div>
+                              <Input
+                                type="text"
+                                value={youtubeUrl}
+                                onChange={(e) => setYoutubeUrl(e.target.value)}
+                                placeholder="https://youtube.com/@exacoat"
+                                className="text-xs font-mono"
+                              />
+                            </div>
+
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                                  <span className="w-4 h-4 rounded-full bg-zinc-200/80 dark:bg-white/10 flex items-center justify-center text-[9px] font-bold text-zinc-700 dark:text-zinc-200">
+                                    TT
+                                  </span>
+                                  <span>TikTok URL (Optional)</span>
+                                </label>
+                              </div>
+                              <Input
+                                type="text"
+                                value={tiktokUrl}
+                                onChange={(e) => setTiktokUrl(e.target.value)}
+                                placeholder="https://tiktok.com/@exacoat"
+                                className="text-xs font-mono"
+                              />
+                            </div>
+                          </div>
+
+                          <p className="text-[10px] text-zinc-400">
+                            Icons link directly to brand profiles and adapt to dark and light email themes automatically.
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-zinc-400 italic py-1">
+                          Social channels are hidden in the footer.
+                        </p>
+                      )}
+                    </GlassCard>
                 </div>
               )}
 

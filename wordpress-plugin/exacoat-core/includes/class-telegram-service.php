@@ -97,6 +97,14 @@ class Exacoat_Telegram_Service {
 			'disable_web_page_preview' => ! empty( $options['disable_preview'] ),
 		];
 
+		if ( ! empty( $options['buttons'] ) && is_array( $options['buttons'] ) ) {
+			$payload['reply_markup'] = [
+				'inline_keyboard' => $options['buttons'],
+			];
+		} elseif ( ! empty( $options['reply_markup'] ) ) {
+			$payload['reply_markup'] = $options['reply_markup'];
+		}
+
 		if ( $thread_id !== '' && is_numeric( $thread_id ) ) {
 			$payload['message_thread_id'] = (int) $thread_id;
 		}

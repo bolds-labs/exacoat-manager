@@ -51,6 +51,17 @@ export function sanitizeMjmlContent(code: string): string {
     return `<mj-social${cleanAttrs}>`;
   });
 
+  // 4. Ensure social elements link directly to profile URLs instead of social share intent dialogs
+  sanitized = sanitized.replace(/<mj-social-element\b([^>]*?)>/gi, (_match, attrs) => {
+    let cleanAttrs = attrs;
+    cleanAttrs = cleanAttrs.replace(/\bname=["'](?:twitter|x)["']/i, 'name="twitter-noshare"');
+    cleanAttrs = cleanAttrs.replace(/\bname=["']youtube["']/i, 'name="youtube-noshare"');
+    cleanAttrs = cleanAttrs.replace(/\bname=["']instagram["']/i, 'name="instagram-noshare"');
+    cleanAttrs = cleanAttrs.replace(/\bname=["']facebook["']/i, 'name="facebook-noshare"');
+    cleanAttrs = cleanAttrs.replace(/\bname=["']linkedin["']/i, 'name="linkedin-noshare"');
+    return `<mj-social-element${cleanAttrs}>`;
+  });
+
   return sanitized;
 }
 

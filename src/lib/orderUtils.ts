@@ -57,7 +57,14 @@ export function isStorePickupOrder(order: Partial<Order> | any): boolean {
     return true;
   }
 
-  // 1. Check shipping method name & title from various WooCommerce properties
+
+  // 1. Check if checkout customer note or shipping lines explicitly specify courier delivery
+  const customerNote = String(order.customer_note || '').toLowerCase();
+  const isExplicitCourierNote = customerNote.includes('shipping courier:') ||
+    customerNote.includes('jasa kirim:') ||
+    customerNote.includes('courier:');
+
+  // 2. Check shipping method name & title from various WooCommerce properties
   const shippingMethodName = String(
     order.shipping_method_name ||
     order.shipping_method ||
@@ -78,19 +85,29 @@ export function isStorePickupOrder(order: Partial<Order> | any): boolean {
         .toLowerCase()
     : '';
 
+  // If a standard courier was explicitly selected at checkout (e.g. SICEPAT, JNE, POS), it is NOT store pickup
+  const courierBrands = ['sicepat', 'jne', 'pos', 'j&t', 'jnt', 'lion', 'tiki', 'anteraja', 'goorita', 'dhl', 'fedex', 'biteship'];
+  const hasCourierBrand = courierBrands.some(brand => 
+    shippingMethodName.includes(brand) || 
+    shippingMethodId.includes(brand) || 
+    allShippingLinesStr.includes(brand) ||
+    customerNote.includes(`courier: ${brand}`) ||
+    customerNote.includes(`courier: ${brand.toUpperCase()}`)
+  );
+
+  if (hasCourierBrand && !shippingMethodName.includes('pickup') && !shippingMethodId.includes('pickup')) {
+    return false;
+  }
+
   const pickupKeywords = [
-    'pickup',
-    'pick up',
-    'pick-up',
     'local_pickup',
     'local pickup',
     'store pickup',
-    'toko',
+    'store_pickup',
     'ambil di toko',
     'ambil sendiri',
-    'smb',
-    'summarecon',
     'self pickup',
+    'self_pickup',
     'store collection',
   ];
 
@@ -104,47 +121,27 @@ export function isStorePickupOrder(order: Partial<Order> | any): boolean {
     }
   }
 
-  // 2. Check Courier / Carrier info
+  // 3. Check Courier / Carrier info
   const courier = String(order.tracking?.courier || '').toLowerCase().trim();
   const carrierId = String(order.tracking?.carrier_id || '').toLowerCase().trim();
   if (
-    courier.includes('pickup') ||
-    courier.includes('smb') ||
-    courier.includes('store') ||
+    courier === 'pickup' ||
+    courier === 'store pickup' ||
     carrierId === 'pickup' ||
-    carrierId === 'smb'
+    carrierId === 'local_pickup'
   ) {
     return true;
   }
 
-  // 3. Check Address strings (often set to Summarecon Bekasi / Ruko Ruby Commercial for store pickup)
-  const shipAddr = `${order.shipping?.address_1 || ''} ${order.shipping?.address_2 || ''} ${order.shipping?.city || ''} ${order.shipping?.state || ''} ${order.shipping?.postcode || ''}`.toLowerCase();
-  const billAddr = `${order.billing?.address_1 || ''} ${order.billing?.address_2 || ''} ${order.billing?.city || ''} ${order.billing?.state || ''} ${order.billing?.postcode || ''}`.toLowerCase();
-
-  const storeLocationKeywords = [
-    'summarecon',
-    'bekasi store',
-    'ruby commercial',
-    'ruko ruby',
-    'store pickup',
-    'ambil di toko',
-  ];
-
-  for (const kw of storeLocationKeywords) {
-    if (shipAddr.includes(kw) || billAddr.includes(kw)) {
+  // 4. Check Order Customer Notes (only if NOT an explicit courier note)
+  if (!isExplicitCourierNote) {
+    if (
+      customerNote.includes('ambil di toko') ||
+      customerNote.includes('store pickup') ||
+      customerNote.includes('ambil sendiri')
+    ) {
       return true;
     }
-  }
-
-  // 4. Check Order Customer Notes
-  const customerNote = String(order.customer_note || '').toLowerCase();
-  if (
-    customerNote.includes('ambil di toko') ||
-    customerNote.includes('store pickup') ||
-    customerNote.includes('ambil summarecon') ||
-    customerNote.includes('ambil di summarecon')
-  ) {
-    return true;
   }
 
   // 5. Check Order Meta Data
@@ -160,7 +157,7 @@ export function isStorePickupOrder(order: Partial<Order> | any): boolean {
     }
     if (
       (k === '_shipping_method' || k === '_chosen_shipping_methods' || k === '_order_shipping_type') &&
-      (v.includes('pickup') || v.includes('smb') || v.includes('local'))
+      (v.includes('pickup') || v.includes('local_pickup'))
     ) {
       return true;
     }

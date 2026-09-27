@@ -2,6 +2,7 @@
 /**
  * Exacoat Unified Push Notification Service
  * Coordinates push notification dispatches across Pushover and Telegram gateways.
+ * Features multi-tier deduplication (in-memory, transient lock, and persistent post meta).
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -13,46 +14,84 @@ if ( ! class_exists( 'Exacoat_Notification_Service' ) ) {
 class Exacoat_Notification_Service {
 
 	/**
+	 * In-memory registry to prevent duplicate notifications during the same PHP process
+	 */
+	private static array $notified_orders = [];
+	private static array $notified_events = [];
+
+	/**
 	 * Initialize WordPress & WooCommerce notification hooks
 	 */
 	public static function init(): void {
 		// Hook: Orders transitioning to 'processing' (User has completed payment)
+		// Priority 20 ensures payment gateway, tracking pool, and coupons finish processing first
 		add_action( 'woocommerce_order_status_processing', [ __CLASS__, 'handle_order_processing' ], 20, 1 );
-		add_action( 'woocommerce_order_status_changed', [ __CLASS__, 'handle_order_status_changed' ], 20, 4 );
 	}
 
 	/**
-	 * Action: Handle WooCommerce order status transition
+	 * Action: Handle WooCommerce order status transition (compatibility fallback)
 	 */
 	public static function handle_order_status_changed( $order_id, $from_status, $to_status, $order = null ): void {
 		$clean_to = str_replace( 'wc-', '', (string) $to_status );
-		// STRICT: Only alert for status 'processing' (which user has paid)
 		if ( 'processing' === $clean_to ) {
 			self::handle_order_processing( $order ?: $order_id );
 		}
 	}
 
 	/**
-	 * Action: Handle order status 'processing'
+	 * Action: Handle order status 'processing' with triple-layer deduplication
 	 */
 	public static function handle_order_processing( $order_or_id ): void {
-		$order = is_numeric( $order_or_id ) ? wc_get_order( $order_or_id ) : $order_or_id;
+		$order_id = is_numeric( $order_or_id ) ? (int) $order_or_id : ( ( $order_or_id instanceof \WC_Order ) ? $order_or_id->get_id() : 0 );
+		if ( ! $order_id ) {
+			return;
+		}
+
+		// Layer 1: In-memory registry check (same PHP request)
+		if ( ! empty( self::$notified_orders[ $order_id ] ) ) {
+			return;
+		}
+
+		// Layer 2: Persistent database post meta check (bypasses stale WC_Order meta cache)
+		$db_notified = get_post_meta( $order_id, '_exacoat_new_sale_notified', true );
+		if ( 'yes' === $db_notified ) {
+			self::$notified_orders[ $order_id ] = true;
+			return;
+		}
+
+		// Layer 3: WordPress transient lock (cross-request race conditions from webhooks)
+		$lock_key = 'exa_lock_notif_order_' . $order_id;
+		if ( get_transient( $lock_key ) ) {
+			self::$notified_orders[ $order_id ] = true;
+			return;
+		}
+		set_transient( $lock_key, 1, 300 ); // 5 minute lock
+
+		// Resolve WC_Order instance
+		$order = is_numeric( $order_or_id ) ? wc_get_order( $order_id ) : $order_or_id;
 		if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
+			delete_transient( $lock_key );
 			return;
 		}
 
 		// Double check status is processing
 		$status = str_replace( 'wc-', '', $order->get_status() );
 		if ( 'processing' !== $status ) {
+			delete_transient( $lock_key );
 			return;
 		}
 
-		// Ensure duplicate alerts are never dispatched for the same order
+		// Check WC_Order meta as well
 		if ( 'yes' === $order->get_meta( '_exacoat_new_sale_notified', true ) ) {
+			self::$notified_orders[ $order_id ] = true;
 			return;
 		}
 
-		// Mark order as notified immediately to avoid race conditions
+		// Mark order as notified immediately in memory, post meta, and WC meta
+		self::$notified_orders[ $order_id ] = true;
+		update_post_meta( $order_id, '_exacoat_new_sale_notified', 'yes' );
+		update_post_meta( $order_id, '_exacoat_notified_at', current_time( 'mysql' ) );
+
 		$order->update_meta_data( '_exacoat_new_sale_notified', 'yes' );
 		$order->update_meta_data( '_exacoat_notified_at', current_time( 'mysql' ) );
 		$order->save();
@@ -81,8 +120,8 @@ class Exacoat_Notification_Service {
 		$customer_email = $order->get_billing_email();
 
 		// Destination
-		$city    = $order->get_shipping_city() ?: $order->get_billing_city();
-		$country = $order->get_shipping_country() ?: $order->get_billing_country();
+		$city       = $order->get_shipping_city() ?: $order->get_billing_city();
+		$country    = $order->get_shipping_country() ?: $order->get_billing_country();
 		$dest_parts = array_filter( [ $city, $country ] );
 		$destination = ! empty( $dest_parts ) ? implode( ', ', $dest_parts ) : 'N/A';
 
@@ -113,7 +152,7 @@ class Exacoat_Notification_Service {
 		if ( class_exists( 'Exacoat_Pushover_Service' ) ) {
 			$pushover_cfg = Exacoat_Pushover_Service::get_config();
 			if ( ! empty( $pushover_cfg['enabled'] ) && ! empty( $pushover_cfg['notify_new_sale'] ) ) {
-				$pushover_title = "🛒 New Order #{$order_number} ({$formatted_price})";
+				$pushover_title = "New Order #{$order_number} ({$formatted_price})";
 				$pushover_body  = "<b>Customer:</b> " . esc_html( $customer_name ) . "\n" .
 					"<b>Status:</b> Paid (Processing)\n" .
 					"<b>Total:</b> " . esc_html( $formatted_price ) . "\n" .
@@ -129,19 +168,31 @@ class Exacoat_Notification_Service {
 			}
 		}
 
-		// 2. Telegram Dispatch
+		// 2. Telegram Dispatch (Toned down: green dot top-left, clean bold labels, no line emojis)
 		if ( class_exists( 'Exacoat_Telegram_Service' ) ) {
 			$telegram_cfg = Exacoat_Telegram_Service::get_config();
 			if ( ! empty( $telegram_cfg['enabled'] ) && ! empty( $telegram_cfg['notify_new_sale'] ) ) {
-				$telegram_text = "🛒 <b>New Paid Customer Order #{$order_number}</b>\n\n" .
-					"👤 <b>Customer:</b> " . esc_html( $customer_name ) . ( $customer_email ? " (" . esc_html( $customer_email ) . ")" : "" ) . "\n" .
-					"💰 <b>Total:</b> " . esc_html( $formatted_price ) . " (Paid - Processing)\n" .
-					"💳 <b>Payment:</b> " . esc_html( $payment_method ) . "\n" .
-					"📍 <b>Ship To:</b> " . esc_html( $destination ) . "\n\n" .
-					"📦 <b>Items:</b>\n" . $items_formatted . "\n\n" .
-					"🔗 <a href=\"" . esc_url( $admin_order_url ) . "\">View Order in Admin</a>";
+				$telegram_text = "🟢 <b>New Order #{$order_number}</b>\n\n" .
+					"<b>Customer:</b> " . esc_html( $customer_name ) . ( $customer_email ? " (" . esc_html( $customer_email ) . ")" : "" ) . "\n" .
+					"<b>Total:</b> " . esc_html( $formatted_price ) . "\n" .
+					"<b>Payment:</b> " . esc_html( $payment_method ) . "\n" .
+					"<b>Ship To:</b> " . esc_html( $destination ) . "\n\n" .
+					"<b>Items:</b>\n" . $items_formatted . "\n\n" .
+					"<a href=\"" . esc_url( $admin_order_url ) . "\">View in Order Manager</a>";
 
-				Exacoat_Telegram_Service::send( $telegram_text, [ 'disable_preview' => true ] );
+				$telegram_options = [
+					'disable_preview' => true,
+					'buttons'         => [
+						[
+							[
+								'text' => "View Order #{$order_number}",
+								'url'  => $admin_order_url,
+							],
+						],
+					],
+				];
+
+				Exacoat_Telegram_Service::send( $telegram_text, $telegram_options );
 			}
 		}
 	}
@@ -164,6 +215,14 @@ class Exacoat_Notification_Service {
 		$type    = ! empty( $applicant['affiliate_type'] ) ? trim( (string) $applicant['affiliate_type'] ) : 'Affiliate Partner';
 		$status  = ! empty( $applicant['status'] ) ? trim( (string) $applicant['status'] ) : 'pending_approval';
 
+		// Deduplication check
+		$dedup_key = 'exa_lock_notif_aff_reg_' . md5( strtolower( $slug . '|' . $email ) );
+		if ( ! empty( self::$notified_events[ $dedup_key ] ) || get_transient( $dedup_key ) ) {
+			return;
+		}
+		self::$notified_events[ $dedup_key ] = true;
+		set_transient( $dedup_key, 1, 300 );
+
 		$status_label = 'active' === $status ? 'Approved (Auto-Active)' : 'Pending Review';
 		$admin_url    = admin_url( 'admin.php?page=exacoat-manager#/affiliates' );
 
@@ -171,7 +230,7 @@ class Exacoat_Notification_Service {
 		if ( class_exists( 'Exacoat_Pushover_Service' ) ) {
 			$cfg = Exacoat_Pushover_Service::get_config();
 			if ( ! empty( $cfg['enabled'] ) && ! empty( $cfg['notify_affiliate_register'] ) ) {
-				$title = "🤝 New Affiliate Registration: {$name}";
+				$title = "New Affiliate Registration: {$name}";
 				$body  = "<b>New Creator Registered</b>\n" .
 					"• <b>Name:</b> " . esc_html( $name ) . " (@" . esc_html( $slug ) . ")\n" .
 					"• <b>Email:</b> " . esc_html( $email ) . "\n" .
@@ -187,19 +246,31 @@ class Exacoat_Notification_Service {
 			}
 		}
 
-		// Telegram
+		// Telegram (Toned down: blue dot top-left, clean bold labels)
 		if ( class_exists( 'Exacoat_Telegram_Service' ) ) {
 			$cfg = Exacoat_Telegram_Service::get_config();
 			if ( ! empty( $cfg['enabled'] ) && ! empty( $cfg['notify_affiliate_register'] ) ) {
-				$text = "🤝 <b>New Affiliate Registration</b>\n\n" .
-					"👤 <b>Creator:</b> " . esc_html( $name ) . " (@" . esc_html( $slug ) . ")\n" .
-					"📧 <b>Email:</b> " . esc_html( $email ) . "\n" .
-					"📱 <b>Channel:</b> " . esc_html( $channel ) . "\n" .
-					"🏷️ <b>Type:</b> " . esc_html( $type ) . "\n" .
-					"⚙️ <b>Status:</b> " . esc_html( $status_label ) . "\n\n" .
-					"🔗 <a href=\"" . esc_url( $admin_url ) . "\">Review in Affiliate Manager</a>";
+				$text = "🔵 <b>New Affiliate Registration</b>\n\n" .
+					"<b>Creator:</b> " . esc_html( $name ) . " (@" . esc_html( $slug ) . ")\n" .
+					"<b>Email:</b> " . esc_html( $email ) . "\n" .
+					"<b>Channel:</b> " . esc_html( $channel ) . "\n" .
+					"<b>Type:</b> " . esc_html( $type ) . "\n" .
+					"<b>Status:</b> " . esc_html( $status_label ) . "\n\n" .
+					"<a href=\"" . esc_url( $admin_url ) . "\">Review in Affiliate Manager</a>";
 
-				Exacoat_Telegram_Service::send( $text, [ 'disable_preview' => true ] );
+				$options = [
+					'disable_preview' => true,
+					'buttons'         => [
+						[
+							[
+								'text' => 'Review Affiliate',
+								'url'  => $admin_url,
+							],
+						],
+					],
+				];
+
+				Exacoat_Telegram_Service::send( $text, $options );
 			}
 		}
 	}
@@ -216,13 +287,21 @@ class Exacoat_Notification_Service {
 		$bank_holder  = ! empty( $payout['bank_account_name'] ) ? trim( (string) $payout['bank_account_name'] ) : $creator_name;
 		$payout_id    = (int) ( $payout['payout_id'] ?? 0 );
 
-		$admin_url    = admin_url( 'admin.php?page=exacoat-manager#/affiliates' );
+		// Deduplication check
+		$dedup_key = 'exa_lock_notif_payout_' . ( $payout_id > 0 ? $payout_id : md5( $creator_name . '|' . $amount_str ) );
+		if ( ! empty( self::$notified_events[ $dedup_key ] ) || get_transient( $dedup_key ) ) {
+			return;
+		}
+		self::$notified_events[ $dedup_key ] = true;
+		set_transient( $dedup_key, 1, 300 );
+
+		$admin_url = admin_url( 'admin.php?page=exacoat-manager#/affiliates' );
 
 		// Pushover
 		if ( class_exists( 'Exacoat_Pushover_Service' ) ) {
 			$cfg = Exacoat_Pushover_Service::get_config();
 			if ( ! empty( $cfg['enabled'] ) && ! empty( $cfg['notify_affiliate_payout'] ) ) {
-				$title = "💸 Affiliate Payout Request: {$creator_name} ({$amount_str})";
+				$title = "Affiliate Payout Request: {$creator_name} ({$amount_str})";
 				$body  = "<b>" . esc_html( $creator_name ) . "</b> requested a payout of <b>" . esc_html( $amount_str ) . "</b>.\n\n" .
 					"• <b>Creator:</b> " . esc_html( $creator_name ) . " (@" . esc_html( $slug ) . ")\n" .
 					"• <b>Bank:</b> " . esc_html( $bank_name ) . " - " . esc_html( $bank_account ) . "\n" .
@@ -237,18 +316,30 @@ class Exacoat_Notification_Service {
 			}
 		}
 
-		// Telegram
+		// Telegram (Toned down: yellow dot top-left, clean bold labels)
 		if ( class_exists( 'Exacoat_Telegram_Service' ) ) {
 			$cfg = Exacoat_Telegram_Service::get_config();
 			if ( ! empty( $cfg['enabled'] ) && ! empty( $cfg['notify_affiliate_payout'] ) ) {
-				$text = "💸 <b>Affiliate Commission Payout Request #" . $payout_id . "</b>\n\n" .
-					"👤 <b>Creator:</b> " . esc_html( $creator_name ) . " (@" . esc_html( $slug ) . ")\n" .
-					"💰 <b>Amount:</b> " . esc_html( $amount_str ) . "\n" .
-					"🏦 <b>Bank:</b> " . esc_html( $bank_name ) . " - " . esc_html( $bank_account ) . "\n" .
-					"👤 <b>A/N:</b> " . esc_html( $bank_holder ) . "\n\n" .
-					"🔗 <a href=\"" . esc_url( $admin_url ) . "\">Process Payout in Manager</a>";
+				$text = "🟡 <b>Affiliate Payout Request #" . $payout_id . "</b>\n\n" .
+					"<b>Creator:</b> " . esc_html( $creator_name ) . " (@" . esc_html( $slug ) . ")\n" .
+					"<b>Amount:</b> " . esc_html( $amount_str ) . "\n" .
+					"<b>Bank:</b> " . esc_html( $bank_name ) . " - " . esc_html( $bank_account ) . "\n" .
+					"<b>A/N:</b> " . esc_html( $bank_holder ) . "\n\n" .
+					"<a href=\"" . esc_url( $admin_url ) . "\">Process Payout in Manager</a>";
 
-				Exacoat_Telegram_Service::send( $text, [ 'disable_preview' => true ] );
+				$options = [
+					'disable_preview' => true,
+					'buttons'         => [
+						[
+							[
+								'text' => 'Process Payout',
+								'url'  => $admin_url,
+							],
+						],
+					],
+				];
+
+				Exacoat_Telegram_Service::send( $text, $options );
 			}
 		}
 	}
@@ -264,15 +355,22 @@ class Exacoat_Notification_Service {
 		$media_count  = (int) ( $review['media_count'] ?? 0 );
 		$comment      = ! empty( $review['review_text'] ) ? trim( (string) $review['review_text'] ) : '';
 
+		// Deduplication check
+		$dedup_key = 'exa_lock_notif_rev_' . md5( (string) $order_num . '|' . $cust_name . '|' . $product );
+		if ( ! empty( self::$notified_events[ $dedup_key ] ) || get_transient( $dedup_key ) ) {
+			return;
+		}
+		self::$notified_events[ $dedup_key ] = true;
+		set_transient( $dedup_key, 1, 120 );
+
 		$stars        = str_repeat( '⭐', max( 1, min( 5, $rating ) ) );
-		$media_text   = $media_count > 0 ? " ({$media_count} photo/video)" : '';
 		$admin_url    = admin_url( 'admin.php?page=exacoat-manager#/reviews' );
 
 		// Pushover
 		if ( class_exists( 'Exacoat_Pushover_Service' ) ) {
 			$cfg = Exacoat_Pushover_Service::get_config();
 			if ( ! empty( $cfg['enabled'] ) && ! empty( $cfg['notify_kyc'] ) ) {
-				$title = "⭐ New Customer Review: {$cust_name} ({$rating}/5★)";
+				$title = "New Customer Review: {$cust_name} ({$rating}/5★)";
 				$body  = "<b>Customer:</b> " . esc_html( $cust_name ) . "\n" .
 					"<b>Rating:</b> {$stars} ({$rating}/5)\n" .
 					"<b>Product:</b> " . esc_html( $product ) . ( $order_num ? " (Order #{$order_num})" : "" ) . "\n" .
@@ -287,19 +385,31 @@ class Exacoat_Notification_Service {
 			}
 		}
 
-		// Telegram
+		// Telegram (Toned down: single star top-left, clean bold labels)
 		if ( class_exists( 'Exacoat_Telegram_Service' ) ) {
 			$cfg = Exacoat_Telegram_Service::get_config();
 			if ( ! empty( $cfg['enabled'] ) && ! empty( $cfg['notify_kyc'] ) ) {
-				$text = "⭐ <b>New Customer Review & Rating</b>\n\n" .
-					"👤 <b>Customer:</b> " . esc_html( $cust_name ) . "\n" .
-					"✨ <b>Rating:</b> {$stars} ({$rating}/5)\n" .
-					"📦 <b>Product:</b> " . esc_html( $product ) . ( $order_num ? " (Order #{$order_num})" : "" ) . "\n" .
-					( $media_count > 0 ? "📸 <b>Media:</b> {$media_count} file(s) attached\n" : "" ) .
-					( $comment ? "💬 <b>Review:</b> \"" . esc_html( wp_trim_words( $comment, 35 ) ) . "\"\n\n" : "\n" ) .
-					"🔗 <a href=\"" . esc_url( $admin_url ) . "\">Inspect in Review Manager</a>";
+				$text = "⭐ <b>New Customer Review</b>\n\n" .
+					"<b>Customer:</b> " . esc_html( $cust_name ) . "\n" .
+					"<b>Rating:</b> {$stars} ({$rating}/5)\n" .
+					"<b>Product:</b> " . esc_html( $product ) . ( $order_num ? " (Order #{$order_num})" : "" ) . "\n" .
+					( $media_count > 0 ? "<b>Media:</b> {$media_count} file(s) attached\n" : "" ) .
+					( $comment ? "<b>Review:</b> \"" . esc_html( wp_trim_words( $comment, 35 ) ) . "\"\n\n" : "\n" ) .
+					"<a href=\"" . esc_url( $admin_url ) . "\">Inspect in Review Manager</a>";
 
-				Exacoat_Telegram_Service::send( $text, [ 'disable_preview' => true ] );
+				$options = [
+					'disable_preview' => true,
+					'buttons'         => [
+						[
+							[
+								'text' => 'Inspect Review',
+								'url'  => $admin_url,
+							],
+						],
+					],
+				];
+
+				Exacoat_Telegram_Service::send( $text, $options );
 			}
 		}
 	}
@@ -308,6 +418,13 @@ class Exacoat_Notification_Service {
 	 * Dispatch Low Stock / Inventory Alert
 	 */
 	public static function notify_inventory( string $title, string $details ): void {
+		$dedup_key = 'exa_lock_notif_inv_' . md5( $title . '|' . $details );
+		if ( ! empty( self::$notified_events[ $dedup_key ] ) || get_transient( $dedup_key ) ) {
+			return;
+		}
+		self::$notified_events[ $dedup_key ] = true;
+		set_transient( $dedup_key, 1, 300 );
+
 		// Pushover
 		if ( class_exists( 'Exacoat_Pushover_Service' ) ) {
 			$cfg = Exacoat_Pushover_Service::get_config();
@@ -316,7 +433,7 @@ class Exacoat_Notification_Service {
 			}
 		}
 
-		// Telegram
+		// Telegram (Toned down: top-left warning icon)
 		if ( class_exists( 'Exacoat_Telegram_Service' ) ) {
 			$cfg = Exacoat_Telegram_Service::get_config();
 			if ( ! empty( $cfg['enabled'] ) && ! empty( $cfg['notify_inventory'] ) ) {
@@ -330,6 +447,13 @@ class Exacoat_Notification_Service {
 	 * Dispatch Critical Error Alert
 	 */
 	public static function notify_error( string $title, string $details ): void {
+		$dedup_key = 'exa_lock_notif_err_' . md5( $title . '|' . $details );
+		if ( ! empty( self::$notified_events[ $dedup_key ] ) || get_transient( $dedup_key ) ) {
+			return;
+		}
+		self::$notified_events[ $dedup_key ] = true;
+		set_transient( $dedup_key, 1, 60 );
+
 		// Pushover
 		if ( class_exists( 'Exacoat_Pushover_Service' ) ) {
 			$cfg = Exacoat_Pushover_Service::get_config();
@@ -340,7 +464,7 @@ class Exacoat_Notification_Service {
 			}
 		}
 
-		// Telegram
+		// Telegram (Toned down: top-left alert icon)
 		if ( class_exists( 'Exacoat_Telegram_Service' ) ) {
 			$cfg = Exacoat_Telegram_Service::get_config();
 			if ( ! empty( $cfg['enabled'] ) && ! empty( $cfg['notify_errors'] ) ) {

@@ -834,6 +834,12 @@ class Exacoat_Checkout_Engine {
 			$fields['billing']['billing_address_2']['label'] = __( 'Apartment, suite, unit, etc. (optional)', 'woocommerce' );
 			$fields['billing']['billing_address_2']['placeholder'] = __( 'Apartment, suite, unit, etc. (optional)', 'woocommerce' );
 		}
+		if ( isset( $fields['billing']['billing_postcode'] ) ) {
+			$fields['billing']['billing_postcode']['placeholder'] = __( 'Postal code / ZIP', 'woocommerce' );
+		}
+		if ( isset( $fields['shipping']['shipping_postcode'] ) ) {
+			$fields['shipping']['shipping_postcode']['placeholder'] = __( 'Postal code / ZIP', 'woocommerce' );
+		}
 		if ( isset( $fields['order']['order_comments'] ) ) {
 			unset( $fields['order']['order_comments'] );
 		}

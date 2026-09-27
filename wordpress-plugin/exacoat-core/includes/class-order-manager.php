@@ -1290,6 +1290,74 @@ class Exacoat_Order_Manager {
 	}
 
 	/**
+	 * REST Endpoint: Resend Order Transactional Email via Exacoat Email Engine
+	 */
+	public static function resend_order_email( WP_REST_Request $request ) {
+		$order_id = (int) $request->get_param( 'id' );
+		$order    = wc_get_order( $order_id );
+		if ( ! $order ) {
+			return new WP_Error( 'not_found', 'Order not found', [ 'status' => 404 ] );
+		}
+
+		$params          = $request->get_json_params() ?: $request->get_params();
+		$template_key    = sanitize_key( $params['template_key'] ?? 'customer_order_processing' );
+		$recipient_email = sanitize_email( $params['recipient_email'] ?? $order->get_billing_email() );
+		$recipient_name  = sanitize_text_field( $params['recipient_name'] ?? ( $order->get_formatted_billing_full_name() ?: 'Customer' ) );
+
+		if ( empty( $recipient_email ) || ! is_email( $recipient_email ) ) {
+			return new WP_Error( 'invalid_email', 'A valid recipient email address is required', [ 'status' => 400 ] );
+		}
+
+		$payload = self::get_email_order_payload( $order );
+
+		// Attach courier tracking if available for shipping emails
+		if ( 'customer_order_shipped' === $template_key ) {
+			$tracking_code = $order->get_meta( 'tracking_number' ) ?: $order->get_meta( '_artmatter_tracking_number' );
+			$courier_val   = $order->get_meta( 'carrier_id' ) ?: ( $order->get_meta( '_artmatter_courier' ) ?: 'Express Courier' );
+			$payload['tracking_number'] = (string) $tracking_code;
+			$payload['courier']         = (string) $courier_val;
+		}
+
+		$email_class = class_exists( 'Exacoat_Email_Engine' ) ? 'Exacoat_Email_Engine' : ( class_exists( 'Artmatter_Email_Engine' ) ? 'Artmatter_Email_Engine' : false );
+		if ( ! $email_class ) {
+			return new WP_Error( 'no_email_engine', 'Exacoat Email Engine is not available', [ 'status' => 500 ] );
+		}
+
+		$result = $email_class::send_email( $template_key, $recipient_email, $recipient_name, $payload );
+
+		// Record in WooCommerce Order Notes for staff traceability
+		$template_labels = [
+			'customer_order_processing'        => 'Order Confirmation',
+			'customer_order_invoice'           => 'Order Invoice & Details',
+			'customer_order_in_production'     => 'In Production',
+			'customer_order_awaiting_pickup'   => 'Ready for Courier Pickup',
+			'customer_order_shipped'           => 'Shipped & Tracking',
+			'customer_order_on_hold'           => 'Order On Hold',
+			'customer_order_delivered'         => 'Order Delivered',
+			'customer_order_store_pickup_ready'=> 'Store Pickup Ready',
+		];
+		$tmpl_name = $template_labels[ $template_key ] ?? $template_key;
+		$user = wp_get_current_user();
+		$sender = ( $user && $user->exists() ) ? $user->display_name : 'Manager ERP';
+
+		if ( ! empty( $result['success'] ) ) {
+			$order->add_order_note( sprintf( __( '✉️ Transactional email "%s" successfully resent to %s by %s.', 'exacoat-core' ), $tmpl_name, $recipient_email, $sender ), false, false );
+			$order->update_meta_data( '_artmatter_confirmation_email_sent', 'yes' );
+			$order->save();
+		} else {
+			$err_msg = $result['message'] ?? 'Dispatch failed';
+			$order->add_order_note( sprintf( __( '⚠️ Failed resending transactional email "%s" to %s: %s', 'exacoat-core' ), $tmpl_name, $recipient_email, $err_msg ), false, false );
+		}
+
+		return rest_ensure_response( array_merge( $result, [
+			'order_id'        => $order_id,
+			'recipient_email' => $recipient_email,
+			'template_key'    => $template_key,
+			'template_label'  => $tmpl_name,
+		] ) );
+	}
+
+	/**
 	 * Extract legacy custom product addons (e.g. WooCommerce Product Add-ons, Acowebs WCPA, Order #542240)
 	 */
 	public static function extract_custom_addons( $item ): array {
@@ -2147,18 +2215,37 @@ class Exacoat_Order_Manager {
 		$clean_to = str_replace( 'wc-', '', $to_status );
 
 		$shipping_method = '';
+		$shipping_method_id = '';
 		$shipping_methods = $order->get_shipping_methods();
 		if ( ! empty( $shipping_methods ) ) {
 			$first_shipping = reset( $shipping_methods );
 			$shipping_method = strtolower( $first_shipping->get_name() . ' ' . $first_shipping->get_method_title() );
+			$shipping_method_id = strtolower( (string) $first_shipping->get_method_id() );
 		}
-		$shipping_address = strtolower( (string) $order->get_shipping_address_1() . ' ' . (string) $order->get_shipping_city() . ' ' . (string) $order->get_shipping_postcode() );
-		$is_store_pickup = str_contains( $shipping_method, 'pickup' ) ||
-			str_contains( $shipping_method, 'store' ) ||
-			str_contains( $shipping_address, 'summarecon' ) ||
-			str_contains( $shipping_address, 'bekasi store' ) ||
-			str_contains( $shipping_address, 'ruby commercial' ) ||
-			in_array( $clean_to, [ 'smb-ready', 'smb-picked' ], true );
+
+		$customer_note = strtolower( (string) $order->get_customer_note() );
+		$has_courier = str_contains( $shipping_method, 'sicepat' ) ||
+			str_contains( $shipping_method, 'jne' ) ||
+			str_contains( $shipping_method, 'pos' ) ||
+			str_contains( $shipping_method, 'j&t' ) ||
+			str_contains( $shipping_method, 'lion' ) ||
+			str_contains( $shipping_method, 'tiki' ) ||
+			str_contains( $shipping_method, 'anteraja' ) ||
+			str_contains( $shipping_method, 'goorita' ) ||
+			str_contains( $shipping_method, 'dhl' ) ||
+			str_contains( $shipping_method, 'fedex' ) ||
+			str_contains( $customer_note, 'shipping courier:' ) ||
+			str_contains( $customer_note, 'jasa kirim:' );
+
+		$is_store_pickup = ! $has_courier && (
+			str_contains( $shipping_method, 'pickup' ) ||
+			str_contains( $shipping_method_id, 'local_pickup' ) ||
+			str_contains( $shipping_method, 'ambil di toko' ) ||
+			str_contains( $shipping_method, 'ambil sendiri' ) ||
+			'yes' === $order->get_meta( 'is_store_pickup' ) ||
+			'1' === $order->get_meta( 'is_store_pickup' ) ||
+			in_array( $clean_to, [ 'smb-ready', 'smb-picked' ], true )
+		);
 
 		if ( 'processing' === $clean_to ) {
 			self::send_order_confirmation_once( $order );
