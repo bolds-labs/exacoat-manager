@@ -28,18 +28,23 @@ import {
   Palette,
   ShieldCheck,
   CheckCheck,
-  Plus
+  Plus,
+  Code,
+  FileCode,
+  Wand2
 } from 'lucide-react';
 import { GlassCard } from '../ui/GlassCard';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
+import { MediaLibraryModal } from '../modals/MediaLibraryModal';
 import { useToast } from '../../context/ToastContext';
 import { 
   fetchAcumbamailListsDirect, 
   sendAcumbamailCampaignDirect, 
   sendAcumbamailSingleEmailDirect, 
   generateMarketingEmailCopyDirect, 
+  generateMarketingFullHtmlEmailDirect,
   uploadMarketingImageDirect,
   fetchAcumbamailCampaignsDirect,
   fetchAcumbamailCampaignDetailDirect,
@@ -253,6 +258,31 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
   const [testEmailAddress, setTestEmailAddress] = useState('william@exacoat.com');
   const [isSendingTest, setIsSendingTest] = useState(false);
 
+  // Composer Mode: Visual Brand Studio vs. Pure HTML / Custom Code
+  const [composerMode, setComposerMode] = useState<'visual' | 'code'>('visual');
+  const [showMediaModal, setShowMediaModal] = useState<boolean>(false);
+
+  // Custom HTML / Code Studio State
+  const [customHtmlCode, setCustomHtmlCode] = useState<string>(() => {
+    return renderMarketingEmailHtml({
+      theme: 'dark',
+      subject: 'Special Announcement from Exacoat',
+      preheaderText: 'Exclusive drop & precision crafted skins.',
+      badgeText: 'ANNOUNCEMENT',
+      badgeVariant: 'amber',
+      headline: 'Engineered Precision. Pure Tactile Feel.',
+      recipientGreeting: 'Hi there,',
+      subPillNotice: 'All Items - Limited Time Only • Free Worldwide Shipping',
+      bodyText: 'We measured every curve, bezel, and port to create a skin that fits like a second skin.\n\nChoose from our signature textured materials: Matrix, Black Camo, Slate, Honeycomb, and Matte Black.\n\nOrder today to protect your device against daily micro-scratches.',
+      ctaText: 'SHOP NOW',
+      ctaUrl: 'https://exacoat.com/shop',
+      primaryCtaColor: 'amber',
+      showTrustGrid: true,
+    }).html;
+  });
+  const [aiCodePrompt, setAiCodePrompt] = useState<string>('');
+  const [isGeneratingFullHtml, setIsGeneratingFullHtml] = useState<boolean>(false);
+
   // Load Acumbamail Lists on Mount
   const loadAcumbamailLists = async () => {
     setIsLoadingLists(true);
@@ -361,6 +391,33 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
       showToast('success', 'AI Copy Generated', 'Applied fresh copy with antislop compliance.');
     } else {
       showToast('error', 'AI Generation Failed', res.error || 'Check API key connection in settings.');
+    }
+  };
+
+  // Generate Full Email Template with AI (Pure HTML Studio)
+  const handleGenerateAiFullHtml = async () => {
+    if (!aiCodePrompt.trim()) {
+      showToast('error', 'Prompt Required', 'Please describe the email design you want.');
+      return;
+    }
+    setIsGeneratingFullHtml(true);
+    showToast('info', 'AI Designing Email', 'Crafting custom responsive HTML template...');
+
+    const res = await generateMarketingFullHtmlEmailDirect({
+      prompt: aiCodePrompt,
+      subject: subject || undefined,
+      theme: emailTheme,
+      language: aiLanguage,
+    });
+
+    setIsGeneratingFullHtml(false);
+
+    if (res.success && res.html) {
+      setCustomHtmlCode(res.html);
+      if (res.subject) setSubject(res.subject);
+      showToast('success', 'AI Template Created', 'Custom responsive HTML ready in editor and live preview.');
+    } else {
+      showToast('error', 'Generation Failed', res.error || 'Could not generate email template.');
     }
   };
 
@@ -555,6 +612,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
       return;
     }
 
+    const contentToSend = composerMode === 'code' ? customHtmlCode : renderedEmail.html;
     setIsSendingTest(true);
     const fromEmail = settings.acumbamail_from_email || 'sales@exacoat.com';
     const fromName = settings.acumbamail_from_name || 'Exacoat';
@@ -562,7 +620,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     const res = await sendAcumbamailSingleEmailDirect({
       toEmail: testEmailAddress,
       subject: `[TEST] ${subject}`,
-      bodyHtml: renderedEmail.html,
+      bodyHtml: contentToSend,
       fromEmail,
       fromName,
       tokenOverride: settings.acumbamail_token,
@@ -580,6 +638,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
   const handleDispatchCampaign = async () => {
     const fromEmail = settings.acumbamail_from_email || 'sales@exacoat.com';
     const fromName = settings.acumbamail_from_name || 'Exacoat';
+    const contentToSend = composerMode === 'code' ? customHtmlCode : renderedEmail.html;
 
     setIsSending(true);
 
@@ -595,7 +654,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
         fromName,
         fromEmail,
         subject,
-        contentHtml: renderedEmail.html,
+        contentHtml: contentToSend,
         listIds: [selectedListId],
         tokenOverride: settings.acumbamail_token,
       });
@@ -632,7 +691,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
         const res = await sendAcumbamailSingleEmailDirect({
           toEmail: email,
           subject,
-          bodyHtml: renderedEmail.html,
+          bodyHtml: contentToSend,
           fromEmail,
           fromName,
           tokenOverride: settings.acumbamail_token,
@@ -660,7 +719,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
       const res = await sendAcumbamailSingleEmailDirect({
         toEmail: customerEmail,
         subject,
-        bodyHtml: renderedEmail.html,
+        bodyHtml: contentToSend,
         fromEmail,
         fromName,
         tokenOverride: settings.acumbamail_token,
@@ -775,6 +834,65 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
           <BookOpen className="w-3.5 h-3.5" />
           <span>Browse Library &amp; Past Campaigns</span>
         </button>
+      </div>
+
+      {/* Studio Composer Mode Switcher */}
+      <div className="flex items-center justify-between bg-zinc-100 dark:bg-white/[0.04] p-1.5 rounded-2xl border border-zinc-200 dark:border-white/10 shadow-sm">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setComposerMode('visual')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
+              composerMode === 'visual'
+                ? 'bg-amber-500 text-black shadow-md font-extrabold'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+            }`}
+          >
+            <Palette className="w-3.5 h-3.5" />
+            <span>Visual Brand Studio</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setComposerMode('code');
+              if (!customHtmlCode || customHtmlCode.trim() === '') {
+                setCustomHtmlCode(renderedEmail.html);
+              }
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
+              composerMode === 'code'
+                ? 'bg-amber-500 text-black shadow-md font-extrabold'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+            }`}
+          >
+            <Code className="w-3.5 h-3.5" />
+            <span>Pure HTML / Custom Code Studio</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/20 dark:bg-white/10 font-bold uppercase tracking-wider">
+              AI Ready
+            </span>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 pr-2">
+          {composerMode === 'code' ? (
+            <button
+              type="button"
+              onClick={() => {
+                setCustomHtmlCode(renderedEmail.html);
+                showToast('info', 'Code Synced', 'Overwrote HTML code with current visual layout.');
+              }}
+              className="text-[11px] font-semibold text-zinc-500 hover:text-amber-500 flex items-center gap-1 transition-colors"
+              title="Sync current visual builder layout into the HTML editor"
+            >
+              <RotateCw className="w-3 h-3" />
+              <span>Sync from Visual Layout</span>
+            </button>
+          ) : (
+            <span className="text-[11px] text-zinc-400 hidden sm:inline">
+              Tactical rounded cards &bull; Antislop verified
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Main Studio Grid: 2 Columns (Composer & Live Dual Preview) */}
@@ -1009,7 +1127,9 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
             )}
           </GlassCard>
 
-          {/* 2. AI Copywriter Assistant */}
+          {composerMode === 'visual' ? (
+            <>
+              {/* 2. AI Copywriter Assistant */}
           {showAiPanel && (
             <GlassCard className="p-5 md:p-6 space-y-4 border-amber-500/20 bg-amber-500/[0.02]">
               <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/[0.06] pb-3">
@@ -1390,25 +1510,17 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                 </div>
                 <div>
                   <label className="text-[10px] font-semibold text-zinc-500 block mb-1">
-                    Or Upload File to CDN
+                    WordPress Media Library
                   </label>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleImageUpload}
-                    accept="image/*"
-                    className="hidden"
-                  />
                   <Button
                     type="button"
                     variant="secondary"
                     size="sm"
-                    disabled={isUploadingImage}
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full flex items-center justify-center gap-1.5"
+                    onClick={() => setShowMediaModal(true)}
+                    className="w-full flex items-center justify-center gap-1.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 border border-amber-500/25 font-bold"
                   >
-                    <Upload className={`w-3.5 h-3.5 ${isUploadingImage ? 'animate-spin' : ''}`} />
-                    <span>{isUploadingImage ? 'Uploading...' : 'Choose Image File'}</span>
+                    <ImageIcon className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Browse &amp; Upload Media</span>
                   </Button>
                 </div>
               </div>
@@ -1427,7 +1539,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                       className="text-xs"
                     />
                   </div>
-                  <div className="relative aspect-[16/7] rounded-lg overflow-hidden border border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-zinc-800">
+                  <div className="relative aspect-[16/7] rounded-2xl overflow-hidden border border-zinc-200 dark:border-white/10 bg-zinc-900 shadow-md">
                     <img src={bannerImageUrl} alt="Banner preview" className="w-full h-full object-cover" />
                   </div>
                 </div>
@@ -1576,6 +1688,139 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
             </div>
 
           </GlassCard>
+            </>
+          ) : (
+            <>
+              {/* AI Full-Email Template Designer Card */}
+              <GlassCard className="p-5 md:p-6 space-y-4 border-amber-500/25 bg-amber-500/[0.03]">
+                <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/[0.06] pb-3">
+                  <div className="flex items-center gap-2">
+                    <Wand2 className="w-4 h-4 text-amber-500" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200">
+                      AI Full-Email Template Designer
+                    </h3>
+                  </div>
+                  <span className="text-[10px] font-mono text-zinc-500">Antislop Responsive HTML</span>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">
+                    Describe Email Design &amp; Layout to Generate
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={aiCodePrompt}
+                    onChange={(e) => setAiCodePrompt(e.target.value)}
+                    placeholder="e.g. Design a sleek, dark cyberpunk product reveal for Matrix texture skins on Galaxy S25 Ultra, with 2-column feature cards, highlight promo box, and bold yellow button."
+                    className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-white/[0.05] border border-zinc-200 dark:border-white/10 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-amber-500 leading-relaxed resize-none"
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] text-zinc-400 font-semibold">Quick Ideas:</span>
+                    <button
+                      type="button"
+                      onClick={() => setAiCodePrompt('Flagship Device Drop: Dark tactile theme for new iPhone 17 skins with 2 comparison cards and replacement warranty guarantee.')}
+                      className="text-[10px] px-2 py-0.5 rounded-lg bg-zinc-100 dark:bg-white/[0.06] text-zinc-600 dark:text-zinc-300 hover:text-amber-500 transition-colors"
+                    >
+                      Product Drop
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAiCodePrompt('VIP Weekend Flash Sale: 20% off all skins with countdown notice, promo coupon VIP20, and gold action button.')}
+                      className="text-[10px] px-2 py-0.5 rounded-lg bg-zinc-100 dark:bg-white/[0.06] text-zinc-600 dark:text-zinc-300 hover:text-amber-500 transition-colors"
+                    >
+                      Flash Sale
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAiCodePrompt('Minimalist Founder Memo: A clean dark-mode letter from Exacoat team introducing our new textured cast vinyl manufacturing.')}
+                      className="text-[10px] px-2 py-0.5 rounded-lg bg-zinc-100 dark:bg-white/[0.06] text-zinc-600 dark:text-zinc-300 hover:text-amber-500 transition-colors"
+                    >
+                      Founder Memo
+                    </button>
+                  </div>
+
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handleGenerateAiFullHtml}
+                    disabled={isGeneratingFullHtml || !aiCodePrompt.trim()}
+                    className="bg-amber-500 hover:bg-amber-600 text-black font-bold flex items-center gap-1.5 shadow-sm"
+                  >
+                    <Sparkles className={`w-3.5 h-3.5 ${isGeneratingFullHtml ? 'animate-spin' : ''}`} />
+                    <span>{isGeneratingFullHtml ? 'Designing Email...' : 'AI Generate HTML'}</span>
+                  </Button>
+                </div>
+              </GlassCard>
+
+              {/* Raw HTML Code Editor Card */}
+              <GlassCard className="p-5 md:p-6 space-y-4">
+                <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/[0.06] pb-3">
+                  <div className="flex items-center gap-2">
+                    <FileCode className="w-4 h-4 text-amber-500" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200">
+                      Pure HTML Source Code Editor
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(customHtmlCode);
+                        showToast('success', 'Copied', 'HTML copied to clipboard.');
+                      }}
+                      className="text-[11px] font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-white flex items-center gap-1 transition-colors"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>Copy Code</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Subject line input for code mode */}
+                <div>
+                  <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">
+                    Campaign Subject Line
+                  </label>
+                  <Input
+                    type="text"
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    placeholder="Subject line for this custom email"
+                    className="text-xs font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
+                      Custom Responsive HTML
+                    </label>
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {customHtmlCode.length} characters &bull; Live Preview synced
+                    </span>
+                  </div>
+                  <textarea
+                    rows={22}
+                    value={customHtmlCode}
+                    onChange={(e) => setCustomHtmlCode(e.target.value)}
+                    className="w-full p-3 font-mono text-[11px] leading-relaxed rounded-xl bg-zinc-950 text-emerald-400 border border-zinc-800 focus:outline-none focus:ring-1 focus:ring-amber-500 overflow-x-auto resize-y"
+                    spellCheck={false}
+                  />
+                </div>
+
+                <div className="p-3 rounded-xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200 dark:border-white/05 text-[11px] text-zinc-500 space-y-1">
+                  <p className="font-semibold text-zinc-700 dark:text-zinc-300">Supported Acumbamail placeholders:</p>
+                  <p className="font-mono text-[10px]">
+                    <code className="text-amber-500">{`{{webview_url}}`}</code> - View in browser link &nbsp;&bull;&nbsp; 
+                    <code className="text-amber-500">{`{{unsubscribe_url}}`}</code> - Required Unsubscribe link
+                  </p>
+                </div>
+              </GlassCard>
+            </>
+          )}
         </div>
 
         {/* Right Column: Live Dual Preview (5 cols) */}
@@ -1640,7 +1885,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
               >
                 <iframe
                   title="Marketing Email Preview"
-                  srcDoc={renderedEmail.html}
+                  srcDoc={composerMode === 'code' ? customHtmlCode : renderedEmail.html}
                   className="w-full h-full min-h-[580px] border-0"
                   sandbox="allow-same-origin"
                 />
@@ -1933,25 +2178,57 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                 sandbox="allow-same-origin"
               />
             </div>
-            <div className="flex items-center justify-between text-xs pt-1">
+            <div className="flex items-center justify-between text-xs pt-1 gap-2">
               <span className="text-zinc-500">Rendered from Acumbamail archive</span>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => {
-                  setSubject(viewingCampaignTitle);
-                  setViewingCampaignHtml(null);
-                  setShowReferencesModal(false);
-                  showToast('success', 'Applied to Composer', `Set subject to "${viewingCampaignTitle}".`);
-                }}
-                className="bg-amber-500 hover:bg-amber-600 text-black font-bold"
-              >
-                Use This Title in Composer
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setCustomHtmlCode(viewingCampaignHtml);
+                    setSubject(viewingCampaignTitle);
+                    setComposerMode('code');
+                    setViewingCampaignHtml(null);
+                    setShowReferencesModal(false);
+                    showToast('success', 'Loaded into HTML Editor', `Imported "${viewingCampaignTitle}" HTML into Code Studio.`);
+                  }}
+                  className="flex items-center gap-1.5"
+                >
+                  <Code className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Edit in HTML Studio</span>
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    setSubject(viewingCampaignTitle);
+                    setViewingCampaignHtml(null);
+                    setShowReferencesModal(false);
+                    showToast('success', 'Applied to Composer', `Set subject to "${viewingCampaignTitle}".`);
+                  }}
+                  className="bg-amber-500 hover:bg-amber-600 text-black font-bold"
+                >
+                  Use Title Only
+                </Button>
+              </div>
             </div>
           </div>
         </Modal>
       )}
+
+      {/* WordPress Media Library Picker Modal */}
+      <MediaLibraryModal
+        isOpen={showMediaModal}
+        onClose={() => setShowMediaModal(false)}
+        onSelectImage={(url) => {
+          setBannerImageUrl(url);
+          setShowMediaModal(false);
+          showToast('success', 'Banner Image Selected', 'Banner applied from WordPress Media Library.');
+        }}
+        title="Select Hero Banner from WordPress Media"
+        recommendedDimensions="1200x600 (or 600x300) JPG / WebP"
+        currentUrl={bannerImageUrl}
+      />
     </div>
   );
 };

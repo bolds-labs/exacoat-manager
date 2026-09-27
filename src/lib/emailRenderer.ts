@@ -1451,7 +1451,7 @@ const DEFAULT_TRUST_CARDS: TrustFeatureCard[] = [
     highlighted: true,
   },
   {
-    title: 'Scratch &amp; Mold Resistant',
+    title: 'Scratch & Mold Resistant',
     desc: 'Shields surfaces from scratches and moisture buildup that degrade gadget finishes.',
     highlighted: false,
   },
@@ -1536,7 +1536,7 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
     const imgUrl = escapeHtml(options.bannerImageUrl);
     const altText = escapeHtml(options.bannerImageAlt || headline);
     const imgBorder = isDark ? '1px solid #27272a' : '1px solid #e5e5e5';
-    const imgTag = `<img src="${imgUrl}" alt="${altText}" width="520" style="width:100%;max-width:520px;height:auto;border-radius:16px;border:${imgBorder};display:block;margin:0 auto 20px;object-fit:cover;" />`;
+    const imgTag = `<img src="${imgUrl}" alt="${altText}" width="520" style="width:100%;max-width:520px;height:auto;border-radius:20px;border:${imgBorder};display:block;margin:0 auto 20px;object-fit:cover;box-shadow:0 8px 30px rgba(0,0,0,0.35);" />`;
     if (options.bannerLinkUrl) {
       const linkUrl = escapeHtml(options.bannerLinkUrl);
       bannerHtml = `<div style="margin-bottom:20px;text-align:center;"><a href="${linkUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:block;">${imgTag}</a></div>`;
@@ -1545,21 +1545,24 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
     }
   }
 
-  // Sub-pill Capsule Notice
+  // Sub-pill Capsule Notice (Compact, Single-Line, Not Full Width)
   let subPillHtml = '';
   if (options.subPillNotice) {
     const pillBg = isDark ? 'rgba(255,255,255,0.04)' : '#f4f4f5';
     const pillBorderColor = isDark ? 'rgba(255,255,255,0.12)' : '#e4e4e7';
-    const pillText = escapeHtml(options.subPillNotice).replace(/\n/g, '<br />');
     subPillHtml = `
-      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px;">
         <tr>
           <td align="center">
-            <div style="display:inline-block;width:94%;max-width:500px;padding:12px 20px;border-radius:9999px;background:${pillBg};border:1px solid ${pillBorderColor};text-align:center;box-sizing:border-box;">
-              <span style="font-size:12.5px;font-weight:600;color:${textHeading};line-height:1.5;letter-spacing:0.2px;">
-                ${pillText}
-              </span>
-            </div>
+            <table cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;background:${pillBg};border:1px solid ${pillBorderColor};border-radius:9999px;">
+              <tr>
+                <td style="padding:6px 20px;text-align:center;white-space:nowrap;">
+                  <span style="font-size:11.5px;font-weight:600;color:${textHeading};letter-spacing:0.25px;white-space:nowrap;display:inline-block;">
+                    ${escapeHtml(options.subPillNotice)}
+                  </span>
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
       </table>`;
@@ -1578,13 +1581,13 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
 
     const codeHtml = options.promoCode ? `
       <div style="margin-top:12px;">
-        <span style="display:inline-block;padding:8px 20px;background:${codeBg};border:${codeBorder};color:${codeColor};font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:16px;font-weight:800;letter-spacing:1.5px;border-radius:8px;">
+        <span style="display:inline-block;padding:8px 20px;background:${codeBg};border:${codeBorder};color:${codeColor};font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:16px;font-weight:800;letter-spacing:1.5px;border-radius:999px;">
           ${escapeHtml(options.promoCode)}
         </span>
       </div>` : '';
 
     highlightHtml = `
-      <table width="100%" cellpadding="0" cellspacing="0" style="background:${boxBg};border:${boxBorder};border-radius:14px;margin:24px 0 28px;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:${boxBg};border:${boxBorder};border-radius:20px;border-collapse:separate;overflow:hidden;margin:24px 0 28px;">
         <tr>
           <td style="padding:22px 24px;text-align:center;">
             <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:${textHeading};">${hTitle}</p>
@@ -1595,7 +1598,7 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
       </table>`;
   }
 
-  // Trust / Feature Cards Grid (2-column layout)
+  // Trust / Feature Cards Grid (2-column layout, deep dark rounded cards)
   let trustGridHtml = '';
   const showGrid = options.showTrustGrid ?? isDark;
   if (showGrid) {
@@ -1609,24 +1612,24 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
       const renderCardCell = (c?: TrustFeatureCard) => {
         if (!c) return '<td width="48%"></td>';
         const isHighlight = Boolean(c.highlighted);
-        const cardBg = isDark ? '#121216' : '#fafafa';
+        const cardBg = isDark ? '#121215' : '#fafafa';
         const cardBorderColor = isHighlight 
-          ? (isDark ? '#f59e0b' : '#d97706') 
-          : (isDark ? '#222227' : '#e5e5e5');
+          ? (isDark ? 'rgba(245,158,11,0.55)' : '#d97706') 
+          : (isDark ? 'rgba(255,255,255,0.08)' : '#e5e5e5');
         const cardTitleColor = isHighlight && isDark ? '#fbbf24' : textHeading;
 
         return `
-          <td width="48%" valign="top" style="padding-bottom:12px;">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${cardBg};border:1px solid ${cardBorderColor};border-radius:14px;height:100%;">
+          <td width="48%" valign="top" style="padding-bottom:14px;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${cardBg};border:1px solid ${cardBorderColor};border-radius:20px;border-collapse:separate;overflow:hidden;box-shadow:${isHighlight ? '0 0 20px rgba(245,158,11,0.08)' : 'none'};">
               <tr>
-                <td style="padding:16px 14px;text-align:center;">
-                  <div style="display:inline-block;width:24px;height:24px;line-height:24px;border-radius:999px;background:${isHighlight ? 'rgba(245,158,11,0.2)' : 'rgba(255,255,255,0.06)'};color:#f59e0b;font-size:11px;font-weight:bold;margin-bottom:8px;">
+                <td style="padding:18px 16px;text-align:center;">
+                  <div style="display:inline-block;width:28px;height:28px;line-height:28px;border-radius:999px;background:${isHighlight ? 'rgba(245,158,11,0.2)' : (isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f5')};color:${isHighlight ? '#f59e0b' : (isDark ? '#e4e4e7' : '#52525b')};font-size:12px;font-weight:bold;margin-bottom:10px;">
                     ${isHighlight ? '&#9733;' : '&#10003;'}
                   </div>
-                  <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:${cardTitleColor};letter-spacing:-0.2px;">
+                  <p style="margin:0 0 5px;font-size:13px;font-weight:700;color:${cardTitleColor};letter-spacing:-0.2px;">
                     ${escapeHtml(c.title)}
                   </p>
-                  <p style="margin:0;font-size:11px;line-height:1.5;color:${textBody};">
+                  <p style="margin:0;font-size:11.5px;line-height:1.55;color:${textBody};">
                     ${escapeHtml(c.desc)}
                   </p>
                 </td>
@@ -1716,7 +1719,7 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
     table { border-collapse: collapse; }
     img { border: 0; display: block; }
     @media only screen and (max-width: 620px) {
-      .container-table { width: 100% !important; border-radius: 0 !important; }
+      .container-table { width: 100% !important; border-radius: 20px !important; }
       .mobile-padding { padding-left: 20px !important; padding-right: 20px !important; }
     }
   </style>
@@ -1739,8 +1742,8 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
           </tr>
         </table>
 
-        <!-- Main Card -->
-        <table class="container-table" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:${bgCard};border:1px solid ${cardBorder};border-radius:24px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,0.4);">
+        <!-- Main Card Container (Rounded 28px) -->
+        <table class="container-table" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:${bgCard};border:1px solid ${cardBorder};border-radius:28px;border-collapse:separate;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,0.5);">
           <tbody>
             <!-- Top Header (Logo + Badge) -->
             <tr>
@@ -1786,17 +1789,17 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
                       <table cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 16px;">
                         <tr>
                           <td style="padding:0 8px;">
-                            <a href="https://instagram.com/exacoat" target="_blank" rel="noopener noreferrer" style="font-size:12px;font-weight:600;color:${isDark ? '#e4e4e7' : '#3f3f46'};text-decoration:none;padding:6px 12px;border-radius:999px;background:${isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f5'};border:1px solid ${cardBorder};">
+                            <a href="https://instagram.com/exacoat" target="_blank" rel="noopener noreferrer" style="font-size:12px;font-weight:600;color:${isDark ? '#e4e4e7' : '#3f3f46'};text-decoration:none;padding:6px 14px;border-radius:999px;background:${isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f5'};border:1px solid ${cardBorder};">
                               Instagram
                             </a>
                           </td>
                           <td style="padding:0 8px;">
-                            <a href="https://x.com/exacoat" target="_blank" rel="noopener noreferrer" style="font-size:12px;font-weight:600;color:${isDark ? '#e4e4e7' : '#3f3f46'};text-decoration:none;padding:6px 12px;border-radius:999px;background:${isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f5'};border:1px solid ${cardBorder};">
-                              X (Twitter)
+                            <a href="https://x.com/exacoat" target="_blank" rel="noopener noreferrer" style="font-size:12px;font-weight:600;color:${isDark ? '#e4e4e7' : '#3f3f46'};text-decoration:none;padding:6px 14px;border-radius:999px;background:${isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f5'};border:1px solid ${cardBorder};">
+                              X
                             </a>
                           </td>
                           <td style="padding:0 8px;">
-                            <a href="https://youtube.com/@exacoat" target="_blank" rel="noopener noreferrer" style="font-size:12px;font-weight:600;color:${isDark ? '#e4e4e7' : '#3f3f46'};text-decoration:none;padding:6px 12px;border-radius:999px;background:${isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f5'};border:1px solid ${cardBorder};">
+                            <a href="https://youtube.com/@exacoat" target="_blank" rel="noopener noreferrer" style="font-size:12px;font-weight:600;color:${isDark ? '#e4e4e7' : '#3f3f46'};text-decoration:none;padding:6px 14px;border-radius:999px;background:${isDark ? 'rgba(255,255,255,0.06)' : '#f4f4f5'};border:1px solid ${cardBorder};">
                               YouTube
                             </a>
                           </td>
@@ -1804,7 +1807,7 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
                       </table>
 
                       <p style="margin:0 0 8px;font-size:11.5px;color:#71717a;">
-                        &copy; 2016-2026 Exacoat &bull; Precision Device Skins
+                        &copy; 2016-2026 Exacoat
                       </p>
                       <p style="margin:0;font-size:11px;color:#71717a;line-height:1.5;">
                         <a href="{{webview_url}}" target="_blank" rel="noopener noreferrer" style="color:#a1a1aa;text-decoration:underline;">View in browser</a>

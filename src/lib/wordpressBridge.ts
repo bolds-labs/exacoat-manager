@@ -2100,6 +2100,137 @@ Format your response strictly as valid, raw JSON (no markdown formatting, no cod
   return { success: false, error: 'AI copy generation failed. Check your API key connection.' };
 }
 
+export async function generateMarketingFullHtmlEmailDirect(params: {
+  prompt: string;
+  subject?: string;
+  theme?: 'dark' | 'light';
+  language?: string;
+}): Promise<{
+  success: boolean;
+  html?: string;
+  subject?: string;
+  error?: string;
+}> {
+  const geminiKey = getCachedPluginSettings().gemini_api_key || '';
+  const openAiKey = getCachedPluginSettings().openai_api_key || '';
+
+  if (!geminiKey && !openAiKey) {
+    return {
+      success: false,
+      error: 'No AI key configured. Please add Gemini or OpenAI API key in Settings.',
+    };
+  }
+
+  const isDark = (params.theme ?? 'dark') === 'dark';
+  const langPrompt = params.language === 'id' ? 'Bahasa Indonesia' : 'English';
+
+  const systemInstructions = `You are an elite email template designer and developer for Exacoat (exacoat.com), a luxury precision device skins and wraps manufacturer.
+Exacoat products: authentic 3M/cast vinyl skins for iPhones, Samsung Galaxy, Pixel, MacBooks, gaming consoles. Key features: bubble-free air release, scratch & mold resistant, zero adhesive residue, 360-degree precision fit.
+
+TASK:
+Generate a complete, production-ready, beautifully designed HTML email based on the user's design request.
+
+CRITICAL DESIGN & CODING SPECIFICATIONS:
+1. Complete Document: Start with <!doctype html> and end with </html>.
+2. Responsive Architecture: Max-width 560px or 600px centered container, table-based layout with border-collapse: separate.
+3. Rounded Aesthetics:
+   - Outer container: border-radius: 28px
+   - Internal cards, product boxes, or grids: border-radius: 20px
+   - Buttons, badges, and pill tags: border-radius: 9999px (capsules)
+4. Color Palette (${isDark ? 'Dark Mode' : 'Light Mode'}):
+   - Outer background: ${isDark ? '#060608' : '#f5f5f7'}
+   - Card container background: ${isDark ? '#0f0f13' : '#ffffff'}
+   - Card border: ${isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e4e4e7'}
+   - Headings: ${isDark ? '#ffffff' : '#111111'}
+   - Body text: ${isDark ? '#a1a1aa' : '#3f3f46'}
+   - Accents / Primary CTA: Amber #f59e0b (or gold #eab308) with bold black text (#000000), or sleek white pill
+5. Font: Plus Jakarta Sans, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif.
+6. Header & Branding:
+   - Exacoat logo or bold stylized "EXACOAT" text mark
+   - Category badge pill
+7. Footer Requirements:
+   - Social links: Instagram, X (do not write Twitter), YouTube
+   - Copyright: &copy; 2016-2026 Exacoat (do not add Precision device skins)
+   - Mandatory Acumbamail placeholders: <a href="{{webview_url}}">View in browser</a> and <a href="{{unsubscribe_url}}">Unsubscribe</a>
+8. ANTISLOP RULES (MANDATORY):
+   - DO NOT use any em dashes ("—"). Use commas, colons, or parentheses.
+   - DO NOT use generic AI marketing buzzwords like "revolutionary", "cutting-edge", "game-changing", "seamless", "effortless", "state-of-the-art".
+   - Keep copy sharp, tactile, confident, and focused on device protection and aesthetic feel.
+   - Language: ${langPrompt}.
+
+USER DESIGN REQUEST:
+${params.prompt}
+${params.subject ? `Subject Context: ${params.subject}` : ''}
+
+Format your response strictly as valid, raw JSON (no markdown formatting, no code fences):
+{
+  "subject": "Compelling subject line",
+  "html": "<!doctype html>..."
+}`;
+
+  if (geminiKey) {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: systemInstructions }] }],
+          generationConfig: { responseMimeType: 'application/json' },
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const cleanJson = rawText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+        const parsed = JSON.parse(cleanJson);
+        return {
+          success: true,
+          subject: parsed.subject || params.subject || 'Special Update from Exacoat',
+          html: parsed.html || '',
+        };
+      }
+    } catch (err: any) {
+      console.warn('[generateMarketingFullHtmlEmailDirect] Gemini failed, trying OpenAI:', err);
+    }
+  }
+
+  if (openAiKey) {
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${openAiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: 'You are an expert HTML email designer and developer. Output raw JSON only.' },
+            { role: 'user', content: systemInstructions },
+          ],
+          response_format: { type: 'json_object' },
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const rawContent = data.choices?.[0]?.message?.content || '{}';
+        const parsed = JSON.parse(rawContent);
+        return {
+          success: true,
+          subject: parsed.subject || params.subject || 'Special Update from Exacoat',
+          html: parsed.html || '',
+        };
+      }
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  return { success: false, error: 'AI email design failed. Check API key connection.' };
+}
+
 // ==========================================
 // System Logs
 // ==========================================
