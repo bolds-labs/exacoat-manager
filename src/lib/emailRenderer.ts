@@ -1449,6 +1449,13 @@ export interface MarketingEmailOptions {
   unsubscribeUrl?: string;
   viewInBrowserUrl?: string;
   recipientName?: string;
+  contentAlign?: 'left' | 'center';
+  showFooterLogo?: boolean;
+  showSocialLinks?: boolean;
+  instagramUrl?: string;
+  xUrl?: string;
+  youtubeUrl?: string;
+  tiktokUrl?: string;
 }
 
 /**
