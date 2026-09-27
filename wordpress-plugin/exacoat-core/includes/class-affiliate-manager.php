@@ -1552,10 +1552,23 @@ class Exacoat_Affiliate_Manager {
 				'permission_callback' => '__return_true',
 			] );
 
+			// Public affiliate visit tracking for headless storefront (web.exacoat.com)
+			register_rest_route( $ns, '/affiliate/track-visit', [
+				'methods'             => 'POST',
+				'callback'            => [ __CLASS__, 'rest_track_visit' ],
+				'permission_callback' => '__return_true',
+			] );
+
 			// Admin workstation endpoints (requires manage_woocommerce capability)
 			register_rest_route( $ns, '/affiliate/admin/all', [
 				'methods'             => 'GET',
 				'callback'            => [ __CLASS__, 'rest_admin_get_affiliates' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_auth' ],
+			] );
+
+			register_rest_route( $ns, '/affiliate/admin/clicks', [
+				'methods'             => 'GET',
+				'callback'            => [ __CLASS__, 'rest_admin_get_clicks' ],
 				'permission_callback' => [ __CLASS__, 'check_admin_auth' ],
 			] );
 
@@ -2030,6 +2043,38 @@ class Exacoat_Affiliate_Manager {
 			)
 		);
 
+		// Augment clicks with visit source info and calculate sources breakdown
+		$source_counts = [];
+		if ( ! empty( $clicks ) ) {
+			foreach ( $clicks as &$cl ) {
+				$source_info = self::parse_visit_source( (string) ( $cl->referrer_url ?? '' ), (string) ( $cl->landing_url ?? '' ) );
+				$cl->source_label = $source_info['label'];
+				$cl->source_type  = $source_info['type'];
+				$s_label = $source_info['label'];
+				if ( ! isset( $source_counts[ $s_label ] ) ) {
+					$source_counts[ $s_label ] = [
+						'source'     => $s_label,
+						'type'       => $source_info['type'],
+						'count'      => 0,
+						'percentage' => 0,
+					];
+				}
+				$source_counts[ $s_label ]['count']++;
+			}
+			unset( $cl );
+
+			$total_c = count( $clicks );
+			if ( $total_c > 0 ) {
+				foreach ( $source_counts as &$sc ) {
+					$sc['percentage'] = round( ( $sc['count'] / $total_c ) * 100, 1 );
+				}
+				unset( $sc );
+				usort( $source_counts, function( $a, $b ) {
+					return $b['count'] <=> $a['count'];
+				} );
+			}
+		}
+
 		// Compute aggregated daily stats across full creator history (no 60-day limit)
 		$daily_clicks = $wpdb->get_results(
 			$wpdb->prepare(
@@ -2173,8 +2218,9 @@ class Exacoat_Affiliate_Manager {
 			],
 			'commissions' => $commissions ?: [],
 			'payouts'     => $payouts ?: [],
-			'clicks'      => $clicks ?: [],
-			'daily_stats' => $daily_stats ?: [],
+			'clicks'            => $clicks ?: [],
+			'sources_breakdown' => array_values( $source_counts ),
+			'daily_stats'       => $daily_stats ?: [],
 		] );
 	}
 
@@ -2560,6 +2606,252 @@ class Exacoat_Affiliate_Manager {
 			'creator_name'    => $creator_name,
 			'discount_rate'   => $discount_rate,
 			'commission_rate' => $comm_rate,
+		] );
+	}
+
+	/**
+	 * Parse visit source from referrer URL and landing URL.
+	 */
+	public static function parse_visit_source( string $referrer_url, string $landing_url = '' ): array {
+		$ref_host = '';
+		if ( ! empty( $referrer_url ) ) {
+			$parsed = wp_parse_url( $referrer_url );
+			$ref_host = strtolower( $parsed['host'] ?? '' );
+			if ( strpos( $ref_host, 'www.' ) === 0 ) {
+				$ref_host = substr( $ref_host, 4 );
+			}
+		}
+
+		// Check UTM parameters on landing URL
+		$utm_source = '';
+		if ( ! empty( $landing_url ) && strpos( $landing_url, '?' ) !== false ) {
+			$q = wp_parse_url( $landing_url, PHP_URL_QUERY );
+			if ( $q ) {
+				parse_str( $q, $params );
+				if ( ! empty( $params['utm_source'] ) ) {
+					$utm_source = strtolower( trim( (string) $params['utm_source'] ) );
+				}
+			}
+		}
+
+		if ( $utm_source ) {
+			if ( in_array( $utm_source, [ 'ig', 'instagram' ], true ) ) {
+				return [ 'label' => 'Instagram', 'type' => 'instagram' ];
+			}
+			if ( in_array( $utm_source, [ 'yt', 'youtube' ], true ) ) {
+				return [ 'label' => 'YouTube', 'type' => 'youtube' ];
+			}
+			if ( in_array( $utm_source, [ 'tt', 'tiktok' ], true ) ) {
+				return [ 'label' => 'TikTok', 'type' => 'tiktok' ];
+			}
+			if ( in_array( $utm_source, [ 'x', 'twitter' ], true ) ) {
+				return [ 'label' => 'X (Twitter)', 'type' => 'twitter' ];
+			}
+			return [ 'label' => ucfirst( $utm_source ), 'type' => 'utm' ];
+		}
+
+		if ( ! empty( $ref_host ) ) {
+			if ( strpos( $ref_host, 'instagram' ) !== false || strpos( $ref_host, 'cdninstagram' ) !== false ) {
+				return [ 'label' => 'Instagram', 'type' => 'instagram' ];
+			}
+			if ( strpos( $ref_host, 'youtube' ) !== false || strpos( $ref_host, 'youtu.be' ) !== false ) {
+				return [ 'label' => 'YouTube', 'type' => 'youtube' ];
+			}
+			if ( strpos( $ref_host, 'tiktok' ) !== false ) {
+				return [ 'label' => 'TikTok', 'type' => 'tiktok' ];
+			}
+			if ( strpos( $ref_host, 'twitter' ) !== false || strpos( $ref_host, 't.co' ) !== false || $ref_host === 'x.com' ) {
+				return [ 'label' => 'X (Twitter)', 'type' => 'twitter' ];
+			}
+			if ( strpos( $ref_host, 'facebook' ) !== false || strpos( $ref_host, 'fb.me' ) !== false ) {
+				return [ 'label' => 'Facebook', 'type' => 'facebook' ];
+			}
+			if ( strpos( $ref_host, 'threads.net' ) !== false ) {
+				return [ 'label' => 'Threads', 'type' => 'threads' ];
+			}
+			if ( strpos( $ref_host, 'wa.me' ) !== false || strpos( $ref_host, 'whatsapp' ) !== false ) {
+				return [ 'label' => 'WhatsApp', 'type' => 'whatsapp' ];
+			}
+			if ( strpos( $ref_host, 'google' ) !== false || strpos( $ref_host, 'bing' ) !== false ) {
+				return [ 'label' => 'Google / Search', 'type' => 'search' ];
+			}
+			if ( strpos( $ref_host, 'exacoat' ) !== false ) {
+				return [ 'label' => 'Internal / Store', 'type' => 'internal' ];
+			}
+			return [ 'label' => $ref_host, 'type' => 'referral' ];
+		}
+
+		return [ 'label' => 'Direct / Bio Link', 'type' => 'direct' ];
+	}
+
+	/**
+	 * Public Endpoint: Track incoming referral visit from headless storefront (web.exacoat.com).
+	 */
+	public static function rest_track_visit( WP_REST_Request $request ) {
+		$raw_slug     = sanitize_text_field( trim( $request->get_param( 'slug' ) ?: $request->get_param( 'ref' ) ?: '' ) );
+		$landing_url  = sanitize_text_field( $request->get_param( 'landing_url' ) ?: '/' );
+		$referrer_url = sanitize_text_field( $request->get_param( 'referrer_url' ) ?: '' );
+		$remote_ip    = sanitize_text_field( $request->get_param( 'ip_address' ) ?: '' );
+		$user_agent   = substr( sanitize_text_field( $request->get_param( 'user_agent' ) ?: '' ), 0, 255 );
+
+		if ( empty( $remote_ip ) && ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
+			$remote_ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
+		}
+		if ( empty( $user_agent ) && ! empty( $_SERVER['HTTP_USER_AGENT'] ) ) {
+			$user_agent = substr( sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ), 0, 255 );
+		}
+
+		if ( empty( $raw_slug ) ) {
+			return rest_ensure_response( [ 'success' => false, 'error' => 'Missing slug' ] );
+		}
+
+		$clean_slug = sanitize_title( $raw_slug );
+		$affiliate  = self::get_affiliate_by_slug( $clean_slug );
+		if ( ! $affiliate && is_numeric( $raw_slug ) ) {
+			$affiliate = self::get_affiliate_by_id( (int) $raw_slug );
+			if ( ! $affiliate ) {
+				$affiliate = self::get_affiliate_by_user_id( (int) $raw_slug );
+			}
+		}
+
+		if ( ! $affiliate || 'active' !== $affiliate->status ) {
+			return rest_ensure_response( [ 'success' => false, 'error' => 'Affiliate inactive or not found' ] );
+		}
+
+		global $wpdb;
+		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
+		$table_clicks     = $wpdb->prefix . 'exacoat_affiliate_clicks';
+
+		// Deduplicate: avoid recording duplicate visits from same IP + affiliate within 15 minutes
+		if ( ! empty( $remote_ip ) ) {
+			$recent_click = $wpdb->get_var(
+				$wpdb->prepare(
+					"SELECT id FROM {$table_clicks} 
+					WHERE affiliate_id = %d AND ip_address = %s AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE) 
+					LIMIT 1",
+					$affiliate->id,
+					$remote_ip
+				)
+			);
+			if ( $recent_click ) {
+				return rest_ensure_response( [
+					'success'      => true,
+					'recorded'     => false,
+					'duplicate'    => true,
+					'affiliate_id' => (int) $affiliate->id,
+					'slug'         => $affiliate->slug,
+				] );
+			}
+		}
+
+		// Increment affiliate clicks count
+		$wpdb->query(
+			$wpdb->prepare(
+				"UPDATE {$table_affiliates} SET total_clicks = total_clicks + 1 WHERE id = %d",
+				$affiliate->id
+			)
+		);
+
+		// Insert visit into clicks ledger
+		$wpdb->insert(
+			$table_clicks,
+			[
+				'affiliate_id' => (int) $affiliate->id,
+				'landing_url'  => $landing_url,
+				'referrer_url' => $referrer_url,
+				'ip_address'   => $remote_ip,
+				'user_agent'   => $user_agent,
+				'created_at'   => current_time( 'mysql' ),
+			],
+			[ '%d', '%s', '%s', '%s', '%s', '%s' ]
+		);
+
+		return rest_ensure_response( [
+			'success'      => true,
+			'recorded'     => true,
+			'affiliate_id' => (int) $affiliate->id,
+			'slug'         => $affiliate->slug,
+			'click_id'     => (int) $wpdb->insert_id,
+		] );
+	}
+
+	/**
+	 * Admin Endpoint: Get clicks and traffic sources for an affiliate or across all affiliates.
+	 */
+	public static function rest_admin_get_clicks( WP_REST_Request $request ) {
+		global $wpdb;
+		$table_clicks     = $wpdb->prefix . 'exacoat_affiliate_clicks';
+		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
+
+		$affiliate_id = (int) $request->get_param( 'affiliate_id' );
+		$limit        = min( 1000, max( 10, (int) ( $request->get_param( 'limit' ) ?: 200 ) ) );
+
+		$where_sql = '';
+		$params    = [];
+		if ( $affiliate_id > 0 ) {
+			$where_sql = 'WHERE c.affiliate_id = %d';
+			$params[]  = $affiliate_id;
+		}
+
+		$sql = "SELECT c.id, c.affiliate_id, c.landing_url, c.referrer_url, c.ip_address, c.created_at,
+		               a.slug, a.display_name, a.creator_display_name
+		        FROM {$table_clicks} c
+		        LEFT JOIN {$table_affiliates} a ON c.affiliate_id = a.id
+		        {$where_sql}
+		        ORDER BY c.id DESC
+		        LIMIT %d";
+		$params[] = $limit;
+
+		$results = $wpdb->get_results( $wpdb->prepare( $sql, $params ) );
+
+		$clicks = [];
+		$source_counts = [];
+		$total = count( $results );
+
+		foreach ( $results as $row ) {
+			$source_info = self::parse_visit_source( (string) $row->referrer_url, (string) $row->landing_url );
+			$label = $source_info['label'];
+
+			$clicks[] = [
+				'id'                   => (int) $row->id,
+				'affiliate_id'         => (int) $row->affiliate_id,
+				'slug'                 => $row->slug ?: '',
+				'creator_name'         => $row->creator_display_name ?: ( $row->display_name ?: ( $row->slug ?: 'Creator' ) ),
+				'landing_url'          => $row->landing_url ?: '/',
+				'referrer_url'         => $row->referrer_url ?: '',
+				'source_label'         => $label,
+				'source_type'          => $source_info['type'],
+				'ip_address'           => $row->ip_address ?: '',
+				'created_at'           => $row->created_at,
+			];
+
+			if ( ! isset( $source_counts[ $label ] ) ) {
+				$source_counts[ $label ] = [
+					'source'     => $label,
+					'type'       => $source_info['type'],
+					'count'      => 0,
+					'percentage' => 0,
+				];
+			}
+			$source_counts[ $label ]['count']++;
+		}
+
+		if ( $total > 0 ) {
+			foreach ( $source_counts as &$sc ) {
+				$sc['percentage'] = round( ( $sc['count'] / $total ) * 100, 1 );
+			}
+			unset( $sc );
+		}
+
+		usort( $source_counts, function( $a, $b ) {
+			return $b['count'] <=> $a['count'];
+		} );
+
+		return rest_ensure_response( [
+			'success'           => true,
+			'total'             => $total,
+			'clicks'            => $clicks,
+			'sources_breakdown' => array_values( $source_counts ),
 		] );
 	}
 

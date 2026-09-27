@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Wallet, 
   Clock, 
@@ -275,10 +276,15 @@ export const AffiliatePayoutsPage: React.FC<AffiliatePayoutsPageProps> = ({
         )}
       </GlassCard>
 
-      {/* Confirmation Modal */}
-      {showConfirmModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="bg-[#0c0c0e] border border-white/[0.1] rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl">
+      {/* Confirmation Modal (Mounted to document.body for true edge-to-edge fullscreen backdrop) */}
+      {showConfirmModal && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-md pointer-events-auto transition-opacity"
+            onClick={() => !isSubmitting && setShowConfirmModal(false)}
+            aria-hidden="true"
+          />
+          <div className="relative z-10 bg-[#0c0c0e] border border-white/[0.1] rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl pointer-events-auto animate-modal-enter">
             <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
               <h3 className="text-sm font-semibold text-white">Confirm Payout Request</h3>
               <button
@@ -334,7 +340,8 @@ export const AffiliatePayoutsPage: React.FC<AffiliatePayoutsPageProps> = ({
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

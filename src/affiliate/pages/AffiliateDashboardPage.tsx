@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Copy, 
   Check, 
@@ -16,7 +17,9 @@ import {
   Link2, 
   Sliders, 
   Search, 
-  Percent 
+  Percent,
+  Globe,
+  ArrowUpRight
 } from 'lucide-react';
 import { 
   AffiliateProfile, 
@@ -294,6 +297,44 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
       return true;
     });
   }, [horizonCommissions, statusFilter, searchQuery]);
+
+  // Derive traffic sources from clicks
+  const creatorTrafficSources = useMemo(() => {
+    if (!horizonClicks || horizonClicks.length === 0) return [];
+    const map: Record<string, { source: string; count: number; percentage: number }> = {};
+    const total = horizonClicks.length;
+
+    horizonClicks.forEach((c) => {
+      const ref = (c.referrer_url || '').toLowerCase();
+      let label = 'Direct / Bio Link';
+      if (ref.includes('instagram') || ref.includes('cdninstagram')) label = 'Instagram';
+      else if (ref.includes('youtube') || ref.includes('youtu.be')) label = 'YouTube';
+      else if (ref.includes('tiktok')) label = 'TikTok';
+      else if (ref.includes('twitter') || ref.includes('t.co') || ref.includes('x.com')) label = 'X (Twitter)';
+      else if (ref.includes('facebook') || ref.includes('fb.me')) label = 'Facebook';
+      else if (ref.includes('google') || ref.includes('bing')) label = 'Google / Search';
+      else if (ref.includes('threads')) label = 'Threads';
+      else if (ref.includes('wa.me') || ref.includes('whatsapp')) label = 'WhatsApp';
+      else if (ref) {
+        try {
+          const u = new URL(ref);
+          label = u.hostname.replace(/^www\./, '');
+        } catch {
+          label = ref;
+        }
+      }
+
+      if (!map[label]) map[label] = { source: label, count: 0, percentage: 0 };
+      map[label].count += 1;
+    });
+
+    const arr = Object.values(map);
+    arr.forEach((item) => {
+      item.percentage = total > 0 ? Math.round((item.count / total) * 100) : 0;
+    });
+    arr.sort((a, b) => b.count - a.count);
+    return arr;
+  }, [horizonClicks]);
 
   const getCommissionBadge = (status: string, reason?: string | null, maturesAt?: string | null) => {
     switch (status) {
@@ -821,6 +862,56 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
         </div>
       </GlassCard>
 
+      {/* Referral Traffic & Channel Sources */}
+      <GlassCard className="p-6 border border-white/[0.08] space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-white/[0.06]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-[#f3aa18]/10 border border-[#f3aa18]/20 text-[#f3aa18] flex items-center justify-center shrink-0">
+              <Globe className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white font-['Chakra_Petch'] uppercase tracking-wider">
+                Audience Traffic Sources
+              </h3>
+              <p className="text-xs text-zinc-400">
+                Where your shoppers and incoming referral visits are coming from.
+              </p>
+            </div>
+          </div>
+          <span className="font-mono text-xs text-neutral-400 px-3 py-1 rounded-lg bg-white/[0.03] border border-white/[0.06] self-start sm:self-auto">
+            {horizonClicks.length.toLocaleString('id-ID')} Total Clicks
+          </span>
+        </div>
+
+        {creatorTrafficSources.length === 0 ? (
+          <div className="py-6 text-center text-xs text-zinc-500 italic">
+            No referral traffic sources recorded yet. Share your branded link to start tracking channels.
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {creatorTrafficSources.map((item) => (
+              <div
+                key={item.source}
+                className="p-3.5 rounded-2xl bg-white/[0.025] border border-white/[0.06] flex flex-col justify-between"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-white truncate max-w-[110px]" title={item.source}>
+                    {item.source}
+                  </span>
+                  <span className="font-mono text-xs font-bold text-[#f3aa18]">
+                    {item.percentage}%
+                  </span>
+                </div>
+                <div className="mt-2 text-xs font-mono text-zinc-400 flex items-center justify-between">
+                  <span>Visits:</span>
+                  <span className="text-zinc-200 font-semibold">{item.count.toLocaleString('id-ID')}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </GlassCard>
+
       {/* Commission Activity Ledger & Filter Bar */}
       <GlassCard className="p-6 border border-white/[0.08] space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.06]">
@@ -926,10 +1017,15 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
         )}
       </GlassCard>
 
-      {/* QR Code Modal */}
-      {showQrModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="bg-[#0c0c0e] border border-white/[0.1] rounded-3xl max-w-sm w-full p-6 space-y-4 text-center shadow-2xl animate-modal-enter">
+      {/* QR Code Modal (Mounted to document.body for true edge-to-edge fullscreen backdrop) */}
+      {showQrModal && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-md pointer-events-auto transition-opacity"
+            onClick={() => setShowQrModal(false)}
+            aria-hidden="true"
+          />
+          <div className="relative z-10 bg-[#0c0c0e] border border-white/[0.1] rounded-3xl max-w-sm w-full p-6 space-y-4 text-center shadow-2xl animate-modal-enter pointer-events-auto">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-white">Your Referral QR Code</h3>
               <button
@@ -960,12 +1056,13 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
               Copy Link URL
             </Button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* Payout Request Confirmation Modal */}
-      {showPayoutModal && (
-        <div className="fixed inset-0 z-50">
+      {/* Payout Request Confirmation Modal (Mounted to document.body for true edge-to-edge fullscreen backdrop) */}
+      {showPayoutModal && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[999999]">
           <div
             className="fixed inset-0 bg-black/85 backdrop-blur-md pointer-events-auto transition-opacity"
             onClick={() => !isSubmittingPayout && setShowPayoutModal(false)}
@@ -1054,7 +1151,8 @@ export const AffiliateDashboardPage: React.FC<AffiliateDashboardPageProps> = ({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

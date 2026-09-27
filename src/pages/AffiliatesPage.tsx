@@ -38,7 +38,10 @@ import {
   Settings,
   Trash2,
   LayoutDashboard,
-  Link2
+  Link2,
+  MousePointerClick,
+  Globe,
+  ArrowUpRight
 } from 'lucide-react';
 import { 
   fetchAdminAffiliates, 
@@ -58,7 +61,10 @@ import {
   createAdminManualCommission,
   updateAdminCommission,
   fetchAffiliatePortalData,
-  deleteAdminAffiliate
+  deleteAdminAffiliate,
+  fetchAdminAffiliateClicks,
+  AdminAffiliateClickRecord,
+  AffiliateClickSource
 } from '../lib/wordpressBridge';
 import { AffiliateCommission, AffiliatePayout, Order } from '../types';
 import { OrderDetailDrawer } from '../components/orders/OrderDetailDrawer';
@@ -99,7 +105,73 @@ const PAYOUT_STATUS_OPTIONS: FilterSelectOption[] = [
   { value: 'rejected', label: 'Rejected' },
 ];
 
-type TabKey = 'applications' | 'affiliates' | 'commissions' | 'payouts' | 'settings' | 'slicewp';
+function getVisitSourceBadge(source: string, type: string) {
+  const s = (source || '').toLowerCase();
+  if (s.includes('instagram')) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-gradient-to-r from-purple-500/20 via-pink-500/20 to-amber-500/20 text-pink-300 border border-pink-500/30">
+        <span className="w-1.5 h-1.5 rounded-full bg-pink-400" />
+        Instagram
+      </span>
+    );
+  }
+  if (s.includes('youtube')) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-red-500/15 text-red-400 border border-red-500/30">
+        <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+        YouTube
+      </span>
+    );
+  }
+  if (s.includes('tiktok')) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+        TikTok
+      </span>
+    );
+  }
+  if (s.includes('twitter') || s.includes('x (')) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-sky-500/15 text-sky-300 border border-sky-500/30">
+        <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+        X (Twitter)
+      </span>
+    );
+  }
+  if (s.includes('facebook')) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/15 text-blue-300 border border-blue-500/30">
+        <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+        Facebook
+      </span>
+    );
+  }
+  if (s.includes('google') || s.includes('search')) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+        Google
+      </span>
+    );
+  }
+  if (s.includes('direct') || s.includes('bio')) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-zinc-800 text-zinc-300 border border-zinc-700">
+        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+        Direct / Bio
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-300 border border-amber-500/25">
+      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+      {source}
+    </span>
+  );
+}
+
+type TabKey = 'applications' | 'affiliates' | 'commissions' | 'payouts' | 'traffic' | 'settings' | 'slicewp';
 
 export const AffiliatesPage: React.FC = () => {
   const { showToast } = useToast();
@@ -111,6 +183,20 @@ export const AffiliatesPage: React.FC = () => {
   const [affiliates, setAffiliates] = useState<any[]>([]);
   const [commissions, setCommissions] = useState<AffiliateCommission[]>([]);
   const [payouts, setPayouts] = useState<AffiliatePayout[]>([]);
+
+  // Traffic / Visits State
+  const [trafficClicks, setTrafficClicks] = useState<AdminAffiliateClickRecord[]>([]);
+  const [trafficSources, setTrafficSources] = useState<AffiliateClickSource[]>([]);
+  const [trafficTotal, setTrafficTotal] = useState(0);
+  const [isLoadingTraffic, setIsLoadingTraffic] = useState(false);
+  const [selectedCreatorForTraffic, setSelectedCreatorForTraffic] = useState<string>('all');
+  const [trafficSearch, setTrafficSearch] = useState('');
+
+  // Per-affiliate visits modal state
+  const [inspectingAffiliateVisits, setInspectingAffiliateVisits] = useState<any | null>(null);
+  const [inspectingVisitsClicks, setInspectingVisitsClicks] = useState<AdminAffiliateClickRecord[]>([]);
+  const [inspectingVisitsSources, setInspectingVisitsSources] = useState<AffiliateClickSource[]>([]);
+  const [isLoadingInspectingVisits, setIsLoadingInspectingVisits] = useState(false);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -215,7 +301,8 @@ export const AffiliatesPage: React.FC = () => {
     deletingAffiliate ||
     isAddManualCommissionOpen ||
     editingCommission ||
-    previewCreatorAffiliate
+    previewCreatorAffiliate ||
+    inspectingAffiliateVisits
   );
 
   useEffect(() => {
@@ -228,7 +315,8 @@ export const AffiliatesPage: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (previewCreatorAffiliate) setPreviewCreatorAffiliate(null);
+        if (inspectingAffiliateVisits) setInspectingAffiliateVisits(null);
+        else if (previewCreatorAffiliate) setPreviewCreatorAffiliate(null);
         else if (selectedAffiliateForCoupon) setSelectedAffiliateForCoupon(null);
         else if (deletingAffiliate) setDeletingAffiliate(null);
         else if (rejectingApp) setRejectingApp(null);
@@ -239,7 +327,25 @@ export const AffiliatesPage: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [previewCreatorAffiliate, selectedAffiliateForCoupon, deletingAffiliate, rejectingApp, payingPayout, isAddManualCommissionOpen, editingCommission]);
+  }, [inspectingAffiliateVisits, previewCreatorAffiliate, selectedAffiliateForCoupon, deletingAffiliate, rejectingApp, payingPayout, isAddManualCommissionOpen, editingCommission]);
+
+  const handleOpenVisitsModal = async (aff: any) => {
+    setInspectingAffiliateVisits(aff);
+    setIsLoadingInspectingVisits(true);
+    try {
+      const res = await fetchAdminAffiliateClicks(Number(aff.id), 250);
+      if (res.success) {
+        setInspectingVisitsClicks(res.clicks);
+        setInspectingVisitsSources(res.sources_breakdown);
+      } else {
+        showToast('error', 'Visits Error', res.error || 'Failed to load visits.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Network Error', err.message);
+    } finally {
+      setIsLoadingInspectingVisits(false);
+    }
+  };
 
   const handleSeeAsCreator = async (aff: any) => {
     setPreviewCreatorAffiliate(aff);
@@ -565,6 +671,18 @@ export const AffiliatesPage: React.FC = () => {
         if (res.success) {
           setPayouts(res.payouts);
         }
+      } else if (activeTab === 'traffic') {
+        setIsLoadingTraffic(true);
+        const affId = selectedCreatorForTraffic !== 'all' ? Number(selectedCreatorForTraffic) : undefined;
+        const res = await fetchAdminAffiliateClicks(affId, 300);
+        if (res.success) {
+          setTrafficClicks(res.clicks);
+          setTrafficSources(res.sources_breakdown);
+          setTrafficTotal(res.total);
+        } else {
+          showToast('error', 'Visits Error', res.error || 'Failed to load traffic log.');
+        }
+        setIsLoadingTraffic(false);
       } else if (activeTab === 'settings') {
         const res = await fetchAdminAffiliateSettings();
         if (res.success && res.settings) {
@@ -593,7 +711,7 @@ export const AffiliatesPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [activeTab, statusFilter, searchQuery, showToast]);
+  }, [activeTab, statusFilter, searchQuery, selectedCreatorForTraffic, showToast]);
 
   useEffect(() => {
     loadData();
@@ -765,6 +883,7 @@ export const AffiliatesPage: React.FC = () => {
     { key: 'affiliates', label: 'Affiliates Directory', count: activeAffiliatesCount },
     { key: 'commissions', label: 'Commissions Ledger' },
     { key: 'payouts', label: 'Payout Requests', count: pendingPayoutsCount },
+    { key: 'traffic', label: 'Traffic & Visits' },
     { key: 'settings', label: 'Program Settings' },
     { key: 'slicewp', label: 'SliceWP Migration' },
   ];
@@ -1133,8 +1252,16 @@ export const AffiliatesPage: React.FC = () => {
                             </span>
                           )}
                         </td>
-                        <td className="py-3 font-mono text-neutral-300">
-                          {Number(aff.total_clicks || 0).toLocaleString('id-ID')}
+                        <td className="py-3 font-mono">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenVisitsModal(aff)}
+                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white/[0.03] hover:bg-[#f3aa18]/15 text-neutral-300 hover:text-[#f3aa18] border border-white/[0.08] hover:border-[#f3aa18]/30 transition-all cursor-pointer text-xs"
+                            title="View traffic and visit sources for this creator"
+                          >
+                            <MousePointerClick className="w-3 h-3 text-neutral-400" />
+                            <span>{Number(aff.total_clicks || 0).toLocaleString('id-ID')}</span>
+                          </button>
                         </td>
                         <td className="py-3 font-mono text-neutral-300">
                           {Number(aff.total_orders || 0).toLocaleString('id-ID')}
@@ -1653,6 +1780,248 @@ export const AffiliatesPage: React.FC = () => {
             </div>
           </div>
         </GlassCard>
+      )}
+
+      {/* Tab: Traffic & Visits */}
+      {activeTab === 'traffic' && (
+        <div className="space-y-6">
+          {/* Traffic Overview & Top Metrics */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <GlassCard className="p-5 border border-white/[0.08] relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold tracking-wider uppercase text-neutral-400 font-mono">
+                  Total Referral Clicks
+                </span>
+                <div className="w-8 h-8 rounded-xl bg-[#f3aa18]/15 border border-[#f3aa18]/30 text-[#f3aa18] flex items-center justify-center shrink-0">
+                  <MousePointerClick className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-3">
+                <span className="text-2xl font-bold font-['Chakra_Petch'] text-white">
+                  {trafficTotal.toLocaleString('id-ID')}
+                </span>
+              </div>
+              <div className="mt-2 text-xs text-neutral-400">
+                Incoming shopper visits recorded across all links
+              </div>
+            </GlassCard>
+
+            <GlassCard className="p-5 border border-white/[0.08] relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold tracking-wider uppercase text-neutral-400 font-mono">
+                  Primary Traffic Channel
+                </span>
+                <div className="w-8 h-8 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-400 flex items-center justify-center shrink-0">
+                  <Globe className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-3">
+                <span className="text-2xl font-bold font-['Chakra_Petch'] text-[#f3aa18]">
+                  {trafficSources[0]?.source || 'Direct'}
+                </span>
+              </div>
+              <div className="mt-2 text-xs text-neutral-400 font-mono">
+                {trafficSources[0] ? `${trafficSources[0].percentage}% of total inbound traffic` : 'No channel data'}
+              </div>
+            </GlassCard>
+
+            <GlassCard className="p-5 border border-white/[0.08] relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold tracking-wider uppercase text-neutral-400 font-mono">
+                  Active Referral Slugs
+                </span>
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0">
+                  <Tag className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-3">
+                <span className="text-2xl font-bold font-['Chakra_Petch'] text-emerald-400">
+                  {new Set(trafficClicks.map((c) => c.slug).filter(Boolean)).size}
+                </span>
+              </div>
+              <div className="mt-2 text-xs text-neutral-400">
+                Creators receiving active click attribution
+              </div>
+            </GlassCard>
+          </div>
+
+          {/* Traffic Channel Sources Breakdown Grid */}
+          <GlassCard className="p-6 border border-white/[0.08] space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+              <div className="flex items-center gap-2.5">
+                <Globe className="w-4 h-4 text-[#f3aa18]" />
+                <div>
+                  <h3 className="text-sm font-bold text-white font-['Chakra_Petch'] uppercase tracking-wider">
+                    Traffic Sources Breakdown
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    Distribution of incoming clicks by external referring platforms and bio links.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {trafficSources.length === 0 ? (
+              <div className="py-8 text-center text-xs text-neutral-500 italic">
+                No traffic source attribution events recorded yet.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                {trafficSources.map((item) => (
+                  <div
+                    key={item.source}
+                    className="p-3.5 rounded-2xl bg-white/[0.025] border border-white/[0.06] flex flex-col justify-between"
+                  >
+                    <div className="flex items-center justify-between">
+                      {getVisitSourceBadge(item.source, item.type)}
+                      <span className="font-mono text-xs font-bold text-[#f3aa18]">
+                        {item.percentage}%
+                      </span>
+                    </div>
+                    <div className="mt-3 text-xs font-mono text-neutral-400 flex items-center justify-between">
+                      <span>Visits:</span>
+                      <span className="text-white font-semibold">{item.count.toLocaleString('id-ID')}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </GlassCard>
+
+          {/* Traffic Ledger & Filter Bar */}
+          <GlassCard className="p-6 border border-white/[0.08] space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.06]">
+              <div>
+                <h3 className="text-sm font-bold text-white font-['Chakra_Petch'] uppercase tracking-wider">
+                  Inbound Visits Ledger
+                </h3>
+                <p className="text-xs text-neutral-400 mt-0.5">
+                  Real-time log of shopper visits with landing page and referral source attribution.
+                </p>
+              </div>
+
+              {/* Filters */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Search */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={trafficSearch}
+                    onChange={(e) => setTrafficSearch(e.target.value)}
+                    placeholder="Search landing URL or referrer..."
+                    className="pl-9 pr-3 py-1.5 bg-[#050506] border border-white/[0.1] rounded-xl text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#f3aa18]/60 font-mono w-48 sm:w-60"
+                  />
+                </div>
+
+                {/* Creator Filter */}
+                <div className="w-48">
+                  <CustomSelect
+                    value={selectedCreatorForTraffic}
+                    onChange={(val) => setSelectedCreatorForTraffic(val)}
+                    options={[
+                      { value: 'all', label: 'All Creators' },
+                      ...affiliates.map((a) => ({
+                        value: String(a.id),
+                        label: `${a.creator_display_name || a.display_name || a.user_login} (@${a.slug})`,
+                      })),
+                    ]}
+                  />
+                </div>
+
+                {/* Refresh */}
+                <button
+                  type="button"
+                  onClick={loadData}
+                  disabled={isLoadingTraffic}
+                  className="p-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-neutral-300 hover:text-white border border-white/[0.08] transition-colors cursor-pointer"
+                  title="Refresh Traffic"
+                >
+                  <RefreshCw className={clsx('w-3.5 h-3.5', isLoadingTraffic && 'animate-spin')} />
+                </button>
+              </div>
+            </div>
+
+            {/* Table */}
+            {isLoadingTraffic ? (
+              <div className="py-20 text-center space-y-3">
+                <Loader2 className="w-8 h-8 text-[#f3aa18] animate-spin mx-auto" />
+                <p className="text-xs text-neutral-400">Loading traffic ledger...</p>
+              </div>
+            ) : trafficClicks.length === 0 ? (
+              <div className="py-16 text-center text-neutral-500 text-xs italic">
+                No inbound visits match the selected filter.
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-white/[0.06] bg-white/[0.01]">
+                <table className="w-full text-left text-xs font-sans">
+                  <thead>
+                    <tr className="border-b border-white/[0.08] bg-white/[0.02] text-neutral-400 font-mono text-[11px] uppercase tracking-wider">
+                      <th className="py-3 px-4">Date / Time</th>
+                      <th className="py-3 px-4">Creator / Slug</th>
+                      <th className="py-3 px-4">Traffic Source</th>
+                      <th className="py-3 px-4">Landing Page</th>
+                      <th className="py-3 px-4">Referrer URL</th>
+                      <th className="py-3 px-4">IP Address</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.04] text-neutral-300">
+                    {trafficClicks
+                      .filter((c) => {
+                        if (!trafficSearch.trim()) return true;
+                        const q = trafficSearch.toLowerCase().trim();
+                        return (
+                          (c.landing_url || '').toLowerCase().includes(q) ||
+                          (c.referrer_url || '').toLowerCase().includes(q) ||
+                          (c.slug || '').toLowerCase().includes(q) ||
+                          (c.creator_name || '').toLowerCase().includes(q)
+                        );
+                      })
+                      .map((c) => (
+                        <tr key={c.id} className="hover:bg-white/[0.02] transition-colors">
+                          <td className="py-3 px-4 font-mono text-neutral-400 whitespace-nowrap">
+                            {c.created_at ? new Date(c.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-'}
+                          </td>
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            <span className="font-semibold text-white block">
+                              {c.creator_name}
+                            </span>
+                            <span className="font-mono text-[11px] text-[#f3aa18]">
+                              @{c.slug}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            {getVisitSourceBadge(c.source_label, c.source_type)}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-[11px] text-neutral-300 max-w-xs truncate" title={c.landing_url}>
+                            {c.landing_url || '/'}
+                          </td>
+                          <td className="py-3 px-4 max-w-sm truncate" title={c.referrer_url}>
+                            {c.referrer_url ? (
+                              <a
+                                href={c.referrer_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-neutral-400 hover:text-white underline inline-flex items-center gap-1 font-mono text-[11px]"
+                              >
+                                <span className="truncate">{c.referrer_url}</span>
+                                <ArrowUpRight className="w-3 h-3 shrink-0" />
+                              </a>
+                            ) : (
+                              <span className="text-neutral-600 font-mono text-[11px]">Direct / In-App Link</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-[11px] text-neutral-400">
+                            {c.ip_address || '-'}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </GlassCard>
+        </div>
       )}
 
       {/* 8. Tab 5: Program Settings */}
@@ -2927,6 +3296,174 @@ export const AffiliatesPage: React.FC = () => {
                   </>
                 ) : null}
               </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Per-Affiliate Traffic & Visit Sources Modal */}
+      {inspectingAffiliateVisits && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-[#0e0e0e] border border-white/[0.08] rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-6 border-b border-white/[0.08] flex items-center justify-between bg-white/[0.02]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#f3aa18]/10 border border-[#f3aa18]/20 flex items-center justify-center text-[#f3aa18]">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-white font-['Chakra_Petch'] uppercase tracking-wider">
+                      Referral Traffic Ledger
+                    </h3>
+                    <span className="font-mono text-xs text-[#f3aa18] bg-[#f3aa18]/10 border border-[#f3aa18]/20 px-2 py-0.5 rounded-full font-semibold">
+                      @{inspectingAffiliateVisits.slug || inspectingAffiliateVisits.id}
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-400 mt-0.5 font-mono">
+                    {inspectingAffiliateVisits.creator_display_name || inspectingAffiliateVisits.display_name || inspectingAffiliateVisits.user_email}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInspectingAffiliateVisits(null)}
+                className="w-8 h-8 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-neutral-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                title="Close modal"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 bg-[#0a0a0a]">
+              {isLoadingInspectingVisits ? (
+                <div className="py-20 flex flex-col items-center justify-center gap-3 text-neutral-400 font-mono text-xs">
+                  <Loader2 className="w-8 h-8 text-[#f3aa18] animate-spin" />
+                  <span>Loading creator traffic history...</span>
+                </div>
+              ) : (
+                <>
+                  {/* Traffic Sources Breakdown */}
+                  <div>
+                    <h4 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider font-mono mb-3">
+                      Acquisition Channels
+                    </h4>
+                    {inspectingVisitsSources.length === 0 ? (
+                      <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] text-center text-xs text-neutral-500 font-mono">
+                        No channel data recorded yet for this creator.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                        {inspectingVisitsSources.map((item, idx) => (
+                          <div
+                            key={idx}
+                            className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] transition-colors"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              {getVisitSourceBadge(item.source, item.type)}
+                              <span className="font-mono text-xs font-bold text-[#f3aa18]">
+                                {item.percentage}%
+                              </span>
+                            </div>
+                            <div className="mt-2 text-[11px] font-mono text-neutral-400 flex items-center justify-between">
+                              <span>Visits:</span>
+                              <span className="text-white font-semibold">
+                                {item.count.toLocaleString('id-ID')}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Visit Logs Table */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider font-mono">
+                        Recent Visits ({inspectingVisitsClicks.length})
+                      </h4>
+                    </div>
+
+                    {inspectingVisitsClicks.length === 0 ? (
+                      <div className="py-12 text-center rounded-xl bg-white/[0.02] border border-white/[0.05] space-y-2">
+                        <MousePointerClick className="w-8 h-8 text-neutral-600 mx-auto" />
+                        <p className="text-xs text-neutral-400 font-mono">No visits recorded yet.</p>
+                      </div>
+                    ) : (
+                      <div className="border border-white/[0.06] rounded-xl overflow-hidden bg-black/40">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-white/[0.02] border-b border-white/[0.06] text-[10px] font-mono uppercase tracking-wider text-neutral-400">
+                              <tr>
+                                <th className="py-2.5 px-3">Time</th>
+                                <th className="py-2.5 px-3">Channel / Source</th>
+                                <th className="py-2.5 px-3">Landing URL</th>
+                                <th className="py-2.5 px-3">Referrer</th>
+                                <th className="py-2.5 px-3">IP Address</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/[0.04]">
+                              {inspectingVisitsClicks.map((c) => (
+                                <tr key={c.id} className="hover:bg-white/[0.02] transition-colors">
+                                  <td className="py-2.5 px-3 font-mono text-[11px] text-neutral-400 whitespace-nowrap">
+                                    {new Date(c.created_at).toLocaleString('id-ID', {
+                                      day: '2-digit',
+                                      month: 'short',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </td>
+                                  <td className="py-2.5 px-3">
+                                    {getVisitSourceBadge(c.source_label, c.source_type)}
+                                  </td>
+                                  <td className="py-2.5 px-3 font-mono text-[11px] text-neutral-300 max-w-[180px] truncate" title={c.landing_url}>
+                                    {c.landing_url || '/'}
+                                  </td>
+                                  <td className="py-2.5 px-3 max-w-[200px] truncate" title={c.referrer_url}>
+                                    {c.referrer_url ? (
+                                      <a
+                                        href={c.referrer_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-neutral-400 hover:text-white underline inline-flex items-center gap-1 font-mono text-[11px]"
+                                      >
+                                        <span className="truncate">{c.referrer_url}</span>
+                                        <ArrowUpRight className="w-3 h-3 shrink-0" />
+                                      </a>
+                                    ) : (
+                                      <span className="text-neutral-600 font-mono text-[11px]">Direct / In-App Link</span>
+                                    )}
+                                  </td>
+                                  <td className="py-2.5 px-3 font-mono text-[11px] text-neutral-400 whitespace-nowrap">
+                                    {c.ip_address || '-'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-white/[0.08] flex items-center justify-between bg-white/[0.02]">
+              <span className="text-xs font-mono text-neutral-500">
+                Showing up to 250 recent inbound referral visits
+              </span>
+              <button
+                type="button"
+                onClick={() => setInspectingAffiliateVisits(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/[0.1] transition-colors cursor-pointer"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>,

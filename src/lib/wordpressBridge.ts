@@ -7430,6 +7430,76 @@ export function getAdminExportPayoutsUrl(bank: 'BCA' | 'MANDIRI'): string {
   return `${base}/wp-json/exacoat/v1/affiliate/admin/export-payouts?bank=${bank}`;
 }
 
+export interface AffiliateClickSource {
+  source: string;
+  type: string;
+  count: number;
+  percentage: number;
+}
+
+export interface AdminAffiliateClickRecord {
+  id: number;
+  affiliate_id: number;
+  slug: string;
+  creator_name: string;
+  landing_url: string;
+  referrer_url: string;
+  source_label: string;
+  source_type: string;
+  ip_address: string;
+  created_at: string;
+}
+
+export async function fetchAdminAffiliateClicks(
+  affiliateId?: number,
+  limit: number = 200
+): Promise<{
+  success: boolean;
+  total: number;
+  clicks: AdminAffiliateClickRecord[];
+  sources_breakdown: AffiliateClickSource[];
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const params = new URLSearchParams();
+  if (affiliateId) params.append('affiliate_id', String(affiliateId));
+  if (limit) params.append('limit', String(limit));
+
+  const url = `${base}/wp-json/exacoat/v1/affiliate/admin/clicks?${params.toString()}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        total: data.total || 0,
+        clicks: data.clicks || [],
+        sources_breakdown: data.sources_breakdown || [],
+      };
+    }
+    return {
+      success: false,
+      total: 0,
+      clicks: [],
+      sources_breakdown: [],
+      error: data?.message || 'Failed to fetch visits.',
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      total: 0,
+      clicks: [],
+      sources_breakdown: [],
+      error: err.message,
+    };
+  }
+}
+
 export async function fetchAdminAffiliateSettings(): Promise<{
   success: boolean;
   settings?: {
