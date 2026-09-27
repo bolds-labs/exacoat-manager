@@ -171,7 +171,7 @@ export const TikTokSettingsModal: React.FC<TikTokSettingsModalProps> = ({
   };
 
   const redirectUrl = settings?.redirect_url || 'https://manager.exacoat.com/tiktok/callback';
-  const webhookUrl = settings?.webhook_url || 'https://exacoat.com/wp-json/exacoat-core/v1/tiktok/webhook';
+  const webhookUrl = settings?.webhook_url || 'https://cms.exacoat.com/wp-json/exacoat-core/v1/tiktok/webhook';
   const partnerUrl = `https://partner.tiktokshop.com/service/gather?service_id=${serviceId || '7686433028542351124'}`;
 
   return (

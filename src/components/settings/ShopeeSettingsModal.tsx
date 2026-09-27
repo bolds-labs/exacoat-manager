@@ -167,7 +167,7 @@ export const ShopeeSettingsModal: React.FC<ShopeeSettingsModalProps> = ({
 
   const testRedirectDomain = 'https://manager.exacoat.com';
   const callbackUrl = settings?.redirect_url || 'https://manager.exacoat.com/shopee/callback';
-  const pushCallbackUrl = settings?.push_callback_url || 'https://exacoat.com/wp-json/exacoat-core/v1/shopee/webhook';
+  const pushCallbackUrl = settings?.push_callback_url || 'https://cms.exacoat.com/wp-json/exacoat-core/v1/shopee/webhook';
 
   return (
     <Modal

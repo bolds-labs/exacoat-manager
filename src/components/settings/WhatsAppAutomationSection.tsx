@@ -576,7 +576,7 @@ export const WhatsAppAutomationSection: React.FC = () => {
             type="button"
             onClick={() =>
               copyToClipboard(
-                bcaStatus?.webhook_url || 'https://exacoat.com/wp-json/exacoat-core/v1/bca-webhook',
+                bcaStatus?.webhook_url || 'https://cms.exacoat.com/wp-json/exacoat-core/v1/bca-webhook',
                 'bca_url'
               )
             }
