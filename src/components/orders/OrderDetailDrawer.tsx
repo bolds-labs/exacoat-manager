@@ -58,7 +58,7 @@ import {
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { extractItemSpecs } from '../../lib/orderItems';
-import { isStorePickupOrder, toggleLocalStorePickupOrder, resolveOrderCourier } from '../../lib/orderUtils';
+import { isStorePickupOrder, toggleLocalStorePickupOrder, resolveOrderCourier, getOrderCourierDisplay } from '../../lib/orderUtils';
 import { getWpBaseUrl } from '../../lib/wordpressBridge';
 import { formatGooritaShipmentText, openGooritaWhatsApp } from '../../lib/exportManager';
 import { 
@@ -96,12 +96,10 @@ const COURIER_PRESETS = [
   { label: 'JNE Express', value: 'jne' },
   { label: 'SiCepat', value: 'sicepat' },
   { label: 'POS Indonesia', value: 'pos' },
-  { label: 'Goorita Send USA', value: 'goorita' },
+  { label: 'Goorita', value: 'goorita' },
   { label: 'DHL Express', value: 'dhl' },
-  { label: 'FedEx International', value: 'fedex' },
+  { label: 'FedEx', value: 'fedex' },
   { label: 'Biteship (Auto)', value: 'biteship' },
-  { label: 'Lion Parcel', value: 'lion' },
-  { label: 'J&T Express', value: 'jnt' },
   { label: 'Custom / Other', value: 'custom' },
 ];
 
@@ -1268,12 +1266,20 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
             </div>
           </div>
 
-          {order.customer_note && (
-            <div className="p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-amber-300 text-xs">
-              <span className="font-bold block mb-0.5">Customer Note:</span>
-              "{order.customer_note}"
-            </div>
-          )}
+          {(() => {
+            const rawNote = String(order.customer_note || '');
+            const cleanNote = rawNote
+              .replace(/(?:shipping courier|jasa kirim|courier)\s*:\s*[^\r\n]+/gi, '')
+              .trim();
+            if (!cleanNote) return null;
+
+            return (
+              <div className="p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-amber-300 text-xs">
+                <span className="font-bold block mb-0.5">Customer Note:</span>
+                "{cleanNote}"
+              </div>
+            );
+          })()}
         </div>
 
         {/* Section 2: Ordered Precision Skins & Items */}
@@ -2930,12 +2936,9 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   <span className="text-[10px] uppercase font-mono tracking-wider text-neutral-400">Courier</span>
                   <span className="text-xs font-semibold text-white uppercase">
                     {(() => {
-                      const res = resolveOrderCourier(order);
-                      if (order.tracking?.courier && order.tracking.courier !== 'JNE Express') {
-                        return order.tracking.courier;
-                      }
-                      if (res.rawMatch && res.courierId !== 'jne') {
-                        return res.rawMatch;
+                      const courierDisplay = getOrderCourierDisplay(order);
+                      if (courierDisplay && courierDisplay !== 'Courier') {
+                        return courierDisplay;
                       }
                       return COURIER_PRESETS.find((p) => p.value === courier)?.label || order.tracking?.courier || courier;
                     })()}

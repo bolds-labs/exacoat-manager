@@ -664,8 +664,8 @@ class Exacoat_Email_Engine {
 			'shipping_address'     => "William Vance\nJl. Sudirman No. 42\nJakarta Selatan 12190\nIndonesia",
 			'billing_address'      => "William Vance\nJl. Sudirman No. 42\nJakarta Selatan 12190\nIndonesia",
 			'courier'              => 'JNE Express',
-			'tracking_number'      => 'JNE9842194829',
-			'tracking_url'         => 'https://www.jne.co.id',
+			'tracking_number'      => '',
+			'tracking_url'         => '',
 		], $extra );
 	}
 
@@ -1355,8 +1355,9 @@ class Exacoat_Email_Engine {
 			<p style="margin:16px 0 0;font-size:13px;color:#71717a;text-align:center;">Need help? <a href="https://exacoat.com/cs" style="color:#f3aa18;text-decoration:underline;font-weight:600;">Contact admin</a></p>';
 		}
 
-		if ( ! empty( $data['customer_note'] ) ) {
-			$note_content = esc_html( (string) $data['customer_note'] );
+		$clean_email_note = trim( preg_replace( '/(?:shipping courier|jasa kirim|courier)\s*:\s*[^\r\n]+/i', '', (string) ( $data['customer_note'] ?? '' ) ) );
+		if ( ! empty( $clean_email_note ) ) {
+			$note_content = esc_html( $clean_email_note );
 			$body_secondary .= "
 			<div style=\"background:#fafafa;border:1px solid #e5e7eb;border-left:3px solid #111111;padding:14px 18px;border-radius:0 12px 12px 0;margin:16px 0;font-size:14px;color:#18181b;line-height:1.6;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">
 				{$note_content}
@@ -1367,9 +1368,13 @@ class Exacoat_Email_Engine {
 		$tracking_number = esc_html( $data['tracking_number'] ?? '' );
 		$tracking_url    = esc_url( $data['tracking_url'] ?? ( $tracking_number ? "https://parcelsapp.com/en/tracking/{$tracking_number}" : '' ) );
 
-		// Shipment Block (if tracking exists)
+		// Shipment Block (strictly ONLY shown in emails when order has shipped)
+		$is_shipped_email = in_array( $event, [ 'customer_order_shipped', 'customer_completed_order' ], true )
+			|| ! empty( $tmpl['show_shipment'] )
+			|| ! empty( $data['is_shipped'] );
+
 		$shipment_html = '';
-		if ( ! empty( $tracking_number ) ) {
+		if ( $is_shipped_email && ! empty( $tracking_number ) ) {
 			$track_btn = $tracking_url 
 				? "<a href=\"{$tracking_url}\" target=\"_blank\" style=\"display:inline-block;padding:11px 22px;background:#111111;color:#ffffff;font-size:13px;font-weight:600;border-radius:100px;text-decoration:none;letter-spacing:0.2px;box-shadow:0 2px 6px rgba(0,0,0,0.08);white-space:nowrap;\">Track Package &rarr;</a>"
 				: "";

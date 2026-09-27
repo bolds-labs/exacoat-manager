@@ -242,8 +242,9 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
   for (const text of candidateTexts) {
     const t = text.toLowerCase();
 
-    // Extract service code if present (e.g. from "SICEPAT - BEST" -> "BEST", "JNE - REG" -> "REG")
-    const serviceMatch = text.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i);
+    // Extract service code if present (e.g. from "SICEPAT - BEST" -> "BEST", "JNE - REG" -> "REG", "JNE (REG)" -> "REG")
+    const serviceMatch = text.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i) ||
+                         text.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|anteraja|ninja|spx|shopee)\s*\(([A-Za-z0-9_\s]+)\)/i);
     const serviceName = serviceMatch ? serviceMatch[1].trim().toUpperCase() : undefined;
 
     if (t.includes('sicepat')) {
@@ -359,3 +360,62 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
   // Default fallback
   return { courierId: 'jne', courierName: 'JNE Express', isCustom: false };
 }
+
+/**
+ * Formats a clean, professional courier and service tier display for an order.
+ * E.g. "JNE - REG", "SiCepat - BEST", "POS - Pos Reguler", "Goorita", "Store Pickup (SMB)"
+ */
+export function getOrderCourierDisplay(order: any): string {
+  if (!order) return 'Courier';
+  if (isStorePickupOrder(order)) return 'Store Pickup (SMB)';
+
+  // If backend already resolved a formatted courier like "JNE - REG", use it directly
+  const backendCourier = String(order.tracking?.courier || order.shipping_courier_name || '').trim();
+  if (backendCourier && backendCourier.includes('-') && !backendCourier.toLowerCase().includes('unknown')) {
+    return backendCourier;
+  }
+
+  const resolved = resolveOrderCourier(order);
+
+  // If a specific service tier was detected (e.g. "REG", "BEST", "YES")
+  if (resolved.serviceName) {
+    let prefix = 'Courier';
+    if (resolved.courierId === 'jne') prefix = 'JNE';
+    else if (resolved.courierId === 'sicepat') prefix = 'SiCepat';
+    else if (resolved.courierId === 'pos') prefix = 'POS';
+    else if (resolved.courierId === 'goorita') prefix = 'Goorita';
+    else if (resolved.courierId === 'dhl') prefix = 'DHL';
+    else if (resolved.courierId === 'fedex') prefix = 'FedEx';
+    else if (resolved.courierName) prefix = resolved.courierName.split(' ')[0];
+
+    return `${prefix} - ${resolved.serviceName}`;
+  }
+
+  // If raw match already has courier and service code separated by hyphen
+  if (resolved.rawMatch && resolved.rawMatch.includes('-')) {
+    const cleanMatch = resolved.rawMatch
+      .replace(/^(?:shipping courier|jasa kirim|courier)\s*:\s*/i, '')
+      .trim();
+    if (cleanMatch.includes('-')) {
+      const parts = cleanMatch.split('-').map(s => s.trim());
+      if (parts.length >= 2 && parts[0] && parts[1]) {
+        let p0 = parts[0];
+        const p0Lower = p0.toLowerCase();
+        if (p0Lower.includes('jne')) p0 = 'JNE';
+        else if (p0Lower.includes('sicepat')) p0 = 'SiCepat';
+        else if (p0Lower.includes('pos')) p0 = 'POS';
+        else if (p0Lower.includes('goorita')) p0 = 'Goorita';
+        return `${p0} - ${parts.slice(1).join('-').trim().toUpperCase()}`;
+      }
+    }
+  }
+
+  if (backendCourier && backendCourier !== 'Express Courier') {
+    if (backendCourier.toLowerCase() === 'jne express') return 'JNE';
+    return backendCourier;
+  }
+
+  if (resolved.courierId === 'jne') return 'JNE';
+  return resolved.courierName || order.shipping_method_name || 'Courier';
+}
+

@@ -299,8 +299,8 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
     payment_method_title: 'Midtrans / QRIS',
     shipping_address: 'William Vance\nJl. Sudirman No. 42\nJakarta Selatan 12190\nIndonesia',
     courier: 'JNE Express',
-    tracking_number: 'JNE9842194829',
-    tracking_url: 'https://www.jne.co.id',
+    tracking_number: event === 'customer_order_shipped' ? 'JNE9842194829' : '',
+    tracking_url: event === 'customer_order_shipped' ? 'https://www.jne.co.id' : '',
   };
 
   const merged: Record<string, any> = { ...defaults, ...data };
@@ -397,7 +397,6 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
     title = 'Your order summary';
     bodyPrimary = `Here is a copy of your order details for order #${orderNum}.`;
     bodySecondary = 'You can review your complete order breakdown and delivery details below.';
-    showShipment = Boolean(merged.tracking_number);
   }
 
   // Modern, Beautiful Shipment Card (Exacoat standard)

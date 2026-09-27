@@ -10,7 +10,7 @@ import { ShippingLabelA6Modal } from './ShippingLabelA6Modal';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../../context/ToastContext';
 import { FilterSelect } from '../ui/FilterSelect';
-import { isStorePickupOrder } from '../../lib/orderUtils';
+import { isStorePickupOrder, getOrderCourierDisplay } from '../../lib/orderUtils';
 import {
   Search,
   RefreshCw,
@@ -241,30 +241,55 @@ export const OrderTable: React.FC<OrderTableProps> = ({
 
   const availableCouriers = useMemo(() => {
     const map = new Map<string, string>();
-    // Default preset couriers so standard carriers are always selectable
-    const presets = [
-      { key: 'JNE', name: 'JNE Express' },
-      { key: 'POS INDONESIA', name: 'POS Indonesia' },
-      { key: 'GOORITA', name: 'Goorita' },
-      { key: 'LION PARCEL', name: 'Lion Parcel' },
-      { key: 'SICEPAT', name: 'SiCepat' },
-      { key: 'J&T', name: 'J&T Express' },
-      { key: 'ANTERAJA', name: 'Anteraja' },
-      { key: 'PAXEL', name: 'Paxel' },
-    ];
-    presets.forEach((p) => map.set(p.key, p.name));
+
+    // Normalize courier names to canonical keys & labels
+    const normalizeCourier = (rawStr: string): { key: string; name: string } | null => {
+      const s = rawStr.toLowerCase().trim();
+      if (!s || s === 'unknown' || s.startsWith('field_')) return null;
+
+      // Exclude unused couriers
+      if (s.includes('paxel') || s.includes('lion') || s.includes('anteraja') || s.includes('j&t') || s.includes('jnt')) {
+        return null;
+      }
+
+      if (s.includes('sicepat') || s.includes('si cepat')) return { key: 'SICEPAT', name: 'SiCepat' };
+      if (s.includes('jne')) return { key: 'JNE', name: 'JNE' };
+      if (s.includes('pos indonesia') || /\bpos\b/.test(s)) return { key: 'POS', name: 'POS Indonesia' };
+      if (s.includes('goorita')) return { key: 'GOORITA', name: 'Goorita' };
+      if (s.includes('dhl')) return { key: 'DHL', name: 'DHL Express' };
+      if (s.includes('fedex')) return { key: 'FEDEX', name: 'FedEx' };
+
+      const clean = rawStr.split('-')[0].split(':')[0].trim();
+      if (!clean) return null;
+      return { key: clean.toUpperCase(), name: clean };
+    };
 
     orders.forEach((o) => {
-      const raw = String(o.tracking?.courier || (o as any).shipping_lines?.[0]?.method_title || o.shipping_method_name || '').trim();
-      if (!raw) return;
-      const clean = raw.split('-')[0].split(':')[0].trim();
-      if (clean && !clean.startsWith('field_') && clean.toUpperCase() !== 'UNKNOWN') {
-        const key = clean.toUpperCase();
-        if (!map.has(key)) {
-          map.set(key, clean);
-        }
+      if (isStorePickupOrder(o)) return;
+
+      const targetStr = String(
+        o.tracking?.courier ||
+        (o as any).shipping_lines?.[0]?.method_title ||
+        o.shipping_method_name ||
+        (o as any).detected_courier ||
+        (o as any).shipping_courier_name ||
+        ''
+      ).trim();
+
+      const norm = normalizeCourier(targetStr);
+      if (norm) {
+        map.set(norm.key, norm.name);
       }
     });
+
+    // Fallback standard options if orders list is currently empty
+    if (map.size === 0) {
+      map.set('JNE', 'JNE');
+      map.set('SICEPAT', 'SiCepat');
+      map.set('POS', 'POS Indonesia');
+      map.set('GOORITA', 'Goorita');
+    }
+
     return Array.from(map.entries())
       .map(([key, name]) => ({ key, name }))
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -300,11 +325,20 @@ export const OrderTable: React.FC<OrderTableProps> = ({
 
       // If parent didn't handle courier filtering on server, filter client-side (bypassed if searching):
       if (!hasSearch && !onCourierFilterChange && activeCourier !== 'all') {
-        const orderCourier = String(order.tracking?.courier || (order as any).shipping_lines?.[0]?.method_title || order.shipping_method_name || '').toUpperCase();
         if (activeCourier === 'PICKUP') {
           if (!isStorePickupOrder(order)) return false;
-        } else if (!orderCourier.includes(activeCourier)) {
-          return false;
+        } else {
+          const courierDisplay = getOrderCourierDisplay(order).toUpperCase();
+          const rawCourier = String(
+            order.tracking?.courier ||
+            (order as any).shipping_lines?.[0]?.method_title ||
+            order.shipping_method_name ||
+            (order as any).shipping_courier_name ||
+            ''
+          ).toUpperCase();
+          if (!courierDisplay.includes(activeCourier) && !rawCourier.includes(activeCourier)) {
+            return false;
+          }
         }
       }
 
@@ -511,7 +545,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
         phone,
         email,
         o.status,
-        o.tracking?.courier || o.shipping_method_name || '',
+        getOrderCourierDisplay(o),
         o.tracking?.tracking_number || '',
         o.shipping?.city || '',
         `${o.shipping?.address_1 || ''} ${o.shipping?.address_2 || ''}`.trim(),
@@ -922,7 +956,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                               </button>
                             </div>
                             <span className="text-[10px] text-zinc-500 truncate max-w-[140px] font-medium block">
-                              {order.tracking?.courier || order.shipping_method_name || 'Courier'}
+                              {getOrderCourierDisplay(order)}
                             </span>
                           </div>
                         ) : (
@@ -931,7 +965,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                               Resi pending
                             </span>
                             <span className="text-[10px] text-zinc-500 block truncate max-w-[140px]">
-                              {order.shipping_method_name || 'Standard'}
+                              {getOrderCourierDisplay(order)}
                             </span>
                           </div>
                         )}
@@ -1059,7 +1093,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                   </div>
 
                   <div className="flex items-center justify-between text-[11px] pt-1 border-t border-zinc-100 dark:border-white/5">
-                    <span className="text-zinc-500">{order.tracking?.courier || 'Courier'}</span>
+                    <span className="text-zinc-500">{getOrderCourierDisplay(order)}</span>
                     <div className="flex items-center gap-2">
                       {hasValidTracking && (
                         <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
@@ -1267,7 +1301,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] text-zinc-400 font-mono">
-                      {ord.tracking?.courier || ord.shipping_method_name || 'Standard'}
+                      {getOrderCourierDisplay(ord)}
                     </span>
                     <Badge type="orderStatus" value="preparing-order" size="xs" />
                   </div>

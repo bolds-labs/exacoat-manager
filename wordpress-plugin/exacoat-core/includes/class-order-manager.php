@@ -1501,6 +1501,7 @@ class Exacoat_Order_Manager {
 
 		// Intelligent courier detection from Customer Note, Shipping Method, or Shipping Lines
 		$detected_carrier = '';
+		$detected_service = '';
 		$search_texts = [];
 		$cust_note = (string) $order->get_customer_note();
 		if ( ! empty( $cust_note ) ) {
@@ -1515,31 +1516,35 @@ class Exacoat_Order_Manager {
 		}
 
 		foreach ( $search_texts as $st ) {
-			$st_lower = strtolower( $st );
-			if ( str_contains( $st_lower, 'sicepat' ) ) {
-				$detected_carrier = 'sicepat';
-				break;
-			} elseif ( str_contains( $st_lower, 'j&t' ) || str_contains( $st_lower, 'jnt' ) ) {
-				$detected_carrier = 'jnt';
-				break;
-			} elseif ( str_contains( $st_lower, 'pos indonesia' ) || preg_match( '/\bpos\b/', $st_lower ) ) {
-				$detected_carrier = 'pos';
-				break;
-			} elseif ( str_contains( $st_lower, 'lion' ) ) {
-				$detected_carrier = 'lion';
-				break;
-			} elseif ( str_contains( $st_lower, 'goorita' ) ) {
-				$detected_carrier = 'goorita';
-				break;
-			} elseif ( str_contains( $st_lower, 'dhl' ) ) {
-				$detected_carrier = 'dhl';
-				break;
-			} elseif ( str_contains( $st_lower, 'fedex' ) ) {
-				$detected_carrier = 'fedex';
-				break;
-			} elseif ( str_contains( $st_lower, 'jne' ) ) {
-				$detected_carrier = 'jne';
-				break;
+			$st_clean = trim( preg_replace( '/^(?:shipping courier|jasa kirim|courier)\s*:\s*/i', '', (string) $st ) );
+			$st_lower = strtolower( $st_clean );
+
+			if ( empty( $detected_service ) ) {
+				if ( preg_match( '/(?:jne|sicepat|pos|goorita|dhl|fedex|lion|j&t|jnt)\s*[-:]\s*([A-Za-z0-9_\s]+)/i', $st_clean, $sm ) ) {
+					$detected_service = strtoupper( trim( $sm[1] ) );
+				} elseif ( preg_match( '/(?:jne|sicepat|pos|goorita|dhl|fedex|lion|j&t|jnt)\s*\(([A-Za-z0-9_\s]+)\)/i', $st_clean, $sm ) ) {
+					$detected_service = strtoupper( trim( $sm[1] ) );
+				}
+			}
+
+			if ( empty( $detected_carrier ) ) {
+				if ( str_contains( $st_lower, 'sicepat' ) ) {
+					$detected_carrier = 'sicepat';
+				} elseif ( str_contains( $st_lower, 'j&t' ) || str_contains( $st_lower, 'jnt' ) ) {
+					$detected_carrier = 'jnt';
+				} elseif ( str_contains( $st_lower, 'pos indonesia' ) || preg_match( '/\bpos\b/', $st_lower ) ) {
+					$detected_carrier = 'pos';
+				} elseif ( str_contains( $st_lower, 'lion' ) ) {
+					$detected_carrier = 'lion';
+				} elseif ( str_contains( $st_lower, 'goorita' ) ) {
+					$detected_carrier = 'goorita';
+				} elseif ( str_contains( $st_lower, 'dhl' ) ) {
+					$detected_carrier = 'dhl';
+				} elseif ( str_contains( $st_lower, 'fedex' ) ) {
+					$detected_carrier = 'fedex';
+				} elseif ( str_contains( $st_lower, 'jne' ) ) {
+					$detected_carrier = 'jne';
+				}
 			}
 		}
 
@@ -1568,18 +1573,26 @@ class Exacoat_Order_Manager {
 		}
 
 		$carrier_labels = [
-			'jne'                 => 'JNE Express',
+			'jne'                 => 'JNE',
 			'sicepat'             => 'SiCepat',
 			'pos'                 => 'POS Indonesia',
-			'goorita'             => 'Goorita Send USA',
+			'goorita'             => 'Goorita',
 			'dhl'                 => 'DHL Express',
-			'fedex'               => 'FedEx International',
+			'fedex'               => 'FedEx',
 			'biteship'            => 'Biteship',
 			'lion'                => 'Lion Parcel',
 			'jnt'                 => 'J&T Express',
 		];
 		$carrier_key = strtolower( trim( (string) $carrier_val ) );
-		$carrier_display = $carrier_labels[ $carrier_key ] ?? ( ! empty( $carrier_val ) ? ucfirst( (string) $carrier_val ) : 'Express Courier' );
+		$base_carrier = $carrier_labels[ $carrier_key ] ?? ( ! empty( $carrier_val ) ? ucfirst( (string) $carrier_val ) : 'Express Courier' );
+
+		// If a specific service tier was detected (e.g. REG, BEST, etc.), format as "JNE - REG"
+		if ( ! empty( $detected_service ) ) {
+			$prefix = ( 'jne' === $carrier_key ) ? 'JNE' : ( ( 'sicepat' === $carrier_key ) ? 'SiCepat' : ( ( 'pos' === $carrier_key ) ? 'POS' : $base_carrier ) );
+			$carrier_display = "{$prefix} - {$detected_service}";
+		} else {
+			$carrier_display = $base_carrier;
+		}
 
 		$tracking = null;
 		if ( ! empty( $tracking_code ) ) {
@@ -1919,7 +1932,7 @@ class Exacoat_Order_Manager {
 			'customer_name'                 => trim( ( $shipping['first_name'] ?? '' ) . ' ' . ( $shipping['last_name'] ?? '' ) ) ?: ( trim( ( $billing['first_name'] ?? '' ) . ' ' . ( $billing['last_name'] ?? '' ) ) ?: 'Store Customer' ),
 			'customer_email'                => $order->get_billing_email(),
 			'customer_phone'                => $order->get_billing_phone(),
-			'customer_note'                 => $order->get_customer_note(),
+			'customer_note'                 => trim( preg_replace( '/(?:shipping courier|jasa kirim|courier)\s*:\s*[^\r\n]+/i', '', (string) $order->get_customer_note() ) ),
 			'payment_method'                => $order->get_payment_method(),
 			'payment_method_title'          => $order->get_payment_method_title(),
 			'shipping'                   => $shipping,
