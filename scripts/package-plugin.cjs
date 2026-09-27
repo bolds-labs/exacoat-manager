@@ -80,7 +80,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Added direct Request Payout button to affiliate workstation with Rp 250.000 minimum threshold and bank account validation\n- Integrated real-time administrator Pushover alert notifications upon affiliate payout requests\n- Enforced 0% customer discount links across all creators except the 5 designated coupon affiliates (msbn, putra, suns, ds, edwinyg)\n- Combined creator commission and customer discount into clean Rate column (e.g. 15% | 10% or full 20%/25%)\n- Transformed Settings icon into clear Edit Commission button with slug editing capability`,
+      changelog: `### Version ${version}\n- Synchronized multi-currency custom cart item price calculation with Exacoat_Store_Enhancements::calculate_price_for_currency to ensure consistent .90 rounding and live markup across all supported currencies`,
     },
   };
 
