@@ -151,6 +151,17 @@ class Exacoat_Diagnostics {
 			'message' => $pushover_has_keys ? 'Configured and active' : 'User Key or App Token missing',
 		];
 
+		// 5. Telegram Push Notification Gateway
+		$telegram_config = class_exists( 'Exacoat_Telegram_Service' ) ? Exacoat_Telegram_Service::get_config() : [];
+		$telegram_has_keys = ! empty( $telegram_config['bot_token'] ) && ! empty( $telegram_config['chat_id'] );
+
+		$results['telegram'] = [
+			'service' => 'Telegram Push Notification Gateway',
+			'status'  => $telegram_has_keys ? 'healthy' : 'warning',
+			'latency' => 0,
+			'message' => $telegram_has_keys ? 'Configured and active' : 'Bot Token or Chat ID missing',
+		];
+
 		// 5. REST Bridge Routes Check
 		$rest_server = rest_get_server();
 		$registered_routes = $rest_server ? array_keys( $rest_server->get_routes() ) : [];
@@ -498,6 +509,46 @@ class Exacoat_Diagnostics {
 			'status_code' => $code,
 			'latency_ms'  => $latency,
 			'message'     => $is_ok ? "Push notification received on your mobile device in {$latency}ms!" : ( $body['errors'][0] ?? "HTTP {$code}" ),
+		];
+	}
+
+	public static function test_telegram( string $bot_token = '', string $chat_id = '', $thread_id = '', string $message = '' ): array {
+		if ( ! class_exists( 'Exacoat_Telegram_Service' ) ) {
+			return [ 'success' => false, 'message' => 'Telegram Service module not loaded', 'latency_ms' => 0 ];
+		}
+
+		$config = Exacoat_Telegram_Service::get_config();
+		$bot_token = $bot_token ?: ( $config['bot_token'] ?? '' );
+		$chat_id   = $chat_id ?: ( $config['chat_id'] ?? '' );
+		$thread_id = ( $thread_id !== '' && $thread_id !== null ) ? $thread_id : ( $config['thread_id'] ?? '' );
+
+		if ( empty( $bot_token ) || empty( $chat_id ) ) {
+			return [ 'success' => false, 'message' => 'Telegram Bot Token or Chat ID missing', 'latency_ms' => 0 ];
+		}
+
+		$text = ! empty( $message ) ? $message : (
+			"🧪 <b>Telegram Alert Gateway Test</b>\n" .
+			"Your Telegram push notification gateway is working perfectly!\n" .
+			"• <b>Timestamp:</b> " . current_time( 'Y-m-d H:i:s' ) . "\n" .
+			"• <b>Origin:</b> manager.exacoat.com"
+		);
+
+		$result = Exacoat_Telegram_Service::send( $text, [
+			'bot_token' => $bot_token,
+			'chat_id'   => $chat_id,
+			'thread_id' => $thread_id,
+			'force'     => true,
+		] );
+
+		$latency = (int) ( $result['latency_ms'] ?? 0 );
+		$thread_desc = ( $thread_id !== '' && $thread_id !== null ) ? " (thread #{$thread_id})" : "";
+
+		return [
+			'success'    => ! empty( $result['success'] ),
+			'latency_ms' => $latency,
+			'message'    => ! empty( $result['success'] )
+				? "Telegram alert delivered into chat " . esc_html( $chat_id ) . $thread_desc . " in {$latency}ms!"
+				: ( $result['message'] ?? 'Failed sending message to Telegram' ),
 		];
 	}
 

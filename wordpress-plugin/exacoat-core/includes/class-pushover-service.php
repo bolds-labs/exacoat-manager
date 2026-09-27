@@ -18,13 +18,17 @@ class Exacoat_Pushover_Service {
 	 * Get Pushover Configuration from Settings
 	 */
 	public static function get_config(): array {
-		$settings = Exacoat_Core::get_settings();
+		$settings = class_exists( 'Exacoat_Core' ) ? Exacoat_Core::get_settings() : get_option( 'exacoat_core_settings', [] );
 		return [
-			'enabled'              => (bool) ( $settings['enable_pushover'] ?? $settings['pushover_enabled'] ?? 1 ),
-			'user_key'             => trim( defined( 'EXA_PUSHOVER_USER_KEY' ) ? EXA_PUSHOVER_USER_KEY : ( getenv( 'EXA_PUSHOVER_USER_KEY' ) ?: ( $settings['pushover_user_key'] ?? '' ) ) ),
-			'app_token'            => trim( defined( 'EXA_PUSHOVER_APP_TOKEN' ) ? EXA_PUSHOVER_APP_TOKEN : ( getenv( 'EXA_PUSHOVER_APP_TOKEN' ) ?: ( $settings['pushover_app_token'] ?? '' ) ) ),
-												'notify_new_sale'      => (bool) ( $settings['pushover_notify_new_sale'] ?? 1 ),
-									'notify_errors'        => (bool) ( $settings['pushover_notify_errors'] ?? 1 ),
+			'enabled'                   => (bool) ( $settings['enable_pushover'] ?? $settings['pushover_enabled'] ?? 1 ),
+			'user_key'                  => trim( (string) ( defined( 'EXA_PUSHOVER_USER_KEY' ) ? EXA_PUSHOVER_USER_KEY : ( defined( 'AM_PUSHOVER_USER_KEY' ) ? AM_PUSHOVER_USER_KEY : ( getenv( 'EXA_PUSHOVER_USER_KEY' ) ?: ( getenv( 'AM_PUSHOVER_USER_KEY' ) ?: ( $settings['pushover_user_key'] ?? '' ) ) ) ) ) ),
+			'app_token'                 => trim( (string) ( defined( 'EXA_PUSHOVER_APP_TOKEN' ) ? EXA_PUSHOVER_APP_TOKEN : ( defined( 'AM_PUSHOVER_APP_TOKEN' ) ? AM_PUSHOVER_APP_TOKEN : ( getenv( 'EXA_PUSHOVER_APP_TOKEN' ) ?: ( getenv( 'AM_PUSHOVER_APP_TOKEN' ) ?: ( $settings['pushover_app_token'] ?? '' ) ) ) ) ) ),
+			'notify_new_sale'           => (bool) ( $settings['pushover_notify_new_sale'] ?? 1 ),
+			'notify_kyc'                => (bool) ( $settings['pushover_notify_kyc'] ?? 1 ),
+			'notify_inventory'          => (bool) ( $settings['pushover_notify_inventory'] ?? 1 ),
+			'notify_affiliate_register' => (bool) ( $settings['pushover_notify_affiliate_register'] ?? 1 ),
+			'notify_affiliate_payout'   => (bool) ( $settings['pushover_notify_affiliate_payout'] ?? 1 ),
+			'notify_errors'             => (bool) ( $settings['pushover_notify_errors'] ?? 1 ),
 		];
 	}
 
@@ -150,9 +154,14 @@ class Exacoat_Pushover_Service {
 	public static function notify_self_purchase( $order_id, $artist_name = '', $email = '' ) {}
 
 	/**
-	 * Convenience Helper: New Order Sale Alert
+	 * Convenience Helper: New Order Sale Alert (Enforces status 'processing' check)
 	 */
 	public static function notify_new_sale( int $order_id, $arg2 = null, $arg3 = null, $arg4 = '' ) {
+		if ( class_exists( 'Exacoat_Notification_Service' ) ) {
+			Exacoat_Notification_Service::handle_order_processing( $order_id );
+			return;
+		}
+
 		$config = self::get_config();
 		if ( empty( $config['notify_new_sale'] ) ) return;
 

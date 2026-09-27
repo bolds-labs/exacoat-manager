@@ -80,7 +80,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Synchronized multi-currency custom cart item price calculation with Exacoat_Store_Enhancements::calculate_price_for_currency to ensure consistent .90 rounding and live markup across all supported currencies`,
+      changelog: `### Version ${version}\n- Directional 3D shading & surface gradient strictly isolated to primary base body skins (protects accents, camera lenses, trims, and sides)\n- Master high-res image compression (500KB+ threshold) with zero dimension resizing and companion WebP generation\n- WordPress Admin & Manager batch image optimization runner\n- Telegram notification gateway and unified multi-channel alerts (Telegram + Pushover)`,
     },
   };
 

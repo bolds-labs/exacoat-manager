@@ -822,6 +822,20 @@ class Exacoat_Configurator_Engine {
 			'callback'            => [ __CLASS__, 'rest_upload_media' ],
 			'permission_callback' => [ __CLASS__, 'verify_permission' ],
 		] );
+
+		// 21. POST /media/batch-optimize: Batch optimize master images and generate WebP
+		$register( '/media/batch-optimize', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_batch_optimize_media' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+		] );
+
+		// 22. POST /media/optimize-single: Optimize single attachment or texture file
+		$register( '/media/optimize-single', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_optimize_single_media' ],
+			'permission_callback' => [ __CLASS__, 'verify_permission' ],
+		] );
 	}
 
 
@@ -1960,6 +1974,152 @@ class Exacoat_Configurator_Engine {
 			'date'          => $post ? (string) $post->post_date : current_time( 'mysql' ),
 			'file_size'     => ( $file_path && file_exists( $file_path ) ) ? (int) @filesize( $file_path ) : 0,
 		], 200 );
+	}
+
+	public static function rest_batch_optimize_media( WP_REST_Request $request ): WP_REST_Response {
+		if ( ! class_exists( 'Exacoat_Image_Sizes' ) ) {
+			return new WP_REST_Response( [ 'success' => false, 'error' => 'Image sizes module not loaded' ], 500 );
+		}
+
+		global $wpdb;
+
+		@set_time_limit( 180 );
+		if ( function_exists( 'ini_set' ) ) {
+			@ini_set( 'memory_limit', '1024M' );
+		}
+
+		$params          = $request->get_json_params() ?: $request->get_params();
+		$offset          = max( 0, (int) ( $params['offset'] ?? 0 ) );
+		$batch_size      = max( 1, min( 50, (int) ( $params['batch_size'] ?? 15 ) ) );
+		$only_over_500kb = ! isset( $params['only_over_500kb'] ) || ! empty( $params['only_over_500kb'] );
+		$generate_webp   = ! isset( $params['generate_webp'] ) || ! empty( $params['generate_webp'] );
+		$products_only   = ! empty( $params['products_only'] );
+
+		$where_clause = "WHERE post_type = 'attachment' AND post_mime_type IN ('image/jpeg', 'image/jpg', 'image/png')";
+		if ( $products_only ) {
+			$where_clause .= " AND (
+				post_parent IN (SELECT ID FROM {$wpdb->posts} WHERE post_type IN ('product', 'product_variation'))
+				OR ID IN (SELECT CAST(meta_value AS UNSIGNED) FROM {$wpdb->postmeta} WHERE meta_key IN ('_thumbnail_id'))
+				OR post_title LIKE '%Skin%' OR post_title LIKE '%Body%' OR post_title LIKE '%Case%' OR post_title LIKE '%Gallery%' OR post_title LIKE '%Texture%'
+			)";
+		}
+
+		$total_attachments = (int) $wpdb->get_var(
+			"SELECT COUNT(ID) FROM {$wpdb->posts} {$where_clause}"
+		);
+
+		$attachment_ids = $wpdb->get_col( $wpdb->prepare(
+			"SELECT ID FROM {$wpdb->posts} {$where_clause} ORDER BY ID DESC LIMIT %d OFFSET %d",
+			$batch_size,
+			$offset
+		) );
+
+		$compressed_count = 0;
+		$webp_count       = 0;
+		$saved_bytes      = 0;
+		$skipped_count    = 0;
+		$threshold_bytes  = $only_over_500kb ? Exacoat_Image_Sizes::LARGE_FILE_THRESHOLD : 0;
+
+		foreach ( $attachment_ids as $att_id ) {
+			$att_id      = (int) $att_id;
+			$source_file = get_attached_file( $att_id );
+
+			if ( ! $source_file || ! file_exists( $source_file ) ) {
+				$skipped_count++;
+				continue;
+			}
+
+			$current_size = (int) @filesize( $source_file );
+			$webp_file    = preg_replace( '/\.(jpe?g|png)$/i', '.webp', $source_file );
+			$has_webp     = $webp_file && file_exists( $webp_file );
+
+			if ( $current_size < $threshold_bytes && ( ! $generate_webp || $has_webp ) ) {
+				$skipped_count++;
+				continue;
+			}
+
+			$res = Exacoat_Image_Sizes::optimize_master_file(
+				$source_file,
+				! $only_over_500kb,
+				Exacoat_Image_Sizes::LARGE_FILE_THRESHOLD,
+				$generate_webp
+			);
+
+			if ( ! empty( $res['master_compressed'] ) ) {
+				$compressed_count++;
+				$saved_bytes += (int) ( $res['saved_bytes'] ?? 0 );
+			}
+
+			if ( ! empty( $res['webp_generated'] ) ) {
+				$webp_count++;
+			}
+		}
+
+		$processed_in_batch = count( $attachment_ids );
+		$next_offset        = $offset + $processed_in_batch;
+		$is_complete        = $next_offset >= $total_attachments || 0 === $processed_in_batch;
+
+		return rest_ensure_response( [
+			'success'            => true,
+			'total_attachments'  => $total_attachments,
+			'processed_in_batch' => $processed_in_batch,
+			'compressed_count'   => $compressed_count,
+			'webp_count'         => $webp_count,
+			'saved_bytes'        => $saved_bytes,
+			'formatted_saved'    => size_format( $saved_bytes, 1 ),
+			'skipped_count'      => $skipped_count,
+			'next_offset'        => $next_offset,
+			'is_complete'        => $is_complete,
+		] );
+	}
+
+	public static function rest_optimize_single_media( WP_REST_Request $request ): WP_REST_Response {
+		if ( ! class_exists( 'Exacoat_Image_Sizes' ) ) {
+			return new WP_REST_Response( [ 'success' => false, 'error' => 'Image sizes module not loaded' ], 500 );
+		}
+
+		$params = $request->get_json_params() ?: $request->get_params();
+		$id     = isset( $params['id'] ) ? (int) $params['id'] : 0;
+		$url    = isset( $params['url'] ) ? sanitize_text_field( $params['url'] ) : '';
+
+		$source_file = '';
+		if ( $id > 0 ) {
+			$source_file = (string) get_attached_file( $id );
+		}
+
+		if ( empty( $source_file ) && ! empty( $url ) ) {
+			$upload_dir = wp_upload_dir();
+			$basedir    = wp_normalize_path( $upload_dir['basedir'] );
+			$parsed     = parse_url( $url, PHP_URL_PATH );
+			if ( $parsed && strpos( $parsed, '/wp-content/uploads/' ) !== false ) {
+				$rel  = ltrim( substr( $parsed, strpos( $parsed, '/wp-content/uploads/' ) + 20 ), '/' );
+				$cand = $basedir . '/' . $rel;
+				if ( file_exists( $cand ) ) {
+					$source_file = $cand;
+				}
+			}
+			if ( empty( $source_file ) && class_exists( 'Exacoat_Store_Enhancements' ) ) {
+				$fn = wp_basename( $url );
+				$source_file = Exacoat_Store_Enhancements::locate_physical_upload( $fn, '', $basedir );
+			}
+		}
+
+		if ( empty( $source_file ) || ! file_exists( $source_file ) ) {
+			return new WP_REST_Response( [ 'success' => false, 'error' => 'Image file not found on disk' ], 404 );
+		}
+
+		$res = Exacoat_Image_Sizes::optimize_master_file( $source_file, true, 0, true );
+
+		if ( $id > 0 && ! empty( $res['master_compressed'] ) ) {
+			$metadata = wp_get_attachment_metadata( $id );
+			if ( is_array( $metadata ) ) {
+				$metadata['filesize'] = $res['current_size'];
+				wp_update_attachment_metadata( $id, $metadata );
+			}
+			clean_post_cache( $id );
+		}
+
+		return rest_ensure_response( array_merge( [ 'success' => true, 'file_path' => $source_file ], $res ) );
 	}
 
 	/**

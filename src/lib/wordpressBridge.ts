@@ -97,8 +97,21 @@ export interface WordPressPluginSettings {
   pushover_user_key?: string;
   pushover_enabled?: number;
   pushover_notify_new_sale?: number;
+  pushover_notify_kyc?: number;
   pushover_notify_inventory?: number;
+  pushover_notify_affiliate_register?: number;
+  pushover_notify_affiliate_payout?: number;
   pushover_notify_errors?: number;
+  telegram_enabled?: number;
+  telegram_bot_token?: string;
+  telegram_chat_id?: string;
+  telegram_thread_id?: string | number;
+  telegram_notify_new_sale?: number;
+  telegram_notify_kyc?: number;
+  telegram_notify_affiliate_register?: number;
+  telegram_notify_affiliate_payout?: number;
+  telegram_notify_inventory?: number;
+  telegram_notify_errors?: number;
   cloudflare_zone_id?: string;
   cloudflare_api_token?: string;
   email_from_name?: string;
@@ -1167,6 +1180,61 @@ export async function testPushoverDirect(appToken?: string, userKey?: string): P
       latency_ms: data.latency_ms || latency,
     };
   } catch (err: any) {
+    const latency = Math.round(performance.now() - start);
+    return { success: false, latencyMs: latency, latency_ms: latency, error: err.message };
+  }
+}
+
+export async function testTelegramDirect(botToken?: string, chatId?: string, threadId?: string | number): Promise<{ success: boolean; latencyMs?: number; latency_ms?: number; message?: string; error?: string }> {
+  const start = performance.now();
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/diagnostics/test-telegram`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ bot_token: botToken, chat_id: chatId, thread_id: threadId }),
+    });
+    const latency = Math.round(performance.now() - start);
+    const data = await res.json();
+    return {
+      ...data,
+      latencyMs: data.latencyMs || data.latency_ms || latency,
+      latency_ms: data.latency_ms || data.latencyMs || latency,
+    };
+  } catch (err: any) {
+    // Direct Telegram Bot API fallback if WordPress bridge endpoint is unreachable
+    if (botToken && chatId) {
+      try {
+        const payload: Record<string, any> = {
+          chat_id: chatId,
+          text: '🧪 <b>Telegram Alert Gateway Test</b>\nYour Telegram push notification connection is working perfectly!\n• <b>Origin:</b> Direct Workstation Fallback',
+          parse_mode: 'HTML',
+        };
+        if (threadId && !isNaN(Number(threadId))) {
+          payload.message_thread_id = Number(threadId);
+        }
+        const directRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const directData = await directRes.json();
+        const latency = Math.round(performance.now() - start);
+        if (directData.ok) {
+          return {
+            success: true,
+            latencyMs: latency,
+            latency_ms: latency,
+            message: `Telegram alert delivered to chat ${chatId}${threadId ? ` (thread #${threadId})` : ''} in ${latency}ms!`,
+          };
+        }
+        return { success: false, latencyMs: latency, latency_ms: latency, message: directData.description || 'Telegram API returned an error' };
+      } catch (directErr: any) {
+        // Fall through to error return below
+      }
+    }
     const latency = Math.round(performance.now() - start);
     return { success: false, latencyMs: latency, latency_ms: latency, error: err.message };
   }
@@ -7663,6 +7731,79 @@ export async function uploadWordPressMediaDirect(
       success: false,
       error: data?.error || data?.message || `HTTP ${res.status}`,
     };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function batchOptimizeWordPressMedia(params?: {
+  offset?: number;
+  batch_size?: number;
+  only_over_500kb?: boolean;
+  generate_webp?: boolean;
+  products_only?: boolean;
+}): Promise<{
+  success: boolean;
+  total_attachments?: number;
+  processed_in_batch?: number;
+  compressed_count?: number;
+  webp_count?: number;
+  saved_bytes?: number;
+  formatted_saved?: string;
+  next_offset?: number;
+  is_complete?: boolean;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/media/batch-optimize`;
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        offset: params?.offset ?? 0,
+        batch_size: params?.batch_size ?? 15,
+        only_over_500kb: params?.only_over_500kb ?? true,
+        generate_webp: params?.generate_webp ?? true,
+        products_only: params?.products_only ?? false,
+      }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return data;
+    }
+    return { success: false, error: data?.error || data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function optimizeSingleWordPressMedia(params: {
+  id?: number;
+  url?: string;
+}): Promise<{
+  success: boolean;
+  master_compressed?: boolean;
+  webp_generated?: boolean;
+  original_size?: number;
+  current_size?: number;
+  saved_bytes?: number;
+  webp_size?: number;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const endpoint = `${base}/wp-json/exacoat-core/v1/media/optimize-single`;
+  try {
+    const res = await authenticatedFetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return data;
+    }
+    return { success: false, error: data?.error || data?.message || `HTTP ${res.status}` };
   } catch (err: any) {
     return { success: false, error: err.message };
   }

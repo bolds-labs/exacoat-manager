@@ -290,7 +290,18 @@ class Exacoat_Logger {
 				'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'UNKNOWN',
 			] );
 
-			if ( class_exists( 'Artmatter_Pushover_Service' ) ) {
+			if ( class_exists( 'Exacoat_Notification_Service' ) ) {
+				Exacoat_Notification_Service::notify_error(
+					'Fatal Error Caught',
+					"URI: {$uri}\n{$error['message']}\nFile: " . basename( $error['file'] ) . ":{$error['line']}"
+				);
+			} elseif ( class_exists( 'Exacoat_Pushover_Service' ) ) {
+				Exacoat_Pushover_Service::send(
+					'🚨 Exacoat Fatal Error Caught',
+					"URI: {$uri}\n{$error['message']}\nFile: " . basename( $error['file'] ) . ":{$error['line']}",
+					[ 'priority' => 1 ]
+				);
+			} elseif ( class_exists( 'Artmatter_Pushover_Service' ) ) {
 				Artmatter_Pushover_Service::send(
 					'🚨 Artmatter Fatal Error Caught',
 					"URI: {$uri}\n{$error['message']}\nFile: " . basename( $error['file'] ) . ":{$error['line']}",
@@ -317,7 +328,12 @@ class Exacoat_Logger {
 			'user_id'    => get_current_user_id(),
 		] );
 
-		if ( class_exists( 'Exacoat_Pushover_Service' ) ) {
+		if ( class_exists( 'Exacoat_Notification_Service' ) ) {
+			Exacoat_Notification_Service::notify_error(
+				'Uncaught Exception: ' . get_class( $e ),
+				"URI: {$uri}\n{$e->getMessage()}\nFile: " . basename( $e->getFile() ) . ":{$e->getLine()}"
+			);
+		} elseif ( class_exists( 'Exacoat_Pushover_Service' ) ) {
 			Exacoat_Pushover_Service::send(
 				'⚠️ Exacoat Uncaught Exception',
 				"URI: {$uri}\n{$e->getMessage()}\nFile: " . basename( $e->getFile() ) . ":{$e->getLine()}",

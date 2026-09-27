@@ -1587,6 +1587,38 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 								</button>
 							</div>
 						</div>
+
+						<!-- Batch Optimize Master Images & WebP Card -->
+						<div style="background: #0d0e12; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; gap: 12px;">
+							<div>
+								<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+									<h4 style="margin: 0; font-size: 13px; font-weight: 700; color: #ffffff;">⚡ Optimize Large Images & Generate WebP</h4>
+									<span class="ex-badge ex-badge-emerald">No Resizing</span>
+								</div>
+								<p style="margin: 0; font-size: 12px; color: #71717a; line-height: 1.5;">
+									Compresses master images in-place without resizing (preserves 100% dimensions) and generates companion .webp files at quality 85.
+								</p>
+								<div style="display: flex; flex-direction: column; gap: 6px; margin-top: 12px;">
+									<label style="display: inline-flex; align-items: center; gap: 8px; color: #f3aa18; font-size: 12px; font-weight: 600; cursor: pointer;">
+										<input type="checkbox" id="batch-opt-over-500kb" value="1" checked>
+										Compress files over 500 KB (skip smaller masters)
+									</label>
+									<label style="display: inline-flex; align-items: center; gap: 8px; color: #a1a1aa; font-size: 12px; font-weight: 500; cursor: pointer;">
+										<input type="checkbox" id="batch-opt-generate-webp" value="1" checked>
+										Generate missing companion .webp files
+									</label>
+									<label style="display: inline-flex; align-items: center; gap: 8px; color: #a1a1aa; font-size: 12px; font-weight: 500; cursor: pointer;">
+										<input type="checkbox" id="batch-opt-products-only" value="1">
+										Prioritize products & textures only
+									</label>
+								</div>
+							</div>
+							<div>
+								<button type="button" id="btn-batch-optimize" class="ex-btn ex-btn-primary" style="width: 100%; justify-content: center;">
+									⚡ Start Optimization
+								</button>
+							</div>
+						</div>
 					</div>
 
 					<!-- Progress & Results Box -->
@@ -2328,6 +2360,112 @@ function initSettingsDashboard() {
 			} catch (err) {
 				btnCleanOldThumbs.innerText = '🧹 Clean Obsolete Thumbnails';
 				btnCleanOldThumbs.disabled = false;
+				if (mediaOpsStatus) mediaOpsStatus.innerHTML = `<span style="color:#f87171;">⚠️ Error: ${err.message}</span>`;
+			}
+		});
+	}
+
+	// 1-Click Batch Master Image Optimization & WebP Generation (Chunked Runner)
+	const btnBatchOptimize = document.getElementById('btn-batch-optimize');
+	const chkOptOver500kb = document.getElementById('batch-opt-over-500kb');
+	const chkOptGenWebp = document.getElementById('batch-opt-generate-webp');
+	const chkOptProductsOnly = document.getElementById('batch-opt-products-only');
+
+	if (btnBatchOptimize) {
+		btnBatchOptimize.addEventListener('click', async function() {
+			const over500kb = chkOptOver500kb ? chkOptOver500kb.checked : true;
+			const genWebp = chkOptGenWebp ? chkOptGenWebp.checked : true;
+			const productsOnly = chkOptProductsOnly ? chkOptProductsOnly.checked : false;
+
+			const confirmMsg = 'Start batch image optimization for ' + (productsOnly ? 'store products & textures' : 'all Media Library images') + '?\n\n' +
+				(over500kb ? '• Compresses master images > 500KB without resizing (preserves 100% dimensions)\n' : '• Compresses all master images without resizing\n') +
+				(genWebp ? '• Generates high-efficiency companion .webp files\n' : '');
+
+			if (!confirm(confirmMsg)) return;
+
+			btnBatchOptimize.disabled = true;
+			btnBatchOptimize.innerText = 'Optimizing...';
+			if (mediaOpsProgress) mediaOpsProgress.style.display = 'block';
+
+			let offset = 0;
+			const batchSize = 10;
+			let totalScanned = 0;
+			let totalCompressed = 0;
+			let totalWebp = 0;
+			let totalBytesSaved = 0;
+
+			try {
+				let retryCount = 0;
+				while (true) {
+					let resp, text, json;
+					try {
+						const body = new URLSearchParams({
+							action: 'exacoat_batch_optimize_images',
+							offset: String(offset),
+							batch_size: String(batchSize),
+							only_over_500kb: over500kb ? '1' : '0',
+							generate_webp: genWebp ? '1' : '0',
+							products_only: productsOnly ? '1' : '0'
+						});
+						resp = await fetch(ajaxurl, { method: 'POST', body });
+						text = await resp.text();
+						json = JSON.parse(text);
+						retryCount = 0;
+					} catch (fetchErr) {
+						if (retryCount < 3) {
+							retryCount++;
+							if (mediaOpsStatus) mediaOpsStatus.innerText = `Retrying batch at offset ${offset} (attempt ${retryCount}/3)...`;
+							await new Promise(r => setTimeout(r, 1000));
+							continue;
+						}
+						throw new Error('Server returned invalid output: ' + (text ? text.slice(0, 200) : fetchErr.message));
+					}
+
+					if (!json.success || !json.data) {
+						throw new Error(json.data?.message || 'Optimization failed');
+					}
+
+					const d = json.data;
+					const total = d.total_attachments || 1;
+					offset = d.next_offset;
+					totalScanned = total;
+					totalCompressed += (d.compressed_count || 0);
+					totalWebp += (d.webp_count || 0);
+					totalBytesSaved += (d.saved_bytes || 0);
+
+					const pct = Math.min(100, Math.round((offset / total) * 100));
+					const savedFmt = (totalBytesSaved > 1048576)
+						? (totalBytesSaved / 1048576).toFixed(1) + ' MB'
+						: (totalBytesSaved / 1024).toFixed(0) + ' KB';
+
+					if (mediaOpsStatus) {
+						mediaOpsStatus.innerText = `Optimizing: ${Math.min(offset, total)} / ${total} items (${totalCompressed} masters compressed, ${totalWebp} WebP generated, saved ${savedFmt})...`;
+					}
+					if (mediaOpsPct) mediaOpsPct.innerText = `${pct}%`;
+					if (mediaOpsBar) mediaOpsBar.style.width = `${pct}%`;
+
+					btnBatchOptimize.innerText = `Optimizing (${pct}%)...`;
+
+					if (d.is_complete || d.processed_in_batch === 0) {
+						break;
+					}
+					await new Promise(r => setTimeout(r, 60));
+				}
+
+				btnBatchOptimize.innerText = '⚡ Start Optimization';
+				btnBatchOptimize.disabled = false;
+				const finalSavedFmt = (totalBytesSaved > 1048576)
+					? (totalBytesSaved / 1048576).toFixed(2) + ' MB'
+					: (totalBytesSaved / 1024).toFixed(1) + ' KB';
+
+				if (mediaOpsStatus) {
+					mediaOpsStatus.innerHTML = `<strong style="color:#34d399;">✓ Complete: Scanned ${totalScanned} images. Compressed ${totalCompressed} large masters, generated ${totalWebp} WebP companions, and saved ${finalSavedFmt} of storage!</strong>`;
+				}
+				if (mediaOpsPct) mediaOpsPct.innerText = '100%';
+				if (mediaOpsBar) mediaOpsBar.style.width = '100%';
+			} catch (err) {
+				btnBatchOptimize.innerText = '⚡ Start Optimization';
+				btnBatchOptimize.disabled = false;
 				if (mediaOpsStatus) mediaOpsStatus.innerHTML = `<span style="color:#f87171;">⚠️ Error: ${err.message}</span>`;
 			}
 		});

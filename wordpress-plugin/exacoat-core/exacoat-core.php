@@ -3,7 +3,7 @@
  * Plugin Name:       Exacoat Core Platform
  * Plugin URI:        https://exacoat.com
  * Description:       Proprietary e-commerce core engine, configurator manager, and ERP workstation integration for Exacoat.
- * Version:           0.1.109
+ * Version:           0.1.112
  * Author:            Exacoat
  * Author URI:        https://exacoat.com
  * License:           Proprietary
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'EXACOAT_CORE_VERSION' ) ) {
-	define( 'EXACOAT_CORE_VERSION', '0.1.109' );
+	define( 'EXACOAT_CORE_VERSION', '0.1.112' );
 }
 if ( ! defined( 'EXACOAT_CORE_FILE' ) ) {
 	define( 'EXACOAT_CORE_FILE', __FILE__ );
@@ -319,6 +319,8 @@ if ( ! function_exists( 'get_sub_field' ) ) {
 
 require_once EXACOAT_CORE_PATH . 'includes/class-logger.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-pushover-service.php';
+require_once EXACOAT_CORE_PATH . 'includes/class-telegram-service.php';
+require_once EXACOAT_CORE_PATH . 'includes/class-notification-service.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-exacoat-core.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-shipping-tracker.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-biteship-shipping.php';
@@ -417,6 +419,11 @@ if ( class_exists( 'Exacoat_Affiliate_Manager' ) ) {
 // Initialize Customer Directory & Analytics Manager
 if ( class_exists( 'Exacoat_Customer_Manager' ) ) {
 	Exacoat_Customer_Manager::init();
+}
+
+// Initialize Unified Push Notification Service (Pushover & Telegram)
+if ( class_exists( 'Exacoat_Notification_Service' ) ) {
+	Exacoat_Notification_Service::init();
 }
 
 // Safe version tracking on admin_init

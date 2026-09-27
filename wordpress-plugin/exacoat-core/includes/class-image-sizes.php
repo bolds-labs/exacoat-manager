@@ -26,6 +26,21 @@ class Exacoat_Image_Sizes {
 	public const MD_WIDTH  = 720;
 	public const MD_HEIGHT = 720;
 
+	/**
+	 * Threshold in bytes for automatic master compression (500 KB).
+	 */
+	public const LARGE_FILE_THRESHOLD = 512000; // 500 * 1024
+
+	/**
+	 * Quality level for JPEG and WebP generation (85%).
+	 */
+	public const TARGET_QUALITY = 85;
+
+	/**
+	 * Prevent recursion during attachment metadata generation.
+	 */
+	private static bool $is_optimizing = false;
+
 	public static function init(): void {
 		// Register image sizes early
 		add_action( 'init', [ __CLASS__, 'register' ], 5 );
@@ -34,9 +49,13 @@ class Exacoat_Image_Sizes {
 		add_filter( 'jpeg_quality', static fn() => 85, 20 );
 		add_filter( 'wp_editor_set_quality', static fn() => 85, 20 );
 
+		// Automatic optimization on direct WordPress upload (compresses >500KB without resizing + generates .webp)
+		add_filter( 'wp_generate_attachment_metadata', [ __CLASS__, 'filter_generate_attachment_metadata' ], 10, 2 );
+
 		// Single-attachment media detail fields & instant regeneration
 		add_filter( 'attachment_fields_to_edit', [ __CLASS__, 'filter_attachment_fields' ], 10, 2 );
 		add_action( 'wp_ajax_exacoat_regenerate_single_thumbnail', [ __CLASS__, 'ajax_regenerate_single_thumbnail' ] );
+		add_action( 'wp_ajax_exacoat_optimize_single_image', [ __CLASS__, 'ajax_optimize_single_image' ] );
 		add_action( 'admin_footer', [ __CLASS__, 'print_admin_scripts' ] );
 
 		// AJAX Endpoints for Admin Dashboard
@@ -44,6 +63,10 @@ class Exacoat_Image_Sizes {
 		add_action( 'wp_ajax_artmatter_regenerate_thumbnails', [ __CLASS__, 'ajax_regenerate_thumbnails' ] );
 		add_action( 'wp_ajax_exacoat_delete_old_thumbnails', [ __CLASS__, 'ajax_delete_old_thumbnails' ] );
 		add_action( 'wp_ajax_artmatter_delete_old_thumbnails', [ __CLASS__, 'ajax_delete_old_thumbnails' ] );
+
+		// Batch Optimizer Endpoint
+		add_action( 'wp_ajax_exacoat_batch_optimize_images', [ __CLASS__, 'ajax_batch_optimize_images' ] );
+		add_action( 'wp_ajax_artmatter_batch_optimize_images', [ __CLASS__, 'ajax_batch_optimize_images' ] );
 	}
 
 	/**
@@ -339,7 +362,277 @@ class Exacoat_Image_Sizes {
 	}
 
 	/**
-	 * Render HTML widget showing sm and md derivative presence, file size, and instant generate button.
+	 * Compress a master image file without resizing and generate a companion .webp file.
+	 *
+	 * - Strictly preserves original dimensions (width and height are untouched).
+	 * - Only replaces original file if compressed version is smaller in bytes.
+	 * - Preserves full alpha transparency for PNGs.
+	 * - Generates high-efficiency .webp companion at quality 85.
+	 *
+	 * @param string $file_path Path to image file on disk.
+	 * @param bool   $force_compress Force master compression even if under threshold.
+	 * @param int    $min_size_bytes Minimum file size in bytes to trigger master compression (default 500KB).
+	 * @param bool   $generate_webp  Whether to generate companion .webp file (default true).
+	 * @return array Result stats.
+	 */
+	public static function optimize_master_file(
+		string $file_path,
+		bool $force_compress = false,
+		int $min_size_bytes = self::LARGE_FILE_THRESHOLD,
+		bool $generate_webp = true
+	): array {
+		if ( empty( $file_path ) || ! file_exists( $file_path ) || ! is_file( $file_path ) ) {
+			return [ 'success' => false, 'error' => 'File not found' ];
+		}
+
+		$orig_size = (int) @filesize( $file_path );
+		if ( $orig_size <= 0 ) {
+			return [ 'success' => false, 'error' => 'Empty file' ];
+		}
+
+		$img_info = @getimagesize( $file_path );
+		if ( empty( $img_info ) || empty( $img_info[0] ) || empty( $img_info[1] ) ) {
+			return [ 'success' => false, 'error' => 'Not a valid image' ];
+		}
+
+		$orig_w = (int) $img_info[0];
+		$orig_h = (int) $img_info[1];
+		$mime   = (string) ( $img_info['mime'] ?? '' );
+
+		$master_compressed = false;
+		$webp_generated    = false;
+		$saved_bytes       = 0;
+
+		$should_compress_master = $force_compress || ( $orig_size >= $min_size_bytes );
+
+		// 1. Compress Master File In-Place (NO RESIZE - PRESERVES EXACT DIMENSIONS)
+		if ( $should_compress_master ) {
+			if ( in_array( $mime, [ 'image/jpeg', 'image/jpg' ], true ) ) {
+				$tmp_file = $file_path . '.exopt.jpg';
+
+				// Try WP_Image_Editor first (handles EXIF orientation & Imagick/GD)
+				if ( function_exists( 'wp_get_image_editor' ) ) {
+					$editor = wp_get_image_editor( $file_path );
+					if ( ! is_wp_error( $editor ) ) {
+						$editor->set_quality( self::TARGET_QUALITY );
+						$saved = $editor->save( $tmp_file, 'image/jpeg' );
+						if ( ! is_wp_error( $saved ) && file_exists( $tmp_file ) ) {
+							$tmp_size = (int) @filesize( $tmp_file );
+							$tmp_info = @getimagesize( $tmp_file );
+							// Guarantee exact dimensions are preserved & size strictly reduced
+							if ( $tmp_info && (int) $tmp_info[0] === $orig_w && (int) $tmp_info[1] === $orig_h && $tmp_size > 0 && $tmp_size < $orig_size ) {
+								@rename( $tmp_file, $file_path );
+								$master_compressed = true;
+								$saved_bytes       = $orig_size - $tmp_size;
+							} else {
+								@unlink( $tmp_file );
+							}
+						}
+					}
+				}
+
+				// Fallback to native GD if editor was not used or did not produce savings
+				if ( ! $master_compressed && function_exists( 'imagecreatefromjpeg' ) && function_exists( 'imagejpeg' ) ) {
+					$im = @imagecreatefromjpeg( $file_path );
+					if ( $im ) {
+						if ( @imagejpeg( $im, $tmp_file, self::TARGET_QUALITY ) ) {
+							$tmp_size = (int) @filesize( $tmp_file );
+							$tmp_info = @getimagesize( $tmp_file );
+							if ( $tmp_info && (int) $tmp_info[0] === $orig_w && (int) $tmp_info[1] === $orig_h && $tmp_size > 0 && $tmp_size < $orig_size ) {
+								@rename( $tmp_file, $file_path );
+								$master_compressed = true;
+								$saved_bytes       = $orig_size - $tmp_size;
+							} else {
+								@unlink( $tmp_file );
+							}
+						}
+						imagedestroy( $im );
+					}
+				}
+			} elseif ( 'image/png' === $mime ) {
+				$tmp_file = $file_path . '.exopt.png';
+
+				if ( function_exists( 'imagecreatefrompng' ) && function_exists( 'imagepng' ) ) {
+					$im = @imagecreatefrompng( $file_path );
+					if ( $im ) {
+						imagealphablending( $im, false );
+						imagesavealpha( $im, true );
+
+						// For huge PNGs (> 500KB), quantize to 128-color palette while preserving alpha (matches Manager)
+						if ( $orig_size >= $min_size_bytes && imageistruecolor( $im ) && function_exists( 'imagetruecolortopalette' ) && function_exists( 'imagecreatetruecolor' ) ) {
+							$palette_im = imagecreatetruecolor( $orig_w, $orig_h );
+							imagealphablending( $palette_im, false );
+							imagesavealpha( $palette_im, true );
+							imagecopy( $palette_im, $im, 0, 0, 0, 0, $orig_w, $orig_h );
+							imagetruecolortopalette( $palette_im, true, 128 );
+
+							if ( @imagepng( $palette_im, $tmp_file, 9 ) ) {
+								$tmp_size = (int) @filesize( $tmp_file );
+								$tmp_info = @getimagesize( $tmp_file );
+								if ( $tmp_info && (int) $tmp_info[0] === $orig_w && (int) $tmp_info[1] === $orig_h && $tmp_size > 0 && $tmp_size < $orig_size ) {
+									@rename( $tmp_file, $file_path );
+									$master_compressed = true;
+									$saved_bytes       = $orig_size - $tmp_size;
+								} else {
+									@unlink( $tmp_file );
+								}
+							}
+							imagedestroy( $palette_im );
+						}
+
+						// Fallback: standard PNG level 9 lossless re-compression
+						if ( ! $master_compressed ) {
+							if ( @imagepng( $im, $tmp_file, 9 ) ) {
+								$tmp_size = (int) @filesize( $tmp_file );
+								$tmp_info = @getimagesize( $tmp_file );
+								if ( $tmp_info && (int) $tmp_info[0] === $orig_w && (int) $tmp_info[1] === $orig_h && $tmp_size > 0 && $tmp_size < $orig_size ) {
+									@rename( $tmp_file, $file_path );
+									$master_compressed = true;
+									$saved_bytes       = $orig_size - $tmp_size;
+								} else {
+									@unlink( $tmp_file );
+								}
+							}
+						}
+						imagedestroy( $im );
+					}
+				}
+			}
+		}
+
+		$current_master_size = (int) @filesize( $file_path );
+
+		// 2. Generate Companion WebP File (NO RESIZE - PRESERVES EXACT DIMENSIONS & FULL ALPHA)
+		$webp_path = preg_replace( '/\.(jpe?g|png)$/i', '.webp', $file_path );
+		$webp_size = 0;
+
+		if ( $generate_webp && $webp_path && $webp_path !== $file_path ) {
+			$needs_webp = ! file_exists( $webp_path ) || ( $master_compressed && ( @filemtime( $file_path ) > @filemtime( $webp_path ) ) );
+
+			if ( $needs_webp ) {
+				// Try WP_Image_Editor first
+				if ( function_exists( 'wp_get_image_editor' ) ) {
+					$editor = wp_get_image_editor( $file_path );
+					if ( ! is_wp_error( $editor ) ) {
+						$editor->set_quality( self::TARGET_QUALITY );
+						$saved_webp = $editor->save( $webp_path, 'image/webp' );
+						if ( ! is_wp_error( $saved_webp ) && file_exists( $webp_path ) && filesize( $webp_path ) > 0 ) {
+							$webp_generated = true;
+						}
+					}
+				}
+
+				// Fallback to native GD imagewebp
+				if ( ! $webp_generated && function_exists( 'imagewebp' ) ) {
+					$im = null;
+					if ( 'image/png' === $mime && function_exists( 'imagecreatefrompng' ) ) {
+						$im = @imagecreatefrompng( $file_path );
+					} elseif ( in_array( $mime, [ 'image/jpeg', 'image/jpg' ], true ) && function_exists( 'imagecreatefromjpeg' ) ) {
+						$im = @imagecreatefromjpeg( $file_path );
+					}
+
+					if ( $im ) {
+						if ( ! imageistruecolor( $im ) && function_exists( 'imagepalettetotruecolor' ) ) {
+							@imagepalettetotruecolor( $im );
+						}
+						imagealphablending( $im, true );
+						imagesavealpha( $im, true );
+						if ( @imagewebp( $im, $webp_path, self::TARGET_QUALITY ) && file_exists( $webp_path ) && filesize( $webp_path ) > 0 ) {
+							$webp_generated = true;
+						}
+						imagedestroy( $im );
+					}
+				}
+			}
+
+			if ( file_exists( $webp_path ) ) {
+				$webp_size = (int) @filesize( $webp_path );
+			}
+		}
+
+		return [
+			'success'           => true,
+			'master_compressed' => $master_compressed,
+			'webp_generated'    => $webp_generated,
+			'original_size'     => $orig_size,
+			'current_size'      => $current_master_size,
+			'saved_bytes'       => $saved_bytes,
+			'webp_size'         => $webp_size,
+			'webp_path'         => $webp_path,
+			'width'             => $orig_w,
+			'height'            => $orig_h,
+			'mime'              => $mime,
+		];
+	}
+
+	/**
+	 * Optimize an attachment master file and generate WebP companion.
+	 *
+	 * @param int  $attachment_id   Attachment ID.
+	 * @param bool $force_compress  Force master compression regardless of size.
+	 * @param int  $min_size_bytes  Minimum file size in bytes to trigger master compression.
+	 * @return array
+	 */
+	public static function optimize_attachment(
+		int $attachment_id,
+		bool $force_compress = false,
+		int $min_size_bytes = self::LARGE_FILE_THRESHOLD
+	): array {
+		if ( $attachment_id <= 0 || ! wp_attachment_is_image( $attachment_id ) ) {
+			return [ 'success' => false, 'error' => 'Invalid image attachment ID' ];
+		}
+
+		$source_file = get_attached_file( $attachment_id );
+		if ( ! $source_file || ! file_exists( $source_file ) ) {
+			return [ 'success' => false, 'error' => 'File not found on disk' ];
+		}
+
+		$res = self::optimize_master_file( $source_file, $force_compress, $min_size_bytes, true );
+
+		if ( $res['success'] && $res['master_compressed'] ) {
+			$metadata = wp_get_attachment_metadata( $attachment_id );
+			if ( is_array( $metadata ) ) {
+				$metadata['filesize'] = $res['current_size'];
+				wp_update_attachment_metadata( $attachment_id, $metadata );
+			}
+			clean_post_cache( $attachment_id );
+		}
+
+		return $res;
+	}
+
+	/**
+	 * Auto-optimize uploads hooking into wp_generate_attachment_metadata.
+	 * Runs on every direct WordPress upload: compresses master images over 500KB without resizing & generates .webp.
+	 *
+	 * @param array $metadata      Attachment metadata.
+	 * @param int   $attachment_id Attachment ID.
+	 * @return array
+	 */
+	public static function filter_generate_attachment_metadata( array $metadata, int $attachment_id ): array {
+		if ( self::$is_optimizing || $attachment_id <= 0 ) {
+			return $metadata;
+		}
+
+		self::$is_optimizing = true;
+		try {
+			$res = self::optimize_attachment( $attachment_id, false, self::LARGE_FILE_THRESHOLD );
+			if ( ! empty( $res['master_compressed'] ) && isset( $metadata['filesize'] ) ) {
+				$metadata['filesize'] = $res['current_size'];
+			}
+		} catch ( \Throwable $e ) {
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log( 'error', 'media', 'Auto-optimization failed for #' . $attachment_id . ': ' . $e->getMessage() );
+			}
+		} finally {
+			self::$is_optimizing = false;
+		}
+
+		return $metadata;
+	}
+
+	/**
+	 * Render HTML widget showing master image status, WebP presence, and sm/md derivatives.
 	 *
 	 * @param int $attachment_id Attachment ID.
 	 * @return string Rendered HTML.
@@ -358,6 +651,35 @@ class Exacoat_Image_Sizes {
 		$metadata = wp_get_attachment_metadata( $attachment_id );
 		$nonce    = wp_create_nonce( 'exacoat_media_thumb_nonce' );
 
+		// Master file status
+		$master_size_bytes = (int) @filesize( $source_file );
+		$master_size_fmt   = size_format( $master_size_bytes, 1 );
+		$is_large          = $master_size_bytes >= self::LARGE_FILE_THRESHOLD;
+		$orig_w            = ! empty( $metadata['width'] ) ? (int) $metadata['width'] : 0;
+		$orig_h            = ! empty( $metadata['height'] ) ? (int) $metadata['height'] : 0;
+		$dim_label         = ( $orig_w && $orig_h ) ? " ({$orig_w}x{$orig_h})" : '';
+
+		// Companion WebP status
+		$webp_file     = preg_replace( '/\.(jpe?g|png)$/i', '.webp', $source_file );
+		$has_webp      = $webp_file && file_exists( $webp_file );
+		$webp_size_fmt = $has_webp ? size_format( (int) @filesize( $webp_file ), 1 ) : '';
+
+		$master_status_html = sprintf(
+			'<span style="color:%s;font-weight:600;font-size:11px;background:%s;padding:2px 7px;border-radius:4px;border:1px solid %s;">%s%s</span>',
+			$is_large ? '#b45309' : '#059669',
+			$is_large ? '#fffbeb' : '#ecfdf5',
+			$is_large ? '#fde68a' : '#a7f3d0',
+			esc_html( $master_size_fmt ),
+			$is_large ? ' (>500KB)' : ''
+		);
+
+		$webp_status_html = $has_webp
+			? sprintf(
+				'<span style="color:#059669;font-weight:600;font-size:11px;background:#ecfdf5;padding:2px 7px;border-radius:4px;border:1px solid #a7f3d0;">Present (%s)</span>',
+				esc_html( $webp_size_fmt )
+			)
+			: '<span style="color:#dc2626;font-weight:600;font-size:11px;background:#fef2f2;padding:2px 7px;border-radius:4px;border:1px solid #fecaca;">Missing</span>';
+
 		$sizes = [
 			'sm' => [
 				'key'   => self::THUMB_SM,
@@ -369,9 +691,29 @@ class Exacoat_Image_Sizes {
 			],
 		];
 
-		$has_missing = false;
-		$rows_html   = '';
+		$has_missing_thumbs = false;
+		$rows_html          = '';
 
+		// Master File Row
+		$rows_html .= sprintf(
+			'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-size:12px;">' .
+				'<span style="font-weight:600;color:#374151;">Master File%s</span>' .
+				'<div style="display:flex;align-items:center;">%s</div>' .
+			'</div>',
+			esc_html( $dim_label ),
+			$master_status_html
+		);
+
+		// WebP Companion Row
+		$rows_html .= sprintf(
+			'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-size:12px;">' .
+				'<span style="font-weight:600;color:#374151;">Companion WebP</span>' .
+				'<div style="display:flex;align-items:center;">%s</div>' .
+			'</div>',
+			$webp_status_html
+		);
+
+		// Thumbnails Rows
 		foreach ( $sizes as $size_info ) {
 			$key        = $size_info['key'];
 			$label      = $size_info['label'];
@@ -381,8 +723,8 @@ class Exacoat_Image_Sizes {
 			$exists     = $file_path && file_exists( $file_path );
 
 			if ( ! $exists ) {
-				$has_missing = true;
-				$status_html = '<span style="color:#dc2626;font-weight:600;font-size:11px;background:#fef2f2;padding:2px 7px;border-radius:4px;border:1px solid #fecaca;">Missing</span>';
+				$has_missing_thumbs = true;
+				$status_html        = '<span style="color:#dc2626;font-weight:600;font-size:11px;background:#fef2f2;padding:2px 7px;border-radius:4px;border:1px solid #fecaca;">Missing</span>';
 			} else {
 				$file_size = size_format( filesize( $file_path ), 1 );
 				$file_url  = wp_get_attachment_image_url( $attachment_id, $key );
@@ -410,12 +752,16 @@ class Exacoat_Image_Sizes {
 			);
 		}
 
-		$btn_text = $has_missing ? 'Generate sm & md' : 'Regenerate sm & md';
+		$regen_btn_text = $has_missing_thumbs ? 'Generate sm & md' : 'Regen sm & md';
 
 		return sprintf(
-			'<div id="exacoat-thumb-status-%1$d" class="exacoat-thumb-status-container" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:9px 11px;margin-top:4px;max-width:320px;">' .
+			'<div id="exacoat-thumb-status-%1$d" class="exacoat-thumb-status-container" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:9px 11px;margin-top:4px;max-width:340px;">' .
 				'%2$s' .
 				'<div style="margin-top:8px;padding-top:7px;border-top:1px solid #e5e7eb;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' .
+					'<button type="button" class="button button-small button-primary exacoat-opt-master-btn" data-attachment-id="%1$d" data-nonce="%3$s" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;height:26px;line-height:24px;">' .
+						'<span class="dashicons dashicons-performance" style="font-size:13px;width:13px;height:13px;line-height:13px;"></span>' .
+						'<span>Optimize & WebP</span>' .
+					'</button>' .
 					'<button type="button" class="button button-small exacoat-regen-thumb-btn" data-attachment-id="%1$d" data-nonce="%3$s" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;height:26px;line-height:24px;">' .
 						'<span class="dashicons dashicons-update" style="font-size:13px;width:13px;height:13px;line-height:13px;"></span>' .
 						'<span>%4$s</span>' .
@@ -427,7 +773,7 @@ class Exacoat_Image_Sizes {
 			$attachment_id,
 			$rows_html,
 			esc_attr( $nonce ),
-			esc_html( $btn_text )
+			esc_html( $regen_btn_text )
 		);
 	}
 
@@ -460,7 +806,150 @@ class Exacoat_Image_Sizes {
 	}
 
 	/**
-	 * Print inline admin JavaScript for 1-click thumbnail generation.
+	 * AJAX Handler: Single Attachment Master Image Optimization & WebP Generation.
+	 */
+	public static function ajax_optimize_single_image(): void {
+		if ( ! current_user_can( 'upload_files' ) ) {
+			wp_send_json_error( [ 'message' => 'Unauthorized user.' ] );
+		}
+
+		check_ajax_referer( 'exacoat_media_thumb_nonce', 'nonce' );
+
+		$attachment_id = isset( $_POST['attachment_id'] ) ? (int) $_POST['attachment_id'] : 0;
+		if ( $attachment_id <= 0 || ! wp_attachment_is_image( $attachment_id ) ) {
+			wp_send_json_error( [ 'message' => 'Invalid image attachment ID.' ] );
+		}
+
+		$res = self::optimize_attachment( $attachment_id, true, 0 );
+		if ( empty( $res['success'] ) ) {
+			wp_send_json_error( [ 'message' => $res['error'] ?? 'Optimization failed.' ] );
+		}
+
+		$html = self::get_attachment_thumbnail_status_html( $attachment_id );
+		$msg  = 'Optimization complete. ';
+		if ( ! empty( $res['master_compressed'] ) ) {
+			$msg .= 'Compressed master, saved ' . size_format( $res['saved_bytes'], 1 ) . '. ';
+		} else {
+			$msg .= 'Master file already optimal. ';
+		}
+		if ( ! empty( $res['webp_generated'] ) ) {
+			$msg .= 'Generated companion .webp (' . size_format( $res['webp_size'], 1 ) . ').';
+		}
+
+		wp_send_json_success( [
+			'attachment_id' => $attachment_id,
+			'html'          => $html,
+			'message'       => trim( $msg ),
+		] );
+	}
+
+	/**
+	 * AJAX Handler: Batch Master Image Optimizer & WebP Generator (Chunked Runner).
+	 */
+	public static function ajax_batch_optimize_images(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( [ 'message' => 'Unauthorized administrator access.' ] );
+		}
+
+		global $wpdb;
+
+		@set_time_limit( 180 );
+		if ( function_exists( 'ini_set' ) ) {
+			@ini_set( 'memory_limit', '1024M' );
+		}
+
+		$offset          = isset( $_POST['offset'] ) ? max( 0, (int) $_POST['offset'] ) : 0;
+		$batch_size      = isset( $_POST['batch_size'] ) ? max( 1, min( 50, (int) $_POST['batch_size'] ) ) : 15;
+		$only_over_500kb = ! isset( $_POST['only_over_500kb'] ) || '1' === (string) $_POST['only_over_500kb'] || true === $_POST['only_over_500kb'];
+		$generate_webp   = ! isset( $_POST['generate_webp'] ) || '1' === (string) $_POST['generate_webp'] || true === $_POST['generate_webp'];
+		$products_only   = isset( $_POST['products_only'] ) && ( '1' === (string) $_POST['products_only'] || true === $_POST['products_only'] );
+
+		$where_clause = "WHERE post_type = 'attachment' AND post_mime_type IN ('image/jpeg', 'image/jpg', 'image/png')";
+		if ( $products_only ) {
+			$where_clause .= " AND (
+				post_parent IN (SELECT ID FROM {$wpdb->posts} WHERE post_type IN ('product', 'product_variation'))
+				OR ID IN (SELECT CAST(meta_value AS UNSIGNED) FROM {$wpdb->postmeta} WHERE meta_key IN ('_thumbnail_id'))
+				OR post_title LIKE '%Skin%' OR post_title LIKE '%Body%' OR post_title LIKE '%Case%' OR post_title LIKE '%Gallery%' OR post_title LIKE '%Texture%'
+			)";
+		}
+
+		$total_attachments = (int) $wpdb->get_var(
+			"SELECT COUNT(ID) FROM {$wpdb->posts} {$where_clause}"
+		);
+
+		$attachment_ids = $wpdb->get_col( $wpdb->prepare(
+			"SELECT ID FROM {$wpdb->posts} {$where_clause} ORDER BY ID DESC LIMIT %d OFFSET %d",
+			$batch_size,
+			$offset
+		) );
+
+		$compressed_count = 0;
+		$webp_count       = 0;
+		$saved_bytes      = 0;
+		$skipped_count    = 0;
+
+		$threshold_bytes = $only_over_500kb ? self::LARGE_FILE_THRESHOLD : 0;
+
+		foreach ( $attachment_ids as $att_id ) {
+			$att_id      = (int) $att_id;
+			$source_file = get_attached_file( $att_id );
+
+			if ( ! $source_file || ! file_exists( $source_file ) ) {
+				$skipped_count++;
+				continue;
+			}
+
+			$current_size = (int) @filesize( $source_file );
+			$webp_file    = preg_replace( '/\.(jpe?g|png)$/i', '.webp', $source_file );
+			$has_webp     = $webp_file && file_exists( $webp_file );
+
+			$needs_compression = ( $current_size >= $threshold_bytes );
+			$needs_webp        = $generate_webp && ! $has_webp;
+
+			if ( ! $needs_compression && ! $needs_webp ) {
+				$skipped_count++;
+				continue;
+			}
+
+			$res = self::optimize_master_file(
+				$source_file,
+				! $only_over_500kb,
+				self::LARGE_FILE_THRESHOLD,
+				$generate_webp
+			);
+
+			if ( ! empty( $res['master_compressed'] ) ) {
+				$compressed_count++;
+				$saved_bytes += (int) ( $res['saved_bytes'] ?? 0 );
+			}
+
+			if ( ! empty( $res['webp_generated'] ) ) {
+				$webp_count++;
+			}
+		}
+
+		$processed_in_batch = count( $attachment_ids );
+		$next_offset        = $offset + $processed_in_batch;
+		$is_complete        = $next_offset >= $total_attachments || 0 === $processed_in_batch;
+
+		wp_send_json_success( [
+			'total_attachments'  => $total_attachments,
+			'processed_in_batch' => $processed_in_batch,
+			'compressed_count'   => $compressed_count,
+			'webp_count'         => $webp_count,
+			'saved_bytes'        => $saved_bytes,
+			'formatted_saved'    => size_format( $saved_bytes, 1 ),
+			'skipped_count'      => $skipped_count,
+			'next_offset'        => $next_offset,
+			'is_complete'        => $is_complete,
+			'message'            => $is_complete
+				? "Optimization complete. Scanned {$total_attachments} media items."
+				: "Processed {$next_offset} of {$total_attachments} media items...",
+		] );
+	}
+
+	/**
+	 * Print inline admin JavaScript for 1-click thumbnail generation and master optimization.
 	 */
 	public static function print_admin_scripts(): void {
 		if ( ! is_admin() ) {
@@ -469,6 +958,7 @@ class Exacoat_Image_Sizes {
 		?>
 		<script>
 		jQuery(document).ready(function($) {
+			// Single Thumbnail Regeneration
 			$(document).on('click', '.exacoat-regen-thumb-btn', function(e) {
 				e.preventDefault();
 				var $btn = $(this);
@@ -500,6 +990,39 @@ class Exacoat_Image_Sizes {
 					$msg.text('Network error.').css('color', '#dc2626');
 				});
 			});
+
+			// Single Master Image Optimization & WebP Generation
+			$(document).on('click', '.exacoat-opt-master-btn', function(e) {
+				e.preventDefault();
+				var $btn = $(this);
+				var attachmentId = $btn.data('attachment-id');
+				var nonce = $btn.data('nonce');
+				var $container = $('#exacoat-thumb-status-' + attachmentId);
+				var $spinner = $container.find('.exacoat-regen-spinner');
+				var $msg = $container.find('.exacoat-regen-msg');
+
+				$btn.prop('disabled', true);
+				$spinner.css('display', 'inline-block').addClass('is-active');
+				$msg.text('Optimizing master & WebP...').css('color', '#6b7280');
+
+				$.post(ajaxurl, {
+					action: 'exacoat_optimize_single_image',
+					attachment_id: attachmentId,
+					nonce: nonce
+				}).done(function(res) {
+					if (res && res.success && res.data && res.data.html) {
+						$container.replaceWith(res.data.html);
+					} else {
+						$btn.prop('disabled', false);
+						$spinner.css('display', 'none').removeClass('is-active');
+						$msg.text(res && res.data && res.data.message ? res.data.message : 'Optimization failed.').css('color', '#dc2626');
+					}
+				}).fail(function() {
+					$btn.prop('disabled', false);
+					$spinner.css('display', 'none').removeClass('is-active');
+					$msg.text('Network error.').css('color', '#dc2626');
+				});
+			});
 		});
 		</script>
 		<?php
@@ -511,3 +1034,4 @@ class Exacoat_Image_Sizes {
 if ( ! class_exists( 'Artmatter_Image_Sizes' ) ) {
 	class_alias( 'Exacoat_Image_Sizes', 'Artmatter_Image_Sizes' );
 }
+

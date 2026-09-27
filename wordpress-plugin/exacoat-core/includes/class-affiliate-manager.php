@@ -1942,6 +1942,19 @@ class Exacoat_Affiliate_Manager {
 
 		$affiliate_id = $wpdb->insert_id;
 
+		if ( class_exists( 'Exacoat_Notification_Service' ) ) {
+			Exacoat_Notification_Service::notify_affiliate_registration( [
+				'affiliate_id'      => $affiliate_id,
+				'user_id'           => $user_id,
+				'name'              => trim( "$first_name $last_name" ),
+				'slug'              => $candidate_slug,
+				'email'             => $email,
+				'promotion_channel' => $promotion_channel,
+				'affiliate_type'    => $affiliate_type,
+				'status'            => $initial_status,
+			] );
+		}
+
 		if ( 'active' === $initial_status ) {
 			self::dispatch_applicant_email( 'approved', $email, $first_name, $candidate_slug );
 		} else {
@@ -2512,7 +2525,18 @@ class Exacoat_Affiliate_Manager {
 			$payout_id
 		);
 
-		if ( class_exists( 'Exacoat_Pushover_Service' ) ) {
+		if ( class_exists( 'Exacoat_Notification_Service' ) ) {
+			Exacoat_Notification_Service::notify_affiliate_payout( [
+				'creator_name'        => $creator_name,
+				'slug'                => $affiliate->slug,
+				'amount_formatted'    => $formatted_amount,
+				'amount'              => $unpaid,
+				'bank_name'           => $affiliate->bank_name,
+				'bank_account_number' => $affiliate->bank_account_number,
+				'bank_account_name'   => $affiliate->bank_account_name ?: $creator_name,
+				'payout_id'           => $payout_id,
+			] );
+		} elseif ( class_exists( 'Exacoat_Pushover_Service' ) ) {
 			Exacoat_Pushover_Service::send(
 				$pushover_title,
 				$pushover_msg,

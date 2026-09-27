@@ -1249,15 +1249,26 @@ class Exacoat_Review_Manager {
 			}
 		}
 
-		// Notify via Pushover if active
-		$pushover_class = class_exists( 'Exacoat_Pushover_Service' ) ? 'Exacoat_Pushover_Service' : ( class_exists( 'Artmatter_Pushover_Service' ) ? 'Artmatter_Pushover_Service' : null );
-		if ( $pushover_class ) {
-			$media_count = count( $media_list );
-			$media_txt   = $media_count > 0 ? " ({$media_count} photo/video)" : '';
-			$pushover_class::send(
-				"⭐ New Customer Review: {$cust_name} ({$rating}/5★){$media_txt}\nOrder #{$order->get_order_number()} for \"{$selected_item['artwork_title']}\".",
-				'New Customer Review'
-			);
+		// Notify via Exacoat Notification Service (Pushover & Telegram)
+		$media_count = count( $media_list );
+		if ( class_exists( 'Exacoat_Notification_Service' ) ) {
+			Exacoat_Notification_Service::notify_review( [
+				'reviewer_name' => $cust_name,
+				'rating'        => $rating,
+				'product_title' => $selected_item['artwork_title'] ?? 'Custom Skin',
+				'order_number'  => $order->get_order_number(),
+				'media_count'   => $media_count,
+				'review_text'   => $review_text ?? '',
+			] );
+		} else {
+			$pushover_class = class_exists( 'Exacoat_Pushover_Service' ) ? 'Exacoat_Pushover_Service' : ( class_exists( 'Artmatter_Pushover_Service' ) ? 'Artmatter_Pushover_Service' : null );
+			if ( $pushover_class ) {
+				$media_txt = $media_count > 0 ? " ({$media_count} photo/video)" : '';
+				$pushover_class::send(
+					'New Customer Review',
+					"⭐ New Customer Review: {$cust_name} ({$rating}/5★){$media_txt}\nOrder #{$order->get_order_number()} for \"{$selected_item['artwork_title']}\"."
+				);
+			}
 		}
 
 		return new WP_REST_Response( [

@@ -19,7 +19,8 @@ import {
   Globe,
   Mail,
   RotateCw,
-  HardDrive
+  HardDrive,
+  Send
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useToast } from '../../context/ToastContext';
@@ -27,6 +28,7 @@ import {
   fetchPluginSettings, 
   savePluginSettings, 
   testPushoverDirect, 
+  testTelegramDirect,
   testCloudflareCacheDirect,
   purgeCloudflareCacheDirect,
   flushWordPressPermalinks, 
@@ -97,8 +99,21 @@ export const SettingsPanel: React.FC = () => {
     pushover_user_key: '',
     pushover_enabled: 1,
     pushover_notify_new_sale: 1,
+    pushover_notify_kyc: 1,
     pushover_notify_inventory: 1,
+    pushover_notify_affiliate_register: 1,
+    pushover_notify_affiliate_payout: 1,
     pushover_notify_errors: 1,
+    telegram_enabled: 1,
+    telegram_bot_token: '5576968403:AAFxQrqNYAfO9GSi6QElD6fMI0-yPUTtcFA',
+    telegram_chat_id: '-1002257662366',
+    telegram_thread_id: '774',
+    telegram_notify_new_sale: 1,
+    telegram_notify_kyc: 1,
+    telegram_notify_affiliate_register: 1,
+    telegram_notify_affiliate_payout: 1,
+    telegram_notify_inventory: 1,
+    telegram_notify_errors: 1,
     cloudflare_zone_id: '',
     cloudflare_api_token: '',
     email_from_name: 'Exacoat',
@@ -115,6 +130,8 @@ export const SettingsPanel: React.FC = () => {
   // Integration Test Statuses
   const [isTestingPushover, setIsTestingPushover] = useState(false);
   const [pushoverTestResult, setPushoverTestResult] = useState<any>(null);
+  const [isTestingTelegram, setIsTestingTelegram] = useState(false);
+  const [telegramTestResult, setTelegramTestResult] = useState<any>(null);
   const [isTestingCloudflare, setIsTestingCloudflare] = useState(false);
   const [isPurgingCloudflareCache, setIsPurgingCloudflareCache] = useState(false);
   const [cloudflareTestResult, setCloudflareTestResult] = useState<any>(null);
@@ -137,15 +154,32 @@ export const SettingsPanel: React.FC = () => {
 
   const loadSettings = async () => {
     setIsLoadingSettings(true);
+    let localCreds: any = null;
+    try {
+      const raw = localStorage.getItem('exacoat_notification_credentials');
+      if (raw) localCreds = JSON.parse(raw);
+    } catch (e) {}
+
     const res = await fetchPluginSettings();
     if (res.success && res.settings) {
       setWpSettings(prev => ({
         ...prev,
+        ...localCreds,
         ...res.settings,
+        telegram_bot_token: res.settings?.telegram_bot_token || localCreds?.telegram_bot_token || prev.telegram_bot_token || '5576968403:AAFxQrqNYAfO9GSi6QElD6fMI0-yPUTtcFA',
+        telegram_chat_id: res.settings?.telegram_chat_id || localCreds?.telegram_chat_id || prev.telegram_chat_id || '-1002257662366',
+        telegram_thread_id: (res.settings?.telegram_thread_id !== undefined && res.settings?.telegram_thread_id !== '') ? res.settings.telegram_thread_id : (localCreds?.telegram_thread_id !== undefined ? localCreds.telegram_thread_id : (prev.telegram_thread_id ?? '774')),
+        pushover_app_token: res.settings?.pushover_app_token || localCreds?.pushover_app_token || prev.pushover_app_token || '',
+        pushover_user_key: res.settings?.pushover_user_key || localCreds?.pushover_user_key || prev.pushover_user_key || '',
       }));
       setSecretStatus(res.secretStatus || {});
-    } else if (!res.success) {
-      showToast('error', 'Settings Unavailable', res.error || 'Sign in with a Manager account to load settings.');
+    } else {
+      if (localCreds) {
+        setWpSettings(prev => ({ ...prev, ...localCreds }));
+      }
+      if (!res.success) {
+        showToast('error', 'Settings Unavailable', res.error || 'Sign in with a Manager account to load settings.');
+      }
     }
     setIsLoadingSettings(false);
   };
@@ -170,14 +204,31 @@ export const SettingsPanel: React.FC = () => {
     return status.source === 'environment' ? 'Loaded from CMS server config' : 'Saved securely in WordPress';
   };
 
-  const handleSaveRemoteSettings = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  const handleSaveRemoteSettings = async (targetScopeOrEvent?: 'pushover' | 'telegram' | 'all' | React.FormEvent) => {
+    if (targetScopeOrEvent && typeof targetScopeOrEvent !== 'string' && 'preventDefault' in targetScopeOrEvent) {
+      targetScopeOrEvent.preventDefault();
+    }
+    const targetScope = typeof targetScopeOrEvent === 'string' ? targetScopeOrEvent : 'all';
+
     setIsSavingSettings(true);
+    try {
+      localStorage.setItem('exacoat_notification_credentials', JSON.stringify({
+        telegram_bot_token: wpSettings.telegram_bot_token,
+        telegram_chat_id: wpSettings.telegram_chat_id,
+        telegram_thread_id: wpSettings.telegram_thread_id,
+        pushover_app_token: wpSettings.pushover_app_token,
+        pushover_user_key: wpSettings.pushover_user_key,
+      }));
+    } catch (e) {}
+
     const res = await savePluginSettings(wpSettings);
     setIsSavingSettings(false);
 
     if (res.success) {
-      showToast('success', 'Settings Saved', 'Settings synchronized with WordPress.');
+      const title = targetScope === 'telegram'
+        ? 'Telegram Config Saved'
+        : (targetScope === 'pushover' ? 'Pushover Config Saved' : 'Settings Saved');
+      showToast('success', title, 'Configuration saved and synchronized successfully.');
       await loadSettings();
     } else {
       showToast('error', 'Save Failed', res.error || 'Failed updating plugin settings');
@@ -187,14 +238,28 @@ export const SettingsPanel: React.FC = () => {
   const handleTestPushover = async () => {
     setIsTestingPushover(true);
     setPushoverTestResult(null);
-    const res = await testPushoverDirect();
+    const res = await testPushoverDirect(wpSettings.pushover_app_token, wpSettings.pushover_user_key);
     setIsTestingPushover(false);
     setPushoverTestResult(res);
 
     if (res.success) {
-      showToast('success', 'Pushover Alert Sent', `Delivered test notification (${res.latency_ms}ms)`);
+      showToast('success', 'Pushover Alert Sent', `Delivered test notification (${res.latency_ms || res.latencyMs || 0}ms)`);
     } else {
       showToast('error', 'Pushover Failed', res.message || 'Check App Token and User Key');
+    }
+  };
+
+  const handleTestTelegram = async () => {
+    setIsTestingTelegram(true);
+    setTelegramTestResult(null);
+    const res = await testTelegramDirect(wpSettings.telegram_bot_token, wpSettings.telegram_chat_id, wpSettings.telegram_thread_id);
+    setIsTestingTelegram(false);
+    setTelegramTestResult(res);
+
+    if (res.success) {
+      showToast('success', 'Telegram Alert Sent', `Delivered test notification (${res.latency_ms || res.latencyMs || 0}ms)`);
+    } else {
+      showToast('error', 'Telegram Failed', res.message || 'Check Bot Token and Chat ID');
     }
   };
 
@@ -583,8 +648,8 @@ export const SettingsPanel: React.FC = () => {
                     className="rounded text-[#f3aa18] accent-[#f3aa18] mt-0.5"
                   />
                   <div className="flex-1">
-                    <span className="text-zinc-900 dark:text-zinc-200 block font-sans font-semibold text-xs">New Customer Orders</span>
-                    <span className="text-[10px] text-zinc-500 block font-mono mt-0.5">Instant notification when a new order is received at checkout</span>
+                    <span className="text-zinc-900 dark:text-zinc-200 block font-sans font-semibold text-xs">New Customer Orders (Paid Only)</span>
+                    <span className="text-[10px] text-zinc-500 block font-mono mt-0.5">Instant notification when customer has paid (status: processing)</span>
                   </div>
                 </label>
 
@@ -598,6 +663,32 @@ export const SettingsPanel: React.FC = () => {
                   <div className="flex-1">
                     <span className="text-zinc-900 dark:text-zinc-200 block font-sans font-semibold text-xs">Customer Reviews & Ratings</span>
                     <span className="text-[10px] text-zinc-500 block font-mono mt-0.5">When customers submit new product reviews with photos</span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 p-3 rounded-xl bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 cursor-pointer hover:border-zinc-300 dark:hover:border-white/15 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(wpSettings.pushover_notify_affiliate_register ?? 1)}
+                    onChange={e => setWpSettings({ ...wpSettings, pushover_notify_affiliate_register: e.target.checked ? 1 : 0 })}
+                    className="rounded text-[#f3aa18] accent-[#f3aa18] mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <span className="text-zinc-900 dark:text-zinc-200 block font-sans font-semibold text-xs">New Affiliate Registration</span>
+                    <span className="text-[10px] text-zinc-500 block font-mono mt-0.5">Instant alert when a creator registers for the affiliate program</span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 p-3 rounded-xl bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 cursor-pointer hover:border-zinc-300 dark:hover:border-white/15 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(wpSettings.pushover_notify_affiliate_payout ?? 1)}
+                    onChange={e => setWpSettings({ ...wpSettings, pushover_notify_affiliate_payout: e.target.checked ? 1 : 0 })}
+                    className="rounded text-[#f3aa18] accent-[#f3aa18] mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <span className="text-zinc-900 dark:text-zinc-200 block font-sans font-semibold text-xs">Affiliate Payout Request</span>
+                    <span className="text-[10px] text-zinc-500 block font-mono mt-0.5">Instant alert when an affiliate requests commission payout</span>
                   </div>
                 </label>
 
@@ -642,7 +733,7 @@ export const SettingsPanel: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => handleSaveRemoteSettings()}
+                onClick={() => handleSaveRemoteSettings('pushover')}
                 disabled={isSavingSettings}
                 className="px-5 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs tracking-wider uppercase transition-all shadow-md flex items-center gap-2 cursor-pointer"
               >
@@ -656,10 +747,211 @@ export const SettingsPanel: React.FC = () => {
                 <div className="flex items-center justify-between pb-1 mb-1 border-b border-zinc-800">
                   <span className="text-zinc-400">Pushover Gateway:</span>
                   <span className={pushoverTestResult.success ? 'text-[#f3aa18] font-bold' : 'text-rose-400 font-bold'}>
-                    {pushoverTestResult.success ? `DELIVERED (${pushoverTestResult.latency_ms}ms)` : 'FAILED'}
+                    {pushoverTestResult.success ? `DELIVERED (${pushoverTestResult.latency_ms || pushoverTestResult.latencyMs || 0}ms)` : 'FAILED'}
                   </span>
                 </div>
-                <p className="text-zinc-300 font-sans">{pushoverTestResult.message}</p>
+                <p className="text-zinc-300 font-sans">{pushoverTestResult.message || pushoverTestResult.error}</p>
+              </div>
+            )}
+          </GlassCard>
+
+          {/* Telegram Real-Time Admin Push Notifications */}
+          <GlassCard className="p-6 md:p-8 space-y-5">
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/[0.06] pb-4">
+              <div className="flex items-center gap-2">
+                <Send className="w-4 h-4 text-[#f3aa18]" />
+                <strong className="text-sm font-bold text-zinc-900 dark:text-white">
+                  Telegram Real-Time Admin Push Notifications
+                </strong>
+              </div>
+
+              <label className="flex items-center gap-2 text-xs font-mono cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(wpSettings.telegram_enabled ?? 1)}
+                  onChange={e => setWpSettings({ ...wpSettings, telegram_enabled: e.target.checked ? 1 : 0 })}
+                  className="rounded text-[#f3aa18] accent-[#f3aa18]"
+                />
+                <span className="text-zinc-300">Enable Telegram Alerts</span>
+              </label>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono text-xs">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
+                  Telegram Bot Token
+                </label>
+                <div className="relative flex items-center">
+                  <input
+                    type={showSecrets['telegram_bot_token'] ? 'text' : 'password'}
+                    value={wpSettings.telegram_bot_token || ''}
+                    onChange={e => setWpSettings({ ...wpSettings, telegram_bot_token: e.target.value })}
+                    placeholder="5576968403:AAFxQrqNYAfO9GSi6QElD6fMI0-yPUTtcFA"
+                    className="w-full p-2.5 pr-10 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 text-xs font-mono text-zinc-900 dark:text-white focus:outline-hidden focus:border-[#f3aa18]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => toggleShowSecret('telegram_bot_token')}
+                    className="absolute right-2.5 p-1 text-zinc-400 hover:text-white transition-colors"
+                  >
+                    {showSecrets['telegram_bot_token'] ? <EyeOff className="w-4 h-4 text-[#f3aa18]" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[10px] text-zinc-500 font-sans">Bot API token from @BotFather</p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
+                  Telegram Chat ID
+                </label>
+                <input
+                  type="text"
+                  value={wpSettings.telegram_chat_id || ''}
+                  onChange={e => setWpSettings({ ...wpSettings, telegram_chat_id: e.target.value })}
+                  placeholder="-1002257662366"
+                  className="w-full p-2.5 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 text-xs font-mono text-zinc-900 dark:text-white focus:outline-hidden focus:border-[#f3aa18]"
+                />
+                <p className="text-[10px] text-zinc-500 font-sans">Group, channel, or direct chat ID</p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
+                  Topic / Thread ID (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={wpSettings.telegram_thread_id !== undefined ? String(wpSettings.telegram_thread_id) : ''}
+                  onChange={e => setWpSettings({ ...wpSettings, telegram_thread_id: e.target.value })}
+                  placeholder="774"
+                  className="w-full p-2.5 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 text-xs font-mono text-zinc-900 dark:text-white focus:outline-hidden focus:border-[#f3aa18]"
+                />
+                <p className="text-[10px] text-zinc-500 font-sans">message_thread_id for forum topics</p>
+              </div>
+            </div>
+
+            {/* Event Triggers Matrix */}
+            <div className="space-y-3 pt-3 border-t border-zinc-200 dark:border-white/[0.06]">
+              <div>
+                <strong className="text-xs font-bold text-zinc-900 dark:text-zinc-200 block">
+                  Select Events to Trigger Telegram Alerts:
+                </strong>
+                <p className="text-[11px] text-zinc-500 font-sans mt-0.5">
+                  Configure which store events instantly dispatch alerts directly to your Telegram chat or topic thread.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 font-mono text-xs">
+                <label className="flex items-start gap-2.5 p-3 rounded-xl bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 cursor-pointer hover:border-zinc-300 dark:hover:border-white/15 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(wpSettings.telegram_notify_new_sale ?? 1)}
+                    onChange={e => setWpSettings({ ...wpSettings, telegram_notify_new_sale: e.target.checked ? 1 : 0 })}
+                    className="rounded text-[#f3aa18] accent-[#f3aa18] mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <span className="text-zinc-900 dark:text-zinc-200 block font-sans font-semibold text-xs">New Customer Orders (Paid Only)</span>
+                    <span className="text-[10px] text-zinc-500 block font-mono mt-0.5">Instant notification when customer has paid (status: processing)</span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 p-3 rounded-xl bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 cursor-pointer hover:border-zinc-300 dark:hover:border-white/15 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(wpSettings.telegram_notify_kyc ?? 1)}
+                    onChange={e => setWpSettings({ ...wpSettings, telegram_notify_kyc: e.target.checked ? 1 : 0 })}
+                    className="rounded text-[#f3aa18] accent-[#f3aa18] mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <span className="text-zinc-900 dark:text-zinc-200 block font-sans font-semibold text-xs">Customer Reviews & Ratings</span>
+                    <span className="text-[10px] text-zinc-500 block font-mono mt-0.5">When customers submit new product reviews with photos</span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 p-3 rounded-xl bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 cursor-pointer hover:border-zinc-300 dark:hover:border-white/15 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(wpSettings.telegram_notify_affiliate_register ?? 1)}
+                    onChange={e => setWpSettings({ ...wpSettings, telegram_notify_affiliate_register: e.target.checked ? 1 : 0 })}
+                    className="rounded text-[#f3aa18] accent-[#f3aa18] mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <span className="text-zinc-900 dark:text-zinc-200 block font-sans font-semibold text-xs">New Affiliate Registration</span>
+                    <span className="text-[10px] text-zinc-500 block font-mono mt-0.5">Instant alert when a creator registers for the affiliate program</span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 p-3 rounded-xl bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 cursor-pointer hover:border-zinc-300 dark:hover:border-white/15 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(wpSettings.telegram_notify_affiliate_payout ?? 1)}
+                    onChange={e => setWpSettings({ ...wpSettings, telegram_notify_affiliate_payout: e.target.checked ? 1 : 0 })}
+                    className="rounded text-[#f3aa18] accent-[#f3aa18] mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <span className="text-zinc-900 dark:text-zinc-200 block font-sans font-semibold text-xs">Affiliate Payout Request</span>
+                    <span className="text-[10px] text-zinc-500 block font-mono mt-0.5">Instant alert when an affiliate requests commission payout</span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 p-3 rounded-xl bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 cursor-pointer hover:border-zinc-300 dark:hover:border-white/15 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(wpSettings.telegram_notify_inventory ?? 1)}
+                    onChange={e => setWpSettings({ ...wpSettings, telegram_notify_inventory: e.target.checked ? 1 : 0 })}
+                    className="rounded text-[#f3aa18] accent-[#f3aa18] mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <span className="text-zinc-900 dark:text-zinc-200 block font-sans font-semibold text-xs">Low Stock & Inventory Alerts</span>
+                    <span className="text-[10px] text-zinc-500 block font-mono mt-0.5">When device skin variations fall below safety inventory threshold</span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 p-3 rounded-xl bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 cursor-pointer hover:border-zinc-300 dark:hover:border-white/15 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(wpSettings.telegram_notify_errors ?? 1)}
+                    onChange={e => setWpSettings({ ...wpSettings, telegram_notify_errors: e.target.checked ? 1 : 0 })}
+                    className="rounded text-[#f3aa18] accent-[#f3aa18] mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <span className="text-zinc-900 dark:text-zinc-200 block font-sans font-semibold text-xs">Critical System & Sync Errors</span>
+                    <span className="text-[10px] text-zinc-500 block font-mono mt-0.5">High-priority alerts for WooCommerce REST API, webhook or payment failures</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-zinc-200 dark:border-white/[0.06] flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handleTestTelegram}
+                disabled={isTestingTelegram}
+                className="px-4 py-2 rounded-xl bg-zinc-100 dark:bg-white/[0.06] hover:bg-zinc-200 dark:hover:bg-white/[0.1] text-xs font-bold text-zinc-900 dark:text-white flex items-center gap-2 border border-zinc-200 dark:border-white/10 uppercase tracking-wider cursor-pointer"
+              >
+                <Zap className="w-3.5 h-3.5 text-[#f3aa18]" />
+                <span>{isTestingTelegram ? 'Sending Alert...' : 'Test Telegram Alert'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSaveRemoteSettings('telegram')}
+                disabled={isSavingSettings}
+                className="px-5 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs tracking-wider uppercase transition-all shadow-md flex items-center gap-2 cursor-pointer"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>Save Telegram Config</span>
+              </button>
+            </div>
+
+            {telegramTestResult && (
+              <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs font-mono text-zinc-300">
+                <div className="flex items-center justify-between pb-1 mb-1 border-b border-zinc-800">
+                  <span className="text-zinc-400">Telegram Gateway:</span>
+                  <span className={telegramTestResult.success ? 'text-[#f3aa18] font-bold' : 'text-rose-400 font-bold'}>
+                    {telegramTestResult.success ? `DELIVERED (${telegramTestResult.latency_ms || telegramTestResult.latencyMs || 0}ms)` : 'FAILED'}
+                  </span>
+                </div>
+                <p className="text-zinc-300 font-sans">{telegramTestResult.message || telegramTestResult.error}</p>
               </div>
             )}
           </GlassCard>

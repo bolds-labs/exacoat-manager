@@ -171,6 +171,37 @@ export function applySyntheticDirectionalShading(
   }
 }
 
+/**
+ * Strict evaluation to determine if a layer is the primary base skin (e.g. Back Skin, Top Skin, Base Body).
+ * Accents, camera pieces, frames, sides, logos, and addons are strictly excluded.
+ */
+export function isBaseSkinLayer(layerName?: string, layerGroup?: string, layerId?: string): boolean {
+  const name = (layerName || '').toLowerCase().trim();
+  const id = (layerId || '').toLowerCase().trim();
+  const group = (layerGroup || '').toLowerCase().trim();
+
+  // 1. Strict Exclusion: Explicit non-primary groups are NEVER base skins
+  if (group === 'accent' || group === 'protection' || group === 'addon' || group === 'secondary') {
+    return false;
+  }
+
+  // 2. Strict Exclusion: Any layer matching accent, camera, trim, frame, sides, logo, etc.
+  const isAccentOrSecondary =
+    /\b(accent|accents|camera|lens|lenses|frame|side|sides|logo|additional|addon|hinge|spine|trackpad|palmrest|keyboard|visor|strip|stripe|ring|rings|glass|bump|island|surround)\b/i.test(name) ||
+    /\b(accent|camera|lens|frame|side|logo|hinge|spine|trackpad|palmrest|visor|strip)\b/i.test(id);
+
+  if (isAccentOrSecondary) {
+    return false;
+  }
+
+  // 3. Positive Qualification: Must explicitly be primary group OR match primary base skin terms
+  if (group === 'primary') {
+    return true;
+  }
+
+  return /\b(back|body|top|base|full)\b/i.test(name) || /\b(back|body|top|base)\b/i.test(id);
+}
+
 export const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
   maskUrl,
   textureUrl,
@@ -309,13 +340,8 @@ export const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
         ctx.drawImage(modelCutoutImg, 0, 0, 1000, 1000);
       }
 
-      // 6. Directional Bevel & Inner Shading and Master Texture Surface Shading
-      const isBackOrRequired = Boolean(
-        isRequired ||
-        layerGroup === 'primary' ||
-        /\b(back|body|top|base|full)\b/i.test(layerName) ||
-        !/\b(accent|camera lens|frame|side|logo|additional|addon)\b/i.test(layerName)
-      );
+      // 6. Directional Bevel & Inner Shading strictly on base body skins (never on accents, camera trims, or sides)
+      const isBaseSkin = isBaseSkinLayer(layerName, layerGroup);
       const isTabletOrFoldableOrLaptop =
         deviceFamily === 'tablet' ||
         deviceFamily === 'foldable' ||
@@ -324,9 +350,9 @@ export const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
         deviceFamily === 'keyboard';
       const defaultGenEnabled = !isTabletOrFoldableOrLaptop && !hasViewShadow && Boolean(maskImg);
       const shouldApplyGeneratedShadow =
-        isBackOrRequired &&
+        isBaseSkin &&
         (generatedShadowConfig?.enabled ?? defaultGenEnabled);
-      const shouldApplySurfaceGradient = Boolean(surfaceGradientEnabled);
+      const shouldApplySurfaceGradient = Boolean(surfaceGradientEnabled) && isBaseSkin;
 
       if ((shouldApplyGeneratedShadow || shouldApplySurfaceGradient) && maskImg) {
         const shadowOptions = {

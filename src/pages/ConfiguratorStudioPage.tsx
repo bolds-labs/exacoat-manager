@@ -110,6 +110,7 @@ import { FinishSurchargeTiersModal } from '../components/modals/FinishSurchargeT
 import { MarketplaceImageGeneratorModal } from '../components/configurator/MarketplaceImageGeneratorModal';
 import { WpMediaItem } from '../lib/wordpressBridge';
 import { loadCorsSafeImageBlobUrl } from '../lib/imageLoader';
+import { isBaseSkinLayer } from '../components/configurator/V2SkinCanvasLayer';
 
 export interface AssetAuditItem {
   id: string;
@@ -649,13 +650,8 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
         ctx.drawImage(modelCutoutImg, 0, 0, 1000, 1000);
       }
 
-      // 6. Directional Bevel & Inner Shading and Master Texture Surface Shading
-      const isBackOrRequired = Boolean(
-        isRequired ||
-        layerGroup === 'primary' ||
-        /\b(back|body|top|base|full)\b/i.test(layerName) ||
-        !/\b(accent|camera lens|frame|side|logo|additional|addon)\b/i.test(layerName)
-      );
+      // 6. Directional Bevel & Inner Shading strictly on base body skins (never on accents, camera trims, or sides)
+      const isBaseSkin = isBaseSkinLayer(layerName, layerGroup);
       const isTabletOrFoldableOrLaptop =
         deviceFamily === 'tablet' ||
         deviceFamily === 'foldable' ||
@@ -664,9 +660,9 @@ const V2SkinCanvasLayer: React.FC<V2SkinCanvasLayerProps> = ({
         deviceFamily === 'keyboard';
       const defaultGenEnabled = !isTabletOrFoldableOrLaptop && !hasViewShadow && Boolean(maskImg);
       const shouldApplyGeneratedShadow =
-        isBackOrRequired &&
+        isBaseSkin &&
         (generatedShadowConfig?.enabled ?? defaultGenEnabled);
-      const shouldApplySurfaceGradient = Boolean(surfaceGradientEnabled);
+      const shouldApplySurfaceGradient = Boolean(surfaceGradientEnabled) && isBaseSkin;
 
       if ((shouldApplyGeneratedShadow || shouldApplySurfaceGradient) && maskImg) {
         const shadowOptions = {

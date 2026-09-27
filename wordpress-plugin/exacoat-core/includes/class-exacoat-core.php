@@ -960,6 +960,20 @@ class Exacoat_Core {
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 
+		$register( '/diagnostics/test-telegram', [
+			'methods'             => 'POST',
+			'callback'            => function( WP_REST_Request $request ) {
+				$params    = $request->get_json_params() ?: $request->get_params();
+				$bot_token = sanitize_text_field( $params['bot_token'] ?? '' );
+				$chat_id   = sanitize_text_field( $params['chat_id'] ?? '' );
+				$thread_id = sanitize_text_field( $params['thread_id'] ?? '' );
+				$message   = sanitize_textarea_field( $params['message'] ?? '' );
+				$diag      = class_exists( 'Exacoat_Diagnostics' ) ? 'Exacoat_Diagnostics' : ( class_exists( 'Artmatter_Diagnostics' ) ? 'Artmatter_Diagnostics' : false );
+				return rest_ensure_response( $diag ? $diag::test_telegram( $bot_token, $chat_id, $thread_id, $message ) : [ 'success' => false, 'message' => 'Diagnostics module not found' ] );
+			},
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
 		$register( '/diagnostics/test-r2', [
 			'methods'             => [ 'GET', 'POST' ],
 			'callback'            => function() {
@@ -2163,8 +2177,11 @@ class Exacoat_Core {
 		$environment_values = [
 			'gemini_api_key'        => defined( 'EXA_GEMINI_API_KEY' ) ? EXA_GEMINI_API_KEY : ( defined( 'AM_GEMINI_API_KEY' ) ? AM_GEMINI_API_KEY : ( defined( 'GEMINI_API_KEY' ) ? GEMINI_API_KEY : getenv( 'EXA_GEMINI_API_KEY' ) ) ),
 			'openai_api_key'        => defined( 'EXA_OPENAI_API_KEY' ) ? EXA_OPENAI_API_KEY : ( defined( 'AM_OPENAI_API_KEY' ) ? AM_OPENAI_API_KEY : ( defined( 'OPENAI_API_KEY' ) ? OPENAI_API_KEY : getenv( 'EXA_OPENAI_API_KEY' ) ) ),
-			'pushover_app_token'    => defined( 'AM_PUSHOVER_APP_TOKEN' ) ? AM_PUSHOVER_APP_TOKEN : getenv( 'AM_PUSHOVER_APP_TOKEN' ),
-			'pushover_user_key'     => defined( 'AM_PUSHOVER_USER_KEY' ) ? AM_PUSHOVER_USER_KEY : getenv( 'AM_PUSHOVER_USER_KEY' ),
+			'pushover_app_token'    => defined( 'EXA_PUSHOVER_APP_TOKEN' ) ? EXA_PUSHOVER_APP_TOKEN : ( defined( 'AM_PUSHOVER_APP_TOKEN' ) ? AM_PUSHOVER_APP_TOKEN : ( getenv( 'EXA_PUSHOVER_APP_TOKEN' ) ?: getenv( 'AM_PUSHOVER_APP_TOKEN' ) ) ),
+			'pushover_user_key'     => defined( 'EXA_PUSHOVER_USER_KEY' ) ? EXA_PUSHOVER_USER_KEY : ( defined( 'AM_PUSHOVER_USER_KEY' ) ? AM_PUSHOVER_USER_KEY : ( getenv( 'EXA_PUSHOVER_USER_KEY' ) ?: getenv( 'AM_PUSHOVER_USER_KEY' ) ) ),
+			'telegram_bot_token'    => defined( 'EXA_TELEGRAM_BOT_TOKEN' ) ? EXA_TELEGRAM_BOT_TOKEN : ( defined( 'AM_TELEGRAM_BOT_TOKEN' ) ? AM_TELEGRAM_BOT_TOKEN : ( getenv( 'EXA_TELEGRAM_BOT_TOKEN' ) ?: getenv( 'AM_TELEGRAM_BOT_TOKEN' ) ) ),
+			'telegram_chat_id'      => defined( 'EXA_TELEGRAM_CHAT_ID' ) ? EXA_TELEGRAM_CHAT_ID : ( defined( 'AM_TELEGRAM_CHAT_ID' ) ? AM_TELEGRAM_CHAT_ID : ( getenv( 'EXA_TELEGRAM_CHAT_ID' ) ?: getenv( 'AM_TELEGRAM_CHAT_ID' ) ) ),
+			'telegram_thread_id'    => defined( 'EXA_TELEGRAM_THREAD_ID' ) ? EXA_TELEGRAM_THREAD_ID : ( defined( 'AM_TELEGRAM_THREAD_ID' ) ? AM_TELEGRAM_THREAD_ID : ( getenv( 'EXA_TELEGRAM_THREAD_ID' ) ?: getenv( 'AM_TELEGRAM_THREAD_ID' ) ) ),
 			'r2_account_id'         => defined( 'AM_R2_ACCOUNT_ID' ) ? AM_R2_ACCOUNT_ID : getenv( 'AM_R2_ACCOUNT_ID' ),
 			'r2_bucket'             => defined( 'AM_R2_BUCKET' ) ? AM_R2_BUCKET : getenv( 'AM_R2_BUCKET' ),
 			'r2_access_key'         => defined( 'AM_R2_ACCESS_KEY' ) ? AM_R2_ACCESS_KEY : getenv( 'AM_R2_ACCESS_KEY' ),
@@ -2176,11 +2193,58 @@ class Exacoat_Core {
 			'drime_parent_folder_id' => defined( 'AM_DRIME_PARENT_FOLDER_ID' ) ? AM_DRIME_PARENT_FOLDER_ID : getenv( 'AM_DRIME_PARENT_FOLDER_ID' ),
 			'supabase_service_role_key' => defined( 'AM_SUPABASE_SERVICE_ROLE_KEY' ) ? AM_SUPABASE_SERVICE_ROLE_KEY : getenv( 'AM_SUPABASE_SERVICE_ROLE_KEY' ),
 		];
-		foreach ( [ 'r2_account_id', 'r2_bucket', 'cloudflare_zone_id', 'drime_workspace_id', 'drime_parent_folder_id' ] as $public_environment_key ) {
+		foreach ( [ 'r2_account_id', 'r2_bucket', 'cloudflare_zone_id', 'drime_workspace_id', 'drime_parent_folder_id', 'telegram_chat_id', 'telegram_thread_id' ] as $public_environment_key ) {
 			if ( ! empty( $environment_values[ $public_environment_key ] ) ) {
 				$settings[ $public_environment_key ] = $environment_values[ $public_environment_key ];
 			}
 		}
+
+		// Defaults for Telegram Notification Gateway
+		if ( empty( $settings['telegram_bot_token'] ) ) {
+			$settings['telegram_bot_token'] = ! empty( $environment_values['telegram_bot_token'] ) ? $environment_values['telegram_bot_token'] : '5576968403:AAFxQrqNYAfO9GSi6QElD6fMI0-yPUTtcFA';
+		}
+		if ( empty( $settings['telegram_chat_id'] ) ) {
+			$settings['telegram_chat_id'] = ! empty( $environment_values['telegram_chat_id'] ) ? $environment_values['telegram_chat_id'] : '-1002257662366';
+		}
+		if ( ! isset( $settings['telegram_thread_id'] ) || $settings['telegram_thread_id'] === '' ) {
+			$settings['telegram_thread_id'] = ! empty( $environment_values['telegram_thread_id'] ) ? $environment_values['telegram_thread_id'] : '774';
+		}
+		if ( ! isset( $settings['telegram_enabled'] ) ) {
+			$settings['telegram_enabled'] = 1;
+		}
+		if ( ! isset( $settings['telegram_notify_new_sale'] ) ) {
+			$settings['telegram_notify_new_sale'] = 1;
+		}
+		if ( ! isset( $settings['telegram_notify_kyc'] ) ) {
+			$settings['telegram_notify_kyc'] = 1;
+		}
+		if ( ! isset( $settings['telegram_notify_affiliate_register'] ) ) {
+			$settings['telegram_notify_affiliate_register'] = 1;
+		}
+		if ( ! isset( $settings['telegram_notify_affiliate_payout'] ) ) {
+			$settings['telegram_notify_affiliate_payout'] = 1;
+		}
+		if ( ! isset( $settings['telegram_notify_inventory'] ) ) {
+			$settings['telegram_notify_inventory'] = 1;
+		}
+		if ( ! isset( $settings['telegram_notify_errors'] ) ) {
+			$settings['telegram_notify_errors'] = 1;
+		}
+
+		// Ensure Pushover keys and event defaults
+		if ( empty( $settings['pushover_app_token'] ) && ! empty( $environment_values['pushover_app_token'] ) ) {
+			$settings['pushover_app_token'] = $environment_values['pushover_app_token'];
+		}
+		if ( empty( $settings['pushover_user_key'] ) && ! empty( $environment_values['pushover_user_key'] ) ) {
+			$settings['pushover_user_key'] = $environment_values['pushover_user_key'];
+		}
+		if ( ! isset( $settings['pushover_notify_affiliate_register'] ) ) {
+			$settings['pushover_notify_affiliate_register'] = 1;
+		}
+		if ( ! isset( $settings['pushover_notify_affiliate_payout'] ) ) {
+			$settings['pushover_notify_affiliate_payout'] = 1;
+		}
+
 		$secret_status = [];
 		foreach ( $environment_values as $key => $environment_value ) {
 			$secret_status[ $key ] = [
@@ -2188,7 +2252,7 @@ class Exacoat_Core {
 				'source'     => ! empty( $environment_value ) ? 'environment' : ( ! empty( $settings[ $key ] ) ? 'settings' : 'missing' ),
 			];
 		}
-		foreach ( [ 'gemini_api_key', 'openai_api_key', 'r2_access_key', 'r2_secret_key', 'cloudflare_api_token', 'drime_access_token', 'drime_access_key', 'drime_secret_key', 'zeptomail_token', 'pushover_app_token', 'pushover_user_key', 'supabase_service_role_key', 'webhook_secret' ] as $secret_key ) {
+		foreach ( [ 'gemini_api_key', 'openai_api_key', 'r2_access_key', 'r2_secret_key', 'cloudflare_api_token', 'drime_access_token', 'drime_access_key', 'drime_secret_key', 'zeptomail_token', 'supabase_service_role_key', 'webhook_secret' ] as $secret_key ) {
 			unset( $settings[ $secret_key ] );
 		}
 
@@ -2389,6 +2453,7 @@ class Exacoat_Core {
 			'acumbamail_token',
 			'pushover_app_token',
 			'pushover_user_key',
+			'telegram_bot_token',
 		];
 
 		foreach ( $new_settings as $key => $val ) {

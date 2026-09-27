@@ -36,3 +36,12 @@ supabase/.temp/
 scratch/
 *.backup
 
+# Wallet migration data & scratch test scripts
+scripts/wallet-migration-*.json
+scripts/test-currency-detection.cjs
+scripts/test-meta-36414.cjs
+scripts/test-recent-wallet-users.cjs
+scripts/test-wallet-ids.cjs
+scripts/test-wc-meta.cjs
+scripts/test-wpswings-wallet.cjs
+

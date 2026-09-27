@@ -1662,12 +1662,9 @@ export function isBaseSkinLayer(layer: {
     group === 'accent' ||
     group === 'addon' ||
     group === 'protection' ||
-    name.includes('accent') ||
-    id.includes('accent') ||
-    name.includes('camera') ||
-    name.includes('lens') ||
-    name.includes('temper') ||
-    name.includes('screen');
+    group === 'secondary' ||
+    /\b(accent|accents|camera|lens|lenses|frame|side|sides|logo|additional|addon|hinge|spine|trackpad|palmrest|keyboard|visor|strip|stripe|ring|rings|glass|bump|island|surround|temper|screen)\b/i.test(name) ||
+    /\b(accent|camera|lens|frame|side|logo|hinge|spine|trackpad|palmrest|visor|strip)\b/i.test(id);
 
   return price <= 0 && !isAccentOrAddon;
 }
@@ -2065,16 +2062,11 @@ async function renderDeviceComposite(
       lCtx.drawImage(modelCutImg, 0, 0, 1500, 1500);
     }
 
-    // Synthetic directional inner shading for realistic skin edges & surface gradient
-    const isBackOrRequired = Boolean(
-      layer.is_required ||
-      layer.group === 'primary' ||
-      /\b(back|body|top|base|full)\b/i.test(layer.name) ||
-      !/\b(accent|camera lens|frame|side|logo|additional|addon)\b/i.test(layer.name)
-    );
+    // Synthetic directional inner shading strictly on base body skins (never on accents, camera trims, or sides)
+    const isBaseSkin = isBaseSkinLayer(layer);
     const hasViewShadow = Boolean(currentView.shadow_png_url || currentView.highlight_png_url);
 
-    if (isBackOrRequired) {
+    if (isBaseSkin) {
       lCtx.globalCompositeOperation = 'source-over';
       const finishGradEnabled = config.surfaceGradientShading?.enabled !== undefined
         ? config.surfaceGradientShading.enabled
