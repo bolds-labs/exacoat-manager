@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Directional 3D shading & surface gradient strictly isolated to primary base body skins (protects accents, camera lenses, trims, and sides)\n- Master high-res image compression (500KB+ threshold) with zero dimension resizing and companion WebP generation\n- WordPress Admin & Manager batch image optimization runner\n- Telegram notification gateway and unified multi-channel alerts (Telegram + Pushover)`,
+      changelog: `### Version ${version}\n- Fix primary layer detection in configurator engine so optional/accent parts (e.g. Additional Camera & Back Glass, Additional Back Glass) are never coerced into primary base layers with 0 extra price\n- Unify configurator part slug generation to kebab-case hyphens\n- Add Additional Back Glass (IDR 60.000) preset across studio preset packs and common parts`,
     },
   };
 

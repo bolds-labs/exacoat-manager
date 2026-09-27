@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.116",
+  "version": "0.1.117",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.116.zip?v=0.1.116",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.117.zip?v=0.1.117",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-27T19:38:40.785Z",
+  "last_updated": "2026-09-27T20:04:05.189Z",
   "sections": {
-    "changelog": "### Version 0.1.116\n- Directional 3D shading & surface gradient strictly isolated to primary base body skins (protects accents, camera lenses, trims, and sides)\n- Master high-res image compression (500KB+ threshold) with zero dimension resizing and companion WebP generation\n- WordPress Admin & Manager batch image optimization runner\n- Telegram notification gateway and unified multi-channel alerts (Telegram + Pushover)"
+    "changelog": "### Version 0.1.117\n- Fix primary layer detection in configurator engine so optional/accent parts (e.g. Additional Camera & Back Glass, Additional Back Glass) are never coerced into primary base layers with 0 extra price\n- Unify configurator part slug generation to kebab-case hyphens\n- Add Additional Back Glass (IDR 60.000) preset across studio preset packs and common parts"
   }
 }

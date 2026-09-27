@@ -186,6 +186,9 @@ export const DEVICE_FAMILY_PRESET_PACKS: Record<string, { label: string; family:
       { name: 'Back Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
       { name: 'Camera Skin', group: 'accent', is_required: false, is_optional: true, extra_price: 15000 },
       { name: 'Back Glass Skin', group: 'accent', is_required: false, is_optional: true, extra_price: 25000 },
+      { name: 'Additional Camera', group: 'accent', is_required: false, is_optional: true, extra_price: 25000 },
+      { name: 'Additional Back Glass', group: 'accent', is_required: false, is_optional: true, extra_price: 60000 },
+      { name: 'Additional Camera & Back Glass', group: 'accent', is_required: false, is_optional: true, extra_price: 85000 },
       { name: 'Accents', group: 'accent', is_required: false, is_optional: true, extra_price: 35000 },
       { name: 'Frame / Sides', group: 'protection', is_required: false, is_optional: true, extra_price: 30000 },
     ],
@@ -234,6 +237,7 @@ const COMMON_PRESET_LAYERS: SkinPartPreset[] = [
   { name: 'Top Skin', group: 'primary', is_required: true, is_optional: false, extra_price: 0 },
   { name: 'Additional Accents', group: 'accent', is_required: false, is_optional: true, extra_price: 30000 },
   { name: 'Additional Camera', group: 'accent', is_required: false, is_optional: true, extra_price: 25000 },
+  { name: 'Additional Back Glass', group: 'accent', is_required: false, is_optional: true, extra_price: 60000 },
   { name: 'Additional Camera & Back Glass', group: 'accent', is_required: false, is_optional: true, extra_price: 85000 },
   { name: 'Frame / Sides', group: 'protection', is_required: false, is_optional: true, extra_price: 30000 },
   { name: 'Bottom Base', group: 'primary', is_required: false, is_optional: true, extra_price: 120000 },
@@ -1281,7 +1285,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
               : fallbackSummary.family === 'keyboard'
               ? 'Main Body'
               : 'Back Skin';
-          const defaultLayerId = defaultLayerName.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+          const defaultLayerId = defaultLayerName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
           const fallbackProfile: DeviceConfiguratorProfile = {
             product_id: fallbackSummary.product_id,
@@ -3246,12 +3250,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
   // Layer manipulation helpers
   const handleAddPresetLayer = (preset: SkinPartPreset) => {
     if (!editingProfile) return;
-    let slug = preset.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
+    let slug = preset.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     let partName = preset.name;
 
-    if (editingProfile.layers.some((l) => l.id === slug)) {
+    if (editingProfile.layers.some((l) => l.id === slug || l.id.replace(/_/g, '-') === slug.replace(/_/g, '-'))) {
       const count = editingProfile.layers.filter((l) => l.name.toLowerCase().startsWith(preset.name.toLowerCase())).length + 1;
-      slug = `${slug}_${count}`;
+      slug = `${slug}-${count}`;
       partName = `${preset.name} ${count}`;
     }
 
@@ -3292,8 +3296,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
     const newSimLayers = { ...selectedSimLayers };
 
     pack.parts.forEach((part) => {
-      const slug = part.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
-      if (!newLayers.some((l) => l.id === slug || l.name.toLowerCase() === part.name.toLowerCase())) {
+      const slug = part.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      if (!newLayers.some((l) => l.id === slug || l.name.toLowerCase() === part.name.toLowerCase() || l.id.replace(/_/g, '-') === slug.replace(/_/g, '-'))) {
         const newLayer: ConfiguratorLayer = {
           id: slug,
           name: part.name,
@@ -3335,10 +3339,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const handleCreateCustomLayer = (rawName: string) => {
     if (!editingProfile || !rawName.trim()) return;
     const name = rawName.trim();
-    let slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
+    let slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
-    if (editingProfile.layers.some((l) => l.id === slug)) {
-      slug = `${slug}_${Date.now()}`;
+    if (editingProfile.layers.some((l) => l.id === slug || l.id.replace(/_/g, '-') === slug.replace(/_/g, '-'))) {
+      slug = `${slug}-${Date.now()}`;
     }
 
     const newLayer: ConfiguratorLayer = {
@@ -4575,12 +4579,23 @@ export const ConfiguratorStudioPage: React.FC = () => {
     editingProfile.layers.forEach((layer, idx) => {
       const isSelected = selectedSimLayers[layer.id] ?? (layer.default_selected || layer.is_required);
       if (isSelected) {
-        const isPrimary =
+        const isAddonOrAccent =
+          layer.group === 'accent' ||
+          layer.group === 'protection' ||
+          layer.group === 'addon' ||
+          Boolean(layer.is_optional) ||
+          /\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm)\b/i.test(layer.name || '') ||
+          /\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm)\b/i.test(layer.id || '');
+
+        const isPrimary = !isAddonOrAccent && (
           layer.group === 'primary' ||
           layer.id === 'back' ||
           layer.id === 'back-skin' ||
-          /\b(back|top lid|body|base|full)\b/i.test(layer.name || '') ||
-          (idx === 0 && !/\b(series|version|connectivity|model)\b/i.test(layer.name || '') && layer.id !== 'series' && layer.id !== 'version');
+          layer.id === 'top' ||
+          layer.id === 'top-lid' ||
+          /^(back|back skin|top|top skin|top lid|main body|full body|device body)$/i.test((layer.name || '').trim()) ||
+          (idx === 0 && !/\b(series|version|connectivity|model)\b/i.test(layer.name || '') && layer.id !== 'series' && layer.id !== 'version')
+        );
 
         const effectiveLayerExtra = isPrimary ? 0 : (Number(layer.extra_price) || 0);
         total += effectiveLayerExtra;
@@ -8353,11 +8368,22 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               const fSlug = finish.slug || finish.id;
                               const currentPartSlug = selectedLayerFinishes[activeTestPartId] || selectedSimFinish;
                               const isSelected = currentPartSlug === fSlug || currentPartSlug === finish.id;
-                              const isPrimary =
+                              const isAddonOrAccent =
+                                activeTestLayer?.group === 'accent' ||
+                                activeTestLayer?.group === 'protection' ||
+                                activeTestLayer?.group === 'addon' ||
+                                Boolean(activeTestLayer?.is_optional) ||
+                                /\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm)\b/i.test(activeTestLayer?.name || '') ||
+                                /\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm)\b/i.test(activeTestLayer?.id || '');
+
+                              const isPrimary = !isAddonOrAccent && (
                                 activeTestLayer?.group === 'primary' ||
                                 activeTestLayer?.id === 'back' ||
                                 activeTestLayer?.id === 'back-skin' ||
-                                /\b(back|top lid|body|base|full)\b/i.test(activeTestLayer?.name || '');
+                                activeTestLayer?.id === 'top' ||
+                                activeTestLayer?.id === 'top-lid' ||
+                                /^(back|back skin|top|top skin|top lid|main body|full body|device body)$/i.test((activeTestLayer?.name || '').trim())
+                              );
 
                               const effectiveLayerExtra = isPrimary ? 0 : (Number(activeTestLayer?.extra_price) || 0);
 
@@ -9074,11 +9100,22 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   </label>
 
                                   {(() => {
-                                    const isPrimaryLayer =
+                                    const isAddonOrAccent =
+                                      currentActiveLayer.group === 'accent' ||
+                                      currentActiveLayer.group === 'protection' ||
+                                      currentActiveLayer.group === 'addon' ||
+                                      Boolean(currentActiveLayer.is_optional) ||
+                                      /\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm)\b/i.test(currentActiveLayer.name || '') ||
+                                      /\b(additional|extra|camera|glass|accent|frame|side|sides|hinge|trackpad|palm)\b/i.test(currentActiveLayer.id || '');
+
+                                    const isPrimaryLayer = !isAddonOrAccent && (
                                       currentActiveLayer.group === 'primary' ||
                                       currentActiveLayer.id === 'back' ||
                                       currentActiveLayer.id === 'back-skin' ||
-                                      /\b(back|top lid|body|base|full)\b/i.test(currentActiveLayer.name || '');
+                                      currentActiveLayer.id === 'top' ||
+                                      currentActiveLayer.id === 'top-lid' ||
+                                      /^(back|back skin|top|top skin|top lid|main body|full body|device body)$/i.test((currentActiveLayer.name || '').trim())
+                                    );
 
                                     return (
                                       <div className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans">

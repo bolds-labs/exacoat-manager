@@ -4685,7 +4685,7 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
         const allowedFinishSlugs = choiceSlugs.length > 0 && choiceSlugs.length < 15 ? choiceSlugs : [];
 
         return {
-          id: (l.name || `layer_${idx + 1}`).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, ''),
+          id: (l.name || `layer-${idx + 1}`).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
           name: l.name || `Layer ${idx + 1}`,
           group: (l.name && ['Back', 'Top'].includes(l.name) ? 'primary' : 'accent') as any,
           is_required: l.required === '1' || l.required === true,
@@ -4702,7 +4702,7 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
       // If product has no layers configured yet, initialize with standard primary layer
       if (convertedLayers.length === 0) {
         const defaultName = family === 'laptop' ? 'Top Lid' : family === 'keyboard' ? 'Main Body' : 'Back Skin';
-        const defaultId = defaultName.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+        const defaultId = defaultName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
         const defaultAssets: Record<string, any> = {
           main_view: { render_texture_map: {}, base_hardware_body_url: '' }
         };
