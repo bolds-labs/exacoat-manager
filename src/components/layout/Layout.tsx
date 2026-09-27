@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Sidebar, NavItemKey } from './Sidebar';
 import { Header } from './Header';
 import { RoleSimulationBanner } from './RoleSimulationBanner';
+import { CommandPalette } from './CommandPalette';
 import { 
   LayoutDashboard, 
   ShoppingBag, 
@@ -36,6 +37,19 @@ export const Layout: React.FC<LayoutProps> = ({
 }) => {
   const { user } = useAuth();
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+
+  // Global keyboard shortcut to toggle Command Palette (Ctrl+K / Cmd+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const isShopManager = user?.role === 'shop_manager';
 
@@ -60,7 +74,7 @@ export const Layout: React.FC<LayoutProps> = ({
         <RoleSimulationBanner />
         <Header
           currentTab={currentTab}
-          onOpenCommandPalette={() => {}}
+          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
           onRefreshData={onRefreshData}
           onNavigateToLogs={user?.role === 'super_admin' ? () => onTabChange('audit') : undefined}
           isRefreshing={isRefreshing}
@@ -164,6 +178,13 @@ export const Layout: React.FC<LayoutProps> = ({
         </button>
       </nav>
       )}
+
+      {/* Global Command Palette / Search Workspace Modal */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onNavigateTab={onTabChange}
+      />
     </div>
   );
 };

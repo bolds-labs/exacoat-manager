@@ -81,7 +81,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={onOpenCommandPalette}
-          className="w-full flex items-center justify-between px-3 sm:px-3.5 py-2 rounded-xl bg-zinc-100 dark:bg-white/[0.03] hover:bg-zinc-200/70 dark:hover:bg-white/[0.06] border border-zinc-200 dark:border-white/[0.07] hover:border-zinc-300 dark:hover:border-white/[0.14] text-xs text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-all"
+          className="w-full flex items-center justify-between px-3 sm:px-3.5 py-2 rounded-xl bg-zinc-100 dark:bg-white/[0.03] hover:bg-zinc-200/70 dark:hover:bg-white/[0.06] border border-zinc-200 dark:border-white/[0.07] hover:border-zinc-300 dark:hover:border-white/[0.14] text-xs text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-all cursor-pointer"
         >
           <span className="flex items-center gap-2 truncate">
             <Search className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
@@ -116,7 +116,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={onOpenCommandPalette}
-          className="sm:hidden p-2 rounded-xl bg-zinc-100 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/[0.06] text-zinc-600 dark:text-zinc-400"
+          className="sm:hidden p-2 rounded-xl bg-zinc-100 dark:bg-white/[0.03] hover:bg-zinc-200 dark:hover:bg-white/[0.06] border border-zinc-200 dark:border-white/[0.06] text-zinc-600 dark:text-zinc-400 cursor-pointer"
           aria-label="Search workspace"
         >
           <Search className="w-4 h-4" />

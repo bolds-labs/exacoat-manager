@@ -1981,6 +1981,56 @@ export async function fetchAcumbamailCampaignDetailDirect(campaignId: string, to
   return { success: false, error: 'Failed to fetch campaign detail' };
 }
 
+export function cleanAntiSlopCopy(text: string): string {
+  if (!text || typeof text !== 'string') return '';
+  return text
+    // Replace em dashes and en dashes with comma or period
+    .replace(/[\u2014\u2013]|--/g, ', ')
+    // Replace exclamation marks with period
+    .replace(/!+/g, '.')
+    // Strip common AI slop words case-insensitively
+    .replace(/\belevate\b/gi, 'upgrade')
+    .replace(/\belevating\b/gi, 'upgrading')
+    .replace(/\belevates\b/gi, 'upgrades')
+    .replace(/\belevated\b/gi, 'refined')
+    .replace(/\belevation\b/gi, 'upgrade')
+    .replace(/\bseamlessly\b/gi, 'cleanly')
+    .replace(/\bseamless\b/gi, 'clean')
+    .replace(/\brevolutionary\b/gi, 'precision-crafted')
+    .replace(/\bgame-changer\b/gi, 'upgrade')
+    .replace(/\bgame-changing\b/gi, 'distinct')
+    .replace(/\bunleash\b/gi, 'unlock')
+    .replace(/\bdelve\b/gi, 'explore')
+    .replace(/\btestament\b/gi, 'proof')
+    .replace(/\btapestry\b/gi, 'lineup')
+    .replace(/\bnext-level\b/gi, 'refined')
+    .replace(/\bstate-of-the-art\b/gi, 'precision-cut')
+    // Punctuation cleanups
+    .replace(/,\s*,+/g, ', ')
+    .replace(/\.\s*\.+/g, '. ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+export interface MarketingCopyGeneratedData {
+  success: boolean;
+  subjectLines?: string[];
+  preheader?: string;
+  headline?: string;
+  subPillNotice?: string;
+  bodyText?: string;
+  ctaText?: string;
+  cards?: Array<{
+    title: string;
+    desc: string;
+    highlighted?: boolean;
+  }>;
+  promoCode?: string;
+  promoTitle?: string;
+  promoText?: string;
+  error?: string;
+}
+
 export async function generateMarketingEmailCopyDirect(params: {
   campaignType: string;
   productFocus?: string;
@@ -1988,15 +2038,7 @@ export async function generateMarketingEmailCopyDirect(params: {
   tone?: string;
   language?: string;
   targetAudience?: string;
-}): Promise<{
-  success: boolean;
-  subjectLines?: string[];
-  preheader?: string;
-  headline?: string;
-  bodyText?: string;
-  ctaText?: string;
-  error?: string;
-}> {
+}): Promise<MarketingCopyGeneratedData> {
   const geminiKey = getCachedPluginSettings().gemini_api_key || '';
   const openAiKey = getCachedPluginSettings().openai_api_key || '';
 
@@ -2007,29 +2049,97 @@ export async function generateMarketingEmailCopyDirect(params: {
     };
   }
 
-  const prompt = `You are a world-class e-commerce copywriter for Exacoat (exacoat.com), a premium precision device skin manufacturer.
-Exacoat crafts precision-cut skins and wraps for smartphones (iPhone, Samsung Galaxy, Pixel), gaming consoles, laptops (MacBook), and accessories.
-Exacoat is known for authentic textures (Carbon Fiber, Black Camo, Matrix, Swarm, Slate, Patina, Honeycomb), 360-degree millimeter precision, bubble-free installation, and sleek minimalist aesthetics.
+  const prompt = `You are the lead creative copywriter for Exacoat (exacoat.com), an industrial-design studio crafting precision-cut device wraps and skins.
+Exacoat wraps smartphones (iPhone, Samsung Galaxy, Pixel), gaming handhelds, laptops (MacBook), and accessories.
+Exacoat signature traits: authentic 3D tactile textures (Matrix, Black Camo, Swarm, Slate, Patina, Honeycomb, Matte Black), 360-degree sub-millimeter precision, bubble-free air release channels, and zero adhesive residue.
 
-CRITICAL ANTISLOP COPYWRITING RULES (MANDATORY):
-1. FORBIDDEN: Do NOT use any em dashes (the character \u2014). Use commas, periods, colons, or parentheses instead.
-2. FORBIDDEN: Do NOT use generic AI marketing buzzwords like "revolutionary", "cutting-edge", "game-changing", "seamless", "effortless", "ultimate", "state-of-the-art".
-3. Write with genuine craftsmanship, high-intent tone, and concise clarity. Keep paragraphs brief (2 to 3 sentences maximum each).
-4. Language: ${params.language === 'id' ? 'Indonesian (Bahasa Indonesia)' : 'English'}.
-5. Campaign Type: ${params.campaignType}.
-6. Target Audience: ${params.targetAudience || 'General Subscribers'}.
-7. Product / Focus: ${params.productFocus || 'Precision device skins and new textures'}.
-8. Special Offer / Promo Details: ${params.promoDetails || 'No specific discount, focus on craftsmanship and release details'}.
-9. Tone: ${params.tone || 'Confident, modern, sleek'}.
+EXACOAT BRAND VOICE & TONE (MANDATORY):
+- Tone: Dry, effortless, design-studio wit. Sharp, observant, self-aware, and clever enough to make a hardware enthusiast smirk, yet composed and premium.
+- Contrast the everyday irony: Engineers spend years shaving tenths of a millimeter off a titanium or aluminum chassis, balancing weight distribution and finishes, only for owners to face an absurd dilemma: bury all that design inside an ugly rubber brick case that ruins the pocket feel, or carry it bare and let table grit, pocket keys, and greasy smudges scratch the glass.
+- Exacoat is the clean third path: 0.2mm millimeter-cut cast vinyl that hugs every chamfer and speaker grille, adding real tactile grip and scratch defense without adding bulk.
+- Avoid generic marketing brochure language. Talk like a sharp hardware insider who respects great engineering.
+
+STRICT ANTISLOP COPYWRITING RULES (MANDATORY):
+1. STRICTLY FORBIDDEN: Do NOT use the word "elevate" or any of its forms.
+2. STRICTLY FORBIDDEN: Do NOT use generic AI marketing buzzwords: "revolutionary", "game-changer", "unleash", "seamless", "cutting-edge", "ultimate armor", "unparalleled", "effortless", "state-of-the-art", "delve", "testament", "tapestry", "landscape".
+3. STRICTLY FORBIDDEN: Do NOT use any em dashes (\u2014) or en dashes (\u2013) or double hyphens (--). Use commas, periods, colons, or parentheses instead.
+4. STRICTLY FORBIDDEN: Do NOT use exclamation marks (!). Keep the tone confident, understated, and sharp.
+5. NO WALLS OF TEXT: Keep body paragraphs short (1 to 2 sentences per paragraph, maximum 2 to 3 brief paragraphs).
+6. SUPPORT COMPLEX CARDS: Always generate 2 to 4 structured feature or comparison cards ("cards") to break up the layout visually.
+7. Language: ${params.language === 'id' ? 'Indonesian (Bahasa Indonesia)' : 'English'}.
+
+Campaign Context:
+- Campaign Type: ${params.campaignType}
+- Target Audience: ${params.targetAudience || 'Hardware enthusiasts and customers'}
+- Product / Focus: ${params.productFocus || 'Precision device skins and new textures'}
+- Special Offer / Promo Details: ${params.promoDetails || 'No specific discount, focus on craftsmanship and release details'}
+- Tone Preference: ${params.tone || 'Exacoat Studio Wit (Dry & Observant)'}
 
 Format your response strictly as valid, raw JSON (no markdown formatting, no code fences):
 {
   "subjectLines": ["Subject Option 1", "Subject Option 2", "Subject Option 3"],
-  "preheader": "Short preview snippet text under 90 characters",
-  "headline": "Bold, captivating email headline",
-  "bodyText": "Paragraph 1\\n\\nParagraph 2\\n\\nParagraph 3",
-  "ctaText": "Active CTA button label (e.g. Explore Collection, Claim 20% Off, Order Now)"
+  "preheader": "Short preview snippet text under 85 characters without em dashes",
+  "headline": "Bold, witty display headline",
+  "subPillNotice": "Capsule notice pill (e.g. Free Replacement Guarantee • Sub-Millimeter Fit)",
+  "bodyText": "Paragraph 1\\n\\nParagraph 2",
+  "ctaText": "UPPERCASE CTA LABEL (e.g. ORDER YOUR SKIN, EXPLORE MATRIX, CLAIM 15% OFF)",
+  "cards": [
+    {
+      "title": "Card 1 Title",
+      "desc": "Card 1 witty, concise description explaining a specific real-world benefit",
+      "highlighted": true
+    },
+    {
+      "title": "Card 2 Title",
+      "desc": "Card 2 witty, concise description",
+      "highlighted": false
+    },
+    {
+      "title": "Card 3 Title",
+      "desc": "Card 3 witty, concise description",
+      "highlighted": false
+    },
+    {
+      "title": "Card 4 Title",
+      "desc": "Card 4 witty, concise description",
+      "highlighted": false
+    }
+  ],
+  "promoCode": "${params.promoDetails ? 'CODE' : ''}",
+  "promoTitle": "${params.promoDetails ? 'Offer Title' : ''}",
+  "promoText": "${params.promoDetails ? 'Offer description' : ''}"
 }`;
+
+  const parseAndSanitizeResponse = (rawText: string): MarketingCopyGeneratedData => {
+    const cleanJson = rawText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+    const parsed = JSON.parse(cleanJson);
+
+    const subjectLines = Array.isArray(parsed.subjectLines)
+      ? parsed.subjectLines.map((s: string) => cleanAntiSlopCopy(s))
+      : [];
+
+    const cards = Array.isArray(parsed.cards)
+      ? parsed.cards.map((c: any) => ({
+          title: cleanAntiSlopCopy(c.title || ''),
+          desc: cleanAntiSlopCopy(c.desc || ''),
+          highlighted: Boolean(c.highlighted),
+        })).filter((c: any) => Boolean(c.title))
+      : [];
+
+    return {
+      success: true,
+      subjectLines,
+      preheader: cleanAntiSlopCopy(parsed.preheader || ''),
+      headline: cleanAntiSlopCopy(parsed.headline || ''),
+      subPillNotice: cleanAntiSlopCopy(parsed.subPillNotice || ''),
+      bodyText: cleanAntiSlopCopy(parsed.bodyText || ''),
+      ctaText: cleanAntiSlopCopy(parsed.ctaText || 'ORDER YOUR SKIN').toUpperCase(),
+      cards: cards.length > 0 ? cards : undefined,
+      promoCode: parsed.promoCode ? cleanAntiSlopCopy(parsed.promoCode) : undefined,
+      promoTitle: parsed.promoTitle ? cleanAntiSlopCopy(parsed.promoTitle) : undefined,
+      promoText: parsed.promoText ? cleanAntiSlopCopy(parsed.promoText) : undefined,
+    };
+  };
 
   if (geminiKey) {
     try {
@@ -2045,16 +2155,7 @@ Format your response strictly as valid, raw JSON (no markdown formatting, no cod
       if (res.ok) {
         const data = await res.json();
         const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const cleanJson = rawText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
-        const parsed = JSON.parse(cleanJson);
-        return {
-          success: true,
-          subjectLines: parsed.subjectLines || [],
-          preheader: parsed.preheader || '',
-          headline: parsed.headline || '',
-          bodyText: parsed.bodyText || '',
-          ctaText: parsed.ctaText || 'Shop Now',
-        };
+        return parseAndSanitizeResponse(rawText);
       }
     } catch (err: any) {
       console.warn('[generateMarketingEmailCopyDirect] Gemini failed, checking OpenAI:', err);
@@ -2082,15 +2183,7 @@ Format your response strictly as valid, raw JSON (no markdown formatting, no cod
       if (res.ok) {
         const data = await res.json();
         const rawContent = data.choices?.[0]?.message?.content || '{}';
-        const parsed = JSON.parse(rawContent);
-        return {
-          success: true,
-          subjectLines: parsed.subjectLines || [],
-          preheader: parsed.preheader || '',
-          headline: parsed.headline || '',
-          bodyText: parsed.bodyText || '',
-          ctaText: parsed.ctaText || 'Shop Now',
-        };
+        return parseAndSanitizeResponse(rawContent);
       }
     } catch (err: any) {
       return { success: false, error: err.message };
@@ -2126,41 +2219,60 @@ export async function generateMarketingFullHtmlEmailDirect(params: {
   const isMjml = params.format === 'mjml';
   const langPrompt = params.language === 'id' ? 'Bahasa Indonesia' : 'English';
 
-  const systemInstructions = `You are an elite email template designer and developer for Exacoat (exacoat.com), a luxury precision device skins and wraps manufacturer.
-Exacoat products: authentic 3M/cast vinyl skins for iPhones, Samsung Galaxy, Pixel, MacBooks, gaming consoles. Key features: bubble-free air release, scratch & mold resistant, zero adhesive residue, 360-degree precision fit.
+  const systemInstructions = `You are the lead email architect and creative copywriter for Exacoat (exacoat.com), an industrial-design studio that crafts precision-cut device wraps and skins.
+
+EXACOAT BRAND VOICE & WIT:
+- Dry, effortless, design-studio wit. Sharp, observant, self-aware, and clever enough to make a hardware enthusiast smirk, yet composed and premium.
+- Contrast the everyday irony: Engineers spend years shaving tenths of a millimeter off a titanium or aluminum frame, only for owners to face an absurd dilemma: bury it in a thick plastic case that ruins the pocket ergonomics, or leave it bare to get micro-scratched by pocket grit. Exacoat provides authentic cast vinyl protection cut to the sub-millimeter with true tactile textures and zero bulk.
+- STRICT BAN on "elevate" and all its derivatives.
+- STRICT BAN on generic AI buzzwords: "revolutionary", "game-changer", "unleash", "seamless", "ultimate armor", "unparalleled", "effortless", "state-of-the-art", "delve", "testament", "tapestry".
+- STRICT BAN on em dashes (\u2014) or en dashes (\u2013) or double hyphens (--). Use commas, periods, or colons.
+- STRICT BAN on exclamation marks (!). Keep the tone confident, understated, and sharp.
 
 TASK:
 ${isMjml 
-  ? 'Generate a complete, production-ready, beautifully designed MJML semantic email template (<mjml>...</mjml>). Include <mj-head> with Plus Jakarta Sans font, <mj-body background-color="#050507">, <mj-wrapper background-color="#0e0e11" border-radius="28px" border="1px solid #1f1f24" padding="28px 24px">, rounded card elements, Exacoat branding, headline, copy, and CTAs.'
-  : 'Generate a complete, production-ready, beautifully designed responsive HTML email (<!doctype html>...</html>). Table-based responsive layout with max-width 560px, rounded container (border-radius: 28px), rounded cards (border-radius: 20px), pill capsules (border-radius: 9999px).'
+  ? 'Generate a complete, production-ready, beautifully designed MJML semantic email template (<mjml>...</mjml>) featuring a rich, multi-card layout (NOT just a wall of text!).'
+  : 'Generate a complete, production-ready, beautifully designed responsive HTML email (<!doctype html>...</html>) with multi-card grids and zero walls of text.'
 }
 
-CRITICAL DESIGN & CODING SPECIFICATIONS:
-1. Format: ${isMjml ? 'Valid MJML root tag <mjml> to </mjml>' : 'Valid HTML5 <!doctype html> to </html>'}.
-2. Rounded Aesthetics:
-   - Outer container / wrapper: border-radius: 28px
-   - Internal cards, product boxes, or grids: border-radius: 20px
-   - Buttons, badges, and pill tags: border-radius: 9999px (capsules)
-3. Color Palette (${isDark ? 'Dark Mode' : 'Light Mode'}):
-   - Outer background: ${isDark ? '#060608' : '#f5f5f7'}
-   - Card container background: ${isDark ? '#0e0e11' : '#ffffff'}
-   - Card border: ${isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e4e4e7'}
-   - Headings: ${isDark ? '#ffffff' : '#111111'}
-   - Body text: ${isDark ? '#a1a1aa' : '#3f3f46'}
-   - Accents / Primary CTA: Amber #f59e0b (or gold #eab308) with bold black text (#000000), or sleek white pill
-4. Font: Plus Jakarta Sans, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif.
-5. Header & Branding:
-   - Exacoat logo or bold stylized "EXACOAT" text mark
-   - Category badge pill
-6. Footer Requirements:
-   - Social links: Instagram, X (do not write Twitter), YouTube
-   - Copyright: &copy; 2016-2026 Exacoat (do not add Precision device skins)
-   - Mandatory Acumbamail placeholders: <a href="{{webview_url}}">View in browser</a> and <a href="{{unsubscribe_url}}">Unsubscribe</a>
-7. ANTISLOP RULES (MANDATORY):
-   - DO NOT use any em dashes (the character \u2014). Use commas, colons, or parentheses.
-   - DO NOT use generic AI marketing buzzwords like "revolutionary", "cutting-edge", "game-changing", "seamless", "effortless", "state-of-the-art".
-   - Keep copy sharp, tactile, confident, and focused on device protection and aesthetic feel.
-   - Language: ${langPrompt}.
+ARCHITECTURAL SPECIFICATIONS (MJML MULTI-CARD DESIGN):
+1. Head Section:
+   - <mj-head>
+     <mj-font name="Plus Jakarta Sans" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&display=swap" />
+     <mj-attributes>
+       <mj-all font-family="Plus Jakarta Sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" />
+       <mj-text font-size="14.5px" color="#a1a1aa" line-height="1.7" />
+     </mj-attributes>
+   </mj-head>
+2. Body & Wrapper (${isDark ? 'Dark Mode' : 'Light Mode'}):
+   - <mj-body background-color="${isDark ? '#050507' : '#f7f7f7'}">
+   - <mj-wrapper background-color="${isDark ? '#0e0e11' : '#ffffff'}" border-radius="28px" border="1px solid ${isDark ? '#1f1f24' : '#e5e5e5'}" padding="28px 24px">
+3. Top Header:
+   - Stylized "EXACOAT" text mark (font-size="20px", font-weight="900", color="${isDark ? '#ffffff' : '#000000'}", letter-spacing="1px")
+   - Category badge pill (e.g. background-color="rgba(245,158,11,0.15)", color="#fbbf24", border="1px solid rgba(245,158,11,0.3)", border-radius="999px", font-size="11px", font-weight="700")
+4. Sub-Pill Notice Capsule:
+   - Centered capsule pill (background-color="${isDark ? 'rgba(255,255,255,0.04)' : '#f4f4f5'}", color="${isDark ? '#ffffff' : '#18181b'}", border="1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e4e4e7'}", border-radius="999px", font-size="11.5px", font-weight="600")
+5. Display Headline & Concise Lead:
+   - Bold display headline (font-size="24px", font-weight="800", color="${isDark ? '#ffffff' : '#111111'}")
+   - Short intro text (maximum 2 brief sentences, no wall of text!)
+6. COMPLEX CARD SECTIONS (MANDATORY - MUST INCLUDE RICH CARDS):
+   Include at least one or two rich card sections:
+   - 2-Column Feature / Spec / Comparison Cards:
+     Use <mj-section padding="8px 0 16px"> with <mj-column width="48%" background-color="${isDark ? '#121215' : '#fafafa'}" border="1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e5e5'}" border-radius="20px" padding="16px">, plus <mj-column width="4%"></mj-column> gap, and another 48% column.
+     One column highlighted with border="1px solid rgba(245,158,11,0.55)".
+   - Or Comparison Cards:
+     e.g. Bare Device (Micro-scratch risk) vs Bulky Case (Ruins ergonomics) vs Exacoat Wrap (0.2mm precision, tactile grip).
+   - Or Material Cards:
+     e.g. Matrix Black (3D Hexagon Grip) vs Matte Slate (Anti-Fingerprint).
+7. Promo Box (if applicable):
+   - Box with dashed amber border, monospace promo code pill.
+8. Call to Action:
+   - High-contrast pill button (<mj-button background-color="#f59e0b" color="#000000" font-weight="900" font-size="14.5px" border-radius="999px" inner-padding="15px 38px">)
+9. Footer:
+   - Social links: Instagram, X, YouTube
+   - &copy; 2016-2026 Exacoat
+   - Acumbamail placeholders: <a href="{{webview_url}}">View in browser</a> and <a href="{{unsubscribe_url}}">Unsubscribe</a>
+10. Language: ${langPrompt}.
 
 USER DESIGN REQUEST:
 ${params.prompt}
@@ -2168,9 +2280,29 @@ ${params.subject ? `Subject Context: ${params.subject}` : ''}
 
 Format your response strictly as valid, raw JSON (no markdown formatting, no code fences):
 {
-  "subject": "Compelling subject line",
+  "subject": "Compelling, witty subject line without em dashes",
   "html": "${isMjml ? '<mjml>...</mjml>' : '<!doctype html>...'}"
 }`;
+
+  const cleanGeneratedEmail = (parsed: any) => {
+    let cleanSubject = cleanAntiSlopCopy(parsed.subject || params.subject || 'Special Update from Exacoat');
+    let cleanHtml = parsed.html || '';
+    if (cleanHtml) {
+      cleanHtml = cleanHtml
+        .replace(/[\u2014\u2013]|--/g, ', ')
+        .replace(/\belevate\b/gi, 'upgrade')
+        .replace(/\belevating\b/gi, 'upgrading')
+        .replace(/\belevates\b/gi, 'upgrades')
+        .replace(/\belevated\b/gi, 'refined')
+        .replace(/\bseamlessly\b/gi, 'cleanly')
+        .replace(/\bseamless\b/gi, 'clean');
+    }
+    return {
+      success: true,
+      subject: cleanSubject,
+      html: cleanHtml,
+    };
+  };
 
   if (geminiKey) {
     try {
@@ -2188,11 +2320,7 @@ Format your response strictly as valid, raw JSON (no markdown formatting, no cod
         const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
         const cleanJson = rawText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
         const parsed = JSON.parse(cleanJson);
-        return {
-          success: true,
-          subject: parsed.subject || params.subject || 'Special Update from Exacoat',
-          html: parsed.html || '',
-        };
+        return cleanGeneratedEmail(parsed);
       }
     } catch (err: any) {
       console.warn('[generateMarketingFullHtmlEmailDirect] Gemini failed, trying OpenAI:', err);
@@ -2221,11 +2349,7 @@ Format your response strictly as valid, raw JSON (no markdown formatting, no cod
         const data = await res.json();
         const rawContent = data.choices?.[0]?.message?.content || '{}';
         const parsed = JSON.parse(rawContent);
-        return {
-          success: true,
-          subject: parsed.subject || params.subject || 'Special Update from Exacoat',
-          html: parsed.html || '',
-        };
+        return cleanGeneratedEmail(parsed);
       }
     } catch (err: any) {
       return { success: false, error: err.message };

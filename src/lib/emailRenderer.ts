@@ -1420,6 +1420,9 @@ export interface MarketingEmailOptions {
   theme?: 'dark' | 'light';
   subject: string;
   preheaderText?: string;
+  showHeader?: boolean;
+  showBadge?: boolean;
+  logoPosition?: 'top' | 'bottom' | 'none';
   badgeText?: string;
   badgeVariant?: 'amber' | 'emerald' | 'blue' | 'purple' | 'zinc';
   headline: string;
@@ -1479,6 +1482,9 @@ const DEFAULT_TRUST_CARDS: TrustFeatureCard[] = [
 
 export function renderMarketingEmailHtml(options: MarketingEmailOptions): RenderedEmail {
   const isDark = (options.theme ?? 'dark') === 'dark';
+  const showHeader = Boolean(options.showHeader);
+  const showBadge = Boolean(options.showBadge);
+  const logoPosition = options.logoPosition ?? 'top';
   const subject = escapeHtml(options.subject || 'Special Update from Exacoat');
   const preheader = escapeHtml(options.preheaderText || 'Precision crafted device skins and exclusive announcements.');
   const headline = escapeHtml(options.headline || 'Exclusive Announcement');
@@ -1545,7 +1551,7 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
     }
   }
 
-  // Sub-pill Capsule Notice (Compact, Single-Line, Not Full Width)
+  // Sub-pill Capsule Notice (Compact, Single-Line, Wide Letter-Spacing, Clean Upper)
   let subPillHtml = '';
   if (options.subPillNotice) {
     const pillBg = isDark ? 'rgba(255,255,255,0.04)' : '#f4f4f5';
@@ -1556,8 +1562,8 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
           <td align="center">
             <table cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;background:${pillBg};border:1px solid ${pillBorderColor};border-radius:9999px;">
               <tr>
-                <td style="padding:6px 20px;text-align:center;white-space:nowrap;">
-                  <span style="font-size:11.5px;font-weight:600;color:${textHeading};letter-spacing:0.25px;white-space:nowrap;display:inline-block;">
+                <td style="padding:4px 14px;text-align:center;white-space:nowrap;">
+                  <span style="font-size:10px;font-weight:700;color:${textHeading};letter-spacing:1.5px;text-transform:uppercase;white-space:nowrap;display:inline-block;">
                     ${escapeHtml(options.subPillNotice)}
                   </span>
                 </td>
@@ -1700,6 +1706,53 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
   const footerNote = options.footerNote ? `<p style="margin:0 0 12px;font-size:13px;line-height:1.6;color:${textBody};text-align:center;">${escapeHtml(options.footerNote)}</p>` : '';
   const brandLogo = isDark ? BRAND_LOGO_WHITE_HTML : BRAND_LOGO_HTML;
 
+  // Header and Logo positioning logic
+  let topHeaderHtml = '';
+  if (showHeader) {
+    const badgeHtml = showBadge ? `
+      <td align="right" valign="middle">
+        <span style="display:inline-block;padding:3px 10px;background:${badgeBg};color:${badgeColor};font-size:9.5px;font-weight:700;border-radius:9999px;border:1px solid ${badgeBorder};letter-spacing:1.5px;text-transform:uppercase;">${badgeText}</span>
+      </td>` : '';
+
+    topHeaderHtml = `
+      <!-- Top Header (Logo + Badge) -->
+      <tr>
+        <td style="padding:28px 36px 20px;border-bottom:1px solid ${headerDivider};" class="mobile-padding">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td valign="middle">
+                <a href="https://exacoat.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">
+                  ${brandLogo}
+                </a>
+              </td>
+              ${badgeHtml}
+            </tr>
+          </table>
+        </td>
+      </tr>`;
+  }
+
+  // In-body logo when header is not shown
+  let topLogoHtml = '';
+  if (!showHeader && logoPosition === 'top') {
+    topLogoHtml = `
+      <div style="margin:0 0 24px;text-align:center;">
+        <a href="https://exacoat.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">
+          ${brandLogo}
+        </a>
+      </div>`;
+  }
+
+  let bottomLogoHtml = '';
+  if (!showHeader && logoPosition === 'bottom') {
+    bottomLogoHtml = `
+      <div style="margin:28px 0 16px;text-align:center;">
+        <a href="https://exacoat.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">
+          ${brandLogo}
+        </a>
+      </div>`;
+  }
+
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -1745,25 +1798,12 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
         <!-- Main Card Container (Rounded 28px) -->
         <table class="container-table" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:${bgCard};border:1px solid ${cardBorder};border-radius:28px;border-collapse:separate;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,0.5);">
           <tbody>
-            <!-- Top Header (Logo + Badge) -->
-            <tr>
-              <td style="padding:28px 36px 20px;border-bottom:1px solid ${headerDivider};" class="mobile-padding">
-                <table width="100%" cellpadding="0" cellspacing="0">
-                  <tr>
-                    <td valign="middle">
-                      ${brandLogo}
-                    </td>
-                    <td align="right" valign="middle">
-                      <span style="display:inline-block;padding:5px 13px;background:${badgeBg};color:${badgeColor};font-size:11px;font-weight:700;border-radius:999px;border:1px solid ${badgeBorder};letter-spacing:0.4px;text-transform:uppercase;">${badgeText}</span>
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
+            ${topHeaderHtml}
 
             <!-- Message Headline & Body -->
             <tr>
               <td style="padding:32px 36px 28px;" class="mobile-padding">
+                ${topLogoHtml}
                 ${bannerHtml}
                 ${subPillHtml}
                 <h1 style="margin:0 0 16px;font-size:24px;font-weight:800;color:${textHeading};letter-spacing:-0.5px;line-height:1.3;">${headline}</h1>
@@ -1772,6 +1812,7 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
                 ${highlightHtml}
                 ${trustGridHtml}
                 ${ctaButtonsHtml}
+                ${bottomLogoHtml}
                 ${footerNote}
 
                 <!-- Dedicated Spacer above Footer -->
