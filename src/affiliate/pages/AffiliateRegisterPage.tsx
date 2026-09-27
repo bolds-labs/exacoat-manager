@@ -386,9 +386,20 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
 
               {/* Program Terms Summary */}
               <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] text-[11px] text-zinc-400 space-y-1">
-                <div className="flex items-center gap-1.5 text-zinc-300 font-semibold">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Program Policy Highlights</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-zinc-300 font-semibold">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Program Policy Highlights</span>
+                  </div>
+                  <a
+                    href="https://exacoat.com/affiliate/terms-and-conditions"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#f3aa18] hover:text-[#f8ba3a] underline underline-offset-2 transition-colors font-medium text-[11px] inline-flex items-center gap-1"
+                  >
+                    <span>Full Terms</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
                 </div>
                 <p className="leading-relaxed">
                   Commissions are 20% on product subtotal (excluding shipping and taxes). Self referrals are strictly prohibited. Cancelled or refunded orders forfeit commission. Payout minimum is Rp 250.000.
@@ -407,7 +418,7 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
               </div>
 
               {/* Submit Button */}
-              <div className="pt-2">
+              <div className="pt-2 space-y-2.5">
                 <Button
                   type="submit"
                   variant="primary"
@@ -418,6 +429,19 @@ export const AffiliateRegisterPage: React.FC<AffiliateRegisterPageProps> = ({ on
                 >
                   Submit Affiliate Application
                 </Button>
+
+                <p className="text-[11px] text-zinc-400 text-center leading-relaxed">
+                  By submitting this application, you acknowledge that you have read and agree to be bound by the{' '}
+                  <a
+                    href="https://exacoat.com/affiliate/terms-and-conditions"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#f3aa18] hover:text-[#f8ba3a] underline underline-offset-2 transition-colors font-medium"
+                  >
+                    Exacoat Affiliate Terms &amp; Conditions
+                  </a>
+                  .
+                </p>
               </div>
             </form>
 
