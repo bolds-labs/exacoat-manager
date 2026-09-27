@@ -67,6 +67,9 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
     : null;
 
   const totalItemsCount = (order.items || []).reduce((sum, item) => sum + (item.quantity || 1), 0);
+  const cleanCustomerNote = (order.customer_note || '')
+    .replace(/(?:shipping courier|jasa kirim|courier)\s*:\s*[^\r\n]+/gi, '')
+    .trim();
 
   const metaList = Array.isArray(order.meta_data) ? order.meta_data : [];
   const isWarrantyOrder =
@@ -289,7 +292,7 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
               <div class="col-text"><strong>Courier:</strong> ${courierName}</div>
               <div class="col-text"><strong>Tracking Resi:</strong> ${trackingNumber || 'Pending Pickup Allocation'}</div>
               <div class="col-text"><strong>Total Line Items:</strong> ${(order.items || []).length} (${totalItemsCount} units)</div>
-              ${order.customer_note ? `<div class="col-text" style="margin-top: 6px; padding: 8px; background: #fff; border: 1.5px solid #d1d5db; border-radius: 6px; font-size: 11px; line-height: 1.45; color: #111827; white-space: pre-line;"><strong>Production Note:</strong>\n${order.customer_note}</div>` : ''}
+              ${cleanCustomerNote ? `<div class="col-text" style="margin-top: 6px; padding: 8px; background: #fff; border: 1.5px solid #d1d5db; border-radius: 6px; font-size: 11px; line-height: 1.45; color: #111827; white-space: pre-line;"><strong>Production Note:</strong>\n${cleanCustomerNote}</div>` : ''}
             </div>
           </div>
 
@@ -437,10 +440,10 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
               <p className="text-[11px] text-neutral-800">
                 <strong>Total Items:</strong> {(order.items || []).length} lines ({totalItemsCount} units)
               </p>
-              {order.customer_note && (
+              {cleanCustomerNote && (
                 <div className="text-[10px] text-neutral-700 mt-2 border-t border-neutral-200 pt-1.5 whitespace-pre-line bg-amber-50/70 p-2 rounded border border-amber-200/60 leading-relaxed font-sans">
                   <strong className="text-neutral-900 block font-bold mb-0.5">Production Note:</strong>
-                  {order.customer_note}
+                  {cleanCustomerNote}
                 </div>
               )}
             </div>

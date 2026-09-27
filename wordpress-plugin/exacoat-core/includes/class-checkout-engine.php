@@ -104,6 +104,10 @@ class Exacoat_Checkout_Engine {
 		add_filter( 'midtrans_snap_params', [ __CLASS__, 'reconcile_midtrans_snap_parameters' ], 99, 1 );
 		add_filter( 'woocommerce_midtrans_snap_params', [ __CLASS__, 'reconcile_midtrans_snap_parameters' ], 99, 1 );
 		add_filter( 'midtrans_snap_params_sub_before_charge', [ __CLASS__, 'reconcile_midtrans_snap_parameters' ], 99, 1 );
+
+		// 14. Customer Note Sanitizer (Prevents courier names or automated tags from leaking into customer note)
+		add_action( 'woocommerce_checkout_order_created', [ __CLASS__, 'sanitize_order_customer_note' ], 20, 1 );
+		add_action( 'woocommerce_store_api_checkout_order_processed', [ __CLASS__, 'sanitize_order_customer_note' ], 20, 1 );
 	}
 
 	/**
@@ -1506,6 +1510,15 @@ class Exacoat_Checkout_Engine {
 			}
 		}
 
+		// Strip automated courier notes from customer note so they are never saved into database
+		$raw_note = (string) $order->get_customer_note();
+		$note_changed = false;
+		if ( ! empty( $raw_note ) && preg_match( '/(?:shipping courier|jasa kirim|courier)\s*:\s*[^\r\n]+/i', $raw_note ) ) {
+			$cleaned_note = trim( preg_replace( '/(?:shipping courier|jasa kirim|courier)\s*:\s*[^\r\n]+/i', '', $raw_note ) );
+			$order->set_customer_note( $cleaned_note );
+			$note_changed = true;
+		}
+
 		if ( ! $already_attached ) {
 			// Clear out existing dummy or zero-cost shipping items from headless cart
 			foreach ( $existing_shipping as $ship_id => $ship_item ) {
@@ -1521,6 +1534,33 @@ class Exacoat_Checkout_Engine {
 
 			$order->calculate_totals( false );
 			$order->save();
+		} elseif ( $note_changed ) {
+			$order->save();
+		}
+	}
+
+	/**
+	 * Sanitize customer note on newly created orders to ensure automated courier strings
+	 * (e.g. "Shipping Courier: JNE - REG") are never persisted into database or displayed as customer notes.
+	 *
+	 * @param \WC_Order|mixed $order
+	 */
+	public static function sanitize_order_customer_note( $order ): void {
+		if ( ! $order instanceof \WC_Order ) {
+			return;
+		}
+
+		$raw_note = (string) $order->get_customer_note();
+		if ( empty( $raw_note ) ) {
+			return;
+		}
+
+		if ( preg_match( '/(?:shipping courier|jasa kirim|courier)\s*:\s*[^\r\n]+/i', $raw_note ) ) {
+			$clean_note = trim( preg_replace( '/(?:shipping courier|jasa kirim|courier)\s*:\s*[^\r\n]+/i', '', $raw_note ) );
+			if ( $clean_note !== $raw_note ) {
+				$order->set_customer_note( $clean_note );
+				$order->save();
+			}
 		}
 	}
 
