@@ -42,6 +42,7 @@ export const WhatsAppAutomationSection: React.FC = () => {
     business_account_id: '',
     telegram_bot_token: '',
     telegram_chat_id: '',
+    telegram_thread_id: '',
     telegram_alerts_enabled: false,
     events: {
       processing: true,
@@ -54,6 +55,7 @@ export const WhatsAppAutomationSection: React.FC = () => {
   const [isLoadingWa, setIsLoadingWa] = useState(false);
   const [isSavingWa, setIsSavingWa] = useState(false);
   const [showToken, setShowToken] = useState(false);
+  const [showTgToken, setShowTgToken] = useState(false);
 
   // Test Message State
   const [testPhone, setTestPhone] = useState('');
@@ -90,7 +92,14 @@ export const WhatsAppAutomationSection: React.FC = () => {
       ]);
 
       if (waRes.success && waRes.settings) {
-        setWaSettings(waRes.settings);
+        setWaSettings((prev) => ({
+          ...prev,
+          ...waRes.settings,
+          events: {
+            ...prev.events,
+            ...(waRes.settings?.events || {}),
+          },
+        }));
       }
       if (bcaRes.success && bcaRes.status) {
         setBcaStatus(bcaRes.status);
@@ -116,7 +125,16 @@ export const WhatsAppAutomationSection: React.FC = () => {
       const res = await saveWhatsAppSettings(waSettings);
       if (res.success) {
         showToast('success', 'Configuration Saved', 'WhatsApp configuration saved');
-        if (res.settings) setWaSettings(res.settings);
+        if (res.settings) {
+          setWaSettings((prev) => ({
+            ...prev,
+            ...res.settings,
+            events: {
+              ...prev.events,
+              ...(res.settings?.events || {}),
+            },
+          }));
+        }
       } else {
         showToast('error', 'Save Failed', res.error || 'Failed to save settings');
       }
@@ -302,19 +320,22 @@ export const WhatsAppAutomationSection: React.FC = () => {
             <label className="flex items-start gap-3 p-3 rounded-xl border border-zinc-800 bg-zinc-950/60 cursor-pointer hover:border-zinc-700 transition-colors">
               <input
                 type="checkbox"
-                checked={waSettings.events.processing}
+                checked={Boolean(waSettings.events?.processing)}
                 onChange={(e) =>
-                  setWaSettings({
-                    ...waSettings,
-                    events: { ...waSettings.events, processing: e.target.checked },
-                  })
+                  setWaSettings((prev) => ({
+                    ...prev,
+                    events: {
+                      ...(prev.events || { processing: true, completed: true, smb_ready: true, smb_picked: true }),
+                      processing: e.target.checked,
+                    },
+                  }))
                 }
                 className="mt-0.5 w-4 h-4 accent-amber-500 rounded"
               />
               <div className="text-xs">
                 <div className="font-bold text-white">Order Confirmed</div>
                 <div className="text-[11px] text-zinc-400">
-                  Sends <code className="text-amber-400">notif_order_confirmed</code> on payment confirmed. Warranty and Redeem orders are automatically detected and bypassed with an internal note.
+                  Sends <code className="text-amber-400">notif_order_confirmed</code> on payment confirmed (status: processing). Warranty and Redeem orders are automatically detected and bypassed with an internal note.
                 </div>
               </div>
             </label>
@@ -322,12 +343,15 @@ export const WhatsAppAutomationSection: React.FC = () => {
             <label className="flex items-start gap-3 p-3 rounded-xl border border-zinc-800 bg-zinc-950/60 cursor-pointer hover:border-zinc-700 transition-colors">
               <input
                 type="checkbox"
-                checked={waSettings.events.completed}
+                checked={Boolean(waSettings.events?.completed)}
                 onChange={(e) =>
-                  setWaSettings({
-                    ...waSettings,
-                    events: { ...waSettings.events, completed: e.target.checked },
-                  })
+                  setWaSettings((prev) => ({
+                    ...prev,
+                    events: {
+                      ...(prev.events || { processing: true, completed: true, smb_ready: true, smb_picked: true }),
+                      completed: e.target.checked,
+                    },
+                  }))
                 }
                 className="mt-0.5 w-4 h-4 accent-amber-500 rounded"
               />
@@ -342,12 +366,15 @@ export const WhatsAppAutomationSection: React.FC = () => {
             <label className="flex items-start gap-3 p-3 rounded-xl border border-zinc-800 bg-zinc-950/60 cursor-pointer hover:border-zinc-700 transition-colors">
               <input
                 type="checkbox"
-                checked={waSettings.events.smb_ready}
+                checked={Boolean(waSettings.events?.smb_ready)}
                 onChange={(e) =>
-                  setWaSettings({
-                    ...waSettings,
-                    events: { ...waSettings.events, smb_ready: e.target.checked },
-                  })
+                  setWaSettings((prev) => ({
+                    ...prev,
+                    events: {
+                      ...(prev.events || { processing: true, completed: true, smb_ready: true, smb_picked: true }),
+                      smb_ready: e.target.checked,
+                    },
+                  }))
                 }
                 className="mt-0.5 w-4 h-4 accent-amber-500 rounded"
               />
@@ -362,12 +389,15 @@ export const WhatsAppAutomationSection: React.FC = () => {
             <label className="flex items-start gap-3 p-3 rounded-xl border border-zinc-800 bg-zinc-950/60 cursor-pointer hover:border-zinc-700 transition-colors">
               <input
                 type="checkbox"
-                checked={waSettings.events.smb_picked}
+                checked={Boolean(waSettings.events?.smb_picked)}
                 onChange={(e) =>
-                  setWaSettings({
-                    ...waSettings,
-                    events: { ...waSettings.events, smb_picked: e.target.checked },
-                  })
+                  setWaSettings((prev) => ({
+                    ...prev,
+                    events: {
+                      ...(prev.events || { processing: true, completed: true, smb_ready: true, smb_picked: true }),
+                      smb_picked: e.target.checked,
+                    },
+                  }))
                 }
                 className="mt-0.5 w-4 h-4 accent-amber-500 rounded"
               />
@@ -392,26 +422,35 @@ export const WhatsAppAutomationSection: React.FC = () => {
             </div>
             <input
               type="checkbox"
-              checked={waSettings.telegram_alerts_enabled}
+              checked={Boolean(waSettings.telegram_alerts_enabled)}
               onChange={(e) =>
-                setWaSettings({ ...waSettings, telegram_alerts_enabled: e.target.checked })
+                setWaSettings((prev) => ({ ...prev, telegram_alerts_enabled: e.target.checked }))
               }
               className="w-4 h-4 accent-sky-500 rounded cursor-pointer"
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1">
               <label className="text-[11px] font-bold uppercase text-zinc-400">
                 Telegram Bot Token
               </label>
-              <input
-                type="text"
-                value={waSettings.telegram_bot_token}
-                onChange={(e) => setWaSettings({ ...waSettings, telegram_bot_token: e.target.value })}
-                placeholder="bot123456:ABC..."
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-2.5 font-mono text-xs text-white placeholder-zinc-600 focus:border-amber-500/50 focus:outline-none"
-              />
+              <div className="relative flex items-center">
+                <input
+                  type={showTgToken ? 'text' : 'password'}
+                  value={waSettings.telegram_bot_token || ''}
+                  onChange={(e) => setWaSettings((prev) => ({ ...prev, telegram_bot_token: e.target.value }))}
+                  placeholder="bot123456:ABC..."
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-2.5 pr-10 font-mono text-xs text-white placeholder-zinc-600 focus:border-amber-500/50 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowTgToken(!showTgToken)}
+                  className="absolute right-2.5 p-1 text-zinc-400 hover:text-white transition-colors"
+                >
+                  {showTgToken ? <EyeOff className="w-3.5 h-3.5 text-amber-400" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
             </div>
             <div className="space-y-1">
               <label className="text-[11px] font-bold uppercase text-zinc-400">
@@ -419,9 +458,21 @@ export const WhatsAppAutomationSection: React.FC = () => {
               </label>
               <input
                 type="text"
-                value={waSettings.telegram_chat_id}
-                onChange={(e) => setWaSettings({ ...waSettings, telegram_chat_id: e.target.value })}
+                value={waSettings.telegram_chat_id || ''}
+                onChange={(e) => setWaSettings((prev) => ({ ...prev, telegram_chat_id: e.target.value }))}
                 placeholder="-100123456..."
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-2.5 font-mono text-xs text-white placeholder-zinc-600 focus:border-amber-500/50 focus:outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold uppercase text-zinc-400">
+                Telegram Thread ID (Topic)
+              </label>
+              <input
+                type="text"
+                value={waSettings.telegram_thread_id || ''}
+                onChange={(e) => setWaSettings((prev) => ({ ...prev, telegram_thread_id: e.target.value }))}
+                placeholder="774"
                 className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-2.5 font-mono text-xs text-white placeholder-zinc-600 focus:border-amber-500/50 focus:outline-none"
               />
             </div>
