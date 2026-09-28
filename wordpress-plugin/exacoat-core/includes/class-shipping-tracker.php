@@ -379,7 +379,7 @@ class Exacoat_Shipping_Tracker {
 		<div style="margin-bottom: 24px; padding: 16px; font-family: 'Neue Haas Display', 'Neue Haas Grotesk Text Pro', inherit, sans-serif; color: #000000; background-color: #f4f4f5; border-radius: 12px; border: 1px solid #e4e4e7;">
 			<table width="100%" cellspacing="0" cellpadding="0" border="0" role="presentation">
 				<tr>
-					<td align="left" valign="middle">
+					<td align="left" valign="middle" style="padding-bottom: 10px;">
 						<p style="margin: 0; font-size: 13px; color: #71717a; font-weight: 500;">
 							Shipped via <?php echo esc_html( $carrier_label ); ?>
 						</p>
@@ -388,12 +388,19 @@ class Exacoat_Shipping_Tracker {
 						</p>
 					</td>
 					<?php if ( ! empty( $tracking_url ) ) : ?>
-					<td align="right" valign="middle">
+					<td align="right" valign="middle" style="padding-left: 16px; padding-bottom: 10px;">
 						<a href="<?php echo esc_url( $tracking_url ); ?>" target="_blank" style="font-size: 13px; color: #ffffff; font-weight: 700; white-space: nowrap; padding: 10px 22px; border-radius: 8px; background-color: #18181b; text-decoration: none; display: inline-block;">
 							Track Package &rarr;
 						</a>
 					</td>
 					<?php endif; ?>
+				</tr>
+				<tr>
+					<td colspan="2" style="padding-top: 10px; border-top: 1px solid #e4e4e7;">
+						<p style="margin: 0; font-size: 11.5px; color: #71717a; line-height: 1.45;">
+							Please note: Tracking numbers usually take some time to update on the courier's database.
+						</p>
+					</td>
 				</tr>
 			</table>
 		</div>

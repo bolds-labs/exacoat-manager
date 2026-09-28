@@ -1397,13 +1397,18 @@ class Exacoat_Email_Engine {
 					<td style=\"padding:22px 24px;\">
 						<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">
 							<tr>
-								<td valign=\"middle\">
+								<td valign=\"middle\" style=\"padding-bottom:12px;\">
 									<span style=\"display:inline-block;padding:3px 9px;background:#e5e7eb;color:#374151;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;border-radius:6px;margin-bottom:8px;\">Courier Dispatch</span>
 									" . ( $courier ? "<p style=\"margin:0 0 5px;font-size:15px;font-weight:700;color:#111827;letter-spacing:-0.2px;\">{$courier}</p>" : "" ) . "
 									<p style=\"margin:0;font-size:12.5px;color:#6b7280;\">Tracking: <span style=\"font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-weight:700;color:#111827;background:#ffffff;padding:2px 8px;border-radius:6px;border:1px solid #e5e7eb;display:inline-block;font-size:13px;margin-left:4px;\">{$tracking_number}</span></p>
 								</td>
-								<td align=\"right\" valign=\"middle\" style=\"padding-left:16px;\">
+								<td align=\"right\" valign=\"middle\" style=\"padding-left:16px;padding-bottom:12px;\">
 									{$track_btn}
+								</td>
+							</tr>
+							<tr>
+								<td colspan=\"2\" style=\"padding-top:12px;border-top:1px solid #e5e7eb;\">
+									<p style=\"margin:0;font-size:11.5px;color:#6b7280;line-height:1.45;\">Please note: Tracking numbers usually take some time to update on the courier&rsquo;s database.</p>
 								</td>
 							</tr>
 						</table>
