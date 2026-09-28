@@ -1528,6 +1528,24 @@ class Exacoat_Checkout_Engine {
 			$note_changed = true;
 		}
 
+		$raw_shipping_price = isset( $_SERVER['HTTP_X_EXACOAT_SHIPPING_RAW'] ) && is_numeric( $_SERVER['HTTP_X_EXACOAT_SHIPPING_RAW'] )
+			? floatval( $_SERVER['HTTP_X_EXACOAT_SHIPPING_RAW'] )
+			: $shipping_total;
+		$shipping_discount  = isset( $_SERVER['HTTP_X_EXACOAT_SHIPPING_DISCOUNT'] ) && is_numeric( $_SERVER['HTTP_X_EXACOAT_SHIPPING_DISCOUNT'] )
+			? floatval( $_SERVER['HTTP_X_EXACOAT_SHIPPING_DISCOUNT'] )
+			: 0.0;
+		$shipping_promo     = isset( $_SERVER['HTTP_X_EXACOAT_SHIPPING_PROMO'] )
+			? sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_EXACOAT_SHIPPING_PROMO'] ) )
+			: '';
+
+		if ( ! empty( $raw_shipping_price ) || $shipping_discount > 0 ) {
+			$order->update_meta_data( '_shipping_raw_price', strval( $raw_shipping_price ) );
+			if ( $shipping_discount > 0 ) {
+				$order->update_meta_data( '_shipping_discount_amount', strval( $shipping_discount ) );
+				$order->update_meta_data( '_shipping_promo_code', $shipping_promo ?: 'ONGKIR15' );
+			}
+		}
+
 		if ( ! $already_attached ) {
 			// Clear out existing dummy or zero-cost shipping items from headless cart
 			foreach ( $existing_shipping as $ship_id => $ship_item ) {
@@ -1543,7 +1561,7 @@ class Exacoat_Checkout_Engine {
 
 			$order->calculate_totals( false );
 			$order->save();
-		} elseif ( $note_changed ) {
+		} elseif ( $note_changed || $shipping_discount > 0 ) {
 			$order->save();
 		}
 	}

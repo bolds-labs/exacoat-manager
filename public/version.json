@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.131.zip?v=0.1.131",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-28T00:20:23.848Z",
+  "last_updated": "2026-09-28T00:39:15.112Z",
   "sections": {
     "changelog": "### Version 0.1.131\n- Add configurable adaptive shipping promo coupon (ONGKIR15) under Fulfillment & Shipping settings\n- Support courier service filter and adaptive shipping discount calculation"
   }
