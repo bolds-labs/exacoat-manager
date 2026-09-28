@@ -38,7 +38,7 @@ import {
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { PageHeroHeader } from '../components/ui/PageHeroHeader';
-import { COUNTRY_OPTIONS, ALL_COUNTRIES } from '../lib/countries';
+import { COUNTRY_OPTIONS, ALL_COUNTRIES, resolveCountryName } from '../lib/countries';
 import {
   fetchReviewsDirect,
   updateReviewStatusDirect,
@@ -81,34 +81,7 @@ export function maskCollectorName(name: string): string {
 
 export const maskCustomerName = maskCollectorName;
 
-export function resolveCountryName(raw?: string): string {
-  if (!raw) return '';
-  const trimmed = raw.trim();
-  if (!trimmed) return '';
-
-  const direct = ALL_COUNTRIES.find(c => c.toLowerCase() === trimmed.toLowerCase());
-  if (direct) return direct;
-
-  if (trimmed.length === 2) {
-    try {
-      const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
-      const resolved = regionNames.of(trimmed.toUpperCase());
-      if (resolved) {
-        const match = ALL_COUNTRIES.find(c => c.toLowerCase() === resolved.toLowerCase());
-        if (match) return match;
-        return resolved;
-      }
-    } catch {}
-  }
-
-  for (const c of ALL_COUNTRIES) {
-    if (trimmed.toLowerCase().includes(c.toLowerCase())) {
-      return c;
-    }
-  }
-
-  return trimmed;
-}
+export { resolveCountryName };
 
 export const ReviewsPage: React.FC<ReviewsPageProps> = ({
   onSelectOrder,

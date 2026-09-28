@@ -61,6 +61,7 @@ import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { extractItemSpecs } from '../../lib/orderItems';
 import { isStorePickupOrder, toggleLocalStorePickupOrder, resolveOrderCourier, getOrderCourierDisplay } from '../../lib/orderUtils';
+import { resolveCountryName } from '../../lib/countries';
 import { getWpBaseUrl } from '../../lib/wordpressBridge';
 import { formatGooritaShipmentText, openGooritaWhatsApp } from '../../lib/exportManager';
 import { 
@@ -1315,7 +1316,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   {order.shipping?.address_1 || order.billing?.address_1 || 'No address provided'}
                   {order.shipping?.address_2 ? `, ${order.shipping.address_2}` : (order.billing?.address_2 ? `, ${order.billing.address_2}` : '')}<br />
                   {order.shipping?.city || order.billing?.city || ''}, {order.shipping?.state || order.billing?.state || ''} {order.shipping?.postcode || order.billing?.postcode || ''}<br />
-                  <strong className="text-white">{order.shipping?.country || order.billing?.country || 'Indonesia'}</strong>
+                  <strong className="text-white">{resolveCountryName(order.shipping?.country || order.billing?.country)}</strong>
                 </p>
               )}
             </div>

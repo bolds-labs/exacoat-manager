@@ -6,6 +6,7 @@ import { Printer, Download, FileText, CheckCircle2, ShieldCheck } from 'lucide-r
 import { useToast } from '../../context/ToastContext';
 import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
 import { cleanItemTitle } from '../../lib/orderItems';
+import { resolveCountryName } from '../../lib/countries';
 
 interface CustomerInvoiceModalProps {
   order: Order | null;
@@ -38,14 +39,14 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
     billing.address_1 || shipping.address_1,
     billing.address_2 || shipping.address_2,
     [billing.city || shipping.city, billing.state || shipping.state, billing.postcode || shipping.postcode].filter(Boolean).join(', '),
-    billing.country || shipping.country || 'ID',
+    resolveCountryName(billing.country || shipping.country || 'Indonesia'),
   ].filter(Boolean);
 
   const shippingAddress = [
     shipping.address_1 || 'Address on file',
     shipping.address_2,
     [shipping.city, shipping.state, shipping.postcode].filter(Boolean).join(', '),
-    shipping.country || 'ID',
+    resolveCountryName(shipping.country || billing.country || 'Indonesia'),
   ].filter(Boolean);
 
   const handlePrint = () => {

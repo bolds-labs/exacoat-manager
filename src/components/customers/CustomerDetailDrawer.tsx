@@ -5,6 +5,7 @@ import { UnifiedCustomer } from '../../lib/customerAnalyticsService';
 import { Order } from '../../types';
 import { fetchCustomerOrdersDirect } from '../../lib/wordpressBridge';
 import { formatCurrency, formatDateTime } from '../../lib/formatters';
+import { resolveCountryName } from '../../lib/countries';
 import { 
   User, 
   Mail, 
@@ -247,7 +248,7 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
                 <span className="text-[10px] font-mono text-neutral-500 block">Location</span>
                 <p className="font-sans text-neutral-300 flex items-center gap-1.5">
                   <MapPin className="w-3 h-3 text-[#f3aa18] shrink-0" />
-                  <span>{customer.city}{customer.country ? `, ${customer.country}` : ''}</span>
+                  <span>{customer.city}{customer.country ? `, ${resolveCountryName(customer.country)}` : ''}</span>
                 </p>
               </div>
             )}
@@ -284,7 +285,7 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
                 {shipping.city || customer.city ? <span>{shipping.city || customer.city}, </span> : null}
                 {shipping.state ? <span>{shipping.state} </span> : null}
                 {shipping.postcode ? <span>{shipping.postcode}<br /></span> : <br />}
-                <span className="font-mono text-neutral-400">{shipping.country || customer.country || 'Indonesia'}</span>
+                <span className="font-mono text-neutral-400">{resolveCountryName(shipping.country || customer.country)}</span>
               </p>
             ) : (
               <p className="text-xs text-neutral-500 italic">No stored shipping address.</p>
@@ -309,7 +310,7 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
                 {billing.city ? <span>{billing.city}, </span> : null}
                 {billing.state ? <span>{billing.state} </span> : null}
                 {billing.postcode ? <span>{billing.postcode}<br /></span> : <br />}
-                <span className="font-mono text-neutral-400">{billing.country || 'Indonesia'}</span>
+                <span className="font-mono text-neutral-400">{resolveCountryName(billing.country)}</span>
               </p>
             ) : (
               <p className="text-xs text-neutral-500 italic">No stored billing address.</p>

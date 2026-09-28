@@ -11,6 +11,7 @@ import { Modal } from '../ui/Modal';
 import { useToast } from '../../context/ToastContext';
 import { FilterSelect } from '../ui/FilterSelect';
 import { isStorePickupOrder, getOrderCourierDisplay, matchesOrderSearch } from '../../lib/orderUtils';
+import { resolveCountryName } from '../../lib/countries';
 import {
   Search,
   RefreshCw,
@@ -856,7 +857,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                           {isPickup ? (
                             <span className="text-[#f3aa18] font-medium">Summarecon Bekasi Store</span>
                           ) : (
-                            `${order.shipping?.city ? `${order.shipping.city}, ` : ''}${order.shipping?.country || 'Indonesia'}`
+                            `${order.shipping?.city ? `${order.shipping.city}, ` : ''}${resolveCountryName(order.shipping?.country)}`
                           )}
                         </p>
                       </td>
@@ -1064,7 +1065,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                         {order.customer_name || 'Customer'}
                       </p>
                       <p className="text-[11px] text-zinc-500">
-                        {order.shipping?.city ? `${order.shipping.city}, ` : ''}{order.shipping?.country || 'Indonesia'}
+                        {order.shipping?.city ? `${order.shipping.city}, ` : ''}{resolveCountryName(order.shipping?.country)}
                       </p>
                     </div>
                     <p className="font-mono font-bold text-zinc-900 dark:text-white text-sm">

@@ -15,6 +15,7 @@ import { useToast } from '../../context/ToastContext';
 import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
 import { formatItemSpecsSummary, formatSeparatedItemSpecs, cleanItemTitle } from '../../lib/orderItems';
 import { resolveOrderCourier } from '../../lib/orderUtils';
+import { resolveCountryName } from '../../lib/countries';
 
 interface ShippingLabelA6ModalProps {
   order?: Order | null;
@@ -159,7 +160,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
   const city = shipping.city || '';
   const state = shipping.state || '';
   const postcode = shipping.postcode || '';
-  const country = shipping.country || 'ID';
+  const country = resolveCountryName(shipping.country || activeOrder.billing?.country || 'Indonesia');
 
   const fullAddressLines = [
     addressLine1,
@@ -189,7 +190,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
       shp.address_1 || 'Address on file',
       shp.address_2 || shp.address_2_extra || '',
       [shp.city || '', shp.state || '', shp.postcode || ''].filter(Boolean).join(', '),
-      shp.country || 'ID',
+      resolveCountryName(shp.country || ord.billing?.country || 'Indonesia'),
     ].filter(Boolean);
 
     const ordResolved = resolveOrderCourier(ord);

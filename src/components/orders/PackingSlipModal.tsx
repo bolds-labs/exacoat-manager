@@ -7,6 +7,7 @@ import { useToast } from '../../context/ToastContext';
 import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
 import { extractItemSpecs, formatSeparatedItemSpecs, cleanItemTitle } from '../../lib/orderItems';
 import { isStorePickupOrder, resolveOrderCourier } from '../../lib/orderUtils';
+import { resolveCountryName } from '../../lib/countries';
 
 interface PackingSlipModalProps {
   order: Order | null;
@@ -51,7 +52,7 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
         [shipping.city || billing.city, shipping.state || billing.state, shipping.postcode || billing.postcode]
           .filter(Boolean)
           .join(', '),
-        shipping.country || billing.country || 'Indonesia',
+        resolveCountryName(shipping.country || billing.country || 'Indonesia'),
       ].filter(Boolean);
 
   const resolvedCourier = resolveOrderCourier(order);
