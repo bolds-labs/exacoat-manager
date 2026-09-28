@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Sanitize legacy internal shipping methods (Stock Adjustment, Redeem, Endorsement) from customer checkout\n- Fix 100% free shipping threshold discounting for domestic REG couriers\n- Support AJAX refresh for eligible coupons and store credit after checkout sign-in\n- Add configurable adaptive shipping promo coupon (ONGKIR15) under Fulfillment & Shipping`,
+      changelog: `### Version ${version}\n- Strip messy applied promo and free shipping suffixes from courier shipping method titles and rate labels\n- Fix clean courier names (e.g. SICEPAT - REG) across checkout, thank-you, account order details, and emails\n- Support AJAX refresh for eligible coupons and store credit after checkout sign-in`,
     },
   };
 

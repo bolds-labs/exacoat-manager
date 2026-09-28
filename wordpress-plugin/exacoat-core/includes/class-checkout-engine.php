@@ -1503,6 +1503,10 @@ class Exacoat_Checkout_Engine {
 
 		if ( empty( $shipping_title ) ) {
 			$shipping_title = 'Courier Delivery';
+		} else {
+			$shipping_title = preg_replace( '/\s*[\(\[]\s*[^)\]]*applied[^)\]]*[\)\]]/i', '', $shipping_title );
+			$shipping_title = preg_replace( '/\s*[\(\[]\s*free\s*shipping\s*[\)\]]/i', '', $shipping_title );
+			$shipping_title = trim( preg_replace( '/\s{2,}/', ' ', $shipping_title ) );
 		}
 
 		// Check existing shipping lines

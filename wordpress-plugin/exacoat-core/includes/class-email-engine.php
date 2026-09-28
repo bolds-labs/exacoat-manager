@@ -1491,8 +1491,11 @@ class Exacoat_Email_Engine {
 		$discount_total = esc_html( self::clean_email_price( $data['discount_total'] ?? '' ) );
 		$coupons        = $data['coupon_codes'] ?? [];
 		$shipping_clean = self::clean_email_price( $data['shipping_total'] ?? 'Rp 15.000' );
-		$shipping_total = esc_html( self::is_price_zero( $shipping_clean ) ? 'Free' : $shipping_clean );
-		$shipping_name  = esc_html( $data['shipping_method_name'] ?? 'Standard Tracked Delivery' );
+		$raw_shipping_name   = $data['shipping_method_name'] ?? 'Standard Tracked Delivery';
+		$clean_shipping_name = preg_replace( '/\s*[\(\[]\s*[^)\]]*applied[^)\]]*[\)\]]/i', '', $raw_shipping_name );
+		$clean_shipping_name = preg_replace( '/\s*[\(\[]\s*free\s*shipping\s*[\)\]]/i', '', $clean_shipping_name );
+		$clean_shipping_name = trim( preg_replace( '/\s{2,}/', ' ', $clean_shipping_name ) );
+		$shipping_name       = esc_html( $clean_shipping_name ?: 'Standard Tracked Delivery' );
 		$total_tax      = esc_html( self::clean_email_price( $data['total_tax'] ?? '' ) );
 		$total_clean    = self::clean_email_price( $data['total'] ?? 'Rp 164.000' );
 		$total          = esc_html( $total_clean ?: 'Rp 164.000' );

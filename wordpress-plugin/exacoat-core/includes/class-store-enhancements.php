@@ -55,6 +55,8 @@ class Exacoat_Store_Enhancements {
 		add_filter( 'woocommerce_package_rates', [ __CLASS__, 'filter_legacy_shipping_rates' ], 5, 2 );
 		add_filter( 'woocommerce_package_rates', [ __CLASS__, 'apply_zone_tiered_shipping_discount' ], 100, 2 );
 		add_filter( 'woocommerce_package_rates', [ __CLASS__, 'apply_shipping_promo_coupon_rate_discount' ], 110, 2 );
+		add_filter( 'woocommerce_order_item_shipping_get_method_title', [ __CLASS__, 'clean_shipping_method_title' ], 20, 2 );
+		add_filter( 'woocommerce_shipping_rate_label', [ __CLASS__, 'clean_shipping_method_title' ], 20, 2 );
 
 		// 18. Virtual Upload Folder Path Resolver & 404 Prevention
 		add_action( 'init', [ __CLASS__, 'resolve_virtual_upload' ], 1 );
@@ -999,6 +1001,23 @@ class Exacoat_Store_Enhancements {
 		}
 
 		return $rates;
+	}
+
+	/**
+	 * Sanitize shipping method title to strip messy applied promo tags (e.g. "(FREE SHIPPING Applied)", "(ONGKIR10 Applied)"),
+	 * preserving clean courier service names like "SICEPAT - REG" or "JNE - REG".
+	 */
+	public static function clean_shipping_method_title( $title, $item = null ) {
+		if ( empty( $title ) || ! is_string( $title ) ) {
+			return $title;
+		}
+
+		$clean = preg_replace( '/\s*[\(\[]\s*[^)\]]*applied[^)\]]*[\)\]]/i', '', $title );
+		$clean = preg_replace( '/\s*\[[^\]]*applied[^\]]*\]/i', '', $clean );
+		$clean = preg_replace( '/\s*[\(\[]\s*free\s*shipping\s*[\)\]]/i', '', $clean );
+		$clean = preg_replace( '/\s*[-–—:]\s*free\s*shipping\b/i', '', $clean );
+
+		return trim( preg_replace( '/\s{2,}/', ' ', $clean ) );
 	}
 
 	/**
