@@ -405,6 +405,15 @@ class Exacoat_Checkout_Engine {
 			'free_shipping_filter_text' => $matched_zone['filter_text'] ?? ( 'ID' === $country ? 'reg' : ( 'US' === $country ? 'goorita' : 'pos' ) ),
 			'thresholds_by_currency'    => $thresholds_by_currency,
 			'shipping_zones'            => $shipping_zones,
+			'shipping_promo'            => class_exists( 'Exacoat_Store_Enhancements' )
+				? Exacoat_Store_Enhancements::get_shipping_promo_config()
+				: ( class_exists( 'Artmatter_Store_Enhancements' ) ? Artmatter_Store_Enhancements::get_shipping_promo_config() : [
+					'enabled'      => true,
+					'code'         => 'ONGKIR15',
+					'max_discount' => 15000,
+					'filter_text'  => 'reg',
+					'currency'     => 'IDR',
+				] ),
 		] );
 	}
 

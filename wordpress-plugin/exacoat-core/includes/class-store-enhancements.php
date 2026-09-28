@@ -53,6 +53,7 @@ class Exacoat_Store_Enhancements {
 
 		// 15. Checkout Shipping Rules (#14577) - Multi-Zone Tiered Free Shipping Discount
 		add_filter( 'woocommerce_package_rates', [ __CLASS__, 'apply_zone_tiered_shipping_discount' ], 100, 2 );
+		add_filter( 'woocommerce_package_rates', [ __CLASS__, 'apply_shipping_promo_coupon_rate_discount' ], 110, 2 );
 
 		// 18. Virtual Upload Folder Path Resolver & 404 Prevention
 		add_action( 'init', [ __CLASS__, 'resolve_virtual_upload' ], 1 );
@@ -920,6 +921,57 @@ class Exacoat_Store_Enhancements {
 			'target_method_ids' => $target_methods,
 			'zones'             => $zones,
 		];
+	}
+
+	/**
+	 * Get Shipping Promo / Coupon Configuration
+	 */
+	public static function get_shipping_promo_config(): array {
+		$settings = Exacoat_Core::get_settings();
+		return [
+			'enabled'      => isset( $settings['shipping_promo_enabled'] ) ? (bool) $settings['shipping_promo_enabled'] : true,
+			'code'         => strtoupper( trim( (string) ( $settings['shipping_promo_code'] ?? 'ONGKIR15' ) ) ),
+			'max_discount' => floatval( $settings['shipping_promo_max_discount'] ?? 15000 ),
+			'filter_text'  => strtolower( trim( (string) ( $settings['shipping_promo_filter_text'] ?? 'reg' ) ) ),
+			'currency'     => strtoupper( trim( (string) ( $settings['shipping_promo_currency'] ?? 'IDR' ) ) ),
+		];
+	}
+
+	/**
+	 * Apply adaptive shipping discount for shipping promo coupon in classic/REST WC checkout
+	 */
+	public static function apply_shipping_promo_coupon_rate_discount( $rates, $package ) {
+		if ( is_admin() && ! defined( 'DOING_AJAX' ) ) return $rates;
+		if ( ! function_exists( 'WC' ) || ! WC()->cart ) return $rates;
+
+		$promo = self::get_shipping_promo_config();
+		if ( empty( $promo['enabled'] ) || empty( $promo['code'] ) ) return $rates;
+
+		$applied = (array) WC()->cart->get_applied_coupons();
+		$has_coupon = in_array( strtoupper( $promo['code'] ), array_map( 'strtoupper', $applied ), true );
+		if ( ! $has_coupon ) return $rates;
+
+		$filter_text  = strtolower( trim( $promo['filter_text'] ?: 'reg' ) );
+		$max_discount = floatval( $promo['max_discount'] ?: 15000 );
+
+		foreach ( $rates as $rate_id => $rate ) {
+			if ( ! is_object( $rate ) || ! isset( $rate->cost ) ) continue;
+
+			$label = strtolower( (string) ( $rate->label ?? '' ) );
+			$id    = strtolower( (string) ( $rate->id ?? '' ) );
+
+			if ( strpos( $label, $filter_text ) !== false || strpos( $id, $filter_text ) !== false ) {
+				$orig_cost = floatval( $rate->cost );
+				if ( $orig_cost > 0 ) {
+					$discount   = min( $orig_cost, $max_discount );
+					$rate->cost = max( 0, $orig_cost - $discount );
+					$rate->add_meta_data( '_shipping_promo_discount', $discount, true );
+					$rate->add_meta_data( '_shipping_promo_code', $promo['code'], true );
+				}
+			}
+		}
+
+		return $rates;
 	}
 
 	/**

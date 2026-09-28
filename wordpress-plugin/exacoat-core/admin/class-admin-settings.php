@@ -164,6 +164,15 @@ class Exacoat_Admin_Settings {
 			$settings['shipping_zones'] = $sanitized_zones;
 		}
 
+		// Shipping Discount Coupon / Promo Configuration
+		if ( isset( $input['shipping_promo_present'] ) || isset( $input['shipping_promo_code'] ) ) {
+			$settings['shipping_promo_enabled']      = ! empty( $input['shipping_promo_enabled'] ) ? 1 : 0;
+			$settings['shipping_promo_code']         = strtoupper( sanitize_text_field( $input['shipping_promo_code'] ?? 'ONGKIR15' ) );
+			$settings['shipping_promo_max_discount'] = max( 0, floatval( $input['shipping_promo_max_discount'] ?? 15000 ) );
+			$settings['shipping_promo_filter_text']  = strtolower( sanitize_text_field( $input['shipping_promo_filter_text'] ?? 'reg' ) );
+			$settings['shipping_promo_currency']     = strtoupper( sanitize_text_field( $input['shipping_promo_currency'] ?? 'IDR' ) );
+		}
+
 		$settings['enable_shipping_tracker'] = 1;
 		return $settings;
 	}

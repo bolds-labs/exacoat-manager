@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Add administrator-only options to cancel orders and move orders to trash\n- Register secure REST endpoint and handle HPOS/CPT order trashing with audit logging`,
+      changelog: `### Version ${version}\n- Add configurable adaptive shipping promo coupon (ONGKIR15) under Fulfillment & Shipping settings\n- Support courier service filter and adaptive shipping discount calculation`,
     },
   };
 

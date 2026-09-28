@@ -1441,7 +1441,70 @@ $manager_url = defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'http://localhos
 					</div>
 				</div>
 
-				<div class="ex-grid-2">
+				<?php
+				$promo_cfg = class_exists( 'Exacoat_Store_Enhancements' )
+					? Exacoat_Store_Enhancements::get_shipping_promo_config()
+					: [ 'enabled' => true, 'code' => 'ONGKIR15', 'max_discount' => 15000, 'filter_text' => 'reg', 'currency' => 'IDR' ];
+				?>
+				<div class="ex-card" style="margin-top: 16px;">
+					<div class="ex-card-header">
+						<div>
+							<h3 class="ex-card-h3">🎟️ Shipping Discount Coupon / Promo</h3>
+							<p style="font-size: 12px; color: #a1a1aa; margin: 4px 0 0 0;">
+								Adaptive coupon discount on shipping rates matching a courier service filter (e.g. max IDR 15,000 off REG). If courier price is 10,000, discount is 10,000; if 17,000, discount is 15,000.
+							</p>
+						</div>
+						<div style="display: flex; align-items: center; gap: 8px;">
+							<label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #e4e4e7; cursor: pointer;">
+								<input type="hidden" form="exacoatSettingsForm" name="exacoat_core_settings[shipping_promo_present]" value="1">
+								<input type="checkbox" form="exacoatSettingsForm" name="exacoat_core_settings[shipping_promo_enabled]" value="1" <?php checked( ! empty( $promo_cfg['enabled'] ) ); ?>>
+								<span>Enable Promo</span>
+							</label>
+							<button type="submit" form="exacoatSettingsForm" class="ex-btn ex-btn-primary" style="padding: 5px 12px; font-size: 11px;">
+								💾 Save Changes
+							</button>
+						</div>
+					</div>
+
+					<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 14px;">
+						<div style="background: #0d0e12; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 14px 16px;">
+							<label class="ex-sim-label">Coupon Code</label>
+							<div style="margin-top: 6px;">
+								<input type="text" form="exacoatSettingsForm" name="exacoat_core_settings[shipping_promo_code]" value="<?php echo esc_attr( $promo_cfg['code'] ); ?>" class="ex-input mono" style="width: 100%; text-transform: uppercase; font-weight: 700; color: #f3aa18;" placeholder="ONGKIR15">
+							</div>
+							<p style="margin: 4px 0 0 0; font-size: 11px; color: #71717a;">Customer coupon code entered at checkout.</p>
+						</div>
+
+						<div style="background: #0d0e12; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 14px 16px;">
+							<label class="ex-sim-label">Max Discount Amount</label>
+							<div style="margin-top: 6px;">
+								<input type="number" step="any" form="exacoatSettingsForm" name="exacoat_core_settings[shipping_promo_max_discount]" value="<?php echo esc_attr( $promo_cfg['max_discount'] ); ?>" class="ex-input mono" style="width: 100%; color: #34d399; font-weight: 700;" placeholder="15000">
+							</div>
+							<p style="margin: 4px 0 0 0; font-size: 11px; color: #71717a;">Adaptive cap (e.g. 15,000 IDR).</p>
+						</div>
+
+						<div style="background: #0d0e12; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 14px 16px;">
+							<label class="ex-sim-label">Courier Filter Match</label>
+							<div style="margin-top: 6px;">
+								<input type="text" form="exacoatSettingsForm" name="exacoat_core_settings[shipping_promo_filter_text]" value="<?php echo esc_attr( $promo_cfg['filter_text'] ); ?>" class="ex-input mono" style="width: 100%;" placeholder="reg">
+							</div>
+							<p style="margin: 4px 0 0 0; font-size: 11px; color: #71717a;">Matches courier service (e.g. reg for JNE - REG, SiCepat REG).</p>
+						</div>
+
+						<div style="background: #0d0e12; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 14px 16px;">
+							<label class="ex-sim-label">Currency</label>
+							<div style="margin-top: 6px;">
+								<select form="exacoatSettingsForm" name="exacoat_core_settings[shipping_promo_currency]" class="ex-select mono" style="width: 100%;">
+									<option value="IDR" <?php selected( $promo_cfg['currency'], 'IDR' ); ?>>IDR</option>
+									<option value="USD" <?php selected( $promo_cfg['currency'], 'USD' ); ?>>USD</option>
+								</select>
+							</div>
+							<p style="margin: 4px 0 0 0; font-size: 11px; color: #71717a;">Currency for discount threshold.</p>
+						</div>
+					</div>
+				</div>
+
+				<div class="ex-grid-2" style="margin-top: 16px;">
 					<div class="ex-card">
 						<div class="ex-card-header">
 							<h3 class="ex-card-h3">Order Production Pipeline</h3>
