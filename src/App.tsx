@@ -37,13 +37,15 @@ const getTabFromUrl = (): NavItemKey => {
   const rawHash = (window.location.hash || '').replace(/^#\/?/, '').trim().toLowerCase();
   const cleanHash = rawHash.split('?')[0].split('&')[0].replace(/\/+$/, '');
 
-  // 2. Query param fallback (e.g. ?tab=tracking_pool or ?page=exacoat-manager&tab=rma)
+  // 2. Query param fallback (e.g. ?tab=tracking_pool or ?page=exacoat-manager&tab=rma, or ?order=123)
   let queryTab = '';
   try {
     const searchParams = new URLSearchParams(window.location.search);
     const param = searchParams.get('tab') || searchParams.get('page');
     if (param && param !== 'exacoat-manager' && param !== 'exacoat-core') {
       queryTab = param.trim().toLowerCase();
+    } else if (searchParams.has('order') || searchParams.has('order_id')) {
+      queryTab = 'orders';
     }
   } catch {
     // Ignore query parsing errors
@@ -119,8 +121,14 @@ const getTabFromUrl = (): NavItemKey => {
     'sandbox': 'testing',
     'health': 'health',
     'system': 'health',
+    'system-health': 'health',
+    'system_health': 'health',
+    'store-health': 'health',
+    'store_health': 'health',
     'audit': 'audit',
     'logs': 'audit',
+    'audit-logs': 'audit',
+    'audit_logs': 'audit',
     'rma': 'rma',
     'rma-claims': 'rma',
     'rma_claims': 'rma',
@@ -248,7 +256,13 @@ export const App: React.FC = () => {
       return;
     }
     setCurrentTab(tab);
-    window.location.hash = `#${tab}`;
+    const targetUrl = window.location.pathname.includes('admin.php') 
+      ? `admin.php?page=exacoat-manager#${tab}` 
+      : `/#${tab}`;
+
+    if (window.location.hash !== `#${tab}`) {
+      window.history.pushState(null, '', targetUrl);
+    }
   }, [isShopManager]);
 
   const handleNavigateToCustomer = useCallback((customerId: number, customerEmail?: string) => {

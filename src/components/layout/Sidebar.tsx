@@ -54,6 +54,13 @@ export type NavItemKey =
   | 'audit'
   | 'settings';
 
+export const getTabHref = (key: NavItemKey): string => {
+  if (typeof window === 'undefined') return `#${key}`;
+  if (window.location.pathname.includes('admin.php') || window.location.search.includes('page=exacoat-manager')) {
+    return `admin.php?page=exacoat-manager#${key}`;
+  }
+  return `/#${key}`;
+};
 
 interface NavChildItem {
   key: NavItemKey;
@@ -272,8 +279,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                 return (
                   <div key={item.key} className="space-y-0.5">
-                    <button
-                      onClick={() => {
+                    <a
+                      href={getTabHref(item.key)}
+                      onClick={(e) => {
+                        // Allow middle click, Ctrl+click, Cmd+click, Shift+click to open native new tab
+                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
+                          return;
+                        }
+                        e.preventDefault();
                         handleSelect(item.key);
                         if (item.children) {
                           setOpenSections(prev => ({ ...prev, [item.key]: true }));
@@ -282,7 +295,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         }
                       }}
                       className={clsx(
-                        'w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group relative border cursor-pointer',
+                        'w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group relative border cursor-pointer select-none no-underline',
                         isSectionActive
                           ? 'bg-white dark:bg-white/[0.08] text-zinc-950 dark:text-white border-zinc-200 dark:border-white/[0.1] shadow-sm font-bold'
                           : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/60 dark:hover:bg-white/[0.03]'
@@ -309,31 +322,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         )}
 
                         {item.children && (
-                          <div
+                          <span
                             role="button"
                             tabIndex={0}
                             aria-label={`Toggle ${item.label} sub-menu`}
-                            onClick={(e) => toggleSection(item.key, e)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              toggleSection(item.key, e);
+                            }}
+                            onAuxClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                            }}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' || e.key === ' ') {
                                 e.preventDefault();
+                                e.stopPropagation();
                                 toggleSection(item.key);
                               }
                             }}
-                            className="p-0.5 rounded hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                            className="p-0.5 rounded hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors cursor-pointer inline-flex items-center justify-center z-10"
                           >
                             <ChevronDown className={clsx(
                               "w-3.5 h-3.5 text-zinc-400 transition-transform duration-200",
                               isExpanded && "rotate-180"
                             )} />
-                          </div>
+                          </span>
                         )}
                       </div>
 
                       {isSectionActive && (
                         <div className="w-1 h-3.5 rounded-full bg-lime-500 dark:bg-[#f3aa18] absolute left-0 top-1/2 -translate-y-1/2" />
                       )}
-                    </button>
+                    </a>
 
                     {/* Sub-menu items for parent containers */}
                     {item.children && isExpanded && (
@@ -341,14 +363,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         {item.children.map(child => {
                           const isSubActive = currentTab === child.key;
                           return (
-                            <button
+                            <a
                               key={child.key}
-                              onClick={() => {
+                              href={getTabHref(child.key)}
+                              onClick={(e) => {
+                                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
+                                  return;
+                                }
+                                e.preventDefault();
                                 handleSelect(child.key);
                                 if (isMobile) onMobileClose?.();
                               }}
                               className={clsx(
-                                'w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] transition-colors cursor-pointer',
+                                'w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] transition-colors cursor-pointer select-none no-underline',
                                 isSubActive
                                   ? 'bg-lime-500/10 text-lime-700 dark:text-[#f3aa18] font-bold'
                                   : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 hover:bg-zinc-200/40 dark:hover:bg-white/[0.02]'
@@ -365,7 +392,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                   {child.badge}
                                 </span>
                               )}
-                            </button>
+                            </a>
                           );
                         })}
                       </div>

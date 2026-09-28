@@ -3,7 +3,7 @@
  * Plugin Name:       Exacoat Core Platform
  * Plugin URI:        https://exacoat.com
  * Description:       Proprietary e-commerce core engine, configurator manager, and ERP workstation integration for Exacoat.
- * Version:           0.1.133
+ * Version:           0.1.134
  * Author:            Exacoat
  * Author URI:        https://exacoat.com
  * License:           Proprietary
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'EXACOAT_CORE_VERSION' ) ) {
-	define( 'EXACOAT_CORE_VERSION', '0.1.133' );
+	define( 'EXACOAT_CORE_VERSION', '0.1.134' );
 }
 if ( ! defined( 'EXACOAT_CORE_FILE' ) ) {
 	define( 'EXACOAT_CORE_FILE', __FILE__ );
@@ -28,6 +28,9 @@ if ( ! defined( 'EXACOAT_CORE_URL' ) ) {
 }
 if ( ! defined( 'EXACOAT_WEB_URL' ) ) {
 	define( 'EXACOAT_WEB_URL', getenv( 'EXACOAT_WEB_URL' ) ?: 'https://exacoat.com' );
+}
+if ( ! defined( 'EXACOAT_MANAGER_URL' ) ) {
+	define( 'EXACOAT_MANAGER_URL', getenv( 'EXACOAT_MANAGER_URL' ) ?: 'https://manager.exacoat.com' );
 }
 if ( ! defined( 'EXACOAT_MEDIA_URL' ) ) {
 	define( 'EXACOAT_MEDIA_URL', getenv( 'EXACOAT_MEDIA_URL' ) ?: 'https://exacoat.com' );

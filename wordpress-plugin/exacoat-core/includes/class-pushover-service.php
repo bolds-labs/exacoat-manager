@@ -170,9 +170,11 @@ class Exacoat_Pushover_Service {
 			$msg .= "<b>Product:</b> " . esc_html( $arg4 ) . "\n";
 		}
 
+		$manager_base = defined( 'EXACOAT_MANAGER_URL' ) ? EXACOAT_MANAGER_URL : ( getenv( 'EXACOAT_MANAGER_URL' ) ?: 'https://manager.exacoat.com' );
+
 		self::send( 'New Order Received', $msg, [
-			'url'       => admin_url( 'post.php?post=' . $order_id . '&action=edit' ),
-			'url_title' => 'View Order',
+			'url'       => rtrim( $manager_base, '/' ) . '/?order=' . $order_id,
+			'url_title' => 'View Order in Manager',
 			'priority'  => 0,
 		] );
 	}
@@ -184,8 +186,10 @@ class Exacoat_Pushover_Service {
 		$msg = "<b>Error:</b> " . esc_html( $title ) . "\n";
 		$msg .= "<code>" . esc_html( wp_trim_words( $details, 40 ) ) . "</code>";
 
+		$manager_base = defined( 'EXACOAT_MANAGER_URL' ) ? EXACOAT_MANAGER_URL : ( getenv( 'EXACOAT_MANAGER_URL' ) ?: 'https://manager.exacoat.com' );
+
 		self::send( 'Exacoat Core Error', $msg, [
-			'url'       => admin_url( 'admin.php?page=exacoat-core' ),
+			'url'       => rtrim( $manager_base, '/' ) . '/#health',
 			'url_title' => 'Inspect Diagnostics & Logs',
 			'priority'  => 1,
 		] );

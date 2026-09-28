@@ -147,6 +147,15 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
   const handleSelectOrder = async (order: Order) => {
     setSelectedOrder(order);
     setIsDrawerOpen(true);
+
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('order', String(order.id));
+      window.history.replaceState(null, '', url.toString());
+    } catch {
+      // ignore
+    }
+
     try {
       const res = await fetchOrderDetailDirect(order.id);
       if (res.success && res.order) {
@@ -156,6 +165,58 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
       console.warn('Could not fetch fresh order details', e);
     }
   };
+
+  const handleCloseDrawer = () => {
+    setIsDrawerOpen(false);
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('order') || url.searchParams.has('order_id')) {
+        url.searchParams.delete('order');
+        url.searchParams.delete('order_id');
+        window.history.replaceState(null, '', url.toString());
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  // Auto-open order drawer if an order ID was passed via query params (?order=123) or hash (#orders?order=123)
+  useEffect(() => {
+    const parseOrderIdFromUrl = (): string | null => {
+      try {
+        const searchParams = new URLSearchParams(window.location.search);
+        const searchOrder = searchParams.get('order') || searchParams.get('order_id');
+        if (searchOrder) return searchOrder;
+
+        if (window.location.hash.includes('?')) {
+          const hashQuery = window.location.hash.split('?')[1];
+          const hashParams = new URLSearchParams(hashQuery);
+          return hashParams.get('order') || hashParams.get('order_id');
+        }
+      } catch (err) {
+        console.warn('Failed parsing order ID from URL:', err);
+      }
+      return null;
+    };
+
+    const targetOrderId = parseOrderIdFromUrl();
+    if (!targetOrderId) return;
+
+    let isMounted = true;
+    fetchOrderDetailDirect(targetOrderId).then(res => {
+      if (!isMounted) return;
+      if (res.success && res.order) {
+        setSelectedOrder(res.order);
+        setIsDrawerOpen(true);
+      }
+    }).catch(err => {
+      console.warn('Failed to auto-load order from URL', err);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Multicurrency Metric Computations
   const currencyBreakdown = useMemo(() => {
@@ -474,7 +535,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
       <OrderDetailDrawer
         order={selectedOrder}
         isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
+        onClose={handleCloseDrawer}
         onOrderUpdated={() => loadOrders(true)}
         onNavigateToCustomer={onNavigateToCustomer}
         onSelectOrderById={async (orderId: number) => {

@@ -2542,7 +2542,7 @@ class Exacoat_Affiliate_Manager {
 				$pushover_msg,
 				[
 					'priority'  => 1,
-					'url'       => admin_url( 'admin.php?page=exacoat-manager#/affiliates' ),
+					'url'       => rtrim( defined( 'EXACOAT_MANAGER_URL' ) ? EXACOAT_MANAGER_URL : 'https://manager.exacoat.com', '/' ) . '/#affiliates',
 					'url_title' => 'Review Affiliates',
 				]
 			);

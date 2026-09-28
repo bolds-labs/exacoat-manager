@@ -146,7 +146,8 @@ class Exacoat_Notification_Service {
 			? html_entity_decode( wp_strip_all_tags( wc_price( $total, [ 'currency' => $currency ] ) ) )
 			: "{$currency} {$total}";
 
-		$admin_order_url = admin_url( 'post.php?post=' . $order_id . '&action=edit' );
+		$manager_base    = defined( 'EXACOAT_MANAGER_URL' ) ? EXACOAT_MANAGER_URL : ( getenv( 'EXACOAT_MANAGER_URL' ) ?: 'https://manager.exacoat.com' );
+		$admin_order_url = rtrim( $manager_base, '/' ) . '/?order=' . $order_id;
 
 		// 1. Pushover Dispatch
 		if ( class_exists( 'Exacoat_Pushover_Service' ) ) {
@@ -224,7 +225,8 @@ class Exacoat_Notification_Service {
 		set_transient( $dedup_key, 1, 300 );
 
 		$status_label = 'active' === $status ? 'Approved (Auto-Active)' : 'Pending Review';
-		$admin_url    = admin_url( 'admin.php?page=exacoat-manager#/affiliates' );
+		$manager_base = defined( 'EXACOAT_MANAGER_URL' ) ? EXACOAT_MANAGER_URL : ( getenv( 'EXACOAT_MANAGER_URL' ) ?: 'https://manager.exacoat.com' );
+		$admin_url    = rtrim( $manager_base, '/' ) . '/#affiliates';
 
 		// Pushover
 		if ( class_exists( 'Exacoat_Pushover_Service' ) ) {
@@ -295,7 +297,8 @@ class Exacoat_Notification_Service {
 		self::$notified_events[ $dedup_key ] = true;
 		set_transient( $dedup_key, 1, 300 );
 
-		$admin_url = admin_url( 'admin.php?page=exacoat-manager#/affiliates' );
+		$manager_base = defined( 'EXACOAT_MANAGER_URL' ) ? EXACOAT_MANAGER_URL : ( getenv( 'EXACOAT_MANAGER_URL' ) ?: 'https://manager.exacoat.com' );
+		$admin_url    = rtrim( $manager_base, '/' ) . '/#affiliates';
 
 		// Pushover
 		if ( class_exists( 'Exacoat_Pushover_Service' ) ) {
@@ -364,7 +367,8 @@ class Exacoat_Notification_Service {
 		set_transient( $dedup_key, 1, 120 );
 
 		$stars        = str_repeat( '⭐', max( 1, min( 5, $rating ) ) );
-		$admin_url    = admin_url( 'admin.php?page=exacoat-manager#/reviews' );
+		$manager_base = defined( 'EXACOAT_MANAGER_URL' ) ? EXACOAT_MANAGER_URL : ( getenv( 'EXACOAT_MANAGER_URL' ) ?: 'https://manager.exacoat.com' );
+		$admin_url    = rtrim( $manager_base, '/' ) . '/#reviews';
 
 		// Pushover
 		if ( class_exists( 'Exacoat_Pushover_Service' ) ) {
@@ -425,11 +429,18 @@ class Exacoat_Notification_Service {
 		self::$notified_events[ $dedup_key ] = true;
 		set_transient( $dedup_key, 1, 300 );
 
+		$manager_base  = defined( 'EXACOAT_MANAGER_URL' ) ? EXACOAT_MANAGER_URL : ( getenv( 'EXACOAT_MANAGER_URL' ) ?: 'https://manager.exacoat.com' );
+		$materials_url = rtrim( $manager_base, '/' ) . '/#materials';
+
 		// Pushover
 		if ( class_exists( 'Exacoat_Pushover_Service' ) ) {
 			$cfg = Exacoat_Pushover_Service::get_config();
 			if ( ! empty( $cfg['enabled'] ) && ! empty( $cfg['notify_inventory'] ) ) {
-				Exacoat_Pushover_Service::send( "⚠️ " . $title, $details, [ 'priority' => 1 ] );
+				Exacoat_Pushover_Service::send( "⚠️ " . $title, $details, [
+					'priority'  => 1,
+					'url'       => $materials_url,
+					'url_title' => 'Inspect Materials & Stock',
+				] );
 			}
 		}
 
@@ -437,8 +448,20 @@ class Exacoat_Notification_Service {
 		if ( class_exists( 'Exacoat_Telegram_Service' ) ) {
 			$cfg = Exacoat_Telegram_Service::get_config();
 			if ( ! empty( $cfg['enabled'] ) && ! empty( $cfg['notify_inventory'] ) ) {
-				$text = "⚠️ <b>Inventory Alert: " . esc_html( $title ) . "</b>\n\n" . esc_html( $details );
-				Exacoat_Telegram_Service::send( $text, [ 'disable_preview' => true ] );
+				$text = "⚠️ <b>Inventory Alert: " . esc_html( $title ) . "</b>\n\n" . esc_html( $details ) . "\n\n" .
+					"<a href=\"" . esc_url( $materials_url ) . "\">Inspect in Materials Manager</a>";
+				$options = [
+					'disable_preview' => true,
+					'buttons'         => [
+						[
+							[
+								'text' => 'Inspect Materials',
+								'url'  => $materials_url,
+							],
+						],
+					],
+				];
+				Exacoat_Telegram_Service::send( $text, $options );
 			}
 		}
 	}
@@ -454,13 +477,20 @@ class Exacoat_Notification_Service {
 		self::$notified_events[ $dedup_key ] = true;
 		set_transient( $dedup_key, 1, 60 );
 
+		$manager_base = defined( 'EXACOAT_MANAGER_URL' ) ? EXACOAT_MANAGER_URL : ( getenv( 'EXACOAT_MANAGER_URL' ) ?: 'https://manager.exacoat.com' );
+		$health_url   = rtrim( $manager_base, '/' ) . '/#health';
+
 		// Pushover
 		if ( class_exists( 'Exacoat_Pushover_Service' ) ) {
 			$cfg = Exacoat_Pushover_Service::get_config();
 			if ( ! empty( $cfg['enabled'] ) && ! empty( $cfg['notify_errors'] ) ) {
 				$msg = "<b>Error:</b> " . esc_html( $title ) . "\n" .
 					"<code>" . esc_html( wp_trim_words( $details, 40 ) ) . "</code>";
-				Exacoat_Pushover_Service::send( 'Exacoat Core Error', $msg, [ 'priority' => 1 ] );
+				Exacoat_Pushover_Service::send( 'Exacoat Core Error', $msg, [
+					'priority'  => 1,
+					'url'       => $health_url,
+					'url_title' => 'Inspect System Health',
+				] );
 			}
 		}
 
@@ -470,8 +500,20 @@ class Exacoat_Notification_Service {
 			if ( ! empty( $cfg['enabled'] ) && ! empty( $cfg['notify_errors'] ) ) {
 				$text = "🚨 <b>System Error Alert</b>\n\n" .
 					"<b>" . esc_html( $title ) . "</b>\n" .
-					"<code>" . esc_html( wp_trim_words( $details, 50 ) ) . "</code>";
-				Exacoat_Telegram_Service::send( $text, [ 'disable_preview' => true ] );
+					"<code>" . esc_html( wp_trim_words( $details, 50 ) ) . "</code>\n\n" .
+					"<a href=\"" . esc_url( $health_url ) . "\">Inspect in Store Health</a>";
+				$options = [
+					'disable_preview' => true,
+					'buttons'         => [
+						[
+							[
+								'text' => 'Inspect Store Health',
+								'url'  => $health_url,
+							],
+						],
+					],
+				];
+				Exacoat_Telegram_Service::send( $text, $options );
 			}
 		}
 	}

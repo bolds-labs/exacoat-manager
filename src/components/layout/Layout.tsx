@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Sidebar, NavItemKey } from './Sidebar';
+import { Sidebar, NavItemKey, getTabHref } from './Sidebar';
 import { Header } from './Header';
 import { RoleSimulationBanner } from './RoleSimulationBanner';
 import { CommandPalette } from './CommandPalette';
@@ -100,11 +100,15 @@ export const Layout: React.FC<LayoutProps> = ({
         className="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/95 dark:bg-[#0c0c0e]/95 border-t border-zinc-200 dark:border-white/10 backdrop-blur-2xl z-30 grid grid-cols-4 items-center px-3 font-sans select-none shadow-[0_-10px_30px_rgba(0,0,0,0.28)] pb-safe"
       >
         {/* 1. Dashboard */}
-        <button
-          type="button"
-          onClick={() => onTabChange('dashboard')}
+        <a
+          href={getTabHref('dashboard')}
+          onClick={(e) => {
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+            e.preventDefault();
+            onTabChange('dashboard');
+          }}
           className={clsx(
-            "flex flex-col items-center justify-center flex-1 py-1.5 transition-all duration-200 cursor-pointer text-center active:scale-90 group",
+            "flex flex-col items-center justify-center flex-1 py-1.5 transition-all duration-200 cursor-pointer text-center active:scale-90 group select-none no-underline",
             currentTab === 'dashboard'
               ? "text-lime-600 dark:text-[#f3aa18]"
               : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
@@ -114,14 +118,18 @@ export const Layout: React.FC<LayoutProps> = ({
             <LayoutDashboard className="w-5 h-5" />
           </div>
           <span className="text-[10px] font-mono mt-1 font-medium tracking-tight">Dashboard</span>
-        </button>
+        </a>
 
         {/* 2. Orders */}
-        <button
-          type="button"
-          onClick={() => onTabChange('orders')}
+        <a
+          href={getTabHref('orders')}
+          onClick={(e) => {
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+            e.preventDefault();
+            onTabChange('orders');
+          }}
           className={clsx(
-            "flex flex-col items-center justify-center flex-1 py-1.5 transition-all duration-200 cursor-pointer text-center relative active:scale-90 group",
+            "flex flex-col items-center justify-center flex-1 py-1.5 transition-all duration-200 cursor-pointer text-center relative active:scale-90 group select-none no-underline",
             currentTab === 'orders'
               ? "text-lime-600 dark:text-[#f3aa18]"
               : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
@@ -136,14 +144,18 @@ export const Layout: React.FC<LayoutProps> = ({
             )}
           </div>
           <span className="text-[10px] font-mono mt-1 font-medium tracking-tight">Orders</span>
-        </button>
+        </a>
 
         {/* 3. Reviews */}
-        <button
-          type="button"
-          onClick={() => onTabChange('reviews')}
+        <a
+          href={getTabHref('reviews')}
+          onClick={(e) => {
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+            e.preventDefault();
+            onTabChange('reviews');
+          }}
           className={clsx(
-            "flex flex-col items-center justify-center flex-1 py-1.5 transition-all duration-200 cursor-pointer text-center relative active:scale-90 group",
+            "flex flex-col items-center justify-center flex-1 py-1.5 transition-all duration-200 cursor-pointer text-center relative active:scale-90 group select-none no-underline",
             currentTab === 'reviews'
               ? "text-lime-600 dark:text-[#f3aa18]"
               : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
@@ -158,14 +170,18 @@ export const Layout: React.FC<LayoutProps> = ({
             )}
           </div>
           <span className="text-[10px] font-mono mt-1 font-medium tracking-tight">Reviews</span>
-        </button>
+        </a>
 
         {/* 4. Reports */}
-        <button
-          type="button"
-          onClick={() => onTabChange('reports')}
+        <a
+          href={getTabHref('reports')}
+          onClick={(e) => {
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+            e.preventDefault();
+            onTabChange('reports');
+          }}
           className={clsx(
-            "flex flex-col items-center justify-center flex-1 py-1.5 transition-all duration-200 cursor-pointer text-center active:scale-90 group",
+            "flex flex-col items-center justify-center flex-1 py-1.5 transition-all duration-200 cursor-pointer text-center active:scale-90 group select-none no-underline",
             currentTab === 'reports'
               ? "text-lime-600 dark:text-[#f3aa18]"
               : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
@@ -175,7 +191,7 @@ export const Layout: React.FC<LayoutProps> = ({
             <FileText className="w-5 h-5" />
           </div>
           <span className="text-[10px] font-mono mt-1 font-medium tracking-tight">Reports</span>
-        </button>
+        </a>
       </nav>
       )}
 
