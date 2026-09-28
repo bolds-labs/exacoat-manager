@@ -821,7 +821,25 @@ class Exacoat_Order_Manager {
 			add_filter( 'woocommerce_email_enabled_customer_invoice', '__return_false', 99 );
 		}
 
-		$order->update_status( $clean_status, 'Status updated via Exacoat Manager' );
+		if ( $clean_status === 'trash' ) {
+			$order->add_order_note( 'Order moved to trash by Administrator via Exacoat Manager' );
+			$order->delete( false );
+
+			if ( class_exists( 'Artmatter_Logger' ) ) {
+				Artmatter_Logger::info( 'orders', "Order #{$order_id} moved to trash via Manager ERP", [
+					'order_id' => $order_id,
+				] );
+			}
+
+			return rest_ensure_response( [
+				'success' => true,
+				'message' => "Order #{$order_id} moved to trash",
+				'trashed' => true,
+			] );
+		}
+
+		$status_note = ( $clean_status === 'cancelled' ) ? 'Order cancelled by Administrator via Exacoat Manager' : 'Status updated via Exacoat Manager';
+		$order->update_status( $clean_status, $status_note );
 
 		// If status is confirmed (processing / preparing-order / ready-to-ship), guarantee tracking number is filled from pool for JNE / SiCepat
 		if ( in_array( $clean_status, [ 'processing', 'confirmed', 'preparing-order', 'ready-to-ship' ], true ) && class_exists( 'Exacoat_Tracking_Pool' ) ) {
@@ -845,6 +863,32 @@ class Exacoat_Order_Manager {
 			'success' => true,
 			'message' => "Order #{$order_id} status updated to {$clean_status}",
 			'order'   => self::format_order_for_manager( $order ),
+		] );
+	}
+
+	/**
+	 * REST Route: Move Order to Trash (Administrator Only)
+	 */
+	public static function trash_order( WP_REST_Request $request ) {
+		$order_id = (int) $request->get_param( 'id' );
+		$order    = wc_get_order( $order_id );
+		if ( ! $order ) {
+			return new WP_Error( 'not_found', 'Order not found', [ 'status' => 404 ] );
+		}
+
+		$order->add_order_note( 'Order moved to trash by Administrator via Exacoat Manager' );
+		$order->delete( false );
+
+		if ( class_exists( 'Artmatter_Logger' ) ) {
+			Artmatter_Logger::info( 'orders', "Order #{$order_id} moved to trash via Manager ERP", [
+				'order_id' => $order_id,
+			] );
+		}
+
+		return rest_ensure_response( [
+			'success' => true,
+			'message' => "Order #{$order_id} moved to trash",
+			'trashed' => true,
 		] );
 	}
 

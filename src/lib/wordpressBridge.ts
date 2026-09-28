@@ -2868,6 +2868,45 @@ export async function updateOrderStatusDirect(orderId: number | string, status: 
   }
 }
 
+export async function cancelOrderDirect(orderId: number | string, notifyCustomer = false): Promise<{ success: boolean; order?: Order; message?: string; error?: string }> {
+  return updateOrderStatusDirect(orderId, 'cancelled', notifyCustomer);
+}
+
+export async function trashOrderDirect(orderId: number | string): Promise<{ success: boolean; message?: string; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/orders/${orderId}/trash`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      return { success: true, message: data.message || `Order #${orderId} moved to trash` };
+    }
+    // Fallback to status update with 'trash'
+    const fallback = await updateOrderStatusDirect(orderId, 'trash');
+    return {
+      success: fallback.success,
+      message: fallback.message || (fallback.success ? `Order #${orderId} moved to trash` : undefined),
+      error: fallback.error,
+    };
+  } catch (err: any) {
+    // Attempt fallback
+    try {
+      const fallback = await updateOrderStatusDirect(orderId, 'trash');
+      return {
+        success: fallback.success,
+        message: fallback.message,
+        error: fallback.error,
+      };
+    } catch {
+      return { success: false, error: err.message, message: err.message };
+    }
+  }
+}
+
 export async function fulfillOrderDirect(orderId: number | string, payload: {
   tracking_number: string;
   courier?: string;

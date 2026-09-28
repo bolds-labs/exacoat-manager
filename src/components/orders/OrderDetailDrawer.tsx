@@ -53,7 +53,9 @@ import {
   Plane,
   Store,
   ClipboardCheck,
-  Edit2
+  Edit2,
+  Trash2,
+  XCircle
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
@@ -63,6 +65,8 @@ import { getWpBaseUrl } from '../../lib/wordpressBridge';
 import { formatGooritaShipmentText, openGooritaWhatsApp } from '../../lib/exportManager';
 import { 
   updateOrderStatusDirect, 
+  cancelOrderDirect,
+  trashOrderDirect,
   fulfillOrderDirect, 
   addOrderNoteDirect, 
   fetchOrderNotesDirect,
@@ -138,6 +142,13 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   const { user, simulatedRole } = useAuth();
   const effectiveRole = simulatedRole || user?.role;
   const isShopManager = effectiveRole === 'shop_manager';
+  const isAdmin = effectiveRole === 'super_admin' || user?.actualRole === 'super_admin' || Boolean((user as any)?.roles?.includes('administrator')) || Boolean(user?.email?.toLowerCase().includes('admin'));
+
+  // Administrator Controls State (Cancel / Trash)
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [isCancellingOrder, setIsCancellingOrder] = useState(false);
+  const [showTrashModal, setShowTrashModal] = useState(false);
+  const [isTrashingOrder, setIsTrashingOrder] = useState(false);
 
   const [internalOrder, setInternalOrder] = useState<Order | null>(propOrder);
   useEffect(() => {
@@ -463,6 +474,50 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
       showToast('error', 'Status update failed', err.message);
     } finally {
       setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleCancelOrder = async () => {
+    if (!order) return;
+    try {
+      setIsCancellingOrder(true);
+      const res = await cancelOrderDirect(order.id, false);
+      if (res.success) {
+        showToast('success', 'Order Cancelled', `Order #${order.id} has been marked as cancelled.`);
+        order.status = 'cancelled' as OrderStatus;
+        if (res.order) {
+          Object.assign(order, res.order);
+        }
+        setShowCancelModal(false);
+        await loadNotes(order.id);
+        if (onOrderUpdated) onOrderUpdated();
+      } else {
+        showToast('error', 'Cancellation Failed', res.error || res.message || 'Could not cancel order.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message || 'Failed to cancel order.');
+    } finally {
+      setIsCancellingOrder(false);
+    }
+  };
+
+  const handleTrashOrder = async () => {
+    if (!order) return;
+    try {
+      setIsTrashingOrder(true);
+      const res = await trashOrderDirect(order.id);
+      if (res.success) {
+        showToast('success', 'Order Trashed', `Order #${order.id} has been moved to trash.`);
+        setShowTrashModal(false);
+        if (onOrderUpdated) onOrderUpdated();
+        onClose();
+      } else {
+        showToast('error', 'Trash Failed', res.error || res.message || 'Could not move order to trash.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message || 'Failed to move order to trash.');
+    } finally {
+      setIsTrashingOrder(false);
     }
   };
 
@@ -2410,6 +2465,54 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
           </a>
         </div>
 
+        {/* Section 7: Administrator Actions (Cancel / Move to Trash) */}
+        {isAdmin && (
+          <div className="pt-2 border-t border-white/[0.08]">
+            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-amber-400" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-mono">Administrator Actions</span>
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 uppercase">
+                  Admin Only
+                </span>
+              </div>
+              <p className="text-xs text-neutral-400 font-sans leading-relaxed">
+                Administrative controls to cancel this order or move it to trash. Moving to trash removes it from active fulfillment.
+              </p>
+              <div className="grid grid-cols-2 gap-2.5 pt-1">
+                {/* Cancel Order */}
+                <button
+                  type="button"
+                  disabled={isCancellingOrder || isTrashingOrder || currentStatusClean === 'cancelled'}
+                  onClick={() => setShowCancelModal(true)}
+                  className={clsx(
+                    "px-3.5 py-2.5 rounded-xl border text-xs font-semibold font-sans flex items-center justify-center gap-2 transition-all cursor-pointer",
+                    currentStatusClean === 'cancelled'
+                      ? "bg-neutral-900/60 border-white/[0.06] text-neutral-500 cursor-not-allowed"
+                      : "bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border-rose-500/25 active:scale-95"
+                  )}
+                >
+                  <XCircle className="w-4 h-4 text-rose-400" />
+                  <span>{currentStatusClean === 'cancelled' ? 'Order Cancelled' : isCancellingOrder ? 'Cancelling...' : 'Cancel Order'}</span>
+                </button>
+
+                {/* Move to Trash */}
+                <button
+                  type="button"
+                  disabled={isCancellingOrder || isTrashingOrder}
+                  onClick={() => setShowTrashModal(true)}
+                  className="px-3.5 py-2.5 rounded-xl bg-neutral-900/80 hover:bg-rose-950/40 text-neutral-300 hover:text-rose-200 border border-white/[0.08] hover:border-rose-500/30 text-xs font-semibold font-sans flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
+                >
+                  <Trash2 className="w-4 h-4 text-neutral-400 hover:text-rose-400" />
+                  <span>{isTrashingOrder ? 'Trashing...' : 'Move to Trash'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* Refund Modal Overlay */}
@@ -2810,6 +2913,32 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         confirmText="Override to Completed"
         cancelText="Cancel"
         variant="warning"
+      />
+
+      {/* Administrator Cancel Order Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showCancelModal}
+        onClose={() => setShowCancelModal(false)}
+        onConfirm={handleCancelOrder}
+        title={`Cancel Order #${cleanOrderNum}`}
+        description="Are you sure you want to cancel this order? This will mark the order status as cancelled in WooCommerce and record an administrative audit note."
+        confirmText="Cancel Order"
+        cancelText="Keep Order"
+        variant="warning"
+        isLoading={isCancellingOrder}
+      />
+
+      {/* Administrator Move to Trash Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showTrashModal}
+        onClose={() => setShowTrashModal(false)}
+        onConfirm={handleTrashOrder}
+        title={`Move Order #${cleanOrderNum} to Trash`}
+        description="Are you sure you want to move this order to trash? It will be removed from active order queues and moved to the WooCommerce trash."
+        confirmText="Move to Trash"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isTrashingOrder}
       />
 
       {/* Internal A6 Thermal Label Modal */}

@@ -2024,6 +2024,12 @@ class Exacoat_Core {
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 
+		$register( '/orders/(?P<id>\d+)/trash', [
+			'methods'             => [ 'POST', 'DELETE' ],
+			'callback'            => [ 'Exacoat_Order_Manager', 'trash_order' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
 		$register( '/orders/(?P<id>\d+)/fulfill', [
 			'methods'             => [ 'POST' ],
 			'callback'            => [ 'Exacoat_Order_Manager', 'fulfill_order' ],

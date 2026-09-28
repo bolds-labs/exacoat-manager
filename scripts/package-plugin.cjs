@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Automatically extract and trigger category page ISR revalidation on product save/update, targeting production exacoat.com\n- Fix PNG alpha channel stripping on upload with lossless level-9 compression`,
+      changelog: `### Version ${version}\n- Add administrator-only options to cancel orders and move orders to trash\n- Register secure REST endpoint and handle HPOS/CPT order trashing with audit logging`,
     },
   };
 

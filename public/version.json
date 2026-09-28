@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.129",
+  "version": "0.1.130",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.129.zip?v=0.1.129",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.130.zip?v=0.1.130",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-27T23:45:04.520Z",
+  "last_updated": "2026-09-28T00:04:50.417Z",
   "sections": {
-    "changelog": "### Version 0.1.129\n- Automatically extract and trigger category page ISR revalidation on product save/update, targeting production exacoat.com\n- Fix PNG alpha channel stripping on upload with lossless level-9 compression"
+    "changelog": "### Version 0.1.130\n- Add administrator-only options to cancel orders and move orders to trash\n- Register secure REST endpoint and handle HPOS/CPT order trashing with audit logging"
   }
 }
