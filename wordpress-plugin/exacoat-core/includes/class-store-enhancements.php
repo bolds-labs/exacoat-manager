@@ -51,7 +51,8 @@ class Exacoat_Store_Enhancements {
 		add_action( 'woocommerce_after_product_object_save', [ __CLASS__, 'auto_set_aelia_currency_prices_after_save' ], 20, 2 );
 		add_filter( 'woocommerce_price_num_decimals', [ __CLASS__, 'get_active_currency_decimals' ], 999 );
 
-		// 15. Checkout Shipping Rules (#14577) - Multi-Zone Tiered Free Shipping Discount
+		// 15. Checkout Shipping Rules (#14577) - Multi-Zone Tiered Free Shipping Discount & Legacy Sanitization
+		add_filter( 'woocommerce_package_rates', [ __CLASS__, 'filter_legacy_shipping_rates' ], 5, 2 );
 		add_filter( 'woocommerce_package_rates', [ __CLASS__, 'apply_zone_tiered_shipping_discount' ], 100, 2 );
 		add_filter( 'woocommerce_package_rates', [ __CLASS__, 'apply_shipping_promo_coupon_rate_discount' ], 110, 2 );
 
@@ -975,6 +976,32 @@ class Exacoat_Store_Enhancements {
 	}
 
 	/**
+	 * Filter out legacy or internal WooCommerce shipping methods (e.g. Stock Adjustment, Redeem, Endorsement, Penyesuaian Stok, Klaim Garansi).
+	 * These must never be displayed in the storefront, cart, or Store API packages.
+	 */
+	public static function filter_legacy_shipping_rates( $rates, $package ) {
+		if ( ! is_array( $rates ) ) return $rates;
+
+		foreach ( $rates as $rate_id => $rate ) {
+			$label     = strtolower( (string) ( $rate->label ?? '' ) );
+			$id        = strtolower( (string) ( $rate->id ?? '' ) );
+			$method_id = strtolower( (string) ( $rate->method_id ?? '' ) );
+
+			$is_legacy = (
+				preg_match( '/stock\s*adjustment|penyesuaian\s*stok|penyesuaian|redeem|endorsement|klaim/i', $label ) ||
+				preg_match( '/stock|redeem|endorse/i', $id ) ||
+				preg_match( '/stock|redeem|endorse/i', $method_id )
+			);
+
+			if ( $is_legacy ) {
+				unset( $rates[ $rate_id ] );
+			}
+		}
+
+		return $rates;
+	}
+
+	/**
 	 * Apply Multi-Zone Tiered Free Shipping Discount (#14577)
 	 */
 	public static function apply_zone_tiered_shipping_discount( $rates, $package ) {
@@ -1076,6 +1103,19 @@ class Exacoat_Store_Enhancements {
 		}
 
 		foreach ( $rates as $rate_id => $rate ) {
+			$rate_label = strtolower( (string) $rate->label );
+			$rate_id_s  = strtolower( (string) $rate->id );
+
+			// Legacy methods must NEVER receive free shipping discounts or be modified
+			$is_legacy = (
+				preg_match( '/stock\s*adjustment|penyesuaian\s*stok|penyesuaian|redeem|endorsement|klaim/i', $rate_label ) ||
+				preg_match( '/stock|redeem|endorse/i', $rate_id_s )
+			);
+			if ( $is_legacy ) {
+				unset( $rates[ $rate_id ] );
+				continue;
+			}
+
 			$is_biteship = ( strpos( $rate->id, 'biteship_shipping' ) !== false || ( isset( $rate->method_id ) && 'biteship_shipping' === $rate->method_id ) );
 
 			// Target method ID verification
@@ -1094,8 +1134,6 @@ class Exacoat_Store_Enhancements {
 				if ( ! $matched_method ) continue;
 			}
 
-			$rate_label   = strtolower( (string) $rate->label );
-			$rate_id_s    = strtolower( (string) $rate->id );
 			$is_flat_rate = ( isset( $rate->method_id ) && 'flat_rate' === $rate->method_id ) || ( strpos( $rate_id_s, 'flat_rate' ) !== false );
 
 			// Guard against expensive express/freight carriers (DHL, FedEx, UPS, Cargo, Trucking, Same Day, Instant)
