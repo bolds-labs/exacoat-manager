@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.131",
+  "version": "0.1.132",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.131.zip?v=0.1.131",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.132.zip?v=0.1.132",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-28T00:52:51.255Z",
+  "last_updated": "2026-09-28T00:56:27.891Z",
   "sections": {
-    "changelog": "### Version 0.1.131\n- Add configurable adaptive shipping promo coupon (ONGKIR15) under Fulfillment & Shipping settings\n- Support courier service filter and adaptive shipping discount calculation"
+    "changelog": "### Version 0.1.132\n- Sanitize legacy internal shipping methods (Stock Adjustment, Redeem, Endorsement) from customer checkout\n- Fix 100% free shipping threshold discounting for domestic REG couriers\n- Support AJAX refresh for eligible coupons and store credit after checkout sign-in\n- Add configurable adaptive shipping promo coupon (ONGKIR15) under Fulfillment & Shipping"
   }
 }

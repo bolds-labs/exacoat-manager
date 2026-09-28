@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Add configurable adaptive shipping promo coupon (ONGKIR15) under Fulfillment & Shipping settings\n- Support courier service filter and adaptive shipping discount calculation`,
+      changelog: `### Version ${version}\n- Sanitize legacy internal shipping methods (Stock Adjustment, Redeem, Endorsement) from customer checkout\n- Fix 100% free shipping threshold discounting for domestic REG couriers\n- Support AJAX refresh for eligible coupons and store credit after checkout sign-in\n- Add configurable adaptive shipping promo coupon (ONGKIR15) under Fulfillment & Shipping`,
     },
   };
 
