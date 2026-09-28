@@ -3,7 +3,7 @@
  * Plugin Name:       Exacoat Core Platform
  * Plugin URI:        https://exacoat.com
  * Description:       Proprietary e-commerce core engine, configurator manager, and ERP workstation integration for Exacoat.
- * Version:           0.1.134
+ * Version:           0.1.135
  * Author:            Exacoat
  * Author URI:        https://exacoat.com
  * License:           Proprietary
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'EXACOAT_CORE_VERSION' ) ) {
-	define( 'EXACOAT_CORE_VERSION', '0.1.134' );
+	define( 'EXACOAT_CORE_VERSION', '0.1.135' );
 }
 if ( ! defined( 'EXACOAT_CORE_FILE' ) ) {
 	define( 'EXACOAT_CORE_FILE', __FILE__ );
@@ -71,6 +71,86 @@ if ( ! defined( 'ARTMATTER_WEB_URL' ) ) {
 if ( ! defined( 'ARTMATTER_MEDIA_URL' ) ) {
 	define( 'ARTMATTER_MEDIA_URL', EXACOAT_MEDIA_URL );
 }
+
+/**
+ * Early SPL Autoloader & Class Fallback for Legacy Configurator Plugins (MKL Product Configurator)
+ *
+ * Prevents PHP 8+ fatal error:
+ * "The script tried to modify a property on an incomplete object. Please ensure that the class definition
+ * 'MKL\PC\Choice' of the object you are trying to operate on was loaded _before_ unserialize() gets called"
+ * when customers with persistent cart sessions or serialized user meta add items or visit checkout.
+ */
+spl_autoload_register( function ( $class ) {
+	if ( strpos( $class, 'MKL\\' ) === 0 || strpos( $class, 'MKL_PC' ) === 0 ) {
+		if ( defined( 'WP_PLUGIN_DIR' ) ) {
+			$mkl_dir = WP_PLUGIN_DIR . '/mkl-product-configurator';
+			if ( is_dir( $mkl_dir ) ) {
+				$rel = str_replace( [ 'MKL\\PC\\', 'MKL\\', '\\' ], [ '', '', '/' ], $class );
+				$candidate = $mkl_dir . '/includes/' . $rel . '.php';
+				if ( file_exists( $candidate ) ) {
+					require_once $candidate;
+					if ( class_exists( $class, false ) ) {
+						return;
+					}
+				}
+			}
+		}
+
+		$parts = explode( '\\', $class );
+		$classname = array_pop( $parts );
+		$namespace = implode( '\\', $parts );
+
+		if ( ! preg_match( '/^[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*$/', $classname ) ) {
+			return;
+		}
+
+		$code = '';
+		if ( ! empty( $namespace ) ) {
+			$code .= 'namespace ' . $namespace . '; ';
+		}
+		$code .= '#[\AllowDynamicProperties] class ' . $classname . ' {
+			public function __construct() {}
+			public function __get( $name ) { return null; }
+			public function __set( $name, $value ) { $this->$name = $value; }
+			public function __isset( $name ) { return isset( $this->$name ); }
+		}';
+
+		@eval( $code );
+	}
+}, true, true );
+
+/**
+ * Defensive Sanitization of Legacy / Incomplete Objects in Cart Sessions
+ */
+if ( ! function_exists( 'exacoat_sanitize_legacy_cart_objects' ) ) {
+	function exacoat_sanitize_legacy_cart_objects( $data ) {
+		if ( is_array( $data ) ) {
+			foreach ( $data as $k => $v ) {
+				$data[ $k ] = exacoat_sanitize_legacy_cart_objects( $v );
+			}
+			return $data;
+		}
+		if ( is_object( $data ) ) {
+			$class = get_class( $data );
+			if ( $class === '__PHP_Incomplete_Class' || strpos( $class, 'MKL\\' ) === 0 || strpos( $class, 'MKL_PC' ) === 0 ) {
+				return exacoat_sanitize_legacy_cart_objects( (array) $data );
+			}
+			$vars = get_object_vars( $data );
+			foreach ( $vars as $k => $v ) {
+				$data->$k = exacoat_sanitize_legacy_cart_objects( $v );
+			}
+			return $data;
+		}
+		return $data;
+	}
+}
+
+add_filter( 'woocommerce_get_cart_item_from_session', function ( $cart_item, $values, $key ) {
+	if ( ! empty( $cart_item ) ) {
+		$cart_item = exacoat_sanitize_legacy_cart_objects( $cart_item );
+	}
+	return $cart_item;
+}, 1, 3 );
 
 // Authenticate WooCommerce API keys across custom REST endpoints before WordPress Application Passwords (prio 20) triggers invalid_username
 add_filter( 'determine_current_user', function( $user ) {
