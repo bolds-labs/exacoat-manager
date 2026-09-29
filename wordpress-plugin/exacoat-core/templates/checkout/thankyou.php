@@ -227,7 +227,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 								}
 							}
 
-							$tracker_class = class_exists( 'Exacoat_Shipping_Tracker' ) ? 'Exacoat_Shipping_Tracker' : ( class_exists( 'Artmatter_Shipping_Tracker' ) ? 'Artmatter_Shipping_Tracker' : false );
+							$tracker_class = class_exists( 'Exacoat_Shipping_Tracker' ) ? 'Exacoat_Shipping_Tracker' : false;
 
 							if ( $tracking_number ) :
 								$track_url = '';
@@ -235,8 +235,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 									$track_url = $tracker_class::get_carrier_tracking_url( $carrier, $tracking_number );
 								} elseif ( function_exists( 'exacoat_get_carrier_tracking_url' ) ) {
 									$track_url = exacoat_get_carrier_tracking_url( $carrier, $tracking_number );
-								} elseif ( function_exists( 'artmatter_get_carrier_tracking_url' ) ) {
-									$track_url = artmatter_get_carrier_tracking_url( $carrier, $tracking_number );
 								}
 
 								$checkpoints = $order->get_meta( '_exacoat_tracking_checkpoints' ) ?: ( $order->get_meta( '_artmatter_tracking_checkpoints' ) ?: get_post_meta( $order_id, '_artmatter_tracking_checkpoints', true ) );

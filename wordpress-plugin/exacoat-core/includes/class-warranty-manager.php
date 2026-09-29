@@ -73,10 +73,10 @@ class Exacoat_Warranty_Manager {
 		if ( empty( $existing ) ) {
 			$now = current_time( 'mysql' );
 			$order->update_meta_data( '_delivered_at', $now );
-			$order->update_meta_data( '_artmatter_delivered_at', $now );
+			$order->update_meta_data( '_exacoat_delivered_at', $now );
 			$order->save();
 			update_post_meta( $order_id, '_delivered_at', $now );
-			update_post_meta( $order_id, '_artmatter_delivered_at', $now );
+			update_post_meta( $order_id, '_exacoat_delivered_at', $now );
 		}
 	}
 
@@ -360,12 +360,12 @@ class Exacoat_Warranty_Manager {
 						if ( ! empty( $delivery_time ) ) {
 							$delivered_at_str = date( 'Y-m-d H:i:s', strtotime( $delivery_time ) );
 							$order->update_meta_data( '_delivered_at', $delivered_at_str );
-							$order->update_meta_data( '_artmatter_delivered_at', $delivered_at_str );
+							$order->update_meta_data( '_exacoat_delivered_at', $delivered_at_str );
 							$order->update_meta_data( '_biteship_delivery_time', $delivered_at_str );
 							$order->update_meta_data( 'delivered_time', $delivered_at_str );
 							$order->save();
 							update_post_meta( $order->get_id(), '_delivered_at', $delivered_at_str );
-							update_post_meta( $order->get_id(), '_artmatter_delivered_at', $delivered_at_str );
+							update_post_meta( $order->get_id(), '_exacoat_delivered_at', $delivered_at_str );
 							update_post_meta( $order->get_id(), '_biteship_delivery_time', $delivered_at_str );
 							update_post_meta( $order->get_id(), 'delivered_time', $delivered_at_str );
 						}

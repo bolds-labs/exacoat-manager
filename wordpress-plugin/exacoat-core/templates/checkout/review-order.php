@@ -38,7 +38,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 				$rates = ( ! empty( $packages ) && isset( $packages[0]['rates'] ) ) ? $packages[0]['rates'] : [];
 				if ( ! empty( $chosen_method ) && isset( $rates[ $chosen_method ] ) ) {
 					$cost = $rates[ $chosen_method ]->get_cost();
-					$checkout_engine = class_exists( 'Exacoat_Checkout_Engine' ) ? 'Exacoat_Checkout_Engine' : ( class_exists( 'Artmatter_Checkout_Engine' ) ? 'Artmatter_Checkout_Engine' : false );
+					$checkout_engine = class_exists( 'Exacoat_Checkout_Engine' ) ? 'Exacoat_Checkout_Engine' : false;
 					$curr = $checkout_engine ? $checkout_engine::get_active_currency() : ( function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'IDR' );
 					echo ( $cost == 0 ) ? esc_html__( 'Free', 'exacoat-core' ) : wc_price( $cost, [ 'currency' => $curr ] );
 				} else {

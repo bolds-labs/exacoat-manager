@@ -326,58 +326,58 @@ class Exacoat_Store_Enhancements {
 
 	public static function register_custom_product_statuses() {
 		register_post_status( 'rejected', [
-			'label'                     => _x( 'Rejected', 'post status', 'artmatter-core' ),
+			'label'                     => _x( 'Rejected', 'post status', 'exacoat-core' ),
 			'public'                    => false,
 			'private'                   => true,
 			'protected'                 => false,
 			'exclude_from_search'       => true,
 			'show_in_admin_all_list'    => true,
 			'show_in_admin_status_list' => true,
-			'label_count'               => _n_noop( 'Rejected <span class="count">(%s)</span>', 'Rejected <span class="count">(%s)</span>', 'artmatter-core' ),
+			'label_count'               => _n_noop( 'Rejected <span class="count">(%s)</span>', 'Rejected <span class="count">(%s)</span>', 'exacoat-core' ),
 		] );
 
 		register_post_status( 'sched_removal', [
-			'label'                     => _x( 'Delisting Wind-Down (7 Days)', 'post status', 'artmatter-core' ),
+			'label'                     => _x( 'Delisting Wind-Down (7 Days)', 'post status', 'exacoat-core' ),
 			'public'                    => false,
 			'private'                   => true,
 			'protected'                 => false,
 			'exclude_from_search'       => true,
 			'show_in_admin_all_list'    => true,
 			'show_in_admin_status_list' => true,
-			'label_count'               => _n_noop( 'Delisting Wind-Down <span class="count">(%s)</span>', 'Delisting Wind-Down <span class="count">(%s)</span>', 'artmatter-core' ),
+			'label_count'               => _n_noop( 'Delisting Wind-Down <span class="count">(%s)</span>', 'Delisting Wind-Down <span class="count">(%s)</span>', 'exacoat-core' ),
 		] );
 
 		register_post_status( 'scheduled_removal', [
-			'label'                     => _x( 'Scheduled for Removal', 'post status', 'artmatter-core' ),
+			'label'                     => _x( 'Scheduled for Removal', 'post status', 'exacoat-core' ),
 			'public'                    => false,
 			'private'                   => true,
 			'protected'                 => false,
 			'exclude_from_search'       => true,
 			'show_in_admin_all_list'    => true,
 			'show_in_admin_status_list' => true,
-			'label_count'               => _n_noop( 'Scheduled for Removal <span class="count">(%s)</span>', 'Scheduled for Removal <span class="count">(%s)</span>', 'artmatter-core' ),
+			'label_count'               => _n_noop( 'Scheduled for Removal <span class="count">(%s)</span>', 'Scheduled for Removal <span class="count">(%s)</span>', 'exacoat-core' ),
 		] );
 
 		register_post_status( 'delisted', [
-			'label'                     => _x( 'Delisted', 'post status', 'artmatter-core' ),
+			'label'                     => _x( 'Delisted', 'post status', 'exacoat-core' ),
 			'public'                    => false,
 			'private'                   => true,
 			'protected'                 => false,
 			'exclude_from_search'       => true,
 			'show_in_admin_all_list'    => true,
 			'show_in_admin_status_list' => true,
-			'label_count'               => _n_noop( 'Delisted <span class="count">(%s)</span>', 'Delisted <span class="count">(%s)</span>', 'artmatter-core' ),
+			'label_count'               => _n_noop( 'Delisted <span class="count">(%s)</span>', 'Delisted <span class="count">(%s)</span>', 'exacoat-core' ),
 		] );
 	}
 
 	public static function display_custom_product_post_states( $states, $post ) {
 		if ( $post->post_type === 'product' ) {
 			if ( $post->post_status === 'rejected' ) {
-				$states['rejected'] = __( 'Rejected', 'artmatter-core' );
+				$states['rejected'] = __( 'Rejected', 'exacoat-core' );
 			} elseif ( $post->post_status === 'sched_removal' || $post->post_status === 'scheduled_removal' ) {
-				$states['sched_removal'] = __( 'Delisting Wind-Down (7 Days)', 'artmatter-core' );
+				$states['sched_removal'] = __( 'Delisting Wind-Down (7 Days)', 'exacoat-core' );
 			} elseif ( $post->post_status === 'delisted' ) {
-				$states['delisted'] = __( 'Delisted (Archived)', 'artmatter-core' );
+				$states['delisted'] = __( 'Delisted (Archived)', 'exacoat-core' );
 			}
 		}
 		return $states;
@@ -427,7 +427,7 @@ class Exacoat_Store_Enhancements {
 		if ( ! empty( $result ) ) return $result;
 		$route = $GLOBALS['wp']->query_vars['rest_route'] ?? '';
 		if ( strpos( $route, '/wp/v2/users' ) !== false && ! is_user_logged_in() ) {
-			return new WP_Error( 'rest_forbidden', __( 'Authentication required to view users.', 'artmatter-core' ), [ 'status' => 401 ] );
+			return new WP_Error( 'rest_forbidden', __( 'Authentication required to view users.', 'exacoat-core' ), [ 'status' => 401 ] );
 		}
 		return $result;
 	}
@@ -557,7 +557,6 @@ class Exacoat_Store_Enhancements {
 		$settings['currency_last_synced_aelia'] = current_time( 'mysql' );
 
 		update_option( 'exacoat_core_settings', $settings );
-		update_option( 'artmatter_core_settings', $settings );
 		Exacoat_Core::clear_settings_cache();
 
 		return [
@@ -1035,9 +1034,7 @@ class Exacoat_Store_Enhancements {
 
 		$active_currency = class_exists( 'Exacoat_Checkout_Engine' )
 			? Exacoat_Checkout_Engine::get_active_currency()
-			: ( class_exists( 'Artmatter_Checkout_Engine' )
-				? Artmatter_Checkout_Engine::get_active_currency()
-				: ( function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'IDR' ) );
+			: ( function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'IDR' );
 
 		// Normalize cart total to IDR base currency for comparison against IDR-configured zone thresholds
 		$cart_total_idr = $cart_total;
@@ -1608,7 +1605,7 @@ class Exacoat_Store_Enhancements {
 	public static function display_print_finish_in_cart( $item_data, $cart_item ) {
 		if ( ! empty( $cart_item['print_finish_label'] ) ) {
 			$item_data[] = [
-				'key'   => __( 'Print Finish', 'artmatter-core' ),
+				'key'   => __( 'Print Finish', 'exacoat-core' ),
 				'value' => esc_html( $cart_item['print_finish_label'] ),
 			];
 		}
@@ -1695,8 +1692,8 @@ class Exacoat_Store_Enhancements {
 			return;
 		}
 
-		$speed = class_exists( 'Artmatter_Performance_Auditor' ) 
-			? Artmatter_Performance_Auditor::get_speed_settings() 
+		$speed = class_exists( 'Exacoat_Performance_Auditor' ) 
+			? Exacoat_Performance_Auditor::get_speed_settings() 
 			: [ 'selective_wc_assets' => 1 ];
 
 		if ( empty( $speed['selective_wc_assets'] ) ) {
@@ -1825,8 +1822,4 @@ class Exacoat_Store_Enhancements {
 	}
 }
 
-}
-
-if ( ! class_exists( 'Artmatter_Store_Enhancements' ) ) {
-	class_alias( 'Exacoat_Store_Enhancements', 'Artmatter_Store_Enhancements' );
 }

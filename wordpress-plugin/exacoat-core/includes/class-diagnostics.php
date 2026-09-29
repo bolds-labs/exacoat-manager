@@ -894,6 +894,4 @@ class Exacoat_Diagnostics {
 
 }
 
-if ( ! class_exists( 'Artmatter_Diagnostics' ) ) {
-	class_alias( 'Exacoat_Diagnostics', 'Artmatter_Diagnostics' );
-}
+

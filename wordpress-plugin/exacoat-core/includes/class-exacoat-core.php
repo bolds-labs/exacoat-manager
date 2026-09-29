@@ -46,6 +46,14 @@ class Exacoat_Core {
 			if ( empty( $options['openai_api_key'] ) && ! empty( $env_openai ) ) {
 				$options['openai_api_key'] = trim( (string) $env_openai );
 			}
+			$env_trackingmore = defined( 'EXA_TRACKINGMORE_API_KEY' ) ? EXA_TRACKINGMORE_API_KEY : ( defined( 'TRACKINGMORE_API_KEY' ) ? TRACKINGMORE_API_KEY : getenv( 'EXA_TRACKINGMORE_API_KEY' ) );
+			if ( empty( $options['trackingmore_api_key'] ) && ! empty( $env_trackingmore ) ) {
+				$options['trackingmore_api_key'] = trim( (string) $env_trackingmore );
+			}
+			$env_trackingmore_secret = defined( 'EXA_TRACKINGMORE_WEBHOOK_SECRET' ) ? EXA_TRACKINGMORE_WEBHOOK_SECRET : ( defined( 'TRACKINGMORE_WEBHOOK_SECRET' ) ? TRACKINGMORE_WEBHOOK_SECRET : getenv( 'EXA_TRACKINGMORE_WEBHOOK_SECRET' ) );
+			if ( empty( $options['trackingmore_webhook_secret'] ) && ! empty( $env_trackingmore_secret ) ) {
+				$options['trackingmore_webhook_secret'] = trim( (string) $env_trackingmore_secret );
+			}
 			self::$cached_settings = $options;
 		}
 		return self::$cached_settings;
@@ -779,7 +787,7 @@ class Exacoat_Core {
 	 * REST API Endpoint Registration for Exacoat Manager ERP & Storefront
 	 */
 	public function register_bridge_routes() {
-		$namespaces = [ 'exacoat-core/v1', 'artmatter-core/v1' ];
+		$namespaces = [ 'exacoat-core/v1' ];
 
 		$register = function( string $route, array $args ) use ( $namespaces ) {
 			foreach ( $namespaces as $namespace ) {
@@ -918,7 +926,6 @@ class Exacoat_Core {
 					$profile = $params['profile'] ?? null;
 					if ( is_array( $profile ) ) {
 						update_user_meta( $user_id, '_exacoat_taste_profile', $profile );
-						update_user_meta( $user_id, '_artmatter_taste_profile', $profile );
 						return rest_ensure_response( [ 'success' => true, 'message' => 'Taste profile synchronized' ] );
 					}
 					return rest_ensure_response( [ 'success' => false, 'error' => 'Invalid profile payload' ] );

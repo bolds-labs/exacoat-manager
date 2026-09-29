@@ -7,7 +7,7 @@
 
   // Config & State
   const settings = window.artmatterSearchSettings || {
-    apiUrl: '/wp-json/artmatter-core/v1/search',
+    apiUrl: '/wp-json/exacoat-core/v1/search',
     currency: 'IDR',
     siteUrl: '/',
   };

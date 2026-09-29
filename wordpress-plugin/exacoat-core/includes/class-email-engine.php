@@ -3519,6 +3519,4 @@ class Exacoat_Email_Engine {
 
 }
 
-if ( ! class_exists( 'Artmatter_Email_Engine' ) ) {
-	class_alias( 'Exacoat_Email_Engine', 'Artmatter_Email_Engine' );
-}
+

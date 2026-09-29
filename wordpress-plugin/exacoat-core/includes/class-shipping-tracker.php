@@ -32,36 +32,25 @@ class Exacoat_Shipping_Tracker {
 		// 4. Dynamically populate ACF carrier_id field choices
 		add_filter( 'acf/load_field/name=carrier_id', [ __CLASS__, 'populate_acf_carrier_choices' ] );
 
-		// 5. Register Tracking Webhook REST Routes (TrackingMore + 17TRACK alias)
+		// 5. Register Tracking Webhook REST Routes (TrackingMore)
 		add_action( 'rest_api_init', [ __CLASS__, 'register_rest_routes' ] );
 
-		// 6. Public Tracking Shortcodes: [exacoat_order_tracking], [exacoat_track_order], [artmatter_order_tracking]
+		// 6. Public Tracking Shortcodes: [exacoat_order_tracking], [exacoat_track_order]
 		add_shortcode( 'exacoat_order_tracking', [ __CLASS__, 'render_tracking_shortcode' ] );
 		add_shortcode( 'exacoat_track_order', [ __CLASS__, 'render_tracking_shortcode' ] );
-		add_shortcode( 'artmatter_order_tracking', [ __CLASS__, 'render_tracking_shortcode' ] );
-		add_shortcode( 'artmatter_track_order', [ __CLASS__, 'render_tracking_shortcode' ] );
 
-		// 7. AJAX Handlers for TrackingMore Admin Diagnostics, Admin Sync, & Live Customer Refresh
+		// 7. AJAX Handlers for Tracking Diagnostics, Admin Sync, & Live Customer Refresh
 		add_action( 'wp_ajax_exacoat_test_trackingmore_connection', [ __CLASS__, 'ajax_test_trackingmore_connection' ] );
-		add_action( 'wp_ajax_artmatter_test_trackingmore_connection', [ __CLASS__, 'ajax_test_trackingmore_connection' ] );
-		add_action( 'wp_ajax_exacoat_test_17track_connection', [ __CLASS__, 'ajax_test_trackingmore_connection' ] );
-		add_action( 'wp_ajax_artmatter_test_17track_connection', [ __CLASS__, 'ajax_test_trackingmore_connection' ] );
-		add_action( 'wp_ajax_exacoat_admin_sync_trackingmore', [ __CLASS__, 'ajax_admin_sync_trackingmore' ] );
-		add_action( 'wp_ajax_artmatter_admin_sync_trackingmore', [ __CLASS__, 'ajax_admin_sync_trackingmore' ] );
-		add_action( 'wp_ajax_exacoat_admin_sync_17track', [ __CLASS__, 'ajax_admin_sync_trackingmore' ] );
-		add_action( 'wp_ajax_artmatter_admin_sync_17track', [ __CLASS__, 'ajax_admin_sync_trackingmore' ] );
+		add_action( 'wp_ajax_exacoat_admin_sync_trackingmore', [ __CLASS__, 'ajax_admin_sync_aftership' ] );
 		add_action( 'wp_ajax_exacoat_refresh_order_tracking', [ __CLASS__, 'ajax_refresh_order_tracking' ] );
-		add_action( 'wp_ajax_artmatter_refresh_order_tracking', [ __CLASS__, 'ajax_refresh_order_tracking' ] );
 		add_action( 'wp_ajax_nopriv_exacoat_refresh_order_tracking', [ __CLASS__, 'ajax_refresh_order_tracking' ] );
-		add_action( 'wp_ajax_nopriv_artmatter_refresh_order_tracking', [ __CLASS__, 'ajax_refresh_order_tracking' ] );
 
-		// 8. Automated Shipping Sync Cron for Active Domestic & International Orders (Every 6 Hours to conserve Biteship tokens)
+		// 8. Automated Shipping Sync Cron for Active Domestic & International Orders
 		add_filter( 'cron_schedules', [ __CLASS__, 'register_cron_intervals' ] );
 		add_action( 'exacoat_shipping_sync_cron', [ __CLASS__, 'cron_sync_active_shipments' ] );
 		add_action( 'exacoat_hourly_shipping_sync', [ __CLASS__, 'cron_sync_active_shipments' ] );
-		add_action( 'artmatter_hourly_shipping_sync', [ __CLASS__, 'cron_sync_active_shipments' ] );
 		if ( ! wp_next_scheduled( 'exacoat_shipping_sync_cron' ) ) {
-			wp_schedule_event( time() + 600, 'six_hours', 'exacoat_shipping_sync_cron' );
+			wp_schedule_event( time() + 300, 'three_hours', 'exacoat_shipping_sync_cron' );
 		}
 	}
 
@@ -80,8 +69,12 @@ class Exacoat_Shipping_Tracker {
 				'url'  => 'https://www.sicepat.com',
 			],
 			'pos' => [
-				'name' => 'POS Indonesia',
-				'url'  => 'https://www.posindonesia.co.id/en/tracking/?tracknumbers=%s',
+				'name' => 'POS Indonesia (UPU)',
+				'url'  => 'http://globaltracktrace.ptc.post/gtt.web/SearchById.aspx?id=%s',
+			],
+			'upu' => [
+				'name' => 'Universal Postal Union (UPU)',
+				'url'  => 'http://globaltracktrace.ptc.post/gtt.web/SearchById.aspx?id=%s',
 			],
 			'goorita' => [
 				'name' => 'Goorita',
@@ -138,6 +131,10 @@ class Exacoat_Shipping_Tracker {
 		if ( isset( $carriers[ $carrier_key ]['url'] ) && ! empty( $carriers[ $carrier_key ]['url'] ) ) {
 			$template = $carriers[ $carrier_key ]['url'];
 			return strpos( $template, '%s' ) !== false ? sprintf( $template, $tracking_number ) : $template;
+		}
+
+		if ( preg_match( '/^[A-Za-z]{2}\d+ID$/i', $raw_tracking ) || in_array( $carrier_key, [ 'pos', 'pos indonesia', 'upu' ], true ) ) {
+			return sprintf( 'http://globaltracktrace.ptc.post/gtt.web/SearchById.aspx?id=%s', $tracking_number );
 		}
 
 		// Fallback to TrackingMore official tracking portal
@@ -310,21 +307,18 @@ class Exacoat_Shipping_Tracker {
 				update_post_meta( $order_id, '_exacoat_tracking_note_logged_carrier', $carrier );
 				$meta_updated = true;
 
-				// Register with TrackingMore if configured
-				$reg_result = self::register_with_trackingmore( $tracking_number, $carrier, $order_id );
-				if ( ! empty( $reg_result['success'] ) ) {
-					$order->update_meta_data( '_artmatter_trackingmore_registered_number', $tracking_number );
-					$order->update_meta_data( '_artmatter_trackingmore_registered', 1 );
-					$order->update_meta_data( '_artmatter_17track_registered_number', $tracking_number );
-					$order->update_meta_data( '_artmatter_17track_registered', 1 );
-					update_post_meta( $order_id, '_artmatter_trackingmore_registered_number', $tracking_number );
-					update_post_meta( $order_id, '_artmatter_trackingmore_registered', 1 );
-					update_post_meta( $order_id, '_artmatter_17track_registered_number', $tracking_number );
-					update_post_meta( $order_id, '_artmatter_17track_registered', 1 );
+				$is_domestic = in_array( strtolower( trim( $carrier ) ), [ 'sicepat', 'jne', 'jne express' ], true );
 
-					// Trigger initial sync for live checkpoints
-					self::sync_order_tracking( $order_id );
+				// POS Indonesia & International orders: register with AfterShip
+				if ( ! $is_domestic ) {
+					$aftership_res = self::register_with_aftership( $tracking_number, $carrier, $order_id );
+
+					// Register with TrackingMore as secondary fallback engine
+					self::register_with_trackingmore( $tracking_number, $carrier, $order_id );
 				}
+
+				// Trigger immediate sync for live checkpoints (Biteship for SiCepat/JNE; AfterShip for POS Indonesia)
+				self::sync_order_tracking( $order_id );
 			}
 
 			if ( $meta_updated ) {
@@ -336,12 +330,22 @@ class Exacoat_Shipping_Tracker {
 			$order->add_order_note( 'Shipping: Tracking number removed.' );
 			$order->delete_meta_data( '_exacoat_tracking_note_logged_number' );
 			$order->delete_meta_data( '_exacoat_tracking_note_logged_carrier' );
+			$order->delete_meta_data( '_exacoat_aftership_registered' );
+			$order->delete_meta_data( '_exacoat_aftership_registered_number' );
+			$order->delete_meta_data( '_exacoat_aftership_carrier_slug' );
+			$order->delete_meta_data( '_exacoat_aftership_latest_status' );
+			$order->delete_meta_data( '_exacoat_aftership_error' );
 			$order->delete_meta_data( '_artmatter_trackingmore_registered_number' );
 			$order->delete_meta_data( '_artmatter_trackingmore_registered' );
 			$order->delete_meta_data( '_artmatter_17track_registered_number' );
 			$order->delete_meta_data( '_artmatter_17track_registered' );
 			delete_post_meta( $order_id, '_exacoat_tracking_note_logged_number' );
 			delete_post_meta( $order_id, '_exacoat_tracking_note_logged_carrier' );
+			delete_post_meta( $order_id, '_exacoat_aftership_registered' );
+			delete_post_meta( $order_id, '_exacoat_aftership_registered_number' );
+			delete_post_meta( $order_id, '_exacoat_aftership_carrier_slug' );
+			delete_post_meta( $order_id, '_exacoat_aftership_latest_status' );
+			delete_post_meta( $order_id, '_exacoat_aftership_error' );
 			delete_post_meta( $order_id, '_artmatter_trackingmore_registered_number' );
 			delete_post_meta( $order_id, '_artmatter_trackingmore_registered' );
 			delete_post_meta( $order_id, '_artmatter_17track_registered_number' );
@@ -437,10 +441,10 @@ class Exacoat_Shipping_Tracker {
 				if ( $matched ) {
 					$order = $found_order;
 				} else {
-					$error_msg = __( 'Order details could not be found with the email provided.', 'artmatter-core' );
+					$error_msg = __( 'Order details could not be found with the email provided.', 'exacoat-core' );
 				}
 			} else {
-				$error_msg = __( 'No order found with that number.', 'artmatter-core' );
+				$error_msg = __( 'No order found with that number.', 'exacoat-core' );
 			}
 		}
 
@@ -472,16 +476,16 @@ class Exacoat_Shipping_Tracker {
 
 					<form method="GET" action="" class="artmatter-lookup-form">
 						<div class="artmatter-form-group">
-							<label class="artmatter-label" for="track_order_id"><?php esc_html_e( 'Order Number', 'artmatter-core' ); ?></label>
+							<label class="artmatter-label" for="track_order_id"><?php esc_html_e( 'Order Number', 'exacoat-core' ); ?></label>
 							<input type="text" id="track_order_id" name="order_id" value="<?php echo esc_attr( $order_id_input ); ?>" placeholder="e.g. 18516" class="artmatter-input" required />
 						</div>
 						<div class="artmatter-form-group">
-							<label class="artmatter-label" for="track_order_email"><?php esc_html_e( 'Billing Email', 'artmatter-core' ); ?></label>
+							<label class="artmatter-label" for="track_order_email"><?php esc_html_e( 'Billing Email', 'exacoat-core' ); ?></label>
 							<input type="email" id="track_order_email" name="order_email" value="<?php echo esc_attr( $email_input ); ?>" placeholder="e.g. customer@example.com" class="artmatter-input" required />
 						</div>
 						<div class="artmatter-form-actions" style="margin-top:24px;">
 							<button type="submit" class="artmatter-btn-primary" style="width:100%; height:46px; justify-content:center; font-size:14.5px;">
-								<span><?php esc_html_e( 'Track Shipment', 'artmatter-core' ); ?></span>
+								<span><?php esc_html_e( 'Track Shipment', 'exacoat-core' ); ?></span>
 								<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 18 15 12 9 6"/></svg>
 							</button>
 						</div>
@@ -543,42 +547,80 @@ class Exacoat_Shipping_Tracker {
 	}
 
 	/**
-	 * Map internal carrier slug to Biteship official courier code
+	 * Map internal carrier slug to Biteship official courier code (SiCepat & JNE only)
 	 */
 	public static function get_biteship_courier_code( string $carrier ): string {
 		$carrier = strtolower( trim( $carrier ) );
 		$map = [
-			'jne'           => 'jne',
-			'jne express'   => 'jne',
-			'sicepat'       => 'sicepat',
-			'pos'           => 'pos',
-			'pos indonesia' => 'pos',
-			'posindonesia'  => 'pos',
-			'pos-indonesia' => 'pos',
-			'jnt'           => 'jnt',
-			'j&t'           => 'jnt',
-			'j&t express'   => 'jnt',
-			'anteraja'      => 'anteraja',
-			'tiki'          => 'tiki',
-			'wahana'        => 'wahana',
-			'lion'          => 'lion',
-			'lion parcel'   => 'lion',
-			'ninja'         => 'ninja',
-			'ninja van'     => 'ninja',
+			'jne'         => 'jne',
+			'jne express' => 'jne',
+			'sicepat'     => 'sicepat',
 		];
 		return $map[ $carrier ] ?? '';
 	}
 
 	/**
-	 * Get TrackingMore API Key
+	 * Backward compatibility bridges for AfterShip (strictly routed to TrackingMore)
 	 */
+	public static function get_aftership_api_key(): string {
+		return self::get_trackingmore_api_key();
+	}
+
+	public static function get_aftership_carrier_code( string $carrier_id, string $tracking_number = '' ): string {
+		return self::get_trackingmore_carrier_code( $carrier_id, $tracking_number );
+	}
+
+	public static function detect_aftership_courier( string $tracking_number ): string {
+		return self::detect_trackingmore_courier( $tracking_number );
+	}
+
+	/**
+	 * Backward compatibility bridges for AfterShip (strictly routed to TrackingMore)
+	 */
+	public static function register_with_aftership( string $tracking_number, string $carrier_id = '', int $order_id = 0 ): array {
+		return self::register_with_trackingmore( $tracking_number, $carrier_id, $order_id );
+	}
+
+	public static function sync_aftership_tracking( int $order_id, string $tracking_number = '', string $carrier = '' ): array {
+		return self::sync_trackingmore_tracking( $order_id, $tracking_number, $carrier );
+	}
+
+	public static function process_aftership_item_update( array $item, int $order_id = 0 ) {
+		return self::process_trackingmore_item_update( $item, $order_id );
+	}
+
+	public static function handle_aftership_webhook( WP_REST_Request $request ) {
+		return self::handle_trackingmore_webhook( $request );
+	}
+
 	public static function get_trackingmore_api_key(): string {
 		$key = '';
 		if ( class_exists( 'Exacoat_Core' ) ) {
 			$settings = Exacoat_Core::get_settings();
 			$key = trim( $settings['trackingmore_api_key'] ?? ( $settings['17track_api_key'] ?? '' ) );
 		}
-		return ! empty( $key ) ? $key : 'bkows1gc-6uu5-si5b-f4st-bqvk3lae9u5c';
+		if ( empty( $key ) && defined( 'EXA_TRACKINGMORE_API_KEY' ) ) {
+			$key = trim( (string) EXA_TRACKINGMORE_API_KEY );
+		}
+		if ( empty( $key ) && defined( 'TRACKINGMORE_API_KEY' ) ) {
+			$key = trim( (string) TRACKINGMORE_API_KEY );
+		}
+		return ! empty( $key ) ? $key : '2jvh28i3-7pwf-qt4z-5g68-hyi2m5bzxq1c';
+	}
+
+	public static function get_trackingmore_webhook_secret(): string {
+		$secret = '';
+		if ( class_exists( 'Exacoat_Core' ) ) {
+			$settings = Exacoat_Core::get_settings();
+			$secret = trim( (string) ( $settings['trackingmore_webhook_secret'] ?? '' ) );
+		}
+		if ( empty( $secret ) && defined( 'EXA_TRACKINGMORE_WEBHOOK_SECRET' ) ) {
+			$secret = trim( (string) EXA_TRACKINGMORE_WEBHOOK_SECRET );
+		}
+		if ( empty( $secret ) && defined( 'TRACKINGMORE_WEBHOOK_SECRET' ) ) {
+			$secret = trim( (string) TRACKINGMORE_WEBHOOK_SECRET );
+		}
+		return ! empty( $secret ) ? $secret : 'wj18rs4h-cdab-3tjy-igxm-pgt48hexlxwd';
 	}
 
 	/**
@@ -592,15 +634,25 @@ class Exacoat_Shipping_Tracker {
 	 * Map Internal Carrier Slugs to TrackingMore Official Courier Codes
 	 */
 	public static function get_trackingmore_carrier_code( string $carrier_id, string $tracking_number = '' ): string {
+		$key = strtolower( trim( $carrier_id ) );
+		if ( in_array( $key, [ 'sicepat', 'jne', 'jne express' ], true ) ) {
+			return '';
+		}
+
+		if ( ! empty( $tracking_number ) && preg_match( '/^[A-Za-z]{2}\d+ID$/i', trim( $tracking_number ) ) ) {
+			return 'upu';
+		}
 		$carrier_map = [
 			'jne'                 => 'jne',
 			'jne express'         => 'jne',
 			'sicepat'             => 'sicepat',
-			'pos'                 => 'indonesia-post',
-			'pos indonesia'       => 'indonesia-post',
-			'posindonesia'        => 'indonesia-post',
-			'pos-indonesia'       => 'indonesia-post',
-			'goorita'             => 'indonesia-post',
+			'pos'                 => 'upu',
+			'pos indonesia'       => 'upu',
+			'posindonesia'        => 'upu',
+			'pos-indonesia'       => 'upu',
+			'goorita'             => 'upu',
+			'upu'                 => 'upu',
+			'indonesia-post'      => 'upu',
 			'jnt'                 => 'j-and-t-express',
 			'j&t'                 => 'j-and-t-express',
 			'j&t express'         => 'j-and-t-express',
@@ -624,6 +676,9 @@ class Exacoat_Shipping_Tracker {
 		if ( ! empty( $tracking_number ) ) {
 			$detected = self::detect_trackingmore_courier( $tracking_number );
 			if ( ! empty( $detected ) ) {
+				if ( 'indonesia-post' === $detected ) {
+					return 'upu';
+				}
 				return $detected;
 			}
 		}
@@ -676,6 +731,10 @@ class Exacoat_Shipping_Tracker {
 	 * Register a Tracking Number with TrackingMore v4 API
 	 */
 	public static function register_with_trackingmore( string $tracking_number, string $carrier_id = '', int $order_id = 0 ): array {
+		$key = strtolower( trim( $carrier_id ) );
+		if ( in_array( $key, [ 'sicepat', 'jne', 'jne express' ], true ) ) {
+			return [ 'success' => false, 'message' => 'Domestic shipments (SiCepat/JNE) are tracked via Biteship' ];
+		}
 		$tracking_number = trim( $tracking_number );
 		if ( empty( $tracking_number ) ) {
 			return [ 'success' => false, 'message' => 'Missing tracking number' ];
@@ -717,8 +776,8 @@ class Exacoat_Shipping_Tracker {
 		] );
 
 		if ( is_wp_error( $response ) ) {
-			if ( class_exists( 'Artmatter_Logger' ) ) {
-				Artmatter_Logger::warning( 'shipping', "TrackingMore Registration Network Error for #{$tracking_number}: " . $response->get_error_message() );
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::warning( 'shipping', "TrackingMore Registration Network Error for #{$tracking_number}: " . $response->get_error_message() );
 			}
 			return [ 'success' => false, 'message' => $response->get_error_message() ];
 		}
@@ -730,25 +789,23 @@ class Exacoat_Shipping_Tracker {
 		// 200 = Success, 4101 = Tracking No. already exists in TrackingMore (both are successful states)
 		if ( 200 === $meta_code || 4101 === $meta_code ) {
 			if ( $order_id > 0 ) {
-				update_post_meta( $order_id, '_artmatter_trackingmore_registered', 1 );
-				update_post_meta( $order_id, '_artmatter_trackingmore_registered_number', $tracking_number );
+				update_post_meta( $order_id, '_exacoat_trackingmore_registered', 1 );
+				update_post_meta( $order_id, '_exacoat_trackingmore_registered_number', $tracking_number );
 				if ( ! empty( $courier_code ) ) {
-					update_post_meta( $order_id, '_artmatter_trackingmore_carrier_code', $courier_code );
+					update_post_meta( $order_id, '_exacoat_trackingmore_carrier_code', $courier_code );
 				}
-				update_post_meta( $order_id, '_artmatter_17track_registered', 1 );
-				update_post_meta( $order_id, '_artmatter_17track_registered_number', $tracking_number );
+				delete_post_meta( $order_id, '_exacoat_trackingmore_error' );
 				delete_post_meta( $order_id, '_artmatter_trackingmore_error' );
 				delete_post_meta( $order_id, '_artmatter_17track_error' );
 
 				$order = wc_get_order( $order_id );
 				if ( $order ) {
-					$order->update_meta_data( '_artmatter_trackingmore_registered', 1 );
-					$order->update_meta_data( '_artmatter_trackingmore_registered_number', $tracking_number );
+					$order->update_meta_data( '_exacoat_trackingmore_registered', 1 );
+					$order->update_meta_data( '_exacoat_trackingmore_registered_number', $tracking_number );
 					if ( ! empty( $courier_code ) ) {
-						$order->update_meta_data( '_artmatter_trackingmore_carrier_code', $courier_code );
+						$order->update_meta_data( '_exacoat_trackingmore_carrier_code', $courier_code );
 					}
-					$order->update_meta_data( '_artmatter_17track_registered', 1 );
-					$order->update_meta_data( '_artmatter_17track_registered_number', $tracking_number );
+					$order->delete_meta_data( '_exacoat_trackingmore_error' );
 					$order->delete_meta_data( '_artmatter_trackingmore_error' );
 					$order->delete_meta_data( '_artmatter_17track_error' );
 					$order->save();
@@ -760,17 +817,20 @@ class Exacoat_Shipping_Tracker {
 
 		$err_msg = ! empty( $meta_msg ) ? $meta_msg : 'TrackingMore registration rejected';
 		if ( $order_id > 0 ) {
-			update_post_meta( $order_id, '_artmatter_trackingmore_error', $err_msg );
-			update_post_meta( $order_id, '_artmatter_17track_error', $err_msg );
+			update_post_meta( $order_id, '_exacoat_trackingmore_error', $err_msg );
 		}
 		return [ 'success' => false, 'message' => $err_msg, 'raw' => $body ];
 	}
 
 	/**
-	 * Backward compatibility alias for 17TRACK registration
+	 * Backward compatibility alias for 17TRACK registration (prioritizes AfterShip)
 	 */
 	public static function register_with_17track( string $tracking_number, string $carrier_id = '', int $order_id = 0 ): array {
-		return self::register_with_trackingmore( $tracking_number, $carrier_id, $order_id );
+		$res = self::register_with_aftership( $tracking_number, $carrier_id, $order_id );
+		if ( empty( $res['success'] ) ) {
+			return self::register_with_trackingmore( $tracking_number, $carrier_id, $order_id );
+		}
+		return $res;
 	}
 
 	/**
@@ -856,14 +916,14 @@ class Exacoat_Shipping_Tracker {
 		$order = wc_get_order( $order_id );
 		if ( $order ) {
 			if ( ! empty( $formatted_checkpoints ) ) {
-				$order->update_meta_data( '_artmatter_tracking_checkpoints', $formatted_checkpoints );
-				update_post_meta( $order_id, '_artmatter_tracking_checkpoints', $formatted_checkpoints );
+				$order->update_meta_data( '_exacoat_tracking_checkpoints', $formatted_checkpoints );
+				update_post_meta( $order_id, '_exacoat_tracking_checkpoints', $formatted_checkpoints );
 			}
 
 			$order->update_meta_data( '_biteship_latest_status', $biteship_status );
-			$order->update_meta_data( '_artmatter_trackingmore_latest_status', $biteship_status );
+			$order->update_meta_data( '_exacoat_tracking_latest_status', $biteship_status );
 			update_post_meta( $order_id, '_biteship_latest_status', $biteship_status );
-			update_post_meta( $order_id, '_artmatter_trackingmore_latest_status', $biteship_status );
+			update_post_meta( $order_id, '_exacoat_tracking_latest_status', $biteship_status );
 
 			$carriers = self::get_carrier_registry();
 			$carrier_label = $carriers[ $biteship_courier ]['name'] ?? ucfirst( $biteship_courier );
@@ -886,11 +946,11 @@ class Exacoat_Shipping_Tracker {
 				if ( ! empty( $delivery_time ) ) {
 					$del_formatted = date( 'Y-m-d H:i:s', strtotime( $delivery_time ) );
 					$order->update_meta_data( '_delivered_at', $del_formatted );
-					$order->update_meta_data( '_artmatter_delivered_at', $del_formatted );
+					$order->update_meta_data( '_exacoat_delivered_at', $del_formatted );
 					$order->update_meta_data( '_biteship_delivery_time', $del_formatted );
 					$order->update_meta_data( 'delivered_time', $del_formatted );
 					update_post_meta( $order_id, '_delivered_at', $del_formatted );
-					update_post_meta( $order_id, '_artmatter_delivered_at', $del_formatted );
+					update_post_meta( $order_id, '_exacoat_delivered_at', $del_formatted );
 					update_post_meta( $order_id, '_biteship_delivery_time', $del_formatted );
 					update_post_meta( $order_id, 'delivered_time', $del_formatted );
 				}
@@ -979,8 +1039,15 @@ class Exacoat_Shipping_Tracker {
 		$item = reset( $items );
 		self::process_trackingmore_item_update( $item, $order_id );
 
-		$checkpoints = $order->get_meta( '_artmatter_tracking_checkpoints' ) ?: get_post_meta( $order_id, '_artmatter_tracking_checkpoints', true );
-		$latest_st   = $order->get_meta( '_artmatter_trackingmore_latest_status' ) ?: get_post_meta( $order_id, '_artmatter_trackingmore_latest_status', true );
+		$checkpoints = $order->get_meta( '_exacoat_tracking_checkpoints' ) 
+			?: ( $order->get_meta( '_artmatter_tracking_checkpoints' ) 
+			?: ( get_post_meta( $order_id, '_exacoat_tracking_checkpoints', true ) 
+			?: get_post_meta( $order_id, '_artmatter_tracking_checkpoints', true ) ) );
+		$latest_st   = $order->get_meta( '_trackingmore_latest_status' ) 
+			?: ( $order->get_meta( '_exacoat_tracking_latest_status' ) 
+			?: ( $order->get_meta( '_artmatter_trackingmore_latest_status' ) 
+			?: ( get_post_meta( $order_id, '_trackingmore_latest_status', true ) 
+			?: get_post_meta( $order_id, '_artmatter_trackingmore_latest_status', true ) ) ) );
 		return [ 'success' => true, 'source' => 'trackingmore', 'status' => $latest_st ?: '', 'checkpoints' => $checkpoints ?: [] ];
 	}
 
@@ -995,13 +1062,18 @@ class Exacoat_Shipping_Tracker {
 
 		$tracking_number = (string) ( $order->get_meta( 'tracking_number' ) 
 			?: ( $order->get_meta( '_tracking_number' ) 
+			?: ( $order->get_meta( '_exacoat_tracking_number' ) 
 			?: ( $order->get_meta( '_artmatter_tracking_number' ) 
 			?: ( get_post_meta( $order_id, 'tracking_number', true ) 
 			?: ( get_post_meta( $order_id, '_tracking_number', true ) 
-			?: ( function_exists( 'get_field' ) ? (string) get_field( 'tracking_number', $order_id ) : '' ) ) ) ) ) );
+			?: ( get_post_meta( $order_id, '_exacoat_tracking_number', true ) 
+			?: ( function_exists( 'get_field' ) ? (string) get_field( 'tracking_number', $order_id ) : '' ) ) ) ) ) ) ) );
 
 		if ( empty( $tracking_number ) ) {
-			$t_info = $order->get_meta( '_artmatter_tracking_info' ) ?: get_post_meta( $order_id, '_artmatter_tracking_info', true );
+			$t_info = $order->get_meta( '_exacoat_tracking_info' ) 
+				?: ( $order->get_meta( '_artmatter_tracking_info' ) 
+				?: ( get_post_meta( $order_id, '_exacoat_tracking_info', true ) 
+				?: get_post_meta( $order_id, '_artmatter_tracking_info', true ) ) );
 			if ( is_array( $t_info ) && ! empty( $t_info['tracking_number'] ) ) {
 				$tracking_number = (string) $t_info['tracking_number'];
 			}
@@ -1021,10 +1093,17 @@ class Exacoat_Shipping_Tracker {
 
 		// If delivery data is already saved on the order and status is completed/delivered, return cached tracking
 		$saved_delivered = $order->get_meta( '_delivered_at' ) 
+			?: ( $order->get_meta( '_exacoat_delivered_at' ) 
 			?: ( $order->get_meta( '_artmatter_delivered_at' ) 
-			?: $order->get_meta( '_biteship_delivery_time' ) );
-		$saved_checkpoints = $order->get_meta( '_artmatter_tracking_checkpoints' ) ?: get_post_meta( $order_id, '_artmatter_tracking_checkpoints', true );
-		$latest_st = $order->get_meta( '_biteship_latest_status' ) ?: $order->get_meta( '_artmatter_trackingmore_latest_status' );
+			?: $order->get_meta( '_biteship_delivery_time' ) ) );
+		$saved_checkpoints = $order->get_meta( '_exacoat_tracking_checkpoints' ) 
+			?: ( $order->get_meta( '_artmatter_tracking_checkpoints' ) 
+			?: ( get_post_meta( $order_id, '_exacoat_tracking_checkpoints', true ) 
+			?: get_post_meta( $order_id, '_artmatter_tracking_checkpoints', true ) ) );
+		$latest_st = $order->get_meta( '_biteship_latest_status' ) 
+			?: ( $order->get_meta( '_trackingmore_latest_status' ) 
+			?: ( $order->get_meta( '_exacoat_tracking_latest_status' ) 
+			?: $order->get_meta( '_artmatter_trackingmore_latest_status' ) ) );
 
 		if ( ! empty( $saved_delivered ) && ! empty( $saved_checkpoints ) && ( 'delivered' === $latest_st || 'completed' === $order->get_status() ) ) {
 			return [
@@ -1036,17 +1115,13 @@ class Exacoat_Shipping_Tracker {
 			];
 		}
 
-		// 1. If courier is supported by Biteship (SiCepat, JNE, POS, J&T, etc.), query Biteship first
+		// 1. Domestic couriers (SiCepat & JNE): Biteship is the exclusive engine
 		$biteship_courier = self::get_biteship_courier_code( $carrier );
 		if ( ! empty( $biteship_courier ) ) {
-			$biteship_res = self::sync_biteship_tracking( $tracking_number, $biteship_courier, $order_id );
-			if ( ! empty( $biteship_res['success'] ) ) {
-				return $biteship_res;
-			}
-			// If Biteship fails (e.g. invalid/expired waybill or temporary sync delay), smoothly fall through to TrackingMore
+			return self::sync_biteship_tracking( $tracking_number, $biteship_courier, $order_id );
 		}
 
-		// 2. Query TrackingMore (Primary for Goorita/International, or reliable domestic fallback)
+		// 2. POS Indonesia / International: TrackingMore is the exclusive engine
 		return self::sync_trackingmore_tracking( $order_id, $tracking_number, $carrier );
 	}
 
@@ -1088,7 +1163,7 @@ class Exacoat_Shipping_Tracker {
 		}
 
 		$now          = time();
-		$min_interval = 4 * HOUR_IN_SECONDS; // Guard: check an order at most once per 4 hours
+		$min_interval = 2 * HOUR_IN_SECONDS; // Guard: check an order at most once per 2 hours
 
 		foreach ( $orders as $order ) {
 			$order_id = $order->get_id();
@@ -1118,19 +1193,26 @@ class Exacoat_Shipping_Tracker {
 		if ( empty( $number ) ) return;
 
 		global $wpdb;
+		if ( $order_id <= 0 && ! empty( $item['order_number'] ) ) {
+			$maybe_order_id = (int) $item['order_number'];
+			if ( $maybe_order_id > 0 && wc_get_order( $maybe_order_id ) ) {
+				$order_id = $maybe_order_id;
+			}
+		}
+
 		if ( $order_id <= 0 ) {
 			// Query HPOS table first if it exists
 			$hpos_table = $wpdb->prefix . 'wc_orders_meta';
 			if ( $wpdb->get_var( "SHOW TABLES LIKE '{$hpos_table}'" ) === $hpos_table ) {
 				$order_id = (int) $wpdb->get_var( $wpdb->prepare(
-					"SELECT order_id FROM {$hpos_table} WHERE meta_key IN ('tracking_number', '_tracking_number', '_artmatter_tracking_number', '_artmatter_trackingmore_registered_number', '_artmatter_17track_registered_number') AND meta_value = %s LIMIT 1",
+					"SELECT order_id FROM {$hpos_table} WHERE meta_key IN ('tracking_number', '_tracking_number', '_exacoat_tracking_number', '_exacoat_trackingmore_registered_number', '_artmatter_tracking_number', '_artmatter_trackingmore_registered_number', '_artmatter_17track_registered_number') AND meta_value = %s LIMIT 1",
 					$number
 				) );
 			}
 			// Fallback to standard postmeta
 			if ( $order_id <= 0 ) {
 				$order_id = (int) $wpdb->get_var( $wpdb->prepare(
-					"SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key IN ('tracking_number', '_tracking_number', '_artmatter_tracking_number', '_artmatter_trackingmore_registered_number', '_artmatter_17track_registered_number') AND meta_value = %s LIMIT 1",
+					"SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key IN ('tracking_number', '_tracking_number', '_exacoat_tracking_number', '_exacoat_trackingmore_registered_number', '_artmatter_tracking_number', '_artmatter_trackingmore_registered_number', '_artmatter_17track_registered_number') AND meta_value = %s LIMIT 1",
 					$number
 				) );
 			}
@@ -1251,8 +1333,8 @@ class Exacoat_Shipping_Tracker {
 		} );
 
 		if ( ! empty( $formatted_checkpoints ) ) {
-			$order->update_meta_data( '_artmatter_tracking_checkpoints', $formatted_checkpoints );
-			update_post_meta( $order_id, '_artmatter_tracking_checkpoints', $formatted_checkpoints );
+			$order->update_meta_data( '_exacoat_tracking_checkpoints', $formatted_checkpoints );
+			update_post_meta( $order_id, '_exacoat_tracking_checkpoints', $formatted_checkpoints );
 		}
 
 		// 2. Delivery Status handling
@@ -1260,22 +1342,42 @@ class Exacoat_Shipping_Tracker {
 		$latest_event    = (string) ( $item['latest_event'] ?? ( $item['track_info']['latest_event']['description'] ?? '' ) );
 
 		if ( ! empty( $delivery_status ) ) {
-			$order->update_meta_data( '_artmatter_trackingmore_latest_status', $delivery_status );
-			$order->update_meta_data( '_artmatter_17track_latest_status', $delivery_status );
-			update_post_meta( $order_id, '_artmatter_trackingmore_latest_status', $delivery_status );
-			update_post_meta( $order_id, '_artmatter_17track_latest_status', $delivery_status );
+			$order->update_meta_data( '_trackingmore_latest_status', $delivery_status );
+			$order->update_meta_data( '_exacoat_tracking_latest_status', $delivery_status );
+			update_post_meta( $order_id, '_trackingmore_latest_status', $delivery_status );
+			update_post_meta( $order_id, '_exacoat_tracking_latest_status', $delivery_status );
 		}
 
 		// Transition WooCommerce order status:
 		// If TrackingMore reports 'delivered', transition order to 'completed' (Delivered)
 		if ( 'delivered' === $delivery_status ) {
+			$delivery_time = '';
+			foreach ( $formatted_checkpoints as $cp ) {
+				if ( ( $cp['stage'] ?? '' ) === 'delivered' && ! empty( $cp['time'] ) ) {
+					$delivery_time = $cp['time'];
+					break;
+				}
+			}
+			if ( empty( $delivery_time ) && ! empty( $formatted_checkpoints[0]['time'] ) ) {
+				$delivery_time = $formatted_checkpoints[0]['time'];
+			}
+			if ( ! empty( $delivery_time ) ) {
+				$del_formatted = date( 'Y-m-d H:i:s', strtotime( $delivery_time ) );
+				$order->update_meta_data( '_delivered_at', $del_formatted );
+				$order->update_meta_data( '_exacoat_delivered_at', $del_formatted );
+				$order->update_meta_data( 'delivered_time', $del_formatted );
+				update_post_meta( $order_id, '_delivered_at', $del_formatted );
+				update_post_meta( $order_id, '_exacoat_delivered_at', $del_formatted );
+				update_post_meta( $order_id, 'delivered_time', $del_formatted );
+			}
+
 			$current_status = $order->get_status();
 			if ( 'completed' !== $current_status ) {
 				$order->update_status( 'completed', sprintf( 'TrackingMore: Package delivered by courier (%s). %s', $number, $latest_event ) );
 			}
-		} elseif ( in_array( $delivery_status, [ 'transit', 'pickup' ], true ) ) {
+		} elseif ( in_array( $delivery_status, [ 'transit', 'pickup', 'undelivered' ], true ) ) {
 			$current_status = $order->get_status();
-			if ( 'processing' === $current_status || 'awaiting-pickup' === $current_status ) {
+			if ( in_array( $current_status, [ 'processing', 'preparing-order', 'ready-to-ship', 'awaiting-pickup' ], true ) ) {
 				$order->update_status( 'shipped', sprintf( 'TrackingMore: Package in transit with courier (%s)', $number ) );
 			}
 		}
@@ -1389,10 +1491,10 @@ class Exacoat_Shipping_Tracker {
 				return $dt->format( 'M j, Y' );
 			}
 
-			$tz_label = __( 'Local time', 'artmatter-core' );
+			$tz_label = __( 'Local time', 'exacoat-core' );
 			if ( preg_match( '/([+-]\d{2}):?(\d{2})?$/', $time, $tzm ) ) {
 				$h = (int) $tzm[1];
-				$tz_label = sprintf( __( 'Local time, UTC%s%d', 'artmatter-core' ), ( $h >= 0 ? '+' : '' ), $h );
+				$tz_label = sprintf( __( 'Local time, UTC%s%d', 'exacoat-core' ), ( $h >= 0 ? '+' : '' ), $h );
 			} elseif ( preg_match( '/Z$/i', $time ) ) {
 				$tz_label = 'UTC';
 			}
@@ -1417,8 +1519,8 @@ class Exacoat_Shipping_Tracker {
 
 		foreach ( $screens as $screen ) {
 			add_meta_box(
-				'artmatter_trackingmore_meta_box',
-				__( 'TrackingMore & Logistics', 'artmatter-core' ),
+				'exacoat_shipping_tracker_meta_box',
+				__( 'Logistics & Shipment Tracking', 'exacoat-core' ),
 				[ __CLASS__, 'render_admin_meta_box' ],
 				$screen,
 				'side',
@@ -1428,7 +1530,7 @@ class Exacoat_Shipping_Tracker {
 	}
 
 	/**
-	 * Render TrackingMore Status & Sync Meta Box on Admin Order Screen
+	 * Render Tracking Status Meta Box on Admin Order Screen
 	 */
 	public static function render_admin_meta_box( $post_or_order ) {
 		$order = $post_or_order instanceof WC_Order 
@@ -1436,44 +1538,58 @@ class Exacoat_Shipping_Tracker {
 			: wc_get_order( is_object( $post_or_order ) ? $post_or_order->ID : $post_or_order );
 
 		if ( ! $order ) {
-			echo '<p style="color:#71717a; font-size:12px;">' . esc_html__( 'Order not found.', 'artmatter-core' ) . '</p>';
+			echo '<p style="color:#71717a; font-size:12px;">' . esc_html__( 'Order not found.', 'exacoat-core' ) . '</p>';
 			return;
 		}
 
 		$order_id        = $order->get_id();
 		$tracking_number = (string) ( $order->get_meta( 'tracking_number' ) 
 			?: ( $order->get_meta( '_tracking_number' ) 
+			?: ( $order->get_meta( '_exacoat_tracking_number' ) 
 			?: ( $order->get_meta( '_artmatter_tracking_number' ) 
 			?: ( get_post_meta( $order_id, 'tracking_number', true ) 
-			?: ( function_exists( 'get_field' ) ? (string) get_field( 'tracking_number', $order_id ) : '' ) ) ) ) );
+			?: ( function_exists( 'get_field' ) ? (string) get_field( 'tracking_number', $order_id ) : '' ) ) ) ) ) );
 		$carrier         = (string) ( $order->get_meta( 'carrier_id' ) 
 			?: ( $order->get_meta( '_carrier_id' ) 
 			?: ( get_post_meta( $order_id, 'carrier_id', true ) 
 			?: ( function_exists( 'get_field' ) ? (string) get_field( 'carrier_id', $order_id ) : '' ) ) ) );
 
-		$is_registered = $order->get_meta( '_artmatter_trackingmore_registered' ) 
-			?: ( $order->get_meta( '_artmatter_17track_registered' ) 
-			?: ( get_post_meta( $order_id, '_artmatter_trackingmore_registered', true ) 
-			?: get_post_meta( $order_id, '_artmatter_17track_registered', true ) ) );
+		$is_registered = $order->get_meta( '_exacoat_trackingmore_registered' ) 
+			?: ( $order->get_meta( '_exacoat_aftership_registered' ) 
+			?: ( $order->get_meta( '_artmatter_trackingmore_registered' ) 
+			?: ( get_post_meta( $order_id, '_exacoat_trackingmore_registered', true ) 
+			?: ( get_post_meta( $order_id, '_exacoat_aftership_registered', true ) 
+			?: get_post_meta( $order_id, '_artmatter_trackingmore_registered', true ) ) ) ) );
 
-		$latest_status = $order->get_meta( '_artmatter_trackingmore_latest_status' ) 
-			?: ( $order->get_meta( '_artmatter_17track_latest_status' ) 
-			?: ( get_post_meta( $order_id, '_artmatter_trackingmore_latest_status', true ) 
-			?: get_post_meta( $order_id, '_artmatter_17track_latest_status', true ) ) );
+		$latest_status = $order->get_meta( '_trackingmore_latest_status' ) 
+			?: ( $order->get_meta( '_exacoat_tracking_latest_status' ) 
+			?: ( $order->get_meta( '_exacoat_aftership_latest_status' ) 
+			?: ( $order->get_meta( '_artmatter_trackingmore_latest_status' ) 
+			?: ( get_post_meta( $order_id, '_trackingmore_latest_status', true ) 
+			?: ( get_post_meta( $order_id, '_exacoat_tracking_latest_status', true ) 
+			?: get_post_meta( $order_id, '_artmatter_trackingmore_latest_status', true ) ) ) ) ) );
 
-		$last_error    = $order->get_meta( '_artmatter_trackingmore_error' ) 
-			?: ( $order->get_meta( '_artmatter_17track_error' ) 
-			?: ( get_post_meta( $order_id, '_artmatter_trackingmore_error', true ) 
-			?: get_post_meta( $order_id, '_artmatter_17track_error', true ) ) );
+		$last_error    = $order->get_meta( '_exacoat_trackingmore_error' ) 
+			?: ( $order->get_meta( '_exacoat_aftership_error' ) 
+			?: ( $order->get_meta( '_artmatter_trackingmore_error' ) 
+			?: ( get_post_meta( $order_id, '_exacoat_trackingmore_error', true ) 
+			?: ( get_post_meta( $order_id, '_exacoat_aftership_error', true ) 
+			?: get_post_meta( $order_id, '_artmatter_trackingmore_error', true ) ) ) ) );
 
-		$checkpoints   = $order->get_meta( '_artmatter_tracking_checkpoints' ) ?: get_post_meta( $order_id, '_artmatter_tracking_checkpoints', true );
+		$checkpoints   = $order->get_meta( '_exacoat_tracking_checkpoints' ) 
+			?: ( $order->get_meta( '_artmatter_tracking_checkpoints' ) 
+			?: ( get_post_meta( $order_id, '_exacoat_tracking_checkpoints', true ) 
+			?: get_post_meta( $order_id, '_artmatter_tracking_checkpoints', true ) ) );
 
 		$carriers      = self::get_carrier_registry();
 		$carrier_name  = $carriers[ strtolower( $carrier ) ]['name'] ?? ( ! empty( $carrier ) ? ucfirst( $carrier ) : 'Auto' );
 		$tracking_url  = ! empty( $tracking_number ) ? self::get_carrier_tracking_url( $carrier, $tracking_number ) : '';
-		$sync_nonce    = wp_create_nonce( 'artmatter_admin_sync_trackingmore_' . $order_id );
+		$sync_nonce    = wp_create_nonce( 'exacoat_admin_sync_trackingmore_' . $order_id );
+
+		$is_domestic   = in_array( strtolower( trim( $carrier ) ), [ 'sicepat', 'jne', 'jne express' ], true );
+		$engine_name   = $is_domestic ? 'Biteship' : 'TrackingMore';
 		?>
-		<div class="artmatter-trackingmore-admin-box" style="font-size:12px; line-height:1.4;">
+		<div class="exacoat-shipping-admin-box" style="font-size:12px; line-height:1.4;">
 			<div style="margin-bottom:10px;">
 				<div style="font-size:10px; text-transform:uppercase; color:#71717a; font-weight:600; letter-spacing:0.04em;">Carrier & Tracking</div>
 				<div style="margin-top:2px; font-size:13px; font-weight:600; color:#18181b;">
@@ -1488,8 +1604,10 @@ class Exacoat_Shipping_Tracker {
 
 			<div style="margin-bottom:12px; padding:8px 10px; background:#f4f4f5; border-radius:6px; border:1px solid #e4e4e7;">
 				<div style="display:flex; justify-content:space-between; align-items:center;">
-					<span style="color:#71717a; font-size:11px;">TrackingMore Sync:</span>
-					<?php if ( ! empty( $is_registered ) ) : ?>
+					<span style="color:#71717a; font-size:11px;"><?php echo esc_html( $engine_name ); ?> Sync:</span>
+					<?php if ( $is_domestic ) : ?>
+						<span style="color:#16a34a; font-weight:600; font-size:11px;">● Active (via Biteship)</span>
+					<?php elseif ( ! empty( $is_registered ) ) : ?>
 						<span style="color:#16a34a; font-weight:600; font-size:11px;">● Registered & Monitored</span>
 					<?php else : ?>
 						<span style="color:#ea580c; font-weight:500; font-size:11px;">○ Not registered yet</span>
@@ -1501,7 +1619,10 @@ class Exacoat_Shipping_Tracker {
 						<span style="color:#09090b; font-weight:600; font-size:11px; text-transform:capitalize;"><?php echo esc_html( $latest_status ); ?></span>
 					</div>
 				<?php endif; ?>
-				<?php if ( ! empty( $last_error ) && empty( $is_registered ) ) : ?>
+				<div style="margin-top:5px; font-size:10px; color:#a1a1aa; line-height:1.3;">
+					Automatic tracking active (webhooks + background sync). Manual refresh below is optional.
+				</div>
+				<?php if ( ! empty( $last_error ) && empty( $is_registered ) && ! $is_domestic ) : ?>
 					<div style="margin-top:6px; padding:6px 8px; background:rgba(239,68,68,0.08); border-radius:6px; font-size:11px; color:#dc2626; border:1px solid rgba(239,68,68,0.2); line-height:1.4;">
 						<div><?php echo esc_html( $last_error ); ?></div>
 					</div>
@@ -1519,55 +1640,14 @@ class Exacoat_Shipping_Tracker {
 				</div>
 			<?php endif; ?>
 
-			<div style="display:flex; flex-direction:column; gap:6px;">
-				<button type="button" id="artmatter-admin-sync-btn-<?php echo esc_attr( $order_id ); ?>" class="button button-primary" style="width:100%; text-align:center;" onclick="artmatterAdminSyncTrackingMore(<?php echo esc_attr( $order_id ); ?>, '<?php echo esc_attr( $sync_nonce ); ?>')">
-					Sync with TrackingMore Now
-				</button>
-				<?php if ( ! empty( $tracking_url ) ) : ?>
+			<?php if ( ! empty( $tracking_url ) ) : ?>
+				<div style="margin-top:10px;">
 					<a href="<?php echo esc_url( $tracking_url ); ?>" target="_blank" class="button" style="width:100%; text-align:center; font-size:11px;">
 						↗ View Courier Portal
 					</a>
-				<?php endif; ?>
-			</div>
-			<div id="artmatter-admin-sync-msg-<?php echo esc_attr( $order_id ); ?>" style="margin-top:6px; font-size:11px; display:none;"></div>
+				</div>
+			<?php endif; ?>
 		</div>
-
-		<script>
-		function artmatterAdminSyncTrackingMore(orderId, nonce) {
-			var btn = document.getElementById('artmatter-admin-sync-btn-' + orderId);
-			var msg = document.getElementById('artmatter-admin-sync-msg-' + orderId);
-			if (!btn) return;
-			btn.disabled = true;
-			btn.textContent = 'Syncing with TrackingMore...';
-			msg.style.display = 'block';
-			msg.style.color = '#71717a';
-			msg.textContent = 'Connecting to TrackingMore API...';
-
-			jQuery.post(ajaxurl, {
-				action: 'artmatter_admin_sync_trackingmore',
-				order_id: orderId,
-				security: nonce
-			}, function(res) {
-				btn.disabled = false;
-				btn.textContent = 'Sync with TrackingMore Now';
-				if (res && res.success) {
-					msg.style.color = '#16a34a';
-					msg.textContent = '✓ ' + (res.data.message || 'Synced successfully!');
-					setTimeout(function() { window.location.reload(); }, 900);
-				} else {
-					msg.style.color = '#dc2626';
-					msg.textContent = '✗ ' + ((res && res.data && res.data.message) ? res.data.message : 'Sync failed');
-				}
-			}).fail(function() {
-				btn.disabled = false;
-				btn.textContent = 'Sync with TrackingMore Now';
-				msg.style.color = '#dc2626';
-				msg.textContent = '✗ Network request failed';
-			});
-		}
-		// Backward compatibility alias for any older inline calls
-		var artmatterAdminSync17track = artmatterAdminSyncTrackingMore;
-		</script>
 		<?php
 	}
 
@@ -1575,12 +1655,18 @@ class Exacoat_Shipping_Tracker {
 	 * Register REST Routes for Tracking Webhooks & Public Order Tracking
 	 */
 	public static function register_rest_routes() {
-		$namespaces = [ 'exacoat-core/v1', 'artmatter-core/v1' ];
+		$namespaces = [ 'exacoat-core/v1' ];
 
 		foreach ( $namespaces as $ns ) {
 			register_rest_route( $ns, '/shipping/track', [
 				'methods'             => [ 'GET', 'POST' ],
 				'callback'            => [ __CLASS__, 'rest_track_order' ],
+				'permission_callback' => '__return_true',
+			] );
+
+			register_rest_route( $ns, '/shipping/aftership-webhook', [
+				'methods'             => [ 'POST', 'GET' ],
+				'callback'            => [ __CLASS__, 'handle_aftership_webhook' ],
 				'permission_callback' => '__return_true',
 			] );
 
@@ -1622,7 +1708,7 @@ class Exacoat_Shipping_Tracker {
 		if ( empty( $order_id_input ) ) {
 			return new WP_REST_Response( [
 				'success' => false,
-				'message' => __( 'Missing order number.', 'artmatter-core' ),
+				'message' => __( 'Missing order number.', 'exacoat-core' ),
 			], 400 );
 		}
 
@@ -1637,7 +1723,7 @@ class Exacoat_Shipping_Tracker {
 		if ( ! $order ) {
 			return new WP_REST_Response( [
 				'success' => false,
-				'message' => __( 'No order found with that number.', 'artmatter-core' ),
+				'message' => __( 'No order found with that number.', 'exacoat-core' ),
 			], 404 );
 		}
 
@@ -1651,23 +1737,26 @@ class Exacoat_Shipping_Tracker {
 		if ( ! $matched ) {
 			return new WP_REST_Response( [
 				'success' => false,
-				'message' => __( 'Order details could not be found with the email provided.', 'artmatter-core' ),
+				'message' => __( 'Order details could not be found with the email provided.', 'exacoat-core' ),
 			], 403 );
 		}
 
 		// Sync latest courier checkpoints if tracking number is present
-		$tracking_number = (string) ( $order->get_meta( 'tracking_number' ) ?: ( $order->get_meta( '_tracking_number' ) ?: ( $order->get_meta( '_artmatter_tracking_number' ) ?: '' ) ) );
+		$tracking_number = (string) ( $order->get_meta( 'tracking_number' ) 
+			?: ( $order->get_meta( '_tracking_number' ) 
+			?: ( $order->get_meta( '_exacoat_tracking_number' ) 
+			?: ( $order->get_meta( '_artmatter_tracking_number' ) ?: '' ) ) ) );
 		if ( ! empty( $tracking_number ) ) {
 			self::sync_order_tracking( $order->get_id() );
 		}
 
 		// Delegate order formatting to Customer Auth if available
-		if ( class_exists( 'Artmatter_Customer_Auth' ) ) {
-			$req = new WP_REST_Request( 'POST', '/artmatter-core/v1/auth/order' );
+		if ( class_exists( 'Exacoat_Customer_Auth' ) ) {
+			$req = new WP_REST_Request( 'POST', '/exacoat-core/v1/auth/order' );
 			$req->set_param( 'orderId', $order->get_id() );
 			$req->set_param( 'key', $order->get_order_key() );
 			$req->set_param( 'email', $order->get_billing_email() );
-			$auth_res = Artmatter_Customer_Auth::rest_order( $req );
+			$auth_res = Exacoat_Customer_Auth::rest_order( $req );
 			if ( $auth_res instanceof WP_REST_Response && 200 === $auth_res->get_status() ) {
 				$payload = $auth_res->get_data();
 				return new WP_REST_Response( [
@@ -1688,7 +1777,7 @@ class Exacoat_Shipping_Tracker {
 				'shippingMethod'  => $order->get_shipping_method() ?: 'Standard Courier Delivery',
 				'trackingNumber'  => $tracking_number,
 				'trackingCarrier' => (string) ( $order->get_meta( 'carrier_id' ) ?: '' ),
-				'checkpoints'     => $order->get_meta( '_artmatter_tracking_checkpoints' ) ?: [],
+				'checkpoints'     => $order->get_meta( '_exacoat_tracking_checkpoints' ) ?: ( $order->get_meta( '_artmatter_tracking_checkpoints' ) ?: [] ),
 			],
 		], 200 );
 	}
@@ -1699,13 +1788,44 @@ class Exacoat_Shipping_Tracker {
 	public static function handle_trackingmore_webhook( WP_REST_Request $request ) {
 		$params = $request->get_json_params() ?: $request->get_params();
 
-		if ( class_exists( 'Artmatter_Logger' ) ) {
-			Artmatter_Logger::info( 'shipping', 'Tracking Webhook received', [ 'payload' => $params ] );
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::info( 'shipping', 'Tracking Webhook received', [ 'payload' => $params ] );
+		}
+
+		// Optional HMAC-SHA256 signature verification if signature is present
+		$raw_body = $request->get_body();
+		$secret   = self::get_trackingmore_webhook_secret();
+		if ( ! empty( $secret ) && ! empty( $raw_body ) ) {
+			$header_sig = $request->get_header( 'trackingmore-signature' ) 
+				?: ( $request->get_header( 'x-trackingmore-signature' ) 
+				?: ( $request->get_header( 'signature' ) ?: '' ) );
+			$body_sig   = (string) ( $params['signature'] ?? '' );
+			$sig        = $header_sig ?: $body_sig;
+
+			if ( ! empty( $sig ) ) {
+				$expected_hex = hash_hmac( 'sha256', $raw_body, $secret );
+				$expected_b64 = base64_encode( hash_hmac( 'sha256', $raw_body, $secret, true ) );
+				$time_str     = (string) ( $params['timeStr'] ?? '' );
+				$time_hex     = ! empty( $time_str ) ? hash_hmac( 'sha256', $time_str, $secret ) : '';
+				$time_b64     = ! empty( $time_str ) ? base64_encode( hash_hmac( 'sha256', $time_str, $secret, true ) ) : '';
+
+				$valid = hash_equals( $expected_hex, $sig )
+					|| hash_equals( $expected_b64, $sig )
+					|| ( ! empty( $time_hex ) && hash_equals( $time_hex, $sig ) )
+					|| ( ! empty( $time_b64 ) && hash_equals( $time_b64, $sig ) );
+
+				if ( ! $valid ) {
+					if ( class_exists( 'Exacoat_Logger' ) ) {
+						Exacoat_Logger::warning( 'shipping', 'TrackingMore Webhook Signature mismatch', [ 'received' => $sig ] );
+					}
+					return new WP_REST_Response( [ 'code' => 401, 'message' => 'Invalid webhook signature' ], 401 );
+				}
+			}
 		}
 
 		$data = $params['data'] ?? [];
 		if ( empty( $data ) && empty( $params ) ) {
-			return new WP_REST_Response( [ 'code' => 0, 'message' => 'Empty payload acknowledged' ], 200 );
+			return new WP_REST_Response( [ 'code' => 200, 'message' => 'Empty payload acknowledged' ], 200 );
 		}
 
 		$items = [];
@@ -1728,7 +1848,7 @@ class Exacoat_Shipping_Tracker {
 		}
 
 		return new WP_REST_Response( [
-			'code'      => 0,
+			'code'      => 200,
 			'message'   => "Successfully processed {$processed} tracking items",
 			'processed' => $processed,
 		], 200 );
@@ -1744,8 +1864,8 @@ class Exacoat_Shipping_Tracker {
 	public static function handle_biteship_webhook( WP_REST_Request $request ) {
 		$params = $request->get_json_params() ?: $request->get_params();
 
-		if ( class_exists( 'Artmatter_Logger' ) ) {
-			Artmatter_Logger::info( 'shipping', 'Biteship Webhook received', [ 'payload' => $params ] );
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::info( 'shipping', 'Biteship Webhook received', [ 'payload' => $params ] );
 		}
 
 		$waybill_id = sanitize_text_field( (string) ( $params['courier_waybill_id'] ?? ( $params['waybill_id'] ?? '' ) ) );
@@ -1761,7 +1881,7 @@ class Exacoat_Shipping_Tracker {
 		$hpos_table = $wpdb->prefix . 'wc_orders_meta';
 		if ( $wpdb->get_var( "SHOW TABLES LIKE '{$hpos_table}'" ) === $hpos_table ) {
 			$order_id = (int) $wpdb->get_var( $wpdb->prepare(
-				"SELECT order_id FROM {$hpos_table} WHERE meta_key IN ('tracking_number', '_tracking_number', '_artmatter_tracking_number') AND meta_value = %s LIMIT 1",
+				"SELECT order_id FROM {$hpos_table} WHERE meta_key IN ('tracking_number', '_tracking_number', '_exacoat_tracking_number', '_artmatter_tracking_number', '_biteship_waybill_id') AND meta_value = %s LIMIT 1",
 				$waybill_id
 			) );
 		}
@@ -1769,7 +1889,7 @@ class Exacoat_Shipping_Tracker {
 		// 2. Fallback to postmeta
 		if ( $order_id <= 0 ) {
 			$order_id = (int) $wpdb->get_var( $wpdb->prepare(
-				"SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key IN ('tracking_number', '_tracking_number', '_artmatter_tracking_number') AND meta_value = %s LIMIT 1",
+				"SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key IN ('tracking_number', '_tracking_number', '_exacoat_tracking_number', '_artmatter_tracking_number', '_biteship_waybill_id') AND meta_value = %s LIMIT 1",
 				$waybill_id
 			) );
 		}
@@ -1807,7 +1927,7 @@ class Exacoat_Shipping_Tracker {
 				'status'        => $status,
 				'status_label'  => wc_get_order_status_name( $status ),
 				'checkpoints'   => $result['checkpoints'] ?? [],
-				'latest_status' => $result['status'] ?? ( $order->get_meta( '_artmatter_trackingmore_latest_status' ) ?: '' ),
+				'latest_status' => $result['status'] ?? ( $order->get_meta( '_trackingmore_latest_status' ) ?: ( $order->get_meta( '_exacoat_tracking_latest_status' ) ?: ( $order->get_meta( '_artmatter_trackingmore_latest_status' ) ?: '' ) ) ),
 				'source'        => $result['source'] ?? 'tracking',
 			], 200 );
 		}
@@ -1822,7 +1942,10 @@ class Exacoat_Shipping_Tracker {
 	 * Admin AJAX: Test TrackingMore API Connection
 	 */
 	public static function ajax_test_trackingmore_connection() {
-		check_ajax_referer( 'artmatter_core_admin_nonce', 'security' );
+		$nonce = isset( $_REQUEST['security'] ) ? sanitize_text_field( $_REQUEST['security'] ) : '';
+		if ( ! wp_verify_nonce( $nonce, 'exacoat_core_admin_nonce' ) && ! wp_verify_nonce( $nonce, 'artmatter_core_admin_nonce' ) ) {
+			wp_send_json_error( [ 'message' => 'Security check failed' ] );
+		}
 		if ( ! current_user_can( 'manage_woocommerce' ) && ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error( [ 'message' => 'Unauthorized' ] );
 		}
@@ -1865,16 +1988,59 @@ class Exacoat_Shipping_Tracker {
 	}
 
 	/**
-	 * Admin AJAX: 1-Click Sync Order with TrackingMore
+	 * Admin AJAX: Test AfterShip API Connection
 	 */
-	public static function ajax_admin_sync_trackingmore() {
+	public static function ajax_test_aftership_connection() {
+		check_ajax_referer( 'exacoat_core_admin_nonce', 'security' );
+		if ( ! current_user_can( 'manage_woocommerce' ) && ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( [ 'message' => 'Unauthorized' ] );
+		}
+
+		$key = isset( $_POST['api_key'] ) ? trim( sanitize_text_field( $_POST['api_key'] ) ) : self::get_aftership_api_key();
+		if ( empty( $key ) ) {
+			wp_send_json_error( [ 'message' => 'Missing AfterShip API Key' ] );
+		}
+
+		$response = wp_remote_get( 'https://api.aftership.com/tracking/2025-01/couriers', [
+			'headers' => [
+				'as-api-key'   => $key,
+				'Content-Type' => 'application/json',
+			],
+			'timeout' => 15,
+		] );
+
+		if ( is_wp_error( $response ) ) {
+			wp_send_json_error( [ 'message' => 'Network error: ' . $response->get_error_message() ] );
+		}
+
+		$status_code = wp_remote_retrieve_response_code( $response );
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( 200 === $status_code ) {
+			wp_send_json_success( [
+				'message' => 'AfterShip API Connected Successfully!',
+				'status'  => 'authenticated',
+			] );
+		}
+
+		wp_send_json_error( [
+			'message' => 'AfterShip Error: ' . ( $body['meta']['message'] ?? 'HTTP ' . $status_code ),
+			'status'  => 'error',
+		] );
+	}
+
+	/**
+	 * Admin AJAX: 1-Click Sync Order with AfterShip / Biteship / Tracker
+	 */
+	public static function ajax_admin_sync_aftership() {
 		$order_id = isset( $_POST['order_id'] ) ? (int) $_POST['order_id'] : 0;
 		if ( $order_id <= 0 ) {
 			wp_send_json_error( [ 'message' => 'Invalid order ID' ] );
 		}
 
 		$nonce = isset( $_POST['security'] ) ? sanitize_text_field( $_POST['security'] ) : '';
-		$valid_nonce = wp_verify_nonce( $nonce, 'artmatter_admin_sync_trackingmore_' . $order_id )
+		$valid_nonce = wp_verify_nonce( $nonce, 'exacoat_admin_sync_aftership_' . $order_id )
+			|| wp_verify_nonce( $nonce, 'artmatter_admin_sync_trackingmore_' . $order_id )
 			|| wp_verify_nonce( $nonce, 'artmatter_admin_sync_17track_' . $order_id );
 
 		if ( ! $valid_nonce && ! current_user_can( 'manage_woocommerce' ) ) {
@@ -1886,18 +2052,26 @@ class Exacoat_Shipping_Tracker {
 
 		if ( ! empty( $result['success'] ) ) {
 			wp_send_json_success( [
-				'message'     => 'Synced successfully with TrackingMore',
+				'message'     => 'Synced successfully with ' . ( $result['source'] ?? 'tracker' ),
 				'checkpoints' => $result['checkpoints'] ?? [],
+				'source'      => $result['source'] ?? 'tracker',
 			] );
 		} else {
 			wp_send_json_error( [
-				'message' => $result['message'] ?? 'Could not sync with TrackingMore',
+				'message' => $result['message'] ?? 'Could not sync tracking',
 			] );
 		}
 	}
 
+	/**
+	 * Admin AJAX: 1-Click Sync Order with TrackingMore (Alias)
+	 */
+	public static function ajax_admin_sync_trackingmore() {
+		self::ajax_admin_sync_aftership();
+	}
+
 	public static function ajax_admin_sync_17track() {
-		self::ajax_admin_sync_trackingmore();
+		self::ajax_admin_sync_aftership();
 	}
 
 	/**
@@ -1910,7 +2084,7 @@ class Exacoat_Shipping_Tracker {
 		}
 
 		$nonce = isset( $_POST['security'] ) ? sanitize_text_field( $_POST['security'] ) : '';
-		if ( ! wp_verify_nonce( $nonce, 'artmatter_customer_tracking_' . $order_id ) && ! current_user_can( 'manage_woocommerce' ) ) {
+		if ( ! wp_verify_nonce( $nonce, 'exacoat_customer_tracking_' . $order_id ) && ! wp_verify_nonce( $nonce, 'artmatter_customer_tracking_' . $order_id ) && ! current_user_can( 'manage_woocommerce' ) ) {
 			wp_send_json_error( [ 'message' => 'Security check failed' ] );
 		}
 
@@ -1931,10 +2105,6 @@ class Exacoat_Shipping_Tracker {
 	}
 }
 
-}
-
-if ( ! class_exists( 'Artmatter_Shipping_Tracker' ) ) {
-	class_alias( 'Exacoat_Shipping_Tracker', 'Artmatter_Shipping_Tracker' );
 }
 
 /**
@@ -1966,7 +2136,3 @@ add_action( 'init', function() {
 		}
 	}
 }, 999 );
-
-if ( ! class_exists( 'Artmatter_Shipping_Tracker' ) ) {
-	class_alias( 'Exacoat_Shipping_Tracker', 'Artmatter_Shipping_Tracker' );
-}

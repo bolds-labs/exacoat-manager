@@ -66,7 +66,7 @@ class Exacoat_Customer_Manager {
 	}
 
 	public static function register_rest_routes(): void {
-		$namespaces = [ 'exacoat-core/v1', 'artmatter-core/v1' ];
+		$namespaces = [ 'exacoat-core/v1' ];
 
 		foreach ( $namespaces as $ns ) {
 			register_rest_route( $ns, '/customers', [

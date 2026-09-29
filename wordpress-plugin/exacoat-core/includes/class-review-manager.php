@@ -655,7 +655,7 @@ class Exacoat_Review_Manager {
 	 * Register REST Routes
 	 */
 	public static function register_rest_routes() {
-		$namespaces = [ 'exacoat-core/v1', 'artmatter-core/v1' ];
+		$namespaces = [ 'exacoat-core/v1' ];
 
 		foreach ( $namespaces as $namespace ) {
 			// 1. List reviews (for Manager & Storefront)
@@ -2739,6 +2739,4 @@ class Exacoat_Review_Manager {
 
 }
 
-if ( ! class_exists( 'Artmatter_Review_Manager' ) ) {
-	class_alias( 'Exacoat_Review_Manager', 'Artmatter_Review_Manager' );
-}
+

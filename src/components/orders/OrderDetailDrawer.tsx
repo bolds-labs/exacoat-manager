@@ -3246,7 +3246,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
               ) : !order.tracking?.checkpoints || order.tracking.checkpoints.length === 0 ? (
                 <div className="p-4 rounded-xl bg-neutral-900/40 border border-white/5 text-center text-xs text-neutral-400">
                   <p>No tracking checkpoints recorded yet.</p>
-                  <p className="text-[11px] text-neutral-500 mt-1">Click the Refresh button to fetch live tracking from Biteship.</p>
+                  <p className="text-[11px] text-neutral-500 mt-1">Click the Refresh button to pull live tracking from courier.</p>
                 </div>
               ) : (
                 <div className="p-4 rounded-xl bg-neutral-900/60 border border-white/10 space-y-3 max-h-80 overflow-y-auto custom-scrollbar">

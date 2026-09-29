@@ -606,7 +606,7 @@ class Exacoat_Configurator_Engine {
 	 * Register REST routes
 	 */
 	public static function register_rest_routes(): void {
-		$namespaces = [ 'exacoat-core/v1', 'artmatter-core/v1' ];
+		$namespaces = [ 'exacoat-core/v1' ];
 
 		$register = function( string $route, array $args ) use ( $namespaces ) {
 			foreach ( $namespaces as $namespace ) {

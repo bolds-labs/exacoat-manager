@@ -198,9 +198,4 @@ class Exacoat_Pushover_Service {
 
 }
 
-if ( ! class_exists( 'Artmatter_Pushover_Service' ) ) {
-	class_alias( 'Exacoat_Pushover_Service', 'Artmatter_Pushover_Service' );
-}
-if ( ! class_exists( 'Artmatter_Pushover' ) ) {
-	class_alias( 'Exacoat_Pushover_Service', 'Artmatter_Pushover' );
-}
+

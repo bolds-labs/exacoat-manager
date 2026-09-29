@@ -203,7 +203,7 @@ if ( ! class_exists( 'WC_Biteship_Shipping_Method' ) && class_exists( 'WC_Shippi
 						$cost_in_base = $biteship_idr_price;
 						if ( 'IDR' !== $shop_base_currency && $biteship_idr_price > 0 ) {
 							$cost_in_base = apply_filters( 'wc_aelia_cs_convert', $biteship_idr_price, 'IDR', $shop_base_currency );
-							$enhancements_class = class_exists( 'Exacoat_Store_Enhancements' ) ? 'Exacoat_Store_Enhancements' : ( class_exists( 'Artmatter_Store_Enhancements' ) ? 'Artmatter_Store_Enhancements' : false );
+							$enhancements_class = class_exists( 'Exacoat_Store_Enhancements' ) ? 'Exacoat_Store_Enhancements' : false;
 							if ( $cost_in_base === $biteship_idr_price && $enhancements_class ) {
 								$currencies = $enhancements_class::get_currency_rates();
 								$rate_val   = floatval( $currencies[ $shop_base_currency ]['rate'] ?? 0 );

@@ -1031,7 +1031,5 @@ class Exacoat_Image_Sizes {
 
 }
 
-if ( ! class_exists( 'Artmatter_Image_Sizes' ) ) {
-	class_alias( 'Exacoat_Image_Sizes', 'Artmatter_Image_Sizes' );
-}
+
 

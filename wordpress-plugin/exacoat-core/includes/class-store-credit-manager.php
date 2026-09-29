@@ -823,6 +823,4 @@ class Exacoat_Store_Credit_Manager {
 
 }
 
-if ( ! class_exists( 'Artmatter_Store_Credit_Manager' ) ) {
-	class_alias( 'Exacoat_Store_Credit_Manager', 'Artmatter_Store_Credit_Manager' );
-}
+

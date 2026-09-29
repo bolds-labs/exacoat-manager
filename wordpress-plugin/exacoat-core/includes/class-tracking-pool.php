@@ -625,7 +625,6 @@ class Exacoat_Tracking_Pool {
 					$order->update_meta_data( '_carrier_id', $carrier );
 					$order->update_meta_data( 'tracking_number', $allocated_number );
 					$order->update_meta_data( '_tracking_number', $allocated_number );
-					$order->update_meta_data( '_artmatter_tracking_number', $allocated_number );
 					$order->update_meta_data( '_ywot_tracking_code', $allocated_number );
 					$order->update_meta_data( '_ywot_carrier_id', strtoupper( $carrier ) );
 					$order->update_meta_data( '_exacoat_tracking_number', $allocated_number );
@@ -656,7 +655,6 @@ class Exacoat_Tracking_Pool {
 					update_post_meta( $order_id, '_carrier_id', $carrier );
 					update_post_meta( $order_id, 'tracking_number', $allocated_number );
 					update_post_meta( $order_id, '_tracking_number', $allocated_number );
-					update_post_meta( $order_id, '_artmatter_tracking_number', $allocated_number );
 					update_post_meta( $order_id, '_ywot_tracking_code', $allocated_number );
 					update_post_meta( $order_id, '_ywot_carrier_id', strtoupper( $carrier ) );
 					update_post_meta( $order_id, '_exacoat_tracking_number', $allocated_number );
@@ -773,7 +771,6 @@ class Exacoat_Tracking_Pool {
 		$carrier_clean = self::normalize_carrier( $carrier );
 		$order->update_meta_data( 'carrier_id', $carrier_clean );
 		$order->update_meta_data( 'tracking_number', $assigned_num );
-		$order->update_meta_data( '_artmatter_tracking_number', $assigned_num );
 		$order->update_meta_data( '_ywot_tracking_code', $assigned_num );
 		$order->update_meta_data( '_ywot_carrier_id', strtoupper( $carrier_clean ) );
 		$order->update_meta_data( '_exacoat_tracking_number', $assigned_num );

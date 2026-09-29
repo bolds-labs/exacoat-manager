@@ -10,7 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 if ( ! class_exists( 'Exacoat_Customer_Auth' ) ) {
 
 class Exacoat_Customer_Auth {
-	private const NAMESPACE = 'artmatter-core/v1';
+	private const NAMESPACE = 'exacoat-core/v1';
 	private const SESSION_TTL = 1209600;
 	private const STATE_TTL = 600;
 	private const CODE_TTL = 90;
@@ -27,7 +27,7 @@ class Exacoat_Customer_Auth {
 	}
 
 	public static function register_routes(): void {
-		$namespaces = [ 'exacoat-core/v1', 'artmatter-core/v1', 'exacoat/v1' ];
+		$namespaces = [ 'exacoat-core/v1', 'exacoat/v1' ];
 		foreach ( [ 'login', 'register', 'forgot', 'reset', 'exchange', 'logout', 'profile', 'password', 'orders', 'order', 'coupons', 'link-ticket', 'delete' ] as $action ) {
 			foreach ( $namespaces as $namespace ) {
 				register_rest_route( $namespace, '/auth/' . $action, [
@@ -114,7 +114,7 @@ class Exacoat_Customer_Auth {
 			return self::error( $user_id->get_error_message(), 400 );
 		}
 
-		update_user_meta( $user_id, '_artmatter_terms_accepted_at', gmdate( 'c' ) );
+		update_user_meta( $user_id, '_exacoat_terms_accepted_at', gmdate( 'c' ) );
 		return self::authenticated_response( get_user_by( 'id', $user_id ), 201 );
 	}
 
@@ -1388,6 +1388,4 @@ class Exacoat_Customer_Auth {
 
 }
 
-if ( ! class_exists( 'Artmatter_Customer_Auth' ) ) {
-	class_alias( 'Exacoat_Customer_Auth', 'Artmatter_Customer_Auth' );
-}
+

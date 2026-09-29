@@ -699,7 +699,7 @@
 
       var restBase = (window.ArtmatterReviewsData && window.ArtmatterReviewsData.restUrl)
         ? window.ArtmatterReviewsData.restUrl
-        : '/wp-json/artmatter-core/v1/';
+        : '/wp-json/exacoat-core/v1/';
 
       var submitUrl = restBase + 'reviews/submit';
 

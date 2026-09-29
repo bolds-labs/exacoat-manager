@@ -57,9 +57,7 @@ class Exacoat_Plugin_Updater {
 
 		// 5. AJAX Endpoints for Explicit Manual Check & 1-Click Update
 		add_action( 'wp_ajax_exacoat_check_plugin_update', [ $this, 'ajax_check_plugin_update' ] );
-		add_action( 'wp_ajax_artmatter_check_plugin_update', [ $this, 'ajax_check_plugin_update' ] );
 		add_action( 'wp_ajax_exacoat_run_one_click_update', [ $this, 'ajax_run_one_click_update' ] );
-		add_action( 'wp_ajax_artmatter_run_one_click_update', [ $this, 'ajax_run_one_click_update' ] );
 	}
 
 	/**
@@ -663,16 +661,9 @@ class Exacoat_Plugin_Updater {
 
 				if ( class_exists( 'Exacoat_Logger' ) ) {
 					Exacoat_Logger::log( 'info', 'updater', 'Plugin core upgrader reactivated to v' . EXACOAT_CORE_VERSION );
-				} elseif ( class_exists( 'Artmatter_Logger' ) ) {
-					Artmatter_Logger::log( 'info', 'updater', 'Plugin core upgrader reactivated to v' . EXACOAT_CORE_VERSION );
 				}
 			}
 		}
 	}
 }
-}
-
-// Backwards compatibility alias
-if ( ! class_exists( 'Artmatter_GitHub_Updater' ) ) {
-	class_alias( 'Exacoat_Plugin_Updater', 'Artmatter_GitHub_Updater' );
 }

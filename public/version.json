@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.139",
+  "version": "0.1.143",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.139.zip?v=0.1.139",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.143.zip?v=0.1.143",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-29T13:53:53.855Z",
+  "last_updated": "2026-09-29T16:50:54.470Z",
   "sections": {
-    "changelog": "### Version 0.1.139\n- Fix Fatal error when formatting configurator metadata on PHP 8.4\n- Ensure all orders with complex configurator data load correctly in manager search and single order views\n- Support defensive parsing of stdClass and nested layer configurator objects across order and warranty management"
+    "changelog": "### Version 0.1.143\n- Fix Fatal error when formatting configurator metadata on PHP 8.4\n- Ensure all orders with complex configurator data load correctly in manager search and single order views\n- Support defensive parsing of stdClass and nested layer configurator objects across order and warranty management"
   }
 }

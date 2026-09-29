@@ -18,6 +18,7 @@ class Exacoat_Webhook_Dispatcher {
 		add_action( 'woocommerce_update_order', [ __CLASS__, 'queue_order_sync' ], 10, 1 );
 		add_action( 'woocommerce_order_status_changed', [ __CLASS__, 'queue_order_sync' ], 10, 1 );
 		add_action( 'woocommerce_saved_order_items', [ __CLASS__, 'queue_order_sync' ], 10, 2 );
+		add_action( 'exacoat_n8n_sync_job', [ __CLASS__, 'execute_order_webhook_send' ], 10, 1 );
 		add_action( 'artmatter_n8n_sync_job', [ __CLASS__, 'execute_order_webhook_send' ], 10, 1 );
 
 		// 2. Product Update Webhook (#12843)
@@ -44,11 +45,9 @@ class Exacoat_Webhook_Dispatcher {
 		if ( $event === 'email_otp' ) $normalized_event = 'artist_otp_code';
 
 		// 1. Direct Native ZeptoMail Dispatch
-		if ( class_exists( 'Artmatter_Email_Engine' ) && is_email( $recipient_email ) ) {
-			Artmatter_Email_Engine::send_email( $normalized_event, $recipient_email, $recipient_name, $data );
+		if ( class_exists( 'Exacoat_Email_Engine' ) && is_email( $recipient_email ) ) {
+			Exacoat_Email_Engine::send_email( $normalized_event, $recipient_email, $recipient_name, $data );
 		}
-
-
 
 		// 3. Optional External Webhook Relay
 		$webhook_url = self::get_webhook_url();
@@ -88,12 +87,12 @@ class Exacoat_Webhook_Dispatcher {
 		$order_id = (int) $order_id;
 		if ( ! $order_id ) return;
 
-		if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'artmatter_n8n_sync_job', [ 'order_id' => $order_id ] ) ) {
+		if ( function_exists( 'as_has_scheduled_action' ) && ( as_has_scheduled_action( 'exacoat_n8n_sync_job', [ 'order_id' => $order_id ] ) || as_has_scheduled_action( 'artmatter_n8n_sync_job', [ 'order_id' => $order_id ] ) ) ) {
 			return;
 		}
 
 		if ( function_exists( 'as_schedule_single_action' ) ) {
-			as_schedule_single_action( time() + 5, 'artmatter_n8n_sync_job', [ 'order_id' => $order_id ], 'artmatter-webhooks' );
+			as_schedule_single_action( time() + 5, 'exacoat_n8n_sync_job', [ 'order_id' => $order_id ], 'exacoat-webhooks' );
 		} else {
 			self::execute_order_webhook_send( $order_id );
 		}
@@ -239,6 +238,4 @@ class Exacoat_Webhook_Dispatcher {
 
 }
 
-if ( ! class_exists( 'Artmatter_Webhook_Dispatcher' ) ) {
-	class_alias( 'Exacoat_Webhook_Dispatcher', 'Artmatter_Webhook_Dispatcher' );
-}
+

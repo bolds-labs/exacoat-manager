@@ -56,15 +56,14 @@ class Exacoat_Performance_Auditor {
 	 * Register REST routes for Manager ERP
 	 */
 	public static function register_rest_routes() {
-		$namespaces = [ 'exacoat-core/v1', 'exacoat/v1', 'artmatter/v1' ];
+		$namespaces = [ 'exacoat-core/v1', 'exacoat/v1' ];
 		foreach ( $namespaces as $ns ) {
 			register_rest_route( $ns, '/performance/health', [
 				'methods'             => 'GET',
 				'callback'            => [ __CLASS__, 'rest_get_health' ],
 				'permission_callback' => function () {
 					return current_user_can( 'manage_options' ) ||
-						( class_exists( 'Exacoat_Core' ) && Exacoat_Core::verify_bridge_permission() ) ||
-						( class_exists( 'Artmatter_Bricks_Bridge' ) && Artmatter_Bricks_Bridge::verify_manager_request() );
+						( class_exists( 'Exacoat_Core' ) && Exacoat_Core::verify_bridge_permission() );
 				},
 			] );
 		}
@@ -718,11 +717,11 @@ class Exacoat_Performance_Auditor {
 			];
 		}
 
-		// Artmatter Core Engine Profile
+		// Exacoat Core Engine Profile
 		$plugin_summary[] = [
-			'name'         => 'Artmatter Core Engine',
-			'slug'         => 'artmatter-core',
-			'scripts'      => 'Modular on-demand only (FeelForm 3D, Wall, Cart)',
+			'name'         => 'Exacoat Core Engine',
+			'slug'         => 'exacoat-core',
+			'scripts'      => 'Modular on-demand only (Configurator, Cart)',
 			'styles'       => 'Consolidated minimal CSS',
 			'status'       => 'Edge & Cloudflare Tuned',
 			'status_class' => 'passed',
@@ -1828,8 +1827,4 @@ class Exacoat_Performance_Auditor {
 	}
 }
 
-}
-
-if ( ! class_exists( 'Artmatter_Performance_Auditor' ) ) {
-	class_alias( 'Exacoat_Performance_Auditor', 'Artmatter_Performance_Auditor' );
 }

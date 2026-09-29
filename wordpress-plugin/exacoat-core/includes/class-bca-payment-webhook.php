@@ -918,12 +918,7 @@ class Exacoat_BCA_Payment_Webhook {
 
 }
 
-/**
- * Backward compatibility class alias
- */
-if ( ! class_exists( 'Artmatter_BCA_Payment_Webhook' ) ) {
-	class_alias( 'Exacoat_BCA_Payment_Webhook', 'Artmatter_BCA_Payment_Webhook' );
-}
+
 
 /**
  * Global fallback functions to preserve exact compatibility with external snippets

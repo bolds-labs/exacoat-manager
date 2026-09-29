@@ -108,6 +108,9 @@ class Exacoat_Checkout_Engine {
 		// 14. Customer Note Sanitizer (Prevents courier names or automated tags from leaking into customer note)
 		add_action( 'woocommerce_checkout_order_created', [ __CLASS__, 'sanitize_order_customer_note' ], 20, 1 );
 		add_action( 'woocommerce_store_api_checkout_order_processed', [ __CLASS__, 'sanitize_order_customer_note' ], 20, 1 );
+
+		// 15. Midtrans Webhook Notification Fallback & Auto-Reconciler
+		add_action( 'woocommerce_api_wc_gateway_midtrans', [ __CLASS__, 'handle_midtrans_webhook_fallback' ], 5 );
 	}
 
 	/**
@@ -146,7 +149,7 @@ class Exacoat_Checkout_Engine {
 	}
 
 	public static function register_headless_checkout_routes() {
-		$namespaces = [ 'exacoat-core/v1', 'exacoat/v1', 'artmatter-core/v1' ];
+		$namespaces = [ 'exacoat-core/v1', 'exacoat/v1' ];
 
 		foreach ( $namespaces as $ns ) {
 			register_rest_route( $ns, '/checkout/config', [
@@ -515,7 +518,7 @@ class Exacoat_Checkout_Engine {
 		);
 
 		if ( ! $allowed ) {
-			wp_die( esc_html__( 'Checkout could not be started from this site.', 'artmatter-core' ), '', [ 'response' => 403 ] );
+			wp_die( esc_html__( 'Checkout could not be started from this site.', 'exacoat-core' ), '', [ 'response' => 403 ] );
 		}
 
 		$raw_cart = wp_unslash( $_POST['cart'] ?? '' );
@@ -533,7 +536,7 @@ class Exacoat_Checkout_Engine {
 		self::ensure_wc_session_and_cart();
 
 		if ( ! function_exists( 'WC' ) || ! WC()->cart || ! WC()->session ) {
-			wp_die( esc_html__( 'Checkout is temporarily unavailable.', 'artmatter-core' ), '', [ 'response' => 503 ] );
+			wp_die( esc_html__( 'Checkout is temporarily unavailable.', 'exacoat-core' ), '', [ 'response' => 503 ] );
 		}
 
 		$normalized = [];
@@ -670,28 +673,28 @@ class Exacoat_Checkout_Engine {
 
 		$coupon_code = sanitize_text_field( $_POST['coupon_code'] ?? '' );
 		if ( empty( $coupon_code ) ) {
-			wp_send_json_error( [ 'message' => esc_html__( 'Please enter a valid coupon code.', 'artmatter-core' ) ] );
+			wp_send_json_error( [ 'message' => esc_html__( 'Please enter a valid coupon code.', 'exacoat-core' ) ] );
 		}
 
 		if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
-			wp_send_json_error( [ 'message' => esc_html__( 'Cart session not active.', 'artmatter-core' ) ] );
+			wp_send_json_error( [ 'message' => esc_html__( 'Cart session not active.', 'exacoat-core' ) ] );
 		}
 
 		if ( WC()->cart->has_discount( $coupon_code ) ) {
-			wp_send_json_error( [ 'message' => esc_html__( 'Coupon code already applied.', 'artmatter-core' ) ] );
+			wp_send_json_error( [ 'message' => esc_html__( 'Coupon code already applied.', 'exacoat-core' ) ] );
 		}
 
 		$applied = WC()->cart->apply_coupon( $coupon_code );
 		if ( $applied ) {
 			WC()->cart->calculate_totals();
 			$success_notices = wc_get_notices( 'success' );
-			$raw_msg = ! empty( $success_notices ) ? $success_notices[0]['notice'] : esc_html__( 'Coupon applied.', 'artmatter-core' );
+			$raw_msg = ! empty( $success_notices ) ? $success_notices[0]['notice'] : esc_html__( 'Coupon applied.', 'exacoat-core' );
 			$msg     = html_entity_decode( wp_strip_all_tags( $raw_msg ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 			wc_clear_notices();
 			wp_send_json_success( [ 'message' => $msg ] );
 		} else {
 			$notices = wc_get_notices( 'error' );
-			$raw_msg = ! empty( $notices ) ? $notices[0]['notice'] : esc_html__( 'Invalid coupon code.', 'artmatter-core' );
+			$raw_msg = ! empty( $notices ) ? $notices[0]['notice'] : esc_html__( 'Invalid coupon code.', 'exacoat-core' );
 			$msg     = html_entity_decode( wp_strip_all_tags( $raw_msg ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 			wc_clear_notices();
 			wp_send_json_error( [ 'message' => $msg ] );
@@ -908,12 +911,12 @@ class Exacoat_Checkout_Engine {
 		$password = $_POST['password'] ?? '';
 
 		if ( empty( $email ) || empty( $password ) ) {
-			wp_send_json_error( [ 'message' => esc_html__( 'Please provide both email and password.', 'artmatter-core' ) ] );
+			wp_send_json_error( [ 'message' => esc_html__( 'Please provide both email and password.', 'exacoat-core' ) ] );
 		}
 
 		$user = get_user_by( 'email', $email );
 		if ( ! $user ) {
-			wp_send_json_error( [ 'message' => esc_html__( 'No account found with this email.', 'artmatter-core' ) ] );
+			wp_send_json_error( [ 'message' => esc_html__( 'No account found with this email.', 'exacoat-core' ) ] );
 		}
 
 		$creds = [
@@ -925,7 +928,7 @@ class Exacoat_Checkout_Engine {
 		$signon = wp_signon( $creds, is_ssl() );
 
 		if ( is_wp_error( $signon ) ) {
-			wp_send_json_error( [ 'message' => esc_html__( 'Incorrect password. Please try again or continue as guest.', 'artmatter-core' ) ] );
+			wp_send_json_error( [ 'message' => esc_html__( 'Incorrect password. Please try again or continue as guest.', 'exacoat-core' ) ] );
 		}
 
 		wp_set_current_user( $signon->ID );
@@ -947,7 +950,7 @@ class Exacoat_Checkout_Engine {
 		];
 
 		wp_send_json_success( [
-			'message' => esc_html__( 'You are logged in.', 'artmatter-core' ),
+			'message' => esc_html__( 'You are logged in.', 'exacoat-core' ),
 			'user'    => $profile,
 		] );
 	}
@@ -1017,7 +1020,7 @@ class Exacoat_Checkout_Engine {
 			<?php if ( function_exists( 'WC' ) && WC()->cart && WC()->cart->needs_shipping() && WC()->cart->show_shipping() ) : ?>
 				<?php wc_cart_totals_shipping_html(); ?>
 			<?php else : ?>
-				<p style="font-size:13px;color:#a1a1aa;"><?php esc_html_e( 'No shipping required or standard complimentary shipping applies.', 'artmatter-core' ); ?></p>
+				<p style="font-size:13px;color:#a1a1aa;"><?php esc_html_e( 'No shipping required or standard complimentary shipping applies.', 'exacoat-core' ); ?></p>
 			<?php endif; ?>
 		</div>
 		<?php
@@ -1344,7 +1347,7 @@ class Exacoat_Checkout_Engine {
 			if ( $is_canceled && $order_id && function_exists( 'wc_get_order' ) ) {
 				$order = wc_get_order( $order_id );
 				if ( $order instanceof WC_Order && $order->has_status( [ 'pending', 'on-hold', 'failed' ] ) ) {
-					$order->update_status( 'cancelled', __( 'Customer cancelled payment on PayPal.', 'artmatter-core' ) );
+					$order->update_status( 'cancelled', __( 'Customer cancelled payment on PayPal.', 'exacoat-core' ) );
 				}
 			}
 
@@ -1653,11 +1656,140 @@ class Exacoat_Checkout_Engine {
 
 		return $params;
 	}
+
+	/**
+	 * Intercept Midtrans webhook notifications before the official plugin to handle:
+	 * 1. Suffixed order IDs with non-standard separators (e.g., 542475-0037 instead of 542475-wc-mdtrs-0037).
+	 * 2. Orders that were prematurely cancelled by WooCommerce's hold stock time limit.
+	 *
+	 * If the notification has standard format and targets an active (non-cancelled) order,
+	 * it yields execution so the official Midtrans plugin handles it as normal.
+	 */
+	public static function handle_midtrans_webhook_fallback(): void {
+		if ( ( $_SERVER['REQUEST_METHOD'] ?? '' ) !== 'POST' ) {
+			return;
+		}
+
+		$raw_input = file_get_contents( 'php://input' );
+		if ( empty( $raw_input ) ) {
+			return;
+		}
+
+		$data = json_decode( $raw_input, true );
+		if ( ! is_array( $data ) || empty( $data['order_id'] ) ) {
+			return;
+		}
+
+		$raw_order_id = trim( (string) $data['order_id'] );
+		$base_id      = 0;
+
+		if ( strpos( $raw_order_id, '-wc-mdtrs-' ) !== false ) {
+			$base_id = intval( explode( '-wc-mdtrs-', $raw_order_id )[0] );
+		} elseif ( strpos( $raw_order_id, '-' ) !== false ) {
+			$base_id = intval( explode( '-', $raw_order_id )[0] );
+		} else {
+			$base_id = intval( $raw_order_id );
+		}
+
+		if ( $base_id <= 0 || ! function_exists( 'wc_get_order' ) ) {
+			return;
+		}
+
+		$order = wc_get_order( $base_id );
+		if ( ! $order instanceof \WC_Order ) {
+			return;
+		}
+
+		$has_nonstandard_suffix = ( strpos( $raw_order_id, '-' ) !== false && strpos( $raw_order_id, '-wc-mdtrs-' ) === false );
+		$is_cancelled_or_failed = in_array( $order->get_status(), [ 'cancelled', 'failed' ], true );
+
+		// If standard format AND order is pending/on-hold, let the official Midtrans plugin handle it
+		if ( ! $has_nonstandard_suffix && ! $is_cancelled_or_failed ) {
+			return;
+		}
+
+		// Retrieve server key for signature validation
+		$server_key = '';
+		$midtrans_settings = get_option( 'woocommerce_midtrans_settings' );
+		if ( is_array( $midtrans_settings ) ) {
+			$env = $midtrans_settings['environment'] ?? 'production';
+			$server_key = ( 'production' === $env )
+				? ( $midtrans_settings['server_key_v2_production'] ?? '' )
+				: ( $midtrans_settings['server_key_v2_sandbox'] ?? '' );
+		}
+		if ( empty( $server_key ) && class_exists( 'WC_Gateway_Midtrans_API' ) && method_exists( 'WC_Gateway_Midtrans_API', 'get_server_key' ) ) {
+			$server_key = \WC_Gateway_Midtrans_API::get_server_key();
+		}
+		if ( empty( $server_key ) ) {
+			$server_key = defined( 'MIDTRANS_SERVER_KEY' ) ? MIDTRANS_SERVER_KEY : ( getenv( 'MIDTRANS_SERVER_KEY' ) ?: '' );
+		}
+
+		$status_code  = (string) ( $data['status_code'] ?? '' );
+		$gross_amount = (string) ( $data['gross_amount'] ?? '' );
+		$signature    = (string) ( $data['signature_key'] ?? '' );
+
+		$expected_sig = hash( 'sha512', $raw_order_id . $status_code . $gross_amount . $server_key );
+		if ( ! hash_equals( $expected_sig, $signature ) ) {
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				\Exacoat_Logger::log( "Midtrans fallback signature mismatch for order #{$base_id} (raw: {$raw_order_id})", 'warning' );
+			}
+			return;
+		}
+
+		$transaction_id     = sanitize_text_field( (string) ( $data['transaction_id'] ?? '' ) );
+		$transaction_status = sanitize_text_field( (string) ( $data['transaction_status'] ?? '' ) );
+		$fraud_status       = sanitize_text_field( (string) ( $data['fraud_status'] ?? 'accept' ) );
+		$payment_type       = sanitize_text_field( (string) ( $data['payment_type'] ?? 'online' ) );
+
+		if ( ! empty( $transaction_id ) ) {
+			$order->update_meta_data( '_midtrans_transaction_id', $transaction_id );
+		}
+		if ( ! empty( $payment_type ) ) {
+			$order->update_meta_data( '_mt_payment_type', $payment_type );
+		}
+		$order->update_meta_data( '_mt_suffixed_midtrans_order_id', $raw_order_id );
+
+		$is_success = ( 'settlement' === $transaction_status )
+			|| ( 'capture' === $transaction_status && 'accept' === $fraud_status );
+
+		if ( $is_success ) {
+			// If order was cancelled, re-reduce stock and restore to processing
+			if ( 'cancelled' === $order->get_status() ) {
+				if ( function_exists( 'wc_reduce_stock_levels' ) ) {
+					wc_reduce_stock_levels( $order->get_id() );
+				}
+				$order->update_status( 'processing', sprintf( __( 'Payment confirmed via Midtrans (%s) after order was cancelled. Transaction ID: %s', 'exacoat-core' ), $payment_type, $transaction_id ) );
+			}
+
+			$order->payment_complete( $transaction_id );
+			$order->add_order_note( sprintf( __( 'Midtrans payment completed: %s. Payment type: Midtrans-%s. Order ID: %s. Transaction ID: %s', 'exacoat-core' ), $transaction_status, $payment_type, $raw_order_id, $transaction_id ) );
+
+			if ( in_array( $order->get_status(), [ 'pending', 'on-hold', 'failed', 'cancelled' ], true ) ) {
+				$order->update_status( 'processing', __( 'Status confirmed via Exacoat Midtrans Webhook Reconciler', 'exacoat-core' ) );
+			}
+		} elseif ( in_array( $transaction_status, [ 'cancel', 'expire', 'deny' ], true ) ) {
+			if ( ! in_array( $order->get_status(), [ 'processing', 'completed', 'shipped', 'delivered' ], true ) ) {
+				$order->update_status( 'cancelled', sprintf( __( 'Midtrans payment %s: Midtrans-%s.', 'exacoat-core' ), $transaction_status, $payment_type ) );
+			}
+		} elseif ( 'pending' === $transaction_status ) {
+			$order->add_order_note( sprintf( __( 'Midtrans pending payment notification received. Midtrans-%s.', 'exacoat-core' ), $payment_type ) );
+		}
+
+		$order->save();
+
+		// Respond with early ACK 200 OK so Midtrans marks notification as completed
+		status_header( 200 );
+		header( 'Content-Type: application/json; charset=utf-8' );
+		echo wp_json_encode( [
+			'status'   => 'success',
+			'message'  => "Order #{$base_id} successfully reconciled by Exacoat Midtrans Interceptor",
+			'order_id' => $base_id,
+		] );
+		exit;
+	}
 }
 
 }
 
-if ( ! class_exists( 'Artmatter_Checkout_Engine' ) ) {
-	class_alias( 'Exacoat_Checkout_Engine', 'Artmatter_Checkout_Engine' );
-}
+
 

@@ -16,15 +16,10 @@ class Exacoat_Admin_Settings {
 		add_action( 'admin_init', [ __CLASS__, 'register_settings' ] );
 		add_action( 'admin_head', [ __CLASS__, 'suppress_third_party_notices' ], 1 );
 		add_action( 'update_option_exacoat_core_settings', [ __CLASS__, 'on_settings_updated' ], 10, 2 );
-		add_action( 'update_option_artmatter_core_settings', [ __CLASS__, 'on_settings_updated' ], 10, 2 );
 		add_action( 'add_option_exacoat_core_settings', [ __CLASS__, 'on_settings_added' ], 10, 2 );
-		add_action( 'add_option_artmatter_core_settings', [ __CLASS__, 'on_settings_added' ], 10, 2 );
 		add_action( 'wp_ajax_exacoat_run_health_test', [ __CLASS__, 'ajax_run_health_test' ] );
-		add_action( 'wp_ajax_artmatter_run_health_test', [ __CLASS__, 'ajax_run_health_test' ] );
 		add_action( 'wp_ajax_exacoat_flush_permalinks', [ __CLASS__, 'ajax_flush_permalinks' ] );
-		add_action( 'wp_ajax_artmatter_flush_permalinks', [ __CLASS__, 'ajax_flush_permalinks' ] );
 		add_action( 'wp_ajax_exacoat_revert_flat_media', [ __CLASS__, 'ajax_revert_flat_media' ] );
-		add_action( 'wp_ajax_artmatter_revert_flat_media', [ __CLASS__, 'ajax_revert_flat_media' ] );
 		add_action( 'wp_ajax_exacoat_save_whatsapp_settings', [ __CLASS__, 'ajax_save_whatsapp_settings' ] );
 		add_action( 'wp_ajax_exacoat_test_whatsapp', [ __CLASS__, 'ajax_test_whatsapp' ] );
 		add_action( 'wp_ajax_exacoat_add_tracking_numbers', [ __CLASS__, 'ajax_add_tracking_numbers' ] );
@@ -33,7 +28,7 @@ class Exacoat_Admin_Settings {
 
 	public static function suppress_third_party_notices() {
 		$screen = get_current_screen();
-		if ( $screen && in_array( $screen->id, [ 'toplevel_page_exacoat-core', 'toplevel_page_artmatter-core' ], true ) ) {
+		if ( $screen && $screen->id === 'toplevel_page_exacoat-core' ) {
 			remove_all_actions( 'admin_notices' );
 			remove_all_actions( 'all_admin_notices' );
 			remove_all_actions( 'user_admin_notices' );
@@ -51,32 +46,16 @@ class Exacoat_Admin_Settings {
 			'dashicons-shield',
 			56
 		);
-
-		// Backward compatibility hidden page for legacy artmatter-core slug
-		add_submenu_page(
-			null,
-			__( 'Exacoat Core', 'exacoat-core' ),
-			__( 'Exacoat Core', 'exacoat-core' ),
-			'manage_options',
-			'artmatter-core',
-			[ __CLASS__, 'render_settings_page' ]
-		);
 	}
 
 	public static function register_settings() {
 		register_setting( 'exacoat_core_settings_group', 'exacoat_core_settings', [
 			'sanitize_callback' => [ __CLASS__, 'sanitize_settings' ],
 		] );
-		register_setting( 'artmatter_core_settings_group', 'artmatter_core_settings', [
-			'sanitize_callback' => [ __CLASS__, 'sanitize_settings' ],
-		] );
 	}
 
 	public static function sanitize_settings( $value ): array {
 		$existing = get_option( 'exacoat_core_settings', [] );
-		if ( empty( $existing ) || ! is_array( $existing ) ) {
-			$existing = get_option( 'artmatter_core_settings', [] );
-		}
 		$settings = is_array( $existing ) ? $existing : [];
 		$input    = is_array( $value ) ? $value : [];
 
@@ -403,8 +382,4 @@ class Exacoat_Admin_Settings {
 		] );
 	}
 }
-}
-
-if ( ! class_exists( 'Artmatter_Admin_Settings' ) ) {
-	class_alias( 'Exacoat_Admin_Settings', 'Artmatter_Admin_Settings' );
 }
