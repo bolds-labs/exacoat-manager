@@ -699,11 +699,29 @@ function parseConfiguratorFromItem(item: any): any[] {
 }
 
 function enrichOrder(order: any): Order {
-  const metaList = order.meta_data || [];
-  const trackingMeta = metaList.find((m: any) => m.key === 'tracking_number' || m.key === '_tracking_number' || m.key === '_exacoat_tracking_number' || m.key === '_artmatter_tracking_number');
-  const carrierMeta = metaList.find((m: any) => m.key === '_shipping_carrier' || m.key === 'carrier_id' || m.key === '_carrier_id');
+  const metaList = Array.isArray(order.meta_data) ? order.meta_data : [];
+
+  const isValidTrackingVal = (val: any): boolean => {
+    if (val === null || val === undefined) return false;
+    const str = String(val).trim();
+    return str.length > 0 && str !== '⚠️' && !str.startsWith('field_');
+  };
+
+  const carrierMeta = metaList.find(
+    (m: any) =>
+      (m.key === '_shipping_carrier' || m.key === 'carrier_id' || m.key === '_carrier_id' || m.key === '_tracking_provider' || m.key === '_exacoat_courier' || m.key === '_artmatter_courier') &&
+      m.value &&
+      !String(m.value).startsWith('field_')
+  );
   const checkpointsMeta = metaList.find((m: any) => m.key === '_exacoat_tracking_checkpoints' || m.key === '_artmatter_tracking_checkpoints');
-  const latestStatusMeta = metaList.find((m: any) => m.key === '_biteship_latest_status' || m.key === '_exacoat_trackingmore_latest_status' || m.key === '_exacoat_17track_latest_status' || m.key === '_artmatter_trackingmore_latest_status' || m.key === '_artmatter_17track_latest_status');
+  const latestStatusMeta = metaList.find(
+    (m: any) =>
+      m.key === '_biteship_latest_status' ||
+      m.key === '_exacoat_trackingmore_latest_status' ||
+      m.key === '_exacoat_17track_latest_status' ||
+      m.key === '_artmatter_trackingmore_latest_status' ||
+      m.key === '_artmatter_17track_latest_status'
+  );
   const districtMeta = metaList.find((m: any) => m.key === '_shipping_district');
   const subdistrictMeta = metaList.find((m: any) => m.key === '_shipping_subdistrict');
   const phoneMeta = metaList.find((m: any) => m.key === '_shipping_phone_formatted' || m.key === '_billing_phone');
@@ -743,13 +761,47 @@ function enrichOrder(order: any): Order {
     };
   });
 
-  const tracking: OrderTracking | null = trackingMeta?.value && trackingMeta.value !== '⚠️' ? {
-    courier: carrierMeta?.value ? String(carrierMeta.value) : 'Standard',
-    carrier_id: carrierMeta?.value ? String(carrierMeta.value) : undefined,
-    tracking_number: String(trackingMeta.value),
-    latest_status: latestStatusMeta?.value ? String(latestStatusMeta.value) : undefined,
-    checkpoints: Array.isArray(checkpointsMeta?.value) ? checkpointsMeta.value : undefined,
-  } : (order.tracking || null);
+  // Resolve tracking: preserve authoritative valid server tracking, else look up valid meta keys
+  let tracking: OrderTracking | null = null;
+  if (order.tracking && isValidTrackingVal(order.tracking.tracking_number)) {
+    tracking = {
+      ...order.tracking,
+      latest_status: order.tracking.latest_status || (latestStatusMeta?.value ? String(latestStatusMeta.value) : undefined),
+      checkpoints: order.tracking.checkpoints || (Array.isArray(checkpointsMeta?.value) ? checkpointsMeta.value : undefined),
+    };
+  } else {
+    const trackingKeys = [
+      'tracking_number',
+      '_tracking_number',
+      '_exacoat_tracking_number',
+      '_artmatter_tracking_number',
+      '_biteship_waybill_id',
+      '_biteship_tracking_id',
+      '_ywot_tracking_code',
+      'yith_wcmg_tracking_code',
+    ];
+
+    let foundTrackingNum = '';
+    for (const key of trackingKeys) {
+      const entry = metaList.find((m: any) => m.key === key && isValidTrackingVal(m.value));
+      if (entry) {
+        foundTrackingNum = String(entry.value).trim();
+        break;
+      }
+    }
+
+    if (foundTrackingNum) {
+      tracking = {
+        courier: carrierMeta?.value ? String(carrierMeta.value) : (order.shipping_courier_name || 'Standard'),
+        carrier_id: carrierMeta?.value ? String(carrierMeta.value) : undefined,
+        tracking_number: foundTrackingNum,
+        latest_status: latestStatusMeta?.value ? String(latestStatusMeta.value) : undefined,
+        checkpoints: Array.isArray(checkpointsMeta?.value) ? checkpointsMeta.value : undefined,
+      };
+    } else if (order.tracking) {
+      tracking = order.tracking;
+    }
+  }
 
   const rawOrderNumber = order.order_number || order.number || String(order.id);
   const cleanOrderNumber = `#${String(rawOrderNumber).replace(/^#+/, '')}`;

@@ -1694,23 +1694,79 @@ class Exacoat_Order_Manager {
 		$clean_tracking = function( $val ) {
 			if ( ! is_scalar( $val ) ) return '';
 			$s = trim( (string) $val );
-			if ( empty( $s ) || str_starts_with( $s, 'field_' ) ) return '';
+			if ( empty( $s ) || str_starts_with( $s, 'field_' ) || $s === '⚠️' ) return '';
 			return $s;
 		};
 
-		$tracking_code = $clean_tracking( $order->get_meta( 'tracking_number' ) )
-			?: ( $clean_tracking( get_post_meta( $order_id, 'tracking_number', true ) )
-			?: ( function_exists( 'get_field' ) ? $clean_tracking( get_field( 'tracking_number', $order_id ) ) : '' ) );
+		$tracking_keys = [
+			'tracking_number',
+			'_tracking_number',
+			'_exacoat_tracking_number',
+			'_artmatter_tracking_number',
+			'_biteship_waybill_id',
+			'_biteship_tracking_id',
+			'_ywot_tracking_code',
+			'yith_wcmg_tracking_code',
+		];
 
-		$carrier_val = $clean_tracking( $order->get_meta( 'carrier_id' ) )
-			?: ( $clean_tracking( get_post_meta( $order_id, 'carrier_id', true ) )
-			?: ( function_exists( 'get_field' ) ? $clean_tracking( get_field( 'carrier_id', $order_id ) ) : '' ) );
+		$tracking_code = '';
+		foreach ( $tracking_keys as $t_key ) {
+			$val = $clean_tracking( $order->get_meta( $t_key ) );
+			if ( empty( $val ) ) {
+				$val = $clean_tracking( get_post_meta( $order_id, $t_key, true ) );
+			}
+			if ( ! empty( $val ) ) {
+				$tracking_code = $val;
+				break;
+			}
+		}
+
+		if ( empty( $tracking_code ) && function_exists( 'get_field' ) ) {
+			$val = $clean_tracking( get_field( 'tracking_number', $order_id ) );
+			if ( ! empty( $val ) ) {
+				$tracking_code = $val;
+			}
+		}
+
+		$carrier_keys = [
+			'carrier_id',
+			'_carrier_id',
+			'_shipping_carrier',
+			'_tracking_provider',
+			'_exacoat_courier',
+			'_artmatter_courier',
+			'_ywot_carrier_id',
+		];
+
+		$carrier_val = '';
+		foreach ( $carrier_keys as $c_key ) {
+			$val = $clean_tracking( $order->get_meta( $c_key ) );
+			if ( empty( $val ) ) {
+				$val = $clean_tracking( get_post_meta( $order_id, $c_key, true ) );
+			}
+			if ( ! empty( $val ) ) {
+				$carrier_val = $val;
+				break;
+			}
+		}
+
+		if ( empty( $carrier_val ) && function_exists( 'get_field' ) ) {
+			$val = $clean_tracking( get_field( 'carrier_id', $order_id ) );
+			if ( ! empty( $val ) ) {
+				$carrier_val = $val;
+			}
+		}
 
 		if ( empty( $tracking_code ) ) {
-			$raw_meta = $order->get_meta( '_artmatter_tracking_info' ) ?: get_post_meta( $order_id, '_artmatter_tracking_info', true );
+			$raw_meta = $order->get_meta( '_exacoat_tracking_info' )
+				?: ( get_post_meta( $order_id, '_exacoat_tracking_info', true )
+				?: ( $order->get_meta( '_artmatter_tracking_info' )
+				?: get_post_meta( $order_id, '_artmatter_tracking_info', true ) ) );
 			if ( is_array( $raw_meta ) && ! empty( $clean_tracking( $raw_meta['tracking_number'] ?? '' ) ) ) {
 				$tracking_code = $clean_tracking( $raw_meta['tracking_number'] );
-				$carrier_val   = $clean_tracking( $raw_meta['carrier_id'] ?? ( $raw_meta['courier'] ?? $carrier_val ) );
+				if ( empty( $carrier_val ) ) {
+					$carrier_val = $clean_tracking( $raw_meta['carrier_id'] ?? ( $raw_meta['courier'] ?? $carrier_val ) );
+				}
 			}
 		}
 
@@ -1720,22 +1776,20 @@ class Exacoat_Order_Manager {
 				$first_item = reset( $wc_st_items );
 				if ( ! empty( $clean_tracking( $first_item['tracking_number'] ?? '' ) ) ) {
 					$tracking_code = $clean_tracking( $first_item['tracking_number'] );
-					$carrier_val   = $clean_tracking( $first_item['custom_tracking_provider'] ?: ( $first_item['tracking_provider'] ?: $carrier_val ) );
+					if ( empty( $carrier_val ) ) {
+						$carrier_val = $clean_tracking( $first_item['custom_tracking_provider'] ?: ( $first_item['tracking_provider'] ?: $carrier_val ) );
+					}
 				}
 			}
 		}
 
-		if ( empty( $tracking_code ) ) {
-			$tracking_code = $clean_tracking( $order->get_meta( '_ywot_tracking_code' ) )
-				?: ( $clean_tracking( get_post_meta( $order_id, '_ywot_tracking_code', true ) )
-				?: ( $clean_tracking( $order->get_meta( 'yith_wcmg_tracking_code' ) )
-				?: $clean_tracking( get_post_meta( $order_id, 'yith_wcmg_tracking_code', true ) ) ) );
-
-			$carrier_val = $clean_tracking( $order->get_meta( '_tracking_provider' ) )
-				?: ( $clean_tracking( get_post_meta( $order_id, '_tracking_provider', true ) )
-				?: ( $clean_tracking( $order->get_meta( '_ywot_carrier_id' ) )
-				?: ( $clean_tracking( get_post_meta( $order_id, '_ywot_carrier_id', true ) )
-				?: $carrier_val ) ) );
+		// Self-healing: if valid tracking was extracted from secondary or legacy meta, sync to primary canonical keys
+		if ( ! empty( $tracking_code ) && empty( $clean_tracking( $order->get_meta( 'tracking_number' ) ) ) ) {
+			$order->update_meta_data( 'tracking_number', $tracking_code );
+			$order->update_meta_data( '_exacoat_tracking_number', $tracking_code );
+			update_post_meta( $order_id, 'tracking_number', $tracking_code );
+			update_post_meta( $order_id, '_exacoat_tracking_number', $tracking_code );
+			$order->save();
 		}
 
 		// Intelligent courier detection from Customer Note, Shipping Method, or Shipping Lines
@@ -2651,15 +2705,22 @@ class Exacoat_Order_Manager {
 
 			// Extract tracking number & carrier from ACF / Order Meta / HPOS
 			$tracking_code = $order->get_meta( 'tracking_number' ) 
+				?: ( $order->get_meta( '_tracking_number' ) 
+				?: ( $order->get_meta( '_exacoat_tracking_number' ) 
+				?: ( $order->get_meta( '_artmatter_tracking_number' ) 
 				?: ( get_post_meta( $order_id, 'tracking_number', true ) 
-				?: ( function_exists( 'get_field' ) ? get_field( 'tracking_number', $order_id ) : '' ) );
+				?: ( get_post_meta( $order_id, '_tracking_number', true ) 
+				?: ( get_post_meta( $order_id, '_exacoat_tracking_number', true ) 
+				?: ( function_exists( 'get_field' ) ? get_field( 'tracking_number', $order_id ) : '' ) ) ) ) ) ) );
 
 			$carrier_val = $order->get_meta( 'carrier_id' ) 
+				?: ( $order->get_meta( '_carrier_id' ) 
+				?: ( $order->get_meta( '_shipping_carrier' ) 
 				?: ( get_post_meta( $order_id, 'carrier_id', true ) 
-				?: ( function_exists( 'get_field' ) ? get_field( 'carrier_id', $order_id ) : '' ) );
+				?: ( function_exists( 'get_field' ) ? get_field( 'carrier_id', $order_id ) : '' ) ) ) );
 
 			if ( empty( $tracking_code ) ) {
-				$tracking_meta = $order->get_meta( '_artmatter_tracking_info' ) ?: get_post_meta( $order_id, '_artmatter_tracking_info', true );
+				$tracking_meta = $order->get_meta( '_exacoat_tracking_info' ) ?: ( $order->get_meta( '_artmatter_tracking_info' ) ?: ( get_post_meta( $order_id, '_exacoat_tracking_info', true ) ?: get_post_meta( $order_id, '_artmatter_tracking_info', true ) ) );
 				if ( is_array( $tracking_meta ) && ! empty( $tracking_meta['tracking_number'] ) ) {
 					$tracking_code = $tracking_meta['tracking_number'];
 					$carrier_val   = $tracking_meta['carrier_id'] ?? ( $tracking_meta['courier'] ?? $carrier_val );
@@ -2731,8 +2792,8 @@ class Exacoat_Order_Manager {
 
 			// Send Luxury "Your Art Has Arrived" email
 			if ( class_exists( 'Artmatter_Email_Engine' ) ) {
-				$carrier_display = $order->get_meta( '_artmatter_courier' ) ?: ( $order->get_meta( 'carrier_id' ) ?: 'Express Courier' );
-				$tracking_num    = $order->get_meta( 'tracking_number' ) ?: $order->get_meta( '_artmatter_tracking_number' );
+				$carrier_display = $order->get_meta( '_exacoat_courier' ) ?: ( $order->get_meta( '_artmatter_courier' ) ?: ( $order->get_meta( 'carrier_id' ) ?: 'Express Courier' ) );
+				$tracking_num    = $order->get_meta( 'tracking_number' ) ?: ( $order->get_meta( '_tracking_number' ) ?: ( $order->get_meta( '_exacoat_tracking_number' ) ?: $order->get_meta( '_artmatter_tracking_number' ) ) );
 
 				if ( $is_store_pickup ) {
 					Artmatter_Email_Engine::send_email(
@@ -3385,12 +3446,15 @@ class Exacoat_Order_Manager {
 
 		$tracking_num = (string) ( $order->get_meta( 'tracking_number' ) 
 			?: ( $order->get_meta( '_tracking_number' ) 
+			?: ( $order->get_meta( '_exacoat_tracking_number' ) 
 			?: ( $order->get_meta( '_artmatter_tracking_number' ) 
 			?: ( get_post_meta( $order_id, 'tracking_number', true ) 
-			?: ( function_exists( 'get_field' ) ? (string) get_field( 'tracking_number', $order_id ) : '' ) ) ) ) );
+			?: ( get_post_meta( $order_id, '_tracking_number', true ) 
+			?: ( get_post_meta( $order_id, '_exacoat_tracking_number', true ) 
+			?: ( function_exists( 'get_field' ) ? (string) get_field( 'tracking_number', $order_id ) : '' ) ) ) ) ) ) ) );
 
 		if ( empty( $tracking_num ) ) {
-			$t_info = $order->get_meta( '_artmatter_tracking_info' ) ?: get_post_meta( $order_id, '_artmatter_tracking_info', true );
+			$t_info = $order->get_meta( '_exacoat_tracking_info' ) ?: ( $order->get_meta( '_artmatter_tracking_info' ) ?: ( get_post_meta( $order_id, '_exacoat_tracking_info', true ) ?: get_post_meta( $order_id, '_artmatter_tracking_info', true ) ) );
 			if ( is_array( $t_info ) && ! empty( $t_info['tracking_number'] ) ) {
 				$tracking_num = (string) $t_info['tracking_number'];
 			}
