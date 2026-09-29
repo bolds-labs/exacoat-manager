@@ -295,6 +295,8 @@ export function formatItemSpecsSummary(item: any, options?: { excludeKeys?: stri
 export interface SeparatedItemSpecs {
   partSpecs: string;
   refSpecs: string;
+  partList: ItemCustomizationSpec[];
+  refList: ItemCustomizationSpec[];
 }
 
 export function formatSeparatedItemSpecs(
@@ -302,7 +304,7 @@ export function formatSeparatedItemSpecs(
   options?: { excludeKeys?: string[] }
 ): SeparatedItemSpecs {
   const specs = extractItemSpecs(item);
-  if (specs.length === 0) return { partSpecs: '', refSpecs: '' };
+  if (specs.length === 0) return { partSpecs: '', refSpecs: '', partList: [], refList: [] };
 
   const refKeys = ['original invoice', 'original order', 'original channel'];
   const excludeList = (options?.excludeKeys || ['part', 'device', 'device type']).map(k => k.toLowerCase());
@@ -324,6 +326,8 @@ export function formatSeparatedItemSpecs(
   return {
     partSpecs: partList.map(s => `${s.label}: ${s.value}`).join(' • '),
     refSpecs: refList.map(s => `${s.label}: ${s.value}`).join(' • '),
+    partList,
+    refList,
   };
 }
 

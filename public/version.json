@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.136.zip?v=0.1.136",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-29T04:15:54.725Z",
+  "last_updated": "2026-09-29T04:21:59.193Z",
   "sections": {
     "changelog": "### Version 0.1.136\n- Strip messy applied promo and free shipping suffixes from courier shipping method titles and rate labels\n- Fix clean courier names (e.g. SICEPAT - REG) across checkout, thank-you, account order details, and emails\n- Support AJAX refresh for eligible coupons and store credit after checkout sign-in"
   }

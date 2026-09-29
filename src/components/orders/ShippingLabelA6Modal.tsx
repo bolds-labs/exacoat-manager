@@ -7,15 +7,16 @@ import {
   ShieldAlert,
   ChevronLeft,
   ChevronRight,
-  Layers,
-  FileText
+  Layers
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useToast } from '../../context/ToastContext';
 import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
-import { formatItemSpecsSummary, formatSeparatedItemSpecs, cleanItemTitle } from '../../lib/orderItems';
-import { resolveOrderCourier } from '../../lib/orderUtils';
+import { formatSeparatedItemSpecs, cleanItemTitle } from '../../lib/orderItems';
+import { resolveOrderCourier, isStorePickupOrder } from '../../lib/orderUtils';
 import { resolveCountryName } from '../../lib/countries';
+
+export { isStorePickupOrder };
 
 interface ShippingLabelA6ModalProps {
   order?: Order | null;
@@ -80,28 +81,455 @@ function generateBarcodeSvgData(code: string, height: number = 44) {
   };
 }
 
-import { isStorePickupOrder } from '../../lib/orderUtils';
-export { isStorePickupOrder };
+// Estimate item row height in pixels for 4x6 label layout (96 DPI)
+function estimateItemHeight(item: any): number {
+  const cleanItemName = cleanItemTitle(String(item?.name || ''));
+  const titleLines = cleanItemName.length > 36 ? 2 : 1;
+  const titleHeight = titleLines * 14;
+  const { partList, partSpecs, refSpecs } = formatSeparatedItemSpecs(item);
+  const specsCount = partList && partList.length > 0 ? partList.length : (partSpecs ? 1 : 0);
+  const specsHeight = specsCount * 12.5;
+  const refHeight = refSpecs ? 11 : 0;
+  // 6px padding + 1px border + contents
+  return 7 + titleHeight + specsHeight + refHeight;
+}
 
-// Split items across multiple label pages if items count exceeds single sheet capacity
-function chunkOrderItems(items: any[]): { pages: any[][]; totalPages: number } {
+// Split items across multiple label pages based on actual available height
+function chunkOrderItems(
+  items: any[],
+  recipientAddressLineCount: number = 3,
+  hasTracking: boolean = false
+): { pages: any[][]; totalPages: number } {
   if (!items || items.length === 0) {
     return { pages: [[]], totalPages: 1 };
   }
-  // Up to 4 items with skin specs comfortably fit on page 1
-  if (items.length <= 4) {
-    return { pages: [items], totalPages: 1 };
-  }
-  // Page 1 gets first 3 items to preserve breathing room for header, recipient and inline FROM/barcode
+
+  // Budget for Page 1 item rows (inner label is 546px, non-item rows take ~230px)
+  // Baseline is 315px when address has 3 lines and no tracking
+  const extraAddressLines = Math.max(0, recipientAddressLineCount - 3);
+  const page1MaxHeight = 315 - (extraAddressLines * 14) - (hasTracking ? 11 : 0);
+  // Page 2 has a minimal 1-line header, giving ~440px for items
+  const page2MaxHeight = 440;
+
   const pages: any[][] = [];
-  pages.push(items.slice(0, 3));
-  let remaining = items.slice(3);
-  // Subsequent pages can hold up to 7 items each since page 2 has a minimal header
-  while (remaining.length > 0) {
-    pages.push(remaining.slice(0, 7));
-    remaining = remaining.slice(7);
+  let currentPageItems: any[] = [];
+  let currentHeight = 0;
+  let isFirstPage = true;
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const itemH = estimateItemHeight(item);
+    const maxHeight = isFirstPage ? page1MaxHeight : page2MaxHeight;
+
+    // Check if adding this item would exceed the page budget
+    if (currentPageItems.length > 0 && currentHeight + itemH > maxHeight) {
+      pages.push(currentPageItems);
+      currentPageItems = [item];
+      currentHeight = itemH;
+      isFirstPage = false;
+    } else {
+      currentPageItems.push(item);
+      currentHeight += itemH;
+    }
   }
+
+  if (currentPageItems.length > 0) {
+    pages.push(currentPageItems);
+  }
+
   return { pages, totalPages: pages.length };
+}
+
+interface LabelPageConfig {
+  courierName: string;
+  trackingNo: string;
+  handlingNote: string;
+  isLastPageOfDoc: boolean;
+  totalUnitsCount: number;
+}
+
+function renderSinglePageHtml(
+  ord: Order,
+  pageItems: any[],
+  pageIdx: number,
+  totalPages: number,
+  config: LabelPageConfig
+): string {
+  const isPickup = isStorePickupOrder(ord);
+  const cOrderNum = String(ord.order_number || ord.id || '').replace(/^#+/, '');
+  const shp = ord.shipping || {};
+  const rName = ord.customer_name || `${shp.first_name || ''} ${shp.last_name || ''}`.trim() || 'Customer';
+  const rPhone = ord.customer_phone || shp.phone || '-';
+  const rAddrLines = [
+    shp.address_1 || 'Address on file',
+    shp.address_2 || shp.address_2_extra || '',
+    [shp.city || '', shp.state || '', shp.postcode || ''].filter(Boolean).join(', '),
+    resolveCountryName(shp.country || ord.billing?.country || 'Indonesia'),
+  ].filter(Boolean);
+
+  const cCourier = config.courierName || 'JNE Express';
+  const validTrk = config.trackingNo && !config.trackingNo.startsWith('field_') ? config.trackingNo : '';
+
+  const bData = generateBarcodeSvgData(cOrderNum, 36);
+  const bSvgRects = bData.elements
+    .map(el => `<rect x="${el.x}" y="0" width="${el.width}" height="36" fill="#000" />`)
+    .join('');
+
+  const renderItemRowsHtml = (itemsList: any[]) => {
+    return (itemsList || []).map((item) => {
+      const itemSku = item.sku 
+        ? item.sku 
+        : (item.product_id ? `SKU${item.product_id}` : `SKU${item.id || '72572'}`);
+      const cleanItemName = cleanItemTitle(String(item.name || 'Precision Device Skin'))
+        .replace(/\r?\n+/g, ' ')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+      const { partSpecs, refSpecs, partList } = formatSeparatedItemSpecs(item);
+
+      const isWarrantyItem =
+        cleanItemName.toLowerCase().includes('warranty') ||
+        (ord.meta_data || []).some((m: any) => (m.key === '_order_badge' && m.value === 'WARRANTY') || (m.key === '_is_warranty' && m.value === 'yes'));
+
+      let finalRefSpecs = refSpecs;
+      if (!finalRefSpecs && isWarrantyItem) {
+        const rmaChannel = (ord.meta_data || []).find((m: any) => m.key === '_rma_marketplace_channel')?.value;
+        const rmaInvoice = (ord.meta_data || []).find((m: any) => m.key === '_rma_original_invoice' || m.key === '_rma_original_order_id')?.value;
+        if (rmaInvoice) {
+          finalRefSpecs = rmaChannel
+            ? `Original Channel: ${rmaChannel} • Original Invoice: ${rmaInvoice}`
+            : `Original Order: #${rmaInvoice}`;
+        }
+      }
+
+      // Line-by-line specs formatting: larger text, bold values for production readability
+      let specsHtml = '';
+      if (partList && partList.length > 0) {
+        specsHtml = `
+          <div style="margin-top: 2px;">
+            ${partList.map(s => `
+              <div style="font-size: 9.5px; line-height: 1.25; color: #111;">
+                <span style="font-weight: 700; color: #333;">${s.label}:</span> <span style="font-weight: 900; color: #000;">${s.value}</span>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      } else if (partSpecs) {
+        specsHtml = `<div style="font-size: 9.5px; color: #000; font-weight: 800; line-height: 1.25; margin-top: 2px;">${partSpecs}</div>`;
+      }
+
+      return `
+        <tr style="border-bottom: 1px solid #e5e7eb;">
+          <td style="padding: 3px 5px; font-weight: 900; width: 26px; text-align: center; font-size: 11px; vertical-align: top; font-variant-numeric: tabular-nums;">
+            ${item.quantity > 1 ? `<u style="text-decoration: underline; text-underline-offset: 2px;">${item.quantity}x</u>` : `${item.quantity}x`}
+          </td>
+          <td style="padding: 3px 5px; vertical-align: top;">
+            <div style="font-size: 10.5px; font-weight: 900; color: #000; line-height: 1.15; letter-spacing: -0.15px; margin: 0 0 1px 0;">${cleanItemName}</div>
+            ${specsHtml}
+            ${finalRefSpecs ? `<div style="font-size: 8px; color: #555; font-weight: 600; line-height: 1.2; margin-top: 2px;">${finalRefSpecs}</div>` : ''}
+          </td>
+          <td style="padding: 3px 5px; font-size: 9px; text-align: right; color: #333; font-weight: 800; vertical-align: top; white-space: nowrap; font-variant-numeric: tabular-nums;">${itemSku}</td>
+        </tr>
+      `;
+    }).join('');
+  };
+
+  const pageBreakClass = config.isLastPageOfDoc ? '' : 'page-break';
+
+  if (pageIdx === 0) {
+    return `
+      <div class="label-container ${pageBreakClass}">
+        <div>
+          <div class="header-row">
+            <div style="display: flex; align-items: center;">
+              <img src="${EXACOAT_LOGO_BASE64}" alt="EXACOAT" style="height: 19px; max-width: 140px; object-fit: contain; display: block;" />
+            </div>
+            <div style="text-align: right; display: flex; align-items: center; gap: 6px;">
+              ${totalPages > 1 ? `<span style="font-size: 10px; font-weight: 900; border: 1.5px solid #000; padding: 1px 5px; border-radius: 2px; font-variant-numeric: tabular-nums;">1/${totalPages}</span>` : ''}
+              <span style="font-size: 13.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">
+                ${isPickup ? 'STORE PICKUP (SMB)' : cCourier.toUpperCase()}
+              </span>
+            </div>
+          </div>
+
+          <div class="recipient-box">
+            <div style="font-size: 8px; font-weight: 800; color: #555; text-transform: uppercase; letter-spacing: 0.5px;">
+              ${isPickup ? 'CUSTOMER PICKUP (WORKSHOP MANIFEST):' : 'SHIP TO / DELIVER TO:'}
+            </div>
+            <div class="recipient-name">${rName}</div>
+            <div class="recipient-phone">Tel: ${rPhone}</div>
+            ${!isPickup ? `<div class="recipient-address">${rAddrLines.join('<br />')}</div>` : ''}
+          </div>
+        </div>
+
+        <div class="inline-from-barcode-row">
+          <div class="from-subcol">
+            <div class="tag-label">FROM:</div>
+            <div class="from-brand">EXACOAT</div>
+            <div class="from-contact">
+              Tel: +62-813-800-9060<br />
+              support@exacoat.com
+            </div>
+          </div>
+
+          <div class="barcode-subcol">
+            ${!isPickup && validTrk ? `
+              <div class="barcode-track">
+                <span>TRACKING:</span> <strong>${validTrk}</strong>
+              </div>
+            ` : ''}
+            <div class="barcode-ref">ORDER REF #${cOrderNum}</div>
+            <div class="barcode-svg-wrap">
+              <svg width="100%" height="32" viewBox="0 0 ${bData.totalWidth} 36" preserveAspectRatio="none" style="display: block; width: 100%;">
+                ${bSvgRects}
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin: 2px 0; flex: 1;">
+          <div style="display: flex; justify-content: space-between; font-size: 8px; font-weight: 900; text-transform: uppercase; border-bottom: 1.5px solid #000; padding-bottom: 2px;">
+            <span>MANIFEST DECLARATION (${config.totalUnitsCount} PCS)</span>
+            <span>PREMIUM DEVICE SKINS</span>
+          </div>
+          <table class="manifest-table">
+            <tbody>
+              ${renderItemRowsHtml(pageItems)}
+            </tbody>
+          </table>
+        </div>
+
+        <div>
+          <div class="caution-bar">
+            &#9650; ${isPickup ? 'STORE PICKUP - SUMMARECON BEKASI' : config.handlingNote} &#9650;
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Page 2+: Minimal header, order ref, page number, and remaining manifest items
+  return `
+    <div class="label-container ${pageBreakClass}">
+      <div>
+        <div class="header-row" style="padding-bottom: 4px;">
+          <div style="display: flex; align-items: baseline; gap: 8px;">
+            <span style="font-size: 13px; font-weight: 900; text-transform: uppercase;">EXACOAT</span>
+            <span style="font-size: 11px; font-weight: 900; font-variant-numeric: tabular-nums;">ORDER REF #${cOrderNum}</span>
+          </div>
+          <div style="text-align: right; display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 10px; font-weight: 900; border: 1.5px solid #000; padding: 1px 5px; border-radius: 2px; font-variant-numeric: tabular-nums;">${pageIdx + 1}/${totalPages}</span>
+            <span style="font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${isPickup ? 'STORE PICKUP' : cCourier.toUpperCase()}</span>
+          </div>
+        </div>
+
+        <div style="font-size: 9.5px; font-weight: 800; padding: 4px 0; border-bottom: 1.5px solid #000; display: flex; justify-content: space-between;">
+          <span>${isPickup ? 'CUSTOMER:' : 'SHIP TO:'} <strong>${rName}</strong></span>
+          <span>Tel: ${rPhone}</span>
+        </div>
+      </div>
+
+      <div style="margin: 4px 0; flex: 1;">
+        <div style="display: flex; justify-content: space-between; font-size: 8px; font-weight: 900; text-transform: uppercase; border-bottom: 1.5px solid #000; padding-bottom: 2px;">
+          <span>MANIFEST CONTINUED (${pageItems.length} ITEMS)</span>
+          <span>PREMIUM DEVICE SKINS</span>
+        </div>
+        <table class="manifest-table">
+          <tbody>
+            ${renderItemRowsHtml(pageItems)}
+          </tbody>
+        </table>
+      </div>
+
+      <div>
+        <div class="caution-bar">
+          &#9650; ${isPickup ? 'STORE PICKUP - SUMMARECON BEKASI' : config.handlingNote} &#9650;
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function generateDocumentHtml(bodyContent: string, options?: { autoPrint?: boolean }): string {
+  const autoPrintScript = options?.autoPrint ? `
+    <script>
+      function executePrint() {
+        window.print();
+        setTimeout(function() {
+          window.close();
+        }, 600);
+      }
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function() {
+          setTimeout(executePrint, 60);
+        });
+      } else {
+        window.onload = function() {
+          setTimeout(executePrint, 60);
+        };
+      }
+    </script>
+  ` : '';
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Shipping Label</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    @page {
+      size: 4in 6in;
+      margin: 0;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #000000;
+      width: 4in;
+      text-rendering: geometricPrecision;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    .label-container {
+      width: 4in;
+      height: 6in;
+      padding: 4mm;
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    .page-break {
+      page-break-after: always;
+      break-after: page;
+    }
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid #000;
+      padding-bottom: 5px;
+    }
+    .recipient-box {
+      padding: 5px 0 4px;
+      line-height: 1.3;
+    }
+    .recipient-name {
+      font-size: 16px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: -0.2px;
+      margin-top: 1px;
+    }
+    .recipient-phone {
+      font-size: 11.5px;
+      font-weight: 800;
+      margin: 1px 0;
+    }
+    .recipient-address {
+      font-size: 11.5px;
+      font-weight: 700;
+      margin-top: 1px;
+      color: #111;
+      line-height: 1.3;
+    }
+    .inline-from-barcode-row {
+      border-top: 2px solid #000;
+      border-bottom: 2px solid #000;
+      display: flex;
+      align-items: stretch;
+      padding: 3.5px 0;
+      margin: 2px 0 3px 0;
+    }
+    .from-subcol {
+      width: 42%;
+      border-right: 2px solid #000;
+      padding-right: 6px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .barcode-subcol {
+      width: 58%;
+      padding-left: 8px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .tag-label {
+      font-size: 7.5px;
+      font-weight: 800;
+      color: #555;
+      text-transform: uppercase;
+    }
+    .from-brand {
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+      line-height: 1.1;
+    }
+    .from-contact {
+      font-size: 8px;
+      font-weight: 600;
+      color: #222;
+      margin-top: 1px;
+      line-height: 1.2;
+    }
+    .barcode-track {
+      font-size: 7.5px;
+      font-weight: 800;
+      color: #222;
+      margin-bottom: 1px;
+      font-variant-numeric: tabular-nums;
+    }
+    .barcode-ref {
+      font-size: 10px;
+      font-weight: 900;
+      color: #000;
+      letter-spacing: 0.3px;
+      line-height: 1.1;
+      margin-bottom: 1px;
+      font-variant-numeric: tabular-nums;
+    }
+    .barcode-svg-wrap {
+      width: 100%;
+    }
+    .manifest-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+      margin-top: 2px;
+    }
+    .caution-bar {
+      background: #000;
+      color: #fff;
+      padding: 3.5px 6px;
+      font-size: 8px;
+      font-weight: 900;
+      text-align: center;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      border-radius: 1px;
+      line-height: 1.2;
+    }
+  </style>
+</head>
+<body>
+  ${bodyContent}
+  ${autoPrintScript}
+</body>
+</html>`;
 }
 
 export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
@@ -112,7 +540,8 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
   onPrinted,
 }) => {
   const { showToast } = useToast();
-  const labelRef = useRef<HTMLDivElement>(null);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
+  const [previewScale, setPreviewScale] = useState(1);
 
   const activeOrdersList = (orders && orders.length > 0) ? orders : (order ? [order] : []);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -120,13 +549,29 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
 
   // Active current order
   const activeOrder = activeOrdersList[currentIndex] || activeOrdersList[0] || null;
-  const isActivePickup = isStorePickupOrder(activeOrder);
 
   // Reset indices when orders list changes
   useEffect(() => {
     setCurrentIndex(0);
     setPreviewPageIndex(0);
   }, [orders, order]);
+
+  // Handle responsive scale for preview iframe on narrow screens
+  useEffect(() => {
+    const handleResize = () => {
+      if (previewContainerRef.current) {
+        const containerWidth = previewContainerRef.current.clientWidth;
+        if (containerWidth > 0 && containerWidth < 384) {
+          setPreviewScale(containerWidth / 384);
+        } else {
+          setPreviewScale(1);
+        }
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isOpen]);
 
   // Editable label fields
   const [courierName, setCourierName] = useState<string>('JNE Express');
@@ -151,10 +596,9 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
 
   const cleanOrderNum = String(activeOrder.order_number || activeOrder.id || '').replace(/^#+/, '');
 
-  // Format recipient full address
+  // Format recipient address for chunking calculations
   const shipping = activeOrder.shipping || {};
   const recipientName = activeOrder.customer_name || `${shipping.first_name || ''} ${shipping.last_name || ''}`.trim() || 'Customer';
-  const recipientPhone = activeOrder.customer_phone || shipping.phone || '-';
   const addressLine1 = shipping.address_1 || 'Address on file';
   const addressLine2 = shipping.address_2 || shipping.address_2_extra || '';
   const city = shipping.city || '';
@@ -169,220 +613,32 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
     country,
   ].filter(Boolean);
 
-  // Barcode ALWAYS encodes the clean order reference
-  const orderBarcodeVal = cleanOrderNum;
-  const barcodeData = generateBarcodeSvgData(orderBarcodeVal, 36);
-
   // Order items resolution
   const activeOrderItems = (activeOrder.items && activeOrder.items.length > 0)
     ? activeOrder.items
     : (activeOrder.line_items && activeOrder.line_items.length > 0 ? activeOrder.line_items : []);
-  const { pages: activePages, totalPages: activeTotalPages } = chunkOrderItems(activeOrderItems);
+  const { pages: activePages, totalPages: activeTotalPages } = chunkOrderItems(
+    activeOrderItems,
+    fullAddressLines.length,
+    Boolean(trackingNo)
+  );
 
-  // Generate single label HTML for print document (handles multi-page orders automatically)
-  const renderSingleOrderHtml = (ord: Order, isLastOrder: boolean) => {
-    const isPickup = isStorePickupOrder(ord);
-    const cOrderNum = String(ord.order_number || ord.id || '').replace(/^#+/, '');
-    const shp = ord.shipping || {};
-    const rName = ord.customer_name || `${shp.first_name || ''} ${shp.last_name || ''}`.trim() || 'Customer';
-    const rPhone = ord.customer_phone || shp.phone || '-';
-    const rAddrLines = [
-      shp.address_1 || 'Address on file',
-      shp.address_2 || shp.address_2_extra || '',
-      [shp.city || '', shp.state || '', shp.postcode || ''].filter(Boolean).join(', '),
-      resolveCountryName(shp.country || ord.billing?.country || 'Indonesia'),
-    ].filter(Boolean);
+  const safePreviewPageIndex = Math.min(previewPageIndex, Math.max(0, activeTotalPages - 1));
+  const activeUnitsCount = activeOrder.item_count || activeOrderItems.reduce((acc: number, it: any) => acc + (it.quantity || 1), 0);
 
-    const ordResolved = resolveOrderCourier(ord);
-    const ordFallbackCourier = ordResolved.rawMatch || (ordResolved.serviceName ? `${ordResolved.courierName} - ${ordResolved.serviceName}` : ordResolved.courierName);
-    const cCourier = (ord.id === activeOrder.id ? courierName : (ord.tracking?.courier && ord.tracking.courier !== 'JNE Express' ? ord.tracking.courier : ordFallbackCourier)) || 'JNE Express';
-    const rawTrk = (ord.id === activeOrder.id ? trackingNo : (ord.tracking?.tracking_number || ''));
-    const validTrk = rawTrk && !rawTrk.startsWith('field_') ? rawTrk : '';
-
-    const bData = generateBarcodeSvgData(cOrderNum, 36);
-    const bSvgRects = bData.elements
-      .map(el => `<rect x="${el.x}" y="0" width="${el.width}" height="36" fill="#000" />`)
-      .join('');
-
-    const ordItems = (ord.items && ord.items.length > 0)
-      ? ord.items
-      : (ord.line_items && ord.line_items.length > 0 ? ord.line_items : []);
-    const { pages, totalPages } = chunkOrderItems(ordItems);
-    const totalUnitsCount = ord.item_count || ordItems.reduce((acc: number, it: any) => acc + (it.quantity || 1), 0);
-
-    const renderItemRowsHtml = (itemsList: any[]) => {
-      return (itemsList || []).map((item) => {
-        const itemSku = item.sku 
-          ? item.sku 
-          : (item.product_id ? `SKU${item.product_id}` : `SKU${item.id || '72572'}`);
-        const cleanItemName = cleanItemTitle(String(item.name || 'Precision Device Skin'))
-          .replace(/\r?\n+/g, ' ')
-          .replace(/\s{2,}/g, ' ')
-          .trim();
-        const { partSpecs, refSpecs } = formatSeparatedItemSpecs(item);
-
-        const isWarrantyItem =
-          cleanItemName.toLowerCase().includes('warranty') ||
-          (ord.meta_data || []).some((m: any) => (m.key === '_order_badge' && m.value === 'WARRANTY') || (m.key === '_is_warranty' && m.value === 'yes'));
-
-        let finalRefSpecs = refSpecs;
-        if (!finalRefSpecs && isWarrantyItem) {
-          const rmaChannel = (ord.meta_data || []).find((m: any) => m.key === '_rma_marketplace_channel')?.value;
-          const rmaInvoice = (ord.meta_data || []).find((m: any) => m.key === '_rma_original_invoice' || m.key === '_rma_original_order_id')?.value;
-          if (rmaInvoice) {
-            finalRefSpecs = rmaChannel
-              ? `Original Channel: ${rmaChannel} • Original Invoice: ${rmaInvoice}`
-              : `Original Order: #${rmaInvoice}`;
-          }
-        }
-
-        return `
-          <tr style="border-bottom: 1px solid #e5e7eb;">
-            <td style="padding: 3px 5px; font-weight: 900; width: 26px; text-align: center; font-size: 10.5px; vertical-align: top; font-variant-numeric: tabular-nums;">
-              ${item.quantity > 1 ? `<u style="text-decoration: underline; text-underline-offset: 2px;">${item.quantity}x</u>` : `${item.quantity}x`}
-            </td>
-            <td style="padding: 3px 5px; vertical-align: top;">
-              <div style="font-size: 10px; font-weight: 800; color: #111; line-height: 1.08; letter-spacing: -0.15px; margin: 0 0 2px 0;">${cleanItemName}</div>
-              ${partSpecs ? `<div style="font-size: 8px; color: #111; font-weight: 700; line-height: 1.15; margin-bottom: 1px;">${partSpecs}</div>` : ''}
-              ${finalRefSpecs ? `<div style="font-size: 7.5px; color: #555; font-weight: 600; line-height: 1.15;">${finalRefSpecs}</div>` : ''}
-            </td>
-            <td style="padding: 3px 5px; font-size: 9px; text-align: right; color: #333; font-weight: 800; vertical-align: top; white-space: nowrap; font-variant-numeric: tabular-nums;">${itemSku}</td>
-          </tr>
-        `;
-      }).join('');
-    };
-
-    return pages.map((pageItems, pageIdx) => {
-      const isLastSheetOfOrder = pageIdx === pages.length - 1;
-      const isAbsoluteLastSheet = isLastOrder && isLastSheetOfOrder;
-      const pageBreakClass = isAbsoluteLastSheet ? '' : 'page-break';
-
-      // Page 1: Comprehensive shipping label
-      if (pageIdx === 0) {
-        return `
-          <div class="label-container ${pageBreakClass}">
-            <!-- Header: Real Exacoat Logo on Left, Bold Courier or Store Pickup on Right -->
-            <div>
-              <div class="header-row">
-                <div style="display: flex; align-items: center;">
-                  <img src="${EXACOAT_LOGO_BASE64}" alt="EXACOAT" style="height: 19px; max-width: 140px; object-fit: contain; display: block;" />
-                </div>
-                <div style="text-align: right; display: flex; align-items: center; gap: 6px;">
-                  ${totalPages > 1 ? `<span style="font-size: 10px; font-weight: 900; border: 1.5px solid #000; padding: 1px 5px; border-radius: 2px; font-variant-numeric: tabular-nums;">1/${totalPages}</span>` : ''}
-                  <span style="font-size: 13.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">
-                    ${isPickup ? 'STORE PICKUP (SMB)' : cCourier.toUpperCase()}
-                  </span>
-                </div>
-              </div>
-
-              <!-- Recipient Section -->
-              <div class="recipient-box">
-                <div style="font-size: 8px; font-weight: 800; color: #555; text-transform: uppercase; letter-spacing: 0.5px;">
-                  ${isPickup ? 'CUSTOMER PICKUP (WORKSHOP MANIFEST):' : 'SHIP TO / DELIVER TO:'}
-                </div>
-                <div class="recipient-name">${rName}</div>
-                <div class="recipient-phone">Tel: ${rPhone}</div>
-                ${!isPickup ? `<div class="recipient-address">${rAddrLines.join('<br />')}</div>` : ''}
-              </div>
-            </div>
-
-            <!-- Inline Section: FROM on Left, ORDER REF & BARCODE on Right -->
-            <div class="inline-from-barcode-row">
-              <div class="from-subcol">
-                <div class="tag-label">FROM:</div>
-                <div class="from-brand">EXACOAT</div>
-                <div class="from-contact">
-                  Tel: +62-813-800-9060<br />
-                  support@exacoat.com
-                </div>
-              </div>
-
-              <div class="barcode-subcol">
-                ${!isPickup && validTrk ? `
-                  <div class="barcode-track">
-                    <span>TRACKING:</span> <strong>${validTrk}</strong>
-                  </div>
-                ` : ''}
-                <div class="barcode-ref">ORDER REF #${cOrderNum}</div>
-                <div class="barcode-svg-wrap">
-                  <svg width="100%" height="32" viewBox="0 0 ${bData.totalWidth} 36" preserveAspectRatio="none" style="display: block; width: 100%;">
-                    ${bSvgRects}
-                  </svg>
-                </div>
-              </div>
-            </div>
-
-            <!-- Manifest Declaration Table with Custom Skin Specs -->
-            <div style="margin: 2px 0; flex: 1;">
-              <div style="display: flex; justify-content: space-between; font-size: 8px; font-weight: 900; text-transform: uppercase; border-bottom: 1.5px solid #000; padding-bottom: 2px;">
-                <span>MANIFEST DECLARATION (${totalUnitsCount} PCS)</span>
-                <span>PREMIUM DEVICE SKINS</span>
-              </div>
-              <table class="manifest-table">
-                <tbody>
-                  ${renderItemRowsHtml(pageItems)}
-                </tbody>
-              </table>
-            </div>
-
-            <!-- Shorter Fragile or Store Pickup Caution Strip -->
-            <div>
-              <div class="caution-bar">
-                &#9650; ${isPickup ? 'STORE PICKUP - SUMMARECON BEKASI' : handlingNote} &#9650;
-              </div>
-            </div>
-          </div>
-        `;
-      }
-
-      // Page 2+: Minimal header, order ref, page number, and remaining manifest items
-      return `
-        <div class="label-container ${pageBreakClass}">
-          <!-- Minimal Header for Page 2+ -->
-          <div>
-            <div class="header-row" style="padding-bottom: 4px;">
-              <div style="display: flex; align-items: baseline; gap: 8px;">
-                <span style="font-size: 13px; font-weight: 900; text-transform: uppercase;">EXACOAT</span>
-                <span style="font-size: 11px; font-weight: 900; font-variant-numeric: tabular-nums;">ORDER REF #${cOrderNum}</span>
-              </div>
-              <div style="text-align: right; display: flex; align-items: center; gap: 6px;">
-                <span style="font-size: 10px; font-weight: 900; border: 1.5px solid #000; padding: 1px 5px; border-radius: 2px; font-variant-numeric: tabular-nums;">${pageIdx + 1}/${totalPages}</span>
-                <span style="font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${isPickup ? 'STORE PICKUP' : cCourier.toUpperCase()}</span>
-              </div>
-            </div>
-
-            <div style="font-size: 9.5px; font-weight: 800; padding: 4px 0; border-bottom: 1.5px solid #000; display: flex; justify-content: space-between;">
-              <span>${isPickup ? 'CUSTOMER:' : 'SHIP TO:'} <strong>${rName}</strong></span>
-              <span>Tel: ${rPhone}</span>
-            </div>
-          </div>
-
-          <!-- Remaining Manifest Items with Specs -->
-          <div style="margin: 4px 0; flex: 1;">
-            <div style="display: flex; justify-content: space-between; font-size: 8px; font-weight: 900; text-transform: uppercase; border-bottom: 1.5px solid #000; padding-bottom: 2px;">
-              <span>MANIFEST CONTINUED (${pageItems.length} ITEMS)</span>
-              <span>PREMIUM DEVICE SKINS</span>
-            </div>
-            <table class="manifest-table">
-              <tbody>
-                ${renderItemRowsHtml(pageItems)}
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Shorter Fragile or Store Pickup Caution Strip -->
-          <div>
-            <div class="caution-bar">
-              &#9650; ${isPickup ? 'STORE PICKUP - SUMMARECON BEKASI' : handlingNote} &#9650;
-            </div>
-          </div>
-        </div>
-      `;
-    }).join('');
-  };
+  const previewPageItems = activePages[safePreviewPageIndex] || [];
+  const previewHtml = generateDocumentHtml(
+    renderSinglePageHtml(activeOrder, previewPageItems, safePreviewPageIndex, activeTotalPages, {
+      courierName,
+      trackingNo,
+      handlingNote,
+      isLastPageOfDoc: true,
+      totalUnitsCount: activeUnitsCount,
+    }),
+    { autoPrint: false }
+  );
 
   const handlePrint = () => {
-    // Record printed order IDs in localStorage and notify listeners
     const printedIds = activeOrdersList.map(o => o.id).filter(Boolean);
     if (printedIds.length > 0) {
       try {
@@ -405,190 +661,43 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
       return;
     }
 
-    const allLabelsHtml = activeOrdersList.map((ord, idx) => {
-      const isLastOrder = idx === activeOrdersList.length - 1;
-      return renderSingleOrderHtml(ord, isLastOrder);
+    const allLabelsHtml = activeOrdersList.map((ord, ordIdx) => {
+      const isCurrentActiveOrder = ord.id === activeOrder.id;
+      const ordResolved = resolveOrderCourier(ord);
+      const ordFallbackCourier = ordResolved.rawMatch || (ordResolved.serviceName ? `${ordResolved.courierName} - ${ordResolved.serviceName}` : ordResolved.courierName);
+      const cCourier = (isCurrentActiveOrder ? courierName : (ord.tracking?.courier && ord.tracking.courier !== 'JNE Express' ? ord.tracking.courier : ordFallbackCourier)) || 'JNE Express';
+      const rawTrk = (isCurrentActiveOrder ? trackingNo : (ord.tracking?.tracking_number || ''));
+      const cTrack = rawTrk && !rawTrk.startsWith('field_') ? rawTrk : '';
+
+      const shp = ord.shipping || {};
+      const rAddrLines = [
+        shp.address_1 || 'Address on file',
+        shp.address_2 || shp.address_2_extra || '',
+        [shp.city || '', shp.state || '', shp.postcode || ''].filter(Boolean).join(', '),
+        resolveCountryName(shp.country || ord.billing?.country || 'Indonesia'),
+      ].filter(Boolean);
+
+      const ordItems = (ord.items && ord.items.length > 0)
+        ? ord.items
+        : (ord.line_items && ord.line_items.length > 0 ? ord.line_items : []);
+      const { pages, totalPages } = chunkOrderItems(ordItems, rAddrLines.length, Boolean(cTrack));
+      const totalUnitsCount = ord.item_count || ordItems.reduce((acc: number, it: any) => acc + (it.quantity || 1), 0);
+
+      return pages.map((pageItems, pageIdx) => {
+        const isLastSheetOfOrder = pageIdx === pages.length - 1;
+        const isAbsoluteLastSheet = (ordIdx === activeOrdersList.length - 1) && isLastSheetOfOrder;
+        return renderSinglePageHtml(ord, pageItems, pageIdx, totalPages, {
+          courierName: cCourier,
+          trackingNo: cTrack,
+          handlingNote: isCurrentActiveOrder ? handlingNote : 'FRAGILE • DO NOT BEND • KEEP DRY',
+          isLastPageOfDoc: isAbsoluteLastSheet,
+          totalUnitsCount,
+        });
+      }).join('');
     }).join('');
 
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Shipping Labels (${activeOrdersList.length} Order${activeOrdersList.length > 1 ? 's' : ''})</title>
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-        <style>
-          @page {
-            size: 4in 6in;
-            margin: 0;
-          }
-          * {
-            box-sizing: border-box;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-          body {
-            margin: 0;
-            padding: 0;
-            background: #ffffff;
-            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            color: #000000;
-            width: 4in;
-            text-rendering: geometricPrecision;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-          }
-          .label-container {
-            width: 4in;
-            height: 6in;
-            padding: 4mm;
-            background: #ffffff;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            overflow: hidden;
-          }
-          .page-break {
-            page-break-after: always;
-            break-after: page;
-          }
-          .header-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 2px solid #000;
-            padding-bottom: 5px;
-          }
-          .recipient-box {
-            padding: 5px 0 4px;
-            line-height: 1.3;
-          }
-          .recipient-name {
-            font-size: 16px;
-            font-weight: 900;
-            text-transform: uppercase;
-            letter-spacing: -0.2px;
-            margin-top: 1px;
-          }
-          .recipient-phone {
-            font-size: 11.5px;
-            font-weight: 800;
-            margin: 1px 0;
-          }
-          .recipient-address {
-            font-size: 11.5px;
-            font-weight: 700;
-            margin-top: 1px;
-            color: #111;
-            line-height: 1.3;
-          }
-          .inline-from-barcode-row {
-            border-top: 2px solid #000;
-            border-bottom: 2px solid #000;
-            display: flex;
-            align-items: stretch;
-            padding: 3.5px 0;
-            margin: 2px 0 3px 0;
-          }
-          .from-subcol {
-            width: 42%;
-            border-right: 2px solid #000;
-            padding-right: 6px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-          }
-          .barcode-subcol {
-            width: 58%;
-            padding-left: 8px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-          }
-          .tag-label {
-            font-size: 7.5px;
-            font-weight: 800;
-            color: #555;
-            text-transform: uppercase;
-          }
-          .from-brand {
-            font-size: 11px;
-            font-weight: 900;
-            text-transform: uppercase;
-            line-height: 1.1;
-          }
-          .from-contact {
-            font-size: 8px;
-            font-weight: 600;
-            color: #222;
-            margin-top: 1px;
-            line-height: 1.2;
-          }
-          .barcode-track {
-            font-size: 7.5px;
-            font-weight: 800;
-            color: #222;
-            margin-bottom: 1px;
-            font-variant-numeric: tabular-nums;
-          }
-          .barcode-ref {
-            font-size: 10px;
-            font-weight: 900;
-            color: #000;
-            letter-spacing: 0.3px;
-            line-height: 1.1;
-            margin-bottom: 1px;
-            font-variant-numeric: tabular-nums;
-          }
-          .barcode-svg-wrap {
-            width: 100%;
-          }
-          .manifest-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 10px;
-            margin-top: 2px;
-          }
-          .caution-bar {
-            background: #000;
-            color: #fff;
-            padding: 3.5px 6px;
-            font-size: 8px;
-            font-weight: 900;
-            text-align: center;
-            letter-spacing: 0.8px;
-            text-transform: uppercase;
-            border-radius: 1px;
-            line-height: 1.2;
-          }
-        </style>
-      </head>
-      <body>
-        ${allLabelsHtml}
-        <script>
-          function executePrint() {
-            window.print();
-            setTimeout(function() {
-              window.close();
-            }, 600);
-          }
-          if (document.fonts && document.fonts.ready) {
-            document.fonts.ready.then(function() {
-              setTimeout(executePrint, 60);
-            });
-          } else {
-            window.onload = function() {
-              setTimeout(executePrint, 60);
-            };
-          }
-        </script>
-      </body>
-      </html>
-    `;
-
-    printWindow.document.write(htmlContent);
+    const fullPrintHtml = generateDocumentHtml(allLabelsHtml, { autoPrint: true });
+    printWindow.document.write(fullPrintHtml);
     printWindow.document.close();
   };
 
@@ -625,14 +734,14 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-neutral-300 hover:text-white text-xs font-semibold border border-white/[0.08] transition-all"
+              className="px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-neutral-300 hover:text-white text-xs font-semibold border border-white/[0.08] transition-all cursor-pointer"
             >
               Close
             </button>
             <button
               type="button"
               onClick={handlePrint}
-              className="px-5 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#d9940c] text-[#0a0a0a] text-xs font-bold font-sans flex items-center gap-2 shadow-lg shadow-[#f3aa18]/10 transition-all active:scale-95"
+              className="px-5 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#d9940c] text-[#0a0a0a] text-xs font-bold font-sans flex items-center gap-2 shadow-lg shadow-[#f3aa18]/10 transition-all active:scale-95 cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               <span>
@@ -664,7 +773,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                       setCurrentIndex(i => Math.max(0, i - 1));
                       setPreviewPageIndex(0);
                     }}
-                    className="p-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] disabled:opacity-30 text-white transition-all"
+                    className="p-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] disabled:opacity-30 text-white transition-all cursor-pointer"
                     title="Previous Order"
                   >
                     <ChevronLeft className="w-3.5 h-3.5" />
@@ -676,7 +785,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                       setCurrentIndex(i => Math.min(activeOrdersList.length - 1, i + 1));
                       setPreviewPageIndex(0);
                     }}
-                    className="p-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] disabled:opacity-30 text-white transition-all"
+                    className="p-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] disabled:opacity-30 text-white transition-all cursor-pointer"
                     title="Next Order"
                   >
                     <ChevronRight className="w-3.5 h-3.5" />
@@ -694,7 +803,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
           <div className="p-4 rounded-xl bg-[#141414] border border-white/[0.06] space-y-3.5">
             <h4 className="font-bold text-white text-xs uppercase tracking-wider flex items-center gap-2">
               <Truck className="w-4 h-4 text-[#f3aa18]" />
-              Courier & Tracking Options
+              Courier &amp; Tracking Options
             </h4>
 
             <div>
@@ -705,7 +814,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                 type="text"
                 value={courierName}
                 onChange={e => setCourierName(e.target.value)}
-                placeholder="e.g. JNE Express, SiCepat, J&T"
+                placeholder="e.g. JNE Express, SiCepat, J&amp;T"
                 className="w-full px-3 py-2 rounded-lg bg-[#1a1a1a] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-[#f3aa18] transition-colors font-sans font-medium"
               />
             </div>
@@ -767,8 +876,8 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                       type="button"
                       onClick={() => setPreviewPageIndex(pIdx)}
                       className={clsx(
-                        "px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-all",
-                        previewPageIndex === pIdx
+                        "px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-all cursor-pointer",
+                        safePreviewPageIndex === pIdx
                           ? "bg-[#f3aa18] text-black"
                           : "bg-white/[0.06] hover:bg-white/[0.12] text-neutral-300"
                       )}
@@ -780,253 +889,29 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
               )}
             </div>
             <span className="text-[10px] font-mono text-neutral-500">
-              100mm &times; 150mm • Border-Free Thermal
+              100mm &times; 150mm &bull; 1:1 Thermal Output
             </span>
           </div>
 
-          {/* Clean 4x6 White Canvas Label Card (NO Outer Border, Identical Layout) */}
-          <div 
-            ref={labelRef}
-            className="w-full max-w-[340px] bg-white text-black p-3.5 rounded-md shadow-2xl flex flex-col justify-between select-none"
-            style={{ 
-              aspectRatio: '4/6', 
-              fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" 
-            }}
-          >
-            {previewPageIndex === 0 ? (
-              // PAGE 1: Complete primary shipping label
-              <>
-                <div>
-                  {/* Header: Authentic Exacoat Vector Logo + Plain Courier Name */}
-                  <div className="flex items-center justify-between border-b-2 border-black pb-1.5">
-                    <div className="flex items-center">
-                      <img src={EXACOAT_LOGO_BASE64} alt="EXACOAT" className="h-5 max-w-[135px] object-contain block" />
-                    </div>
-                    <div className="text-right flex items-center gap-1.5">
-                      {activeTotalPages > 1 && (
-                        <span className="font-sans font-black text-[9px] border border-black px-1 rounded-xs tabular-nums">
-                          1/{activeTotalPages}
-                        </span>
-                      )}
-                      <span className="font-sans font-black text-xs uppercase tracking-tight text-black">
-                        {isActivePickup ? 'STORE PICKUP (SMB)' : courierName.toUpperCase()}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Recipient Section */}
-                  <div className="py-2 leading-snug">
-                    <span className="font-extrabold text-[8px] text-neutral-500 uppercase tracking-wide block">
-                      {isActivePickup ? 'CUSTOMER PICKUP (WORKSHOP MANIFEST):' : 'SHIP TO / DELIVER TO:'}
-                    </span>
-                    <p className="font-black text-[14px] uppercase tracking-tight text-black mt-0.5">
-                      {recipientName}
-                    </p>
-                    <p className="font-extrabold text-[10.5px] text-black">Tel: {recipientPhone}</p>
-                    {!isActivePickup && (
-                      <div className="text-[10.5px] text-neutral-900 font-bold mt-0.5 leading-tight">
-                        {fullAddressLines.map((line, idx) => (
-                          <span key={idx} className="block">{line}</span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Inline FROM & Order Ref Barcode Row */}
-                <div className="my-1 border-y-2 border-black flex items-stretch py-1">
-                  {/* Left: FROM */}
-                  <div className="w-[42%] border-r-2 border-black pr-1.5 flex flex-col justify-center">
-                    <div className="flex items-center gap-1">
-                      <span className="text-[7px] font-bold text-neutral-500 uppercase">FROM:</span>
-                      <span className="font-black text-[10px] uppercase leading-tight">EXACOAT</span>
-                    </div>
-                    <span className="text-[7.5px] text-neutral-700 font-sans mt-0.5 leading-tight tabular-nums">
-                      Tel: +62-813-800-9060
-                    </span>
-                    <span className="text-[7.5px] text-neutral-600 font-sans leading-tight">
-                      support@exacoat.com
-                    </span>
-                  </div>
-
-                  {/* Right: Barcode + Order Ref */}
-                  <div className="w-[58%] pl-2 flex flex-col justify-center">
-                    {!isActivePickup && trackingNo ? (
-                      <div className="text-[7.5px] font-sans font-bold text-neutral-800 uppercase tracking-tight mb-0.5 flex items-center justify-between tabular-nums">
-                        <span>TRACKING:</span>
-                        <span className="font-black text-black">{trackingNo}</span>
-                      </div>
-                    ) : null}
-                    <div className="font-sans font-black text-[9.5px] text-black tracking-tight mb-0.5 tabular-nums">
-                      ORDER REF #{cleanOrderNum}
-                    </div>
-                    <div className="w-full">
-                      <svg width="100%" height="28" viewBox={`0 0 ${barcodeData.totalWidth} 36`} preserveAspectRatio="none" className="w-full block">
-                        {barcodeData.elements.map(el => (
-                          <rect key={el.key} x={el.x} y={0} width={el.width} height={36} fill="#000000" />
-                        ))}
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Package Contents Declaration with Skin Metadata */}
-                <div className="my-1 flex-1">
-                  <div className="flex items-center justify-between border-b border-black pb-0.5 text-[7px] font-black uppercase">
-                    <span>MANIFEST DECLARATION ({activeOrder.item_count || activeOrderItems.reduce((acc, it) => acc + (it.quantity || 1), 0)} PCS)</span>
-                    <span>PREMIUM DEVICE SKINS</span>
-                  </div>
-                  <div className="space-y-1 mt-1 text-[8px]">
-                    {activePages[0].map((item, idx) => {
-                      const itemSku = item.sku 
-                        ? item.sku 
-                        : (item.product_id ? `SKU${item.product_id}` : `SKU${item.id || '72572'}`);
-                      const cleanItemName = cleanItemTitle(String(item.name || 'Precision Device Skin'))
-                        .replace(/\r?\n+/g, ' ')
-                        .replace(/\s{2,}/g, ' ')
-                        .trim();
-                      const { partSpecs, refSpecs } = formatSeparatedItemSpecs(item);
-
-                      const isWarrantyItem =
-                        cleanItemName.toLowerCase().includes('warranty') ||
-                        (activeOrder.meta_data || []).some((m: any) => (m.key === '_order_badge' && m.value === 'WARRANTY') || (m.key === '_is_warranty' && m.value === 'yes'));
-
-                      let finalRefSpecs = refSpecs;
-                      if (!finalRefSpecs && isWarrantyItem) {
-                        const rmaChannel = (activeOrder.meta_data || []).find((m: any) => m.key === '_rma_marketplace_channel')?.value;
-                        const rmaInvoice = (activeOrder.meta_data || []).find((m: any) => m.key === '_rma_original_invoice' || m.key === '_rma_original_order_id')?.value;
-                        if (rmaInvoice) {
-                          finalRefSpecs = rmaChannel
-                            ? `Original Channel: ${rmaChannel} • Original Invoice: ${rmaInvoice}`
-                            : `Original Order: #${rmaInvoice}`;
-                        }
-                      }
-
-                      return (
-                        <div key={idx} className="border-b border-neutral-100 pb-0.5">
-                          <div className="flex items-start justify-between font-medium">
-                            <span className={clsx("font-black text-black", item.quantity > 1 && "underline decoration-2 underline-offset-2")}>
-                              {item.quantity}x
-                            </span>
-                            <span className="font-bold text-black ml-1 leading-[1.08] block text-[8px] tracking-tight">
-                              {cleanItemName}
-                            </span>
-                            <span className="text-[7.5px] text-neutral-700 font-sans font-bold shrink-0 ml-auto pl-1 tabular-nums">{itemSku}</span>
-                          </div>
-                          {partSpecs && (
-                            <p className="text-[7.5px] text-neutral-900 font-bold leading-tight mt-0.5 pl-3">
-                              {partSpecs}
-                            </p>
-                          )}
-                          {finalRefSpecs && (
-                            <p className="text-[7px] text-neutral-500 font-semibold leading-tight mt-0.5 pl-3">
-                              {finalRefSpecs}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Shorter Bottom Caution Strip */}
-                <div>
-                  <div className="bg-black text-white text-[8px] font-black text-center py-1 tracking-wider uppercase rounded-xs">
-                    ▲ {isActivePickup ? 'STORE PICKUP - SUMMARECON BEKASI' : handlingNote} ▲
-                  </div>
-                </div>
-              </>
-            ) : (
-              // PAGE 2+: Minimal header and remaining manifest items
-              <>
-                <div>
-                  <div className="flex items-center justify-between border-b-2 border-black pb-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-black text-xs uppercase">EXACOAT</span>
-                      <span className="font-sans font-black text-[10.5px] tabular-nums">REF #{cleanOrderNum}</span>
-                    </div>
-                    <div className="text-right flex items-center gap-1.5">
-                      <span className="font-sans font-black text-[9px] border border-black px-1 rounded-xs tabular-nums">
-                        {previewPageIndex + 1}/{activeTotalPages}
-                      </span>
-                      <span className="font-sans font-black text-[11px] uppercase tracking-tight text-black">
-                        {isActivePickup ? 'STORE PICKUP' : courierName.toUpperCase()}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="py-1 text-[9px] font-bold border-b border-black flex items-center justify-between">
-                    <span>{isActivePickup ? 'CUSTOMER:' : 'SHIP TO:'} <strong>{recipientName}</strong></span>
-                    <span>Tel: {recipientPhone}</span>
-                  </div>
-                </div>
-
-                <div className="my-1 flex-1">
-                  <div className="flex items-center justify-between border-b border-black pb-0.5 text-[7px] font-black uppercase">
-                    <span>MANIFEST CONTINUED ({activePages[previewPageIndex].length} ITEMS)</span>
-                    <span>PREMIUM DEVICE SKINS</span>
-                  </div>
-                  <div className="space-y-1 mt-1 text-[8px]">
-                    {activePages[previewPageIndex].map((item, idx) => {
-                      const itemSku = item.sku 
-                        ? item.sku 
-                        : (item.product_id ? `SKU${item.product_id}` : `SKU${item.id || '72572'}`);
-                      const cleanItemName = cleanItemTitle(String(item.name || 'Precision Device Skin'))
-                        .replace(/\r?\n+/g, ' ')
-                        .replace(/\s{2,}/g, ' ')
-                        .trim();
-                      const { partSpecs, refSpecs } = formatSeparatedItemSpecs(item);
-
-                      const isWarrantyItem =
-                        cleanItemName.toLowerCase().includes('warranty') ||
-                        (activeOrder.meta_data || []).some((m: any) => (m.key === '_order_badge' && m.value === 'WARRANTY') || (m.key === '_is_warranty' && m.value === 'yes'));
-
-                      let finalRefSpecs = refSpecs;
-                      if (!finalRefSpecs && isWarrantyItem) {
-                        const rmaChannel = (activeOrder.meta_data || []).find((m: any) => m.key === '_rma_marketplace_channel')?.value;
-                        const rmaInvoice = (activeOrder.meta_data || []).find((m: any) => m.key === '_rma_original_invoice' || m.key === '_rma_original_order_id')?.value;
-                        if (rmaInvoice) {
-                          finalRefSpecs = rmaChannel
-                            ? `Original Channel: ${rmaChannel} • Original Invoice: ${rmaInvoice}`
-                            : `Original Order: #${rmaInvoice}`;
-                        }
-                      }
-
-                      return (
-                        <div key={idx} className="border-b border-neutral-100 pb-0.5">
-                          <div className="flex items-start justify-between font-medium">
-                            <span className={clsx("font-black text-black", item.quantity > 1 && "underline decoration-2 underline-offset-2")}>
-                              {item.quantity}x
-                            </span>
-                            <span className="font-bold text-black ml-1 leading-[1.08] block text-[8px] tracking-tight">
-                              {cleanItemName}
-                            </span>
-                            <span className="text-[7.5px] text-neutral-700 font-sans font-bold shrink-0 ml-auto pl-1 tabular-nums">{itemSku}</span>
-                          </div>
-                          {partSpecs && (
-                            <p className="text-[7.5px] text-neutral-900 font-bold leading-tight mt-0.5 pl-3">
-                              {partSpecs}
-                            </p>
-                          )}
-                          {finalRefSpecs && (
-                            <p className="text-[7px] text-neutral-500 font-semibold leading-tight mt-0.5 pl-3">
-                              {finalRefSpecs}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="bg-black text-white text-[8px] font-black text-center py-1 tracking-wider uppercase rounded-xs">
-                    ▲ {isActivePickup ? 'STORE PICKUP - SUMMARECON BEKASI' : handlingNote} ▲
-                  </div>
-                </div>
-              </>
-            )}
-
+          <div ref={previewContainerRef} className="w-full flex justify-center items-center py-1 overflow-hidden">
+            <div
+              style={{
+                width: '384px',
+                height: '576px',
+                transform: previewScale < 1 ? `scale(${previewScale})` : undefined,
+                transformOrigin: 'top center',
+                marginBottom: previewScale < 1 ? `-${576 * (1 - previewScale)}px` : undefined,
+              }}
+              className="shadow-2xl rounded-sm overflow-hidden bg-white border border-neutral-300 dark:border-neutral-700 shrink-0"
+            >
+              <iframe
+                key={`${activeOrder.id}-${safePreviewPageIndex}-${courierName}-${trackingNo}-${handlingNote}-${activeOrderItems.length}`}
+                title="4x6 Thermal Label Print Preview"
+                srcDoc={previewHtml}
+                className="w-[384px] h-[576px] border-none block pointer-events-none select-none bg-white"
+                style={{ width: '384px', height: '576px', border: 'none' }}
+              />
+            </div>
           </div>
         </div>
 
