@@ -1053,6 +1053,9 @@ jQuery(function ($) {
         $li.removeClass('is-selected');
       }
     });
+
+    // Update checkout totals so unique payment code fee recalculates for BACS vs Midtrans
+    $('body').trigger('update_checkout');
   });
 
   // Whole-card clickable for Terms and Conditions

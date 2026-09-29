@@ -86,6 +86,7 @@ import { WarrantyReviewModal } from './WarrantyReviewModal';
 import { ManualWarrantyModal } from './ManualWarrantyModal';
 import { EditOrderAddressModal } from './EditOrderAddressModal';
 import { EditOrderItemModal } from './EditOrderItemModal';
+import { WhatsAppContactModal, WhatsAppIcon } from './WhatsAppContactModal';
 import { clsx } from 'clsx';
 
 interface OrderDetailDrawerProps {
@@ -203,6 +204,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   const [isPackingSlipModalOpen, setIsPackingSlipModalOpen] = useState(false);
   const [isWarrantyReviewModalOpen, setIsWarrantyReviewModalOpen] = useState(false);
   const [isManualWarrantyModalOpen, setIsManualWarrantyModalOpen] = useState(false);
+  const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [manualClaimType, setManualClaimType] = useState<'Warranty' | 'Redeem'>('Warranty');
   const [previewCustomItem, setPreviewCustomItem] = useState<any | null>(null);
   const [showManualCompletedModal, setShowManualCompletedModal] = useState(false);
@@ -1256,6 +1258,14 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                       title="Copy Phone"
                     >
                       {copiedField === 'phone' ? <Check className="w-3.5 h-3.5 text-[#f3aa18]" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => setIsWhatsAppModalOpen(true)}
+                      className="p-1 text-emerald-500 hover:text-emerald-400 dark:text-emerald-400 dark:hover:text-emerald-300 hover:bg-emerald-500/10 rounded transition-colors"
+                      title="Contact Customer via WhatsApp"
+                    >
+                      <WhatsAppIcon className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
@@ -3323,6 +3333,18 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
               item_count: filtered.reduce((acc, it) => acc + (it.quantity || 1), 0),
             });
           }}
+        />
+      )}
+
+      {/* WhatsApp Contact Customer Modal */}
+      {order && isWhatsAppModalOpen && (
+        <WhatsAppContactModal
+          isOpen={isWhatsAppModalOpen}
+          onClose={() => setIsWhatsAppModalOpen(false)}
+          phone={order.customer_phone}
+          customerName={order.customer_name || `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`.trim()}
+          orderNumber={order.order_number || order.id}
+          trackingNumber={order.tracking?.tracking_number}
         />
       )}
     </SlideDrawer>

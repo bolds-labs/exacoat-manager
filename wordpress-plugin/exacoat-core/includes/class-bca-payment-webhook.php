@@ -660,17 +660,26 @@ class Exacoat_BCA_Payment_Webhook {
 			return;
 		}
 
-		// Restrict to Bank Transfer / BCA or unselected gateway
-		$chosen_gateway = WC()->session->get( 'chosen_payment_method' );
+		// Strictly restrict Unique Payment Code fee to BACS (Direct Bank Transfer)
+		$chosen_gateway = '';
+		if ( ! empty( $_POST['payment_method'] ) ) {
+			$chosen_gateway = wc_clean( wp_unslash( $_POST['payment_method'] ) );
+		} elseif ( ! empty( $_POST['post_data'] ) ) {
+			parse_str( wp_unslash( $_POST['post_data'] ), $post_data );
+			if ( ! empty( $post_data['payment_method'] ) ) {
+				$chosen_gateway = wc_clean( $post_data['payment_method'] );
+			}
+		}
+
+		if ( empty( $chosen_gateway ) && WC()->session ) {
+			$chosen_gateway = (string) WC()->session->get( 'chosen_payment_method' );
+		}
+
 		$applicable_gateways = apply_filters( 'exa_bca_unique_code_gateways', [
 			'bacs',
-			'bca',
-			'bank_transfer',
-			'manual_bca',
-			'',
 		] );
 
-		if ( ! empty( $chosen_gateway ) && ! in_array( $chosen_gateway, $applicable_gateways, true ) ) {
+		if ( empty( $chosen_gateway ) || ! in_array( $chosen_gateway, $applicable_gateways, true ) ) {
 			return;
 		}
 
@@ -769,6 +778,12 @@ class Exacoat_BCA_Payment_Webhook {
 			return;
 		}
 
+		// Only apply unique payment code to BACS orders
+		if ( 'bacs' !== $order->get_payment_method() ) {
+			$order->delete_meta_data( '_bca_unique_code' );
+			return;
+		}
+
 		if ( function_exists( 'WC' ) && WC()->session ) {
 			$code = (int) ( WC()->session->get( 'bca_unique_payment_code' ) ?: WC()->session->get( 'random_fee' ) );
 			if ( $code > 0 ) {
@@ -799,6 +814,28 @@ class Exacoat_BCA_Payment_Webhook {
 		}
 
 		delete_transient( 'exa_pending_order_totals' );
+
+		// Strictly enforce unique code only for BACS (Direct Bank Transfer)
+		// If placed via Midtrans, credit card, e-wallet, etc., strip any fee item and meta immediately
+		if ( 'bacs' !== $order->get_payment_method() ) {
+			$removed = false;
+			foreach ( $order->get_items( 'fee' ) as $item_id => $fee_item ) {
+				$fee_name = (string) $fee_item->get_name();
+				if ( self::is_unique_code_fee_name( $fee_name ) ) {
+					$order->remove_item( $fee_item->get_id() );
+					$removed = true;
+				}
+			}
+			if ( $order->get_meta( '_bca_unique_code' ) ) {
+				$order->delete_meta_data( '_bca_unique_code' );
+				$removed = true;
+			}
+			if ( $removed ) {
+				$order->calculate_totals( false );
+				$order->save();
+			}
+			return;
+		}
 
 		$fee_item_target = null;
 		$current_code    = 0;

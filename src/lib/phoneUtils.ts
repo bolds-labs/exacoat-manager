@@ -18,6 +18,9 @@ export function normalizeIndonesianPhone(phone?: string | null): string {
   const digits = String(phone).replace(/\D/g, '');
   if (!digits) return '';
 
+  if (digits.startsWith('620') && digits.length >= 11) {
+    return '62' + digits.slice(3);
+  }
   if (digits.startsWith('08')) {
     return '62' + digits.slice(1);
   }
@@ -28,6 +31,14 @@ export function normalizeIndonesianPhone(phone?: string | null): string {
     return digits;
   }
   return digits;
+}
+
+/**
+ * Formats a phone number specifically for WhatsApp URL / API (e.g. 6281932303336).
+ * Strips non-digit characters and standardizes Indonesian country prefix to 628...
+ */
+export function formatWhatsAppPhone(phone?: string | null): string {
+  return normalizeIndonesianPhone(phone);
 }
 
 /**
