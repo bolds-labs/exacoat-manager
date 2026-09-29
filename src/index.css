@@ -315,6 +315,54 @@ html:not(.dark) textarea::placeholder {
   color: #71717a !important;
 }
 
+/* Universal Dropdowns, Comboboxes, and Selects in Light Mode */
+html:not(.dark) [role="combobox"],
+html:not(.dark) [aria-haspopup="listbox"],
+html:not(.dark) [aria-haspopup="menu"],
+html:not(.dark) [data-radix-select-trigger] {
+  color: #09090b !important;
+  background-color: #ffffff !important;
+  border-color: #d4d4d8 !important;
+}
+
+html:not(.dark) [role="combobox"] span,
+html:not(.dark) [role="combobox"] div,
+html:not(.dark) [aria-haspopup="listbox"] span,
+html:not(.dark) [aria-haspopup="listbox"] div,
+html:not(.dark) [data-radix-select-trigger] span,
+html:not(.dark) [data-radix-select-trigger] div,
+html:not(.dark) [data-radix-select-value],
+html:not(.dark) .custom-select-popover span:not([class*="text-emerald"]):not([class*="text-amber"]):not([class*="text-rose"]):not([class*="text-sky"]):not([class*="text-orange"]),
+html:not(.dark) .custom-select-popover div {
+  color: #09090b !important;
+}
+
+html:not(.dark) [role="option"],
+html:not(.dark) [role="menuitem"],
+html:not(.dark) [data-radix-collection-item] {
+  color: #18181b !important;
+}
+
+html:not(.dark) [role="option"] span:not([class*="text-emerald"]):not([class*="text-amber"]):not([class*="text-rose"]):not([class*="text-sky"]):not([class*="text-orange"]),
+html:not(.dark) [role="menuitem"] span:not([class*="text-emerald"]):not([class*="text-amber"]):not([class*="text-rose"]):not([class*="text-sky"]):not([class*="text-orange"]),
+html:not(.dark) [data-radix-collection-item] span:not([class*="text-emerald"]):not([class*="text-amber"]):not([class*="text-rose"]):not([class*="text-sky"]):not([class*="text-orange"]) {
+  color: #18181b !important;
+}
+
+html:not(.dark) [role="option"][data-highlighted],
+html:not(.dark) [role="menuitem"][data-highlighted],
+html:not(.dark) [role="option"]:hover,
+html:not(.dark) [role="menuitem"]:hover,
+html:not(.dark) [data-radix-collection-item]:hover {
+  color: #09090b !important;
+  background-color: #f4f4f5 !important;
+}
+
+html:not(.dark) select option {
+  background-color: #ffffff !important;
+  color: #09090b !important;
+}
+
 /* Murky -950/20 backgrounds mapped to clean, vibrant pastel alerts */
 html:not(.dark) .bg-amber-950\/20,
 html:not(.dark) .bg-amber-950\/30 {

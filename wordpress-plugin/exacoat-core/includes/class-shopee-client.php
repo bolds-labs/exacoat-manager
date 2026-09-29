@@ -675,9 +675,9 @@ class Exacoat_Shopee_Client {
 		return [
 			'order_sn'                 => $sn,
 			'order_status'             => $ord['order_status'] ?? 'UNKNOWN',
-			'create_time'              => date( 'Y-m-d H:i:s', $ord['create_time'] ?? time() ),
+			'create_time'              => function_exists( 'wp_date' ) ? wp_date( 'Y-m-d H:i:s', $ord['create_time'] ?? time() ) : date( 'Y-m-d H:i:s', $ord['create_time'] ?? time() ),
 			'create_timestamp'         => $ord['create_time'] ?? time(),
-			'pay_time'                 => ! empty( $ord['pay_time'] ) ? date( 'Y-m-d H:i:s', $ord['pay_time'] ) : null,
+			'pay_time'                 => ! empty( $ord['pay_time'] ) ? ( function_exists( 'wp_date' ) ? wp_date( 'Y-m-d H:i:s', $ord['pay_time'] ) : date( 'Y-m-d H:i:s', $ord['pay_time'] ) ) : null,
 			'ship_by_date'             => $ship_by_date,
 			'ship_by_timestamp'        => $ship_by_ts,
 			'buyer_username'           => $ord['buyer_username'] ?? 'Shopee Customer',
@@ -836,7 +836,7 @@ class Exacoat_Shopee_Client {
 				'existing_order_id'   => $ord->get_id(),
 				'existing_order_num'  => $ord->get_order_number(),
 				'claim_type'          => $is_redeem ? 'Redeem' : 'Warranty',
-				'created_at'          => $ord->get_date_created() ? $ord->get_date_created()->date( 'Y-m-d H:i' ) : '',
+				'created_at'          => $ord->get_date_created() ? ( function_exists( 'wp_date' ) ? wp_date( 'Y-m-d H:i', $ord->get_date_created()->getTimestamp() ) : date_i18n( 'Y-m-d H:i', $ord->get_date_created()->getTimestamp() ) ) : '',
 			];
 		}
 

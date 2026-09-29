@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Strip messy applied promo and free shipping suffixes from courier shipping method titles and rate labels\n- Fix clean courier names (e.g. SICEPAT - REG) across checkout, thank-you, account order details, and emails\n- Support AJAX refresh for eligible coupons and store credit after checkout sign-in`,
+      changelog: `### Version ${version}\n- Fix timezone synchronization to follow WordPress site timezone settings (GMT+7)\n- Return standard ISO 8601 timestamps with accurate timezone offsets for orders, refunds, notes, and marketplace integrations\n- Resolve 7-hour discrepancy across Exacoat Manager and client applications`,
     },
   };
 

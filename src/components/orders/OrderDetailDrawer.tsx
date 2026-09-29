@@ -1617,7 +1617,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   })()}
                 </div>
                 <Select value={courier} onValueChange={setCourier}>
-                  <SelectTrigger className="w-full h-10 px-3.5 rounded-xl bg-[#141414] border-white/[0.08] text-xs text-white">
+                  <SelectTrigger className="w-full h-10 px-3.5 rounded-xl bg-zinc-50 dark:bg-[#141414] border-zinc-200 dark:border-white/[0.08] text-xs text-zinc-900 dark:text-white">
                     <SelectValue placeholder="Select Courier" />
                   </SelectTrigger>
                   <SelectContent>

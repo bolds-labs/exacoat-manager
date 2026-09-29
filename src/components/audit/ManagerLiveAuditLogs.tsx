@@ -176,7 +176,7 @@ export const ManagerLiveAuditLogs: React.FC = () => {
           {/* Category Select */}
           <div className="w-48">
             <Select value={filterCategory} onValueChange={setFilterCategory}>
-              <SelectTrigger className="h-9 text-xs font-mono bg-black/60 border-white/10">
+              <SelectTrigger className="h-9 text-xs font-mono bg-zinc-100 dark:bg-black/60 border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-zinc-100">
                 <SelectValue placeholder="Select Category" />
               </SelectTrigger>
               <SelectContent>
@@ -193,7 +193,7 @@ export const ManagerLiveAuditLogs: React.FC = () => {
           {/* Level Select */}
           <div className="w-36">
             <Select value={filterLevel} onValueChange={setFilterLevel}>
-              <SelectTrigger className="h-9 text-xs font-mono bg-black/60 border-white/10">
+              <SelectTrigger className="h-9 text-xs font-mono bg-zinc-100 dark:bg-black/60 border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-zinc-100">
                 <SelectValue placeholder="All Levels" />
               </SelectTrigger>
               <SelectContent>

@@ -112,12 +112,42 @@ export function formatIDR(amount: number | string | null | undefined): string {
   }).format(Number(amount));
 }
 
-export function formatDate(dateString: string | null | undefined): string {
-  if (!dateString) return '-';
+export const STORE_TIMEZONE = 'Asia/Jakarta';
+
+/**
+ * Parses date inputs into a Date object representing the true moment in time.
+ * Normalizes legacy responses where local GMT+7 was emitted with a +00:00 suffix,
+ * and handles date strings lacking timezone offsets by anchoring them to store time (GMT+7).
+ */
+export function parseStoreDate(dateString: string | null | undefined): Date | null {
+  if (!dateString) return null;
+  const trimmed = String(dateString).trim();
+  if (!trimmed) return null;
+
   try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return '-';
+    let normalized = trimmed;
+
+    // Detect legacy artifact where local GMT+7 was sent with +00:00
+    if (normalized.endsWith('+00:00')) {
+      normalized = normalized.slice(0, -6) + '+07:00';
+    } else if (!normalized.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(normalized)) {
+      // Missing timezone offset: anchor to WordPress store time (GMT+7)
+      normalized = `${normalized.replace(' ', 'T')}+07:00`;
+    }
+
+    const d = new Date(normalized);
+    return isNaN(d.getTime()) ? null : d;
+  } catch {
+    return null;
+  }
+}
+
+export function formatDate(dateString: string | null | undefined): string {
+  const d = parseStoreDate(dateString);
+  if (!d) return '-';
+  try {
     return d.toLocaleDateString('en-US', {
+      timeZone: STORE_TIMEZONE,
       day: 'numeric',
       month: 'short',
       year: 'numeric',
@@ -128,11 +158,11 @@ export function formatDate(dateString: string | null | undefined): string {
 }
 
 export function formatDateTime(dateString: string | null | undefined): string {
-  if (!dateString) return '-';
+  const d = parseStoreDate(dateString);
+  if (!d) return '-';
   try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return '-';
     return d.toLocaleDateString('en-US', {
+      timeZone: STORE_TIMEZONE,
       day: 'numeric',
       month: 'short',
       year: 'numeric',
@@ -145,11 +175,10 @@ export function formatDateTime(dateString: string | null | undefined): string {
 }
 
 export function formatTimeAgo(dateString: string | null | undefined): string {
-  if (!dateString) return '-';
+  const d = parseStoreDate(dateString);
+  if (!d) return '-';
   try {
-    const date = new Date(dateString);
-    const now = new Date();
-    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    const seconds = Math.floor((Date.now() - d.getTime()) / 1000);
 
     if (seconds < 60) return 'Just now';
     const minutes = Math.floor(seconds / 60);

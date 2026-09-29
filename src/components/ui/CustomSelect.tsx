@@ -147,7 +147,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         onClick={() => !disabled && setIsOpen(!isOpen)}
         className={clsx(
           'w-full p-2.5 rounded-xl text-xs flex items-center justify-between gap-2 text-left transition-all cursor-pointer',
-          'bg-[#09090b] border border-white/[0.12] hover:border-white/25 shadow-xs',
+          'bg-zinc-50 dark:bg-[#09090b] border border-zinc-200 dark:border-white/[0.12] hover:border-zinc-300 dark:hover:border-white/25 shadow-xs',
           isOpen && 'border-[#f3aa18]/70 ring-2 ring-[#f3aa18]/15',
           disabled && 'opacity-50 cursor-not-allowed'
         )}
@@ -159,7 +159,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
             </span>
           )}
           <div className="truncate">
-            <span className={clsx('font-medium', selectedOption ? 'text-white' : 'text-zinc-500')}>
+            <span className={clsx('font-medium', selectedOption ? 'text-zinc-900 dark:text-white' : 'text-zinc-500')}>
               {selectedOption ? selectedOption.label : placeholder}
             </span>
             {selectedOption?.subtitle && (
@@ -201,14 +201,14 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
           }}
           className={clsx(
             'custom-select-popover rounded-2xl overflow-hidden shadow-2xl',
-            'bg-[#0c0c0e] border border-white/[0.14] backdrop-blur-2xl',
+            'bg-white dark:bg-[#0c0c0e] border border-zinc-200 dark:border-white/[0.14] backdrop-blur-2xl text-zinc-900 dark:text-zinc-100',
             'animate-in fade-in zoom-in-95 duration-150',
             dropdownClassName
           )}
         >
           {/* Optional Search Box */}
           {searchable && (
-            <div className="p-2 border-b border-white/[0.08] bg-black/40">
+            <div className="p-2 border-b border-zinc-200 dark:border-white/[0.08] bg-zinc-50/50 dark:bg-black/40">
               <div className="relative flex items-center">
                 <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5" />
                 <input
@@ -217,14 +217,14 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Search options..."
-                  className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-[#050506] border border-white/[0.1] text-xs text-white font-mono focus:outline-none focus:border-white/30"
+                  className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white dark:bg-[#050506] border border-zinc-200 dark:border-white/[0.1] text-xs text-zinc-900 dark:text-white font-mono focus:outline-none focus:border-zinc-400 dark:focus:border-white/30"
                 />
               </div>
             </div>
           )}
 
           {/* Options List */}
-          <div className="max-h-72 overflow-y-auto p-1.5 space-y-1 divide-y divide-white/[0.04]">
+          <div className="max-h-72 overflow-y-auto p-1.5 space-y-1 divide-y divide-zinc-100 dark:divide-white/[0.04]">
             {searchable && searchQuery.trim() && !options.some(o => o.value.toLowerCase() === searchQuery.trim().toLowerCase()) && (
               <div className="p-1 pb-1.5">
                 <button
@@ -233,10 +233,10 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                     onChange(searchQuery.trim());
                     setIsOpen(false);
                   }}
-                  className="w-full px-3 py-2 rounded-xl text-xs flex items-center justify-between text-left bg-white/[0.08] hover:bg-white/[0.14] text-white font-mono border border-white/10 transition-all cursor-pointer"
+                  className="w-full px-3 py-2 rounded-xl text-xs flex items-center justify-between text-left bg-zinc-100 hover:bg-zinc-200 dark:bg-white/[0.08] dark:hover:bg-white/[0.14] text-zinc-900 dark:text-white font-mono border border-zinc-200 dark:border-white/10 transition-all cursor-pointer"
                 >
                   <span className="truncate">Use custom: <strong>&quot;{searchQuery.trim()}&quot;</strong></span>
-                  <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-white/20 text-white">Custom</span>
+                  <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-white/20 text-zinc-800 dark:text-white">Custom</span>
                 </button>
               </div>
             )}
@@ -247,7 +247,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
             ) : hasCategories ? (
               Object.entries(groupedOptions).map(([category, items]) => (
                 <div key={category} className="pt-1.5 first:pt-0 space-y-1">
-                  <div className="px-2.5 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
+                  <div className="px-2.5 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                     {category}
                   </div>
                   {items.map(opt => {
@@ -263,8 +263,8 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                         className={clsx(
                           'w-full px-3 py-2.5 rounded-xl text-xs flex items-center justify-between text-left transition-all cursor-pointer',
                           isSelected
-                            ? 'bg-white/[0.1] text-white font-semibold border border-white/[0.12]'
-                            : 'text-zinc-300 hover:bg-white/[0.06] hover:text-white'
+                            ? 'bg-amber-500/15 text-amber-800 dark:bg-white/[0.1] dark:text-white font-semibold border border-amber-500/25 dark:border-white/[0.12]'
+                            : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/[0.06] hover:text-zinc-950 dark:hover:text-white'
                         )}
                       >
                         <div className="flex items-center gap-2.5 truncate">

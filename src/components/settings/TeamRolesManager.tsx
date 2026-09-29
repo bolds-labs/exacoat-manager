@@ -486,7 +486,7 @@ export const TeamRolesManager: React.FC<TeamRolesManagerProps> = () => {
               Role Assignment
             </label>
             <Select value={newRole} onValueChange={(val: any) => setNewRole(val)}>
-              <SelectTrigger className="w-full h-10 px-3.5 bg-zinc-900 border-white/10 rounded-xl text-xs font-semibold text-white">
+              <SelectTrigger className="w-full h-10 px-3.5 bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-white/10 rounded-xl text-xs font-semibold text-zinc-900 dark:text-white">
                 <SelectValue placeholder="Assign Role" />
               </SelectTrigger>
               <SelectContent>

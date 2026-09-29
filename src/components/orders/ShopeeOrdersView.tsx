@@ -11,7 +11,7 @@ import {
 } from '../../lib/wordpressBridge';
 import { buildGroupedCourierOptions, matchesCourierFilter } from '../../lib/courierGrouping';
 import { useToast } from '../../context/ToastContext';
-import { formatCurrency } from '../../lib/formatters';
+import { formatCurrency, formatDateTime } from '../../lib/formatters';
 import { matchesPhoneQuery, formatDisplayPhone } from '../../lib/phoneUtils';
 import { ShopeeSettingsModal } from '../settings/ShopeeSettingsModal';
 import { ArrangeShipmentModal } from './ArrangeShipmentModal';
@@ -996,7 +996,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                     <span className="text-neutral-600">•</span>
                     <div className="flex items-center gap-1.5 text-xs text-neutral-400">
                       <Clock className="w-3.5 h-3.5 text-neutral-500" />
-                      <span>{order.create_time}</span>
+                      <span>{formatDateTime(order.create_time)}</span>
                     </div>
 
                     <span className="text-neutral-600">•</span>

@@ -742,7 +742,7 @@ export const ReviewsPage: React.FC<ReviewsPageProps> = ({
                 setCurrentPage(1);
               }}
             >
-              <SelectTrigger className="w-[125px] h-8 text-xs font-mono bg-zinc-950/80 border-white/[0.08] text-zinc-200">
+              <SelectTrigger className="w-[125px] h-8 text-xs font-mono bg-zinc-100 dark:bg-zinc-950/80 border-zinc-200 dark:border-white/[0.08] text-zinc-900 dark:text-zinc-200">
                 <SelectValue placeholder="Rating" />
               </SelectTrigger>
               <SelectContent>
@@ -1397,7 +1397,7 @@ export const ReviewsPage: React.FC<ReviewsPageProps> = ({
                   value={createStatus}
                   onValueChange={(val: any) => setCreateStatus(val)}
                 >
-                  <SelectTrigger className="w-full h-9 bg-zinc-900 border-zinc-800 text-xs text-white">
+                  <SelectTrigger className="w-full h-9 bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-xs text-zinc-900 dark:text-white">
                     <SelectValue placeholder="Select initial status" />
                   </SelectTrigger>
                   <SelectContent>

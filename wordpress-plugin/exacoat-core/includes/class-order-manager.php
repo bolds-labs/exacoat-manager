@@ -2095,7 +2095,7 @@ class Exacoat_Order_Manager {
 				'id'           => $ref->get_id(),
 				'amount'       => floatval( $ref->get_amount() ),
 				'reason'       => $ref->get_reason() ?: 'Manual refund',
-				'date_created' => $ref->get_date_created() ? $ref->get_date_created()->date( 'c' ) : '',
+				'date_created' => $ref->get_date_created() ? ( function_exists( 'wp_date' ) ? wp_date( 'c', $ref->get_date_created()->getTimestamp() ) : date_i18n( 'c', $ref->get_date_created()->getTimestamp() ) ) : '',
 				'refunded_by'  => $ref->get_refunded_by(),
 			];
 		}
@@ -2191,9 +2191,9 @@ class Exacoat_Order_Manager {
 			'total_refunded'                => $total_refunded,
 			'remaining_refund_available'    => $available_refund,
 			'refunds'                       => $refunds_data,
-			'created_at'                    => $order->get_date_created() ? $order->get_date_created()->date( 'c' ) : current_time( 'c' ),
-			'date_paid'                     => $order->get_date_paid() ? $order->get_date_paid()->date( 'c' ) : null,
-			'date_completed'                => $order->get_date_completed() ? $order->get_date_completed()->date( 'c' ) : null,
+			'created_at'                    => $order->get_date_created() ? ( function_exists( 'wp_date' ) ? wp_date( 'c', $order->get_date_created()->getTimestamp() ) : date_i18n( 'c', $order->get_date_created()->getTimestamp() ) ) : ( function_exists( 'wp_date' ) ? wp_date( 'c' ) : current_time( 'c' ) ),
+			'date_paid'                     => $order->get_date_paid() ? ( function_exists( 'wp_date' ) ? wp_date( 'c', $order->get_date_paid()->getTimestamp() ) : date_i18n( 'c', $order->get_date_paid()->getTimestamp() ) ) : null,
+			'date_completed'                => $order->get_date_completed() ? ( function_exists( 'wp_date' ) ? wp_date( 'c', $order->get_date_completed()->getTimestamp() ) : date_i18n( 'c', $order->get_date_completed()->getTimestamp() ) ) : null,
 			'customer_ip'                   => $order->get_customer_ip_address() ?: '',
 			'customer_id'                   => $cust_id,
 			'customer_store_credit_balance' => $store_credit_balance,
@@ -2277,7 +2277,7 @@ class Exacoat_Order_Manager {
 				$notes_data[] = [
 					'id'            => $n->id,
 					'content'       => $n->content,
-					'date_created'  => $n->date_created ? $n->date_created->date( 'c' ) : '',
+					'date_created'  => $n->date_created ? ( is_a( $n->date_created, 'WC_DateTime' ) ? ( function_exists( 'wp_date' ) ? wp_date( 'c', $n->date_created->getTimestamp() ) : date_i18n( 'c', $n->date_created->getTimestamp() ) ) : ( function_exists( 'wp_date' ) ? wp_date( 'c', strtotime( (string) $n->date_created ) ) : (string) $n->date_created ) ) : '',
 					'customer_note' => (bool) $n->customer_note,
 					'added_by'      => $author_name,
 					'author_name'   => $author_name,

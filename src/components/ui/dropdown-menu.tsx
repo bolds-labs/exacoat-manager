@@ -1,4 +1,4 @@
-﻿import * as React from "react"
+import * as React from "react"
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu"
 import { Check, ChevronRight, Circle } from "lucide-react"
 import { cn } from "../../lib/utils"
@@ -80,7 +80,7 @@ const DropdownMenuItem = React.forwardRef<
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-pointer select-none items-center rounded-xl px-3 py-2 text-xs outline-none transition-colors focus:bg-zinc-100 dark:focus:bg-white/10 focus:text-zinc-900 dark:focus:text-white data-[disabled]:pointer-events-none data-[disabled]:opacity-50 font-sans",
+      "relative flex cursor-pointer select-none items-center rounded-xl px-3 py-2 text-xs outline-none text-zinc-800 dark:text-zinc-200 transition-colors focus:bg-zinc-100 dark:focus:bg-white/10 focus:text-zinc-950 dark:focus:text-white data-[disabled]:pointer-events-none data-[disabled]:opacity-50 font-sans",
       inset && "pl-8",
       className
     )}
