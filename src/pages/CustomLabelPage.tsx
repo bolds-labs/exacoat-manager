@@ -645,7 +645,7 @@ export const CustomLabelPage: React.FC = () => {
         <div class="tag-label">FROM:</div>
         <div class="from-brand">${escapeHtml(sender.brand || 'EXACOAT')}</div>
         <div class="from-contact">
-          Tel: ${escapeHtml(sender.phone || '+62-813-800-9060')}<br />
+          Tel: ${escapeHtml(sender.phone || '628975556000')}<br />
           ${escapeHtml(sender.email || 'support@exacoat.com')}
         </div>
       </div>
@@ -1091,7 +1091,7 @@ export const CustomLabelPage: React.FC = () => {
                   type="text"
                   value={sender.phone}
                   onChange={(e) => setSender({ ...sender, phone: e.target.value })}
-                  placeholder="+62-813-800-9060"
+                  placeholder="628975556000"
                   className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.035] border border-white/[0.09] text-white text-sm focus:border-[#f3aa18]/60 focus:ring-2 focus:ring-[#f3aa18]/15 outline-none transition-all placeholder:text-zinc-600 font-mono"
                 />
               </div>
@@ -1317,7 +1317,7 @@ export const CustomLabelPage: React.FC = () => {
                     {sender.brand || 'EXACOAT'}
                   </div>
                   <div className="text-[8px] font-semibold text-zinc-800 mt-0.5 leading-tight">
-                    Tel: {sender.phone || '+62-813-800-9060'}
+                    Tel: {sender.phone || '628975556000'}
                     <br />
                     {sender.email || 'support@exacoat.com'}
                   </div>

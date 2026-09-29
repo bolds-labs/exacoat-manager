@@ -266,7 +266,7 @@ function renderSinglePageHtml(
             <div class="tag-label">FROM:</div>
             <div class="from-brand">EXACOAT</div>
             <div class="from-contact">
-              Tel: +62-813-800-9060<br />
+              Tel: 628975556000<br />
               support@exacoat.com
             </div>
           </div>
@@ -856,7 +856,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
             <div className="text-xs text-neutral-300 font-sans leading-relaxed">
               <p className="font-bold text-white uppercase">Exacoat</p>
               <p className="font-mono text-[#f3aa18] font-bold">support@exacoat.com</p>
-              <p className="text-neutral-400 text-[11px]">+62-813-800-9060</p>
+              <p className="text-neutral-400 text-[11px]">628975556000</p>
             </div>
           </div>
         </div>

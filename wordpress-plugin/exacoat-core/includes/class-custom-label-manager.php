@@ -26,13 +26,17 @@ class Exacoat_Custom_Label_Manager {
 	public static function get_default_sender(): array {
 		$saved = get_option( self::OPTION_DEFAULT_SENDER );
 		if ( is_array( $saved ) && ! empty( $saved['brand'] ) ) {
+			if ( ( $saved['phone'] ?? '' ) === '+62-813-800-9060' ) {
+				$saved['phone'] = '628975556000';
+				update_option( self::OPTION_DEFAULT_SENDER, $saved, false );
+			}
 			return $saved;
 		}
 
 		return [
 			'brand'        => 'EXACOAT',
 			'name'         => 'Exacoat Workshop',
-			'phone'        => '+62-813-800-9060',
+			'phone'        => '628975556000',
 			'email'        => 'support@exacoat.com',
 			'address_line' => 'Summarecon Bekasi, West Java, Indonesia',
 		];
@@ -232,7 +236,7 @@ class Exacoat_Custom_Label_Manager {
 		$clean_sender = [
 			'brand'        => sanitize_text_field( $body['brand'] ?? 'EXACOAT' ),
 			'name'         => sanitize_text_field( $body['name'] ?? 'Exacoat Workshop' ),
-			'phone'        => sanitize_text_field( $body['phone'] ?? '+62-813-800-9060' ),
+			'phone'        => sanitize_text_field( $body['phone'] ?? '628975556000' ),
 			'email'        => sanitize_email( $body['email'] ?? 'support@exacoat.com' ),
 			'address_line' => sanitize_text_field( $body['address_line'] ?? '' ),
 		];

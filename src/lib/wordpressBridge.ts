@@ -9235,7 +9235,7 @@ export async function updateAdminCommission(payload: {
 export const DEFAULT_CUSTOM_LABEL_SENDER: CustomLabelSender = {
   brand: 'EXACOAT',
   name: 'Exacoat Workshop',
-  phone: '+62-813-800-9060',
+  phone: '628975556000',
   email: 'support@exacoat.com',
   address_line: 'Summarecon Bekasi, West Java, Indonesia',
 };
@@ -9270,6 +9270,16 @@ function getLocalCustomLabelSender(): CustomLabelSender {
     const raw = localStorage.getItem(LOCAL_STORAGE_CUSTOM_SENDER_KEY);
     if (!raw) return DEFAULT_CUSTOM_LABEL_SENDER;
     const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      if (parsed.phone === '+62-813-800-9060') {
+        parsed.phone = '628975556000';
+        try {
+          localStorage.setItem(LOCAL_STORAGE_CUSTOM_SENDER_KEY, JSON.stringify(parsed));
+        } catch {
+          // ignore
+        }
+      }
+    }
     return parsed?.brand ? parsed : DEFAULT_CUSTOM_LABEL_SENDER;
   } catch {
     return DEFAULT_CUSTOM_LABEL_SENDER;
