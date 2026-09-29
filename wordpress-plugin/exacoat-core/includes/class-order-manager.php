@@ -515,11 +515,15 @@ class Exacoat_Order_Manager {
 			if ( 'any' !== $status && ! empty( $status ) ) {
 				$clean_status = str_replace( 'wc-', '', $status );
 				if ( 'ready-to-ship' === $clean_status ) {
-					$args['status'] = [ 'ready-to-ship', 'awaiting-pickup', 'smb-ready' ];
+					$args['status'] = [ 'ready-to-ship', 'awaiting-pickup' ];
 				} elseif ( 'preparing-order' === $clean_status ) {
 					$args['status'] = [ 'preparing-order', 'in-production' ];
 				} elseif ( 'store-pickup' === $clean_status ) {
 					$args['status'] = [ 'smb-ready', 'smb-picked' ];
+				} elseif ( 'store-pickup-ready' === $clean_status || 'smb-ready' === $clean_status ) {
+					$args['status'] = [ 'smb-ready' ];
+				} elseif ( 'store-pickup-picked' === $clean_status || 'smb-picked' === $clean_status ) {
+					$args['status'] = [ 'smb-picked' ];
 				} elseif ( 'on-hold' === $clean_status ) {
 					$args['status'] = [ 'on-hold', 'pending' ];
 				} elseif ( 'warranty' === $clean_status ) {

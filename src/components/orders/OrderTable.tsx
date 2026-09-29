@@ -28,7 +28,15 @@ import {
   X,
   ChevronDown,
   Layers,
+  Store,
+  PackageCheck,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '../ui/dropdown-menu';
 import { clsx } from 'clsx';
 
 export function isOrderConfirmed(status: string | null | undefined): boolean {
@@ -86,6 +94,24 @@ export const OrderTable: React.FC<OrderTableProps> = ({
   const activeCourier = propCourierFilter !== undefined ? propCourierFilter : internalCourier;
   const activeSearch = propSearchQuery !== undefined ? propSearchQuery : internalSearch;
 
+  // Sub-status filter for Store Pickup (SMB): 'all' | 'ready' | 'picked'
+  const [storePickupSubFilter, setStorePickupSubFilter] = useState<'all' | 'ready' | 'picked'>('all');
+
+  useEffect(() => {
+    if (propStatusFilter === 'store-pickup-ready') {
+      setStorePickupSubFilter('ready');
+    } else if (propStatusFilter === 'store-pickup-picked') {
+      setStorePickupSubFilter('picked');
+    } else if (propStatusFilter === 'store-pickup') {
+      setStorePickupSubFilter('all');
+    }
+  }, [propStatusFilter]);
+
+  const isStorePickupActive = ['store-pickup', 'store-pickup-ready', 'store-pickup-picked'].includes(activeStatus);
+  const currentPickupSub = activeStatus === 'store-pickup-ready'
+    ? 'ready'
+    : (activeStatus === 'store-pickup-picked' ? 'picked' : storePickupSubFilter);
+
   // Sync propSearchQuery changes to internalSearch
   useEffect(() => {
     if (propSearchQuery !== undefined) {
@@ -111,6 +137,14 @@ export const OrderTable: React.FC<OrderTableProps> = ({
     } else {
       setInternalStatus(status);
     }
+  };
+
+  const handleSelectStorePickupSub = (sub: 'all' | 'ready' | 'picked') => {
+    setStorePickupSubFilter(sub);
+    const targetStatus = sub === 'ready' 
+      ? 'store-pickup-ready' 
+      : (sub === 'picked' ? 'store-pickup-picked' : 'store-pickup');
+    handleStatusChange(targetStatus);
   };
 
   const handleCourierChange = (courier: string) => {
@@ -202,6 +236,8 @@ export const OrderTable: React.FC<OrderTableProps> = ({
     let preparing = 0;
     let readyToShip = 0;
     let storePickup = 0;
+    let storePickupReady = 0;
+    let storePickupPicked = 0;
     let shipped = 0;
     let completed = 0;
     let warranty = 0;
@@ -213,6 +249,8 @@ export const OrderTable: React.FC<OrderTableProps> = ({
       if (rma?.order_type === 'Warranty') warranty++;
       if (rma?.order_type === 'Redeem') redeem++;
 
+      const isPickup = isStorePickupOrder(o);
+
       if (['on-hold', 'pending-payment', 'pending'].includes(cleanStatus)) {
         onHold++;
       } else if (cleanStatus === 'processing') {
@@ -221,13 +259,19 @@ export const OrderTable: React.FC<OrderTableProps> = ({
         preparing++;
       }
 
-      if (['ready-to-ship', 'ready_to_ship', 'awaiting-pickup', 'awaiting_pickup', 'smb-ready'].includes(cleanStatus)) {
+      // Waiting for pickup (strictly couriers, excluding store pickup)
+      if (['ready-to-ship', 'ready_to_ship', 'awaiting-pickup', 'awaiting_pickup'].includes(cleanStatus) && !isPickup) {
         readyToShip++;
       }
 
-      const isPickup = isStorePickupOrder(o);
       if (isPickup) {
         storePickup++;
+        if (['smb-ready', 'ready-to-ship', 'ready_to_ship', 'awaiting-pickup', 'awaiting_pickup'].includes(cleanStatus)) {
+          storePickupReady++;
+        }
+        if (['smb-picked', 'completed', 'delivered'].includes(cleanStatus)) {
+          storePickupPicked++;
+        }
       }
 
       if (cleanStatus === 'shipped') {
@@ -237,8 +281,36 @@ export const OrderTable: React.FC<OrderTableProps> = ({
       }
     });
 
-    return { onHold, confirmed, preparing, readyToShip, storePickup, shipped, completed, warranty, redeem };
+    return { 
+      onHold, 
+      confirmed, 
+      preparing, 
+      readyToShip, 
+      storePickup, 
+      storePickupReady, 
+      storePickupPicked, 
+      shipped, 
+      completed, 
+      warranty, 
+      redeem 
+    };
   }, [orders]);
+
+  const storePickupLabel = useMemo(() => {
+    if (isStorePickupActive) {
+      if (currentPickupSub === 'ready') return 'Store Pickup: Ready';
+      if (currentPickupSub === 'picked') return 'Store Pickup: Picked Up';
+    }
+    return 'Store Pickup (SMB)';
+  }, [isStorePickupActive, currentPickupSub]);
+
+  const storePickupCount = useMemo(() => {
+    if (isStorePickupActive) {
+      if (currentPickupSub === 'ready') return statusCounts.storePickupReady;
+      if (currentPickupSub === 'picked') return statusCounts.storePickupPicked;
+    }
+    return statusCounts.storePickup;
+  }, [isStorePickupActive, currentPickupSub, statusCounts]);
 
   const availableCouriers = useMemo(() => {
     const map = new Map<string, string>();
@@ -300,6 +372,32 @@ export const OrderTable: React.FC<OrderTableProps> = ({
     const hasSearch = Boolean(activeSearch && activeSearch.trim());
 
     return orders.filter((order) => {
+      const cleanStatus = String(order.status || '').replace('wc-', '').toLowerCase();
+
+      // Waiting for Pickup (strictly couriers: always exclude Store Pickup orders)
+      if (activeStatus === 'ready-to-ship' && isStorePickupOrder(order)) {
+        return false;
+      }
+
+      // Store Pickup views: always ensure order is a Store Pickup order
+      if (['store-pickup', 'store-pickup-ready', 'store-pickup-picked'].includes(activeStatus)) {
+        if (!isStorePickupOrder(order)) return false;
+
+        const effectiveSub = activeStatus === 'store-pickup-ready'
+          ? 'ready'
+          : (activeStatus === 'store-pickup-picked' ? 'picked' : storePickupSubFilter);
+
+        if (effectiveSub === 'ready') {
+          if (!['smb-ready', 'ready-to-ship', 'ready_to_ship', 'awaiting-pickup', 'awaiting_pickup'].includes(cleanStatus)) {
+            return false;
+          }
+        } else if (effectiveSub === 'picked') {
+          if (!['smb-picked', 'completed', 'delivered'].includes(cleanStatus)) {
+            return false;
+          }
+        }
+      }
+
       // If parent didn't handle status filtering on server, filter client-side (bypassed if searching):
       if (!hasSearch && !onStatusFilterChange && activeStatus !== 'all') {
         if (activeStatus === 'warranty') {
@@ -308,19 +406,16 @@ export const OrderTable: React.FC<OrderTableProps> = ({
         } else if (activeStatus === 'redeem') {
           const rma = getOrderRma(order);
           if (rma?.order_type !== 'Redeem') return false;
-        } else {
-          const cleanStatus = String(order.status || '').replace('wc-', '').toLowerCase();
-          if (activeStatus === 'store-pickup') {
-            if (!isStorePickupOrder(order)) return false;
-          } else if (activeStatus === 'ready-to-ship') {
-            if (!['ready-to-ship', 'ready_to_ship', 'awaiting-pickup', 'awaiting_pickup', 'smb-ready'].includes(cleanStatus)) return false;
-          } else if (activeStatus === 'preparing-order') {
-            if (!['preparing-order', 'preparing_order', 'in-production', 'in_production'].includes(cleanStatus)) return false;
-          } else if (activeStatus === 'on-hold') {
-            if (!['on-hold', 'pending-payment', 'pending'].includes(cleanStatus)) return false;
-          } else if (cleanStatus !== activeStatus) {
-            return false;
-          }
+        } else if (['store-pickup', 'store-pickup-ready', 'store-pickup-picked'].includes(activeStatus)) {
+          // Already filtered above
+        } else if (activeStatus === 'ready-to-ship') {
+          if (!['ready-to-ship', 'ready_to_ship', 'awaiting-pickup', 'awaiting_pickup'].includes(cleanStatus)) return false;
+        } else if (activeStatus === 'preparing-order') {
+          if (!['preparing-order', 'preparing_order', 'in-production', 'in_production'].includes(cleanStatus)) return false;
+        } else if (activeStatus === 'on-hold') {
+          if (!['on-hold', 'pending-payment', 'pending'].includes(cleanStatus)) return false;
+        } else if (cleanStatus !== activeStatus) {
+          return false;
         }
       }
 
@@ -359,7 +454,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
       }
       return true;
     });
-  }, [orders, activeStatus, activeCourier, printFilter, printedOrderIds, activeSearch, onStatusFilterChange, onCourierFilterChange, onSearchQueryChange]);
+  }, [orders, activeStatus, activeCourier, printFilter, printedOrderIds, activeSearch, onStatusFilterChange, onCourierFilterChange, onSearchQueryChange, storePickupSubFilter]);
 
   const [lastSelectedId, setLastSelectedId] = useState<number | null>(null);
 
@@ -554,7 +649,6 @@ export const OrderTable: React.FC<OrderTableProps> = ({
             { key: 'processing', label: 'Confirmed', count: statusCounts.confirmed },
             { key: 'preparing-order', label: 'Preparing order', count: statusCounts.preparing },
             { key: 'ready-to-ship', label: 'Waiting for Pickup', count: statusCounts.readyToShip },
-            { key: 'store-pickup', label: 'Store Pickup (SMB)', count: statusCounts.storePickup },
             { key: 'shipped', label: 'Shipped', count: statusCounts.shipped },
             { key: 'completed', label: 'Completed' },
             { key: 'warranty', label: 'Warranty Claims' },
@@ -590,6 +684,117 @@ export const OrderTable: React.FC<OrderTableProps> = ({
               )}
             </button>
           ))}
+
+          {/* Visual Separator before Store Pickup */}
+          <div className="h-5 w-px bg-zinc-200 dark:bg-white/10 mx-1 shrink-0" aria-hidden="true" />
+
+          {/* Store Pickup (SMB) Dropdown Pill */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={clsx(
+                  'px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer border flex items-center gap-1.5 shrink-0 select-none outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50',
+                  isStorePickupActive
+                    ? 'bg-amber-500 text-black border-amber-500 font-bold shadow-xs'
+                    : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-transparent'
+                )}
+                title="Store Pickup options (SMB)"
+              >
+                <Store className={clsx('w-3.5 h-3.5', isStorePickupActive ? 'text-black' : 'text-amber-500')} />
+                <span>{storePickupLabel}</span>
+                {storePickupCount > 0 && (
+                  <span
+                    className={clsx(
+                      'px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold',
+                      isStorePickupActive
+                        ? 'bg-black/20 text-black font-extrabold'
+                        : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                    )}
+                  >
+                    {storePickupCount}
+                  </span>
+                )}
+                <ChevronDown className={clsx('w-3.5 h-3.5 transition-transform duration-200', isStorePickupActive ? 'text-black/80' : 'text-zinc-400')} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 p-1.5">
+              <DropdownMenuItem
+                onClick={() => handleSelectStorePickupSub('all')}
+                className={clsx(
+                  'flex items-center justify-between px-2.5 py-2 rounded-xl text-xs cursor-pointer',
+                  isStorePickupActive && currentPickupSub === 'all'
+                    ? 'bg-zinc-100 dark:bg-white/10 font-bold text-zinc-900 dark:text-white'
+                    : 'text-zinc-700 dark:text-zinc-300'
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <Store className="w-3.5 h-3.5 text-zinc-500" />
+                  <span>All Store Pickup</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {statusCounts.storePickup > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-zinc-200 dark:bg-white/10 text-zinc-700 dark:text-zinc-300">
+                      {statusCounts.storePickup}
+                    </span>
+                  )}
+                  {isStorePickupActive && currentPickupSub === 'all' && (
+                    <Check className="w-3.5 h-3.5 text-amber-500 ml-1" />
+                  )}
+                </div>
+              </DropdownMenuItem>
+
+              <DropdownMenuItem
+                onClick={() => handleSelectStorePickupSub('ready')}
+                className={clsx(
+                  'flex items-center justify-between px-2.5 py-2 rounded-xl text-xs cursor-pointer',
+                  isStorePickupActive && currentPickupSub === 'ready'
+                    ? 'bg-zinc-100 dark:bg-white/10 font-bold text-zinc-900 dark:text-white'
+                    : 'text-zinc-700 dark:text-zinc-300'
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <Package className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Ready for Pickup</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {statusCounts.storePickupReady > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25">
+                      {statusCounts.storePickupReady}
+                    </span>
+                  )}
+                  {isStorePickupActive && currentPickupSub === 'ready' && (
+                    <Check className="w-3.5 h-3.5 text-amber-500 ml-1" />
+                  )}
+                </div>
+              </DropdownMenuItem>
+
+              <DropdownMenuItem
+                onClick={() => handleSelectStorePickupSub('picked')}
+                className={clsx(
+                  'flex items-center justify-between px-2.5 py-2 rounded-xl text-xs cursor-pointer',
+                  isStorePickupActive && currentPickupSub === 'picked'
+                    ? 'bg-zinc-100 dark:bg-white/10 font-bold text-zinc-900 dark:text-white'
+                    : 'text-zinc-700 dark:text-zinc-300'
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <PackageCheck className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Picked Up</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {statusCounts.storePickupPicked > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-zinc-200 dark:bg-white/10 text-zinc-700 dark:text-zinc-300">
+                      {statusCounts.storePickupPicked}
+                    </span>
+                  )}
+                  {isStorePickupActive && currentPickupSub === 'picked' && (
+                    <Check className="w-3.5 h-3.5 text-emerald-500 ml-1" />
+                  )}
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Row 2: Secondary Filters & Search Bar */}

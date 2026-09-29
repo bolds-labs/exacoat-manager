@@ -11,6 +11,7 @@ import { TikTokOrdersView } from './TikTokOrdersView';
 import { fetchOrdersDirect, fetchOrderDetailDirect, ShopeeOrder, TikTokOrder } from '../../lib/wordpressBridge';
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency } from '../../lib/formatters';
+import { isStorePickupOrder } from '../../lib/orderUtils';
 import { RefreshCw, FileSpreadsheet, Package, ShieldCheck, RotateCcw, Layers, HelpCircle } from 'lucide-react';
 import { GlassCard } from '../ui/GlassCard';
 import { PageHeroHeader } from '../ui/PageHeroHeader';
@@ -238,7 +239,10 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
 
   const preparingCount = orders.filter(o => ['preparing-order', 'preparing_order', 'in-production', 'in_production'].includes(String(o.status).replace('wc-', ''))).length;
   const processingCount = orders.filter(o => String(o.status).replace('wc-', '') === 'processing').length;
-  const waitingPickupCount = orders.filter(o => ['ready-to-ship', 'ready_to_ship', 'awaiting-pickup', 'awaiting_pickup', 'smb-ready'].includes(String(o.status).replace('wc-', ''))).length;
+  const waitingPickupCount = orders.filter(o => 
+    ['ready-to-ship', 'ready_to_ship', 'awaiting-pickup', 'awaiting_pickup'].includes(String(o.status).replace('wc-', '')) &&
+    !isStorePickupOrder(o)
+  ).length;
   const shippedCount = orders.filter(o => ['shipped', 'smb-picked'].includes(String(o.status).replace('wc-', ''))).length;
   const deliveredCount = orders.filter(o => ['completed', 'delivered'].includes(String(o.status).replace('wc-', ''))).length;
 

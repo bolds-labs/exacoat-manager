@@ -1,6 +1,7 @@
 import React from 'react';
 import { Order } from '../../types';
 import { formatCurrency, convertToIdr, isRevenueOrder } from '../../lib/formatters';
+import { isStorePickupOrder } from '../../lib/orderUtils';
 import { GlassCard } from '../ui/GlassCard';
 import { 
   DollarSign, 
@@ -51,8 +52,9 @@ export const SalesMetricsOverview: React.FC<SalesMetricsOverviewProps> = ({
     }
 
     const st = String(order.status || '').replace('wc-', '').toLowerCase();
+    const isPickup = isStorePickupOrder(order);
     if (st === 'processing' || st === 'in-production') processingCount++;
-    if (st === 'ready-to-ship' || st === 'awaiting-pickup' || st === 'smb-ready') readyToShipCount++;
+    if ((st === 'ready-to-ship' || st === 'awaiting-pickup') && !isPickup) readyToShipCount++;
     if (st === 'completed' || st === 'delivered' || st === 'smb-picked') deliveredCount++;
   });
 
