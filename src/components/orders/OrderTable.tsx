@@ -1319,9 +1319,13 @@ export const OrderTable: React.FC<OrderTableProps> = ({
             <span>
               Showing <span className="font-mono font-bold text-zinc-900 dark:text-white">{filteredOrders.length === 0 ? 0 : ((currentPage - 1) * pageSize) + 1}</span> to{' '}
               <span className="font-mono font-bold text-zinc-900 dark:text-white">
-                {filteredOrders.length === 0 ? 0 : Math.min(((currentPage - 1) * pageSize) + filteredOrders.length, totalOrders ?? (((currentPage - 1) * pageSize) + filteredOrders.length))}
+                {filteredOrders.length === 0
+                  ? 0
+                  : (totalOrders && totalOrders > 0
+                      ? Math.min(((currentPage - 1) * pageSize) + filteredOrders.length, totalOrders)
+                      : ((currentPage - 1) * pageSize) + filteredOrders.length)}
               </span>{' '}
-              of <span className="font-mono font-bold text-zinc-900 dark:text-white">{totalOrders ?? filteredOrders.length}</span> orders
+              of <span className="font-mono font-bold text-zinc-900 dark:text-white">{totalOrders && totalOrders > 0 ? totalOrders : ((currentPage - 1) * pageSize) + filteredOrders.length}</span> orders
             </span>
             {Boolean(activeSearch && activeSearch.trim()) && (
               <span className="ml-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[#f3aa18]/10 text-amber-600 dark:text-[#f3aa18] border border-[#f3aa18]/20">

@@ -714,8 +714,8 @@ class Exacoat_Order_Manager {
 						}
 					}
 				}
-				$total_orders = $results->total ?? count( $orders_data );
-				$max_pages    = $results->max_num_pages ?? 1;
+				$total_orders = ! empty( $results->total ) ? intval( $results->total ) : count( $orders_data );
+				$max_pages    = ! empty( $results->max_num_pages ) ? intval( $results->max_num_pages ) : max( 1, (int) ceil( $total_orders / $per_page ) );
 			} elseif ( is_array( $results ) ) {
 				foreach ( $results as $order ) {
 					if ( $order && is_a( $order, 'WC_Order' ) ) {
@@ -733,6 +733,9 @@ class Exacoat_Order_Manager {
 					}
 				}
 				$total_orders = count( $orders_data );
+				$max_pages    = max( 1, (int) ceil( $total_orders / $per_page ) );
+			} else {
+				$total_orders = 0;
 				$max_pages    = 1;
 			}
 
@@ -742,20 +745,15 @@ class Exacoat_Order_Manager {
 				$orders_data = array_values( array_filter( $orders_data, function( $od ) use ( $search_id_map ) {
 					return isset( $search_id_map[ intval( $od['id'] ) ] );
 				} ) );
-				$total_orders = count( $matched_search_ids );
-				$max_pages    = max( 1, ceil( $total_orders / $per_page ) );
-			} else {
-				$total_orders = 0;
-				$max_pages    = 1;
+				$search_pool_count = ! empty( $args['include'] ) ? count( $args['include'] ) : count( $matched_search_ids );
+				$total_orders = $search_pool_count;
+				$max_pages    = max( 1, (int) ceil( $total_orders / $per_page ) );
 			}
 
-			// If a search query was performed, ensure total_orders and max_pages accurately reflect all matched orders across the store
-			if ( ! empty( $search ) && ! empty( $matched_search_ids ) ) {
-				$search_pool_count = ! empty( $args['include'] ) ? count( $args['include'] ) : count( $matched_search_ids );
-				if ( $total_orders < $search_pool_count || ( 1 === (int) $max_pages && $search_pool_count > $per_page ) ) {
-					$total_orders = $search_pool_count;
-					$max_pages    = max( 1, (int) ceil( $total_orders / $per_page ) );
-				}
+			// Guarantee total_orders is not reported as 0 if orders are loaded
+			if ( empty( $total_orders ) && ! empty( $orders_data ) ) {
+				$total_orders = count( $orders_data );
+				$max_pages    = max( 1, (int) ceil( $total_orders / $per_page ) );
 			}
 
 			return rest_ensure_response( [

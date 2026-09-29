@@ -85,8 +85,15 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
       });
       if (res.success && Array.isArray(res.orders)) {
         setOrders(res.orders as Order[]);
-        if (typeof res.total_orders === 'number') setTotalOrders(res.total_orders);
-        if (typeof res.max_pages === 'number') setMaxPages(res.max_pages);
+        const fetchedTotal = typeof res.total_orders === 'number' && res.total_orders > 0 
+          ? res.total_orders 
+          : res.orders.length;
+        setTotalOrders(fetchedTotal);
+
+        const fetchedMax = typeof res.max_pages === 'number' && res.max_pages > 0
+          ? res.max_pages
+          : Math.max(1, Math.ceil(fetchedTotal / limit));
+        setMaxPages(fetchedMax);
       } else {
         if (!quiet) {
           showToast('warning', 'Orders Sync Warning', res.error || 'Could not fetch orders from store.');
