@@ -12,7 +12,7 @@ import { fetchOrdersDirect, fetchOrderDetailDirect, ShopeeOrder, TikTokOrder } f
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency } from '../../lib/formatters';
 import { isStorePickupOrder } from '../../lib/orderUtils';
-import { RefreshCw, FileSpreadsheet, Package, ShieldCheck, RotateCcw, Layers, HelpCircle } from 'lucide-react';
+import { RefreshCw, FileSpreadsheet, Package, ShieldCheck, RotateCcw, Layers, Tag, HelpCircle } from 'lucide-react';
 import { GlassCard } from '../ui/GlassCard';
 import { PageHeroHeader } from '../ui/PageHeroHeader';
 import { Tooltip } from '../ui/Tooltip';
@@ -261,6 +261,17 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         subtitle="Orders, production, and delivery."
         actions={
           <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                window.location.hash = 'custom_label';
+              }}
+              className="px-3.5 py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/20 text-xs font-semibold font-sans flex items-center gap-1.5 transition-all shrink-0 self-start sm:self-auto cursor-pointer shadow-xs"
+              title="Create custom 4x6 thermal shipping label"
+            >
+              <Tag className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Custom Label</span>
+            </button>
             <button
               type="button"
               onClick={() => {

@@ -23,6 +23,7 @@ const SystemHealthPage = React.lazy(() => import('./pages/SystemHealthPage').the
 const AuditLogsPage = React.lazy(() => import('./pages/AuditLogsPage').then(m => ({ default: m.AuditLogsPage })));
 const SettingsPage = React.lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const RmaClaimsPage = React.lazy(() => import('./pages/RmaClaimsPage').then(m => ({ default: m.RmaClaimsPage })));
+const CustomLabelPage = React.lazy(() => import('./pages/CustomLabelPage').then(m => ({ default: m.CustomLabelPage })));
 const ExportShipmentsPage = React.lazy(() => import('./pages/ExportShipmentsPage').then(m => ({ default: m.ExportShipmentsPage })));
 const TrackingPoolPage = React.lazy(() => import('./pages/TrackingPoolPage').then(m => ({ default: m.TrackingPoolPage })));
 const ProductsPage = React.lazy(() => import('./pages/ProductsPage').then(m => ({ default: m.ProductsPage })));
@@ -140,6 +141,13 @@ const getTabFromUrl = (): NavItemKey => {
     'warranties': 'rma',
     'claims': 'rma',
     'claim': 'rma',
+    'custom-label': 'custom_label',
+    'custom_label': 'custom_label',
+    'customlabel': 'custom_label',
+    'custom-labels': 'custom_label',
+    'custom_labels': 'custom_label',
+    'label': 'custom_label',
+    'labels': 'custom_label',
     'export': 'export',
     'exports': 'export',
     'export-shipments': 'export',
@@ -161,7 +169,7 @@ const getTabFromUrl = (): NavItemKey => {
   return urlMap[key] || 'dashboard';
 };
 
-const SHOP_MANAGER_ALLOWED_TABS: NavItemKey[] = ['orders', 'reviews', 'rma', 'warranty', 'export', 'tracking_pool'];
+const SHOP_MANAGER_ALLOWED_TABS: NavItemKey[] = ['orders', 'custom_label', 'reviews', 'rma', 'warranty', 'export', 'tracking_pool'];
 
 export const App: React.FC = () => {
   const { user, simulatedRole, isLoading: isAuthLoading } = useAuth();
@@ -341,6 +349,9 @@ export const App: React.FC = () => {
 
   const renderActiveTab = () => {
     if (isShopManager) {
+      if (currentTab === 'custom_label') {
+        return <CustomLabelPage />;
+      }
       if (currentTab === 'reviews') {
         return <ReviewsPage />;
       }
@@ -373,6 +384,8 @@ export const App: React.FC = () => {
             onNavigateToCustomer={handleNavigateToCustomer} 
           />
         );
+      case 'custom_label':
+        return <CustomLabelPage />;
       case 'customers':
         return (
           <CustomersPage
