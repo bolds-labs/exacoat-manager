@@ -573,12 +573,13 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
       setIsSyncingTracking(true);
       const res = await syncOrderTrackingDirect(order.id);
       if (res.success) {
+        const checkpointCount = res.checkpoints?.length || 0;
         showToast(
           'success',
           'Tracking Refreshed',
-          res.status === 'completed'
+          res.status_updated
             ? `Order marked as Completed (Delivered by ${res.source || 'courier'})`
-            : `Status: ${res.latest_status || 'In Transit'} (${res.checkpoints?.length || 0} checkpoints)`
+            : `Carrier Status: ${(res.latest_status || 'Pending').toUpperCase()} (${checkpointCount} checkpoint${checkpointCount === 1 ? '' : 's'})`
         );
         if (res.status && order.status !== res.status) {
           order.status = res.status as OrderStatus;
@@ -3127,7 +3128,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
           title={
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-[#f3aa18]" />
-              <span>Shipment Tracking • Order #{order.order_number}</span>
+              <span>Shipment Tracking • Order #{String(order.order_number || order.id).replace(/^#+/, '')}</span>
             </div>
           }
           subtitle="Real-time carrier checkpoints and delivery timeline"

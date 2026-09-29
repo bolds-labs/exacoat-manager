@@ -394,7 +394,7 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
       title={
         <div className="flex items-center gap-2">
           <FileText className="w-5 h-5 text-[#f3aa18]" />
-          <span>Customer Tax Invoice #{order.order_number || order.id}</span>
+          <span>Customer Tax Invoice #{cleanOrderNum}</span>
         </div>
       }
       subtitle="Official customer tax receipt and itemized order invoice."

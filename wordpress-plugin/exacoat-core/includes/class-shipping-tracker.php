@@ -551,12 +551,24 @@ class Exacoat_Shipping_Tracker {
 	 */
 	public static function get_biteship_courier_code( string $carrier ): string {
 		$carrier = strtolower( trim( $carrier ) );
-		$map = [
-			'jne'         => 'jne',
-			'jne express' => 'jne',
-			'sicepat'     => 'sicepat',
-		];
-		return $map[ $carrier ] ?? '';
+		if ( strpos( $carrier, 'jne' ) !== false ) {
+			return 'jne';
+		}
+		if ( strpos( $carrier, 'sicepat' ) !== false ) {
+			return 'sicepat';
+		}
+		return '';
+	}
+
+	public static function detect_biteship_courier( string $tracking_number ): string {
+		$clean = preg_replace( '/\D/', '', $tracking_number );
+		if ( strlen( $clean ) === 12 && str_starts_with( $clean, '00' ) ) {
+			return 'sicepat';
+		}
+		if ( ( strlen( $clean ) === 15 || strlen( $clean ) === 16 ) && preg_match( '/^(01|02|07)/', $clean ) ) {
+			return 'jne';
+		}
+		return '';
 	}
 
 	/**
@@ -870,7 +882,20 @@ class Exacoat_Shipping_Tracker {
 		$body = json_decode( wp_remote_retrieve_body( $response ), true );
 
 		if ( 200 !== $status_code || empty( $body['success'] ) ) {
-			$err_msg = $body['error'] ?? ( $body['message'] ?? "Biteship tracking returned HTTP {$status_code}" );
+			$err_msg   = (string) ( $body['error'] ?? ( $body['message'] ?? "Biteship tracking returned HTTP {$status_code}" ) );
+			$err_lower = strtolower( $err_msg );
+
+			// If Biteship reports pre-allocated / not-yet-scanned waybill (code 40003001 or invalid/expired before first scan)
+			if ( 40003001 === (int) ( $body['code'] ?? 0 ) || strpos( $err_lower, 'invalid or expired' ) !== false || strpos( $err_lower, 'failed to get tracking information' ) !== false ) {
+				return [
+					'success'     => true,
+					'source'      => 'biteship',
+					'status'      => 'pending',
+					'message'     => 'Waybill generated. Awaiting initial scan by courier.',
+					'checkpoints' => [],
+				];
+			}
+
 			return [ 'success' => false, 'message' => $err_msg, 'status_code' => $status_code, 'raw' => $body ];
 		}
 
@@ -1117,6 +1142,9 @@ class Exacoat_Shipping_Tracker {
 
 		// 1. Domestic couriers (SiCepat & JNE): Biteship is the exclusive engine
 		$biteship_courier = self::get_biteship_courier_code( $carrier );
+		if ( empty( $biteship_courier ) ) {
+			$biteship_courier = self::detect_biteship_courier( $tracking_number );
+		}
 		if ( ! empty( $biteship_courier ) ) {
 			return self::sync_biteship_tracking( $tracking_number, $biteship_courier, $order_id );
 		}
@@ -1935,7 +1963,7 @@ class Exacoat_Shipping_Tracker {
 		return new WP_REST_Response( [
 			'success' => false,
 			'message' => $result['message'] ?? 'Failed syncing tracking',
-		], 400 );
+		], 200 );
 	}
 
 	/**

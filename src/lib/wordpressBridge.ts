@@ -3012,6 +3012,7 @@ export async function syncOrderTrackingDirect(orderId: number | string): Promise
   success: boolean;
   order_id?: number;
   status?: string;
+  status_updated?: boolean;
   status_label?: string;
   latest_status?: string;
   checkpoints?: any[];

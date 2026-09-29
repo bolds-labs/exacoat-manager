@@ -852,7 +852,7 @@ class Exacoat_Review_Manager {
 
 		$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE order_id = %d LIMIT 1", $order_id ), ARRAY_A );
 		if ( ! $row ) {
-			return new WP_REST_Response( [ 'success' => false, 'message' => 'No review found for this order' ], 404 );
+			return new WP_REST_Response( [ 'success' => true, 'review' => null, 'message' => 'No review found for this order' ], 200 );
 		}
 
 		$row['rating'] = (int) $row['rating'];
