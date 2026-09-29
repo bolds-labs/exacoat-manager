@@ -880,6 +880,12 @@ class Exacoat_Core {
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 
+		$register( '/debug/coupon-post-type', [
+			'methods'             => 'GET',
+			'callback'            => [ $this, 'rest_debug_coupon_post_type' ],
+			'permission_callback' => '__return_true',
+		] );
+
 		$register( '/redirects', [
 			'methods'             => 'GET',
 			'callback'            => [ $this, 'rest_get_redirects' ],
@@ -2109,6 +2115,72 @@ class Exacoat_Core {
 			'message'   => 'Pong from Exacoat Core WordPress master plugin',
 			'received'  => $params,
 			'timestamp' => current_time( 'mysql' ),
+		] );
+	}
+
+	public function rest_debug_coupon_post_type( WP_REST_Request $request ) {
+		$pto = get_post_type_object( 'shop_coupon' );
+		$show_ui_types = get_post_types( [ 'show_ui' => true ] );
+		$is_in_show_ui = in_array( 'shop_coupon', $show_ui_types, true );
+
+		$roles = function_exists( 'wp_roles' ) ? wp_roles()->roles : [];
+		$admin_caps = $roles['administrator']['capabilities'] ?? [];
+
+		$admins = get_users( [ 'role' => 'administrator', 'number' => 10 ] );
+		$user_checks = [];
+		foreach ( $admins as $user ) {
+			$user_checks[ $user->user_login ] = [
+				'id' => $user->ID,
+				'can_manage_woocommerce' => user_can( $user, 'manage_woocommerce' ),
+				'can_edit_shop_coupons' => user_can( $user, 'edit_shop_coupons' ),
+				'can_publish_shop_coupons' => user_can( $user, 'publish_shop_coupons' ),
+				'can_pto_edit_posts' => $pto ? user_can( $user, $pto->cap->edit_posts ) : false,
+				'can_pto_create_posts' => $pto ? user_can( $user, $pto->cap->create_posts ) : false,
+			];
+		}
+
+		$htaccess_file = ABSPATH . '.htaccess';
+		$htaccess_snippet = file_exists( $htaccess_file ) ? substr( file_get_contents( $htaccess_file ), 0, 1500 ) : 'not_found';
+
+		global $wp_filter;
+		$filter_checks = [];
+		$hooks_to_check = [
+			'woocommerce_register_post_type_shop_coupon',
+			'register_post_type_args',
+			'map_meta_cap',
+			'user_has_cap',
+			'load-post-new.php',
+		];
+		foreach ( $hooks_to_check as $hook ) {
+			if ( isset( $wp_filter[ $hook ] ) ) {
+				$callbacks = [];
+				foreach ( $wp_filter[ $hook ]->callbacks as $priority => $arr ) {
+					foreach ( array_keys( $arr ) as $cb_name ) {
+						$callbacks[] = "p{$priority}: {$cb_name}";
+					}
+				}
+				$filter_checks[ $hook ] = $callbacks;
+			}
+		}
+
+		return rest_ensure_response( [
+			'post_type_exists' => post_type_exists( 'shop_coupon' ),
+			'is_in_show_ui' => $is_in_show_ui,
+			'show_ui_types' => array_values( $show_ui_types ),
+			'pto' => $pto ? [
+				'name' => $pto->name,
+				'show_ui' => $pto->show_ui,
+				'show_in_menu' => $pto->show_in_menu,
+				'cap' => (array) $pto->cap,
+				'capabilities' => (array) $pto->capabilities,
+				'map_meta_cap' => $pto->map_meta_cap,
+			] : null,
+			'woocommerce_enable_coupons' => get_option( 'woocommerce_enable_coupons' ),
+			'wc_coupons_enabled' => function_exists( 'wc_coupons_enabled' ) ? wc_coupons_enabled() : 'function_missing',
+			'user_checks' => $user_checks,
+			'filter_checks' => $filter_checks,
+			'htaccess_snippet' => $htaccess_snippet,
+			'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
 		] );
 	}
 

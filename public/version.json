@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.136",
+  "version": "0.1.137",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.136.zip?v=0.1.136",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.137.zip?v=0.1.137",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-29T04:35:45.954Z",
+  "last_updated": "2026-09-29T04:41:52.480Z",
   "sections": {
-    "changelog": "### Version 0.1.136\n- Strip messy applied promo and free shipping suffixes from courier shipping method titles and rate labels\n- Fix clean courier names (e.g. SICEPAT - REG) across checkout, thank-you, account order details, and emails\n- Support AJAX refresh for eligible coupons and store credit after checkout sign-in"
+    "changelog": "### Version 0.1.137\n- Strip messy applied promo and free shipping suffixes from courier shipping method titles and rate labels\n- Fix clean courier names (e.g. SICEPAT - REG) across checkout, thank-you, account order details, and emails\n- Support AJAX refresh for eligible coupons and store credit after checkout sign-in"
   }
 }
