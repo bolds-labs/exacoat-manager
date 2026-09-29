@@ -8,7 +8,39 @@ import { Terminal, Activity } from 'lucide-react';
 interface AuditLogsPageProps {}
 
 export const AuditLogsPage: React.FC<AuditLogsPageProps> = () => {
-  const [activeTab, setActiveTab] = useState<'manager_ai' | 'wordpress'>('manager_ai');
+  const [activeTab, setActiveTab] = useState<'manager_ai' | 'wordpress'>(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash || '';
+      const search = window.location.search || '';
+      if (hash.includes('tab=wordpress') || hash.includes('view=wordpress') || search.includes('tab=wordpress')) {
+        return 'wordpress';
+      }
+    }
+    return 'manager_ai';
+  });
+
+  // Listen to hash / route changes to switch tabs dynamically
+  React.useEffect(() => {
+    const handleUrlChange = () => {
+      const hash = window.location.hash || '';
+      const search = window.location.search || '';
+      if (hash.includes('tab=wordpress') || hash.includes('view=wordpress') || search.includes('tab=wordpress')) {
+        setActiveTab('wordpress');
+      } else if (hash.includes('tab=manager_ai') || search.includes('tab=manager_ai')) {
+        setActiveTab('manager_ai');
+      }
+    };
+    window.addEventListener('hashchange', handleUrlChange);
+    return () => window.removeEventListener('hashchange', handleUrlChange);
+  }, []);
+
+  const handleTabChange = (tabId: string) => {
+    const nextTab = tabId as 'manager_ai' | 'wordpress';
+    setActiveTab(nextTab);
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', `#audit?tab=${nextTab}`);
+    }
+  };
 
   return (
     <div className="space-y-6 font-sans">
@@ -36,7 +68,7 @@ export const AuditLogsPage: React.FC<AuditLogsPageProps> = () => {
               { id: 'wordpress', label: 'WordPress Logs', icon: Terminal },
             ]}
             activeTab={activeTab}
-            onChange={(tabId) => setActiveTab(tabId as any)}
+            onChange={handleTabChange}
           />
         </div>
       </GlassCard>

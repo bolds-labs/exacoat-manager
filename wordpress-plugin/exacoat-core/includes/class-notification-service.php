@@ -478,6 +478,7 @@ class Exacoat_Notification_Service {
 		set_transient( $dedup_key, 1, 60 );
 
 		$manager_base = defined( 'EXACOAT_MANAGER_URL' ) ? EXACOAT_MANAGER_URL : ( getenv( 'EXACOAT_MANAGER_URL' ) ?: 'https://manager.exacoat.com' );
+		$logs_url     = rtrim( $manager_base, '/' ) . '/#audit?tab=wordpress';
 		$health_url   = rtrim( $manager_base, '/' ) . '/#health';
 
 		// Pushover
@@ -488,8 +489,8 @@ class Exacoat_Notification_Service {
 					"<code>" . esc_html( wp_trim_words( $details, 40 ) ) . "</code>";
 				Exacoat_Pushover_Service::send( 'Exacoat Core Error', $msg, [
 					'priority'  => 1,
-					'url'       => $health_url,
-					'url_title' => 'Inspect System Health',
+					'url'       => $logs_url,
+					'url_title' => 'Inspect Error Logs',
 				] );
 			}
 		}
@@ -501,13 +502,17 @@ class Exacoat_Notification_Service {
 				$text = "🚨 <b>System Error Alert</b>\n\n" .
 					"<b>" . esc_html( $title ) . "</b>\n" .
 					"<code>" . esc_html( wp_trim_words( $details, 50 ) ) . "</code>\n\n" .
-					"<a href=\"" . esc_url( $health_url ) . "\">Inspect in Store Health</a>";
+					"<a href=\"" . esc_url( $logs_url ) . "\">Inspect in Audit Logs</a>";
 				$options = [
 					'disable_preview' => true,
 					'buttons'         => [
 						[
 							[
-								'text' => 'Inspect Store Health',
+								'text' => 'Inspect Error Logs',
+								'url'  => $logs_url,
+							],
+							[
+								'text' => 'Store Health',
 								'url'  => $health_url,
 							],
 						],

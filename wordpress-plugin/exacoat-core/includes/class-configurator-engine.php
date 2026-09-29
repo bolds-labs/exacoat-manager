@@ -2834,6 +2834,59 @@ class Exacoat_Configurator_Engine {
 	}
 
 	/**
+	 * Resolve a product ID by slug with multi-layer fallback (get_page_by_path, get_posts, direct wpdb, SKU)
+	 */
+	public static function get_product_id_by_slug( string $slug ): int {
+		$clean_slug = sanitize_title( $slug );
+		if ( empty( $clean_slug ) ) {
+			return 0;
+		}
+
+		// 1. Fast lookup via get_page_by_path
+		$post = get_page_by_path( $clean_slug, OBJECT, 'product' );
+		if ( $post && $post instanceof WP_Post ) {
+			return (int) $post->ID;
+		}
+
+		// 2. Query posts by slug across standard post statuses
+		$matched = get_posts( [
+			'name'                   => $clean_slug,
+			'post_type'              => 'product',
+			'post_status'            => [ 'publish', 'draft', 'pending', 'private' ],
+			'posts_per_page'         => 1,
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+		] );
+
+		if ( ! empty( $matched ) ) {
+			return (int) $matched[0];
+		}
+
+		// 3. Direct DB lookup fallback (handles edge cases, custom post statuses or filter overrides)
+		global $wpdb;
+		$id = $wpdb->get_var( $wpdb->prepare(
+			"SELECT ID FROM {$wpdb->posts} WHERE post_name = %s AND post_type = 'product' LIMIT 1",
+			$clean_slug
+		) );
+
+		if ( $id ) {
+			return (int) $id;
+		}
+
+		// 4. Fallback: check if slug was actually a SKU
+		if ( function_exists( 'wc_get_product_id_by_sku' ) ) {
+			$by_sku = wc_get_product_id_by_sku( $clean_slug );
+			if ( $by_sku ) {
+				return (int) $by_sku;
+			}
+		}
+
+		return 0;
+	}
+
+	/**
 	 * REST Endpoint to get fully processed configurator data for a product
 	 */
 	public static function rest_get_product_configurator( WP_REST_Request $request ): WP_REST_Response {
@@ -2842,7 +2895,7 @@ class Exacoat_Configurator_Engine {
 		if ( is_numeric( $id_or_slug ) ) {
 			$product_id = (int) $id_or_slug;
 		} else {
-			$product_id = wc_get_product_id_by_slug( $id_or_slug );
+			$product_id = self::get_product_id_by_slug( $id_or_slug );
 		}
 
 		if ( ! $product_id ) {
@@ -3209,11 +3262,7 @@ class Exacoat_Configurator_Engine {
 		$product_id = (int) ( $params['product_id'] ?? $params['id'] ?? $request->get_param( 'product_id' ) ?? 0 );
 
 		if ( ! $product_id && ! empty( $params['device_slug'] ) ) {
-			$slug = sanitize_title( (string) $params['device_slug'] );
-			$post = get_page_by_path( $slug, OBJECT, 'product' );
-			if ( $post ) {
-				$product_id = (int) $post->ID;
-			}
+			$product_id = self::get_product_id_by_slug( (string) $params['device_slug'] );
 		}
 
 		if ( ! $product_id || ! get_post( $product_id ) ) {
@@ -4372,5 +4421,14 @@ class Exacoat_Configurator_Engine {
 	}
 }
 
+}
+
+if ( ! function_exists( 'wc_get_product_id_by_slug' ) ) {
+	/**
+	 * Polyfill for wc_get_product_id_by_slug to prevent uncaught function errors
+	 */
+	function wc_get_product_id_by_slug( $slug ): int {
+		return Exacoat_Configurator_Engine::get_product_id_by_slug( (string) $slug );
+	}
 }
 

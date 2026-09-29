@@ -49,6 +49,28 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
     resolveCountryName(shipping.country || billing.country || 'Indonesia'),
   ].filter(Boolean);
 
+  const metaList = Array.isArray(order.meta_data) ? order.meta_data : [];
+  const findMeta = (k: string) => metaList.find(m => m.key === k)?.value;
+
+  const rawShippingPriceStr = findMeta('_shipping_raw_price') || findMeta('_shipping_biteship_original_rate') || findMeta('_shipping_biteship_courier_rate');
+  const shippingDiscountStr = findMeta('_shipping_discount_amount') || findMeta('_shipping_biteship_discount');
+  const shippingDiscount = shippingDiscountStr ? Math.abs(parseFloat(String(shippingDiscountStr))) : 0;
+  const shippingPromoCode = String(findMeta('_shipping_promo_code') || findMeta('_shipping_biteship_applied_coupon') || '').trim();
+
+  const originalShipping = rawShippingPriceStr
+    ? parseFloat(String(rawShippingPriceStr))
+    : (shippingDiscount > 0 ? parseFloat(String(order.shipping_total || 0)) + shippingDiscount : parseFloat(String(order.shipping_total || 0)));
+
+  const uniqueCodeFee = (order.fees || []).find(f => {
+    const n = String(f.name || '').toLowerCase();
+    return n.includes('unique') || n.includes('kode unik');
+  })?.total || findMeta('_bca_unique_code');
+  const uniqueCodeNum = uniqueCodeFee ? Number(uniqueCodeFee) : 0;
+
+  const calculatedSubtotal = order.subtotal !== undefined && Number(order.subtotal) > 0
+    ? Number(order.subtotal)
+    : Number(order.total) - Number(order.shipping_total || 0) - Number(order.total_tax || 0) - uniqueCodeNum;
+
   const handlePrint = () => {
     if (onPrinted && order.id) {
       onPrinted(order.id);
@@ -290,15 +312,38 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
                 <tr>
                   <td style="color: #6b7280; font-weight: 600;">Items Subtotal</td>
                   <td style="text-align: right; font-weight: 700; font-family: monospace;">
-                    ${formatCurrency(Number(order.total) - Number(order.shipping_total || 0) - Number(order.total_tax || 0), order.currency)}
+                    ${formatCurrency(calculatedSubtotal, order.currency)}
                   </td>
                 </tr>
-                <tr>
-                  <td style="color: #6b7280; font-weight: 600;">Shipping & Handling</td>
-                  <td style="text-align: right; font-weight: 700; font-family: monospace;">
-                    ${Number(order.shipping_total) > 0 ? formatCurrency(order.shipping_total, order.currency) : 'Free Shipping'}
-                  </td>
-                </tr>
+                ${shippingDiscount > 0 ? `
+                  <tr>
+                    <td style="color: #6b7280; font-weight: 600;">Shipping</td>
+                    <td style="text-align: right; font-weight: 700; font-family: monospace;">
+                      ${formatCurrency(originalShipping, order.currency)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="color: #059669; font-weight: 600;">Shipping Discount ${shippingPromoCode ? `(${shippingPromoCode.toUpperCase()})` : ''}</td>
+                    <td style="text-align: right; font-weight: 700; font-family: monospace; color: #059669;">
+                      -${formatCurrency(shippingDiscount, order.currency)}
+                    </td>
+                  </tr>
+                ` : `
+                  <tr>
+                    <td style="color: #6b7280; font-weight: 600;">Shipping & Handling</td>
+                    <td style="text-align: right; font-weight: 700; font-family: monospace;">
+                      ${Number(order.shipping_total) > 0 ? formatCurrency(order.shipping_total, order.currency) : 'Free Shipping'}
+                    </td>
+                  </tr>
+                `}
+                ${uniqueCodeNum > 0 ? `
+                  <tr>
+                    <td style="color: #6b7280; font-weight: 600;">Unique Payment Code</td>
+                    <td style="text-align: right; font-weight: 700; font-family: monospace;">
+                      +${formatCurrency(uniqueCodeNum, order.currency)}
+                    </td>
+                  </tr>
+                ` : ''}
                 ${Number(order.total_tax) > 0 ? `
                   <tr>
                     <td style="color: #6b7280; font-weight: 600;">Estimated Tax</td>
@@ -469,15 +514,40 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
               <div className="flex justify-between text-neutral-600 font-medium">
                 <span>Subtotal:</span>
                 <span className="font-mono text-neutral-900 font-bold">
-                  {formatCurrency(Number(order.total) - Number(order.shipping_total || 0) - Number(order.total_tax || 0), order.currency)}
+                  {formatCurrency(calculatedSubtotal, order.currency)}
                 </span>
               </div>
-              <div className="flex justify-between text-neutral-600 font-medium">
-                <span>Shipping:</span>
-                <span className="font-mono text-neutral-900 font-bold">
-                  {Number(order.shipping_total) > 0 ? formatCurrency(order.shipping_total, order.currency) : 'Free'}
-                </span>
-              </div>
+              {shippingDiscount > 0 ? (
+                <>
+                  <div className="flex justify-between text-neutral-600 font-medium">
+                    <span>Shipping:</span>
+                    <span className="font-mono text-neutral-900 font-bold">
+                      {formatCurrency(originalShipping, order.currency)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-emerald-600 font-medium">
+                    <span>Shipping Discount {shippingPromoCode ? `(${shippingPromoCode.toUpperCase()})` : ''}:</span>
+                    <span className="font-mono font-bold">
+                      -{formatCurrency(shippingDiscount, order.currency)}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-between text-neutral-600 font-medium">
+                  <span>Shipping:</span>
+                  <span className="font-mono text-neutral-900 font-bold">
+                    {Number(order.shipping_total) > 0 ? formatCurrency(order.shipping_total, order.currency) : 'Free'}
+                  </span>
+                </div>
+              )}
+              {uniqueCodeNum > 0 && (
+                <div className="flex justify-between text-neutral-600 font-medium">
+                  <span>Unique Payment Code:</span>
+                  <span className="font-mono text-neutral-900 font-bold">
+                    +{formatCurrency(uniqueCodeNum, order.currency)}
+                  </span>
+                </div>
+              )}
               {Number(order.total_tax) > 0 && (
                 <div className="flex justify-between text-neutral-600 font-medium">
                   <span>Tax:</span>

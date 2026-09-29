@@ -52,46 +52,56 @@ class Exacoat_Logger {
 	private static $table_verified = false;
 
 	/**
-	 * Create or Update wp_artmatter_logs Table Schema
+	 * Create or Update wp_exacoat_logs Table Schema
 	 */
 	public static function ensure_table_exists() {
 		if ( self::$table_verified ) {
 			return;
 		}
 
-		if ( get_option( '_artmatter_logs_table_v1' ) ) {
+		global $wpdb;
+		$table  = $wpdb->prefix . self::$table_name;
+		$legacy = $wpdb->prefix . 'artmatter_logs';
+
+		// 1. If modern exacoat_logs table exists, mark verified and return
+		if ( $wpdb->get_var( $wpdb->prepare( "SHOW TABLES LIKE %s", $table ) ) === $table ) {
 			self::$table_verified = true;
 			return;
 		}
 
-		global $wpdb;
-		$table = self::get_table_name();
-
-		if ( $wpdb->get_var( $wpdb->prepare( "SHOW TABLES LIKE %s", $table ) ) !== $table ) {
-			if ( file_exists( ABSPATH . 'wp-admin/includes/upgrade.php' ) ) {
-				require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-			}
-			$charset_collate = $wpdb->get_charset_collate();
-
-			$sql = "CREATE TABLE {$table} (
-				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-				created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-				level varchar(20) NOT NULL DEFAULT 'info',
-				channel varchar(50) NOT NULL DEFAULT 'general',
-				message text NOT NULL,
-				context longtext DEFAULT NULL,
-				PRIMARY KEY (id),
-				KEY created_at (created_at),
-				KEY level (level),
-				KEY channel (channel)
-			) {$charset_collate};";
-
-			if ( function_exists( 'dbDelta' ) ) {
-				dbDelta( $sql );
+		// 2. If legacy artmatter_logs exists, rename it to exacoat_logs
+		if ( $wpdb->get_var( $wpdb->prepare( "SHOW TABLES LIKE %s", $legacy ) ) === $legacy ) {
+			$wpdb->query( "ALTER TABLE {$legacy} RENAME TO {$table}" );
+			if ( $wpdb->get_var( $wpdb->prepare( "SHOW TABLES LIKE %s", $table ) ) === $table ) {
+				self::$table_verified = true;
+				return;
 			}
 		}
 
-		update_option( '_artmatter_logs_table_v1', '1', true );
+		// 3. Create exacoat_logs table schema
+		if ( file_exists( ABSPATH . 'wp-admin/includes/upgrade.php' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		}
+		$charset_collate = $wpdb->get_charset_collate();
+
+		$sql = "CREATE TABLE {$table} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			level varchar(20) NOT NULL DEFAULT 'info',
+			channel varchar(50) NOT NULL DEFAULT 'general',
+			message text NOT NULL,
+			context longtext DEFAULT NULL,
+			PRIMARY KEY (id),
+			KEY created_at (created_at),
+			KEY level (level),
+			KEY channel (channel)
+		) {$charset_collate};";
+
+		if ( function_exists( 'dbDelta' ) ) {
+			dbDelta( $sql );
+		}
+
+		update_option( '_exacoat_logs_table_v2', '1', true );
 		self::$table_verified = true;
 	}
 
@@ -99,6 +109,7 @@ class Exacoat_Logger {
 	 * Log an event with level, channel, message, and optional context
 	 */
 	public static function log( string $level, string $channel, string $message, $context = [] ) {
+		self::ensure_table_exists();
 		global $wpdb;
 		$table = self::get_table_name();
 

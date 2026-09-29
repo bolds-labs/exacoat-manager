@@ -714,6 +714,18 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
     const parentWarrantyClaimInvoice = (order.meta_data || []).find(m => m.key === '_warranty_claim_invoice')?.value;
     const parentRedeemClaimId = (order.meta_data || []).find(m => m.key === '_redeem_replacement_order_id')?.value;
 
+    const orderMetaList = Array.isArray(order.meta_data) ? order.meta_data : [];
+    const findOrderMeta = (k: string) => orderMetaList.find(m => m.key === k)?.value;
+
+    const rawShippingPriceStr = findOrderMeta('_shipping_raw_price') || findOrderMeta('_shipping_biteship_original_rate') || findOrderMeta('_shipping_biteship_courier_rate');
+    const shippingDiscountStr = findOrderMeta('_shipping_discount_amount') || findOrderMeta('_shipping_biteship_discount');
+    const shippingDiscount = shippingDiscountStr ? Math.abs(parseFloat(String(shippingDiscountStr))) : 0;
+    const shippingPromoCode = String(findOrderMeta('_shipping_promo_code') || findOrderMeta('_shipping_biteship_applied_coupon') || '').trim();
+
+    const originalShippingRate = rawShippingPriceStr
+      ? parseFloat(String(rawShippingPriceStr))
+      : (shippingDiscount > 0 ? parseFloat(String(order.shipping_total || 0)) + shippingDiscount : parseFloat(String(order.shipping_total || 0)));
+
     return (
       <SlideDrawer
         isOpen={isOpen}
@@ -1930,11 +1942,33 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
               </div>
             ) : null}
 
-            {/* Shipping */}
-            <div className="flex items-center justify-between text-neutral-400">
-              <span>Shipping ({order.shipping_method_name || 'Standard Delivery'})</span>
-              <span className="font-mono text-white">{formatCurrency(order.shipping_total || 0, order.currency)}</span>
-            </div>
+            {/* Shipping & Shipping Discount Breakdown */}
+            {shippingDiscount > 0 ? (
+              <>
+                <div className="flex items-center justify-between text-neutral-400">
+                  <span className="flex items-center gap-1.5">
+                    <span>Shipping ({order.shipping_method_name || 'Standard Delivery'})</span>
+                    <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-mono text-[9px] uppercase font-bold">
+                      PROMO
+                    </span>
+                  </span>
+                  <span className="font-mono text-white">{formatCurrency(originalShippingRate, order.currency)}</span>
+                </div>
+                <div className="flex items-center justify-between text-emerald-400">
+                  <span>
+                    Shipping Discount {shippingPromoCode ? `(${shippingPromoCode.toUpperCase()})` : ''}
+                  </span>
+                  <span className="font-mono font-medium">
+                    -{formatCurrency(shippingDiscount, order.currency)}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-between text-neutral-400">
+                <span>Shipping ({order.shipping_method_name || 'Standard Delivery'})</span>
+                <span className="font-mono text-white">{formatCurrency(order.shipping_total || 0, order.currency)}</span>
+              </div>
+            )}
 
             {/* Tax */}
             {Number(order.total_tax) > 0 && (
@@ -2011,9 +2045,33 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
             <div className="text-[11px] text-neutral-400 font-sans pt-1 flex items-center justify-between border-t border-white/[0.04]">
               <span>Payment:</span>
               <span className="text-white font-mono">
-                {order.date_paid ? `${formatCurrency(order.total, order.currency)} paid on ${formatDate(order.date_paid)}` : 'Pending'}
+                {order.date_paid
+                  ? `${formatCurrency(order.total, order.currency)} paid on ${formatDate(order.date_paid)}`
+                  : ['processing', 'completed', 'in-production', 'ready-to-ship', 'shipped'].includes(currentStatusClean)
+                  ? `Confirmed (${order.payment_method_title || order.payment_method || 'Online Payment'})`
+                  : 'Pending'}
               </span>
             </div>
+
+            {/* Midtrans Transaction Detail */}
+            {(() => {
+              const midtransId = orderMetaList.find(m => m.key === '_midtrans_transaction_id')?.value;
+              if (!midtransId) return null;
+              return (
+                <div className="text-[10px] text-neutral-400 font-mono bg-white/[0.02] p-2.5 rounded-lg border border-white/[0.04] mt-1.5 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-emerald-400 font-sans font-semibold">Midtrans Transaction:</span>
+                    <span className="text-white uppercase font-bold text-[9px] px-1.5 py-0.5 rounded bg-white/10 font-mono">
+                      {String(order.payment_method_title || order.payment_method || 'Online Payment')}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-neutral-300">
+                    <span className="text-neutral-500 font-sans">Transaction ID:</span>
+                    <span className="text-neutral-300 truncate max-w-[220px]">{String(midtransId)}</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* BCA Mutation Detail */}
             {(() => {
@@ -2041,17 +2099,36 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
 
             {/* Coupons Used */}
             {order.coupon_codes && order.coupon_codes.length > 0 && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[11px] text-neutral-400 font-sans">Coupons applied:</span>
-                {order.coupon_codes.map(code => (
-                  <span 
-                    key={code} 
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/20 text-xs font-mono font-bold"
-                  >
-                    <Tag className="w-3 h-3" />
-                    {code}
-                  </span>
-                ))}
+              <div className="space-y-2">
+                <span className="text-[11px] text-neutral-400 font-sans block">Coupons applied:</span>
+                <div className="space-y-1.5">
+                  {order.coupon_codes.map(code => {
+                    const isShippingCoupon =
+                      (shippingPromoCode && String(shippingPromoCode).toLowerCase() === code.toLowerCase()) ||
+                      code.toLowerCase().includes('ongkir') ||
+                      Boolean(shippingDiscount > 0 && order.coupon_codes?.length === 1);
+                    return (
+                      <div key={code} className="flex items-center justify-between text-xs font-sans">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/20 font-mono font-bold">
+                          <Tag className="w-3 h-3" />
+                          {code}
+                          {isShippingCoupon && (
+                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-200 uppercase font-sans font-normal ml-0.5">
+                              Shipping Promo
+                            </span>
+                          )}
+                        </span>
+                        <span className="font-mono text-emerald-400 font-semibold">
+                          {isShippingCoupon && shippingDiscount > 0
+                            ? `-${formatCurrency(shippingDiscount, order.currency)}`
+                            : Number(order.discount_total || 0) > 0
+                            ? `-${formatCurrency(order.discount_total, order.currency)}`
+                            : 'Applied'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 

@@ -3,23 +3,34 @@ import { GlassCard } from '../ui/GlassCard';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { runSystemDiagnostics, DiagnosticsReport } from '../../lib/healthCheck';
-import { CatalogReconciliationResult, fetchWordPressSiteHealth, getWpBaseUrl, pingWordPressPlugin, runCatalogReconciliation, WordPressSiteHealth } from '../../lib/wordpressBridge';
-import { formatDateTime } from '../../lib/formatters';
+import { 
+  CatalogReconciliationResult, 
+  fetchWordPressSiteHealth, 
+  getWpBaseUrl, 
+  pingWordPressPlugin, 
+  runCatalogReconciliation, 
+  WordPressSiteHealth,
+  fetchWordPressLogs,
+  WordPressSystemLog
+} from '../../lib/wordpressBridge';
+import { formatDateTime, formatTimeAgo } from '../../lib/formatters';
 import { 
   Activity, 
   RefreshCw, 
   ShieldCheck, 
   AlertTriangle, 
+  AlertCircle,
+  ChevronRight,
   XCircle, 
   CheckCircle2, 
   Database, 
   Server, 
-  Download,
-  Globe,
-  Radio,
-  ExternalLink,
-  Cpu,
-  Layers
+  Download, 
+  Globe, 
+  Radio, 
+  ExternalLink, 
+  Cpu, 
+  Layers 
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 
@@ -27,6 +38,7 @@ export const SystemHealthDashboard: React.FC = () => {
   const { showToast } = useToast();
   const [report, setReport] = useState<DiagnosticsReport | null>(null);
   const [wpHealth, setWpHealth] = useState<WordPressSiteHealth | null>(null);
+  const [recentErrors, setRecentErrors] = useState<WordPressSystemLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isPingingWp, setIsPingingWp] = useState(false);
   const [catalogReport, setCatalogReport] = useState<CatalogReconciliationResult | null>(null);
@@ -36,10 +48,33 @@ export const SystemHealthDashboard: React.FC = () => {
   const handleRunDiagnostics = async () => {
     setIsLoading(true);
     try {
-      const [diagRes, wpRes] = await Promise.all([
+      const [diagRes, wpRes, logsRes] = await Promise.all([
         runSystemDiagnostics(),
         fetchWordPressSiteHealth(),
+        fetchWordPressLogs({ level: 'error', limit: 10 }),
       ]);
+
+      const errorRows = (logsRes.success && logsRes.data)
+        ? ((logsRes.data as any).logs || (logsRes.data as any).rows || (Array.isArray(logsRes.data) ? logsRes.data : []))
+        : [];
+      const safeErrors = Array.isArray(errorRows) ? errorRows : [];
+      setRecentErrors(safeErrors);
+
+      if (safeErrors.length > 0) {
+        diagRes.anomalies.unshift({
+          id: 'recent-wp-exceptions',
+          title: `${safeErrors.length} Critical System Errors Logged`,
+          type: 'api_connectivity',
+          severity: 'high',
+          description: `Latest error: ${safeErrors[0].message ? safeErrors[0].message.slice(0, 160) : 'Uncaught exception'}`,
+          detectedAt: safeErrors[0].created_at || new Date().toISOString(),
+          suggestedAction: 'Review details in the WordPress System Logs tab under Audit Logs',
+        });
+        if (diagRes.overallStatus === 'healthy') {
+          diagRes.overallStatus = 'warning';
+        }
+      }
+
       setReport(diagRes);
       setWpHealth(wpRes);
       showToast('info', 'Diagnostics Complete', `System status is ${diagRes.overallStatus.toUpperCase()}.`);
@@ -151,7 +186,47 @@ export const SystemHealthDashboard: React.FC = () => {
         </div>
       </GlassCard>
 
-      {/* 2. WordPress Master Plugin & Website Bridge Status */}
+      {/* 2. Recent System Errors & Exceptions Alert Banner */}
+      {recentErrors.length > 0 && (
+        <GlassCard className="p-6 space-y-4 border-rose-500/30 bg-rose-950/20">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-rose-500/20 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-rose-500/20 border border-rose-500/30 text-rose-400">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-white">Recent System Errors ({recentErrors.length})</h3>
+                <p className="text-xs text-rose-300/80">Uncaught exceptions and runtime errors captured by Exacoat Logger</p>
+              </div>
+            </div>
+            <a
+              href="#audit?tab=wordpress"
+              className="px-3.5 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-200 font-mono text-xs flex items-center gap-1.5 transition-all w-fit"
+            >
+              <span>View Full Error Logs</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </a>
+          </div>
+
+          <div className="space-y-2">
+            {recentErrors.slice(0, 3).map((err) => (
+              <div key={err.id} className="p-3.5 rounded-xl bg-zinc-950/80 border border-rose-500/20 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase font-bold">
+                    {err.channel || 'exception'}
+                  </span>
+                  <span className="text-[11px] font-mono text-zinc-400">
+                    {formatDateTime(err.created_at)} ({formatTimeAgo(err.created_at)})
+                  </span>
+                </div>
+                <p className="text-xs font-mono text-zinc-200 break-words">{err.message}</p>
+              </div>
+            ))}
+          </div>
+        </GlassCard>
+      )}
+
+      {/* 3. WordPress Master Plugin & Website Bridge Status */}
       <GlassCard className="p-6 space-y-4 border-zinc-800 bg-zinc-900/90">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
           <div className="flex items-center gap-3">
