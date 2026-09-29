@@ -22,17 +22,17 @@ const buttonVariants = cva(
         dark:
           "bg-[#131417] text-white font-semibold border-white/10 hover:bg-[#1a1c21] hover:border-white/20 shadow-[inset_0_-1.5px_0_rgba(0,0,0,0.4),0_1px_2px_rgba(0,0,0,0.2)] hover:shadow-[inset_0_-1.5px_0_rgba(0,0,0,0.3),0_2px_6px_rgba(0,0,0,0.3)] active:shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)] before:pointer-events-none before:absolute before:top-0 before:left-1/2 before:-translate-x-1/2 before:w-14 before:h-[1.5px] before:rounded-full before:bg-gradient-to-r before:from-transparent before:via-white/25 before:to-transparent before:opacity-80 before:transition-all before:duration-300 before:ease-out hover:before:w-24 hover:before:via-white/40 hover:before:opacity-100",
         destructive:
-          "bg-red-500/15 text-red-400 border-red-500/30 hover:bg-red-500/25 shadow-none font-semibold",
+          "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30 hover:bg-red-500/25 shadow-none font-semibold",
         danger:
-          "bg-red-500/15 text-red-400 border-red-500/30 hover:bg-red-500/25 shadow-none font-semibold",
+          "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30 hover:bg-red-500/25 shadow-none font-semibold",
         outline:
           "border border-zinc-200 dark:border-white/[0.1] bg-transparent hover:bg-zinc-100 dark:hover:bg-white/[0.05] text-zinc-900 dark:text-zinc-100 font-semibold",
         secondary:
-          "bg-[#18181c] text-zinc-200 border-white/10 hover:bg-[#222228] hover:border-white/20 hover:text-white shadow-none font-semibold",
+          "bg-zinc-100 hover:bg-zinc-200 dark:bg-[#18181c] dark:hover:bg-[#222228] text-zinc-800 hover:text-zinc-950 dark:text-zinc-200 dark:hover:text-white border-zinc-200 dark:border-white/10 hover:border-zinc-300 dark:hover:border-white/20 shadow-none font-semibold",
         ghost: "hover:bg-zinc-100 dark:hover:bg-white/[0.05] text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-semibold",
         glass: "bg-white/80 dark:bg-white/[0.055] hover:bg-white dark:hover:bg-white/[0.1] text-zinc-900 dark:text-white backdrop-blur-xl border border-zinc-200 dark:border-white/[0.1] shadow-sm font-semibold",
-        link: "text-[#f3aa18] underline-offset-4 hover:underline border-transparent p-0 h-auto normal-case tracking-normal font-normal",
-        success: "bg-emerald-600/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-600/30 shadow-none font-semibold",
+        link: "text-amber-700 dark:text-[#f3aa18] underline-offset-4 hover:underline border-transparent p-0 h-auto normal-case tracking-normal font-normal",
+        success: "bg-emerald-600/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-600/25 shadow-none font-semibold",
       },
       size: {
         default: "h-9 px-4 py-2 text-xs rounded-xl gap-2",

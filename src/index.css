@@ -108,6 +108,13 @@
   box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.75), inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
 }
 
+:root:not(.dark) .glass-panel-hover:hover,
+:root:not(.dark) .exacoat-glass-hover:hover {
+  border-color: rgba(24, 24, 27, 0.2);
+  background: linear-gradient(180deg, #ffffff 0%, #f4f4f5 100%);
+  box-shadow: 0 14px 35px -15px rgba(24, 24, 27, 0.15), inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
 .glass-pill {
   background: rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(12px);
@@ -115,10 +122,261 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+:root:not(.dark) .glass-pill {
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  color: #18181b;
+}
+
 .glass-pill-active {
   background: #f3aa18;
   color: #080808;
   border: 1px solid #f3aa18;
+}
+
+:root:not(.dark) .glass-pill-active {
+  background: #f3aa18;
+  color: #080808;
+  border: 1px solid #d97706;
+}
+
+/* ==========================================================================
+   Universal Light Mode Design System & Color Tokens
+   ========================================================================== */
+
+:root:not(.dark),
+html.light,
+html:not(.dark) {
+  --bg-primary: #f6f6f3;
+  --bg-surface: #ffffff;
+  --bg-surface-raised: #ffffff;
+  --bg-surface-sunken: #f8f9fa;
+  --bg-surface-hover: #f1f3f5;
+  --border-subtle: #e4e4e7;
+  --border-medium: #d4d4d8;
+  --border-strong: #a1a1aa;
+  --accent: #d97706; /* WCAG AA compliant amber-700 on white (4.8:1) */
+  --accent-hover: #b45309;
+  --text-primary: #09090b; /* zinc-950 */
+  --text-secondary: #3f3f46; /* zinc-700 */
+  --text-muted: #71717a; /* zinc-500 */
+  --shadow-panel: 0 10px 30px -10px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+/* Light mode luxury scrollbars */
+html:not(.dark) ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.16);
+}
+html:not(.dark) ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.32);
+}
+
+/* Universal Card & Surface Container mappings for light mode */
+html:not(.dark) .bg-\[\#111111\],
+html:not(.dark) .bg-\[\#141417\],
+html:not(.dark) .bg-\[\#121212\],
+html:not(.dark) .bg-\[\#161616\],
+html:not(.dark) .bg-\[\#181818\],
+html:not(.dark) .bg-\[\#0d0f12\],
+html:not(.dark) .bg-\[\#0a0c10\],
+html:not(.dark) .bg-\[\#0e0e12\],
+html:not(.dark) .bg-\[\#131417\],
+html:not(.dark) .bg-\[\#141416\],
+html:not(.dark) .bg-dark-850,
+html:not(.dark) .bg-dark-900 {
+  background-color: #ffffff !important;
+  border-color: #e4e4e7 !important;
+  color: #09090b !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+}
+
+/* Universal Inset Wells, Sub-cards, and Inner Panels */
+html:not(.dark) .bg-\[\#141414\],
+html:not(.dark) .bg-\[\#101114\],
+html:not(.dark) .bg-\[\#0c0d10\],
+html:not(.dark) .bg-\[\#0a0a0c\],
+html:not(.dark) .bg-\[\#0f0f0f\],
+html:not(.dark) .bg-\[\#101014\],
+html:not(.dark) .bg-\[\#121316\],
+html:not(.dark) .bg-\[\#18181c\],
+html:not(.dark) .bg-\[\#1a1a1a\],
+html:not(.dark) .bg-\[\#1a1b22\],
+html:not(.dark) .bg-\[\#1a1c21\],
+html:not(.dark) .bg-\[\#1c1c1c\],
+html:not(.dark) .bg-\[\#222228\],
+html:not(.dark) .bg-dark-800,
+html:not(.dark) .bg-neutral-900\/80 {
+  background-color: #f8f9fa !important;
+  border-color: #e4e4e7 !important;
+}
+
+/* In light mode, subtle dark overlays inside cards become clean subtle gray */
+html:not(.dark) [role="dialog"] .bg-black\/20,
+html:not(.dark) [role="dialog"] .bg-black\/30,
+html:not(.dark) [role="dialog"] .bg-black\/40,
+html:not(.dark) [role="dialog"] .bg-black\/50,
+html:not(.dark) [role="dialog"] .bg-black\/60,
+html:not(.dark) .manager-workspace .bg-black\/20,
+html:not(.dark) .manager-workspace .bg-black\/30,
+html:not(.dark) .manager-workspace .bg-black\/40,
+html:not(.dark) .manager-workspace .bg-black\/50,
+html:not(.dark) .manager-workspace .bg-black\/60 {
+  background-color: #f4f4f5 !important;
+  border-color: #e4e4e7 !important;
+  color: #18181b !important;
+}
+
+/* Universal Border Mapping in light mode: replace invisible white borders with crisp subtle borders */
+html:not(.dark) [class*="border-white/"] {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html:not(.dark) [class*="border-white/[0.1]"],
+html:not(.dark) [class*="border-white/[0.12]"],
+html:not(.dark) [class*="border-white/[0.15]"],
+html:not(.dark) [class*="border-white/[0.2]"],
+html:not(.dark) [class*="border-white/20"],
+html:not(.dark) [class*="border-white/30"] {
+  border-color: rgba(0, 0, 0, 0.14) !important;
+}
+
+/* Universal Typography & Contrast Enhancements in light mode */
+html:not(.dark) {
+  /* Neutral scale */
+  .text-neutral-200,
+  .text-zinc-200 {
+    color: #18181b !important; /* zinc-900 */
+  }
+  .text-neutral-300,
+  .text-zinc-300 {
+    color: #27272a !important; /* zinc-800 */
+  }
+  .text-neutral-400,
+  .text-zinc-400 {
+    color: #52525b !important; /* zinc-600 (5.7:1 contrast on white) */
+  }
+  .text-neutral-500,
+  .text-zinc-500 {
+    color: #71717a !important; /* zinc-500 (4.6:1 contrast on white) */
+  }
+
+  /* Vibrant status colors - WCAG AA compliant on light backgrounds */
+  .text-emerald-400,
+  .text-emerald-300 {
+    color: #047857 !important; /* emerald-700 (5.1:1 on white) */
+  }
+  .text-cyan-400,
+  .text-cyan-300 {
+    color: #0e7490 !important; /* cyan-700 (6.2:1 on white) */
+  }
+  .text-sky-400,
+  .text-sky-300 {
+    color: #0369a1 !important; /* sky-700 (6.5:1 on white) */
+  }
+  .text-amber-400,
+  .text-amber-300 {
+    color: #b45309 !important; /* amber-700 (5.8:1 on white) */
+  }
+  .text-rose-400,
+  .text-rose-300 {
+    color: #be123c !important; /* rose-700 (5.6:1 on white) */
+  }
+  .text-indigo-400,
+  .text-indigo-300 {
+    color: #4338ca !important; /* indigo-700 (6.3:1 on white) */
+  }
+  .text-purple-400,
+  .text-purple-300 {
+    color: #7e22ce !important; /* purple-700 (6.4:1 on white) */
+  }
+}
+
+/* Headings and labels that were hardcoded text-white */
+html:not(.dark) :is(h1, h2, h3, h4, h5, h6, th, td, label, dt, dd).text-white {
+  color: #09090b !important;
+}
+
+/* Modal and drawer headers and contents */
+html:not(.dark) [role="dialog"] :is(h1, h2, h3, h4, h5, h6, p, span):not(button):not([class*="bg-black"]):not([class*="bg-zinc-9"]):not([class*="bg-amber-6"]):not([class*="bg-emerald-6"]):not([class*="bg-rose-6"]):not([class*="bg-blue-6"]).text-white {
+  color: #09090b !important;
+}
+
+/* Form inputs & controls in light mode */
+html:not(.dark) input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([class*="bg-white"]):not([class*="bg-zinc"]),
+html:not(.dark) select:not([class*="bg-white"]):not([class*="bg-zinc"]),
+html:not(.dark) textarea:not([class*="bg-white"]):not([class*="bg-zinc"]) {
+  background-color: #ffffff !important;
+  color: #09090b !important;
+  border-color: #d4d4d8 !important;
+}
+
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder {
+  color: #71717a !important;
+}
+
+/* Murky -950/20 backgrounds mapped to clean, vibrant pastel alerts */
+html:not(.dark) .bg-amber-950\/20,
+html:not(.dark) .bg-amber-950\/30 {
+  background-color: #fffbeb !important;
+  border-color: #fde68a !important;
+}
+html:not(.dark) .bg-emerald-950\/20,
+html:not(.dark) .bg-emerald-950\/30 {
+  background-color: #ecfdf5 !important;
+  border-color: #a7f3d0 !important;
+}
+html:not(.dark) .bg-sky-950\/20,
+html:not(.dark) .bg-sky-950\/30 {
+  background-color: #f0f9ff !important;
+  border-color: #bae6fd !important;
+}
+html:not(.dark) .bg-purple-950\/20,
+html:not(.dark) .bg-purple-950\/30 {
+  background-color: #faf5ff !important;
+  border-color: #e9d5ff !important;
+}
+html:not(.dark) .bg-rose-950\/20,
+html:not(.dark) .bg-rose-950\/30 {
+  background-color: #fff1f2 !important;
+  border-color: #fecdd3 !important;
+}
+
+/* Live configuration preview and light yellow/amber highlights */
+html:not(.dark) .bg-\[\#f3aa18\]\/5 {
+  background-color: #fffbeb !important;
+  border-color: #fcd34d !important;
+}
+html:not(.dark) .bg-white\/\[0\.08\],
+html:not(.dark) .bg-white\/\[0\.06\],
+html:not(.dark) .bg-white\/\[0\.04\],
+html:not(.dark) .bg-white\/\[0\.03\] {
+  background-color: #ffffff !important;
+  border-color: #e4e4e7 !important;
+  color: #18181b !important;
+}
+
+/* Pending & zinc badges in light mode */
+html:not(.dark) .bg-zinc-800\/50,
+html:not(.dark) .bg-zinc-800\/80,
+html:not(.dark) .bg-zinc-800 {
+  background-color: #f4f4f5 !important;
+  border-color: #e4e4e7 !important;
+  color: #27272a !important;
+}
+
+/* Hover fixes for icon and utility buttons */
+html:not(.dark) :is(button, a):not([class*="bg-black"]):not([class*="bg-zinc-9"]):not([class*="bg-amber-6"]):not([class*="bg-emerald-6"]):not([class*="bg-rose-6"]):not([class*="bg-blue-6"]).hover\:text-white:hover,
+html:not(.dark) :is(button, a):not([class*="bg-black"]):not([class*="bg-zinc-9"]):not([class*="bg-amber-6"]):not([class*="bg-emerald-6"]):not([class*="bg-rose-6"]):not([class*="bg-blue-6"]) .hover\:text-white:hover {
+  color: #09090b !important;
+}
+
+html:not(.dark) :is(button, a):not([class*="bg-black"]):not([class*="bg-zinc-9"]):not([class*="bg-amber-6"]):not([class*="bg-emerald-6"]):not([class*="bg-rose-6"]):not([class*="bg-blue-6"]).hover\:bg-white\/\[0\.08\]:hover,
+html:not(.dark) :is(button, a):not([class*="bg-black"]):not([class*="bg-zinc-9"]):not([class*="bg-amber-6"]):not([class*="bg-emerald-6"]):not([class*="bg-rose-6"]):not([class*="bg-blue-6"]).hover\:bg-white\/\[0\.06\]:hover,
+html:not(.dark) :is(button, a):not([class*="bg-black"]):not([class*="bg-zinc-9"]):not([class*="bg-amber-6"]):not([class*="bg-emerald-6"]):not([class*="bg-rose-6"]):not([class*="bg-blue-6"]).hover\:bg-white\/\[0\.04\]:hover,
+html:not(.dark) :is(button, a):not([class*="bg-black"]):not([class*="bg-zinc-9"]):not([class*="bg-amber-6"]):not([class*="bg-emerald-6"]):not([class*="bg-rose-6"]):not([class*="bg-blue-6"]).hover\:bg-white\/10:hover,
+html:not(.dark) :is(button, a):not([class*="bg-black"]):not([class*="bg-zinc-9"]):not([class*="bg-amber-6"]):not([class*="bg-emerald-6"]):not([class*="bg-rose-6"]):not([class*="bg-blue-6"]).hover\:bg-white\/5:hover {
+  background-color: rgba(0, 0, 0, 0.05) !important;
 }
 
 @layer components {

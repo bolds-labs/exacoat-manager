@@ -916,10 +916,10 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
               <Layers className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white font-sans tracking-tight">
+              <h3 className="text-base font-bold text-zinc-900 dark:text-white font-sans tracking-tight">
                 {isEditing ? 'Edit Item Configuration' : 'Add Item to Order'}
               </h3>
-              <p className="text-[11px] font-mono text-neutral-400">
+              <p className="text-[11px] font-mono text-zinc-500 dark:text-neutral-400">
                 Order {order.order_number || `#${order.id}`} {item ? `• Item #${item.id}` : ''}
               </p>
             </div>
@@ -1817,27 +1817,27 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
           )}
 
           {/* Section 3: Live Output Summary Preview Card */}
-          <div className="p-4 rounded-xl border border-[#f3aa18]/20 bg-[#f3aa18]/5 space-y-2">
+          <div className="p-4 rounded-xl border border-amber-500/30 dark:border-[#f3aa18]/20 bg-amber-500/5 dark:bg-[#f3aa18]/5 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[#f3aa18] font-sans flex items-center gap-1.5">
-                <Eye className="w-3.5 h-3.5 text-[#f3aa18]" />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-[#f3aa18] font-sans flex items-center gap-1.5">
+                <Eye className="w-3.5 h-3.5 text-amber-600 dark:text-[#f3aa18]" />
                 Live Configuration Summary Preview
               </span>
-              <span className="text-xs font-mono font-bold text-white">
+              <span className="text-xs font-mono font-bold text-zinc-900 dark:text-white">
                 Line Total: {formatCurrency(Math.max(1, quantity) * unitPrice, order.currency)} ({quantity}x)
               </span>
             </div>
 
             <div className="flex items-center gap-1.5 flex-wrap">
               {compiledSpecs.length === 0 ? (
-                <span className="text-xs text-neutral-400 italic">No configurations selected yet</span>
+                <span className="text-xs text-zinc-500 dark:text-neutral-400 italic">No configurations selected yet</span>
               ) : (
                 compiledSpecs.map((sp, idx) => (
                   <span
                     key={idx}
-                    className="text-[11px] font-mono px-2 py-0.5 rounded bg-white/[0.08] text-neutral-200 border border-white/10"
+                    className="text-[11px] font-mono px-2 py-0.5 rounded bg-white dark:bg-white/[0.08] text-zinc-800 dark:text-neutral-200 border border-zinc-200 dark:border-white/10 shadow-xs"
                   >
-                    <strong className="text-neutral-400">{sp.label}:</strong> {sp.value}
+                    <strong className="text-zinc-950 dark:text-white font-semibold">{sp.label}:</strong> {sp.value}
                   </span>
                 ))
               )}
