@@ -127,6 +127,67 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
       }
     }
 
+    // Marketplace bundle / title format e.g.
+    // "1x [EXACOAT] iPad Pro 11" (2022, M2) Premium 3M Skin / Garskin : Matte White | Side skin only | Wifi + Cellular"
+    const hasMarketplacePattern = /\[EXACOAT\]|garskin|premium.*skin|\d+x\s+\[/i.test(cleanVal);
+    if (hasMarketplacePattern && cleanVal.includes('|')) {
+      let detectedFinish = '';
+      let detectedCoverage = '';
+      const otherTokens: string[] = [];
+
+      for (const p of parts) {
+        const trimmed = p.replace(/^[•\s&bull;]+|[•\s&bull;]+$/g, '').trim();
+        if (!trimmed) continue;
+
+        if (/side.*skin.*only|side.*only/i.test(trimmed)) {
+          detectedCoverage = 'side';
+        } else if (/back.*skin.*only|back.*only/i.test(trimmed)) {
+          detectedCoverage = 'back';
+        } else if (/full.*body|back.*\+.*side/i.test(trimmed)) {
+          detectedCoverage = 'both';
+        } else if (trimmed.includes(':')) {
+          const colonIdx = trimmed.indexOf(':');
+          const valPart = trimmed.substring(colonIdx + 1).trim();
+          if (valPart && !/^(custom|default|none)$/i.test(valPart)) {
+            detectedFinish = valPart;
+          }
+          const keyPart = trimmed.substring(0, colonIdx).trim();
+          // Extract hardware model name from keyPart, e.g. iPad Pro 11, iPad Pro 12.9
+          const modelMatch = keyPart.match(/(?:iPad|Surface|MacBook|Galaxy Tab|Steam Deck|PlayStation|Xbox|ROG Ally)[A-Za-z0-9\s"'\.,\(\)]+/i);
+          if (modelMatch) {
+            const cleanModel = modelMatch[0].replace(/['"\(\)]+/g, '').replace(/,\s*M\d+/i, '').replace(/\b20\d\d\b/g, '').trim();
+            if (cleanModel) {
+              otherTokens.push(cleanModel);
+            }
+          }
+        } else {
+          otherTokens.push(trimmed);
+        }
+      }
+
+      if (detectedFinish) {
+        if (detectedCoverage === 'side') {
+          addSpec('Sides', detectedFinish);
+        } else if (detectedCoverage === 'both') {
+          addSpec('Back', detectedFinish);
+          addSpec('Sides', detectedFinish);
+        } else {
+          addSpec('Back', detectedFinish);
+        }
+      }
+
+      for (const token of otherTokens) {
+        if (/wifi|cellular|celullar|5g|lte/i.test(token)) {
+          addSpec('Connectivity', token);
+        } else if (/iPad|Surface|MacBook|Tab|Deck|PlayStation|Series/i.test(token)) {
+          addSpec('Series', token);
+        } else {
+          addSpec('Option', token);
+        }
+      }
+      return;
+    }
+
     for (const p of parts) {
       const trimmed = p.replace(/^[•\s&bull;]+|[•\s&bull;]+$/g, '').trim();
       if (!trimmed) continue;
@@ -279,6 +340,12 @@ export function sortItemSpecs(specs: ItemCustomizationSpec[]): ItemCustomization
     const isWarrantyB = /^(claimed part|part to produce|original invoice|original order|original channel|variation|shopee note|buyer note)$/i.test(nameB);
     if (isWarrantyA && !isWarrantyB) return -1;
     if (!isWarrantyA && isWarrantyB) return 1;
+
+    // Priority Production Variants (Series, Connectivity, Model, Hardware Edition) right after warranty
+    const isHardwareA = /^(series|connectivity|model|edition|hardware|device model)$/i.test(nameA);
+    const isHardwareB = /^(series|connectivity|model|edition|hardware|device model)$/i.test(nameB);
+    if (isHardwareA && !isHardwareB) return -1;
+    if (!isHardwareA && isHardwareB) return 1;
 
     // 1. Back skin / primary base layer ALWAYS on top
     const isBackA = nameA.includes('back') && !nameA.includes('camera') && !nameA.includes('glass');

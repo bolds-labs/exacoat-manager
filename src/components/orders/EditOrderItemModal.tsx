@@ -3,7 +3,7 @@ import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { ConfirmationModal } from '../ui/ConfirmationModal';
-import { Order, OrderItem, DeviceConfiguratorProfile } from '../../types';
+import { Order, OrderItem, DeviceConfiguratorProfile, ConfiguratorVariant } from '../../types';
 import {
   fetchProductsDirect,
   fetchGlobalFinishesDirect,
@@ -33,6 +33,7 @@ import {
   ChevronDown,
   ChevronRight,
   Palette,
+  Cpu,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -160,6 +161,10 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
   const [isConfiguratorProduct, setIsConfiguratorProduct] = useState(false);
   const [configMode, setConfigMode] = useState<'configurator' | 'form'>('configurator');
 
+  // Production Variants State (e.g. Series, Connectivity, Hardware Model)
+  const [productionVariants, setProductionVariants] = useState<ConfiguratorVariant[]>([]);
+  const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
+
   // Configurator Layers & Options State
   const [layers, setLayers] = useState<DynamicLayerOption[]>([]);
   const [layerFinishes, setLayerFinishes] = useState<Record<string, string>>({});
@@ -263,8 +268,67 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
 
     setProfile(loadedProfile);
 
-    // If profile has layers and is configurable, this is a configurator product
-    const isConfigurable = resolvedLayers.length > 0;
+    // Extract production variants (Hardware models requiring distinct physical cut templates)
+    const loadedVariants = (Array.isArray(loadedProfile?.variants) ? loadedProfile.variants : []).filter(
+      (v) => v && v.name && Array.isArray(v.options) && v.options.length > 0
+    );
+    setProductionVariants(loadedVariants);
+
+    const initialSelectedVariants: Record<string, string> = {};
+    loadedVariants.forEach((v, vIdx) => {
+      const vKey = v.id || v.name || `variant_${vIdx}`;
+
+      // 1. Direct label match (e.g. spec label === "Series", spec value === "iPad Pro 11")
+      const directMatch = currentSpecs.find(
+        (s) => s.label.trim().toLowerCase() === v.name.trim().toLowerCase()
+      );
+      if (directMatch) {
+        const found = v.options.find(
+          (o) =>
+            o.name.trim().toLowerCase() === directMatch.value.trim().toLowerCase() ||
+            directMatch.value.trim().toLowerCase().includes(o.name.trim().toLowerCase())
+        );
+        if (found) {
+          initialSelectedVariants[vKey] = found.name;
+          return;
+        }
+      }
+
+      // 2. Search any spec whose value or label contains the option name
+      for (const opt of v.options) {
+        const optLower = opt.name.trim().toLowerCase();
+        if (optLower.length < 2) continue;
+        const specMatch = currentSpecs.find((s) => {
+          const valLower = s.value.trim().toLowerCase();
+          const lblLower = s.label.trim().toLowerCase();
+          return valLower.includes(optLower) || lblLower.includes(optLower);
+        });
+        if (specMatch) {
+          initialSelectedVariants[vKey] = opt.name;
+          return;
+        }
+      }
+
+      // 3. Fallback: Search raw strings (item name, meta string, formatted meta)
+      const itemAny = item as any;
+      const rawText = `${item?.name || ''} ${itemAny?.meta || ''} ${JSON.stringify(itemAny?.meta_data || [])} ${JSON.stringify(itemAny?.formatted_meta || [])}`.toLowerCase();
+      for (const opt of v.options) {
+        const optLower = opt.name.trim().toLowerCase();
+        if (optLower.length >= 3 && rawText.includes(optLower)) {
+          initialSelectedVariants[vKey] = opt.name;
+          return;
+        }
+      }
+
+      // 4. Default to first option
+      if (v.options.length > 0) {
+        initialSelectedVariants[vKey] = v.options[0].name;
+      }
+    });
+    setSelectedVariants(initialSelectedVariants);
+
+    // If profile has layers or production variants, this is a configurator product
+    const isConfigurable = resolvedLayers.length > 0 || loadedVariants.length > 0;
     setIsConfiguratorProduct(isConfigurable);
     setConfigMode(isConfigurable ? 'configurator' : 'form');
 
@@ -360,7 +424,7 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
         setPencilCutout(null);
       }
 
-      // 5. Custom specs for configurator: ONLY non-layer, non-coverage, non-logo extra metadata
+      // 5. Custom specs for configurator: ONLY non-layer, non-coverage, non-logo, non-variant extra metadata
       const nonLayerSpecs = currentSpecs.filter((s) => {
         const lbl = s.label.trim().toLowerCase();
         const lblClean = lbl.replace(/s$/, '');
@@ -372,7 +436,13 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
         const isLogo = /^(logo|logo cutout)$/i.test(lbl);
         const isPencil = /pencil/i.test(lbl);
         const isRelic = lbl === 'configuration' && /^(custom|default|none)$/i.test(s.value.trim());
-        return !isLayer && !isCoverage && !isLogo && !isPencil && !isRelic;
+
+        const isVariant = loadedVariants.some((v) => {
+          if (v.name.trim().toLowerCase() === lbl) return true;
+          return v.options.some((o) => o.name.trim().toLowerCase() === s.value.trim().toLowerCase());
+        });
+
+        return !isLayer && !isCoverage && !isLogo && !isPencil && !isRelic && !isVariant;
       });
 
       setCustomSpecs(
@@ -451,6 +521,8 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
       setHasPencilOption(false);
       setPencilCutout(null);
       setCustomSpecs([]);
+      setProductionVariants([]);
+      setSelectedVariants({});
       setIsChangingProduct(true);
     }
 
@@ -500,6 +572,15 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
     const list: ItemCustomizationSpec[] = [];
 
     if (configMode === 'configurator') {
+      // 0. Production Variants (Hardware models e.g. Series, Connectivity)
+      productionVariants.forEach((v, vIdx) => {
+        const vKey = v.id || v.name || `variant_${vIdx}`;
+        const selectedOpt = selectedVariants[vKey];
+        if (selectedOpt && selectedOpt.trim()) {
+          list.push({ label: v.name, value: selectedOpt.trim() });
+        }
+      });
+
       // 1. Configurator Layers (only active layers with non-empty finish)
       layers.forEach((l) => {
         if (layerActive[l.id] && layerFinishes[l.id]?.trim()) {
@@ -531,11 +612,19 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
         }
       });
     } else {
-      // Form / Non-configurator Mode: Use customSpecs directly
+      // Form / Non-configurator Mode: Include production variants if defined, plus customSpecs
+      productionVariants.forEach((v, vIdx) => {
+        const vKey = v.id || v.name || `variant_${vIdx}`;
+        const selectedOpt = selectedVariants[vKey];
+        if (selectedOpt && selectedOpt.trim() && !customSpecs.some((s) => s.label.toLowerCase() === v.name.toLowerCase())) {
+          list.push({ label: v.name, value: selectedOpt.trim() });
+        }
+      });
+
       customSpecs.forEach((s) => {
         const l = s.label.trim();
         const v = s.value.trim();
-        if (l && v) {
+        if (l && v && !list.some((existing) => existing.label.toLowerCase() === l.toLowerCase())) {
           list.push({ label: l, value: v });
         }
       });
@@ -544,6 +633,8 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
     return list;
   }, [
     configMode,
+    productionVariants,
+    selectedVariants,
     layers,
     layerActive,
     layerFinishes,
@@ -1058,7 +1149,10 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
                   Loading profile...
                 </span>
               ) : isConfiguratorProduct ? (
-                <span>{layers.length} profile layers</span>
+                <span>
+                  {layers.length} profile layers
+                  {productionVariants.length > 0 && ` • ${productionVariants.length} variants`}
+                </span>
               ) : (
                 <span>Form / Custom Product</span>
               )}
@@ -1068,6 +1162,83 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
           {/* Mode 1: Configurator Skin Layers View */}
           {configMode === 'configurator' && (
             <div className="space-y-4">
+              {/* Production Variants (Hardware Models requiring distinct physical cut templates) */}
+              {productionVariants.length > 0 && (
+                <div className="p-4 rounded-xl border border-white/[0.06] bg-[#141417] space-y-3.5">
+                  <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
+                    <div className="flex items-center gap-2">
+                      <Cpu className="w-3.5 h-3.5 text-[#f3aa18]" />
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans">
+                        Production Variants ({productionVariants.length})
+                      </h4>
+                      <span className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/20">
+                        Hardware Cut
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-mono text-neutral-400">
+                      Physical cut template & device model
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {productionVariants.map((v, vIdx) => {
+                      const vKey = v.id || v.name || `variant_${vIdx}`;
+                      const currentSelected = selectedVariants[vKey] || (v.options[0]?.name ?? '');
+
+                      return (
+                        <div
+                          key={vKey}
+                          className="p-3 rounded-lg border border-white/[0.06] bg-[#101114] space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-neutral-200">
+                              {v.name}
+                            </span>
+                            <span className="text-[10px] font-mono text-neutral-400">
+                              {v.options.length} {v.options.length === 1 ? 'option' : 'options'}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1.5">
+                            {v.options.map((opt) => {
+                              const isOptSelected = currentSelected.toLowerCase() === opt.name.toLowerCase();
+                              return (
+                                <button
+                                  key={opt.id || opt.name}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedVariants((prev) => ({
+                                      ...prev,
+                                      [vKey]: opt.name,
+                                    }));
+                                  }}
+                                  className={clsx(
+                                    "px-2.5 py-1.5 rounded-md text-xs font-medium border transition-all text-left flex items-center gap-1.5",
+                                    isOptSelected
+                                      ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18] shadow-xs"
+                                      : "bg-white/[0.03] border-white/[0.08] text-neutral-300 hover:border-white/20 hover:text-white"
+                                  )}
+                                >
+                                  <span className={clsx(
+                                    "w-1.5 h-1.5 rounded-full shrink-0",
+                                    isOptSelected ? "bg-[#f3aa18]" : "bg-neutral-500"
+                                  )} />
+                                  <span>{opt.name}</span>
+                                  {typeof opt.price_diff === 'number' && opt.price_diff !== 0 && (
+                                    <span className="text-[10px] opacity-75 font-mono ml-0.5">
+                                      ({opt.price_diff > 0 ? `+Rp ${opt.price_diff.toLocaleString('id-ID')}` : `-Rp ${Math.abs(opt.price_diff).toLocaleString('id-ID')}`})
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <div className="p-4 rounded-xl border border-white/[0.06] bg-[#141417] space-y-3.5">
                 <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-2">
@@ -1420,6 +1591,84 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
           {/* Mode 2: Form Specifications View (For non-configurator drops, kits, merchandise) */}
           {configMode === 'form' && (
             <div className="space-y-4">
+              {/* Production Variants if profile has variants configured */}
+              {productionVariants.length > 0 && (
+                <div className="p-4 rounded-xl border border-white/[0.06] bg-[#141417] space-y-3.5">
+                  <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
+                    <div className="flex items-center gap-2">
+                      <Cpu className="w-3.5 h-3.5 text-[#f3aa18]" />
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans">
+                        Production Variants ({productionVariants.length})
+                      </h4>
+                      <span className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/20">
+                        Hardware Cut
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-mono text-neutral-400">
+                      Physical cut template & device model
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {productionVariants.map((v, vIdx) => {
+                      const vKey = v.id || v.name || `variant_${vIdx}`;
+                      const currentSelected = selectedVariants[vKey] || (v.options[0]?.name ?? '');
+
+                      return (
+                        <div
+                          key={vKey}
+                          className="p-3 rounded-lg border border-white/[0.06] bg-[#101114] space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-neutral-200">
+                              {v.name}
+                            </span>
+                            <span className="text-[10px] font-mono text-neutral-400">
+                              {v.options.length} {v.options.length === 1 ? 'option' : 'options'}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1.5">
+                            {v.options.map((opt) => {
+                              const isOptSelected = currentSelected.toLowerCase() === opt.name.toLowerCase();
+                              return (
+                                <button
+                                  key={opt.id || opt.name}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedVariants((prev) => ({
+                                      ...prev,
+                                      [vKey]: opt.name,
+                                    }));
+                                  }}
+                                  className={clsx(
+                                    "px-2.5 py-1.5 rounded-md text-xs font-medium border transition-all text-left flex items-center gap-1.5",
+                                    isOptSelected
+                                      ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18] shadow-xs"
+                                      : "bg-white/[0.03] border-white/[0.08] text-neutral-300 hover:border-white/20 hover:text-white"
+                                  )}
+                                >
+                                  <span className={clsx(
+                                    "w-1.5 h-1.5 rounded-full shrink-0",
+                                    isOptSelected ? "bg-[#f3aa18]" : "bg-neutral-500"
+                                  )} />
+                                  <span>{opt.name}</span>
+                                  {typeof opt.price_diff === 'number' && opt.price_diff !== 0 && (
+                                    <span className="text-[10px] opacity-75 font-mono ml-0.5">
+                                      ({opt.price_diff > 0 ? `+Rp ${opt.price_diff.toLocaleString('id-ID')}` : `-Rp ${Math.abs(opt.price_diff).toLocaleString('id-ID')}`})
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="p-4 rounded-xl border border-white/[0.06] bg-[#141417] space-y-3.5">
                 <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
                   <div className="flex items-center gap-2">

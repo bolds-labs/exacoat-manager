@@ -4533,6 +4533,7 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
         const lName = (l.name || '').toLowerCase();
         return lName !== 'device' && !lName.includes('device-body');
       });
+      const isPhoneDevice = (data.profile.family === 'phone') || /\b(iphone|galaxy\s*s\d|pixel\s*\d|phone)\b/i.test(`${data.profile.device_name || ''} ${data.profile.device_slug || ''}`);
       const cleanVariants = (data.profile.variants || []).filter((v: any) => {
         const vId = (v.id || '').toLowerCase();
         const vName = (v.name || '').toLowerCase();
@@ -4541,7 +4542,8 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
           const optName = (opt.name || '').toLowerCase();
           return optId.includes('360') || optName.includes('360') || optId.includes('model-cut') || optName.includes('model cut');
         });
-        return !hasCoverageOptions && vId !== 'model' && vName !== 'model' && !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage') && !vId.includes('360') && !vName.includes('360');
+        const isPhoneModelRelic = isPhoneDevice && (vId === 'model' || vName === 'model');
+        return !hasCoverageOptions && !isPhoneModelRelic && !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage') && !vId.includes('360') && !vName.includes('360');
       });
 
       // Sanitize corrupted unicode degree representations in presets or strings
@@ -4871,6 +4873,7 @@ export async function saveProductConfiguratorProfileDirect(profile: Partial<Devi
   const url = `${base}/wp-json/exacoat-core/v1/configurator/save`;
 
   try {
+    const isPhoneDevice = (profile.family === 'phone') || /\b(iphone|galaxy\s*s\d|pixel\s*\d|phone)\b/i.test(`${profile.device_name || ''} ${profile.device_slug || ''}`);
     const cleanVariants = profile.variants ? profile.variants.filter((v: any) => {
       const vId = (v.id || '').toLowerCase();
       const vName = (v.name || '').toLowerCase();
@@ -4879,7 +4882,8 @@ export async function saveProductConfiguratorProfileDirect(profile: Partial<Devi
         const optName = (opt.name || '').toLowerCase();
         return optId.includes('360') || optName.includes('360') || optId.includes('model-cut') || optName.includes('model cut');
       });
-      return !hasCoverageOptions && vId !== 'model' && vName !== 'model' && !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage') && !vId.includes('360') && !vName.includes('360');
+      const isPhoneModelRelic = isPhoneDevice && (vId === 'model' || vName === 'model');
+      return !hasCoverageOptions && !isPhoneModelRelic && !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage') && !vId.includes('360') && !vName.includes('360');
     }) : undefined;
 
     const cleanPresets = Array.isArray(profile.presets) ? profile.presets.map((p: any) => ({
