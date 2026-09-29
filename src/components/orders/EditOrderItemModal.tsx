@@ -277,9 +277,11 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
       const initialFinishes: Record<string, string> = {};
 
       resolvedLayers.forEach((l) => {
-        const match = currentSpecs.find(
-          (s) => s.label.trim().toLowerCase() === l.name.trim().toLowerCase()
-        );
+        const lClean = l.name.trim().toLowerCase().replace(/s$/, '');
+        const match = currentSpecs.find((s) => {
+          const sClean = s.label.trim().toLowerCase().replace(/s$/, '');
+          return sClean === lClean || s.label.trim().toLowerCase() === l.name.trim().toLowerCase();
+        });
         if (match) {
           initialActive[l.id] = true;
           initialFinishes[l.id] = match.value;
@@ -361,11 +363,16 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
       // 5. Custom specs for configurator: ONLY non-layer, non-coverage, non-logo extra metadata
       const nonLayerSpecs = currentSpecs.filter((s) => {
         const lbl = s.label.trim().toLowerCase();
-        const isLayer = resolvedLayers.some((l) => l.name.trim().toLowerCase() === lbl);
+        const lblClean = lbl.replace(/s$/, '');
+        const isLayer = resolvedLayers.some((l) => {
+          const lClean = l.name.trim().toLowerCase().replace(/s$/, '');
+          return lClean === lblClean || l.name.trim().toLowerCase() === lbl;
+        });
         const isCoverage = /^(coverage|cut|model cut|360)$/i.test(lbl);
         const isLogo = /^(logo|logo cutout)$/i.test(lbl);
         const isPencil = /pencil/i.test(lbl);
-        return !isLayer && !isCoverage && !isLogo && !isPencil;
+        const isRelic = lbl === 'configuration' && /^(custom|default|none)$/i.test(s.value.trim());
+        return !isLayer && !isCoverage && !isLogo && !isPencil && !isRelic;
       });
 
       setCustomSpecs(
@@ -642,6 +649,20 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
               is_choice: true,
             })),
             specs: compiledSpecs,
+            custom_addons: [],
+            formatted_meta: compiledSpecs.map((s, idx) => ({
+              id: idx,
+              key: s.label,
+              label: s.label,
+              value: s.value,
+              display_key: s.label,
+              display_value: s.value,
+            })),
+            meta_data: compiledSpecs.map((s, idx) => ({
+              id: idx,
+              key: s.label,
+              value: s.value,
+            })),
           };
         }
         return it;
@@ -665,6 +686,20 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
           is_choice: true,
         })),
         specs: compiledSpecs,
+        custom_addons: [],
+        formatted_meta: compiledSpecs.map((s, idx) => ({
+          id: idx,
+          key: s.label,
+          label: s.label,
+          value: s.value,
+          display_key: s.label,
+          display_value: s.value,
+        })),
+        meta_data: compiledSpecs.map((s, idx) => ({
+          id: idx,
+          key: s.label,
+          value: s.value,
+        })),
       };
       updatedItemsList = [...currentItems, newItem];
     }

@@ -1022,26 +1022,125 @@ class Exacoat_Order_Manager {
 
 				// Update specifications / configuration metadata
 				if ( isset( $it_data['specs'] ) && is_array( $it_data['specs'] ) ) {
-					$config_parts = [];
-					$raw_config = [];
+					$config_parts  = [];
+					$raw_config    = [];
+					$new_specs_map = [];
 
 					foreach ( $it_data['specs'] as $sp ) {
 						$lbl = sanitize_text_field( $sp['label'] ?? '' );
 						$val = sanitize_text_field( $sp['value'] ?? '' );
 						if ( ! empty( $lbl ) && ! empty( $val ) ) {
-							$line_item->update_meta_data( $lbl, $val );
+							$lbl_lower = strtolower( trim( $lbl ) );
+							$new_specs_map[ $lbl_lower ] = [
+								'label' => $lbl,
+								'value' => $val,
+							];
 							$config_parts[] = "{$lbl}: {$val}";
-							$raw_config[] = [
+							$raw_config[]   = [
 								'layer_name'   => $lbl,
 								'name'         => $val,
 								'choice_title' => $val,
+								'choice_name'  => $val,
 								'is_choice'    => true,
 							];
 						}
 					}
 
+					// Protected WooCommerce/internal/pricing/warranty line item meta keys that must never be removed
+					$protected_meta_keys = [
+						'_qty',
+						'_tax_class',
+						'_product_id',
+						'_variation_id',
+						'_line_subtotal',
+						'_line_total',
+						'_line_subtotal_tax',
+						'_line_tax',
+						'_reduced_stock',
+						'_shipped_at',
+						'_configured_image_url',
+						'_configurator_image',
+						'_thumbnail_url',
+						'mkl_pc_thumbnail_url',
+						'_composite_url',
+						'_image_url',
+						'image_url',
+						'thumbnail_url',
+						'image',
+						'composite_url',
+						'composite_image',
+						'_claimed_part_note',
+						'claimed part',
+						'part to produce',
+						'original invoice',
+						'original order',
+						'original channel',
+						'variation',
+						'shopee note',
+						'buyer note',
+					];
+
+					// Legacy addon blobs and configuration meta keys to wipe clean
+					$legacy_addon_keys = [
+						'_wcpa_order_meta_data',
+						'wcpa_data',
+						'_pao_addon_values',
+						'_pao_ids',
+						'addons',
+						'_addons',
+						'_custom_product_addons',
+						'exacoat_addons',
+						'_exacoat_addons',
+						'configuration',
+						'Configuration',
+						'_configurator_data',
+						'_configurator_data_raw',
+					];
+
+					// Clean existing metadata: delete obsolete notes/specs and legacy addon blobs
+					$existing_meta = $line_item->get_meta_data();
+					if ( is_array( $existing_meta ) ) {
+						foreach ( $existing_meta as $m ) {
+							$m_key = is_object( $m ) && method_exists( $m, 'get_data' )
+								? ( $m->get_data()['key'] ?? '' )
+								: ( is_object( $m ) ? ( $m->key ?? '' ) : ( $m['key'] ?? '' ) );
+							$m_key_str   = trim( (string) $m_key );
+							$m_key_lower = strtolower( $m_key_str );
+							if ( empty( $m_key_str ) ) {
+								continue;
+							}
+
+							// Skip protected system keys
+							if ( in_array( $m_key_lower, $protected_meta_keys, true ) ) {
+								continue;
+							}
+
+							// Always wipe legacy addon blobs and old configuration keys
+							if ( in_array( $m_key_lower, array_map( 'strtolower', $legacy_addon_keys ), true ) ) {
+								if ( is_object( $m ) && method_exists( $m, 'get_id' ) && $m->get_id() ) {
+									$line_item->delete_meta_data_by_mid( $m->get_id() );
+								}
+								$line_item->delete_meta_data( $m_key_str );
+								continue;
+							}
+
+							// Delete old instance so removed notes disappear and key casing doesn't duplicate
+							if ( is_object( $m ) && method_exists( $m, 'get_id' ) && $m->get_id() ) {
+								$line_item->delete_meta_data_by_mid( $m->get_id() );
+							}
+							$line_item->delete_meta_data( $m_key_str );
+						}
+					}
+
+					// Now persist newly specified specs
+					foreach ( $new_specs_map as $spec_item ) {
+						$line_item->update_meta_data( $spec_item['label'], $spec_item['value'] );
+					}
+
 					if ( ! empty( $config_parts ) ) {
-						$line_item->update_meta_data( 'configuration', implode( ' • ', $config_parts ) );
+						$config_str = implode( ' • ', $config_parts );
+						$line_item->update_meta_data( 'configuration', $config_str );
+						$line_item->update_meta_data( 'Configuration', $config_str );
 						$line_item->update_meta_data( '_configurator_data_raw', $raw_config );
 					}
 				}
@@ -1064,6 +1163,12 @@ class Exacoat_Order_Manager {
 		// Recalculate totals & persist
 		$order->calculate_totals();
 		$order->save();
+
+		// Refresh clean order instance from DB to ensure format_order_for_manager returns up-to-date metadata
+		$refreshed_order = wc_get_order( $order_id );
+		if ( $refreshed_order ) {
+			$order = $refreshed_order;
+		}
 
 		// Record note
 		if ( ! empty( $audit_notes ) ) {
@@ -1496,6 +1601,10 @@ class Exacoat_Order_Manager {
 			if ( empty( $l ) || empty( $v ) ) return;
 			// Strip legacy price adjustments e.g. (+Rp 0), (+Rp 25.000)
 			$v = preg_replace( '/\s*\(\+[^)]+\)\s*$/i', '', $v );
+			// Ignore WCPA relic "Configuration: Custom / Default / None"
+			if ( strtolower( $l ) === 'configuration' && in_array( strtolower( $v ), [ 'custom', 'default', 'none' ], true ) ) {
+				return;
+			}
 			$sig = strtolower( $l . ':' . $v );
 			if ( ! isset( $seen[ $sig ] ) ) {
 				$seen[ $sig ] = true;
@@ -1864,6 +1973,44 @@ class Exacoat_Order_Manager {
 				}
 			}
 
+			// Configuration / specs parsing from _configurator_data_raw
+			$parsed_config = [];
+			$raw_config = $item->get_meta( '_configurator_data_raw' ) ?: $item->get_meta( '_configurator_data' );
+			if ( ! empty( $raw_config ) ) {
+				if ( is_string( $raw_config ) ) {
+					$decoded = json_decode( $raw_config, true );
+					if ( is_array( $decoded ) ) {
+						$raw_config = $decoded;
+					}
+				}
+				if ( is_array( $raw_config ) ) {
+					foreach ( $raw_config as $v ) {
+						$l_name = $v['layer_data']['layer_name'] ?? ( $v['layer_data']['name'] ?? ( $v['layer_name'] ?? 'Layer' ) );
+						$c_name = $v['layer_data']['name'] ?? ( $v['choice_title'] ?? ( $v['choice_name'] ?? ( $v['name'] ?? '' ) ) );
+						if ( $c_name ) {
+							$parsed_config[] = [
+								'layer_name'   => $l_name,
+								'name'         => $c_name,
+								'choice_title' => $c_name,
+								'choice_name'  => $c_name,
+								'is_choice'    => true,
+							];
+						}
+					}
+				}
+			}
+
+			// Compile specs list directly from line item for easy consumption
+			$compiled_specs = [];
+			if ( ! empty( $parsed_config ) ) {
+				foreach ( $parsed_config as $pc ) {
+					$compiled_specs[] = [
+						'label' => $pc['layer_name'],
+						'value' => $pc['choice_name'],
+					];
+				}
+			}
+
 			$items_data[] = [
 				'id'                   => $item_id,
 				'product_id'           => $product_id,
@@ -1891,6 +2038,8 @@ class Exacoat_Order_Manager {
 				'meta_data'            => $meta_data,
 				'formatted_meta'       => $formatted_meta,
 				'custom_addons'        => $custom_addons,
+				'parsed_configurator'  => $parsed_config,
+				'specs'                => $compiled_specs,
 			];
 		}
 

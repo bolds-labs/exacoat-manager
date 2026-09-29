@@ -11,6 +11,26 @@ export interface ItemCustomizationSpec {
 export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
   if (!item) return [];
 
+  // Early return if structured specs are already present on the item
+  if (Array.isArray(item.specs) && item.specs.length > 0) {
+    const list: ItemCustomizationSpec[] = [];
+    const localSeen = new Set<string>();
+    for (const s of item.specs) {
+      const lbl = String(s?.label || '').trim();
+      const val = String(s?.value || '').trim();
+      if (!lbl || !val || lbl.startsWith('_')) continue;
+      if (lbl.toLowerCase() === 'configuration' && /^(custom|default|none)$/i.test(val)) continue;
+      const sig = `${lbl.toLowerCase()}:${val.toLowerCase()}`;
+      if (!localSeen.has(sig)) {
+        localSeen.add(sig);
+        list.push({ label: lbl, value: val });
+      }
+    }
+    if (list.length > 0) {
+      return sortItemSpecs(list);
+    }
+  }
+
   const specs: ItemCustomizationSpec[] = [];
   const seen = new Set<string>();
 
@@ -39,6 +59,11 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
 
     // Skip auto or portrait relics if label is generic
     if (/^(auto|portrait)$/i.test(cleanVal) && /^(finish|orientation)$/i.test(cleanLabel)) {
+      return;
+    }
+
+    // Skip placeholder configuration: custom relics
+    if (cleanLabel.toLowerCase() === 'configuration' && /^(custom|default|none)$/i.test(cleanVal)) {
       return;
     }
 
@@ -85,6 +110,39 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
     }
   };
 
+  // Helper to parse joined configuration strings (e.g. Back: Shadow Camo • Sides: Matte White)
+  const parseConfigurationString = (val: string) => {
+    if (!val || typeof val !== 'string') return;
+    const cleanVal = val.trim();
+    if (!cleanVal || /^(custom|default|none)$/i.test(cleanVal)) return;
+
+    // Split on bullet (• or &bull;), newline, HTML break, or pipe
+    let parts = cleanVal.split(/\s*(?:&bull;|•|<br\s*\/?>|\r?\n|\|)\s*/i).filter(Boolean);
+
+    // Fallback if no bullet/newline delimiter was used but contains multiple "Key: Val" tokens
+    if (parts.length === 1 && (cleanVal.match(/:/g) || []).length > 1) {
+      const splitByLookahead = cleanVal.split(/(?=[A-Za-z0-9\s_-]+:\s*)/i).filter(Boolean);
+      if (splitByLookahead.length > 1) {
+        parts = splitByLookahead;
+      }
+    }
+
+    for (const p of parts) {
+      const trimmed = p.replace(/^[•\s&bull;]+|[•\s&bull;]+$/g, '').trim();
+      if (!trimmed) continue;
+      const colonIdx = trimmed.indexOf(':');
+      if (colonIdx > 0) {
+        const subKey = trimmed.substring(0, colonIdx).trim();
+        const subVal = trimmed.substring(colonIdx + 1).trim();
+        if (subKey && subVal) {
+          addSpec(subKey, subVal);
+        }
+      } else if (!/^(custom|default|none)$/i.test(trimmed)) {
+        addSpec('Part', trimmed);
+      }
+    }
+  };
+
   // 0. Prioritize Warranty Replacement & RMA keys so production immediately sees what part to cut
   if (Array.isArray(item.meta_data) && item.meta_data.length > 0) {
     const priorityWarrantyKeys = [
@@ -117,13 +175,8 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
   // Count specs found so far before checking regular configurator/product attributes
   const hasConfiguratorSpecs = () => specs.some(s => !['claimed part', 'part to produce', 'original invoice', 'original order', 'original channel', 'variation', 'shopee note', 'buyer note'].includes(s.label.toLowerCase()));
 
-  // 1. Check custom_addons array (prepared by backend parser)
-  if (Array.isArray(item.custom_addons) && item.custom_addons.length > 0) {
-    parseAddonsList(item.custom_addons);
-  }
-
-  // 2. Check parsed_configurator
-  if (!hasConfiguratorSpecs() && Array.isArray(item.parsed_configurator) && item.parsed_configurator.length > 0) {
+  // 1. Check parsed_configurator first (exact configurator layer choices)
+  if (Array.isArray(item.parsed_configurator) && item.parsed_configurator.length > 0) {
     for (const c of item.parsed_configurator) {
       const layer = String(c.layer_name || c.name || '').trim();
       const choice = String(c.choice_name || c.choice_title || c.name || '').trim();
@@ -131,6 +184,20 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
         addSpec(layer, choice);
       } else if (choice) {
         addSpec('Part', choice);
+      }
+    }
+  }
+
+  // 2. Check raw configurator data in meta_data if parsed_configurator wasn't present
+  if (!hasConfiguratorSpecs() && Array.isArray(item.meta_data) && item.meta_data.length > 0) {
+    const rawConfig = item.meta_data.find((m: any) => m.key === '_configurator_data_raw' || m.key === '_configurator_data');
+    if (rawConfig && rawConfig.value && Array.isArray(rawConfig.value)) {
+      for (const v of rawConfig.value) {
+        const layerName = v.layer_data?.layer_name || v.layer_data?.name || v.layer_name || 'Part';
+        const choiceName = v.layer_data?.name || v.choice_title || v.choice_name || v.name || '';
+        if (choiceName) {
+          addSpec(layerName, choiceName);
+        }
       }
     }
   }
@@ -143,47 +210,32 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
       if (!key || !val || key.startsWith('_')) continue;
 
       if (key.toLowerCase() === 'configuration') {
-        const parts = val.split(/(?=Back:|Accents:|Camera:|Additional Camera:|Model:|Frame:|Trackpad:|Logo:|Coverage:)/i);
-        for (const p of parts) {
-          const [subKey, ...subRest] = p.split(':');
-          if (subRest.length > 0 && subRest.join(':').trim()) {
-            addSpec(subKey.trim(), subRest.join(':').trim());
-          }
-        }
+        parseConfigurationString(val);
       } else {
         addSpec(key, val);
       }
     }
   }
 
-  // 4. Check meta_data (including legacy WooCommerce Product Add-ons & Acowebs WCPA)
-  if (!hasConfiguratorSpecs() && Array.isArray(item.meta_data) && item.meta_data.length > 0) {
-    // Check raw configurator data
-    const rawConfig = item.meta_data.find((m: any) => m.key === '_configurator_data_raw' || m.key === '_configurator_data');
-    if (rawConfig && rawConfig.value && Array.isArray(rawConfig.value)) {
-      for (const v of rawConfig.value) {
-        const layerName = v.layer_data?.layer_name || v.layer_data?.name || v.layer_name || 'Part';
-        const choiceName = v.layer_data?.name || v.choice_title || v.name || '';
-        if (choiceName) {
-          addSpec(layerName, choiceName);
-        }
-      }
-    }
+  // 4. Check custom_addons array (prepared by backend parser)
+  if (Array.isArray(item.custom_addons) && item.custom_addons.length > 0) {
+    parseAddonsList(item.custom_addons);
+  }
 
+  // 5. Check meta_data (including legacy WooCommerce Product Add-ons & Acowebs WCPA)
+  if (!hasConfiguratorSpecs() && Array.isArray(item.meta_data) && item.meta_data.length > 0) {
     // Check legacy WooCommerce Custom Product Add-ons keys (e.g. Order #542240 Everything Skins)
-    if (!hasConfiguratorSpecs()) {
-      for (const m of item.meta_data) {
-        const key = String(m.key || '').trim().toLowerCase();
-        if (
-          key === '_wcpa_order_meta_data' ||
-          key === 'wcpa_data' ||
-          key === '_pao_addon_values' ||
-          key === 'addons' ||
-          key === '_addons' ||
-          key === '_custom_product_addons'
-        ) {
-          parseAddonsList(m.value);
-        }
+    for (const m of item.meta_data) {
+      const key = String(m.key || '').trim().toLowerCase();
+      if (
+        key === '_wcpa_order_meta_data' ||
+        key === 'wcpa_data' ||
+        key === '_pao_addon_values' ||
+        key === 'addons' ||
+        key === '_addons' ||
+        key === '_custom_product_addons'
+      ) {
+        parseAddonsList(m.value);
       }
     }
 
@@ -194,13 +246,7 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
         if (!key || !val || key.startsWith('_')) continue;
 
         if (key.toLowerCase() === 'configuration') {
-          const parts = val.split(/(?=Back:|Accents:|Camera:|Additional Camera:|Model:|Frame:|Trackpad:|Logo:|Coverage:)/i);
-          for (const p of parts) {
-            const [subKey, ...subRest] = p.split(':');
-            if (subRest.length > 0 && subRest.join(':').trim()) {
-              addSpec(subKey.trim(), subRest.join(':').trim());
-            }
-          }
+          parseConfigurationString(val);
         } else {
           addSpec(key, val);
         }
@@ -208,22 +254,12 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
     }
   }
 
-  // 5. Check item.meta string (e.g. Back: Swarm • Camera: Black Camo)
+  // 6. Check item.meta string (e.g. Back: Swarm • Camera: Black Camo)
   if (specs.length === 0 && item.meta) {
-    const parts = String(item.meta).split(/\s*(?:&bull;|•|<br\s*\/?>|\r?\n|\|)\s*/i).filter(Boolean);
-    for (const p of parts) {
-      const clean = p.replace(/&bull;|•/g, '').trim();
-      if (!clean) continue;
-      if (clean.includes(':')) {
-        const [k, ...v] = clean.split(':');
-        addSpec(k.trim(), v.join(':').trim());
-      } else {
-        addSpec('Option', clean);
-      }
-    }
+    parseConfigurationString(String(item.meta));
   }
 
-  // 6. Fallback device model if present
+  // 7. Fallback device model if present
   if (specs.length === 0 && item.device_model) {
     addSpec('Model', String(item.device_model).trim());
   }

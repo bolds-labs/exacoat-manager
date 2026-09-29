@@ -716,10 +716,18 @@ function enrichOrder(order: any): Order {
       }
     }
 
+    const parsedConfig = (Array.isArray(item.parsed_configurator) && item.parsed_configurator.length > 0)
+      ? item.parsed_configurator
+      : parseConfiguratorFromItem(item);
+    const itemSpecs = (Array.isArray(item.specs) && item.specs.length > 0)
+      ? item.specs
+      : extractItemSpecs({ ...item, parsed_configurator: parsedConfig });
+
     return {
       ...item,
       image_url: resolvedImg || item.image_url,
-      parsed_configurator: item.parsed_configurator || parseConfiguratorFromItem(item),
+      parsed_configurator: parsedConfig,
+      specs: itemSpecs,
     };
   });
 
