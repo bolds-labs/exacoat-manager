@@ -3,7 +3,7 @@
  * Plugin Name:       Exacoat Core Platform
  * Plugin URI:        https://exacoat.com
  * Description:       Proprietary e-commerce core engine, configurator manager, and ERP workstation integration for Exacoat.
- * Version:           0.1.144
+ * Version:           0.1.145
  * Author:            Exacoat
  * Author URI:        https://exacoat.com
  * License:           Proprietary
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'EXACOAT_CORE_VERSION' ) ) {
-	define( 'EXACOAT_CORE_VERSION', '0.1.144' );
+	define( 'EXACOAT_CORE_VERSION', '0.1.145' );
 }
 if ( ! defined( 'EXACOAT_CORE_FILE' ) ) {
 	define( 'EXACOAT_CORE_FILE', __FILE__ );
@@ -411,6 +411,7 @@ require_once EXACOAT_CORE_PATH . 'includes/class-store-enhancements.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-diagnostics.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-performance-auditor.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-email-engine.php';
+require_once EXACOAT_CORE_PATH . 'includes/class-email-logger.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-order-manager.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-checkout-engine.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-customer-auth.php';

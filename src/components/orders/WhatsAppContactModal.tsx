@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { normalizeIndonesianPhone } from '../../lib/phoneUtils';
-import { Copy, Check, ExternalLink, MessageCircle, AlertCircle } from 'lucide-react';
+import { ExternalLink, Check, AlertCircle } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
+import { cleanOrderNumber, formatOrderNumber } from '../../lib/orderUtils';
 
 export const WhatsAppIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
   <svg 
@@ -24,7 +25,8 @@ export interface WhatsAppContactModalProps {
   trackingNumber?: string | null;
 }
 
-type TemplateKey = 'followup' | 'shipping' | 'payment' | 'blank';
+export type TemplateKey = 'followup' | 'shipping' | 'payment' | 'blank';
+export type TemplateLanguage = 'id' | 'en';
 
 export const WhatsAppContactModal: React.FC<WhatsAppContactModalProps> = ({
   isOpen,
@@ -36,28 +38,57 @@ export const WhatsAppContactModal: React.FC<WhatsAppContactModalProps> = ({
 }) => {
   const { showToast } = useToast();
   const [targetPhone, setTargetPhone] = useState('');
+  const [language, setLanguage] = useState<TemplateLanguage>('id');
   const [activeTemplate, setActiveTemplate] = useState<TemplateKey>('followup');
   const [message, setMessage] = useState('');
-  const [copiedType, setCopiedType] = useState<'phone' | 'message' | null>(null);
+
+  const cleanOrderRef = cleanOrderNumber(orderNumber);
+  const formattedOrderRef = formatOrderNumber(orderNumber);
 
   const getCleanPhone = (val: string) => {
     return normalizeIndonesianPhone(val);
   };
 
-  const getFirstName = () => {
+  const getFirstName = (lang: TemplateLanguage = language) => {
     const trimmed = (customerName || '').trim();
-    if (!trimmed) return 'Kak';
-    return trimmed.split(' ')[0] || 'Kak';
+    if (!trimmed) {
+      return lang === 'en' ? 'Customer' : 'Kak';
+    }
+    return trimmed.split(' ')[0] || (lang === 'en' ? 'Customer' : 'Kak');
   };
 
-  const generateTemplate = (key: TemplateKey, name: string, orderRef: string, tracking: string): string => {
+  const generateTemplate = (
+    key: TemplateKey,
+    lang: TemplateLanguage,
+    name: string,
+    orderRef: string,
+    tracking: string
+  ): string => {
+    const displayRef = formatOrderNumber(orderRef);
+
+    if (lang === 'en') {
+      switch (key) {
+        case 'followup':
+          return `Hello ${name}, thank you for shopping with Exacoat.\n\nRegarding your order ${displayRef}, we would like to confirm a few details regarding...`;
+        case 'shipping':
+          return `Hello ${name}, your order ${displayRef} at Exacoat has been processed and shipped.\n\nTracking Number: ${tracking || '[tracking number]'}\nYou can track your shipment through the courier's tracking portal. Thank you for shopping with Exacoat!`;
+        case 'payment':
+          return `Hello ${name}, this is the Exacoat team reaching out regarding payment for order ${displayRef}.\n\nIf you have completed the transfer, please share your payment confirmation with us. Thank you!`;
+        case 'blank':
+          return '';
+        default:
+          return '';
+      }
+    }
+
+    // Default: Indonesian
     switch (key) {
       case 'followup':
-        return `Halo Kak ${name}, terima kasih telah berbelanja di Exacoat.\n\nMengenai pesanan #${orderRef}, kami ingin konfirmasi terkait...`;
+        return `Halo Kak ${name}, terima kasih telah berbelanja di Exacoat.\n\nMengenai pesanan ${displayRef}, kami ingin konfirmasi terkait...`;
       case 'shipping':
-        return `Halo Kak ${name}, pesanan #${orderRef} di Exacoat sudah kami proses dan dikirimkan.\n\nNomor Resi: ${tracking || '[nomor resi]'}\nKamu dapat melacak pengiriman melalui aplikasi kurir terkait. Terima kasih telah berbelanja di Exacoat!`;
+        return `Halo Kak ${name}, pesanan ${displayRef} di Exacoat sudah kami proses dan dikirimkan.\n\nNomor Resi: ${tracking || '[nomor resi]'}\nKamu dapat melacak pengiriman melalui aplikasi kurir terkait. Terima kasih telah berbelanja di Exacoat!`;
       case 'payment':
-        return `Halo Kak ${name}, kami dari tim Exacoat ingin konfirmasi terkait pembayaran untuk pesanan #${orderRef}.\n\nJika sudah melakukan transfer, mohon bantu kirimkan bukti pembayarannya ya. Terima kasih!`;
+        return `Halo Kak ${name}, kami dari tim Exacoat ingin konfirmasi terkait pembayaran untuk pesanan ${displayRef}.\n\nJika sudah melakukan transfer, mohon bantu kirimkan bukti pembayarannya ya. Terima kasih!`;
       case 'blank':
         return '';
       default:
@@ -69,32 +100,24 @@ export const WhatsAppContactModal: React.FC<WhatsAppContactModalProps> = ({
     if (isOpen) {
       const normalized = getCleanPhone(phone || '');
       setTargetPhone(normalized);
-      const name = getFirstName();
-      const orderRef = String(orderNumber || '');
+      const name = getFirstName(language);
       const track = trackingNumber || '';
-      setMessage(generateTemplate(activeTemplate, name, orderRef, track));
-      setCopiedType(null);
+      setMessage(generateTemplate(activeTemplate, language, name, cleanOrderRef, track));
     }
   }, [isOpen, phone, customerName, orderNumber, trackingNumber]);
 
-  const handleSelectTemplate = (key: TemplateKey) => {
-    setActiveTemplate(key);
-    const name = getFirstName();
-    const orderRef = String(orderNumber || '');
+  const handleLanguageChange = (newLang: TemplateLanguage) => {
+    setLanguage(newLang);
+    const name = getFirstName(newLang);
     const track = trackingNumber || '';
-    setMessage(generateTemplate(key, name, orderRef, track));
+    setMessage(generateTemplate(activeTemplate, newLang, name, cleanOrderRef, track));
   };
 
-  const handleCopy = async (text: string, type: 'phone' | 'message') => {
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedType(type);
-      showToast('success', type === 'phone' ? 'Phone Number Copied' : 'Message Copied', text.slice(0, 40));
-      setTimeout(() => setCopiedType(null), 2000);
-    } catch {
-      showToast('error', 'Copy Failed', 'Unable to copy text to clipboard.');
-    }
+  const handleSelectTemplate = (key: TemplateKey, lang: TemplateLanguage = language) => {
+    setActiveTemplate(key);
+    const name = getFirstName(lang);
+    const track = trackingNumber || '';
+    setMessage(generateTemplate(key, lang, name, cleanOrderRef, track));
   };
 
   const handleLaunchWhatsApp = () => {
@@ -114,6 +137,20 @@ export const WhatsAppContactModal: React.FC<WhatsAppContactModalProps> = ({
   const currentFormatted = getCleanPhone(targetPhone);
   const isValidPhone = currentFormatted.length >= 10;
 
+  const templateOptions = language === 'id'
+    ? [
+        { id: 'followup', label: 'Konfirmasi Pesanan (Follow-up)' },
+        { id: 'shipping', label: 'Update Pengiriman & Nomor Resi' },
+        { id: 'payment', label: 'Konfirmasi Pembayaran (Payment Notice)' },
+        { id: 'blank', label: 'Pesan Kosong (Custom Blank)' },
+      ]
+    : [
+        { id: 'followup', label: 'Order Follow-up Confirmation' },
+        { id: 'shipping', label: 'Shipping Update & Tracking' },
+        { id: 'payment', label: 'Payment Notice & Transfer Receipt' },
+        { id: 'blank', label: 'Custom Blank Message' },
+      ];
+
   return (
     <Modal
       isOpen={isOpen}
@@ -127,75 +164,31 @@ export const WhatsAppContactModal: React.FC<WhatsAppContactModalProps> = ({
           <div>
             <div className="font-semibold text-zinc-950 dark:text-white text-base">WhatsApp Customer</div>
             <div className="text-xs text-zinc-500 dark:text-zinc-400 font-normal">
-              Direct message dispatch for Order #{orderNumber || ''}
+              Direct message dispatch for Order {formattedOrderRef || `#${cleanOrderRef}`}
             </div>
           </div>
         </div>
       }
       footer={
-        <div className="flex items-center justify-between w-full gap-2">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => handleCopy(currentFormatted, 'phone')}
-              disabled={!currentFormatted}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors flex items-center gap-1.5 disabled:opacity-50"
-              title="Copy formatted phone number"
-            >
-              {copiedType === 'phone' ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>Copied</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Copy Phone</span>
-                </>
-              )}
-            </button>
+        <div className="flex items-center justify-end w-full gap-2.5">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
 
-            <button
-              type="button"
-              onClick={() => handleCopy(message, 'message')}
-              disabled={!message.trim()}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors flex items-center gap-1.5 disabled:opacity-50"
-              title="Copy message text"
-            >
-              {copiedType === 'message' ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>Copied</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Copy Text</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3.5 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
-            >
-              Cancel
-            </button>
-
-            <button
-              type="button"
-              onClick={handleLaunchWhatsApp}
-              disabled={!isValidPhone}
-              className="px-4 py-2 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-sm hover:shadow flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <WhatsAppIcon className="w-4 h-4" />
-              <span>Open in WhatsApp</span>
-              <ExternalLink className="w-3.5 h-3.5 opacity-80" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleLaunchWhatsApp}
+            disabled={!isValidPhone}
+            className="px-4 py-2 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-sm hover:shadow flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            <WhatsAppIcon className="w-4 h-4" />
+            <span>Open in WhatsApp</span>
+            <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+          </button>
         </div>
       }
     >
@@ -258,31 +251,57 @@ export const WhatsAppContactModal: React.FC<WhatsAppContactModalProps> = ({
           </div>
         </div>
 
-        {/* Message Templates Selection */}
-        <div>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block mb-1.5">
-            Quick Message Template
-          </span>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {[
-              { id: 'followup', label: 'Order Follow-up' },
-              { id: 'shipping', label: 'Shipping & Resi' },
-              { id: 'payment', label: 'Payment Notice' },
-              { id: 'blank', label: 'Custom Blank' },
-            ].map((tpl) => (
+        {/* Quick Message Template Selection with Language Toggle */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <label 
+              htmlFor="wa-template-select"
+              className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
+            >
+              Quick Message Template
+            </label>
+
+            {/* Language Selector */}
+            <div className="inline-flex items-center rounded-lg p-0.5 bg-zinc-200/80 dark:bg-white/[0.06] border border-zinc-300 dark:border-white/10 text-xs">
               <button
-                key={tpl.id}
                 type="button"
-                onClick={() => handleSelectTemplate(tpl.id as TemplateKey)}
-                className={`px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-all text-center truncate ${
-                  activeTemplate === tpl.id
-                    ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                    : 'border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5'
+                onClick={() => handleLanguageChange('id')}
+                className={`px-2.5 py-1 rounded-md text-xs transition-all flex items-center gap-1 cursor-pointer ${
+                  language === 'id'
+                    ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs font-semibold'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white font-medium'
                 }`}
               >
-                {tpl.label}
+                <span>🇮🇩 Indonesian</span>
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => handleLanguageChange('en')}
+                className={`px-2.5 py-1 rounded-md text-xs transition-all flex items-center gap-1 cursor-pointer ${
+                  language === 'en'
+                    ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs font-semibold'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white font-medium'
+                }`}
+              >
+                <span>🇬🇧 English</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Template Dropdown */}
+          <div className="relative">
+            <select
+              id="wa-template-select"
+              value={activeTemplate}
+              onChange={(e) => handleSelectTemplate(e.target.value as TemplateKey, language)}
+              className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-white/10 rounded-lg text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all cursor-pointer font-medium"
+            >
+              {templateOptions.map((tpl) => (
+                <option key={tpl.id} value={tpl.id}>
+                  {tpl.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 

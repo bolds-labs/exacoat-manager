@@ -11,6 +11,7 @@ import {
   processGuaranteeActionDirect,
 } from '../../lib/wordpressBridge';
 import { formatCurrency } from '../../lib/formatters';
+import { formatOrderNumber } from '../../lib/orderUtils';
 import {
   ShieldCheck,
   RotateCcw,
@@ -481,7 +482,7 @@ export const RmaClaimsLogModal: React.FC<RmaClaimsLogModalProps> = ({
                             onClick={() => onSelectOrder?.(claim.order_id)}
                             className="font-bold text-white hover:text-amber-400 transition-colors cursor-pointer text-xs"
                           >
-                            #{claim.order_number}
+                            {formatOrderNumber(claim.order_number || claim.order_id)}
                           </button>
                           <div className="text-[10px] text-neutral-500 mt-0.5">
                             {claim.created_at ? claim.created_at.split(' ')[0] : ''}
@@ -767,7 +768,7 @@ export const RmaClaimsLogModal: React.FC<RmaClaimsLogModalProps> = ({
                             onClick={() => onSelectOrder?.(claim.order_id)}
                             className="font-bold text-white hover:text-purple-300 transition-colors cursor-pointer text-xs"
                           >
-                            #{claim.order_number}
+                            {formatOrderNumber(claim.order_number || claim.order_id)}
                           </button>
                           <div className="text-[10px] text-neutral-500 mt-0.5">
                             {claim.submitted_at ? claim.submitted_at.split(' ')[0] : ''}

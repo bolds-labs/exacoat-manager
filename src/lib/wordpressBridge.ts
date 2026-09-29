@@ -2792,6 +2792,193 @@ export async function clearWordPressLogs(): Promise<{ success: boolean; message?
 }
 
 // ==========================================
+// Email & ZeptoMail Telemetry Logs
+// ==========================================
+
+export interface ZeptoMailLog {
+  id: number;
+  request_id: string;
+  message_id?: string | null;
+  provider: 'zeptomail' | 'wp_mail';
+  event: string;
+  order_id?: number | null;
+  recipient_email: string;
+  recipient_name: string;
+  subject: string;
+  status: 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'failed';
+  status_code: number;
+  latency_ms: number;
+  bounce_reason?: string | null;
+  error_message?: string | null;
+  metadata?: Record<string, any> | null;
+  created_at: string;
+  delivered_at?: string | null;
+  opened_at?: string | null;
+}
+
+export interface EmailLogsResponse {
+  success: boolean;
+  logs: ZeptoMailLog[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+  stats: {
+    total: number;
+    delivered: number;
+    opened: number;
+    clicked: number;
+    sent: number;
+    bounced: number;
+    failed: number;
+    delivery_rate: number;
+    open_rate: number;
+    avg_latency_ms: number;
+  };
+  webhook_url?: string;
+  error?: string;
+}
+
+export async function fetchEmailLogsDirect(params?: {
+  status?: string;
+  event?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+  order_id?: number;
+}): Promise<EmailLogsResponse> {
+  const base = getWordPressBaseUrl();
+  const query = new URLSearchParams();
+  if (params?.status && params.status !== 'all') query.set('status', params.status);
+  if (params?.event && params.event !== 'all') query.set('event', params.event);
+  if (params?.search && params.search.trim()) query.set('search', params.search.trim());
+  if (params?.page) query.set('page', String(params.page));
+  if (params?.limit) query.set('limit', String(params.limit));
+  if (params?.order_id) query.set('order_id', String(params.order_id));
+
+  const qs = query.toString();
+  const url = `${base}/wp-json/exacoat-core/v1/emails/logs${qs ? '?' + qs : ''}`;
+
+  try {
+    const res = await authenticatedFetch(url, { headers: { Accept: 'application/json' } });
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        success: true,
+        logs: data.logs || [],
+        total: data.total || 0,
+        page: data.page || 1,
+        limit: data.limit || 25,
+        total_pages: data.total_pages || 1,
+        stats: data.stats || {
+          total: 0,
+          delivered: 0,
+          opened: 0,
+          clicked: 0,
+          sent: 0,
+          bounced: 0,
+          failed: 0,
+          delivery_rate: 100,
+          open_rate: 0,
+          avg_latency_ms: 0,
+        },
+        webhook_url: data.webhook_url,
+      };
+    }
+    return {
+      success: false,
+      logs: [],
+      total: 0,
+      page: 1,
+      limit: 25,
+      total_pages: 1,
+      stats: { total: 0, delivered: 0, opened: 0, clicked: 0, sent: 0, bounced: 0, failed: 0, delivery_rate: 0, open_rate: 0, avg_latency_ms: 0 },
+      error: `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      logs: [],
+      total: 0,
+      page: 1,
+      limit: 25,
+      total_pages: 1,
+      stats: { total: 0, delivered: 0, opened: 0, clicked: 0, sent: 0, bounced: 0, failed: 0, delivery_rate: 0, open_rate: 0, avg_latency_ms: 0 },
+      error: err.message,
+    };
+  }
+}
+
+export async function resendEmailFromLogDirect(logId: number): Promise<{ success: boolean; message: string; result?: any }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/emails/resend`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ log_id: logId }),
+    });
+    const data = await res.json();
+    return {
+      success: !!data.success,
+      message: data.message || (data.success ? 'Email re-sent successfully.' : 'Failed to re-send email.'),
+      result: data.result,
+    };
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Connection error re-sending email.' };
+  }
+}
+
+export async function clearEmailLogsDirect(): Promise<{ success: boolean; message?: string; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/emails/clear-logs`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    return {
+      success: !!data.success,
+      message: data.message || 'Email logs cleared.',
+      error: data.message,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function purgeOldEmailLogsDirect(days: number = 60): Promise<{ success: boolean; message?: string; purged?: number; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/emails/purge-old`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ days }),
+    });
+    const data = await res.json();
+    return {
+      success: !!data.success,
+      message: data.message,
+      purged: data.purged,
+      error: data.message,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ==========================================
 // Orders & Fulfillment
 // ==========================================
 

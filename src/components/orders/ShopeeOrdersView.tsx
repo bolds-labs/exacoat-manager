@@ -12,6 +12,7 @@ import {
 import { buildGroupedCourierOptions, matchesCourierFilter } from '../../lib/courierGrouping';
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency, formatDateTime } from '../../lib/formatters';
+import { formatOrderNumber } from '../../lib/orderUtils';
 import { matchesPhoneQuery, formatDisplayPhone } from '../../lib/phoneUtils';
 import { ShopeeSettingsModal } from '../settings/ShopeeSettingsModal';
 import { ArrangeShipmentModal } from './ArrangeShipmentModal';
@@ -1015,7 +1016,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                     {isClaimed && (
                       <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
                         <ShieldCheck className="w-3 h-3" />
-                        <span>Claimed: #{order.existing_claim?.existing_order_num}</span>
+                        <span>Claimed: {formatOrderNumber(order.existing_claim?.existing_order_num)}</span>
                       </span>
                     )}
                   </div>

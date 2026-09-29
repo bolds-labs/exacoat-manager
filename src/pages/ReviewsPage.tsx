@@ -53,6 +53,7 @@ import {
   ReviewRewardSettings
 } from '../lib/wordpressBridge';
 import { formatDateTime, formatDate } from '../lib/formatters';
+import { formatOrderNumber } from '../lib/orderUtils';
 import { SearchableCombobox, ComboboxOption } from '../components/ui/SearchableCombobox';
 import {
   Select,
@@ -1258,7 +1259,7 @@ export const ReviewsPage: React.FC<ReviewsPageProps> = ({
               <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 text-xs">
                 <div className="flex items-center gap-2 truncate">
                   <span className="px-1.5 py-0.5 rounded bg-lime-500/10 text-lime-400 border border-lime-500/20 font-mono font-medium text-[11px] shrink-0">
-                    Order #{createOrderNumber || selectedOrderId}
+                    Order {formatOrderNumber(createOrderNumber || selectedOrderId)}
                   </span>
                   <span className="text-white font-medium truncate">{createCustomerName}</span>
                   {createCustomerLocation && (

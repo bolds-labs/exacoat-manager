@@ -19,6 +19,7 @@ import {
   Phone,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { formatOrderNumber } from '../../lib/orderUtils';
 import {
   fetchWarrantyClaimDetails,
   reviewWarrantyClaimDirect,
@@ -230,7 +231,7 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
       title={
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-5 w-5 text-[#f3aa18]" />
-          <span>Warranty Claim Review #{claim?.order_number || orderId}</span>
+          <span>Warranty Claim Review {formatOrderNumber(claim?.order_number || orderId)}</span>
         </div>
       }
       subtitle="Verify customer 5-piece cut video proof and approve replacement"
@@ -344,7 +345,7 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
                     }}
                     className="flex items-center gap-1 font-mono text-[#f3aa18] hover:underline"
                   >
-                    <span>#{claim.parent_order_number || claim.parent_order_id}</span>
+                    <span>{formatOrderNumber(claim.parent_order_number || claim.parent_order_id)}</span>
                     <ExternalLink className="h-3 w-3" />
                   </button>
                 ) : (

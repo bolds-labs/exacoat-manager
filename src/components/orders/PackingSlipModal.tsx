@@ -397,7 +397,7 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
               <span className="text-lg font-black tracking-tight text-black block">PACKING SLIP</span>
               <span className="text-[11px] font-mono font-bold text-neutral-700 block">{packingSlipNum}</span>
               {rmaOrigInvoice && (
-                <span className="text-[11px] font-mono font-bold text-sky-700 block">Orig: #{rmaOrigInvoice}</span>
+                <span className="text-[11px] font-mono font-bold text-sky-700 block">Orig: #{String(rmaOrigInvoice).replace(/^#+/, '')}</span>
               )}
               <span className="text-[10px] text-neutral-500 block">{formatDate(order.created_at)}</span>
               <div className="flex items-center justify-end gap-1 mt-1">

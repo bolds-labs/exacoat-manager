@@ -2538,6 +2538,18 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                 <span className="text-emerald-400 font-bold">{lastEmailSentResult.latency_ms}ms</span>
               </div>
             )}
+
+            <div className="pt-1 flex items-center justify-between text-[11px] text-zinc-400">
+              <span>Inspect ZeptoMail delivery telemetry:</span>
+              <a
+                href="#emails?tab=logs"
+                onClick={onClose}
+                className="text-amber-500 hover:text-amber-400 font-semibold flex items-center gap-1 hover:underline cursor-pointer"
+              >
+                <span>Delivery Logs</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
           </div>
         </div>
 

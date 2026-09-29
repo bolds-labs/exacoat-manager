@@ -18,6 +18,7 @@ import { OrderDetailDrawer } from '../components/orders/OrderDetailDrawer';
 import { WarrantyReviewModal } from '../components/orders/WarrantyReviewModal';
 import { ManualWarrantyModal } from '../components/orders/ManualWarrantyModal';
 import { formatCurrency } from '../lib/formatters';
+import { formatOrderNumber } from '../lib/orderUtils';
 import {
   ShieldCheck,
   RotateCcw,
@@ -728,7 +729,7 @@ export const RmaClaimsPage: React.FC = () => {
                               onClick={() => handleOpenOrder(claim.order_id)}
                               className="font-bold text-zinc-900 dark:text-white hover:text-amber-500 transition-colors cursor-pointer text-xs"
                             >
-                              #{claim.order_number}
+                              {formatOrderNumber(claim.order_number || claim.order_id)}
                             </button>
                             <div className="text-[10px] text-zinc-500 mt-0.5">
                               {claim.created_at ? claim.created_at.split(' ')[0] : ''}
@@ -1102,7 +1103,7 @@ export const RmaClaimsPage: React.FC = () => {
                               onClick={() => handleOpenOrder(claim.order_id)}
                               className="font-bold text-zinc-900 dark:text-white hover:text-purple-400 transition-colors cursor-pointer text-xs"
                             >
-                              #{claim.order_number}
+                              {formatOrderNumber(claim.order_number || claim.order_id)}
                             </button>
                             <div className="text-[10px] text-zinc-500 mt-0.5">
                               {claim.submitted_at ? claim.submitted_at.split(' ')[0] : 'Online Claim'}

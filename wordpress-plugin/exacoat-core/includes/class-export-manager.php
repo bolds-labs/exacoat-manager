@@ -1351,13 +1351,29 @@ class Exacoat_Export_Manager {
 		$status_code = wp_remote_retrieve_response_code( $response );
 		$body_res    = json_decode( wp_remote_retrieve_body( $response ), true );
 		$is_ok       = ( $status_code >= 200 && $status_code < 300 );
+		$request_id  = $body_res['data'][0]['request_id'] ?? ( $body_res['request_id'] ?? '' );
+
+		if ( class_exists( 'Exacoat_Email_Logger' ) ) {
+			Exacoat_Email_Logger::log_outbound( [
+				'request_id'      => (string) $request_id,
+				'provider'        => 'zeptomail',
+				'event'           => 'export_manifest_jne',
+				'recipient_email' => implode( ', ', $to_list ),
+				'recipient_name'  => 'JNE Logistics',
+				'subject'         => $subject,
+				'status'          => $is_ok ? 'sent' : 'failed',
+				'status_code'     => $status_code,
+				'latency_ms'      => $latency,
+				'error_message'   => ! $is_ok ? ( $body_res['message'] ?? "HTTP {$status_code}" ) : null,
+			] );
+		}
 
 		return [
 			'success'    => $is_ok,
 			'status'     => $status_code,
 			'latency_ms' => $latency,
 			'message'    => $is_ok ? 'Email accepted by ZeptoMail API' : ( $body_res['message'] ?? "HTTP {$status_code}" ),
-			'request_id' => $body_res['data'][0]['request_id'] ?? null,
+			'request_id' => $request_id ?: null,
 			'raw'        => $body_res,
 		];
 	}

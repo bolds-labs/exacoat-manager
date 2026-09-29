@@ -3,15 +3,19 @@ import { GlassCard } from '../components/ui/GlassCard';
 import { Tabs } from '../components/ui/Tabs';
 import { WordPressSystemLogsTable } from '../components/audit/WordPressSystemLogsTable';
 import { ManagerLiveAuditLogs } from '../components/audit/ManagerLiveAuditLogs';
-import { Terminal, Activity } from 'lucide-react';
+import { EmailLogsTable } from '../components/email/EmailLogsTable';
+import { Terminal, Activity, Mail } from 'lucide-react';
 
 interface AuditLogsPageProps {}
 
 export const AuditLogsPage: React.FC<AuditLogsPageProps> = () => {
-  const [activeTab, setActiveTab] = useState<'manager_ai' | 'wordpress'>(() => {
+  const [activeTab, setActiveTab] = useState<'manager_ai' | 'wordpress' | 'emails'>(() => {
     if (typeof window !== 'undefined') {
       const hash = window.location.hash || '';
       const search = window.location.search || '';
+      if (hash.includes('tab=emails') || search.includes('tab=emails') || hash.includes('tab=email')) {
+        return 'emails';
+      }
       if (hash.includes('tab=wordpress') || hash.includes('view=wordpress') || search.includes('tab=wordpress')) {
         return 'wordpress';
       }
@@ -24,7 +28,9 @@ export const AuditLogsPage: React.FC<AuditLogsPageProps> = () => {
     const handleUrlChange = () => {
       const hash = window.location.hash || '';
       const search = window.location.search || '';
-      if (hash.includes('tab=wordpress') || hash.includes('view=wordpress') || search.includes('tab=wordpress')) {
+      if (hash.includes('tab=emails') || search.includes('tab=emails') || hash.includes('tab=email')) {
+        setActiveTab('emails');
+      } else if (hash.includes('tab=wordpress') || hash.includes('view=wordpress') || search.includes('tab=wordpress')) {
         setActiveTab('wordpress');
       } else if (hash.includes('tab=manager_ai') || search.includes('tab=manager_ai')) {
         setActiveTab('manager_ai');
@@ -35,7 +41,7 @@ export const AuditLogsPage: React.FC<AuditLogsPageProps> = () => {
   }, []);
 
   const handleTabChange = (tabId: string) => {
-    const nextTab = tabId as 'manager_ai' | 'wordpress';
+    const nextTab = tabId as 'manager_ai' | 'wordpress' | 'emails';
     setActiveTab(nextTab);
     if (typeof window !== 'undefined') {
       window.history.replaceState(null, '', `#audit?tab=${nextTab}`);
@@ -66,6 +72,7 @@ export const AuditLogsPage: React.FC<AuditLogsPageProps> = () => {
             tabs={[
               { id: 'manager_ai', label: 'Manager Activity' },
               { id: 'wordpress', label: 'WordPress Logs', icon: Terminal },
+              { id: 'emails', label: 'Email Telemetry', icon: Mail },
             ]}
             activeTab={activeTab}
             onChange={handleTabChange}
@@ -74,11 +81,9 @@ export const AuditLogsPage: React.FC<AuditLogsPageProps> = () => {
       </GlassCard>
 
       {/* 2. Tab Content */}
-      {activeTab === 'manager_ai' ? (
-        <ManagerLiveAuditLogs />
-      ) : (
-        <WordPressSystemLogsTable />
-      )}
+      {activeTab === 'manager_ai' && <ManagerLiveAuditLogs />}
+      {activeTab === 'wordpress' && <WordPressSystemLogsTable />}
+      {activeTab === 'emails' && <EmailLogsTable />}
     </div>
   );
 };

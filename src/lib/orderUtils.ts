@@ -529,4 +529,24 @@ export function matchesOrderSearch(order: any, query: string): boolean {
   return false;
 }
 
+/**
+ * Safely format order numbers/references to strictly have exactly one leading '#'
+ * E.g., '##542222' -> '#542222', '542222' -> '#542222', '#542222' -> '#542222'
+ */
+export function formatOrderNumber(orderNum?: string | number | null): string {
+  if (orderNum === null || orderNum === undefined || orderNum === '') return '';
+  const clean = String(orderNum).replace(/^#+/, '').trim();
+  return clean ? `#${clean}` : '';
+}
+
+/**
+ * Strips any leading '#' from order number/ref
+ * E.g., '##542222' -> '542222', '#542222' -> '542222', '542222' -> '542222'
+ */
+export function cleanOrderNumber(orderNum?: string | number | null): string {
+  if (orderNum === null || orderNum === undefined || orderNum === '') return '';
+  return String(orderNum).replace(/^#+/, '').trim();
+}
+
+
 

@@ -81,6 +81,7 @@ import { Button } from '../components/ui/Button';
 import { clsx } from 'clsx';
 import { createPortal } from 'react-dom';
 import { lockBodyScroll } from '../lib/bodyScrollLock';
+import { formatOrderNumber } from '../lib/orderUtils';
 
 const AFFILIATE_STATUS_OPTIONS: FilterSelectOption[] = [
   { value: 'all', label: 'All Statuses' },
@@ -1524,7 +1525,7 @@ export const AffiliatesPage: React.FC = () => {
                               onClick={(e) => handleOpenOrderById(c.order_id || c.order_number, e)}
                               className="font-mono font-bold text-white hover:text-[#f3aa18] transition-colors flex items-center gap-1.5 group-hover:underline cursor-pointer"
                             >
-                              <span>#{c.order_number || c.order_id}</span>
+                              <span>{formatOrderNumber(c.order_number || c.order_id)}</span>
                               <ExternalLink className="w-3 h-3 text-neutral-500 group-hover:text-[#f3aa18]" />
                             </button>
                             {c.coupon_code && (

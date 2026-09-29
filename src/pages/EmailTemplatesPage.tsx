@@ -34,14 +34,24 @@ import {
   WordPressPluginSettings 
 } from '../lib/wordpressBridge';
 import { EmailMarketingStudio } from '../components/email/EmailMarketingStudio';
+import { EmailLogsTable } from '../components/email/EmailLogsTable';
 
 interface EmailTemplatesPageProps {
-  defaultTab?: 'marketing' | 'templates' | 'test' | 'delivery';
+  defaultTab?: 'marketing' | 'templates' | 'test' | 'logs' | 'delivery';
 }
 
 export const EmailTemplatesPage: React.FC<EmailTemplatesPageProps> = ({ defaultTab = 'marketing' }) => {
   const { showToast } = useToast();
-  const [activeSection, setActiveSection] = useState<string>(defaultTab);
+  const [activeSection, setActiveSection] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash || '';
+      const search = window.location.search || '';
+      if (hash.includes('tab=logs') || hash.includes('tab=delivery_logs') || search.includes('tab=logs')) {
+        return 'logs';
+      }
+    }
+    return defaultTab;
+  });
 
   useEffect(() => {
     if (defaultTab) {
@@ -180,10 +190,16 @@ export const EmailTemplatesPage: React.FC<EmailTemplatesPageProps> = ({ defaultT
           { id: 'marketing', label: 'Marketing Studio' },
           { id: 'templates', label: 'Transactional Catalog' },
           { id: 'test', label: 'Transactional Sandbox' },
+          { id: 'logs', label: 'Delivery Logs' },
           { id: 'delivery', label: 'Delivery & ESP Settings' },
         ]}
         activeTab={activeSection}
-        onChange={setActiveSection}
+        onChange={(tabId) => {
+          setActiveSection(tabId);
+          if (typeof window !== 'undefined') {
+            window.history.replaceState(null, '', `#emails?tab=${tabId}`);
+          }
+        }}
         className="w-full sm:w-fit"
       />
 
@@ -535,6 +551,11 @@ export const EmailTemplatesPage: React.FC<EmailTemplatesPageProps> = ({ defaultT
           ))}
         </div>
       </GlassCard>}
+
+      {/* 5. ZeptoMail Delivery Logs & Telemetry */}
+      {activeSection === 'logs' && (
+        <EmailLogsTable />
+      )}
 
       {/* HTML Email Preview Modal */}
       <Modal

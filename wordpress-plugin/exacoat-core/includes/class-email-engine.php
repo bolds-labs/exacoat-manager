@@ -3133,26 +3133,82 @@ class Exacoat_Email_Engine {
 
 			if ( is_wp_error( $response ) ) {
 				$err_msg = $response->get_error_message();
-				Artmatter_Logger::log( 'error', 'email', "ZeptoMail Direct API Failed: {$err_msg}", [ 'event' => $event, 'recipient' => $recipient_email ] );
+				if ( class_exists( 'Exacoat_Logger' ) ) {
+					Exacoat_Logger::error( 'email', "ZeptoMail Direct API Failed: {$err_msg}", [ 'event' => $event, 'recipient' => $recipient_email ] );
+				} elseif ( class_exists( 'Artmatter_Logger' ) ) {
+					Artmatter_Logger::log( 'error', 'email', "ZeptoMail Direct API Failed: {$err_msg}", [ 'event' => $event, 'recipient' => $recipient_email ] );
+				}
+
+				if ( class_exists( 'Exacoat_Email_Logger' ) ) {
+					Exacoat_Email_Logger::log_outbound( [
+						'request_id'      => '',
+						'provider'        => 'zeptomail',
+						'event'           => $event,
+						'order_id'        => intval( $data['order_id'] ?? $data['order_number'] ?? 0 ),
+						'recipient_email' => $recipient_email,
+						'recipient_name'  => $recipient_name ?: 'Customer',
+						'subject'         => $subject,
+						'status'          => 'failed',
+						'status_code'     => 500,
+						'latency_ms'      => $latency,
+						'error_message'   => $err_msg,
+						'metadata'        => $data,
+					] );
+				}
+
 				return [ 'success' => false, 'message' => "ZeptoMail Error: {$err_msg}", 'latency_ms' => $latency ];
 			}
 
 			$status_code = wp_remote_retrieve_response_code( $response );
 			$body        = json_decode( wp_remote_retrieve_body( $response ), true );
 			$is_ok       = ( $status_code >= 200 && $status_code < 300 );
+			$request_id  = $body['data'][0]['request_id'] ?? ( $body['request_id'] ?? '' );
+			$err_msg     = ! $is_ok ? ( $body['message'] ?? ( $body['error']['message'] ?? "HTTP {$status_code}" ) ) : null;
 
-			Artmatter_Logger::log(
-				$is_ok ? 'success' : 'error',
-				'email',
-				"Direct ZeptoMail Email Sent: '{$event}' to {$recipient_email} -> HTTP {$status_code} ({$latency}ms)",
-				[
-					'event'       => $event,
-					'recipient'   => $recipient_email,
-					'status_code' => $status_code,
-					'latency_ms'  => $latency,
-					'request_id'  => $body['data'][0]['request_id'] ?? '',
-				]
-			);
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log(
+					$is_ok ? 'success' : 'error',
+					'email',
+					"Direct ZeptoMail Email Sent: '{$event}' to {$recipient_email} -> HTTP {$status_code} ({$latency}ms)",
+					[
+						'event'       => $event,
+						'recipient'   => $recipient_email,
+						'status_code' => $status_code,
+						'latency_ms'  => $latency,
+						'request_id'  => $request_id,
+					]
+				);
+			} elseif ( class_exists( 'Artmatter_Logger' ) ) {
+				Artmatter_Logger::log(
+					$is_ok ? 'success' : 'error',
+					'email',
+					"Direct ZeptoMail Email Sent: '{$event}' to {$recipient_email} -> HTTP {$status_code} ({$latency}ms)",
+					[
+						'event'       => $event,
+						'recipient'   => $recipient_email,
+						'status_code' => $status_code,
+						'latency_ms'  => $latency,
+						'request_id'  => $request_id,
+					]
+				);
+			}
+
+			if ( class_exists( 'Exacoat_Email_Logger' ) ) {
+				Exacoat_Email_Logger::log_outbound( [
+					'request_id'      => $request_id,
+					'provider'        => 'zeptomail',
+					'event'           => $event,
+					'order_id'        => intval( $data['order_id'] ?? $data['order_number'] ?? 0 ),
+					'recipient_email' => $recipient_email,
+					'recipient_name'  => $recipient_name ?: 'Customer',
+					'subject'         => $subject,
+					'status'          => $is_ok ? 'sent' : 'failed',
+					'status_code'     => $status_code,
+					'latency_ms'      => $latency,
+					'error_message'   => $err_msg,
+					'metadata'        => $data,
+				] );
+			}
 
 			return [
 				'success'     => $is_ok,
@@ -3172,12 +3228,38 @@ class Exacoat_Email_Engine {
 		}
 		$sent = wp_mail( $recipient_email, $subject, $html, $headers );
 
-		Artmatter_Logger::log(
-			$sent ? 'success' : 'error',
-			'email',
-			"Email Sent via wp_mail(): '{$event}' to {$recipient_email}",
-			[ 'event' => $event, 'recipient' => $recipient_email ]
-		);
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log(
+				$sent ? 'success' : 'error',
+				'email',
+				"Email Sent via wp_mail(): '{$event}' to {$recipient_email}",
+				[ 'event' => $event, 'recipient' => $recipient_email ]
+			);
+		} elseif ( class_exists( 'Artmatter_Logger' ) ) {
+			Artmatter_Logger::log(
+				$sent ? 'success' : 'error',
+				'email',
+				"Email Sent via wp_mail(): '{$event}' to {$recipient_email}",
+				[ 'event' => $event, 'recipient' => $recipient_email ]
+			);
+		}
+
+		if ( class_exists( 'Exacoat_Email_Logger' ) ) {
+			Exacoat_Email_Logger::log_outbound( [
+				'request_id'      => '',
+				'provider'        => 'wp_mail',
+				'event'           => $event,
+				'order_id'        => intval( $data['order_id'] ?? $data['order_number'] ?? 0 ),
+				'recipient_email' => $recipient_email,
+				'recipient_name'  => $recipient_name ?: 'Customer',
+				'subject'         => $subject,
+				'status'          => $sent ? 'sent' : 'failed',
+				'status_code'     => $sent ? 200 : 500,
+				'latency_ms'      => 0,
+				'error_message'   => $sent ? null : 'wp_mail failed to dispatch',
+				'metadata'        => $data,
+			] );
+		}
 
 		return [
 			'success' => $sent,
