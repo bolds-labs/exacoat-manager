@@ -511,16 +511,28 @@ class Exacoat_Warranty_Manager {
 					if ( is_array( $decoded ) ) {
 						$raw_config = $decoded;
 					}
+				} elseif ( is_object( $raw_config ) || is_array( $raw_config ) ) {
+					$decoded = json_decode( wp_json_encode( $raw_config ), true );
+					if ( is_array( $decoded ) ) {
+						$raw_config = $decoded;
+					}
 				}
 				if ( is_array( $raw_config ) ) {
 					foreach ( $raw_config as $idx => $v ) {
-						$layer_name  = $v['layer_data']['layer_name'] ?? ( $v['layer_data']['name'] ?? ( $v['layer_name'] ?? ( $v['name'] ?? '' ) ) );
-						$choice_name = $v['layer_data']['name'] ?? ( $v['choice_name'] ?? ( $v['name'] ?? '' ) );
+						if ( is_object( $v ) ) {
+							$v = (array) $v;
+						}
+						if ( ! is_array( $v ) ) {
+							continue;
+						}
+						$layer_data  = isset( $v['layer_data'] ) ? ( (array) $v['layer_data'] ) : [];
+						$layer_name  = $layer_data['layer_name'] ?? ( $layer_data['name'] ?? ( $v['layer_name'] ?? ( $v['name'] ?? '' ) ) );
+						$choice_name = $layer_data['name'] ?? ( $v['choice_name'] ?? ( $v['name'] ?? '' ) );
 						if ( ! empty( $layer_name ) && ! empty( $choice_name ) && $layer_name !== $choice_name ) {
 							$parts[] = [
 								'id'          => sanitize_title( $layer_name ),
-								'layer_name'  => $layer_name,
-								'choice_name' => $choice_name,
+								'layer_name'  => (string) $layer_name,
+								'choice_name' => (string) $choice_name,
 								'label'       => sprintf( '%s (%s)', $layer_name, $choice_name ),
 							];
 						}

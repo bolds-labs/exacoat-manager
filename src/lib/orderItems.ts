@@ -252,12 +252,23 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
   // 2. Check raw configurator data in meta_data if parsed_configurator wasn't present
   if (!hasConfiguratorSpecs() && Array.isArray(item.meta_data) && item.meta_data.length > 0) {
     const rawConfig = item.meta_data.find((m: any) => m.key === '_configurator_data_raw' || m.key === '_configurator_data');
-    if (rawConfig && rawConfig.value && Array.isArray(rawConfig.value)) {
-      for (const v of rawConfig.value) {
-        const layerName = v.layer_data?.layer_name || v.layer_data?.name || v.layer_name || 'Part';
-        const choiceName = v.layer_data?.name || v.choice_title || v.choice_name || v.name || '';
-        if (choiceName) {
-          addSpec(layerName, choiceName);
+    if (rawConfig && rawConfig.value) {
+      let cfgList = rawConfig.value;
+      if (typeof cfgList === 'string') {
+        try {
+          cfgList = JSON.parse(cfgList);
+        } catch {
+          // ignore
+        }
+      }
+      if (Array.isArray(cfgList)) {
+        for (const v of cfgList) {
+          if (!v || typeof v !== 'object') continue;
+          const layerName = v.layer_data?.layer_name || v.layer_data?.name || v.layer_name || 'Part';
+          const choiceName = v.layer_data?.name || v.choice_title || v.choice_name || v.name || '';
+          if (choiceName) {
+            addSpec(layerName, choiceName);
+          }
         }
       }
     }

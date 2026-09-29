@@ -22,9 +22,11 @@ import {
   AffiliatePayout,
   AffiliateRegistrationPayload,
   AffiliateClick,
-  AffiliateDailyStat
+  AffiliateDailyStat,
+  CustomLabelAddress,
+  CustomLabelSender
 } from '../types';
-export type { MarketplaceDeviceImageSettings };
+export type { MarketplaceDeviceImageSettings, CustomLabelAddress, CustomLabelSender };
 import { renderEmailHtmlLocally, BRAND_LOGO_WHITE_HTML, BRAND_LOGO_HTML } from './emailRenderer';
 import { extractItemSpecs } from './orderItems';
 import { normalizeDeviceName } from './seoUtils';
@@ -660,15 +662,25 @@ function parseConfiguratorFromItem(item: any): any[] {
   // 1. Raw configurator array check
   const metaList = Array.isArray(item.meta_data) ? item.meta_data : [];
   const rawMeta = metaList.find((m: any) => m.key === '_configurator_data_raw' || m.key === '_configurator_data');
-  if (rawMeta && rawMeta.value && Array.isArray(rawMeta.value)) {
-    return rawMeta.value.map((v: any) => ({
-      layer_id: v.layer_data?.layer_id || v.layer_id,
-      layer_name: v.layer_data?.layer_name || v.layer_data?.name || v.layer_name || 'Part',
-      choice_id: v.layer_data?.choice_id || v.choice_id,
-      name: v.layer_data?.name || v.choice_title || v.name || 'Custom',
-      image: v.layer_data?.image || v.image,
-      is_choice: v.is_choice,
-    }));
+  if (rawMeta && rawMeta.value) {
+    let cfgList = rawMeta.value;
+    if (typeof cfgList === 'string') {
+      try {
+        cfgList = JSON.parse(cfgList);
+      } catch {
+        // ignore
+      }
+    }
+    if (Array.isArray(cfgList)) {
+      return cfgList.map((v: any) => ({
+        layer_id: v?.layer_data?.layer_id || v?.layer_id,
+        layer_name: v?.layer_data?.layer_name || v?.layer_data?.name || v?.layer_name || 'Part',
+        choice_id: v?.layer_data?.choice_id || v?.choice_id,
+        name: v?.layer_data?.name || v?.choice_title || v?.choice_name || v?.name || 'Custom',
+        image: v?.layer_data?.image || v?.image,
+        is_choice: v?.is_choice,
+      }));
+    }
   }
 
   // 2. Extract item specs from configuration string, formatted_meta, or meta_data
@@ -9215,3 +9227,323 @@ export async function updateAdminCommission(payload: {
     return { success: false, error: err.message };
   }
 }
+
+// ==========================================
+// Custom Shipping Label & Shared Address Book
+// ==========================================
+
+export const DEFAULT_CUSTOM_LABEL_SENDER: CustomLabelSender = {
+  brand: 'EXACOAT',
+  name: 'Exacoat Workshop',
+  phone: '+62-813-800-9060',
+  email: 'support@exacoat.com',
+  address_line: 'Summarecon Bekasi, West Java, Indonesia',
+};
+
+const LOCAL_STORAGE_CUSTOM_LABEL_KEY = 'exacoat_custom_label_addresses';
+const LOCAL_STORAGE_CUSTOM_SENDER_KEY = 'exacoat_custom_label_sender';
+
+function getLocalCustomLabelAddresses(): CustomLabelAddress[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_CUSTOM_LABEL_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function setLocalCustomLabelAddresses(addresses: CustomLabelAddress[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(LOCAL_STORAGE_CUSTOM_LABEL_KEY, JSON.stringify(addresses));
+  } catch {
+    // Storage quota or private browsing restriction
+  }
+}
+
+function getLocalCustomLabelSender(): CustomLabelSender {
+  if (typeof window === 'undefined') return DEFAULT_CUSTOM_LABEL_SENDER;
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_CUSTOM_SENDER_KEY);
+    if (!raw) return DEFAULT_CUSTOM_LABEL_SENDER;
+    const parsed = JSON.parse(raw);
+    return parsed?.brand ? parsed : DEFAULT_CUSTOM_LABEL_SENDER;
+  } catch {
+    return DEFAULT_CUSTOM_LABEL_SENDER;
+  }
+}
+
+function setLocalCustomLabelSender(sender: CustomLabelSender): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(LOCAL_STORAGE_CUSTOM_SENDER_KEY, JSON.stringify(sender));
+  } catch {
+    // Storage quota or private browsing restriction
+  }
+}
+
+export async function fetchCustomLabelAddressesDirect(): Promise<{
+  success: boolean;
+  addresses: CustomLabelAddress[];
+  default_sender?: CustomLabelSender;
+  error?: string;
+}> {
+  const cachedAddresses = getLocalCustomLabelAddresses();
+  const cachedSender = getLocalCustomLabelSender();
+
+  const base = getWordPressBaseUrl();
+  const wcCreds = getWcCredentials();
+  const authKey = wcCreds.key || '';
+  const authSecret = wcCreds.secret || '';
+  const queryParams = new URLSearchParams({
+    consumer_key: authKey,
+    consumer_secret: authSecret,
+  }).toString();
+
+  const endpoints = [
+    `${base}/wp-json/exacoat-core/v1/custom-labels/addresses?${queryParams}`,
+    `${base}/wp-json/exacoat/v1/custom-labels/addresses?${queryParams}`,
+  ];
+
+  for (const url of endpoints) {
+    try {
+      const res = await authenticatedFetch(url, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.addresses)) {
+          setLocalCustomLabelAddresses(data.addresses);
+          if (data.default_sender) {
+            setLocalCustomLabelSender(data.default_sender);
+          }
+          return {
+            success: true,
+            addresses: data.addresses,
+            default_sender: data.default_sender || cachedSender,
+          };
+        }
+      }
+    } catch {
+      // Continue to next endpoint or cached fallback
+    }
+  }
+
+  // Graceful fallback to persistent browser cache
+  return {
+    success: true,
+    addresses: cachedAddresses,
+    default_sender: cachedSender,
+  };
+}
+
+export async function saveCustomLabelAddressDirect(
+  address: Partial<CustomLabelAddress> & { name: string }
+): Promise<{
+  success: boolean;
+  address?: CustomLabelAddress;
+  addresses?: CustomLabelAddress[];
+  message?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const wcCreds = getWcCredentials();
+  const authKey = wcCreds.key || '';
+  const authSecret = wcCreds.secret || '';
+  const queryParams = new URLSearchParams({
+    consumer_key: authKey,
+    consumer_secret: authSecret,
+  }).toString();
+
+  // Optimistic local update
+  const currentLocal = getLocalCustomLabelAddresses();
+  const cleanId = address.id || `addr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const nowIso = new Date().toISOString();
+  const normalized: CustomLabelAddress = {
+    id: cleanId,
+    label: address.label?.trim() || address.name.trim() || 'Saved Address',
+    name: address.name.trim(),
+    company: address.company?.trim() || '',
+    phone: address.phone?.trim() || '',
+    email: address.email?.trim() || '',
+    address_1: address.address_1?.trim() || '',
+    address_2: address.address_2?.trim() || '',
+    city: address.city?.trim() || '',
+    state: address.state?.trim() || '',
+    postcode: address.postcode?.trim() || '',
+    country: address.country?.trim() || 'Indonesia',
+    courier: address.courier?.trim() || '',
+    tracking_number: address.tracking_number?.trim() || '',
+    notes: address.notes?.trim() || '',
+    created_at: address.created_at || nowIso,
+    updated_at: nowIso,
+  };
+
+  const existingIdx = currentLocal.findIndex((a) => a.id === cleanId);
+  const updatedLocal = existingIdx >= 0
+    ? currentLocal.map((a, idx) => (idx === existingIdx ? normalized : a))
+    : [normalized, ...currentLocal];
+
+  setLocalCustomLabelAddresses(updatedLocal);
+
+  const endpoints = [
+    `${base}/wp-json/exacoat-core/v1/custom-labels/addresses?${queryParams}`,
+    `${base}/wp-json/exacoat/v1/custom-labels/addresses?${queryParams}`,
+  ];
+
+  for (const url of endpoints) {
+    try {
+      const res = await authenticatedFetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(normalized),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.success && Array.isArray(data.addresses)) {
+          setLocalCustomLabelAddresses(data.addresses);
+          return {
+            success: true,
+            address: data.address || normalized,
+            addresses: data.addresses,
+            message: data.message || 'Address saved successfully.',
+          };
+        }
+      }
+    } catch {
+      // Continue to next endpoint or fallback
+    }
+  }
+
+  return {
+    success: true,
+    address: normalized,
+    addresses: updatedLocal,
+    message: 'Address saved to local storage.',
+  };
+}
+
+export async function deleteCustomLabelAddressDirect(
+  id: string
+): Promise<{
+  success: boolean;
+  addresses?: CustomLabelAddress[];
+  message?: string;
+  error?: string;
+}> {
+  const currentLocal = getLocalCustomLabelAddresses();
+  const updatedLocal = currentLocal.filter((a) => a.id !== id);
+  setLocalCustomLabelAddresses(updatedLocal);
+
+  const base = getWordPressBaseUrl();
+  const wcCreds = getWcCredentials();
+  const authKey = wcCreds.key || '';
+  const authSecret = wcCreds.secret || '';
+  const queryParams = new URLSearchParams({
+    consumer_key: authKey,
+    consumer_secret: authSecret,
+    id,
+  }).toString();
+
+  const endpoints = [
+    `${base}/wp-json/exacoat-core/v1/custom-labels/addresses?${queryParams}`,
+    `${base}/wp-json/exacoat/v1/custom-labels/addresses?${queryParams}`,
+  ];
+
+  for (const url of endpoints) {
+    try {
+      const res = await authenticatedFetch(url, {
+        method: 'DELETE',
+        headers: { Accept: 'application/json' },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.success && Array.isArray(data.addresses)) {
+          setLocalCustomLabelAddresses(data.addresses);
+          return {
+            success: true,
+            addresses: data.addresses,
+            message: data.message || 'Address deleted.',
+          };
+        }
+      }
+    } catch {
+      // Fallback
+    }
+  }
+
+  return {
+    success: true,
+    addresses: updatedLocal,
+    message: 'Address removed.',
+  };
+}
+
+export async function saveCustomLabelSenderDirect(
+  sender: CustomLabelSender
+): Promise<{
+  success: boolean;
+  sender?: CustomLabelSender;
+  message?: string;
+  error?: string;
+}> {
+  setLocalCustomLabelSender(sender);
+
+  const base = getWordPressBaseUrl();
+  const wcCreds = getWcCredentials();
+  const authKey = wcCreds.key || '';
+  const authSecret = wcCreds.secret || '';
+  const queryParams = new URLSearchParams({
+    consumer_key: authKey,
+    consumer_secret: authSecret,
+  }).toString();
+
+  const endpoints = [
+    `${base}/wp-json/exacoat-core/v1/custom-labels/sender?${queryParams}`,
+    `${base}/wp-json/exacoat/v1/custom-labels/sender?${queryParams}`,
+  ];
+
+  for (const url of endpoints) {
+    try {
+      const res = await authenticatedFetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(sender),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.success && data.sender) {
+          setLocalCustomLabelSender(data.sender);
+          return {
+            success: true,
+            sender: data.sender,
+            message: data.message || 'Default sender updated.',
+          };
+        }
+      }
+    } catch {
+      // Fallback
+    }
+  }
+
+  return {
+    success: true,
+    sender,
+    message: 'Sender settings saved locally.',
+  };
+}
+

@@ -375,12 +375,12 @@ export const OrderTable: React.FC<OrderTableProps> = ({
       const cleanStatus = String(order.status || '').replace('wc-', '').toLowerCase();
 
       // Waiting for Pickup (strictly couriers: always exclude Store Pickup orders)
-      if (activeStatus === 'ready-to-ship' && isStorePickupOrder(order)) {
+      if (!hasSearch && activeStatus === 'ready-to-ship' && isStorePickupOrder(order)) {
         return false;
       }
 
       // Store Pickup views: always ensure order is a Store Pickup order
-      if (['store-pickup', 'store-pickup-ready', 'store-pickup-picked'].includes(activeStatus)) {
+      if (!hasSearch && ['store-pickup', 'store-pickup-ready', 'store-pickup-picked'].includes(activeStatus)) {
         if (!isStorePickupOrder(order)) return false;
 
         const effectiveSub = activeStatus === 'store-pickup-ready'

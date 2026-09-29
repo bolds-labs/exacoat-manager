@@ -1298,15 +1298,27 @@ class Exacoat_Customer_Auth {
 			if ( is_array( $decoded ) ) {
 				$config_meta = $decoded;
 			}
+		} elseif ( is_object( $config_meta ) || is_array( $config_meta ) ) {
+			$decoded = json_decode( wp_json_encode( $config_meta ), true );
+			if ( is_array( $decoded ) ) {
+				$config_meta = $decoded;
+			}
 		}
 
 		if ( is_array( $config_meta ) ) {
 			foreach ( $config_meta as $idx => $l ) {
-				$layer_name = trim( (string) ( $l['layer_name'] ?? $l['layerName'] ?? $l['layer_title'] ?? $l['label'] ?? '' ) );
-				$choice_name = trim( (string) ( $l['name'] ?? $l['choiceName'] ?? $l['choice_name'] ?? $l['choice'] ?? $l['value'] ?? '' ) );
+				if ( is_object( $l ) ) {
+					$l = (array) $l;
+				}
+				if ( ! is_array( $l ) ) {
+					continue;
+				}
+				$layer_data = isset( $l['layer_data'] ) ? ( (array) $l['layer_data'] ) : [];
+				$layer_name = trim( (string) ( $layer_data['layer_name'] ?? ( $layer_data['name'] ?? ( $l['layer_name'] ?? ( $l['layerName'] ?? ( $l['layer_title'] ?? ( $l['label'] ?? '' ) ) ) ) ) ) );
+				$choice_name = trim( (string) ( $layer_data['name'] ?? ( $l['name'] ?? ( $l['choiceName'] ?? ( $l['choice_name'] ?? ( $l['choice'] ?? ( $l['value'] ?? '' ) ) ) ) ) ) );
 				if ( ! empty( $layer_name ) || ! empty( $choice_name ) ) {
 					$layers[] = [
-						'layerId'    => (string) ( $l['layer_id'] ?? $l['layerId'] ?? ( $idx + 1 ) ),
+						'layerId'    => (string) ( $l['layer_id'] ?? ( $l['layerId'] ?? ( $layer_data['layer_id'] ?? ( $idx + 1 ) ) ) ),
 						'layerName'  => $layer_name,
 						'choiceName' => $choice_name,
 					];

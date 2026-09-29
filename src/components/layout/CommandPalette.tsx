@@ -21,6 +21,7 @@ import {
   Sliders,
   Share2,
   UserCog,
+  Tag,
   CornerDownLeft
 } from 'lucide-react';
 import { NavItemKey } from './Sidebar';
@@ -62,6 +63,15 @@ const WORKSPACE_PAGES: WorkspaceAction[] = [
     tab: 'orders', 
     icon: ShoppingBag,
     keywords: ['orders', 'fulfill', 'shipping', 'shopee', 'tiktok', 'woocommerce', 'status', 'invoice'] 
+  },
+  { 
+    id: 'custom_label', 
+    label: 'Custom Shipping Label', 
+    category: 'Workspace',
+    description: 'On-demand 4x6 thermal shipping label generator with real-time preview and address book', 
+    tab: 'custom_label', 
+    icon: Tag,
+    keywords: ['label', 'shipping', 'thermal', 'print', 'custom label', 'address book', 'waybill', 'a6', 'resi'] 
   },
   { 
     id: 'rma', 
@@ -235,6 +245,7 @@ const WORKSPACE_PAGES: WorkspaceAction[] = [
 
 const SHOP_MANAGER_ALLOWED_TABS: NavItemKey[] = [
   'orders', 
+  'custom_label',
   'reviews', 
   'rma', 
   'warranty', 

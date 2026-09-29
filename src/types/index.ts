@@ -750,3 +750,65 @@ export interface AffiliateRegistrationPayload {
   promotion_notes: string;
   turnstile_token?: string;
 }
+
+// ==========================================
+// Custom Shipping Label & Address Book Types
+// ==========================================
+
+export interface CustomLabelAddress {
+  id: string;
+  label: string;
+  name: string;
+  company?: string;
+  phone: string;
+  email?: string;
+  address_1: string;
+  address_2?: string;
+  city: string;
+  state?: string;
+  postcode: string;
+  country: string;
+  courier?: string;
+  tracking_number?: string;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+  updated_by?: string;
+}
+
+export interface CustomLabelSender {
+  brand: string;
+  name?: string;
+  phone: string;
+  email: string;
+  address_line?: string;
+}
+
+export interface CustomLabelManifestItem {
+  id: string;
+  name: string;
+  quantity: number;
+  sku?: string;
+  specs?: string;
+}
+
+export interface CustomLabelData {
+  courier_name: string;
+  tracking_number: string;
+  order_ref: string;
+  handling_note: string;
+  recipient_name: string;
+  recipient_phone: string;
+  recipient_email?: string;
+  recipient_company?: string;
+  recipient_address_1: string;
+  recipient_address_2?: string;
+  recipient_city: string;
+  recipient_state?: string;
+  recipient_postcode: string;
+  recipient_country: string;
+  sender: CustomLabelSender;
+  manifest_category?: string;
+  manifest_items: CustomLabelManifestItem[];
+}
+

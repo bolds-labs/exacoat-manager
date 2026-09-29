@@ -3,7 +3,7 @@
  * Plugin Name:       Exacoat Core Platform
  * Plugin URI:        https://exacoat.com
  * Description:       Proprietary e-commerce core engine, configurator manager, and ERP workstation integration for Exacoat.
- * Version:           0.1.138
+ * Version:           0.1.139
  * Author:            Exacoat
  * Author URI:        https://exacoat.com
  * License:           Proprietary
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'EXACOAT_CORE_VERSION' ) ) {
-	define( 'EXACOAT_CORE_VERSION', '0.1.138' );
+	define( 'EXACOAT_CORE_VERSION', '0.1.139' );
 }
 if ( ! defined( 'EXACOAT_CORE_FILE' ) ) {
 	define( 'EXACOAT_CORE_FILE', __FILE__ );
@@ -431,6 +431,7 @@ require_once EXACOAT_CORE_PATH . 'includes/class-store-credit-manager.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-abandoned-cart.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-affiliate-manager.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-customer-manager.php';
+require_once EXACOAT_CORE_PATH . 'includes/class-custom-label-manager.php';
 require_once EXACOAT_CORE_PATH . 'admin/class-admin-settings.php';
 require_once EXACOAT_CORE_PATH . 'admin/class-github-updater.php';
 
@@ -507,6 +508,11 @@ if ( class_exists( 'Exacoat_Customer_Manager' ) ) {
 // Initialize Unified Push Notification Service (Pushover & Telegram)
 if ( class_exists( 'Exacoat_Notification_Service' ) ) {
 	Exacoat_Notification_Service::init();
+}
+
+// Initialize Custom Label & Shared Address Book Manager
+if ( class_exists( 'Exacoat_Custom_Label_Manager' ) ) {
+	Exacoat_Custom_Label_Manager::init();
 }
 
 // Safe version tracking on admin_init

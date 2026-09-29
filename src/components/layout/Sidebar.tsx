@@ -23,6 +23,7 @@ import {
   UserCog,
   Share2,
   ChevronDown,
+  Tag,
   LucideIcon
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -34,6 +35,7 @@ import { ExacoatLogo } from '../ui/ExacoatLogo';
 export type NavItemKey = 
   | 'dashboard'
   | 'orders'
+  | 'custom_label'
   | 'customers'
   | 'products'
   | 'rma'
@@ -154,6 +156,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           icon: ShoppingBag,
           children: [
             { key: 'orders', label: 'All Orders' },
+            { key: 'custom_label', label: 'Custom Label', icon: Tag },
             { key: 'rma', label: 'RMA Claims', icon: Layers },
             { key: 'export', label: 'Export Shipments', icon: FileSpreadsheet },
             { key: 'tracking_pool', label: 'Tracking Pool', icon: Package },
@@ -210,6 +213,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           icon: ShoppingBag,
           children: [
             { key: 'orders', label: 'All Orders' },
+            { key: 'custom_label', label: 'Custom Label', icon: Tag },
             { key: 'rma', label: 'RMA Claims', icon: Layers },
             { key: 'export', label: 'Export Shipments', icon: FileSpreadsheet },
             { key: 'tracking_pool', label: 'Tracking Pool', icon: Package },

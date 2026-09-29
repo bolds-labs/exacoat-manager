@@ -790,10 +790,21 @@ class Exacoat_Order_Manager {
 			return new WP_Error( 'not_found', 'Order not found', [ 'status' => 404 ] );
 		}
 
-		return rest_ensure_response( [
-			'success' => true,
-			'order'   => self::format_order_for_manager( $order ),
-		] );
+		try {
+			return rest_ensure_response( [
+				'success' => true,
+				'order'   => self::format_order_for_manager( $order ),
+			] );
+		} catch ( \Throwable $err ) {
+			if ( class_exists( 'Artmatter_Logger' ) ) {
+				Artmatter_Logger::error( 'orders', "Error formatting Single Order #{$order_id}: " . $err->getMessage(), [
+					'file'  => $err->getFile(),
+					'line'  => $err->getLine(),
+					'trace' => $err->getTraceAsString(),
+				] );
+			}
+			return new WP_Error( 'format_error', 'Failed formatting order: ' . $err->getMessage(), [ 'status' => 500 ] );
+		}
 	}
 
 	/**
@@ -1982,17 +1993,30 @@ class Exacoat_Order_Manager {
 					if ( is_array( $decoded ) ) {
 						$raw_config = $decoded;
 					}
+				} elseif ( is_object( $raw_config ) || is_array( $raw_config ) ) {
+					$decoded = json_decode( wp_json_encode( $raw_config ), true );
+					if ( is_array( $decoded ) ) {
+						$raw_config = $decoded;
+					}
 				}
+
 				if ( is_array( $raw_config ) ) {
 					foreach ( $raw_config as $v ) {
-						$l_name = $v['layer_data']['layer_name'] ?? ( $v['layer_data']['name'] ?? ( $v['layer_name'] ?? 'Layer' ) );
-						$c_name = $v['layer_data']['name'] ?? ( $v['choice_title'] ?? ( $v['choice_name'] ?? ( $v['name'] ?? '' ) ) );
+						if ( is_object( $v ) ) {
+							$v = (array) $v;
+						}
+						if ( ! is_array( $v ) ) {
+							continue;
+						}
+						$layer_data = isset( $v['layer_data'] ) ? ( (array) $v['layer_data'] ) : [];
+						$l_name = $layer_data['layer_name'] ?? ( $layer_data['name'] ?? ( $v['layer_name'] ?? ( $v['label'] ?? 'Layer' ) ) );
+						$c_name = $layer_data['name'] ?? ( $v['choice_title'] ?? ( $v['choice_name'] ?? ( $v['name'] ?? ( $v['value'] ?? '' ) ) ) );
 						if ( $c_name ) {
 							$parsed_config[] = [
-								'layer_name'   => $l_name,
-								'name'         => $c_name,
-								'choice_title' => $c_name,
-								'choice_name'  => $c_name,
+								'layer_name'   => (string) $l_name,
+								'name'         => (string) $c_name,
+								'choice_title' => (string) $c_name,
+								'choice_name'  => (string) $c_name,
 								'is_choice'    => true,
 							];
 						}
@@ -2392,15 +2416,28 @@ class Exacoat_Order_Manager {
 					if ( is_array( $decoded ) ) {
 						$raw_config = $decoded;
 					}
+				} elseif ( is_object( $raw_config ) || is_array( $raw_config ) ) {
+					$decoded = json_decode( wp_json_encode( $raw_config ), true );
+					if ( is_array( $decoded ) ) {
+						$raw_config = $decoded;
+					}
 				}
+
 				if ( is_array( $raw_config ) ) {
 					foreach ( $raw_config as $v ) {
-						$l_name = $v['layer_data']['layer_name'] ?? ( $v['layer_data']['name'] ?? ( $v['layer_name'] ?? 'Layer' ) );
-						$c_name = $v['layer_data']['name'] ?? ( $v['choice_name'] ?? ( $v['name'] ?? '' ) );
+						if ( is_object( $v ) ) {
+							$v = (array) $v;
+						}
+						if ( ! is_array( $v ) ) {
+							continue;
+						}
+						$layer_data = isset( $v['layer_data'] ) ? ( (array) $v['layer_data'] ) : [];
+						$l_name = $layer_data['layer_name'] ?? ( $layer_data['name'] ?? ( $v['layer_name'] ?? ( $v['label'] ?? 'Layer' ) ) );
+						$c_name = $layer_data['name'] ?? ( $v['choice_name'] ?? ( $v['name'] ?? ( $v['value'] ?? '' ) ) );
 						if ( $c_name ) {
 							$parsed_config[] = [
-								'layer_name'  => $l_name,
-								'choice_name' => $c_name,
+								'layer_name'  => (string) $l_name,
+								'choice_name' => (string) $c_name,
 							];
 						}
 					}
