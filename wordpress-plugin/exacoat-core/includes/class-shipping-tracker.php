@@ -652,19 +652,19 @@ class Exacoat_Shipping_Tracker {
 		}
 
 		if ( ! empty( $tracking_number ) && preg_match( '/^[A-Za-z]{2}\d+ID$/i', trim( $tracking_number ) ) ) {
-			return 'upu';
+			return 'indonesia-post';
 		}
 		$carrier_map = [
 			'jne'                 => 'jne',
 			'jne express'         => 'jne',
 			'sicepat'             => 'sicepat',
-			'pos'                 => 'upu',
-			'pos indonesia'       => 'upu',
-			'posindonesia'        => 'upu',
-			'pos-indonesia'       => 'upu',
-			'goorita'             => 'upu',
-			'upu'                 => 'upu',
-			'indonesia-post'      => 'upu',
+			'pos'                 => 'indonesia-post',
+			'pos indonesia'       => 'indonesia-post',
+			'posindonesia'        => 'indonesia-post',
+			'pos-indonesia'       => 'indonesia-post',
+			'goorita'             => 'indonesia-post',
+			'upu'                 => 'indonesia-post',
+			'indonesia-post'      => 'indonesia-post',
 			'jnt'                 => 'j-and-t-express',
 			'j&t'                 => 'j-and-t-express',
 			'j&t express'         => 'j-and-t-express',
@@ -688,9 +688,6 @@ class Exacoat_Shipping_Tracker {
 		if ( ! empty( $tracking_number ) ) {
 			$detected = self::detect_trackingmore_courier( $tracking_number );
 			if ( ! empty( $detected ) ) {
-				if ( 'indonesia-post' === $detected ) {
-					return 'upu';
-				}
 				return $detected;
 			}
 		}
@@ -1061,7 +1058,15 @@ class Exacoat_Shipping_Tracker {
 			return [ 'success' => false, 'message' => $err_msg, 'raw' => $body ];
 		}
 
+		// Select the item with the most tracking checkpoints
 		$item = reset( $items );
+		foreach ( $items as $candidate ) {
+			$cand_cps = count( $candidate['origin_info']['trackinfo'] ?? [] ) + count( $candidate['destination_info']['trackinfo'] ?? [] );
+			$item_cps = count( $item['origin_info']['trackinfo'] ?? [] ) + count( $item['destination_info']['trackinfo'] ?? [] );
+			if ( $cand_cps > $item_cps ) {
+				$item = $candidate;
+			}
+		}
 		self::process_trackingmore_item_update( $item, $order_id );
 
 		$checkpoints = $order->get_meta( '_exacoat_tracking_checkpoints' ) 
@@ -1262,12 +1267,54 @@ class Exacoat_Shipping_Tracker {
 		$formatted_checkpoints = [];
 		$seen = [];
 
-		if ( ! empty( $dest_trackinfo ) ) {
-			// International shipment: Prioritize English destination scan updates
-			foreach ( $dest_trackinfo as $d ) {
-				$desc = trim( (string) ( $d['tracking_detail'] ?? ( $d['checkpoint_delivery_substatus'] ?? ( $d['description'] ?? '' ) ) ) );
-				if ( empty( $desc ) ) continue;
+		// For postal shipments (POS Indonesia / UPU), orig_trackinfo contains the full, authoritative
+		// end-to-end timeline with exact timestamps (HH:MM:SS) from export customs to delivery handover.
+		if ( ! empty( $orig_trackinfo ) ) {
+			foreach ( $orig_trackinfo as $o ) {
+				$raw_desc = trim( (string) ( $o['tracking_detail'] ?? ( $o['checkpoint_delivery_substatus'] ?? ( $o['description'] ?? '' ) ) ) );
+				if ( empty( $raw_desc ) ) continue;
 
+				$desc = self::clean_checkpoint_description( $raw_desc );
+				$time = (string) ( $o['checkpoint_date'] ?? ( $o['time'] ?? '' ) );
+				$day  = ! empty( $time ) ? substr( $time, 0, 10 ) : '';
+				$key  = $day . '|' . strtolower( $desc );
+
+				if ( isset( $seen[ $key ] ) ) {
+					continue;
+				}
+				$seen[ $key ] = true;
+
+				$loc = (string) ( $o['location'] ?? '' );
+				$stg = (string) ( $o['checkpoint_delivery_status'] ?? '' );
+
+				// Infer stage if generic
+				$desc_lower = strtolower( $desc );
+				if ( empty( $stg ) || 'transit' === $stg ) {
+					if ( strpos( $desc_lower, 'delivered' ) !== false || strpos( $desc_lower, 'berhasil diserahkan' ) !== false ) {
+						$stg = 'delivered';
+					} elseif ( strpos( $desc_lower, 'unsuccessful' ) !== false || strpos( $desc_lower, 'tidak berhasil' ) !== false ) {
+						$stg = 'exception';
+					} elseif ( strpos( $desc_lower, 'out for delivery' ) !== false ) {
+						$stg = 'pickup';
+					}
+				}
+
+				$formatted_checkpoints[] = [
+					'time'        => $time,
+					'description' => $desc,
+					'location'    => self::clean_checkpoint_location( $loc ),
+					'stage'       => $stg,
+				];
+			}
+		}
+
+		// Also incorporate destination scans (e.g. Deutsche Post, USPS) if present and unique
+		if ( ! empty( $dest_trackinfo ) ) {
+			foreach ( $dest_trackinfo as $d ) {
+				$raw_desc = trim( (string) ( $d['tracking_detail'] ?? ( $d['checkpoint_delivery_substatus'] ?? ( $d['description'] ?? '' ) ) ) );
+				if ( empty( $raw_desc ) ) continue;
+
+				$desc = self::clean_checkpoint_description( $raw_desc );
 				$time = (string) ( $d['checkpoint_date'] ?? ( $d['time'] ?? '' ) );
 				$day  = ! empty( $time ) ? substr( $time, 0, 10 ) : '';
 				$key  = $day . '|' . strtolower( $desc );
@@ -1277,10 +1324,10 @@ class Exacoat_Shipping_Tracker {
 				}
 				$seen[ $key ] = true;
 
-				// Check if origin scan on the same day has precise hour:minute or location
 				$loc = (string) ( $d['location'] ?? '' );
 				$stg = (string) ( $d['checkpoint_delivery_status'] ?? '' );
 
+				// Check if origin scan on the same day has precise hour:minute or location
 				if ( ! empty( $orig_trackinfo ) ) {
 					foreach ( $orig_trackinfo as $o ) {
 						$o_time = (string) ( $o['checkpoint_date'] ?? '' );
@@ -1297,35 +1344,17 @@ class Exacoat_Shipping_Tracker {
 					}
 				}
 
+				// Guard: Destination carriers sometimes flag failed delivery attempt as "delivered"
+				$desc_lower = strtolower( $desc );
+				if ( 'delivered' === $stg && ( strpos( $desc_lower, 'couldnt be delivered' ) !== false || strpos( $desc_lower, 'unsuccessful' ) !== false ) ) {
+					$stg = 'exception';
+				}
+
 				$formatted_checkpoints[] = [
 					'time'        => $time,
 					'description' => $desc,
 					'location'    => self::clean_checkpoint_location( $loc ),
 					'stage'       => $stg,
-				];
-			}
-		}
-
-		// If destination info was empty (e.g. domestic shipments) or for remaining unique origin scans
-		if ( empty( $formatted_checkpoints ) && ! empty( $orig_trackinfo ) ) {
-			foreach ( $orig_trackinfo as $o ) {
-				$desc = trim( (string) ( $o['tracking_detail'] ?? ( $o['checkpoint_delivery_substatus'] ?? ( $o['description'] ?? '' ) ) ) );
-				if ( empty( $desc ) ) continue;
-
-				$time = (string) ( $o['checkpoint_date'] ?? ( $o['time'] ?? '' ) );
-				$day  = ! empty( $time ) ? substr( $time, 0, 10 ) : '';
-				$key  = $day . '|' . strtolower( $desc );
-
-				if ( isset( $seen[ $key ] ) ) {
-					continue;
-				}
-				$seen[ $key ] = true;
-
-				$formatted_checkpoints[] = [
-					'time'        => $time,
-					'description' => $desc,
-					'location'    => self::clean_checkpoint_location( (string) ( $o['location'] ?? '' ) ),
-					'stage'       => (string) ( $o['checkpoint_delivery_status'] ?? '' ),
 				];
 			}
 		}
@@ -1368,6 +1397,15 @@ class Exacoat_Shipping_Tracker {
 		// 2. Delivery Status handling
 		$delivery_status = strtolower( trim( (string) ( $item['delivery_status'] ?? ( $item['track_info']['latest_status']['status'] ?? '' ) ) ) );
 		$latest_event    = (string) ( $item['latest_event'] ?? ( $item['track_info']['latest_event']['description'] ?? '' ) );
+
+		// Detect delivered status from latest event or newest checkpoint
+		$latest_event_lower = strtolower( $latest_event );
+		if ( strpos( $latest_event_lower, 'sudah diterima' ) !== false || 
+		     strpos( $latest_event_lower, 'berhasil diserahkan' ) !== false ||
+		     strpos( $latest_event_lower, 'handed over to recipient' ) !== false ||
+		     ( ! empty( $formatted_checkpoints[0]['stage'] ) && 'delivered' === $formatted_checkpoints[0]['stage'] ) ) {
+			$delivery_status = 'delivered';
+		}
 
 		if ( ! empty( $delivery_status ) ) {
 			$order->update_meta_data( '_trackingmore_latest_status', $delivery_status );
@@ -1414,10 +1452,67 @@ class Exacoat_Shipping_Tracker {
 	}
 
 	/**
-	 * Backward compatibility alias
+	 * Clean and standardize carrier checkpoint descriptions to professional English.
+	 * Formats Pos Indonesia bilingual strings and maps common status phrases.
 	 */
-	public static function process_17track_item_update( array $item, int $order_id = 0 ) {
-		self::process_trackingmore_item_update( $item, $order_id );
+	public static function clean_checkpoint_description( string $desc ): string {
+		$desc = trim( $desc );
+		if ( empty( $desc ) ) {
+			return '';
+		}
+
+		// Handle Pos Indonesia bilingual format (e.g. "Kiriman berhasil diserahkan/Item has been delivered ( EMI )")
+		if ( strpos( $desc, '/' ) !== false ) {
+			$parts = explode( '/', $desc );
+			if ( ! empty( $parts[1] ) ) {
+				$eng = trim( preg_replace( '/\s*\([A-Z0-9\s]+\)\s*/', ' ', $parts[1] ) );
+				if ( strlen( $eng ) > 3 ) {
+					return ucfirst( $eng );
+				}
+			}
+		}
+
+		$lower = strtolower( preg_replace( '/\s+/', ' ', $desc ) );
+
+		$phrase_map = [
+			'sudah diterima,kiriman berhasil diserahkan'                   => 'Delivered: Successfully handed over to recipient',
+			'kiriman berhasil diserahkan'                                 => 'Delivered: Successfully handed over to recipient',
+			'pengantaran tidak berhasil,kiriman tidak berhasil diserahkan' => 'Delivery attempt unsuccessful',
+			'kiriman tidak berhasil diserahkan'                           => 'Delivery attempt unsuccessful',
+			'dalam pengiriman,kiriman berangkat dari kantor antaran'      => 'Out for delivery: Departed from local delivery hub',
+			'kiriman berangkat dari kantor antaran'                       => 'Out for delivery: Departed from local delivery hub',
+			'dalam pengiriman,kiriman berangkat dari fasilitas impor'     => 'In transit: Departed from import sorting facility',
+			'kiriman berangkat dari fasilitas impor'                      => 'In transit: Departed from import sorting facility',
+			'pemeriksaan bea & cukai,kiriman tiba di kantor transit'      => 'Customs inspection: Arrived at transit office',
+			'pemeriksaan bea & cukai'                                     => 'Customs inspection in progress',
+			'kiriman tiba di kantor transit'                              => 'Arrived at transit facility',
+			'kiriman berangkat dari fasilitas ekspor'                     => 'Departed from export facility (Jakarta)',
+			'kiriman tiba di fasilitas ekspor'                            => 'Arrived at export facility (Jakarta)',
+			'kiriman diserahkan kepada bea & cukai untuk proses ekspor'   => 'Presented to export Customs & Security',
+			'kiriman diterima dan disetujui bea & cukai untuk proses ekspor' => 'Cleared export Customs & Security',
+			'diterima di kantor pos,kiriman sudah diterima'               => 'Posting/Collection: Item accepted at post office',
+			'kiriman sudah diterima'                                      => 'Item accepted at post office',
+		];
+
+		foreach ( $phrase_map as $needle => $clean_eng ) {
+			if ( strpos( $lower, $needle ) !== false ) {
+				return $clean_eng;
+			}
+		}
+
+		if ( strpos( $lower, 'disetujui bea dan cukai' ) !== false ) {
+			return 'Approved by Customs: Proceeding to local delivery';
+		}
+
+		if ( strpos( $lower, 'menunggu kelengkapan dokumen' ) !== false ) {
+			return 'Customs processing: Awaiting required clearance documents';
+		}
+
+		if ( strpos( $lower, 'penyampaian dokumen kepabeanan' ) !== false ) {
+			return 'Under Customs inspection: Declaration documents submitted';
+		}
+
+		return $desc;
 	}
 
 	/**
