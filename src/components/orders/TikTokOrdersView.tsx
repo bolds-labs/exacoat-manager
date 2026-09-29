@@ -579,35 +579,35 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
   return (
     <div className="space-y-5 font-sans">
       {/* Top Banner and Actions */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-neutral-900/60 border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-neutral-900/60 border border-zinc-200 dark:border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
         <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-rose-500/15 border border-rose-500/25 flex items-center justify-center text-rose-400 font-bold font-mono text-base shadow-sm shrink-0">
+          <div className="w-11 h-11 rounded-xl bg-rose-500/15 border border-rose-500/25 flex items-center justify-center text-rose-600 dark:text-rose-400 font-bold font-mono text-base shadow-sm shrink-0">
             TT
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-base font-bold text-white tracking-tight">
+              <h2 className="text-base font-bold text-zinc-900 dark:text-white tracking-tight">
                 {settings?.shop_name || 'Operasional TikTok Shop'}
               </h2>
               <span
                 className={clsx(
                   'text-[10px] px-2 py-0.5 rounded-full font-mono font-bold uppercase',
                   settings?.is_connected
-                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20'
+                    : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20'
                 )}
               >
                 {settings?.is_connected ? 'Terhubung' : 'Belum Terhubung'}
               </span>
             </div>
-            <p className="text-xs text-neutral-400 mt-0.5 flex items-center gap-2 flex-wrap">
+            <p className="text-xs text-zinc-500 dark:text-neutral-400 mt-0.5 flex items-center gap-2 flex-wrap">
               <span>ID Layanan: {settings?.service_id || 'N/A'}</span>
               <span>•</span>
               <span>
                 Sinkronisasi Terakhir: {settings?.last_synced_at || 'Baru saja'}
               </span>
               <span>•</span>
-              <span className="text-rose-400 font-mono">
+              <span className="text-rose-600 dark:text-rose-400 font-mono font-medium">
                 {orders.length} pesanan tersimpan
               </span>
             </p>
@@ -618,9 +618,9 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
           <button
             type="button"
             onClick={() => setIsSettingsOpen(true)}
-            className="px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-white/10 text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer"
+            className="px-3.5 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-800 dark:text-neutral-200 border border-zinc-200 dark:border-white/10 text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer"
           >
-            <Settings className="w-3.5 h-3.5 text-neutral-400" />
+            <Settings className="w-3.5 h-3.5 text-zinc-500 dark:text-neutral-400" />
             <span>Pengaturan</span>
           </button>
 
@@ -636,7 +636,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
 
       {/* Tabs and Search Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-neutral-900 border border-white/10 overflow-x-auto">
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-zinc-100 dark:bg-neutral-900 border border-zinc-200 dark:border-white/10 overflow-x-auto">
           {(
             [
               { id: 'ALL', label: 'Semua' },
@@ -654,8 +654,8 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
               className={clsx(
                 'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer',
                 activeTab === tab.id
-                  ? 'bg-white text-neutral-950 font-bold shadow-sm'
-                  : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                  ? 'bg-white text-zinc-950 dark:bg-white dark:text-neutral-950 font-bold shadow-xs'
+                  : 'text-zinc-600 dark:text-neutral-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200/60 dark:hover:bg-white/5'
               )}
             >
               <span>{tab.label}</span>
@@ -663,7 +663,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                 <span
                   className={clsx(
                     'text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold',
-                    activeTab === tab.id ? 'bg-black/20 text-neutral-950' : 'bg-rose-500/20 text-rose-400'
+                    activeTab === tab.id ? 'bg-zinc-200 text-zinc-900 dark:bg-black/20 dark:text-neutral-950' : 'bg-rose-500/15 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400'
                   )}
                 >
                   {tab.count}
@@ -674,19 +674,19 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
         </div>
 
         <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="w-4 h-4 text-zinc-400 dark:text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Cari No. Pesanan, Pembeli, Resi..."
-            className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-neutral-900 border border-white/10 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-rose-500"
+            className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-white dark:bg-neutral-900 border border-zinc-200 dark:border-white/10 text-xs text-zinc-900 dark:text-neutral-100 placeholder-zinc-400 dark:placeholder-neutral-500 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
           />
         </div>
       </div>
 
       {/* Row 2: Secondary Filter Bar (Courier & Tracking Resi) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-neutral-900/50 border border-white/10 text-xs relative z-20">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-zinc-50 dark:bg-neutral-900/50 border border-zinc-200 dark:border-white/10 text-xs relative z-20">
         <div className="flex flex-wrap items-center gap-3">
           {/* Courier Filter with Instant, Same Day, and Reguler/YES Groups */}
           <FilterSelect
@@ -716,7 +716,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                 setActiveTab('ALL');
                 setSearchQuery('');
               }}
-              className="text-xs text-neutral-400 hover:text-white underline cursor-pointer"
+              className="text-xs text-zinc-500 dark:text-neutral-400 hover:text-zinc-900 dark:hover:text-white underline cursor-pointer"
             >
               Reset filter
             </button>
@@ -735,9 +735,9 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                 }
               }}
               onChange={handleToggleSelectAll}
-              className="w-4 h-4 rounded border-white/20 bg-neutral-800 text-rose-500 focus:ring-rose-500 focus:ring-offset-0 cursor-pointer"
+              className="w-4 h-4 rounded border-zinc-300 dark:border-white/20 bg-white dark:bg-neutral-800 text-rose-500 focus:ring-rose-500 focus:ring-offset-0 cursor-pointer"
             />
-            <span className="text-neutral-300 font-medium">
+            <span className="text-zinc-700 dark:text-neutral-300 font-medium">
               Pilih semua ({filteredOrders.length})
             </span>
           </label>
@@ -749,14 +749,14 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-            <span className="font-bold text-white">
+            <span className="font-bold text-zinc-900 dark:text-white">
               {selectedIds.size} pesanan dipilih
             </span>
-            <span className="text-neutral-600">|</span>
+            <span className="text-zinc-400 dark:text-neutral-600">|</span>
             <button
               type="button"
               onClick={() => setSelectedIds(new Set())}
-              className="text-neutral-400 hover:text-white underline cursor-pointer"
+              className="text-zinc-600 dark:text-neutral-400 hover:text-zinc-900 dark:hover:text-white underline cursor-pointer"
             >
               Batalkan Pilihan
             </button>
@@ -785,9 +785,9 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
             <button
               type="button"
               onClick={handleBulkExport}
-              className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-white/10 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+              className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-800 dark:text-neutral-200 border border-zinc-200 dark:border-white/10 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
             >
-              <Download className="w-3.5 h-3.5 text-neutral-400" />
+              <Download className="w-3.5 h-3.5 text-zinc-500 dark:text-neutral-400" />
               <span>Ekspor CSV</span>
             </button>
           </div>
@@ -796,15 +796,15 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
 
       {/* Orders List / Table */}
       {isLoading ? (
-        <div className="p-12 text-center rounded-2xl bg-neutral-900/40 border border-white/5 space-y-3">
-          <RefreshCw className="w-6 h-6 text-rose-400 animate-spin mx-auto" />
-          <p className="text-xs text-neutral-400">Memuat pesanan TikTok Shop...</p>
+        <div className="p-12 text-center rounded-2xl bg-white dark:bg-neutral-900/40 border border-zinc-200 dark:border-white/5 space-y-3 shadow-xs">
+          <RefreshCw className="w-6 h-6 text-rose-500 dark:text-rose-400 animate-spin mx-auto" />
+          <p className="text-xs text-zinc-500 dark:text-neutral-400">Memuat pesanan TikTok Shop...</p>
         </div>
       ) : filteredOrders.length === 0 ? (
-        <div className="p-12 text-center rounded-2xl bg-neutral-900/40 border border-white/5 space-y-3">
-          <Package className="w-8 h-8 text-neutral-600 mx-auto" />
-          <p className="text-sm font-semibold text-neutral-300">Tidak ada pesanan ditemukan</p>
-          <p className="text-xs text-neutral-500">
+        <div className="p-12 text-center rounded-2xl bg-white dark:bg-neutral-900/40 border border-zinc-200 dark:border-white/5 space-y-3 shadow-xs">
+          <Package className="w-8 h-8 text-zinc-400 dark:text-neutral-600 mx-auto" />
+          <p className="text-sm font-semibold text-zinc-800 dark:text-neutral-300">Tidak ada pesanan ditemukan</p>
+          <p className="text-xs text-zinc-500">
             {searchQuery ? 'Coba ubah kata kunci pencarian atau cari langsung dari API TikTok Shop.' : 'Sinkronkan pesanan dari TikTok Shop atau sesuaikan filter.'}
           </p>
           {searchQuery.trim().length >= 6 && (
@@ -812,7 +812,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
               type="button"
               onClick={handleLiveSearch}
               disabled={isLiveSearching}
-              className="mt-2 px-4 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/40 text-xs font-semibold inline-flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+              className="mt-2 px-4 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-600 dark:text-rose-400 border border-rose-500/40 text-xs font-semibold inline-flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
             >
               <Search className={clsx('w-3.5 h-3.5', isLiveSearching && 'animate-spin')} />
               <span>{isLiveSearching ? 'Mencari di API TikTok Shop...' : `Cari di API TikTok untuk "${searchQuery.trim()}"`}</span>
@@ -834,16 +834,16 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                 key={order.order_id}
                 onClick={() => setSelectedDetailOrder(order)}
                 className={clsx(
-                  'p-4 sm:p-5 rounded-2xl bg-neutral-900/70 border transition-all cursor-pointer hover:border-white/25 active:scale-[0.999]',
+                  'p-4 sm:p-5 rounded-2xl bg-white dark:bg-neutral-900/70 border transition-all cursor-pointer hover:border-zinc-300 dark:hover:border-white/25 active:scale-[0.999] shadow-xs',
                   isSelected
-                    ? 'border-rose-500/50 bg-rose-500/[0.03]'
+                    ? 'border-rose-500/50 bg-rose-50/50 dark:bg-rose-500/[0.03]'
                     : order.already_claimed
-                    ? 'border-amber-500/20 bg-amber-500/[0.02]'
-                    : 'border-white/10'
+                    ? 'border-amber-500/30 bg-amber-50/40 dark:bg-amber-500/[0.02]'
+                    : 'border-zinc-200 dark:border-white/10'
                 )}
               >
                 {/* Top Header Bar */}
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/5 pb-3 mb-3">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-zinc-100 dark:border-white/5 pb-3 mb-3">
                   {/* Left: Checkbox, Channel tag, Order ID, Countdown, Buyer */}
                   <div className="flex flex-wrap items-center gap-2.5">
                     <input
@@ -851,14 +851,14 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                       checked={isSelected}
                       onClick={(e) => e.stopPropagation()}
                       onChange={(e) => handleToggleSelect(order.order_id, e as any)}
-                      className="w-4 h-4 rounded border-white/20 bg-neutral-800 text-rose-500 focus:ring-rose-500 focus:ring-offset-0 cursor-pointer shrink-0"
+                      className="w-4 h-4 rounded border-zinc-300 dark:border-white/20 bg-white dark:bg-neutral-800 text-rose-500 focus:ring-rose-500 focus:ring-offset-0 cursor-pointer shrink-0"
                     />
 
-                    <span className="text-[10px] px-2 py-0.5 rounded-md font-mono font-bold uppercase bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                    <span className="text-[10px] px-2 py-0.5 rounded-md font-mono font-bold uppercase bg-rose-500/15 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400 border border-rose-500/30">
                       TikTok
                     </span>
 
-                    <span className="text-xs font-mono font-bold text-white">
+                    <span className="text-xs font-mono font-bold text-zinc-900 dark:text-white">
                       #{order.order_id}
                     </span>
 
@@ -875,30 +875,30 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                         e.stopPropagation();
                         handleCopy(order.order_id, `id_${order.order_id}`);
                       }}
-                      className="text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer"
+                      className="text-zinc-400 hover:text-zinc-600 dark:text-neutral-500 dark:hover:text-neutral-300 transition-colors cursor-pointer"
                       title="Salin No. Pesanan"
                     >
                       {copiedId === `id_${order.order_id}` ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                       ) : (
                         <Copy className="w-3.5 h-3.5" />
                       )}
                     </button>
 
-                    <span className="text-neutral-600">•</span>
-                    <div className="flex items-center gap-1.5 text-xs text-neutral-400">
-                      <Clock className="w-3.5 h-3.5 text-neutral-500" />
+                    <span className="text-zinc-300 dark:text-neutral-600">•</span>
+                    <div className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-neutral-400">
+                      <Clock className="w-3.5 h-3.5 text-zinc-400 dark:text-neutral-500" />
                       <span>{formatDateTime(order.create_time)}</span>
                     </div>
 
-                    <span className="text-neutral-600">•</span>
-                    <div className="flex items-center gap-1.5 text-xs text-neutral-300 font-medium">
-                      <User className="w-3.5 h-3.5 text-neutral-500" />
+                    <span className="text-zinc-300 dark:text-neutral-600">•</span>
+                    <div className="flex items-center gap-1.5 text-xs text-zinc-700 dark:text-neutral-300 font-medium">
+                      <User className="w-3.5 h-3.5 text-zinc-400 dark:text-neutral-500" />
                       <span>@{order.buyer_username}</span>
                     </div>
 
                     {order.already_claimed && (
-                      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
+                      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-500/30 font-bold">
                         <ShieldCheck className="w-3 h-3" />
                         <span>Claimed</span>
                       </span>
@@ -923,10 +923,10 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                       <button
                         type="button"
                         onClick={() => handlePrintLabel(order)}
-                        className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-800 dark:text-neutral-200 border border-zinc-200 dark:border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                         title="Cetak Label Pengiriman"
                       >
-                        <Printer className="w-3.5 h-3.5 text-neutral-400" />
+                        <Printer className="w-3.5 h-3.5 text-zinc-500 dark:text-neutral-400" />
                         <span>Cetak Label</span>
                       </button>
                     )}
@@ -937,7 +937,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                         type="button"
                         onClick={() => handleArrangeShipment(order)}
                         disabled={isArrangingId === order.order_id}
-                        className="px-3 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 shadow-sm shadow-rose-500/20"
+                        className="px-3 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 shadow-xs shadow-rose-500/20"
                       >
                         {isArrangingId === order.order_id ? (
                           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -956,20 +956,20 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                           onClick={() =>
                             setActiveActionMenuId(activeActionMenuId === order.order_id ? null : order.order_id)
                           }
-                          className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-white/10 cursor-pointer"
+                          className="p-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-700 dark:text-neutral-300 border border-zinc-200 dark:border-white/10 cursor-pointer"
                         >
                           <MoreVertical className="w-4 h-4" />
                         </button>
 
                         {activeActionMenuId === order.order_id && (
-                          <div className="absolute right-0 top-full mt-1 w-48 rounded-xl bg-neutral-900 border border-white/10 shadow-xl py-1 z-30 font-sans">
+                          <div className="absolute right-0 top-full mt-1 w-48 rounded-xl bg-white dark:bg-neutral-900 border border-zinc-200 dark:border-white/10 shadow-xl py-1 z-30 font-sans">
                             <button
                               type="button"
                               onClick={() => {
                                 setActiveActionMenuId(null);
                                 onClaimWarranty(order);
                               }}
-                              className="w-full px-3 py-2 text-left text-xs text-emerald-400 hover:bg-emerald-500/10 flex items-center gap-2 cursor-pointer font-medium"
+                              className="w-full px-3 py-2 text-left text-xs text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 flex items-center gap-2 cursor-pointer font-medium"
                             >
                               <ShieldCheck className="w-3.5 h-3.5" />
                               <span>Claim Warranty</span>
@@ -981,13 +981,13 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                                 setActiveActionMenuId(null);
                                 onClaimRedeem(order);
                               }}
-                              className="w-full px-3 py-2 text-left text-xs text-amber-400 hover:bg-amber-500/10 flex items-center gap-2 cursor-pointer font-medium"
+                              className="w-full px-3 py-2 text-left text-xs text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 flex items-center gap-2 cursor-pointer font-medium"
                             >
                               <RotateCcw className="w-3.5 h-3.5" />
                               <span>Claim Redeem (Defect)</span>
                             </button>
 
-                            <div className="my-1 border-t border-white/10" />
+                            <div className="my-1 border-t border-zinc-200 dark:border-white/10" />
 
                             <button
                               type="button"
@@ -995,9 +995,9 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                                 setActiveActionMenuId(null);
                                 handleCopy(order.order_id, `id_${order.order_id}`);
                               }}
-                              className="w-full px-3 py-2 text-left text-xs text-neutral-300 hover:bg-white/5 flex items-center gap-2 cursor-pointer"
+                              className="w-full px-3 py-2 text-left text-xs text-zinc-700 dark:text-neutral-300 hover:bg-zinc-100 dark:hover:bg-white/5 flex items-center gap-2 cursor-pointer"
                             >
-                              <Copy className="w-3.5 h-3.5 text-neutral-500" />
+                              <Copy className="w-3.5 h-3.5 text-zinc-400 dark:text-neutral-500" />
                               <span>Salin No. Pesanan</span>
                             </button>
 
@@ -1008,9 +1008,9 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                                   setActiveActionMenuId(null);
                                   handleCopy(order.tracking_number, `resi_${order.order_id}`);
                                 }}
-                                className="w-full px-3 py-2 text-left text-xs text-neutral-300 hover:bg-white/5 flex items-center gap-2 cursor-pointer"
+                                className="w-full px-3 py-2 text-left text-xs text-zinc-700 dark:text-neutral-300 hover:bg-zinc-100 dark:hover:bg-white/5 flex items-center gap-2 cursor-pointer"
                               >
-                                <Copy className="w-3.5 h-3.5 text-neutral-500" />
+                                <Copy className="w-3.5 h-3.5 text-zinc-400 dark:text-neutral-500" />
                                 <span>Salin No. Resi</span>
                               </button>
                             )}
@@ -1019,7 +1019,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                       </div>
                     )}
 
-                    <div className="pl-1 text-neutral-500 hover:text-white transition-colors">
+                    <div className="pl-1 text-zinc-400 hover:text-zinc-600 dark:text-neutral-500 dark:hover:text-white transition-colors">
                       <ChevronRight className="w-4 h-4" />
                     </div>
                   </div>
@@ -1032,37 +1032,37 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                     {(order.items || []).map((item, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-neutral-950/40 border border-white/5"
+                        className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-zinc-50 dark:bg-neutral-950/40 border border-zinc-200/80 dark:border-white/5"
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           {item.image_url ? (
                             <img
                               src={item.image_url}
                               alt={item.item_name}
-                              className="w-10 h-10 rounded-lg object-cover bg-neutral-800 shrink-0 border border-white/5"
+                              className="w-10 h-10 rounded-lg object-cover bg-zinc-100 dark:bg-neutral-800 shrink-0 border border-zinc-200/80 dark:border-white/5"
                             />
                           ) : (
-                            <div className="w-10 h-10 rounded-lg bg-neutral-800 flex items-center justify-center shrink-0 border border-white/5">
-                              <Tag className="w-4 h-4 text-neutral-500" />
+                            <div className="w-10 h-10 rounded-lg bg-zinc-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 border border-zinc-200/80 dark:border-white/5">
+                              <Tag className="w-4 h-4 text-zinc-400 dark:text-neutral-500" />
                             </div>
                           )}
                           <div className="min-w-0">
-                            <p className="text-xs font-semibold text-white leading-tight truncate">
+                            <p className="text-xs font-semibold text-zinc-900 dark:text-white leading-tight truncate">
                               {item.item_name}
                             </p>
                             {item.sku_name && (
-                              <p className="text-[11px] font-mono text-neutral-400 mt-0.5 truncate">
-                                Varian: <span className="text-neutral-200">{item.sku_name}</span>
+                              <p className="text-[11px] font-mono text-zinc-500 dark:text-neutral-400 mt-0.5 truncate">
+                                Varian: <span className="text-zinc-700 dark:text-neutral-200">{item.sku_name}</span>
                               </p>
                             )}
                           </div>
                         </div>
 
                         <div className="text-right shrink-0">
-                          <span className="text-xs font-mono font-bold text-white">
+                          <span className="text-xs font-mono font-bold text-zinc-900 dark:text-white">
                             x{item.quantity}
                           </span>
-                          <p className="text-[11px] font-mono text-neutral-400">
+                          <p className="text-[11px] font-mono text-zinc-500 dark:text-neutral-400">
                             {formatCurrency(item.price, order.currency || 'IDR')}
                           </p>
                         </div>
@@ -1070,37 +1070,37 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                     ))}
 
                     <div className="flex items-center justify-between pt-1 text-xs">
-                      <span className="text-neutral-500 font-mono text-[11px]">
+                      <span className="text-zinc-500 font-mono text-[11px]">
                         {order.items?.length || 0} jenis produk
                       </span>
-                      <div className="font-mono text-xs font-bold text-white">
-                        Total: <span className="text-rose-400">{formatCurrency(order.total_amount, order.currency || 'IDR')}</span>
+                      <div className="font-mono text-xs font-bold text-zinc-900 dark:text-white">
+                        Total: <span className="text-rose-600 dark:text-rose-400">{formatCurrency(order.total_amount, order.currency || 'IDR')}</span>
                       </div>
                     </div>
 
                     {order.buyer_note && (
-                      <div className="text-xs p-2 rounded-lg bg-amber-500/5 border border-amber-500/10 text-amber-300/90 italic">
+                      <div className="text-xs p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300/90 italic">
                         Catatan: {order.buyer_note}
                       </div>
                     )}
                   </div>
 
                   {/* Column 3: Logistics and Destination */}
-                  <div className="p-3.5 rounded-xl bg-neutral-950/40 border border-white/5 space-y-2 text-xs">
+                  <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-neutral-950/40 border border-zinc-200/80 dark:border-white/5 space-y-2 text-xs">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono uppercase text-neutral-500">Jasa Kirim</span>
-                      <span className="font-semibold text-neutral-200">{order.shipping_carrier || 'N/A'}</span>
+                      <span className="text-[10px] font-mono uppercase text-zinc-500 dark:text-neutral-500">Jasa Kirim</span>
+                      <span className="font-semibold text-zinc-800 dark:text-neutral-200">{order.shipping_carrier || 'N/A'}</span>
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono uppercase text-neutral-500">Status Pengiriman</span>
+                      <span className="text-[10px] font-mono uppercase text-zinc-500 dark:text-neutral-500">Status Pengiriman</span>
                       {isCancelled ? (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-rose-500/15 text-rose-300 border border-rose-500/30 flex items-center gap-1">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30 flex items-center gap-1">
                           <XCircle className="w-2.5 h-2.5" />
                           <span>Dibatalkan</span>
                         </span>
                       ) : (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-neutral-800 text-neutral-300 border border-white/10">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-zinc-200 dark:bg-neutral-800 text-zinc-700 dark:text-neutral-300 border border-zinc-300 dark:border-white/10">
                           {badge.label}
                         </span>
                       )}
@@ -1108,8 +1108,8 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
 
                     {!isCancelled && (
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono uppercase text-neutral-500">No. Resi</span>
-                        <span className="font-mono font-bold text-rose-400">
+                        <span className="text-[10px] font-mono uppercase text-zinc-500 dark:text-neutral-500">No. Resi</span>
+                        <span className="font-mono font-bold text-rose-600 dark:text-rose-400">
                           {order.tracking_number || 'N/A'}
                         </span>
                       </div>
@@ -1117,21 +1117,21 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
 
                     {!isCancelled && (
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono uppercase text-neutral-500">Batas Kirim</span>
-                        <span className="font-mono text-neutral-300">
+                        <span className="text-[10px] font-mono uppercase text-zinc-500 dark:text-neutral-500">Batas Kirim</span>
+                        <span className="font-mono text-zinc-700 dark:text-neutral-300">
                           {order.ship_by_date || 'N/A'}
                         </span>
                       </div>
                     )}
 
-                    <div className="flex items-start gap-2 pt-2 border-t border-white/5">
-                      <MapPin className="w-3.5 h-3.5 text-neutral-500 shrink-0 mt-0.5" />
+                    <div className="flex items-start gap-2 pt-2 border-t border-zinc-200/80 dark:border-white/5">
+                      <MapPin className="w-3.5 h-3.5 text-zinc-400 dark:text-neutral-500 shrink-0 mt-0.5" />
                       <div className="min-w-0">
-                        <p className="font-medium text-neutral-200">{order.recipient_name || 'N/A'}</p>
-                        <p className="text-[11px] text-neutral-400 leading-tight truncate max-w-[200px]" title={order.recipient_address}>
+                        <p className="font-medium text-zinc-800 dark:text-neutral-200">{order.recipient_name || 'N/A'}</p>
+                        <p className="text-[11px] text-zinc-600 dark:text-neutral-400 leading-tight truncate max-w-[200px]" title={order.recipient_address}>
                           {order.recipient_address || 'N/A'}
                         </p>
-                        <p className="text-[10px] text-neutral-500 font-mono mt-0.5">
+                        <p className="text-[10px] text-zinc-500 dark:text-neutral-500 font-mono mt-0.5">
                           {order.recipient_city || ''} {order.recipient_postcode || ''}
                         </p>
                       </div>
@@ -1146,13 +1146,13 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
 
       {/* Pagination Footer */}
       {filteredOrders.length > 0 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 rounded-xl bg-neutral-900/60 border border-white/10 text-xs text-neutral-400">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 rounded-xl bg-white dark:bg-neutral-900/60 border border-zinc-200 dark:border-white/10 text-xs text-zinc-600 dark:text-neutral-400 shadow-xs">
           <div>
-            Menampilkan <span className="font-mono font-bold text-white">{(currentPage - 1) * pageSize + 1}</span> sampai{' '}
-            <span className="font-mono font-bold text-white">
+            Menampilkan <span className="font-mono font-bold text-zinc-900 dark:text-white">{(currentPage - 1) * pageSize + 1}</span> sampai{' '}
+            <span className="font-mono font-bold text-zinc-900 dark:text-white">
               {Math.min(currentPage * pageSize, filteredOrders.length)}
             </span>{' '}
-            dari <span className="font-mono font-bold text-white">{filteredOrders.length}</span> pesanan
+            dari <span className="font-mono font-bold text-zinc-900 dark:text-white">{filteredOrders.length}</span> pesanan
           </div>
 
           <div className="flex items-center gap-3">
@@ -1176,18 +1176,18 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
                 type="button"
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage <= 1}
-                className="px-2.5 py-1 rounded-lg border border-white/10 bg-neutral-900 hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                className="px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-white/10 bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-900 dark:hover:bg-white/5 text-zinc-700 dark:text-neutral-300 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
               >
                 Sebelumnya
               </button>
-              <span className="px-2 py-1 font-mono text-[11px] text-neutral-300">
+              <span className="px-2 py-1 font-mono text-[11px] text-zinc-600 dark:text-neutral-300">
                 Halaman {currentPage} dari {totalPages}
               </span>
               <button
                 type="button"
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage >= totalPages}
-                className="px-2.5 py-1 rounded-lg border border-white/10 bg-neutral-900 hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                className="px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-white/10 bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-900 dark:hover:bg-white/5 text-zinc-700 dark:text-neutral-300 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
               >
                 Berikutnya
               </button>

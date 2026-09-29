@@ -947,9 +947,9 @@ export const AffiliatesPage: React.FC = () => {
       {/* 2. Core Metrics KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Active Creators */}
-        <GlassCard className="p-5 space-y-2 border border-white/[0.06] bg-[#111111]">
+        <GlassCard className="p-5 space-y-2 border border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111]">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-neutral-400 font-mono">
+            <span className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-neutral-400 font-mono">
               Affiliate Partners
             </span>
             <div className="w-8 h-8 rounded-lg bg-[#f3aa18]/10 border border-[#f3aa18]/20 flex items-center justify-center text-[#f3aa18]">
@@ -957,70 +957,70 @@ export const AffiliatesPage: React.FC = () => {
             </div>
           </div>
           <div className="space-y-1">
-            <p className="text-2xl font-bold font-mono text-white">
+            <p className="text-2xl font-bold font-mono text-zinc-900 dark:text-white">
               {affiliates.length.toLocaleString()}
             </p>
-            <p className="text-[11px] font-sans text-neutral-400">
-              <span className="text-[#f3aa18] font-mono font-semibold">{activeAffiliatesCount}</span> active creators &bull; <span className="text-amber-400 font-mono font-semibold">{pendingApps.length}</span> awaiting review
+            <p className="text-[11px] font-sans text-zinc-600 dark:text-neutral-400">
+              <span className="text-amber-600 dark:text-[#f3aa18] font-mono font-semibold">{activeAffiliatesCount}</span> active creators &bull; <span className="text-amber-600 dark:text-amber-400 font-mono font-semibold">{pendingApps.length}</span> awaiting review
             </p>
           </div>
         </GlassCard>
 
         {/* Card 2: Commission Liability */}
-        <GlassCard className="p-5 space-y-2 border border-white/[0.06] bg-[#111111]">
+        <GlassCard className="p-5 space-y-2 border border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111]">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-neutral-400 font-mono">
+            <span className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-neutral-400 font-mono">
               Unpaid Liability
             </span>
-            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400">
               <Wallet className="w-4 h-4" />
             </div>
           </div>
           <div className="space-y-1">
-            <p className="text-2xl font-bold font-mono text-[#f3aa18]">
+            <p className="text-2xl font-bold font-mono text-amber-600 dark:text-[#f3aa18]">
               {formatIDR(totalUnpaidLiability)}
             </p>
-            <p className="text-[11px] font-sans text-neutral-400">
+            <p className="text-[11px] font-sans text-zinc-600 dark:text-neutral-400">
               Cleared commissions ready for creator disbursement
             </p>
           </div>
         </GlassCard>
 
         {/* Card 3: Lifetime Paid Out */}
-        <GlassCard className="p-5 space-y-2 border border-white/[0.06] bg-[#111111]">
+        <GlassCard className="p-5 space-y-2 border border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111]">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-neutral-400 font-mono">
+            <span className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-neutral-400 font-mono">
               Lifetime Paid Out
             </span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
           <div className="space-y-1">
-            <p className="text-2xl font-bold font-mono text-white">
+            <p className="text-2xl font-bold font-mono text-zinc-900 dark:text-white">
               {formatIDR(totalLifetimeEarned)}
             </p>
-            <p className="text-[11px] font-sans text-neutral-400">
+            <p className="text-[11px] font-sans text-zinc-600 dark:text-neutral-400">
               Total historical earnings paid to creator partners
             </p>
           </div>
         </GlassCard>
 
         {/* Card 4: Payout Requests Queue */}
-        <GlassCard className="p-5 space-y-2 border border-white/[0.06] bg-[#111111]">
+        <GlassCard className="p-5 space-y-2 border border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111]">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-neutral-400 font-mono">
+            <span className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-neutral-400 font-mono">
               Pending Payouts
             </span>
-            <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400">
+            <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-600 dark:text-sky-400">
               <Clock className="w-4 h-4" />
             </div>
           </div>
           <div className="space-y-1">
-            <p className="text-2xl font-bold font-mono text-white">
+            <p className="text-2xl font-bold font-mono text-zinc-900 dark:text-white">
               {pendingPayoutsCount}
             </p>
-            <p className="text-[11px] font-sans text-neutral-400">
+            <p className="text-[11px] font-sans text-zinc-600 dark:text-neutral-400">
               Transfer requests waiting for bank settlement
             </p>
           </div>
@@ -1348,54 +1348,54 @@ export const AffiliatesPage: React.FC = () => {
         <div className="space-y-4">
           {/* Commission Summary Metrics Banner */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <GlassCard className="p-4 border border-white/[0.06] bg-[#111111] space-y-1">
-              <div className="flex items-center justify-between text-neutral-400 text-xs">
+            <GlassCard className="p-4 border border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] space-y-1">
+              <div className="flex items-center justify-between text-zinc-500 dark:text-neutral-400 text-xs">
                 <span className="font-medium">Total Recorded</span>
                 <Percent className="w-3.5 h-3.5 text-[#f3aa18]" />
               </div>
-              <p className="text-xl font-bold font-mono text-white">
+              <p className="text-xl font-bold font-mono text-zinc-900 dark:text-white">
                 {formatIDR(commissionMetrics.totalAmt)}
               </p>
-              <p className="text-[11px] font-mono text-neutral-500">
+              <p className="text-[11px] font-mono text-zinc-500 dark:text-neutral-500">
                 {commissions.length} total commission events
               </p>
             </GlassCard>
 
-            <GlassCard className="p-4 border border-sky-500/20 bg-[#111111] space-y-1">
-              <div className="flex items-center justify-between text-sky-400 text-xs">
+            <GlassCard className="p-4 border border-sky-500/20 bg-white dark:bg-[#111111] space-y-1">
+              <div className="flex items-center justify-between text-sky-600 dark:text-sky-400 text-xs">
                 <span className="font-medium">Ready for Payout</span>
-                <Clock className="w-3.5 h-3.5 text-sky-400" />
+                <Clock className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
               </div>
-              <p className="text-xl font-bold font-mono text-sky-400">
+              <p className="text-xl font-bold font-mono text-sky-600 dark:text-sky-400">
                 {formatIDR(commissionMetrics.unpaidAmt)}
               </p>
-              <p className="text-[11px] font-mono text-neutral-500">
+              <p className="text-[11px] font-mono text-zinc-500 dark:text-neutral-500">
                 {commissionMetrics.unpaidCount} orders cleared after grace period
               </p>
             </GlassCard>
 
-            <GlassCard className="p-4 border border-amber-500/20 bg-[#111111] space-y-1">
-              <div className="flex items-center justify-between text-amber-400 text-xs">
+            <GlassCard className="p-4 border border-amber-500/20 bg-white dark:bg-[#111111] space-y-1">
+              <div className="flex items-center justify-between text-amber-600 dark:text-amber-400 text-xs">
                 <span className="font-medium">7-Day Grace Period</span>
-                <Hourglass className="w-3.5 h-3.5 text-amber-400" />
+                <Hourglass className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
               </div>
-              <p className="text-xl font-bold font-mono text-amber-400">
+              <p className="text-xl font-bold font-mono text-amber-600 dark:text-amber-400">
                 {formatIDR(commissionMetrics.pendingAmt)}
               </p>
-              <p className="text-[11px] font-mono text-neutral-500">
+              <p className="text-[11px] font-mono text-zinc-500 dark:text-neutral-500">
                 {commissionMetrics.pendingCount} orders in return/maturation window
               </p>
             </GlassCard>
 
-            <GlassCard className="p-4 border border-emerald-500/20 bg-[#111111] space-y-1">
-              <div className="flex items-center justify-between text-emerald-400 text-xs">
+            <GlassCard className="p-4 border border-emerald-500/20 bg-white dark:bg-[#111111] space-y-1">
+              <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 text-xs">
                 <span className="font-medium">Historical Paid Out</span>
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               </div>
-              <p className="text-xl font-bold font-mono text-emerald-400">
+              <p className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
                 {formatIDR(commissionMetrics.paidAmt)}
               </p>
-              <p className="text-[11px] font-mono text-neutral-500">
+              <p className="text-[11px] font-mono text-zinc-500 dark:text-neutral-500">
                 {commissionMetrics.paidCount} orders settled via bank transfer
               </p>
             </GlassCard>

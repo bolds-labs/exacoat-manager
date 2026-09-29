@@ -157,7 +157,7 @@ export function FilterSelect<T extends string | number = string>({
                 >
                   <div className="flex items-center gap-2 truncate">
                     {opt.icon && <span className="shrink-0">{opt.icon}</span>}
-                    <span className={clsx('truncate', opt.indent && 'text-[11px] text-neutral-300')}>{opt.label}</span>
+                    <span className={clsx('truncate', opt.indent && 'text-[11px] text-zinc-600 dark:text-neutral-300')}>{opt.label}</span>
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">

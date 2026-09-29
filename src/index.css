@@ -183,7 +183,21 @@ html:not(.dark) .bg-\[\#0e0e12\],
 html:not(.dark) .bg-\[\#131417\],
 html:not(.dark) .bg-\[\#141416\],
 html:not(.dark) .bg-dark-850,
-html:not(.dark) .bg-dark-900 {
+html:not(.dark) .bg-dark-900,
+html:not(.dark) .bg-dark-950,
+html:not(.dark) .bg-neutral-900,
+html:not(.dark) .bg-neutral-900\/60,
+html:not(.dark) .bg-neutral-900\/70,
+html:not(.dark) .bg-neutral-900\/80,
+html:not(.dark) .bg-neutral-900\/90,
+html:not(.dark) .bg-zinc-900,
+html:not(.dark) .bg-zinc-900\/70,
+html:not(.dark) .bg-zinc-900\/80,
+html:not(.dark) .bg-zinc-900\/90,
+html:not(.dark) .bg-zinc-950,
+html:not(.dark) .bg-zinc-950\/60,
+html:not(.dark) .bg-zinc-950\/80,
+html:not(.dark) .bg-zinc-950\/90 {
   background-color: #ffffff !important;
   border-color: #e4e4e7 !important;
   color: #09090b !important;
@@ -205,9 +219,30 @@ html:not(.dark) .bg-\[\#1a1c21\],
 html:not(.dark) .bg-\[\#1c1c1c\],
 html:not(.dark) .bg-\[\#222228\],
 html:not(.dark) .bg-dark-800,
-html:not(.dark) .bg-neutral-900\/80 {
+html:not(.dark) .bg-neutral-900\/50,
+html:not(.dark) .bg-zinc-900\/50,
+html:not(.dark) .bg-neutral-950\/40,
+html:not(.dark) .bg-neutral-950\/50,
+html:not(.dark) .bg-neutral-950\/60,
+html:not(.dark) .bg-zinc-950\/30,
+html:not(.dark) .bg-zinc-950\/40,
+html:not(.dark) .bg-zinc-950\/50 {
   background-color: #f8f9fa !important;
   border-color: #e4e4e7 !important;
+}
+
+/* Subtle transparent badge/pill backgrounds inverted for light mode */
+html:not(.dark) .bg-white\/5,
+html:not(.dark) .bg-white\/10,
+html:not(.dark) .bg-white\/\[0\.04\],
+html:not(.dark) .bg-white\/\[0\.06\],
+html:not(.dark) .bg-white\/\[0\.08\] {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+html:not(.dark) .bg-white\/15,
+html:not(.dark) .bg-white\/20 {
+  background-color: rgba(0, 0, 0, 0.08) !important;
 }
 
 /* In light mode, subtle dark overlays inside cards become clean subtle gray */
@@ -237,7 +272,14 @@ html:not(.dark) [class*="border-white/[0.15]"],
 html:not(.dark) [class*="border-white/[0.2]"],
 html:not(.dark) [class*="border-white/20"],
 html:not(.dark) [class*="border-white/30"] {
-  border-color: rgba(0, 0, 0, 0.14) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+html:not(.dark) [class*="border-zinc-800"],
+html:not(.dark) [class*="border-zinc-700"],
+html:not(.dark) [class*="border-neutral-800"],
+html:not(.dark) [class*="border-neutral-700"] {
+  border-color: #e4e4e7 !important;
 }
 
 /* Universal Typography & Contrast Enhancements in light mode */
@@ -291,20 +333,125 @@ html:not(.dark) {
   }
 }
 
-/* Headings and labels that were hardcoded text-white */
-html:not(.dark) :is(h1, h2, h3, h4, h5, h6, th, td, label, dt, dd).text-white {
+/* Universal Typography: prevent white-on-white text in light mode */
+html:not(.dark) .text-white {
   color: #09090b !important;
 }
 
-/* Modal and drawer headers and contents */
-html:not(.dark) [role="dialog"] :is(h1, h2, h3, h4, h5, h6, p, span):not(button):not([class*="bg-black"]):not([class*="bg-zinc-9"]):not([class*="bg-amber-6"]):not([class*="bg-emerald-6"]):not([class*="bg-rose-6"]):not([class*="bg-blue-6"]).text-white {
+/* Explicitly preserve crisp white text on colored/dark primary CTA buttons, badges & active states */
+html:not(.dark) :is(
+  button[class*="bg-orange"],
+  button[class*="bg-amber-600"],
+  button[class*="bg-emerald"],
+  button[class*="bg-rose"],
+  button[class*="bg-red"],
+  button[class*="bg-blue"],
+  button[class*="bg-indigo"],
+  button[class*="bg-black"],
+  button.bg-zinc-900,
+  a[class*="bg-orange"],
+  a[class*="bg-emerald"],
+  a[class*="bg-rose"],
+  a[class*="bg-blue"],
+  [class*="bg-orange-500"],
+  [class*="bg-orange-600"],
+  [class*="bg-emerald-600"],
+  [class*="bg-rose-600"],
+  [class*="bg-blue-600"],
+  [class*="bg-indigo-600"],
+  .glass-pill-active
+) {
+  color: #ffffff !important;
+}
+
+html:not(.dark) :is(
+  button[class*="bg-orange"],
+  button[class*="bg-amber-600"],
+  button[class*="bg-emerald"],
+  button[class*="bg-rose"],
+  button[class*="bg-red"],
+  button[class*="bg-blue"],
+  button[class*="bg-indigo"],
+  button[class*="bg-black"],
+  button.bg-zinc-900,
+  a[class*="bg-orange"],
+  a[class*="bg-emerald"],
+  a[class*="bg-rose"],
+  a[class*="bg-blue"],
+  [class*="bg-orange-500"],
+  [class*="bg-orange-600"],
+  [class*="bg-emerald-600"],
+  [class*="bg-rose-600"],
+  [class*="bg-blue-600"],
+  [class*="bg-indigo-600"],
+  .glass-pill-active
+) :is(span, p, div, strong, b, svg, i) {
+  color: #ffffff !important;
+}
+
+/* Universal Table styling in light mode */
+html:not(.dark) thead tr,
+html:not(.dark) thead tr.bg-zinc-900\/60,
+html:not(.dark) thead.bg-\[\#0e0e0e\] {
+  background-color: #f8f9fa !important;
+  border-color: #e4e4e7 !important;
+  color: #52525b !important;
+}
+
+html:not(.dark) thead th {
+  color: #52525b !important;
+  border-color: #e4e4e7 !important;
+}
+
+html:not(.dark) tbody.divide-white\/5 > :not([hidden]) ~ :not([hidden]),
+html:not(.dark) tbody.divide-white\/10 > :not([hidden]) ~ :not([hidden]),
+html:not(.dark) tbody.divide-white\/\[0\.04\] > :not([hidden]) ~ :not([hidden]) {
+  border-color: #f4f4f5 !important;
+}
+
+html:not(.dark) tbody tr:hover,
+html:not(.dark) tr.hover\:bg-white\/\[0\.03\]:hover {
+  background-color: #f8f9fa !important;
+}
+
+/* Filter pill bars & tab containers in light mode */
+html:not(.dark) .flex:has(> button).bg-neutral-900,
+html:not(.dark) .flex:has(> button).bg-zinc-900,
+html:not(.dark) .flex:has(> button).bg-zinc-900\/60,
+html:not(.dark) .rounded-xl:has(> button).bg-neutral-900,
+html:not(.dark) .rounded-xl:has(> button).bg-zinc-900\/60 {
+  background-color: #f4f4f5 !important;
+  border-color: #e4e4e7 !important;
+}
+
+/* Inactive filter buttons in light mode */
+html:not(.dark) button.text-neutral-400:not([class*="bg-orange"]):not([class*="bg-amber"]):not([class*="bg-emerald"]):not([class*="bg-rose"]):not([class*="bg-blue"]):not([class*="bg-zinc-9"]):not([class*="bg-black"]),
+html:not(.dark) button.text-zinc-400:not([class*="bg-orange"]):not([class*="bg-amber"]):not([class*="bg-emerald"]):not([class*="bg-rose"]):not([class*="bg-blue"]):not([class*="bg-zinc-9"]):not([class*="bg-black"]) {
+  color: #52525b !important;
+}
+
+/* Secondary / utility buttons that had hardcoded dark backgrounds */
+html:not(.dark) button.bg-neutral-800,
+html:not(.dark) button.bg-neutral-900:not([class*="text-white"]):not([class*="bg-orange"]),
+html:not(.dark) button.bg-zinc-800,
+html:not(.dark) button.bg-\[\#141414\] {
+  background-color: #f4f4f5 !important;
+  border-color: #d4d4d8 !important;
+  color: #18181b !important;
+}
+
+html:not(.dark) button.bg-neutral-800:hover,
+html:not(.dark) button.bg-neutral-900:hover,
+html:not(.dark) button.bg-zinc-800:hover,
+html:not(.dark) button.bg-\[\#141414\]:hover {
+  background-color: #e4e4e7 !important;
   color: #09090b !important;
 }
 
-/* Form inputs & controls in light mode */
-html:not(.dark) input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([class*="bg-white"]):not([class*="bg-zinc"]),
-html:not(.dark) select:not([class*="bg-white"]):not([class*="bg-zinc"]),
-html:not(.dark) textarea:not([class*="bg-white"]):not([class*="bg-zinc"]) {
+/* Form inputs & controls in light mode: un-skips bg-zinc/bg-neutral dark inputs */
+html:not(.dark) input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([class*="bg-orange"]):not([class*="bg-amber"]),
+html:not(.dark) select,
+html:not(.dark) textarea {
   background-color: #ffffff !important;
   color: #09090b !important;
   border-color: #d4d4d8 !important;
@@ -313,6 +460,33 @@ html:not(.dark) textarea:not([class*="bg-white"]):not([class*="bg-zinc"]) {
 html:not(.dark) input::placeholder,
 html:not(.dark) textarea::placeholder {
   color: #71717a !important;
+}
+
+html:not(.dark) input:focus,
+html:not(.dark) textarea:focus,
+html:not(.dark) select:focus {
+  border-color: #f3aa18 !important;
+  box-shadow: 0 0 0 1px rgba(243, 170, 24, 0.4) !important;
+}
+
+/* Popovers and floating menus */
+html:not(.dark) [data-action-menu] [class*="bg-neutral-900"],
+html:not(.dark) [class*="bg-[#121215]"] {
+  background-color: #ffffff !important;
+  border-color: #e4e4e7 !important;
+  color: #09090b !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+}
+
+html:not(.dark) [data-action-menu] button,
+html:not(.dark) [class*="bg-[#121215]"] button {
+  color: #18181b !important;
+}
+
+html:not(.dark) [data-action-menu] button:hover,
+html:not(.dark) [class*="bg-[#121215]"] button:hover {
+  background-color: #f4f4f5 !important;
+  color: #09090b !important;
 }
 
 /* Universal Dropdowns, Comboboxes, and Selects in Light Mode */

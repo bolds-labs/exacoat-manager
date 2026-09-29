@@ -4946,42 +4946,42 @@ export const ConfiguratorStudioPage: React.FC = () => {
       {/* Metrics Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <GlassCard className="p-4 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-[#f3aa18] shrink-0">
+          <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-[#f3aa18] shrink-0">
             <Layers className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-[11px] font-sans font-medium text-zinc-400 uppercase tracking-wider">Catalog Devices</p>
-            <p className="text-2xl font-mono font-bold text-white mt-0.5">{stats.total}</p>
+            <p className="text-[11px] font-sans font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Catalog Devices</p>
+            <p className="text-2xl font-mono font-bold text-zinc-900 dark:text-white mt-0.5">{stats.total}</p>
           </div>
         </GlassCard>
 
         <GlassCard className="p-4 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+          <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
             <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-[11px] font-sans font-medium text-zinc-400 uppercase tracking-wider">Audited Clean</p>
-            <p className="text-2xl font-mono font-bold text-emerald-400 mt-0.5">{Math.max(0, stats.audited - stats.issues)}</p>
+            <p className="text-[11px] font-sans font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Audited Clean</p>
+            <p className="text-2xl font-mono font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{Math.max(0, stats.audited - stats.issues)}</p>
           </div>
         </GlassCard>
 
         <GlassCard className="p-4 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+          <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
             <ShieldAlert className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-[11px] font-sans font-medium text-zinc-400 uppercase tracking-wider">Unaudited Devices</p>
-            <p className="text-2xl font-mono font-bold text-amber-400 mt-0.5">{stats.unaudited}</p>
+            <p className="text-[11px] font-sans font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Unaudited Devices</p>
+            <p className="text-2xl font-mono font-bold text-amber-600 dark:text-amber-400 mt-0.5">{stats.unaudited}</p>
           </div>
         </GlassCard>
 
         <GlassCard className="p-4 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 shrink-0">
+          <div className="w-11 h-11 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-600 dark:text-sky-400 shrink-0">
             <Eye className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-[11px] font-sans font-medium text-zinc-400 uppercase tracking-wider">Multi-Angle Setups</p>
-            <p className="text-2xl font-mono font-bold text-sky-400 mt-0.5">{stats.multiAngle}</p>
+            <p className="text-[11px] font-sans font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Multi-Angle Setups</p>
+            <p className="text-2xl font-mono font-bold text-sky-600 dark:text-sky-400 mt-0.5">{stats.multiAngle}</p>
           </div>
         </GlassCard>
       </div>
@@ -4995,13 +4995,13 @@ export const ConfiguratorStudioPage: React.FC = () => {
             placeholder="Search device name, model, SKU, or category..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 text-xs rounded-xl bg-zinc-900/60 border border-white/10 text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/50 font-sans"
+            className="w-full pl-10 pr-4 py-2 text-xs rounded-xl bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/50 font-sans"
           />
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Scope Selector: Configurators Only vs All Store Products */}
-          <div className="flex items-center gap-1 bg-zinc-900/60 p-1 rounded-xl border border-white/10 shrink-0">
+          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900/60 p-1 rounded-xl border border-zinc-200 dark:border-white/10 shrink-0">
             <button
               type="button"
               onClick={() => handleToggleShowAllProducts(false)}
@@ -5009,7 +5009,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer flex items-center gap-1.5',
                 !showAllProducts
                   ? 'bg-[#f3aa18]/20 text-[#f3aa18] font-bold border border-[#f3aa18]/30'
-                  : 'text-zinc-400 hover:text-white'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
               )}
               title="Display only products configured as interactive device skins"
             >
@@ -5022,8 +5022,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
               className={clsx(
                 'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer flex items-center gap-1.5',
                 showAllProducts
-                  ? 'bg-white/15 text-white font-bold'
-                  : 'text-zinc-400 hover:text-white'
+                  ? 'bg-zinc-900 text-white dark:bg-white/15 dark:text-white font-bold'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
               )}
               title="Display all store products including merchandise, drops, and kits"
             >
@@ -5031,12 +5031,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
             </button>
           </div>
 
-          <div className="flex items-center gap-1 bg-zinc-900/60 p-1 rounded-xl border border-white/10 shrink-0">
+          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900/60 p-1 rounded-xl border border-zinc-200 dark:border-white/10 shrink-0">
             <button
               onClick={() => setFilterConfigured('all')}
               className={clsx(
                 'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer',
-                filterConfigured === 'all' ? 'bg-white/15 text-white font-bold' : 'text-zinc-400 hover:text-white'
+                filterConfigured === 'all' ? 'bg-zinc-900 text-white dark:bg-white/15 dark:text-white font-bold' : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
               )}
             >
               All
@@ -5045,7 +5045,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
               onClick={() => setFilterConfigured('configured')}
               className={clsx(
                 'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer',
-                filterConfigured === 'configured' ? 'bg-white/15 text-white font-bold' : 'text-zinc-400 hover:text-white'
+                filterConfigured === 'configured' ? 'bg-zinc-900 text-white dark:bg-white/15 dark:text-white font-bold' : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
               )}
             >
               Active
@@ -5053,13 +5053,13 @@ export const ConfiguratorStudioPage: React.FC = () => {
           </div>
 
           {/* Audit Status Filter Selector */}
-          <div className="flex items-center gap-1 bg-zinc-900/60 p-1 rounded-xl border border-white/10 shrink-0">
+          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900/60 p-1 rounded-xl border border-zinc-200 dark:border-white/10 shrink-0">
             <button
               type="button"
               onClick={() => setFilterAudit('all')}
               className={clsx(
                 'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer',
-                filterAudit === 'all' ? 'bg-white/15 text-white font-bold' : 'text-zinc-400 hover:text-white'
+                filterAudit === 'all' ? 'bg-zinc-900 text-white dark:bg-white/15 dark:text-white font-bold' : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
               )}
             >
               All Audit
@@ -5070,12 +5070,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
               className={clsx(
                 'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer flex items-center gap-1.5',
                 filterAudit === 'audited'
-                  ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40'
-                  : 'text-zinc-400 hover:text-white'
+                  ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-500/40'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
               )}
               title="Show devices that have been audited and verified clean"
             >
-              <ShieldCheck className="w-3 h-3 text-emerald-400" />
+              <ShieldCheck className="w-3 h-3 text-emerald-500" />
               <span>Audited ({Math.max(0, stats.audited - stats.issues)})</span>
             </button>
             <button
@@ -5084,12 +5084,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
               className={clsx(
                 'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer flex items-center gap-1.5',
                 filterAudit === 'unaudited'
-                  ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40'
-                  : 'text-zinc-400 hover:text-white'
+                  ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold border border-amber-500/40'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
               )}
               title="Show devices that need auditing"
             >
-              <ShieldAlert className="w-3 h-3 text-amber-400" />
+              <ShieldAlert className="w-3 h-3 text-amber-500" />
               <span>Unaudited ({stats.unaudited})</span>
             </button>
             {stats.issues > 0 && (
@@ -5099,12 +5099,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 className={clsx(
                   'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer flex items-center gap-1.5',
                   filterAudit === 'issues'
-                    ? 'bg-rose-500/20 text-rose-300 font-bold border border-rose-500/40'
-                    : 'text-zinc-400 hover:text-white'
+                    ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300 font-bold border border-rose-500/40'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
                 )}
                 title="Show devices with broken textures or ghost angles"
               >
-                <AlertTriangle className="w-3 h-3 text-rose-400" />
+                <AlertTriangle className="w-3 h-3 text-rose-500" />
                 <span>Issues ({stats.issues})</span>
               </button>
             )}
@@ -5119,7 +5119,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 'px-3 py-1.5 text-xs font-sans rounded-xl transition-all cursor-pointer flex items-center gap-2 border shadow-xs',
                 selectedCategory !== 'all'
                   ? 'bg-[#f3aa18]/15 text-[#f3aa18] border-[#f3aa18]/40 font-semibold'
-                  : 'bg-zinc-900/80 text-zinc-300 border-white/10 hover:border-white/20 hover:text-white'
+                  : 'bg-white dark:bg-zinc-900/80 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-white/10 hover:border-zinc-300 dark:hover:border-white/20 hover:text-zinc-900 dark:hover:text-white'
               )}
               title="Filter catalog by device category / brand"
             >
@@ -5132,7 +5132,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   'text-[10px] font-mono px-1.5 py-0.5 rounded-full font-bold',
                   selectedCategory !== 'all'
                     ? 'bg-[#f3aa18]/25 text-[#f3aa18]'
-                    : 'bg-white/10 text-zinc-400'
+                    : 'bg-zinc-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-400'
                 )}
               >
                 {categoryCounts[selectedCategory] ?? profiles.length}
@@ -5140,14 +5140,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
               <ChevronDown
                 className={clsx(
                   'w-3.5 h-3.5 text-zinc-400 transition-transform duration-200',
-                  categoryDropdownOpen && 'rotate-180 text-white'
+                  categoryDropdownOpen && 'rotate-180 text-zinc-900 dark:text-white'
                 )}
               />
             </button>
 
             {/* Floating Popover Dropdown */}
             {categoryDropdownOpen && (
-              <div className="absolute left-0 lg:right-0 lg:left-auto top-full mt-1.5 z-[60] w-72 rounded-2xl bg-[#121215]/95 backdrop-blur-xl border border-white/10 shadow-2xl p-2 animate-in fade-in zoom-in-95 duration-150">
+              <div className="absolute left-0 lg:right-0 lg:left-auto top-full mt-1.5 z-[60] w-72 rounded-2xl bg-white dark:bg-[#121215]/95 backdrop-blur-xl border border-zinc-200 dark:border-white/10 shadow-2xl p-2 animate-in fade-in zoom-in-95 duration-150">
                 {/* Search Header */}
                 <div className="relative mb-2">
                   <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
@@ -5157,13 +5157,13 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     value={categorySearch}
                     onChange={(e) => setCategorySearch(e.target.value)}
                     autoFocus
-                    className="w-full pl-8 pr-7 py-1.5 text-xs font-sans rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/50"
+                    className="w-full pl-8 pr-7 py-1.5 text-xs font-sans rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/50"
                   />
                   {categorySearch && (
                     <button
                       type="button"
                       onClick={() => setCategorySearch('')}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white p-0.5 cursor-pointer"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-900 dark:hover:text-white p-0.5 cursor-pointer"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -5172,17 +5172,17 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                 {/* Reset to All Categories Quick Action */}
                 {selectedCategory !== 'all' && (
-                  <div className="pb-1.5 mb-1.5 border-b border-white/5">
+                  <div className="pb-1.5 mb-1.5 border-b border-zinc-100 dark:border-white/5">
                     <button
                       type="button"
                       onClick={() => {
                         setSelectedCategory('all');
                         setCategoryDropdownOpen(false);
                       }}
-                      className="w-full px-2.5 py-1.5 rounded-xl text-xs font-sans text-left transition-colors flex items-center justify-between text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer"
+                      className="w-full px-2.5 py-1.5 rounded-xl text-xs font-sans text-left transition-colors flex items-center justify-between text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 cursor-pointer"
                     >
                       <span className="flex items-center gap-1.5">
-                        <RefreshCw className="w-3 h-3 text-zinc-500" />
+                        <RefreshCw className="w-3 h-3 text-zinc-400 dark:text-zinc-500" />
                         <span>Reset to All Categories</span>
                       </span>
                       <span className="text-[10px] font-mono text-zinc-500">{profiles.length}</span>
@@ -5193,7 +5193,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 {/* Categories Options List */}
                 <div className="max-h-64 overflow-y-auto space-y-0.5 pr-1">
                   {filteredCategories.length === 0 ? (
-                    <div className="py-4 text-center text-xs text-zinc-500">No categories match search</div>
+                    <div className="py-4 text-center text-xs text-zinc-400 dark:text-zinc-500">No categories match search</div>
                   ) : (
                     filteredCategories.map((cat) => {
                       const isSelected = selectedCategory === cat;
@@ -5210,14 +5210,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             'w-full px-2.5 py-1.5 rounded-xl text-xs font-sans text-left transition-colors flex items-center justify-between group cursor-pointer',
                             isSelected
                               ? 'bg-[#f3aa18]/15 text-[#f3aa18] font-semibold'
-                              : 'text-zinc-300 hover:bg-white/5 hover:text-white'
+                              : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5 hover:text-zinc-900 dark:hover:text-white'
                           )}
                         >
                           <div className="flex items-center gap-2 truncate">
                             <span
                               className={clsx(
                                 'w-1.5 h-1.5 rounded-full shrink-0',
-                                isSelected ? 'bg-[#f3aa18]' : 'bg-zinc-600 group-hover:bg-zinc-400'
+                                isSelected ? 'bg-[#f3aa18]' : 'bg-zinc-400 dark:bg-zinc-600 group-hover:bg-zinc-600 dark:group-hover:bg-zinc-400'
                               )}
                             />
                             <span className="capitalize truncate">
@@ -5225,7 +5225,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             </span>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
-                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-white/5 text-zinc-400">
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400">
                               {count}
                             </span>
                             {isSelected && <Check className="w-3.5 h-3.5 text-[#f3aa18]" />}
@@ -5254,11 +5254,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
           <p className="text-xs text-zinc-500 mt-1">Try broadening your search query or selecting a different category.</p>
         </GlassCard>
       ) : (
-        <div className="rounded-2xl border border-white/10 overflow-hidden bg-zinc-950/60 shadow-xl">
+        <div className="rounded-2xl border border-zinc-200 dark:border-white/10 overflow-hidden bg-white dark:bg-zinc-950/60 shadow-xs dark:shadow-xl">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs font-sans border-collapse">
               <thead>
-                <tr className="border-b border-white/10 bg-zinc-900/60 text-[11px] uppercase tracking-wider font-semibold text-zinc-400">
+                <tr className="border-b border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-zinc-900/60 text-[11px] uppercase tracking-wider font-semibold text-zinc-600 dark:text-zinc-400">
                   <th className="py-3 px-3 min-w-[95px] text-center">Status</th>
                   <th className="py-3 px-4 min-w-[220px]">Device / Model</th>
                   <th className="py-3 px-4 min-w-[150px]">Category</th>
@@ -5270,7 +5270,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-zinc-200 dark:divide-white/5">
                 {filteredProfiles.map((p) => {
                   const isAuditedClean =
                     p.last_audited_at &&
@@ -5284,7 +5284,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     <tr
                       key={p.product_id}
                       onClick={() => handleOpenEditor(p.product_id)}
-                      className="hover:bg-white/[0.03] transition-colors cursor-pointer group"
+                      className="hover:bg-zinc-50 dark:hover:bg-white/[0.03] transition-colors cursor-pointer group"
                     >
                       {/* Status / Issues Badge */}
                       <td
@@ -5298,10 +5298,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       >
                         {isAuditedClean ? (
                           <span
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[10px] font-medium"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 text-[10px] font-medium"
                             title={p.last_audited_at ? `Audited clean on ${new Date(p.last_audited_at).toLocaleDateString()}` : 'Audited clean'}
                           >
-                            <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />
+                            <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
                             <span>Clean</span>
                           </span>
                         ) : isAuditedIssues ? (
@@ -5312,33 +5312,33 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 e.stopPropagation();
                                 handleOpenAssetAuditForProduct(p.product_id);
                               }}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-300 hover:bg-rose-500/25 hover:border-rose-500/40 text-[10px] font-semibold cursor-pointer transition-all shadow-[0_0_8px_rgba(251,113,133,0.15)]"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-700 dark:text-rose-300 hover:bg-rose-500/25 hover:border-rose-500/40 text-[10px] font-semibold cursor-pointer transition-all shadow-[0_0_8px_rgba(251,113,133,0.15)]"
                               title="Click to inspect and fix issues in Asset Integrity Audit"
                             >
-                              <AlertTriangle className="w-2.5 h-2.5 text-rose-400" />
+                              <AlertTriangle className="w-2.5 h-2.5 text-rose-500" />
                               <span>{p.audit_issues || 1} {p.audit_issues === 1 ? 'issue' : 'issues'}</span>
                             </button>
 
                             {/* Rich Hover Popover showing exact issues */}
-                            <div className="hidden group-hover/issue:block absolute left-2 top-full mt-1.5 z-50 w-80 max-w-[calc(100vw-3rem)] p-2.5 rounded-xl bg-zinc-950/95 border border-rose-500/30 shadow-2xl backdrop-blur-md text-left pointer-events-none animate-in fade-in duration-150">
-                              <div className="flex items-center justify-between gap-2 pb-1.5 mb-1.5 border-b border-white/10">
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-rose-300 flex items-center gap-1">
-                                  <AlertTriangle className="w-3 h-3 text-rose-400" />
+                            <div className="hidden group-hover/issue:block absolute left-2 top-full mt-1.5 z-50 w-80 max-w-[calc(100vw-3rem)] p-2.5 rounded-xl bg-white dark:bg-zinc-950/95 border border-rose-500/30 shadow-2xl backdrop-blur-md text-left pointer-events-none animate-in fade-in duration-150">
+                              <div className="flex items-center justify-between gap-2 pb-1.5 mb-1.5 border-b border-zinc-100 dark:border-white/10">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-300 flex items-center gap-1">
+                                  <AlertTriangle className="w-3 h-3 text-rose-500" />
                                   <span>{p.audit_issues || 1} Detected {p.audit_issues === 1 ? 'Issue' : 'Issues'}</span>
                                 </span>
-                                <span className="text-[9px] font-mono text-zinc-400">Click to fix</span>
+                                <span className="text-[9px] font-mono text-zinc-500 dark:text-zinc-400">Click to fix</span>
                               </div>
                               {p.audit_details && p.audit_details.length > 0 ? (
-                                <ul className="space-y-1 text-[11px] text-zinc-300 max-h-48 overflow-y-auto pr-1">
+                                <ul className="space-y-1 text-[11px] text-zinc-700 dark:text-zinc-300 max-h-48 overflow-y-auto pr-1">
                                   {p.audit_details.map((detail, idx) => (
                                     <li key={idx} className="flex items-start gap-1.5 text-left leading-tight break-all">
-                                      <span className="text-rose-400 shrink-0">•</span>
-                                      <span className="text-zinc-300 font-sans">{detail}</span>
+                                      <span className="text-rose-500 shrink-0">•</span>
+                                      <span className="text-zinc-700 dark:text-zinc-300 font-sans">{detail}</span>
                                     </li>
                                   ))}
                                 </ul>
                               ) : (
-                                <p className="text-[11px] text-zinc-400 leading-snug">
+                                <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-snug">
                                   Click to run real-time asset probe and view broken URLs and ghost angles.
                                 </p>
                               )}
@@ -5346,10 +5346,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           </>
                         ) : (
                           <span
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-500 border border-zinc-700/50 text-[10px]"
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-700/50 text-[10px]"
                             title="Unaudited device"
                           >
-                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
                             <span>Unaudited</span>
                           </span>
                         )}
@@ -5358,14 +5358,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       {/* Device Name & SKU */}
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
-                          <span className="font-heading font-normal tracking-wide text-white group-hover:text-[#f3aa18] transition-colors">
+                          <span className="font-heading font-normal tracking-wide text-zinc-900 dark:text-white group-hover:text-[#f3aa18] transition-colors">
                             {p.name}
                           </span>
-                          <span className="text-[10px] font-mono text-zinc-500 bg-white/5 px-1.5 py-0.5 rounded">
+                          <span className="text-[10px] font-mono text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-white/5 px-1.5 py-0.5 rounded">
                             #{p.product_id}
                           </span>
                           {p.status === 'draft' && (
-                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
                               Draft
                             </span>
                           )}
@@ -5373,7 +5373,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       </td>
 
                       {/* Category */}
-                      <td className="py-3 px-4 text-zinc-400 truncate max-w-[180px]">
+                      <td className="py-3 px-4 text-zinc-600 dark:text-zinc-400 truncate max-w-[180px]">
                         {p.categories.join(', ') || 'Uncategorized'}
                       </td>
 
@@ -5389,8 +5389,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           className={clsx(
                             'text-[10px] font-sans px-2.5 py-1 rounded-full border font-semibold inline-flex items-center gap-1 transition-all cursor-pointer',
                             p.is_configurator !== false
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-                              : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:bg-zinc-700 hover:text-white'
+                              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                              : 'bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white'
                           )}
                           title={
                             p.is_configurator !== false
@@ -5403,21 +5403,21 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           ) : p.is_configurator !== false ? (
                             <CheckCircle2 className="w-2.5 h-2.5" />
                           ) : (
-                            <AlertCircle className="w-2.5 h-2.5 text-zinc-500" />
+                            <AlertCircle className="w-2.5 h-2.5 text-zinc-400 dark:text-zinc-500" />
                           )}
                           <span>{p.is_configurator !== false ? 'Active' : 'Excluded'}</span>
                         </button>
                       </td>
 
                       {/* Setup Specs */}
-                      <td className="py-3 px-4 text-center font-mono text-[11px] text-zinc-400">
+                      <td className="py-3 px-4 text-center font-mono text-[11px] text-zinc-600 dark:text-zinc-400">
                         <span>{p.views_count}v</span>
-                        <span className="mx-1 text-zinc-600">•</span>
+                        <span className="mx-1 text-zinc-300 dark:text-zinc-600">•</span>
                         <span>{p.layers_count}L</span>
                       </td>
 
                       {/* Scale */}
-                      <td className="py-3 px-3 text-center font-mono text-[11px] text-zinc-300">
+                      <td className="py-3 px-3 text-center font-mono text-[11px] text-zinc-700 dark:text-zinc-300">
                         {Math.round((((p as any).views?.[0]?.texture_scale ?? p.texture_scale ?? 0.75)) * 100)}%
                       </td>
 
@@ -5428,7 +5428,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             'text-[10px] font-mono px-2 py-0.5 rounded-md border font-medium',
                             (p.presets_count || 0) > 0
                               ? 'bg-[#f3aa18]/15 text-[#f3aa18] border-[#f3aa18]/30 font-semibold'
-                              : 'bg-zinc-900/80 text-zinc-500 border-white/5'
+                              : 'bg-zinc-100 dark:bg-zinc-900/80 text-zinc-600 dark:text-zinc-500 border-zinc-200 dark:border-white/5'
                           )}
                         >
                           {(p.presets_count || 0) > 0 ? `${p.presets_count} Looks` : '0'}
@@ -5443,9 +5443,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           handleOpenPriceModal(p);
                         }}
                       >
-                        <span className="font-mono font-medium text-white hover:text-[#f3aa18] transition-colors inline-flex items-center gap-1 cursor-pointer">
+                        <span className="font-mono font-medium text-zinc-900 dark:text-white hover:text-[#f3aa18] transition-colors inline-flex items-center gap-1 cursor-pointer">
                           IDR {p.price.toLocaleString('id-ID')}
-                          <Edit3 className="w-2.5 h-2.5 text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <Edit3 className="w-2.5 h-2.5 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </span>
                       </td>
 
@@ -5458,7 +5458,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => handleOpenMarketplaceForProduct(p.product_id)}
-                            className="p-1.5 rounded-lg border border-white/10 hover:bg-[#f3aa18]/20 hover:border-[#f3aa18]/40 text-zinc-400 hover:text-[#f3aa18] transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg border border-zinc-200 dark:border-white/10 hover:bg-[#f3aa18]/20 hover:border-[#f3aa18]/40 text-zinc-500 dark:text-zinc-400 hover:text-[#f3aa18] transition-colors cursor-pointer"
                             title="Generate 1500x1500px marketplace images"
                           >
                             <ImageIcon className="w-3 h-3" />
@@ -5466,7 +5466,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => handleOpenDuplicateModal(p)}
-                            className="p-1.5 rounded-lg border border-white/10 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg border border-zinc-200 dark:border-white/10 hover:bg-zinc-100 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
                             title="Duplicate product & profile"
                           >
                             <Copy className="w-3 h-3" />
@@ -5474,7 +5474,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => handleOpenEditor(p.product_id)}
-                            className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-white/10 hover:bg-[#f3aa18] hover:text-black text-white transition-colors cursor-pointer"
+                            className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-zinc-100 hover:bg-[#f3aa18] hover:text-black dark:bg-white/10 dark:hover:bg-[#f3aa18] dark:hover:text-black text-zinc-900 dark:text-white border border-zinc-200 dark:border-transparent transition-colors cursor-pointer"
                           >
                             Open
                           </button>

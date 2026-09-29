@@ -401,8 +401,8 @@ export const TestingSandboxPage: React.FC<TestingSandboxPageProps> = () => {
                   onClick={() => setAiProvider('gemini')}
                   className={`flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
                     aiProvider === 'gemini'
-                      ? 'bg-lime-500/10 border-lime-500/40 text-[#f3aa18]'
-                      : 'bg-zinc-900/60 border-zinc-800 text-zinc-400'
+                      ? 'bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-[#f3aa18]'
+                      : 'bg-zinc-100 dark:bg-zinc-900/60 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400'
                   }`}
                 >
                   Google Gemini 2.5 Flash
@@ -412,8 +412,8 @@ export const TestingSandboxPage: React.FC<TestingSandboxPageProps> = () => {
                   onClick={() => setAiProvider('openai')}
                   className={`flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
                     aiProvider === 'openai'
-                      ? 'bg-lime-500/10 border-lime-500/40 text-[#f3aa18]'
-                      : 'bg-zinc-900/60 border-zinc-800 text-zinc-400'
+                      ? 'bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-[#f3aa18]'
+                      : 'bg-zinc-100 dark:bg-zinc-900/60 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400'
                   }`}
                 >
                   OpenAI GPT-4o

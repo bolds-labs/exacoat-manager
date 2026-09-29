@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.138.zip?v=0.1.138",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-29T05:52:18.537Z",
+  "last_updated": "2026-09-29T06:08:59.060Z",
   "sections": {
     "changelog": "### Version 0.1.138\n- Fix timezone synchronization to follow WordPress site timezone settings (GMT+7)\n- Return standard ISO 8601 timestamps with accurate timezone offsets for orders, refunds, notes, and marketplace integrations\n- Resolve 7-hour discrepancy across Exacoat Manager and client applications"
   }

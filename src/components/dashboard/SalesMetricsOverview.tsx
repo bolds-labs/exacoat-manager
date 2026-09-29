@@ -71,17 +71,17 @@ export const SalesMetricsOverview: React.FC<SalesMetricsOverviewProps> = ({
       {/* 1. Gross Revenue */}
       <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[125px]">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">Gross Sales</span>
-          <div className="p-2 rounded-xl bg-white/[0.04] group-hover:bg-[#f3aa18]/10 text-neutral-400 group-hover:text-[#f3aa18] transition-colors border border-white/[0.06]">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-neutral-400">Gross Sales</span>
+          <div className="p-2 rounded-xl bg-zinc-100 dark:bg-white/[0.04] group-hover:bg-[#f3aa18]/10 text-zinc-500 dark:text-neutral-400 group-hover:text-[#f3aa18] transition-colors border border-zinc-200 dark:border-white/[0.06]">
             <DollarSign className="w-4 h-4" />
           </div>
         </div>
         <div className="mt-2">
-          <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white">
+          <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-zinc-900 dark:text-white">
             {formatCurrency(primaryTotal, primaryCurrency)}
           </p>
           {foreignCurrencies.length > 0 && (
-            <p className="text-[10px] font-mono text-neutral-400 mt-0.5">
+            <p className="text-[10px] font-mono text-zinc-500 dark:text-neutral-400 mt-0.5">
               Includes {foreignCurrencies.map(c => `${formatCurrency(currencyTotals[c].total, c)} (${currencyTotals[c].count})`).join(', ')}
             </p>
           )}
@@ -91,19 +91,19 @@ export const SalesMetricsOverview: React.FC<SalesMetricsOverviewProps> = ({
       {/* 2. Total Orders */}
       <GlassCard 
         onClick={() => onNavigateToOrders('all')}
-        className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[125px] cursor-pointer hover:border-white/20"
+        className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[125px] cursor-pointer hover:border-zinc-300 dark:hover:border-white/20"
       >
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">Total Orders</span>
-          <div className="p-2 rounded-xl bg-white/[0.04] group-hover:bg-sky-500/10 text-neutral-400 group-hover:text-sky-400 transition-colors border border-white/[0.06]">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-neutral-400">Total Orders</span>
+          <div className="p-2 rounded-xl bg-zinc-100 dark:bg-white/[0.04] group-hover:bg-sky-500/10 text-zinc-500 dark:text-neutral-400 group-hover:text-sky-500 dark:group-hover:text-sky-400 transition-colors border border-zinc-200 dark:border-white/[0.06]">
             <ShoppingBag className="w-4 h-4" />
           </div>
         </div>
         <div className="mt-2">
-          <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white">
+          <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-zinc-900 dark:text-white">
             {totalOrdersCount}
           </p>
-          <p className="text-[10px] font-mono text-neutral-400 mt-0.5">
+          <p className="text-[10px] font-mono text-zinc-500 dark:text-neutral-400 mt-0.5">
             {totalUnits} units ordered
           </p>
         </div>
@@ -115,16 +115,16 @@ export const SalesMetricsOverview: React.FC<SalesMetricsOverviewProps> = ({
         className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[125px] cursor-pointer hover:border-amber-500/30"
       >
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300">Processing</span>
-          <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">Processing</span>
+          <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
             <Clock className="w-4 h-4" />
           </div>
         </div>
         <div className="mt-2">
-          <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white">
+          <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-zinc-900 dark:text-white">
             {processingCount}
           </p>
-          <p className="text-[10px] font-mono text-amber-400/80 mt-0.5">
+          <p className="text-[10px] font-mono text-amber-600 dark:text-amber-400/80 mt-0.5">
             In queue &bull; Needs pack
           </p>
         </div>
@@ -136,16 +136,16 @@ export const SalesMetricsOverview: React.FC<SalesMetricsOverviewProps> = ({
         className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[125px] cursor-pointer hover:border-[#f3aa18]/30"
       >
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[#f3aa18]">Ready to Ship</span>
-          <div className="p-2 rounded-xl bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/20">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700 dark:text-[#f3aa18]">Ready to Ship</span>
+          <div className="p-2 rounded-xl bg-[#f3aa18]/10 text-amber-600 dark:text-[#f3aa18] border border-[#f3aa18]/20">
             <Truck className="w-4 h-4" />
           </div>
         </div>
         <div className="mt-2">
-          <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white">
+          <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-zinc-900 dark:text-white">
             {readyToShipCount}
           </p>
-          <p className="text-[10px] font-mono text-[#f3aa18]/80 mt-0.5">
+          <p className="text-[10px] font-mono text-amber-600 dark:text-[#f3aa18]/80 mt-0.5">
             Packed &bull; Awaiting courier
           </p>
         </div>
@@ -154,16 +154,16 @@ export const SalesMetricsOverview: React.FC<SalesMetricsOverviewProps> = ({
       {/* 5. Average Order Value */}
       <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[125px] col-span-2 sm:col-span-1">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">Avg Order Value</span>
-          <div className="p-2 rounded-xl bg-white/[0.04] group-hover:bg-purple-500/10 text-neutral-400 group-hover:text-purple-400 transition-colors border border-white/[0.06]">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-neutral-400">Avg Order Value</span>
+          <div className="p-2 rounded-xl bg-zinc-100 dark:bg-white/[0.04] group-hover:bg-purple-500/10 text-zinc-500 dark:text-neutral-400 group-hover:text-purple-500 dark:group-hover:text-purple-400 transition-colors border border-zinc-200 dark:border-white/[0.06]">
             <TrendingUp className="w-4 h-4" />
           </div>
         </div>
         <div className="mt-2">
-          <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white">
+          <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-zinc-900 dark:text-white">
             {formatCurrency(aov, primaryCurrency)}
           </p>
-          <p className="text-[10px] font-mono text-emerald-400 mt-0.5 flex items-center gap-1">
+          <p className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 mt-0.5 flex items-center gap-1">
             <CheckCircle2 className="w-3 h-3" />
             <span>{deliveredCount} delivered</span>
           </p>
