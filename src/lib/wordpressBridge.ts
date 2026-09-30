@@ -3588,6 +3588,53 @@ export async function sendReviewInviteDirect(orderId: number | string): Promise<
   }
 }
 
+export async function syncWooCommerceReviewsDirect(): Promise<{
+  success: boolean;
+  message?: string;
+  imported?: number;
+  total?: number;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const wcCreds = getWcCredentials();
+  const query = new URLSearchParams({
+    consumer_key: wcCreds.key || '',
+    consumer_secret: wcCreds.secret || '',
+    _t: String(Date.now()),
+  }).toString();
+
+  const url = `${base}/wp-json/exacoat-core/v1/reviews/sync-wc?${query}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+    });
+
+    if (res.status === 404) {
+      return {
+        success: false,
+        error: 'Sync endpoint not active on WordPress yet. Please update the Exacoat Core plugin to v0.1.151 in WordPress Admin (Plugins > Check for Updates).',
+      };
+    }
+
+    const data = await res.json();
+    return {
+      success: !!data.success,
+      message: data.message,
+      imported: data.imported ?? 0,
+      total: data.total ?? 0,
+      error: data.message || data.error,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Network error syncing WooCommerce reviews' };
+  }
+}
+
+
 export async function fetchReviewRewardSettingsDirect(): Promise<{ success: boolean; settings?: ReviewRewardSettings; error?: string }> {
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/reviews/reward-settings?_t=${Date.now()}`;

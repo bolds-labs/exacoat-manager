@@ -56,6 +56,9 @@ class Exacoat_Review_Manager {
 		// 6. WooCommerce coupon rules: enforce strict non-stackable Exacoat Perks promo codes
 		add_filter( 'woocommerce_apply_with_individual_use_coupon', '__return_false', 999 );
 		add_filter( 'woocommerce_coupon_is_valid', [ __CLASS__, 'prevent_coupon_stacking' ], 10, 3 );
+
+		// 7. Auto-ingest native WooCommerce product reviews into Exacoat review repository
+		add_action( 'comment_post', [ __CLASS__, 'on_wc_comment_posted' ], 20, 3 );
 	}
 
 	/**
@@ -740,6 +743,13 @@ class Exacoat_Review_Manager {
 				'methods'             => [ 'GET', 'POST' ],
 				'callback'            => [ __CLASS__, 'api_verify_order_for_review' ],
 				'permission_callback' => '__return_true',
+			] );
+
+			// 13. Sync historical reviews from WooCommerce product comments
+			register_rest_route( $namespace, '/reviews/sync-wc', [
+				'methods'             => [ 'POST', 'GET' ],
+				'callback'            => [ __CLASS__, 'api_sync_woocommerce_reviews' ],
+				'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
 			] );
 		}
 	}
@@ -1833,6 +1843,181 @@ class Exacoat_Review_Manager {
 			'success'  => true,
 			'message'  => 'Reward settings updated successfully',
 			'settings' => $data,
+		], 200 );
+	}
+
+	/**
+	 * Ingest native WooCommerce product reviews into exacoat_reviews automatically
+	 */
+	public static function on_wc_comment_posted( $comment_id, $comment_approved, $commentdata ) {
+		$comment_type = $commentdata['comment_type'] ?? '';
+		if ( $comment_type !== 'review' && ! empty( $comment_type ) ) {
+			return;
+		}
+
+		$post_id = (int) ( $commentdata['comment_post_ID'] ?? 0 );
+		if ( ! $post_id || get_post_type( $post_id ) !== 'product' ) {
+			return;
+		}
+
+		global $wpdb;
+		$table = self::get_table_name();
+
+		$existing = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$table} WHERE wc_comment_id = %d", $comment_id ) );
+		if ( $existing ) {
+			return;
+		}
+
+		$rating   = (float) get_comment_meta( $comment_id, 'rating', true ) ?: 5.0;
+		$verified = get_comment_meta( $comment_id, 'verified', true ) ? 1 : 0;
+		$thumb_id = get_post_thumbnail_id( $post_id );
+		$thumb    = $thumb_id ? wp_get_attachment_image_url( $thumb_id, 'medium' ) : '';
+
+		$status = 'approved';
+		if ( $comment_approved === '0' || $comment_approved === 0 || $comment_approved === 'hold' ) {
+			$status = 'pending';
+		} elseif ( $comment_approved === 'spam' || $comment_approved === 'trash' ) {
+			$status = 'rejected';
+		}
+
+		$clean_content = trim( wp_strip_all_tags( $commentdata['comment_content'] ?? '' ) );
+
+		$wpdb->insert( $table, [
+			'order_id'          => 0,
+			'order_number'      => '',
+			'product_id'        => $post_id,
+			'artwork_id'        => '',
+			'artwork_title'     => wp_specialchars_decode( get_the_title( $post_id ), ENT_QUOTES ),
+			'artwork_image'     => $thumb ?: '',
+			'artist_name'       => 'Exacoat',
+			'customer_name'     => sanitize_text_field( $commentdata['comment_author'] ?? '' ),
+			'customer_email'    => sanitize_email( $commentdata['comment_author_email'] ?? '' ),
+			'customer_location' => '',
+			'is_anonymous'      => 0,
+			'rating'            => $rating,
+			'title'             => '',
+			'content'           => $clean_content,
+			'media'             => '[]',
+			'status'            => $status,
+			'verified_purchase' => $verified,
+			'wc_comment_id'     => $comment_id,
+			'created_at'        => current_time( 'mysql' ),
+			'updated_at'        => current_time( 'mysql' ),
+		] );
+	}
+
+	/**
+	 * Sync historical product reviews from WooCommerce comments table into exacoat_reviews
+	 */
+	public static function api_sync_woocommerce_reviews( WP_REST_Request $request ): WP_REST_Response {
+		global $wpdb;
+		$table = self::get_table_name();
+
+		self::check_table_schema();
+
+		$sql = "
+			SELECT 
+				c.comment_ID,
+				c.comment_post_ID,
+				c.comment_author,
+				c.comment_author_email,
+				c.comment_content,
+				c.comment_approved,
+				c.comment_date,
+				p.post_title,
+				rm.meta_value AS rating,
+				vm.meta_value AS verified
+			FROM {$wpdb->comments} c
+			INNER JOIN {$wpdb->posts} p ON c.comment_post_ID = p.ID
+			LEFT JOIN {$wpdb->commentmeta} rm ON c.comment_ID = rm.comment_id AND rm.meta_key = 'rating'
+			LEFT JOIN {$wpdb->commentmeta} vm ON c.comment_ID = vm.comment_id AND vm.meta_key = 'verified'
+			WHERE c.comment_type IN ('review', '')
+			  AND p.post_type IN ('product', 'product_variation')
+			  AND c.comment_ID NOT IN (
+				  SELECT wc_comment_id FROM {$table} WHERE wc_comment_id IS NOT NULL AND wc_comment_id > 0
+			  )
+			ORDER BY c.comment_date DESC
+		";
+
+		$unimported = $wpdb->get_results( $sql, ARRAY_A );
+
+		if ( empty( $unimported ) ) {
+			$total_synced = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table}" );
+			return new WP_REST_Response( [
+				'success'  => true,
+				'message'  => 'All WooCommerce reviews are already synced.',
+				'imported' => 0,
+				'total'    => $total_synced,
+			], 200 );
+		}
+
+		$thumb_cache = [];
+		$imported_count = 0;
+
+		foreach ( $unimported as $row ) {
+			$comment_id   = (int) $row['comment_ID'];
+			$product_id   = (int) $row['comment_post_ID'];
+			$author_name  = sanitize_text_field( $row['comment_author'] ?? '' );
+			$author_email = sanitize_email( $row['comment_author_email'] ?? '' );
+			$content      = trim( wp_strip_all_tags( $row['comment_content'] ?? '' ) );
+			$product_name = sanitize_text_field( $row['post_title'] ?? 'Product' );
+			$created_at   = ! empty( $row['comment_date'] ) ? $row['comment_date'] : current_time( 'mysql' );
+
+			$rating = (float) ( $row['rating'] ?? 5.0 );
+			if ( $rating <= 0 || $rating > 5 ) {
+				$rating = 5.0;
+			}
+
+			$status = 'approved';
+			if ( $row['comment_approved'] === '0' || $row['comment_approved'] === 'hold' ) {
+				$status = 'pending';
+			} elseif ( $row['comment_approved'] === 'spam' || $row['comment_approved'] === 'trash' ) {
+				$status = 'rejected';
+			}
+
+			$verified = ( ! empty( $row['verified'] ) && $row['verified'] != '0' ) ? 1 : 0;
+
+			if ( ! isset( $thumb_cache[ $product_id ] ) ) {
+				$thumb_id = get_post_thumbnail_id( $product_id );
+				$thumb_cache[ $product_id ] = $thumb_id ? wp_get_attachment_image_url( $thumb_id, 'medium' ) : '';
+			}
+			$thumb_url = $thumb_cache[ $product_id ] ?: '';
+
+			$inserted = $wpdb->insert( $table, [
+				'order_id'          => 0,
+				'order_number'      => '',
+				'product_id'        => $product_id,
+				'artwork_id'        => '',
+				'artwork_title'     => wp_specialchars_decode( $product_name, ENT_QUOTES ),
+				'artwork_image'     => $thumb_url,
+				'artist_name'       => 'Exacoat',
+				'customer_name'     => wp_specialchars_decode( $author_name, ENT_QUOTES ),
+				'customer_email'    => $author_email,
+				'customer_location' => '',
+				'is_anonymous'      => 0,
+				'rating'            => $rating,
+				'title'             => '',
+				'content'           => wp_specialchars_decode( $content, ENT_QUOTES ),
+				'media'             => '[]',
+				'status'            => $status,
+				'verified_purchase' => $verified,
+				'wc_comment_id'     => $comment_id,
+				'created_at'        => $created_at,
+				'updated_at'        => current_time( 'mysql' ),
+			] );
+
+			if ( $inserted ) {
+				$imported_count++;
+			}
+		}
+
+		$total_reviews = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table}" );
+
+		return new WP_REST_Response( [
+			'success'  => true,
+			'message'  => sprintf( 'Successfully synced %d reviews from WooCommerce.', $imported_count ),
+			'imported' => $imported_count,
+			'total'    => $total_reviews,
 		], 200 );
 	}
 

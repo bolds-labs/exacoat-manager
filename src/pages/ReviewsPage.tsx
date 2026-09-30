@@ -33,6 +33,7 @@ import {
   Plus,
   Gift,
   UploadCloud,
+  DownloadCloud,
   Loader2
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
@@ -49,6 +50,7 @@ import {
   uploadReviewMediaDirect,
   fetchReviewRewardSettingsDirect,
   updateReviewRewardSettingsDirect,
+  syncWooCommerceReviewsDirect,
   fetchOrdersDirect,
   ReviewRewardSettings
 } from '../lib/wordpressBridge';
@@ -231,6 +233,9 @@ export const ReviewsPage: React.FC<ReviewsPageProps> = ({
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteOrderId, setInviteOrderId] = useState('');
   const [isSendingInvite, setIsSendingInvite] = useState(false);
+
+  // WooCommerce Sync state
+  const [isSyncingWc, setIsSyncingWc] = useState(false);
 
   // Review Reward Incentive Settings Modal state
   const [isRewardModalOpen, setIsRewardModalOpen] = useState(false);
@@ -534,6 +539,28 @@ export const ReviewsPage: React.FC<ReviewsPageProps> = ({
     }
   };
 
+  // Sync historical reviews from WooCommerce
+  const handleSyncWooCommerceReviews = async () => {
+    setIsSyncingWc(true);
+    try {
+      const res = await syncWooCommerceReviewsDirect();
+      if (res.success) {
+        if ((res.imported || 0) > 0) {
+          showToast('success', 'Reviews Synced', `Successfully imported ${res.imported} reviews from WooCommerce.`);
+        } else {
+          showToast('success', 'Reviews Up to Date', res.message || 'All WooCommerce product reviews are already synced.');
+        }
+        await loadReviews();
+      } else {
+        showToast('error', 'Sync Failed', res.error || 'Could not sync reviews from WooCommerce');
+      }
+    } catch (err: any) {
+      showToast('error', 'Sync Error', err.message || 'Failed connecting to WordPress');
+    } finally {
+      setIsSyncingWc(false);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-16 lg:pb-0 font-sans">
       {/* Top Banner & Header */}
@@ -550,6 +577,16 @@ export const ReviewsPage: React.FC<ReviewsPageProps> = ({
             >
               <RefreshCw className={clsx('w-3.5 h-3.5', isLoading && 'animate-spin text-[#f3aa18]')} />
               Refresh
+            </button>
+
+            <button
+              onClick={handleSyncWooCommerceReviews}
+              disabled={isSyncingWc || isLoading}
+              className="px-4 py-2 rounded-xl bg-[#141414] hover:bg-white/[0.06] text-neutral-300 hover:text-white border border-white/[0.08] text-xs font-semibold font-sans flex items-center gap-2 transition-all shrink-0 self-start sm:self-auto disabled:opacity-50"
+              title="Detect and sync historical product reviews from WooCommerce"
+            >
+              <DownloadCloud className={clsx('w-3.5 h-3.5 text-sky-400', isSyncingWc && 'animate-bounce')} />
+              {isSyncingWc ? 'Syncing...' : 'Sync Store Reviews'}
             </button>
 
             {!isShopManager && (
@@ -774,6 +811,22 @@ export const ReviewsPage: React.FC<ReviewsPageProps> = ({
               ? 'Try adjusting your filters or search query to find reviews.'
               : 'As orders are delivered, customers will automatically receive invitations to share their feedback.'}
           </p>
+          {!searchQuery && activeTab === 'all' && ratingFilter === 0 && (
+            <div className="mt-6 pt-6 border-t border-zinc-800/60 flex flex-col items-center gap-3 max-w-md mx-auto">
+              <p className="text-xs text-zinc-400">
+                Have existing product reviews on WooCommerce? You can detect and import all historical customer reviews into your manager catalog with one click.
+              </p>
+              <button
+                type="button"
+                onClick={handleSyncWooCommerceReviews}
+                disabled={isSyncingWc}
+                className="px-4 py-2.5 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/30 text-xs font-semibold flex items-center gap-2 transition-all disabled:opacity-50"
+              >
+                <DownloadCloud className={clsx('w-4 h-4 text-sky-400', isSyncingWc && 'animate-bounce')} />
+                {isSyncingWc ? 'Syncing WooCommerce Reviews...' : 'Sync Store Reviews from WooCommerce'}
+              </button>
+            </div>
+          )}
         </GlassCard>
       ) : (
         <div className="space-y-3">
