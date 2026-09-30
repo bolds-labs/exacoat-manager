@@ -2053,8 +2053,19 @@ class Exacoat_Shipping_Tracker {
 	 * saves tracking milestones, and adds WooCommerce order timeline note.
 	 */
 	public static function handle_goorita_webhook( WP_REST_Request $request ) {
+		// Send CORS headers so browser-based simulator in ERP workstation can dispatch successfully
+		if ( ! headers_sent() ) {
+			header( 'Access-Control-Allow-Origin: *' );
+			header( 'Access-Control-Allow-Methods: POST, GET, OPTIONS' );
+			header( 'Access-Control-Allow-Headers: Content-Type, X-Goorita-Token, x-goorita-token, X-Goorita-Event, x-goorita-event, Authorization' );
+		}
+		if ( ( $_SERVER['REQUEST_METHOD'] ?? '' ) === 'OPTIONS' ) {
+			return new WP_REST_Response( [ 'status' => 'ok' ], 200 );
+		}
+
 		$headers = $request->get_headers();
-		$incoming_token = $request->get_header( 'x-goorita-token' ) ?: ( $headers['x_goorita_token'][0] ?? '' );
+		$incoming_token = $request->get_header( 'x-goorita-token' )
+			?: ( $headers['x_goorita_token'][0] ?? ( $request->get_param( 'token' ) ?? ( $request->get_param( 'x_goorita_token' ) ?? '' ) ) );
 		$expected_token = defined( 'EXA_GOORITA_API_KEY' ) ? EXA_GOORITA_API_KEY : 'iO9TyZTLFPD9xv1JJpzPLNWO6FPT0QDB';
 
 		if ( ! empty( $expected_token ) && ! empty( $incoming_token ) ) {

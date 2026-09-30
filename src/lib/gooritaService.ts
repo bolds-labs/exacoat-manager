@@ -556,15 +556,36 @@ export async function simulateGooritaWebhook(
   token = GOORITA_CONFIG.DEV_API_KEY
 ): Promise<{ success: boolean; status: number; data: any }> {
   try {
-    const res = await fetch(targetUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goorita-Event': 'tracking.updated',
-        'X-Goorita-Token': token,
-      },
-      body: JSON.stringify(payload),
-    });
+    let res: Response;
+    try {
+      // 1. First attempt: Standard webhook headers (mirroring Goorita's server-to-server dispatch)
+      res = await fetch(targetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goorita-Event': 'tracking.updated',
+          'X-Goorita-Token': token,
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (corsErr: any) {
+      // 2. Fallback for browser execution: if browser CORS blocks custom X-Goorita-* preflight headers,
+      // pass token via query parameter with standard Content-Type to complete the browser simulation
+      let fallbackUrl = targetUrl;
+      try {
+        const u = new URL(targetUrl, typeof window !== 'undefined' ? window.location.href : undefined);
+        u.searchParams.set('token', token);
+        fallbackUrl = u.toString();
+      } catch {}
+
+      res = await fetch(fallbackUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ...payload, token }),
+      });
+    }
 
     const status = res.status;
     const text = await res.text();

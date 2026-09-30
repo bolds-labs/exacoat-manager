@@ -117,7 +117,7 @@ class Exacoat_Core {
 		}, 999 );
 
 		add_filter( 'rest_allowed_cors_headers', function( $headers ) {
-			$custom = [ 'Authorization', 'Content-Type', 'X-WP-Nonce', 'Cache-Control', 'Pragma', 'X-Requested-With', 'sent_from', 'x-api-key', 'X-Api-Key', 'apikey', 'Accept', 'Origin', 'Cart-Token', 'Nonce', 'X-Exacoat-Currency', 'X-Artmatter-Currency', 'X-Exacoat-Client-IP', 'X-Artmatter-Client-IP', 'x-secret-key', 'X-Secret-Key', 'X-Exacoat-Secret', 'x_exacoat_secret' ];
+			$custom = [ 'Authorization', 'Content-Type', 'X-WP-Nonce', 'Cache-Control', 'Pragma', 'X-Requested-With', 'sent_from', 'x-api-key', 'X-Api-Key', 'apikey', 'Accept', 'Origin', 'Cart-Token', 'Nonce', 'X-Exacoat-Currency', 'X-Artmatter-Currency', 'X-Exacoat-Client-IP', 'X-Artmatter-Client-IP', 'x-secret-key', 'X-Secret-Key', 'X-Exacoat-Secret', 'x_exacoat_secret', 'X-Goorita-Token', 'x-goorita-token', 'X-Goorita-Event', 'x-goorita-event' ];
 			return array_unique( array_merge( (array) $headers, $custom ) );
 		} );
 	}
@@ -162,7 +162,7 @@ class Exacoat_Core {
 		header( 'Access-Control-Allow-Credentials: true' );
 		header( 'Vary: Origin', false );
 		header( 'Access-Control-Allow-Methods: OPTIONS, GET, POST, PUT, PATCH, DELETE, HEAD' );
-		header( 'Access-Control-Allow-Headers: Authorization, Content-Type, X-WP-Nonce, Cache-Control, Pragma, X-Requested-With, sent_from, x-api-key, X-Api-Key, apikey, Accept, Origin, Cart-Token, Nonce, X-Exacoat-Currency, X-Artmatter-Currency, X-Exacoat-Client-IP, X-Artmatter-Client-IP, x-secret-key, X-Secret-Key, X-Exacoat-Secret, x_exacoat_secret, X-WC-Consumer-Key, X-WC-Consumer-Secret, X-SliceWP-Key, X-SliceWP-Secret' );
+		header( 'Access-Control-Allow-Headers: Authorization, Content-Type, X-WP-Nonce, Cache-Control, Pragma, X-Requested-With, sent_from, x-api-key, X-Api-Key, apikey, Accept, Origin, Cart-Token, Nonce, X-Exacoat-Currency, X-Artmatter-Currency, X-Exacoat-Client-IP, X-Artmatter-Client-IP, x-secret-key, X-Secret-Key, X-Exacoat-Secret, x_exacoat_secret, X-WC-Consumer-Key, X-WC-Consumer-Secret, X-SliceWP-Key, X-SliceWP-Secret, X-Goorita-Token, x-goorita-token, X-Goorita-Event, x-goorita-event' );
 		header( 'Access-Control-Expose-Headers: Cart-Token, Nonce, X-WP-Total, X-WP-TotalPages, X-Exacoat-Currency, X-Artmatter-Currency' );
 		header( 'Cache-Control: no-cache, no-store, must-revalidate, max-age=0' );
 		header( 'Pragma: no-cache' );
