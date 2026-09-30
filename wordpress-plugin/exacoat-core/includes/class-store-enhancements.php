@@ -53,6 +53,7 @@ class Exacoat_Store_Enhancements {
 
 		// 15. Checkout Shipping Rules (#14577) - Multi-Zone Tiered Free Shipping Discount & Legacy Sanitization
 		add_filter( 'woocommerce_package_rates', [ __CLASS__, 'filter_legacy_shipping_rates' ], 5, 2 );
+		add_filter( 'woocommerce_package_rates', [ __CLASS__, 'apply_currency_markup_to_shipping_rates' ], 90, 2 );
 		add_filter( 'woocommerce_package_rates', [ __CLASS__, 'apply_zone_tiered_shipping_discount' ], 100, 2 );
 		add_filter( 'woocommerce_package_rates', [ __CLASS__, 'apply_shipping_promo_coupon_rate_discount' ], 110, 2 );
 		add_filter( 'woocommerce_order_item_shipping_get_method_title', [ __CLASS__, 'clean_shipping_method_title' ], 20, 2 );
@@ -1017,6 +1018,78 @@ class Exacoat_Store_Enhancements {
 		$clean = preg_replace( '/\s*[-–—:]\s*free\s*shipping\b/i', '', $clean );
 
 		return trim( preg_replace( '/\s{2,}/', ' ', $clean ) );
+	}
+
+	/**
+	 * Apply global currency markup buffer to shipping costs for non-base currencies (#14577).
+	 * Ensures shipping rates in foreign currencies (USD, SGD, EUR, AUD, etc.) apply the configured
+	 * safety markup buffer, protecting against payment gateway FX volatility and spreads.
+	 */
+	public static function apply_currency_markup_to_shipping_rates( $rates, $package ) {
+		if ( is_admin() && ! defined( 'DOING_AJAX' ) ) {
+			return $rates;
+		}
+		if ( ! is_array( $rates ) || empty( $rates ) ) {
+			return $rates;
+		}
+
+		$active_currency = class_exists( 'Exacoat_Checkout_Engine' )
+			? Exacoat_Checkout_Engine::get_active_currency()
+			: ( function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'IDR' );
+
+		// IDR is the shop base currency; raw carrier rates apply without FX markup
+		if ( 'IDR' === $active_currency ) {
+			return $rates;
+		}
+
+		$settings = class_exists( 'Exacoat_Core' ) ? Exacoat_Core::get_settings() : [];
+		$markup   = floatval( $settings['currency_global_markup'] ?? 1.15 );
+		if ( $markup <= 1.0 ) {
+			return $rates;
+		}
+
+		foreach ( $rates as $rate_id => $rate ) {
+			if ( ! $rate instanceof WC_Shipping_Rate ) {
+				continue;
+			}
+
+			// Prevent duplicate markup application across cart recalculation loops
+			$meta = $rate->get_meta_data();
+			if ( ! empty( $meta['_shipping_markup_applied'] ) ) {
+				continue;
+			}
+
+			$cost = floatval( $rate->get_cost() );
+			if ( $cost <= 0 ) {
+				continue;
+			}
+
+			// If rate was not converted to active currency by Aelia (e.g. still in IDR units >= 500)
+			if ( $cost >= 500 && ! in_array( $active_currency, [ 'IDR', 'JPY', 'KRW', 'VND' ], true ) ) {
+				$currencies = self::get_currency_rates();
+				$rate_val   = floatval( $currencies[ $active_currency ]['rate'] ?? 0 );
+				$marked_up_cost = $rate_val > 0 ? round( $cost * $rate_val * $markup, 2 ) : round( $cost * $markup, 2 );
+			} else {
+				$marked_up_cost = round( $cost * $markup, 2 );
+			}
+
+			$rate->set_cost( $marked_up_cost );
+
+			// Re-scale tax amounts proportionally if present
+			$taxes = $rate->get_taxes();
+			if ( ! empty( $taxes ) && is_array( $taxes ) ) {
+				$new_taxes = [];
+				foreach ( $taxes as $tax_id => $tax_val ) {
+					$new_taxes[ $tax_id ] = round( floatval( $tax_val ) * $markup, 2 );
+				}
+				$rate->set_taxes( $new_taxes );
+			}
+
+			$rate->add_meta_data( '_shipping_markup_applied', (string) $markup, true );
+			$rate->add_meta_data( '_shipping_raw_cost_before_markup', (string) $cost, true );
+		}
+
+		return $rates;
 	}
 
 	/**

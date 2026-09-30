@@ -754,34 +754,44 @@ class Exacoat_Checkout_Engine {
 	}
 
 	/**
-	 * Convert shipping rate cost linearly without product retail markup or psychological 9-ending rounding.
+	 * Convert shipping rate cost with global currency safety markup buffer.
 	 */
 	public static function convert_shipping_rate_cost( float $cost, string $active_currency, string $shop_base_currency = 'IDR' ): float {
 		if ( $cost <= 0 || $active_currency === $shop_base_currency ) {
 			return $cost;
 		}
 
+		$settings = class_exists( 'Exacoat_Core' ) ? Exacoat_Core::get_settings() : [];
+		$markup   = floatval( $settings['currency_global_markup'] ?? 1.15 );
+		if ( $markup < 1.0 ) {
+			$markup = 1.0;
+		}
+
 		// 1. Try Aelia Currency Switcher filter first if an exchange rate is registered
 		$aelia_converted = apply_filters( 'wc_aelia_cs_convert', $cost, $shop_base_currency, $active_currency );
 		if ( $aelia_converted > 0 && (float) $aelia_converted !== (float) $cost ) {
-			return round( (float) $aelia_converted, 2 );
+			return round( (float) $aelia_converted * $markup, 2 );
 		}
 
-		// 2. Convert from IDR using Artmatter Core FX rates without 15% product markup and without 9-ending rounding
-		if ( class_exists( 'Artmatter_Store_Enhancements' ) ) {
-			$currencies = Artmatter_Store_Enhancements::get_currency_rates();
+		// 2. Convert from IDR using FX rates with product/shipping markup buffer
+		$enhancements_class = class_exists( 'Exacoat_Store_Enhancements' )
+			? 'Exacoat_Store_Enhancements'
+			: ( class_exists( 'Artmatter_Store_Enhancements' ) ? 'Artmatter_Store_Enhancements' : false );
+
+		if ( $enhancements_class ) {
+			$currencies = $enhancements_class::get_currency_rates();
 			if ( isset( $currencies[ $active_currency ] ) ) {
 				$data = $currencies[ $active_currency ];
 				$rate = floatval( is_array( $data ) ? ( $data['rate'] ?? 0 ) : $data );
 				if ( $rate > 0 ) {
-					$raw      = $cost * $rate;
+					$raw      = $cost * $rate * $markup;
 					$decimals = in_array( $active_currency, [ 'IDR', 'JPY', 'KRW', 'VND' ], true ) ? 0 : 2;
 					return round( $raw, $decimals );
 				}
 			}
 		}
 
-		return $cost;
+		return round( $cost * $markup, 2 );
 	}
 
 	/**

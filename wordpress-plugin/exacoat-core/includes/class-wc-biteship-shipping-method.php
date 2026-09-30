@@ -199,16 +199,20 @@ if ( ! class_exists( 'WC_Biteship_Shipping_Method' ) && class_exists( 'WC_Shippi
 						$shop_base_currency = get_option( 'woocommerce_currency', 'IDR' );
 
 						// Biteship rates from API are always in IDR.
-						// If the store's base currency is not IDR, convert to shop base currency so WooCommerce interprets it correctly.
+						// If the store's base currency is not IDR, convert to shop base currency with currency safety markup buffer.
 						$cost_in_base = $biteship_idr_price;
 						if ( 'IDR' !== $shop_base_currency && $biteship_idr_price > 0 ) {
 							$cost_in_base = apply_filters( 'wc_aelia_cs_convert', $biteship_idr_price, 'IDR', $shop_base_currency );
-							$enhancements_class = class_exists( 'Exacoat_Store_Enhancements' ) ? 'Exacoat_Store_Enhancements' : false;
-							if ( $cost_in_base === $biteship_idr_price && $enhancements_class ) {
+							$enhancements_class = class_exists( 'Exacoat_Store_Enhancements' ) ? 'Exacoat_Store_Enhancements' : ( class_exists( 'Artmatter_Store_Enhancements' ) ? 'Artmatter_Store_Enhancements' : false );
+							$settings = class_exists( 'Exacoat_Core' ) ? Exacoat_Core::get_settings() : [];
+							$markup   = max( 1.0, floatval( $settings['currency_global_markup'] ?? 1.15 ) );
+							if ( $cost_in_base !== $biteship_idr_price && $cost_in_base > 0 ) {
+								$cost_in_base = round( (float) $cost_in_base * $markup, 2 );
+							} elseif ( $enhancements_class ) {
 								$currencies = $enhancements_class::get_currency_rates();
 								$rate_val   = floatval( $currencies[ $shop_base_currency ]['rate'] ?? 0 );
 								if ( $rate_val > 0 ) {
-									$cost_in_base = round( $biteship_idr_price * $rate_val, 2 );
+									$cost_in_base = round( $biteship_idr_price * $rate_val * $markup, 2 );
 								}
 							}
 						}

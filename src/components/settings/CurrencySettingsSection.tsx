@@ -362,7 +362,7 @@ export const CurrencySettingsSection: React.FC = () => {
               </span>
             </div>
             <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-              Safety markup buffer against payment gateway FX spreads and volatility.
+              Safety markup buffer against payment gateway FX spreads and volatility. Applied to both product prices and shipping costs.
             </p>
           </div>
 

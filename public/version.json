@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.149",
+  "version": "0.1.150",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.149.zip?v=0.1.149",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.150.zip?v=0.1.150",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-30T09:30:05.192Z",
+  "last_updated": "2026-09-30T09:36:32.099Z",
   "sections": {
-    "changelog": "### Version 0.1.149\n- Add Goorita USA logistics tracking webhook receiver supporting dashboard and openapi event formats\n- Support Small Package/Envelope format for 0.10kg chargeable weight tier\n- Defensive parsing of stdClass and nested layer configurator objects across order and warranty management"
+    "changelog": "### Version 0.1.150\n- Add Goorita USA logistics tracking webhook receiver supporting dashboard and openapi event formats\n- Support Small Package/Envelope format for 0.10kg chargeable weight tier\n- Defensive parsing of stdClass and nested layer configurator objects across order and warranty management"
   }
 }
