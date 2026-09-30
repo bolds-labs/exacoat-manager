@@ -10,7 +10,7 @@ export const GOORITA_CONFIG = {
   ORIGIN_DISTRICT_ID: '9d70d21b-870e-4da9-a284-3905da004bbd', // Bekasi Barat
   ORIGIN_POSTAL_CODE: '17142', // Summarecon Bekasi / Marga Mulya
   ORIGIN_ADDRESS: {
-    name: 'Exacoat Store',
+    name: 'Exacoat',
     email: 'support@exacoat.com',
     phone: '628975556000',
     address_line_1: 'Ruby Commercial TB12, Jl. Bulevar Selatan',
