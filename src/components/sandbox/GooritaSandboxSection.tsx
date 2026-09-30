@@ -89,7 +89,7 @@ export const GooritaSandboxSection: React.FC = () => {
 
   // 7. Webhook Simulation State
   const [webhookTargetUrl, setWebhookTargetUrl] = useState<string>(
-    'https://exacoat.com/wp-json/exacoat-core/v1/shipping/goorita-webhook'
+    'https://cms.exacoat.com/wp-json/exacoat-core/v1/shipping/goorita-webhook'
   );
   const [webhookSimStatus, setWebhookSimStatus] = useState<string>('In Transit');
   const [webhookLocation, setWebhookLocation] = useState<string>('Jakarta Delivery Hub');

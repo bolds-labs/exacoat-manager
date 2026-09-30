@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Fix Fatal error when formatting configurator metadata on PHP 8.4\n- Ensure all orders with complex configurator data load correctly in manager search and single order views\n- Support defensive parsing of stdClass and nested layer configurator objects across order and warranty management`,
+      changelog: `### Version ${version}\n- Add Goorita USA logistics tracking webhook receiver supporting dashboard and openapi event formats\n- Support Small Package/Envelope format for 0.10kg chargeable weight tier\n- Defensive parsing of stdClass and nested layer configurator objects across order and warranty management`,
     },
   };
 

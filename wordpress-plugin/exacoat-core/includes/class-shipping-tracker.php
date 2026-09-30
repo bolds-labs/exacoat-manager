@@ -2069,8 +2069,21 @@ class Exacoat_Shipping_Tracker {
 			Exacoat_Logger::info( 'shipping', 'Goorita Webhook received', [ 'payload' => $params ] );
 		}
 
-		$goorita_order_id = sanitize_text_field( (string) ( $params['order_id'] ?? '' ) );
-		$events = is_array( $params['data'] ?? null ) ? $params['data'] : [];
+		// Support multiple payload formats (OpenAPI data format and Dashboard portal format)
+		$goorita_order_id = sanitize_text_field( (string) (
+			$params['order_id'] ?? (
+				( is_array( $params['order'] ?? null ) ) ? ( $params['order']['order_id'] ?? ( $params['order']['id'] ?? '' ) ) : ( $params['order'] ?? '' )
+			)
+		) );
+
+		$events = [];
+		if ( ! empty( $params['trackings'] ) && is_array( $params['trackings'] ) ) {
+			$events = $params['trackings'];
+		} elseif ( ! empty( $params['data'] ) && is_array( $params['data'] ) ) {
+			$events = $params['data'];
+		} elseif ( ! empty( $params['latest_tracking'] ) && is_array( $params['latest_tracking'] ) ) {
+			$events = [ $params['latest_tracking'] ];
+		}
 
 		if ( empty( $goorita_order_id ) ) {
 			return new WP_REST_Response( [ 'status' => 'received', 'message' => 'No order_id in payload' ], 200 );
