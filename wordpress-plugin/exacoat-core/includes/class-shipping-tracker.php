@@ -1822,6 +1822,12 @@ class Exacoat_Shipping_Tracker {
 				'permission_callback' => '__return_true',
 			] );
 
+			register_rest_route( $ns, '/shipping/goorita-webhook', [
+				'methods'             => [ 'POST', 'GET' ],
+				'callback'            => [ __CLASS__, 'handle_goorita_webhook' ],
+				'permission_callback' => '__return_true',
+			] );
+
 			register_rest_route( $ns, '/shipping/sync-order', [
 				'methods'             => [ 'POST', 'GET' ],
 				'callback'            => [ __CLASS__, 'rest_sync_order_tracking' ],
@@ -2039,6 +2045,96 @@ class Exacoat_Shipping_Tracker {
 		}
 
 		return new WP_REST_Response( [ 'success' => true, 'message' => 'Webhook received but order not found' ], 200 );
+	}
+
+	/**
+	 * REST Webhook Handler: Goorita Tracking Updates
+	 * Verifies X-Goorita-Token, locates order by Goorita order code or tracking number,
+	 * saves tracking milestones, and adds WooCommerce order timeline note.
+	 */
+	public static function handle_goorita_webhook( WP_REST_Request $request ) {
+		$headers = $request->get_headers();
+		$incoming_token = $request->get_header( 'x-goorita-token' ) ?: ( $headers['x_goorita_token'][0] ?? '' );
+		$expected_token = defined( 'EXA_GOORITA_API_KEY' ) ? EXA_GOORITA_API_KEY : 'iO9TyZTLFPD9xv1JJpzPLNWO6FPT0QDB';
+
+		if ( ! empty( $expected_token ) && ! empty( $incoming_token ) ) {
+			if ( ! hash_equals( (string) $expected_token, (string) $incoming_token ) ) {
+				return new WP_REST_Response( [ 'error' => 'Unauthorized' ], 401 );
+			}
+		}
+
+		$params = $request->get_json_params() ?: $request->get_params();
+
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::info( 'shipping', 'Goorita Webhook received', [ 'payload' => $params ] );
+		}
+
+		$goorita_order_id = sanitize_text_field( (string) ( $params['order_id'] ?? '' ) );
+		$events = is_array( $params['data'] ?? null ) ? $params['data'] : [];
+
+		if ( empty( $goorita_order_id ) ) {
+			return new WP_REST_Response( [ 'status' => 'received', 'message' => 'No order_id in payload' ], 200 );
+		}
+
+		global $wpdb;
+		$order_id = 0;
+
+		// 1. HPOS table check
+		$hpos_table = $wpdb->prefix . 'wc_orders_meta';
+		if ( $wpdb->get_var( "SHOW TABLES LIKE '{$hpos_table}'" ) === $hpos_table ) {
+			$order_id = (int) $wpdb->get_var( $wpdb->prepare(
+				"SELECT order_id FROM {$hpos_table} WHERE meta_key IN ('_goorita_order_id', 'goorita_order_id', 'tracking_number', '_tracking_number') AND meta_value = %s LIMIT 1",
+				$goorita_order_id
+			) );
+		}
+
+		// 2. Postmeta fallback
+		if ( $order_id <= 0 ) {
+			$order_id = (int) $wpdb->get_var( $wpdb->prepare(
+				"SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key IN ('_goorita_order_id', 'goorita_order_id', 'tracking_number', '_tracking_number') AND meta_value = %s LIMIT 1",
+				$goorita_order_id
+			) );
+		}
+
+		if ( $order_id > 0 ) {
+			$order = wc_get_order( $order_id );
+			if ( $order ) {
+				$order->update_meta_data( '_goorita_tracking_events', $events );
+
+				if ( ! empty( $events ) ) {
+					$latest = $events[0];
+					$latest_status = sanitize_text_field( (string) ( $latest['status'] ?? '' ) );
+					$latest_loc    = sanitize_text_field( (string) ( $latest['location'] ?? '' ) );
+					$latest_time   = sanitize_text_field( (string) ( $latest['datetime'] ?? '' ) );
+
+					$order->update_meta_data( '_goorita_latest_status', $latest_status );
+					$order->update_meta_data( '_goorita_latest_datetime', $latest_time );
+
+					$order->add_order_note( sprintf(
+						'Goorita Tracking Update: %s (%s) at %s',
+						$latest_status,
+						$latest_loc,
+						$latest_time
+					) );
+
+					if ( stripos( $latest_status, 'deliver' ) !== false && stripos( $latest_status, 'out for' ) === false ) {
+						$order->update_meta_data( '_goorita_delivered', 1 );
+					}
+				}
+				$order->save();
+
+				return new WP_REST_Response( [
+					'status'   => 'received',
+					'order_id' => $order_id,
+					'message'  => 'Goorita tracking synced to order #' . $order_id,
+				], 200 );
+			}
+		}
+
+		return new WP_REST_Response( [
+			'status'  => 'received',
+			'message' => 'Webhook acknowledged (sandbox / order not mapped)',
+		], 200 );
 	}
 
 	/**

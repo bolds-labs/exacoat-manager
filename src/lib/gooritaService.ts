@@ -506,3 +506,65 @@ export async function downloadGooritaAwbPdf(awbUrl: string, filename = 'goorita-
     return false;
   }
 }
+
+/**
+ * Simulate an incoming Goorita Webhook payload (useful for testing webhook handlers)
+ */
+export function buildSampleGooritaWebhookPayload(
+  orderId: string,
+  status = 'In Transit',
+  location = 'Jakarta Delivery Hub',
+  remarks = 'Package scanned at sorting facility and scheduled for export linehaul'
+) {
+  return {
+    event: 'tracking.updated',
+    order_id: orderId,
+    success: true,
+    statusCode: 200,
+    message: 'OK',
+    data: [
+      {
+        location,
+        datetime: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        remarks,
+        status,
+        status_code: '103 - Arrive at Hub',
+        event: 'ARRIVAL',
+      },
+    ],
+  };
+}
+
+/**
+ * Dispatch simulated webhook to WordPress endpoint or custom URL
+ */
+export async function simulateGooritaWebhook(
+  targetUrl: string,
+  payload: any,
+  token = GOORITA_CONFIG.DEV_API_KEY
+): Promise<{ success: boolean; status: number; data: any }> {
+  try {
+    const res = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goorita-Event': 'tracking.updated',
+        'X-Goorita-Token': token,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const status = res.status;
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+    return { success: res.ok, status, data };
+  } catch (err: any) {
+    return { success: false, status: 0, data: err.message };
+  }
+}
+

@@ -10,6 +10,8 @@ import {
   trackGooritaOrder,
   fetchGooritaTransactions,
   downloadGooritaAwbPdf,
+  simulateGooritaWebhook,
+  buildSampleGooritaWebhookPayload,
   GOORITA_CONFIG,
   GOORITA_US_STATES,
   GooritaPackageRate,
@@ -33,6 +35,8 @@ import {
   Clock,
   Layers,
   ArrowRight,
+  Webhook,
+  Copy,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -81,6 +85,15 @@ export const GooritaSandboxSection: React.FC = () => {
   // 6. Recent Dev Transactions
   const [transactions, setTransactions] = useState<any[]>([]);
   const [isLoadingTx, setIsLoadingTx] = useState<boolean>(false);
+
+  // 7. Webhook Simulation State
+  const [webhookTargetUrl, setWebhookTargetUrl] = useState<string>(
+    'https://exacoat.com/wp-json/exacoat-core/v1/shipping/goorita-webhook'
+  );
+  const [webhookSimStatus, setWebhookSimStatus] = useState<string>('In Transit');
+  const [webhookLocation, setWebhookLocation] = useState<string>('Jakarta Delivery Hub');
+  const [isSimulatingWebhook, setIsSimulatingWebhook] = useState<boolean>(false);
+  const [webhookSimResult, setWebhookSimResult] = useState<any>(null);
 
   // Computations
   const computedWeightKg = calculateGooritaShipmentWeight(skinCount, laptopSkinCount);
@@ -223,6 +236,34 @@ export const GooritaSandboxSection: React.FC = () => {
       // Ignored
     } finally {
       setIsLoadingTx(false);
+    }
+  };
+
+  // Dispatch Simulated Webhook
+  const handleSimulateWebhook = async () => {
+    const orderIdToSimulate = trackOrderId || (transactions[0]?.order_id) || '6343534900';
+    setIsSimulatingWebhook(true);
+    setWebhookSimResult(null);
+
+    const payload = buildSampleGooritaWebhookPayload(
+      orderIdToSimulate,
+      webhookSimStatus,
+      webhookLocation,
+      `Status updated: ${webhookSimStatus}`
+    );
+
+    try {
+      const res = await simulateGooritaWebhook(webhookTargetUrl, payload);
+      setWebhookSimResult(res);
+      if (res.success) {
+        showToast('success', 'Webhook Received (200 OK)', `Goorita webhook handled successfully`);
+      } else {
+        showToast('error', `Webhook Failed (HTTP ${res.status})`, typeof res.data === 'string' ? res.data : JSON.stringify(res.data));
+      }
+    } catch (err: any) {
+      showToast('error', 'Webhook Dispatch Error', err.message);
+    } finally {
+      setIsSimulatingWebhook(false);
     }
   };
 
@@ -768,6 +809,106 @@ export const GooritaSandboxSection: React.FC = () => {
                     </div>
                   );
                 })
+              )}
+            </div>
+          </GlassCard>
+
+          {/* 4. Webhook Receiver & Simulator */}
+          <GlassCard className="p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/[0.06] pb-4">
+              <div className="flex items-center gap-2">
+                <Webhook className="w-4 h-4 text-purple-500" />
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono">
+                  4. Webhook Receiver & Simulator
+                </h3>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 font-bold">
+                tracking.updated
+              </span>
+            </div>
+
+            <div className="space-y-3 font-mono text-xs">
+              <div className="space-y-1">
+                <label className="text-zinc-500 block text-[11px]">
+                  Configured Receiver Endpoint URL:
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    value={webhookTargetUrl}
+                    onChange={(e) => setWebhookTargetUrl(e.target.value)}
+                    className="flex-1 px-2.5 py-1.5 rounded-lg bg-zinc-100 dark:bg-white/[0.04] border border-zinc-300 dark:border-white/10 text-[11px] text-zinc-900 dark:text-zinc-200 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(webhookTargetUrl);
+                      showToast('info', 'Copied URL', 'Paste into Goorita /panel/my-token');
+                    }}
+                    title="Copy URL"
+                    className="p-1.5 rounded-lg bg-zinc-200 dark:bg-white/10 hover:bg-zinc-300 dark:hover:bg-white/20 text-zinc-700 dark:text-zinc-300 transition"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <span className="text-[10px] text-zinc-400 block pt-0.5">
+                  Set this URL in Goorita portal: <code className="text-zinc-300">/panel/my-token → Set Webhook</code>
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="space-y-1">
+                  <label className="text-zinc-500 text-[11px]">Event Status</label>
+                  <select
+                    value={webhookSimStatus}
+                    onChange={(e) => setWebhookSimStatus(e.target.value)}
+                    className="w-full px-2 py-1.5 rounded-lg bg-zinc-100 dark:bg-white/[0.04] border border-zinc-300 dark:border-white/10 text-xs text-zinc-900 dark:text-zinc-200 focus:outline-none"
+                  >
+                    <option value="In Transit" className="bg-zinc-900">In Transit</option>
+                    <option value="Arrived at Hub" className="bg-zinc-900">Arrived at Hub</option>
+                    <option value="Customs Cleared" className="bg-zinc-900">Customs Cleared</option>
+                    <option value="Out for delivery" className="bg-zinc-900">Out for delivery</option>
+                    <option value="Delivered" className="bg-zinc-900">Delivered</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-zinc-500 text-[11px]">Hub Location</label>
+                  <input
+                    type="text"
+                    value={webhookLocation}
+                    onChange={(e) => setWebhookLocation(e.target.value)}
+                    className="w-full px-2 py-1.5 rounded-lg bg-zinc-100 dark:bg-white/[0.04] border border-zinc-300 dark:border-white/10 text-xs text-zinc-900 dark:text-zinc-200 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSimulateWebhook}
+                disabled={isSimulatingWebhook}
+                className="w-full py-2 rounded-xl bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+              >
+                {isSimulatingWebhook ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Webhook className="w-3.5 h-3.5" />
+                )}
+                <span>Simulate Webhook Dispatch</span>
+              </button>
+
+              {webhookSimResult && (
+                <div className="mt-2 p-2.5 rounded-lg bg-zinc-950 border border-zinc-800 font-mono text-[11px] space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-400">Response Code:</span>
+                    <span className={clsx('font-bold', webhookSimResult.success ? 'text-emerald-400' : 'text-rose-400')}>
+                      HTTP {webhookSimResult.status}
+                    </span>
+                  </div>
+                  <pre className="text-[10px] text-zinc-300 overflow-x-auto no-scrollbar max-h-24">
+                    {JSON.stringify(webhookSimResult.data, null, 2)}
+                  </pre>
+                </div>
               )}
             </div>
           </GlassCard>
