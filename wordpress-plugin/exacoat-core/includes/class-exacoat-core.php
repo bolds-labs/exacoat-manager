@@ -54,6 +54,10 @@ class Exacoat_Core {
 			if ( empty( $options['trackingmore_webhook_secret'] ) && ! empty( $env_trackingmore_secret ) ) {
 				$options['trackingmore_webhook_secret'] = trim( (string) $env_trackingmore_secret );
 			}
+			$env_rayspeed = defined( 'EXA_RAYSPEED_API_KEY' ) ? EXA_RAYSPEED_API_KEY : ( defined( 'RAYSPEED_API_KEY' ) ? RAYSPEED_API_KEY : getenv( 'EXA_RAYSPEED_API_KEY' ) );
+			if ( empty( $options['rayspeed_api_key'] ) && ! empty( $env_rayspeed ) ) {
+				$options['rayspeed_api_key'] = trim( (string) $env_rayspeed );
+			}
 			self::$cached_settings = $options;
 		}
 		return self::$cached_settings;
@@ -191,6 +195,9 @@ class Exacoat_Core {
 				Exacoat_Biteship_Engine::init();
 			} elseif ( class_exists( 'Artmatter_Biteship_Engine' ) ) {
 				Artmatter_Biteship_Engine::init();
+			}
+			if ( class_exists( 'Exacoat_Rayspeed_Service' ) ) {
+				Exacoat_Rayspeed_Service::init();
 			}
 		} catch ( \Throwable $e ) {
 			error_log( 'Exacoat Shipping Tracker init error: ' . $e->getMessage() );

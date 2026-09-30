@@ -88,6 +88,10 @@ class Exacoat_Shipping_Tracker {
 				'name' => 'FedEx',
 				'url'  => 'https://www.fedex.com/fedextrack/?trknbr=%s',
 			],
+			'rayspeed' => [
+				'name' => 'Rayspeed Asia',
+				'url'  => 'https://rayspeed.com/speedship/tracking.php?awb=%s',
+			],
 			'biteship' => [
 				'name' => 'Biteship / Default',
 				'url'  => 'https://biteship.com/track/%s',
@@ -1154,7 +1158,14 @@ class Exacoat_Shipping_Tracker {
 			return self::sync_biteship_tracking( $tracking_number, $biteship_courier, $order_id );
 		}
 
-		// 2. POS Indonesia / International: TrackingMore is the exclusive engine
+		// 2. Rayspeed courier check (Southeast Asia)
+		if ( 'rayspeed' === $carrier || strpos( $carrier, 'rayspeed' ) !== false || strpos( $tracking_number, 'SBX' ) === 0 ) {
+			if ( class_exists( 'Exacoat_Rayspeed_Service' ) ) {
+				return Exacoat_Rayspeed_Service::sync_order_tracking( $order_id, $tracking_number );
+			}
+		}
+
+		// 3. POS Indonesia / International: TrackingMore is the exclusive engine
 		return self::sync_trackingmore_tracking( $order_id, $tracking_number, $carrier );
 	}
 

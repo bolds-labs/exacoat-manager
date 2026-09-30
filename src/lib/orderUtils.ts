@@ -244,8 +244,8 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
     const t = text.toLowerCase();
 
     // Extract service code if present (e.g. from "SICEPAT - BEST" -> "BEST", "JNE - REG" -> "REG", "JNE (REG)" -> "REG")
-    const serviceMatch = text.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i) ||
-                         text.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|anteraja|ninja|spx|shopee)\s*\(([A-Za-z0-9_\s]+)\)/i);
+    const serviceMatch = text.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i) ||
+                         text.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*\(([A-Za-z0-9_\s]+)\)/i);
     const serviceName = serviceMatch ? serviceMatch[1].trim().toUpperCase() : undefined;
 
     if (t.includes('sicepat')) {
@@ -320,6 +320,15 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
         isCustom: false,
       };
     }
+    if (t.includes('rayspeed')) {
+      return {
+        courierId: 'rayspeed',
+        courierName: 'Rayspeed Asia',
+        serviceName,
+        rawMatch: text,
+        isCustom: false,
+      };
+    }
     if (t.includes('biteship')) {
       return {
         courierId: 'biteship',
@@ -341,6 +350,7 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
       goorita: 'Goorita Send USA',
       dhl: 'DHL Express',
       fedex: 'FedEx International',
+      rayspeed: 'Rayspeed Asia',
       biteship: 'Biteship (Auto)',
       lion: 'Lion Parcel',
       jnt: 'J&T Express',
@@ -387,6 +397,7 @@ export function getOrderCourierDisplay(order: any): string {
     else if (resolved.courierId === 'goorita') prefix = 'Goorita';
     else if (resolved.courierId === 'dhl') prefix = 'DHL';
     else if (resolved.courierId === 'fedex') prefix = 'FedEx';
+    else if (resolved.courierId === 'rayspeed') prefix = 'Rayspeed';
     else if (resolved.courierName) prefix = resolved.courierName.split(' ')[0];
 
     return `${prefix} - ${resolved.serviceName}`;
@@ -406,6 +417,7 @@ export function getOrderCourierDisplay(order: any): string {
         else if (p0Lower.includes('sicepat')) p0 = 'SiCepat';
         else if (p0Lower.includes('pos')) p0 = 'POS';
         else if (p0Lower.includes('goorita')) p0 = 'Goorita';
+        else if (p0Lower.includes('rayspeed')) p0 = 'Rayspeed';
         return `${p0} - ${parts.slice(1).join('-').trim().toUpperCase()}`;
       }
     }

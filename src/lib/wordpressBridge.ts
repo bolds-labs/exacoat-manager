@@ -659,9 +659,36 @@ function setCachedPluginSettings(settings: Partial<WordPressPluginSettings>): vo
 function parseConfiguratorFromItem(item: any): any[] {
   if (!item) return [];
 
+  // Check item.layers first if provided directly on item (e.g. from customer API or CMS order payload)
+  if (Array.isArray(item.layers) && item.layers.length > 0) {
+    return item.layers.map((l: any, idx: number) => {
+      const lName = l?.layerName || l?.layer_name || l?.name || l?.label || `Layer ${idx + 1}`;
+      const cName = l?.choiceName || l?.choice_name || l?.choice_title || l?.choice || l?.value || l?.name || '';
+      return {
+        layer_id: l?.layerId || l?.layer_id || idx,
+        layer_name: lName,
+        choice_id: l?.choiceId || l?.choice_id || idx,
+        name: cName || 'Custom',
+        choice_name: cName,
+        choice_title: cName,
+        image: l?.image,
+        is_choice: true,
+      };
+    });
+  }
+
   // 1. Raw configurator array check
   const metaList = Array.isArray(item.meta_data) ? item.meta_data : [];
-  const rawMeta = metaList.find((m: any) => m.key === '_configurator_data_raw' || m.key === '_configurator_data');
+  const rawMeta = metaList.find(
+    (m: any) =>
+      m.key === '_configurator_data_raw' ||
+      m.key === '_configurator_data' ||
+      m.key === '_pc_configurator_data' ||
+      m.key === 'layers' ||
+      m.key === '_layers' ||
+      m.key === 'ark_config' ||
+      m.key === '_ark_config'
+  );
   if (rawMeta && rawMeta.value) {
     let cfgList = rawMeta.value;
     if (typeof cfgList === 'string') {
@@ -672,14 +699,35 @@ function parseConfiguratorFromItem(item: any): any[] {
       }
     }
     if (Array.isArray(cfgList)) {
-      return cfgList.map((v: any) => ({
-        layer_id: v?.layer_data?.layer_id || v?.layer_id,
-        layer_name: v?.layer_data?.layer_name || v?.layer_data?.name || v?.layer_name || 'Part',
-        choice_id: v?.layer_data?.choice_id || v?.choice_id,
-        name: v?.layer_data?.name || v?.choice_title || v?.choice_name || v?.name || 'Custom',
-        image: v?.layer_data?.image || v?.image,
-        is_choice: v?.is_choice,
-      }));
+      return cfgList.map((v: any, idx: number) => {
+        const lName =
+          v?.layer_data?.layer_name ||
+          v?.layer_data?.name ||
+          v?.layer_name ||
+          v?.layerName ||
+          v?.layer_title ||
+          v?.label ||
+          `Layer ${idx + 1}`;
+        const cName =
+          v?.layer_data?.name ||
+          v?.choice_name ||
+          v?.choiceName ||
+          v?.choice_title ||
+          v?.choice ||
+          v?.name ||
+          v?.value ||
+          '';
+        return {
+          layer_id: v?.layer_data?.layer_id || v?.layer_id || v?.layerId || idx,
+          layer_name: lName,
+          choice_id: v?.layer_data?.choice_id || v?.choice_id || v?.choiceId || idx,
+          name: cName || 'Custom',
+          choice_name: cName,
+          choice_title: cName,
+          image: v?.layer_data?.image || v?.image,
+          is_choice: v?.is_choice !== false,
+        };
+      });
     }
   }
 
@@ -692,6 +740,7 @@ function parseConfiguratorFromItem(item: any): any[] {
       choice_id: idx,
       name: s.value,
       choice_title: s.value,
+      choice_name: s.value,
     }));
   }
 
@@ -9796,4 +9845,89 @@ export async function saveCustomLabelSenderDirect(
     message: 'Sender settings saved locally.',
   };
 }
+
+export interface RayspeedStatus {
+  success: boolean;
+  enabled: boolean;
+  sandbox: boolean;
+  has_api_key: boolean;
+  api_key_masked: string;
+  base_url: string;
+  default_origin: string;
+  default_service: string;
+}
+
+export async function fetchRayspeedStatus(): Promise<RayspeedStatus | null> {
+  const base = getWordPressBaseUrl();
+  const wcCreds = getWcCredentials();
+  const query = new URLSearchParams({
+    consumer_key: wcCreds.key || '',
+    consumer_secret: wcCreds.secret || '',
+  }).toString();
+
+  try {
+    const res = await authenticatedFetch(`${base}/wp-json/exacoat-core/v1/shipping/rayspeed/status?${query}`);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (e) {
+    console.error('Failed to fetch Rayspeed status:', e);
+  }
+  return null;
+}
+
+export async function createRayspeedAwbDirect(orderId: number, options: Record<string, any> = {}): Promise<{
+  success: boolean;
+  airwaybill?: string;
+  tracking_number?: string;
+  destination?: string;
+  weight?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const wcCreds = getWcCredentials();
+  const query = new URLSearchParams({
+    consumer_key: wcCreds.key || '',
+    consumer_secret: wcCreds.secret || '',
+  }).toString();
+
+  try {
+    const res = await authenticatedFetch(`${base}/wp-json/exacoat-core/v1/shipping/rayspeed/create-awb?${query}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ order_id: orderId, ...options }),
+    });
+    const data = await res.json();
+    return data;
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Network error creating Rayspeed AWB' };
+  }
+}
+
+export async function trackRayspeedAwbDirect(awb: string): Promise<{
+  success: boolean;
+  awb?: string;
+  status?: string;
+  delivered?: boolean;
+  checkpoints?: Array<{ time: string; description: string; location: string; stage: string }>;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const wcCreds = getWcCredentials();
+  const query = new URLSearchParams({
+    consumer_key: wcCreds.key || '',
+    consumer_secret: wcCreds.secret || '',
+  }).toString();
+
+  try {
+    const res = await authenticatedFetch(`${base}/wp-json/exacoat-core/v1/shipping/rayspeed/track/${encodeURIComponent(awb)}?${query}`);
+    return await res.json();
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Network error fetching Rayspeed tracking' };
+  }
+}
+
 

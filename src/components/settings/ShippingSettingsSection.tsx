@@ -34,6 +34,7 @@ const DEFAULT_CARRIERS: Record<string, LogisticsCarrierConfig> = {
   goorita: { name: 'Goorita', url: 'https://send.goorita.com/track' },
   dhl: { name: 'DHL Express', url: 'https://www.dhl.com/en/express/tracking.html?AWB=%s' },
   fedex: { name: 'FedEx', url: 'https://www.fedex.com/fedextrack/?trknbr=%s' },
+  rayspeed: { name: 'Rayspeed Asia', url: 'https://rayspeed.com/speedship/tracking.php?awb=%s' },
   biteship: { name: 'Biteship / Default', url: 'https://biteship.com/track/%s' },
 };
 

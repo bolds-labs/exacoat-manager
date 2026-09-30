@@ -60,7 +60,7 @@ import {
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { extractItemSpecs } from '../../lib/orderItems';
-import { isStorePickupOrder, toggleLocalStorePickupOrder, resolveOrderCourier, getOrderCourierDisplay } from '../../lib/orderUtils';
+import { isStorePickupOrder, toggleLocalStorePickupOrder, resolveOrderCourier, getOrderCourierDisplay, formatOrderNumber, cleanOrderNumber } from '../../lib/orderUtils';
 import { resolveCountryName } from '../../lib/countries';
 import { getWpBaseUrl } from '../../lib/wordpressBridge';
 import { formatGooritaShipmentText, openGooritaWhatsApp } from '../../lib/exportManager';
@@ -77,7 +77,8 @@ import {
   syncOrderTrackingDirect,
   processGuaranteeActionDirect,
   assignTrackingNumberFromPool,
-  resendOrderEmail
+  resendOrderEmail,
+  createRayspeedAwbDirect
 } from '../../lib/wordpressBridge';
 import { ShippingLabelA6Modal } from './ShippingLabelA6Modal';
 import { CustomerInvoiceModal } from './CustomerInvoiceModal';
@@ -105,6 +106,7 @@ const COURIER_PRESETS = [
   { label: 'Goorita', value: 'goorita' },
   { label: 'DHL Express', value: 'dhl' },
   { label: 'FedEx', value: 'fedex' },
+  { label: 'Rayspeed Asia', value: 'rayspeed' },
   { label: 'Biteship (Auto)', value: 'biteship' },
   { label: 'Custom / Other', value: 'custom' },
 ];
@@ -119,6 +121,7 @@ const getPublicTrackingUrl = (carrier?: string, trackingNum?: string, customUrl?
   const c = (carrier || '').toLowerCase();
   if (c.includes('dhl')) return `https://www.dhl.com/en/express/tracking.html?AWB=${encodeURIComponent(trackingNum.trim())}`;
   if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(trackingNum.trim())}`;
+  if (c.includes('rayspeed')) return `https://rayspeed.com/speedship/tracking.php?awb=${encodeURIComponent(trackingNum.trim())}`;
   return `https://biteship.com/track/${encodeURIComponent(trackingNum.trim())}`;
 };
 
@@ -281,6 +284,37 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
     courier === 'goorita' ||
     (order?.shipping_lines?.[0]?.method_id || '').toLowerCase().includes('goorita')
   );
+
+  const destCountry = (order?.shipping?.country || order?.billing?.country || '').toUpperCase();
+  const isSeaDestination = ['SG', 'MY', 'TH', 'PH', 'VN', 'TW', 'JP', 'HK'].includes(destCountry);
+  const isRayspeedOrder = Boolean(
+    courier === 'rayspeed' ||
+    isSeaDestination ||
+    (order?.shipping_lines?.[0]?.method_id || '').toLowerCase().includes('rayspeed') ||
+    (order?.tracking?.carrier_id || '').toLowerCase() === 'rayspeed'
+  );
+
+  const [isBookingRayspeed, setIsBookingRayspeed] = useState(false);
+
+  const handleBookRayspeed = async () => {
+    if (!order) return;
+    setIsBookingRayspeed(true);
+    try {
+      const res = await createRayspeedAwbDirect(order.id);
+      if (res.success && res.airwaybill) {
+        showToast('success', 'Rayspeed AWB Created', `Airwaybill ${res.airwaybill} generated for Order #${cleanOrderNumber(order.id)}.`);
+        setTrackingNumber(res.airwaybill);
+        setCourier('rayspeed');
+        if (onOrderUpdated) onOrderUpdated();
+      } else {
+        showToast('error', 'Rayspeed Booking Failed', res.error || 'Failed to generate AWB');
+      }
+    } catch (err: any) {
+      showToast('error', 'Rayspeed Error', err.message || 'Error communicating with Rayspeed API');
+    } finally {
+      setIsBookingRayspeed(false);
+    }
+  };
 
   const handleCopyGooritaText = () => {
     if (!order) return;
@@ -1779,6 +1813,52 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   <MessageSquare className="w-3.5 h-3.5 text-zinc-950" />
                   <span>Send WhatsApp</span>
                 </button>
+              </div>
+            </div>
+          )}
+
+          {isRayspeedOrder && (
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Plane className="w-4 h-4 text-amber-400" />
+                  <span className="text-xs font-bold text-white font-sans uppercase tracking-wider">
+                    Rayspeed Asia
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/20">
+                    SEA Dispatch ({destCountry || 'International'})
+                  </span>
+                </div>
+                {order.tracking?.tracking_number && (
+                  <span className="text-[11px] font-mono font-bold text-amber-400">
+                    {order.tracking.tracking_number}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {(!order.tracking?.tracking_number || courier === 'rayspeed') && (
+                  <button
+                    type="button"
+                    onClick={handleBookRayspeed}
+                    disabled={isBookingRayspeed}
+                    className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 text-xs font-bold font-sans flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  >
+                    <Send className={clsx("w-3.5 h-3.5", isBookingRayspeed && "animate-spin")} />
+                    <span>{isBookingRayspeed ? 'Booking AWB...' : order.tracking?.tracking_number ? 'Re-generate AWB' : 'Dispatch via Rayspeed'}</span>
+                  </button>
+                )}
+                {order.tracking?.tracking_number && (
+                  <a
+                    href={getPublicTrackingUrl('rayspeed', order.tracking.tracking_number)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3.5 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-white text-xs font-bold font-sans flex items-center gap-1.5 border border-white/[0.1] transition-all"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Track on Rayspeed</span>
+                  </a>
+                )}
               </div>
             </div>
           )}

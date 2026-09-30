@@ -19,7 +19,7 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
       const lbl = String(s?.label || '').trim();
       const val = String(s?.value || '').trim();
       if (!lbl || !val || lbl.startsWith('_')) continue;
-      if (lbl.toLowerCase() === 'configuration' && /^(custom|default|none)$/i.test(val)) continue;
+      if (/^(configuration|part)$/i.test(lbl) && /^(custom|default|none)$/i.test(val)) continue;
       const sig = `${lbl.toLowerCase()}:${val.toLowerCase()}`;
       if (!localSeen.has(sig)) {
         localSeen.add(sig);
@@ -62,8 +62,8 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
       return;
     }
 
-    // Skip placeholder configuration: custom relics
-    if (cleanLabel.toLowerCase() === 'configuration' && /^(custom|default|none)$/i.test(cleanVal)) {
+    // Skip placeholder configuration or part: custom relics
+    if (/^(configuration|part)$/i.test(cleanLabel) && /^(custom|default|none)$/i.test(cleanVal)) {
       return;
     }
 
@@ -236,14 +236,25 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
   // Count specs found so far before checking regular configurator/product attributes
   const hasConfiguratorSpecs = () => specs.some(s => !['claimed part', 'part to produce', 'original invoice', 'original order', 'original channel', 'variation', 'shopee note', 'buyer note'].includes(s.label.toLowerCase()));
 
+  // 0.5. Check item.layers array directly (e.g. from customer API or CMS order payload)
+  if (Array.isArray(item.layers) && item.layers.length > 0) {
+    for (const l of item.layers) {
+      const layer = String(l?.layerName || l?.layer_name || l?.name || l?.label || '').trim();
+      const choice = String(l?.choiceName || l?.choice_name || l?.choice_title || l?.choice || l?.value || l?.name || '').trim();
+      if (layer && choice) {
+        addSpec(layer, choice);
+      }
+    }
+  }
+
   // 1. Check parsed_configurator first (exact configurator layer choices)
   if (Array.isArray(item.parsed_configurator) && item.parsed_configurator.length > 0) {
     for (const c of item.parsed_configurator) {
-      const layer = String(c.layer_name || c.name || '').trim();
-      const choice = String(c.choice_name || c.choice_title || c.name || '').trim();
+      const layer = String(c.layer_name || c.layerName || c.name || '').trim();
+      const choice = String(c.choice_name || c.choiceName || c.choice_title || c.choice || c.name || '').trim();
       if (layer && choice && layer.toLowerCase() !== choice.toLowerCase()) {
         addSpec(layer, choice);
-      } else if (choice) {
+      } else if (choice && !/^(custom|default|none)$/i.test(choice)) {
         addSpec('Part', choice);
       }
     }
@@ -251,7 +262,16 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
 
   // 2. Check raw configurator data in meta_data if parsed_configurator wasn't present
   if (!hasConfiguratorSpecs() && Array.isArray(item.meta_data) && item.meta_data.length > 0) {
-    const rawConfig = item.meta_data.find((m: any) => m.key === '_configurator_data_raw' || m.key === '_configurator_data');
+    const rawConfig = item.meta_data.find(
+      (m: any) =>
+        m.key === '_configurator_data_raw' ||
+        m.key === '_configurator_data' ||
+        m.key === '_pc_configurator_data' ||
+        m.key === 'layers' ||
+        m.key === '_layers' ||
+        m.key === 'ark_config' ||
+        m.key === '_ark_config'
+    );
     if (rawConfig && rawConfig.value) {
       let cfgList = rawConfig.value;
       if (typeof cfgList === 'string') {
@@ -264,10 +284,25 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
       if (Array.isArray(cfgList)) {
         for (const v of cfgList) {
           if (!v || typeof v !== 'object') continue;
-          const layerName = v.layer_data?.layer_name || v.layer_data?.name || v.layer_name || 'Part';
-          const choiceName = v.layer_data?.name || v.choice_title || v.choice_name || v.name || '';
-          if (choiceName) {
-            addSpec(layerName, choiceName);
+          const layerName =
+            v.layer_data?.layer_name ||
+            v.layer_data?.name ||
+            v.layer_name ||
+            v.layerName ||
+            v.layer_title ||
+            v.label ||
+            '';
+          const choiceName =
+            v.layer_data?.name ||
+            v.choice_name ||
+            v.choiceName ||
+            v.choice_title ||
+            v.choice ||
+            v.name ||
+            v.value ||
+            '';
+          if (choiceName && !(/^(part|configuration)$/i.test(layerName) && /^(custom|default|none)$/i.test(choiceName))) {
+            addSpec(layerName || 'Part', choiceName);
           }
         }
       }

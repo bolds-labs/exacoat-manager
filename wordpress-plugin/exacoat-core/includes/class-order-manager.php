@@ -2043,7 +2043,13 @@ class Exacoat_Order_Manager {
 
 			// Configuration / specs parsing from _configurator_data_raw
 			$parsed_config = [];
-			$raw_config = $item->get_meta( '_configurator_data_raw' ) ?: $item->get_meta( '_configurator_data' );
+			$raw_config = $item->get_meta( '_configurator_data_raw' )
+				?: ( $item->get_meta( '_configurator_data' )
+				?: ( $item->get_meta( '_pc_configurator_data' )
+				?: ( $item->get_meta( 'layers' )
+				?: ( $item->get_meta( '_layers' )
+				?: ( $item->get_meta( 'ark_config' )
+				?: $item->get_meta( '_ark_config' ) ) ) ) ) );
 			if ( ! empty( $raw_config ) ) {
 				if ( is_string( $raw_config ) ) {
 					$decoded = json_decode( $raw_config, true );
@@ -2066,9 +2072,9 @@ class Exacoat_Order_Manager {
 							continue;
 						}
 						$layer_data = isset( $v['layer_data'] ) ? ( (array) $v['layer_data'] ) : [];
-						$l_name = $layer_data['layer_name'] ?? ( $layer_data['name'] ?? ( $v['layer_name'] ?? ( $v['label'] ?? 'Layer' ) ) );
-						$c_name = $layer_data['name'] ?? ( $v['choice_title'] ?? ( $v['choice_name'] ?? ( $v['name'] ?? ( $v['value'] ?? '' ) ) ) );
-						if ( $c_name ) {
+						$l_name = $layer_data['layer_name'] ?? ( $layer_data['name'] ?? ( $v['layer_name'] ?? ( $v['layerName'] ?? ( $v['layer_title'] ?? ( $v['label'] ?? 'Layer' ) ) ) ) );
+						$c_name = $layer_data['name'] ?? ( $v['choice_name'] ?? ( $v['choiceName'] ?? ( $v['choice_title'] ?? ( $v['choice'] ?? ( $v['name'] ?? ( $v['value'] ?? '' ) ) ) ) ) );
+						if ( $c_name && ! ( in_array( strtolower( (string) $l_name ), [ 'part', 'configuration' ], true ) && in_array( strtolower( (string) $c_name ), [ 'custom', 'default', 'none' ], true ) ) ) {
 							$parsed_config[] = [
 								'layer_name'   => (string) $l_name,
 								'name'         => (string) $c_name,
@@ -2078,6 +2084,33 @@ class Exacoat_Order_Manager {
 							];
 						}
 					}
+				}
+			}
+
+			// Fallback: check formatted item meta data if parsed_config is still empty
+			if ( empty( $parsed_config ) && method_exists( $item, 'get_formatted_meta_data' ) ) {
+				foreach ( $item->get_formatted_meta_data( '' ) as $m ) {
+					$key = trim( wp_strip_all_tags( (string) $m->display_key ) );
+					$val = trim( wp_strip_all_tags( (string) $m->display_value ) );
+					if ( empty( $key ) || empty( $val ) ) {
+						continue;
+					}
+					if ( str_starts_with( $key, '_' ) || in_array( strtolower( $key ), [ 'sku', 'product id', 'items', 'image_url', 'image' ], true ) ) {
+						continue;
+					}
+					if ( str_starts_with( $val, 'http://' ) || str_starts_with( $val, 'https://' ) ) {
+						continue;
+					}
+					if ( strtolower( $key ) === 'configuration' && preg_match( '/^(custom|default|none)$/i', $val ) ) {
+						continue;
+					}
+					$parsed_config[] = [
+						'layer_name'   => $key,
+						'name'         => $val,
+						'choice_title' => $val,
+						'choice_name'  => $val,
+						'is_choice'    => true,
+					];
 				}
 			}
 
@@ -2466,7 +2499,13 @@ class Exacoat_Order_Manager {
 
 			// Configuration / specs parsing
 			$parsed_config = [];
-			$raw_config = $item->get_meta( '_configurator_data_raw' ) ?: $item->get_meta( '_configurator_data' );
+			$raw_config = $item->get_meta( '_configurator_data_raw' )
+				?: ( $item->get_meta( '_configurator_data' )
+				?: ( $item->get_meta( '_pc_configurator_data' )
+				?: ( $item->get_meta( 'layers' )
+				?: ( $item->get_meta( '_layers' )
+				?: ( $item->get_meta( 'ark_config' )
+				?: $item->get_meta( '_ark_config' ) ) ) ) ) );
 			if ( ! empty( $raw_config ) ) {
 				if ( is_string( $raw_config ) ) {
 					$decoded = json_decode( $raw_config, true );
@@ -2489,9 +2528,9 @@ class Exacoat_Order_Manager {
 							continue;
 						}
 						$layer_data = isset( $v['layer_data'] ) ? ( (array) $v['layer_data'] ) : [];
-						$l_name = $layer_data['layer_name'] ?? ( $layer_data['name'] ?? ( $v['layer_name'] ?? ( $v['label'] ?? 'Layer' ) ) );
-						$c_name = $layer_data['name'] ?? ( $v['choice_name'] ?? ( $v['name'] ?? ( $v['value'] ?? '' ) ) );
-						if ( $c_name ) {
+						$l_name = $layer_data['layer_name'] ?? ( $layer_data['name'] ?? ( $v['layer_name'] ?? ( $v['layerName'] ?? ( $v['layer_title'] ?? ( $v['label'] ?? 'Layer' ) ) ) ) );
+						$c_name = $layer_data['name'] ?? ( $v['choice_name'] ?? ( $v['choiceName'] ?? ( $v['choice_title'] ?? ( $v['choice'] ?? ( $v['name'] ?? ( $v['value'] ?? '' ) ) ) ) ) );
+						if ( $c_name && ! ( in_array( strtolower( (string) $l_name ), [ 'part', 'configuration' ], true ) && in_array( strtolower( (string) $c_name ), [ 'custom', 'default', 'none' ], true ) ) ) {
 							$parsed_config[] = [
 								'layer_name'  => (string) $l_name,
 								'choice_name' => (string) $c_name,
