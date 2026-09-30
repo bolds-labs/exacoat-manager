@@ -813,17 +813,19 @@ class Exacoat_Performance_Auditor {
 
 		$audit = self::run_full_audit();
 
-		Artmatter_Logger::log(
-			'info',
-			'audit',
-			"Performance Local Audit Executed: Score {$audit['health_score']}/100 ({$audit['rating']})",
-			[
-				'health_score'   => $audit['health_score'],
-				'checks_passed'  => $audit['checks_passed'],
-				'fixes_found'    => $audit['fixes_found'],
-				'autoload_kb'    => $audit['autoload_kb'],
-			]
-		);
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log(
+				'info',
+				'audit',
+				"Performance Local Audit Executed: Score {$audit['health_score']}/100 ({$audit['rating']})",
+				[
+					'health_score'   => $audit['health_score'],
+					'checks_passed'  => $audit['checks_passed'],
+					'fixes_found'    => $audit['fixes_found'],
+					'autoload_kb'    => $audit['autoload_kb'],
+				]
+			);
+		}
 
 		wp_send_json_success( $audit );
 	}
@@ -874,11 +876,13 @@ class Exacoat_Performance_Auditor {
 		// 3. Re-run fresh live performance audit
 		$audit = self::run_full_audit();
 
-		Artmatter_Logger::log(
-			'info',
-			'quick_optimize',
-			"1-Click Store Stack Optimized. Score: {$audit['health_score']}/100, Expired Transients Purged: {$purged}"
-		);
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log(
+				'info',
+				'quick_optimize',
+				"1-Click Store Stack Optimized. Score: {$audit['health_score']}/100, Expired Transients Purged: {$purged}"
+			);
+		}
 
 		wp_send_json_success( [
 			'message'           => 'Store stack fully optimized! Cart fragments blocked sitewide, reactive mini-cart active, and expired transients purged.',
@@ -945,12 +949,14 @@ class Exacoat_Performance_Auditor {
 			}
 		}
 
-		Artmatter_Logger::log(
-			'info',
-			'manager_sync',
-			"Store Performance Health Score ({$audit['health_score']}/100) Synced to Studio Manager",
-			[ 'supabase_synced' => $synced_supabase ]
-		);
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log(
+				'info',
+				'manager_sync',
+				"Store Performance Health Score ({$audit['health_score']}/100) Synced to Studio Manager",
+				[ 'supabase_synced' => $synced_supabase ]
+			);
+		}
 
 		wp_send_json_success( [
 			'message'         => 'Store Health Report successfully synchronized to Artmatter Manager ERP!',
@@ -1376,7 +1382,9 @@ class Exacoat_Performance_Auditor {
 		wp_cache_delete( 'alloptions', 'options' );
 		wp_cache_delete( $option_name, 'options' );
 
-		Artmatter_Logger::log( 'info', 'autoload_tamer', "Tamed autoload for option '{$option_name}' (" . round( (int) $row['size_bytes'] / 1024, 1 ) . " KB)" );
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log( 'info', 'autoload_tamer', "Tamed autoload for option '{$option_name}' (" . round( (int) $row['size_bytes'] / 1024, 1 ) . " KB)" );
+		}
 
 		return [
 			'success'     => true,
@@ -1413,7 +1421,9 @@ class Exacoat_Performance_Auditor {
 		wp_cache_delete( 'alloptions', 'options' );
 		wp_cache_delete( $option_name, 'options' );
 
-		Artmatter_Logger::log( 'info', 'autoload_tamer', "Rolled back autoload for option '{$option_name}' to 'yes'" );
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log( 'info', 'autoload_tamer', "Rolled back autoload for option '{$option_name}' to 'yes'" );
+		}
 
 		return [
 			'success'     => true,
@@ -1489,8 +1499,9 @@ class Exacoat_Performance_Auditor {
 
 		$size_kb = round( $total_bytes / 1024, 2 );
 
-		if ( class_exists( 'Artmatter_Logger' ) ) {
-			Artmatter_Logger::log(
+		$logger = class_exists( 'Exacoat_Logger' ) ? 'Exacoat_Logger' : ( class_exists( 'Artmatter_Logger' ) ? 'Artmatter_Logger' : false );
+		if ( $logger ) {
+			$logger::log(
 				'info',
 				'autoload_tamer',
 				"Bulk tamed {$count} autoloaded transients, freeing {$size_kb} KB of autoload memory"
@@ -1650,11 +1661,14 @@ class Exacoat_Performance_Auditor {
 		// Run fresh audit
 		$fresh_audit = self::run_full_audit();
 
-		Artmatter_Logger::log(
-			'info',
-			'db_cleanse',
-			"Full Database Cleanse: Pruned {$total_pruned} records (Transients: {$transients_res['purged']}, Actions: {$as_res['purged']}, Postmeta: {$postmeta_res['purged']})"
-		);
+		$logger = class_exists( 'Exacoat_Logger' ) ? 'Exacoat_Logger' : ( class_exists( 'Artmatter_Logger' ) ? 'Artmatter_Logger' : false );
+		if ( $logger ) {
+			$logger::log(
+				'info',
+				'db_cleanse',
+				"Full Database Cleanse: Pruned {$total_pruned} records (Transients: {$transients_res['purged']}, Actions: {$as_res['purged']}, Postmeta: {$postmeta_res['purged']})"
+			);
+		}
 
 		return [
 			'success'           => true,

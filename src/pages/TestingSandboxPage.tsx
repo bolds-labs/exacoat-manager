@@ -10,12 +10,14 @@ import {
   Activity, 
   Eye,
   Bell,
-  RotateCcw
+  RotateCcw,
+  Truck
 } from 'lucide-react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Tabs } from '../components/ui/Tabs';
 import { CustomSelect, SelectOption } from '../components/ui/CustomSelect';
 import { useToast } from '../context/ToastContext';
+import { GooritaSandboxSection } from '../components/sandbox/GooritaSandboxSection';
 import { 
   sendDirectZeptoMailEmail, 
   previewEmailHtml,
@@ -36,7 +38,7 @@ interface TestingSandboxPageProps {
 export const TestingSandboxPage: React.FC<TestingSandboxPageProps> = () => {
   const { showToast } = useToast();
 
-  const [activeTab, setActiveTab] = useState<'emails' | 'ai' | 'infra'>('emails');
+  const [activeTab, setActiveTab] = useState<'emails' | 'goorita' | 'ai' | 'infra'>('emails');
 
   // Email Sandbox State
   const [emailEvent, setEmailEvent] = useState<string>(ALL_EMAIL_TEMPLATES[0]?.key || 'order_shipped');
@@ -248,6 +250,7 @@ export const TestingSandboxPage: React.FC<TestingSandboxPageProps> = () => {
         <Tabs
           tabs={[
             { id: 'emails', label: `Transactional Emails (${ALL_EMAIL_TEMPLATES.length})`, icon: Mail },
+            { id: 'goorita', label: 'Goorita US Logistics', icon: Truck },
             { id: 'ai', label: 'AI Diagnostic Probes', icon: Bot },
             { id: 'infra', label: 'Cloud & Infrastructure Suite', icon: Activity },
           ]}
@@ -378,6 +381,9 @@ export const TestingSandboxPage: React.FC<TestingSandboxPageProps> = () => {
           </div>
         </GlassCard>
       )}
+
+      {/* TAB: GOORITA US LOGISTICS SANDBOX */}
+      {activeTab === 'goorita' && <GooritaSandboxSection />}
 
       {/* TAB 2: AI DIAGNOSTIC PROBES */}
       {activeTab === 'ai' && (

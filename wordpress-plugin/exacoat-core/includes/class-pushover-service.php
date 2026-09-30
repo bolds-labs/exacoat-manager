@@ -116,12 +116,14 @@ class Exacoat_Pushover_Service {
 		] );
 
 		if ( is_wp_error( $response ) ) {
-			Artmatter_Logger::log(
-				'error',
-				'pushover',
-				'Pushover Alert Failed: ' . $response->get_error_message(),
-				[ 'title' => $title ]
-			);
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log(
+					'error',
+					'pushover',
+					'Pushover Alert Failed: ' . $response->get_error_message(),
+					[ 'title' => $title ]
+				);
+			}
 			return [ 'success' => false, 'message' => $response->get_error_message() ];
 		}
 
@@ -129,22 +131,26 @@ class Exacoat_Pushover_Service {
 		$body = json_decode( wp_remote_retrieve_body( $response ), true );
 
 		if ( $code === 200 && ! empty( $body['status'] ) && (int) $body['status'] === 1 ) {
-			Artmatter_Logger::log(
-				'info',
-				'pushover',
-				"Pushover Alert Sent: \"{$title}\"",
-				[ 'title' => $title ]
-			);
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log(
+					'info',
+					'pushover',
+					"Pushover Alert Sent: \"{$title}\"",
+					[ 'title' => $title ]
+				);
+			}
 			return [ 'success' => true, 'message' => 'Pushover alert delivered successfully' ];
 		}
 
 		$err_msg = ! empty( $body['errors'] ) ? implode( ', ', (array) $body['errors'] ) : "HTTP {$code}";
-		Artmatter_Logger::log(
-			'warning',
-			'pushover',
-			"Pushover Delivery Error: {$err_msg}",
-			[ 'title' => $title, 'response' => $body ]
-		);
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log(
+				'warning',
+				'pushover',
+				"Pushover Delivery Error: {$err_msg}",
+				[ 'title' => $title, 'response' => $body ]
+			);
+		}
 		return [ 'success' => false, 'message' => $err_msg ];
 	}
 

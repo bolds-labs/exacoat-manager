@@ -564,5 +564,9 @@ class Exacoat_Logger {
 
 }
 
+if ( ! class_exists( 'Artmatter_Logger' ) && class_exists( 'Exacoat_Logger' ) ) {
+	class_alias( 'Exacoat_Logger', 'Artmatter_Logger' );
+}
+
 
 

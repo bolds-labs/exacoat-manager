@@ -704,8 +704,8 @@ class Exacoat_Order_Manager {
 						try {
 							$orders_data[] = self::format_order_for_manager( $order );
 						} catch ( Throwable $err ) {
-							if ( class_exists( 'Artmatter_Logger' ) ) {
-								Artmatter_Logger::error( 'orders', "Error formatting Order #{$order->get_id()}: " . $err->getMessage(), [
+							if ( class_exists( 'Exacoat_Logger' ) ) {
+								Exacoat_Logger::error( 'orders', "Error formatting Order #{$order->get_id()}: " . $err->getMessage(), [
 									'file'  => $err->getFile(),
 									'line'  => $err->getLine(),
 									'trace' => $err->getTraceAsString(),
@@ -722,8 +722,8 @@ class Exacoat_Order_Manager {
 						try {
 							$orders_data[] = self::format_order_for_manager( $order );
 						} catch ( Throwable $err ) {
-							if ( class_exists( 'Artmatter_Logger' ) ) {
-								Artmatter_Logger::error( 'orders', "Error formatting Order #{$order->get_id()}: " . $err->getMessage(), [
+							if ( class_exists( 'Exacoat_Logger' ) ) {
+								Exacoat_Logger::error( 'orders', "Error formatting Order #{$order->get_id()}: " . $err->getMessage(), [
 									'file'  => $err->getFile(),
 									'line'  => $err->getLine(),
 									'trace' => $err->getTraceAsString(),
@@ -764,8 +764,8 @@ class Exacoat_Order_Manager {
 				'orders'       => $orders_data,
 			] );
 		} catch ( Throwable $e ) {
-			if ( class_exists( 'Artmatter_Logger' ) ) {
-				Artmatter_Logger::error( 'orders', 'Orders fetch exception: ' . $e->getMessage(), [
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::error( 'orders', 'Orders fetch exception: ' . $e->getMessage(), [
 					'file'  => $e->getFile(),
 					'line'  => $e->getLine(),
 					'trace' => $e->getTraceAsString(),
@@ -796,8 +796,8 @@ class Exacoat_Order_Manager {
 				'order'   => self::format_order_for_manager( $order ),
 			] );
 		} catch ( \Throwable $err ) {
-			if ( class_exists( 'Artmatter_Logger' ) ) {
-				Artmatter_Logger::error( 'orders', "Error formatting Single Order #{$order_id}: " . $err->getMessage(), [
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::error( 'orders', "Error formatting Single Order #{$order_id}: " . $err->getMessage(), [
 					'file'  => $err->getFile(),
 					'line'  => $err->getLine(),
 					'trace' => $err->getTraceAsString(),
@@ -838,8 +838,8 @@ class Exacoat_Order_Manager {
 			$order->add_order_note( 'Order moved to trash by Administrator via Exacoat Manager' );
 			$order->delete( false );
 
-			if ( class_exists( 'Artmatter_Logger' ) ) {
-				Artmatter_Logger::info( 'orders', "Order #{$order_id} moved to trash via Manager ERP", [
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::info( 'orders', "Order #{$order_id} moved to trash via Manager ERP", [
 					'order_id' => $order_id,
 				] );
 			}
@@ -865,8 +865,8 @@ class Exacoat_Order_Manager {
 			$order = $refreshed_order;
 		}
 
-		if ( class_exists( 'Artmatter_Logger' ) ) {
-			Artmatter_Logger::info( 'orders', "Status for Order #{$order_id} updated to '{$clean_status}' via Manager ERP", [
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::info( 'orders', "Status for Order #{$order_id} updated to '{$clean_status}' via Manager ERP", [
 				'order_id'   => $order_id,
 				'new_status' => $clean_status,
 			] );
@@ -892,8 +892,8 @@ class Exacoat_Order_Manager {
 		$order->add_order_note( 'Order moved to trash by Administrator via Exacoat Manager' );
 		$order->delete( false );
 
-		if ( class_exists( 'Artmatter_Logger' ) ) {
-			Artmatter_Logger::info( 'orders', "Order #{$order_id} moved to trash via Manager ERP", [
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::info( 'orders', "Order #{$order_id} moved to trash via Manager ERP", [
 				'order_id' => $order_id,
 			] );
 		}
@@ -1187,8 +1187,8 @@ class Exacoat_Order_Manager {
 			$order->add_order_note( $note_text, false );
 		}
 
-		if ( class_exists( 'Artmatter_Logger' ) ) {
-			Artmatter_Logger::info( 'orders', "Order #{$order_id} modified via Manager ERP", [
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::info( 'orders', "Order #{$order_id} modified via Manager ERP", [
 				'order_id' => $order_id,
 				'changes'  => $audit_notes,
 			] );
@@ -1324,8 +1324,8 @@ class Exacoat_Order_Manager {
 			Artmatter_Shipping_Tracker::sync_order_tracking( $order_id );
 		}
 
-		if ( class_exists( 'Artmatter_Logger' ) ) {
-			Artmatter_Logger::info( 'shipping', "Tracking details saved for Order #{$order_id}: {$carrier_display} #{$tracking_number}", [
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::info( 'shipping', "Tracking details saved for Order #{$order_id}: {$carrier_display} #{$tracking_number}", [
 				'order_id'        => $order_id,
 				'courier'         => $carrier_display,
 				'carrier_id'      => $carrier_id,
@@ -2425,8 +2425,8 @@ class Exacoat_Order_Manager {
 
 			$note_id = $order->add_order_note( $note_content, $is_customer, true );
 
-			if ( class_exists( 'Artmatter_Logger' ) ) {
-				Artmatter_Logger::info( 'orders', "Added " . ( $is_customer ? 'customer' : 'internal staff' ) . " note to Order #{$order_id}", [
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::info( 'orders', "Added " . ( $is_customer ? 'customer' : 'internal staff' ) . " note to Order #{$order_id}", [
 					'order_id'    => $order_id,
 					'note_id'     => $note_id,
 					'is_customer' => $is_customer,
@@ -2660,8 +2660,8 @@ class Exacoat_Order_Manager {
 	 * Handle Order Status Transitions
 	 */
 	public static function handle_order_status_changed( $order_id, $from_status, $to_status, $order ) {
-		if ( class_exists( 'Artmatter_Logger' ) ) {
-			Artmatter_Logger::log( 'info', 'orders', "Order #{$order_id} status changed from {$from_status} to {$to_status}" );
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log( 'info', 'orders', "Order #{$order_id} status changed from {$from_status} to {$to_status}" );
 		}
 
 		if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
