@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.148.zip?v=0.1.148",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-30T09:12:57.245Z",
+  "last_updated": "2026-09-30T09:16:25.037Z",
   "sections": {
     "changelog": "### Version 0.1.148\n- Fix Fatal error when formatting configurator metadata on PHP 8.4\n- Ensure all orders with complex configurator data load correctly in manager search and single order views\n- Support defensive parsing of stdClass and nested layer configurator objects across order and warranty management"
   }

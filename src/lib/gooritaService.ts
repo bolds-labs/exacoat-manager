@@ -23,7 +23,9 @@ export const GOORITA_CONFIG = {
     is_business: true,
   },
   US_COUNTRY_ID: '9d4e2dae-34cc-498a-860e-609bd81bf6e2',
-  DEFAULT_ITEM_TYPE_ID: '1ae7f73e-a34f-4a39-8acf-afe501041151', // Box Package
+  ITEM_TYPE_SMALL_PACKAGE: 'e8a11d5a-31ae-4f03-b9da-1ce4cd90f7d2', // Small Package/Envelope (< 2kg)
+  ITEM_TYPE_BOX_PACKAGE: '80fb61fd-41d0-45ea-9e75-e4ca61bc46aa', // Box Package (> 2kg)
+  DEFAULT_ITEM_TYPE_ID: 'e8a11d5a-31ae-4f03-b9da-1ce4cd90f7d2', // Small Package/Envelope (< 2kg)
   DEFAULT_CATEGORY_ID: '9f876651-092e-49e7-919b-c7c220ccdda0', // VINYL (HS: 8523.49.20)
 };
 
@@ -247,10 +249,14 @@ export async function checkGooritaRates(params: {
   skinCount: number;
   laptopSkinCount: number;
   declaredValueUsd?: number;
+  packageType?: 'small' | 'box';
 }): Promise<GooritaRateResult> {
   const weightKg = calculateGooritaShipmentWeight(params.skinCount, params.laptopSkinCount);
   const dims = calculateGooritaDimensions(params.skinCount, params.laptopSkinCount);
   const stateId = params.stateId || GOORITA_US_STATES.CA.id;
+  const itemTypeId = params.packageType === 'box'
+    ? GOORITA_CONFIG.ITEM_TYPE_BOX_PACKAGE
+    : GOORITA_CONFIG.ITEM_TYPE_SMALL_PACKAGE;
 
   const payload = {
     district_id: GOORITA_CONFIG.ORIGIN_DISTRICT_ID,
@@ -261,7 +267,7 @@ export async function checkGooritaRates(params: {
     },
     items: [
       {
-        type: GOORITA_CONFIG.DEFAULT_ITEM_TYPE_ID,
+        type: itemTypeId,
         length: dims.length,
         width: dims.width,
         height: dims.height,
@@ -325,18 +331,23 @@ export async function createGooritaSandboxOrder(params: {
   laptopSkinCount: number;
   declaredValueUsd?: number;
   customTrackingNumber?: string;
+  packageType?: 'small' | 'box';
 }): Promise<GooritaOrderCreationResult> {
   const weightKg = calculateGooritaShipmentWeight(params.skinCount, params.laptopSkinCount);
   const dims = calculateGooritaDimensions(params.skinCount, params.laptopSkinCount);
   const trackingNumber = params.customTrackingNumber || `EXA-US-${Date.now()}`;
   const totalValue = params.declaredValueUsd || (params.laptopSkinCount > 0 ? 45 : 25);
+  const itemType = params.packageType === 'box' ? 'box' : 'small';
+  const itemTypeId = params.packageType === 'box'
+    ? GOORITA_CONFIG.ITEM_TYPE_BOX_PACKAGE
+    : GOORITA_CONFIG.ITEM_TYPE_SMALL_PACKAGE;
 
   const cleanPhoneStr = (params.customerPhone || '14155550192').replace(/\D/g, '');
   const phoneNum = parseInt(cleanPhoneStr, 10) || 14155550192;
 
   const payload = {
     package_id: params.packageId,
-    item_type: 'box',
+    item_type: itemType,
     tracking_number: trackingNumber,
     origin: {
       name: GOORITA_CONFIG.ORIGIN_ADDRESS.name,
@@ -371,6 +382,7 @@ export async function createGooritaSandboxOrder(params: {
     },
     items: [
       {
+        type: itemTypeId,
         weight: weightKg,
         height: dims.height,
         width: dims.width,

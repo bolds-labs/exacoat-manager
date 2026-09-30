@@ -53,6 +53,7 @@ export const GooritaSandboxSection: React.FC = () => {
   ];
 
   // 1. Parcel Config State
+  const [packageType, setPackageType] = useState<'small' | 'box'>('small');
   const [skinCount, setSkinCount] = useState<number>(2);
   const [laptopSkinCount, setLaptopSkinCount] = useState<number>(0);
   const [declaredValueUsd, setDeclaredValueUsd] = useState<number>(30);
@@ -138,6 +139,7 @@ export const GooritaSandboxSection: React.FC = () => {
         skinCount,
         laptopSkinCount,
         declaredValueUsd,
+        packageType,
       });
 
       if (res.success && res.packages.length > 0) {
@@ -178,6 +180,7 @@ export const GooritaSandboxSection: React.FC = () => {
         skinCount,
         laptopSkinCount,
         declaredValueUsd,
+        packageType,
       });
 
       if (res.success) {
@@ -317,6 +320,58 @@ export const GooritaSandboxSection: React.FC = () => {
               <span className="text-xs font-mono text-zinc-500">
                 US Direct Saver
               </span>
+            </div>
+
+            {/* Package Type Format Selector */}
+            <div className="space-y-1.5 font-mono text-xs">
+              <label className="text-zinc-500 block text-[11px] font-bold uppercase tracking-wider">
+                Package Format:
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPackageType('small')}
+                  className={clsx(
+                    'p-3 rounded-xl border text-left transition flex items-center justify-between',
+                    packageType === 'small'
+                      ? 'bg-amber-500/10 border-amber-500 text-zinc-900 dark:text-white font-bold'
+                      : 'bg-zinc-50 dark:bg-white/[0.02] border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
+                  )}
+                >
+                  <div>
+                    <div className="text-xs font-bold flex items-center gap-1.5">
+                      <Package className="w-3.5 h-3.5 text-amber-500" />
+                      Small Package / Envelope
+                    </div>
+                    <div className="text-[10px] text-zinc-400 mt-0.5">
+                      Under 2kg • Chargeable from 0.10kg (Saver LITE)
+                    </div>
+                  </div>
+                  {packageType === 'small' && <CheckCircle2 className="w-4 h-4 text-amber-500 shrink-0" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPackageType('box')}
+                  className={clsx(
+                    'p-3 rounded-xl border text-left transition flex items-center justify-between',
+                    packageType === 'box'
+                      ? 'bg-amber-500/10 border-amber-500 text-zinc-900 dark:text-white font-bold'
+                      : 'bg-zinc-50 dark:bg-white/[0.02] border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
+                  )}
+                >
+                  <div>
+                    <div className="text-xs font-bold flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-zinc-400" />
+                      Box Package
+                    </div>
+                    <div className="text-[10px] text-zinc-400 mt-0.5">
+                      Heavy bulk • Min. 0.50kg chargeable
+                    </div>
+                  </div>
+                  {packageType === 'box' && <CheckCircle2 className="w-4 h-4 text-amber-500 shrink-0" />}
+                </button>
+              </div>
             </div>
 
             {/* Weight Rules Visual Matrix */}
