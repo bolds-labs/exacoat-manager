@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.153.zip?v=0.1.153",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-01T11:05:02.548Z",
+  "last_updated": "2026-10-01T11:10:03.521Z",
   "sections": {
     "changelog": "### Version 0.1.153\n- Harden POS Indonesia and TrackingMore delivery detection to strictly reflect courier structured status\n- Eliminate false positive delivered states caused by post office acceptance wording (sudah diterima)\n- Add self-healing order restoration to reset prematurely completed orders back to in-transit shipped status"
   }
