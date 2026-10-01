@@ -446,3 +446,142 @@ export async function clearJneEmailSentLog(): Promise<{ success: boolean; error?
   }
 }
 
+export interface PendingGooritaItem {
+  id: string;
+  name: string;
+  quantity: number;
+  sku: string;
+  specs: string;
+  total: number;
+}
+
+export interface PendingGooritaOrder {
+  id: number;
+  order_number: string;
+  status: string;
+  customer_name: string;
+  country: string;
+  city: string;
+  date_created: string;
+  item_count: number;
+  items: PendingGooritaItem[];
+}
+
+export const GOORITA_HQ_DEFAULT_ADDRESS = {
+  label: 'Goorita HQ - Jonathan Rio',
+  name: 'Jonathan Rio (exacoat)',
+  phone: '081806734618',
+  company: 'Goorita HQ',
+  address_1: 'Jl. TB Simatupang No.9, RT.12/RW.5, Rambutan',
+  address_2: '',
+  city: 'Ciracas, Jakarta Timur',
+  state: 'DKI Jakarta',
+  postcode: '13830',
+  country: 'Indonesia',
+  courier: 'JNE Express - REG',
+  notes: 'Domestic master package to Goorita freight forwarder hub',
+};
+
+/**
+ * Fetch pending Goorita orders with item breakdown for consolidation
+ */
+export async function fetchPendingGooritaOrders(): Promise<{
+  success: boolean;
+  orders: PendingGooritaOrder[];
+  count: number;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const endpoints = [
+    `${base}/wp-json/exacoat-core/v1/exports/pending-goorita-orders`,
+    `${base}/wp-json/exacoat/v1/exports/pending-goorita-orders`,
+  ];
+
+  for (const url of endpoints) {
+    try {
+      const res = await authenticatedFetch(url, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.orders)) {
+          return {
+            success: true,
+            orders: data.orders,
+            count: data.count || data.orders.length,
+          };
+        }
+      }
+    } catch {
+      // Fallback to next endpoint
+    }
+  }
+
+  return {
+    success: false,
+    orders: [],
+    count: 0,
+    error: 'Failed to fetch pending Goorita orders from server.',
+  };
+}
+
+/**
+ * Create a domestic JNE consolidation order in WooCommerce to Goorita HQ
+ */
+export async function createGooritaConsolidationOrder(params: {
+  order_ids: number[];
+  recipient?: Partial<typeof GOORITA_HQ_DEFAULT_ADDRESS>;
+}): Promise<{
+  success: boolean;
+  order_id?: number;
+  order_number?: string;
+  orders_count?: number;
+  items_count?: number;
+  message?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const endpoints = [
+    `${base}/wp-json/exacoat-core/v1/exports/create-consolidation-order`,
+    `${base}/wp-json/exacoat/v1/exports/create-consolidation-order`,
+  ];
+
+  const payload = {
+    order_ids: params.order_ids,
+    recipient: {
+      ...GOORITA_HQ_DEFAULT_ADDRESS,
+      ...(params.recipient || {}),
+    },
+  };
+
+  for (const url of endpoints) {
+    try {
+      const res = await authenticatedFetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (res.ok && data?.success) {
+        return data;
+      }
+      if (data?.error) {
+        return { success: false, error: data.error };
+      }
+    } catch (err: any) {
+      // Try next
+    }
+  }
+
+  return {
+    success: false,
+    error: 'Could not create domestic consolidation order on server.',
+  };
+}
+

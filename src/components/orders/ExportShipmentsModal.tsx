@@ -25,7 +25,8 @@ import {
   FolderOpen,
   Send,
   AlertTriangle,
-  X
+  X,
+  Tag,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -408,29 +409,44 @@ export const ExportShipmentsModal: React.FC<ExportShipmentsModalProps> = ({
             )}
 
             {/* Action Bar */}
-            <div className="flex items-center justify-between pt-2">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
               <span className="text-[11px] text-zinc-400 font-mono">
                 {status?.goorita?.lastGenerated ? `Last generated: ${status.goorita.lastGenerated}` : 'Ready to export'}
               </span>
 
-              <button
-                type="button"
-                onClick={handleGenerateGoorita}
-                disabled={isGeneratingGoorita}
-                className="px-5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-zinc-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-sky-500/10 transition-all cursor-pointer disabled:opacity-50"
-              >
-                {isGeneratingGoorita ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Generating XLSX...</span>
-                  </>
-                ) : (
-                  <>
-                    <FileSpreadsheet className="w-4 h-4" />
-                    <span>Generate Goorita Export</span>
-                  </>
-                )}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    window.location.hash = 'custom_label?goorita=1';
+                  }}
+                  className="px-3.5 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 hover:text-white font-semibold text-xs border border-white/[0.1] flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                  title="Open Custom Label page to consolidate USA orders into a domestic JNE shipment to Goorita HQ in Jakarta"
+                >
+                  <Tag className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Consolidate JNE Label</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleGenerateGoorita}
+                  disabled={isGeneratingGoorita}
+                  className="px-5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-zinc-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-sky-500/10 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {isGeneratingGoorita ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Generating XLSX...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileSpreadsheet className="w-4 h-4" />
+                      <span>Export Goorita (.xlsx)</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}

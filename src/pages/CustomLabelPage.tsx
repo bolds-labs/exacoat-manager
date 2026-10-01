@@ -42,8 +42,10 @@ import {
   ExternalLink,
   ChevronDown,
   Info,
+  Plane,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { GooritaConsolidationModal } from '../components/orders/GooritaConsolidationModal';
 
 // Dynamic Code-128 SVG barcode generator (pure client-side vector, matching ShippingLabelA6Modal)
 function generateBarcodeSvgData(code: string, height: number = 36) {
@@ -174,9 +176,16 @@ export const CustomLabelPage: React.FC = () => {
   // Copy state
   const [isCopied, setIsCopied] = useState(false);
 
+  // Goorita Consolidation Modal & Quick Template states
+  const [isGooritaModalOpen, setIsGooritaModalOpen] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+
   // Load saved addresses on initial mount
   useEffect(() => {
     loadAddressBook();
+    if (window.location.hash.includes('goorita') || window.location.search.includes('goorita')) {
+      setIsGooritaModalOpen(true);
+    }
   }, []);
 
   const loadAddressBook = async () => {
@@ -279,8 +288,64 @@ export const CustomLabelPage: React.FC = () => {
     if (addr.tracking_number) {
       setTrackingNumber(addr.tracking_number);
     }
+    setSelectedTemplateId(addr.id || '');
     setIsAddressModalOpen(false);
     showToast('success', 'Address Applied', `Loaded "${addr.label}" into shipping label.`);
+  };
+
+  // Quick select template dropdown change
+  const handleSelectTemplate = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    if (!templateId) return;
+    const addr = savedAddresses.find((a) => a.id === templateId);
+    if (addr) {
+      handleApplyAddress(addr);
+      if (
+        addr.name.toLowerCase().includes('jonathan') ||
+        addr.label.toLowerCase().includes('goorita') ||
+        (addr.company && addr.company.toLowerCase().includes('goorita'))
+      ) {
+        showToast('info', 'Goorita HQ Selected', 'Click "Consolidate USA Shipments" to pull waiting items into the manifest.');
+      }
+    }
+  };
+
+  // Apply consolidated Goorita orders to custom label
+  const handleApplyGooritaConsolidation = (params: {
+    items: CustomLabelManifestItem[];
+    manifestCategory: string;
+    orderRef: string;
+    address: any;
+    autoPrint?: boolean;
+  }) => {
+    setRecipientName(formatCleanText(params.address.name));
+    setRecipientPhone(params.address.phone);
+    setRecipientCompany(formatCleanText(params.address.company || 'Goorita HQ'));
+    setRecipientEmail(params.address.email || 'support@exacoat.com');
+    setRecipientAddress1(formatCleanText(params.address.address_1));
+    setRecipientAddress2(formatCleanText(params.address.address_2 || ''));
+    setRecipientCity(formatCleanText(params.address.city));
+    setRecipientState(formatCleanText(params.address.state || 'DKI Jakarta'));
+    setRecipientPostcode(params.address.postcode || '13830');
+    setRecipientCountry(params.address.country || 'Indonesia');
+    setCourierName(params.address.courier || 'JNE Express - REG');
+    setOrderRef(params.orderRef);
+    setTrackingNumber('');
+    setHandlingNote('▲ FRAGILE • DO NOT BEND • KEEP DRY ▲');
+
+    setManifestCategory(params.manifestCategory);
+    setManifestItems(params.items);
+
+    const matched = savedAddresses.find(
+      (a) => a.phone === params.address.phone || a.name.toLowerCase().includes('jonathan')
+    );
+    if (matched) {
+      setSelectedTemplateId(matched.id);
+    }
+
+    if (params.autoPrint) {
+      setTimeout(() => handlePrint(), 400);
+    }
   };
 
   // Save current recipient to address book
@@ -727,6 +792,16 @@ export const CustomLabelPage: React.FC = () => {
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
+              onClick={() => setIsGooritaModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-semibold font-sans flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              title="Consolidate USA orders waiting for pickup to Goorita HQ"
+            >
+              <Plane className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Consolidate Goorita</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setIsAddressModalOpen(true)}
               className="px-3.5 py-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] text-zinc-200 border border-white/[0.1] text-xs font-semibold font-sans flex items-center gap-2 transition-all cursor-pointer shadow-xs"
             >
@@ -803,6 +878,37 @@ export const CustomLabelPage: React.FC = () => {
                 </button>
               </div>
             </div>
+
+            {/* Quick Destination Template Dropdown Selector */}
+            {savedAddresses.length > 0 && (
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 p-2.5 rounded-xl bg-white/[0.025] border border-white/[0.06]">
+                <div className="flex items-center gap-1.5 text-zinc-400 font-semibold shrink-0 text-xs">
+                  <BookmarkPlus className="w-3.5 h-3.5 text-[#f3aa18]" />
+                  <span>Address Template:</span>
+                </div>
+                <select
+                  value={selectedTemplateId}
+                  onChange={(e) => handleSelectTemplate(e.target.value)}
+                  className="w-full sm:flex-1 px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/[0.1] text-white text-xs outline-none focus:border-[#f3aa18]/60 cursor-pointer font-medium"
+                >
+                  <option value="">-- Choose saved address template --</option>
+                  {savedAddresses.map((addr) => (
+                    <option key={addr.id} value={addr.id}>
+                      {addr.label || addr.name} {addr.courier ? `(${addr.courier})` : ''} - {addr.city}
+                    </option>
+                  ))}
+                </select>
+                {selectedTemplateId && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTemplateId('')}
+                    className="text-zinc-500 hover:text-zinc-300 px-1 py-0.5 text-[11px] self-end sm:self-auto cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
 
             <div className="space-y-4 font-sans text-xs">
               {/* Row 1: Name and Phone */}
@@ -1535,6 +1641,13 @@ export const CustomLabelPage: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Modal 3: Goorita USA Shipments Consolidation */}
+      <GooritaConsolidationModal
+        isOpen={isGooritaModalOpen}
+        onClose={() => setIsGooritaModalOpen(false)}
+        onApplyToLabel={handleApplyGooritaConsolidation}
+      />
     </div>
   );
 };

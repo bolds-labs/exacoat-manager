@@ -31,6 +31,7 @@ import {
   Send,
   X,
   AlertTriangle,
+  Tag,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -540,15 +541,27 @@ export const ExportShipmentsPage: React.FC = () => {
             )}
           </div>
 
-          <div className="pt-4 border-t border-zinc-200 dark:border-white/[0.06]">
+          <div className="pt-4 border-t border-zinc-200 dark:border-white/[0.06] flex flex-col sm:flex-row gap-2.5">
             <button
               type="button"
               onClick={handleGenerateGoorita}
               disabled={isGeneratingGoorita || (status?.goorita.pendingCount ?? 0) === 0}
-              className="w-full py-2.5 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-neutral-950 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
+              className="flex-1 py-2.5 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-neutral-950 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
             >
               <FileSpreadsheet className={clsx('w-4 h-4', isGeneratingGoorita && 'animate-spin')} />
-              <span>{isGeneratingGoorita ? 'Processing Manifest...' : 'Generate Goorita Manifest (XLSX)'}</span>
+              <span>{isGeneratingGoorita ? 'Processing Manifest...' : 'Export Goorita (.xlsx)'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                window.location.hash = 'custom_label?goorita=1';
+              }}
+              className="py-2.5 px-4 rounded-xl bg-zinc-100 dark:bg-white/[0.06] hover:bg-zinc-200 dark:hover:bg-white/[0.1] text-zinc-800 dark:text-zinc-200 font-semibold text-xs border border-zinc-300 dark:border-white/[0.1] flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-xs"
+              title="Open Custom Label page to consolidate USA orders into a domestic JNE shipment to Goorita HQ in Jakarta"
+            >
+              <Tag className="w-3.5 h-3.5 text-amber-500" />
+              <span>Consolidate & Print JNE Label</span>
             </button>
           </div>
         </GlassCard>

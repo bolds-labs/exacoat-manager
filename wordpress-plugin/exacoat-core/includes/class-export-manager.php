@@ -351,6 +351,11 @@ class Exacoat_Export_Manager {
 			return false;
 		}
 
+		// Skip master consolidation orders
+		if ( $order->get_meta( '_is_consolidation_order' ) === 'yes' ) {
+			return false;
+		}
+
 		// 1. Check explicit carrier metadata
 		$carrier = strtolower( trim( (string) (
 			$order->get_meta( 'carrier_id' )
@@ -1074,6 +1079,20 @@ class Exacoat_Export_Manager {
 				'callback'            => [ __CLASS__, 'rest_get_order_goorita_text' ],
 				'permission_callback' => [ __CLASS__, 'rest_permission_check' ],
 			] );
+
+			// Get pending Goorita orders with line items for consolidation
+			register_rest_route( $ns, '/exports/pending-goorita-orders', [
+				'methods'             => 'GET',
+				'callback'            => [ __CLASS__, 'rest_get_pending_goorita_orders' ],
+				'permission_callback' => [ __CLASS__, 'rest_permission_check' ],
+			] );
+
+			// Create domestic JNE consolidation order to Goorita HQ
+			register_rest_route( $ns, '/exports/create-consolidation-order', [
+				'methods'             => 'POST',
+				'callback'            => [ __CLASS__, 'rest_create_consolidation_order' ],
+				'permission_callback' => [ __CLASS__, 'rest_permission_check' ],
+			] );
 		}
 	}
 
@@ -1630,6 +1649,214 @@ class Exacoat_Export_Manager {
 			'text'         => $text,
 			'wa_url'       => 'https://wa.me/6281806734618?text=' . rawurlencode( $text ),
 		], 200 );
+	}
+
+	/**
+	 * REST: Get pending Goorita orders with line items for consolidation
+	 */
+	public static function rest_get_pending_goorita_orders( WP_REST_Request $request ): WP_REST_Response {
+		$orders = self::get_goorita_export_orders();
+		$result = [];
+
+		foreach ( $orders as $order ) {
+			if ( ! is_a( $order, 'WC_Order' ) ) {
+				continue;
+			}
+
+			$order_items = [];
+			foreach ( $order->get_items() as $item_id => $item ) {
+				if ( ! is_a( $item, 'WC_Order_Item_Product' ) ) {
+					continue;
+				}
+
+				$product = $item->get_product();
+				$sku     = $product ? $product->get_sku() : '';
+
+				$specs = [];
+				$config = $item->get_meta( 'Configuration' );
+				if ( ! empty( $config ) ) {
+					$specs[] = trim( (string) $config );
+				}
+				$device = $item->get_meta( 'device_model' ) ?: $item->get_meta( 'pa_device' );
+				if ( ! empty( $device ) && ( empty( $config ) || stripos( (string) $config, (string) $device ) === false ) ) {
+					$specs[] = trim( (string) $device );
+				}
+
+				if ( empty( $specs ) ) {
+					$formatted = $item->get_formatted_meta_data( '' );
+					foreach ( $formatted as $meta ) {
+						if ( ! str_starts_with( $meta->key, '_' ) ) {
+							$specs[] = $meta->display_key . ': ' . wp_strip_all_tags( $meta->display_value );
+						}
+					}
+				}
+
+				$order_items[] = [
+					'id'       => (string) $item_id,
+					'name'     => $item->get_name(),
+					'quantity' => (int) $item->get_quantity(),
+					'sku'      => (string) $sku,
+					'specs'    => implode( ' • ', $specs ),
+					'total'    => (float) $item->get_total(),
+				];
+			}
+
+			$country = strtoupper( (string) ( $order->get_shipping_country() ?: $order->get_billing_country() ) );
+			$full_name = trim( $order->get_formatted_shipping_full_name() );
+			if ( empty( $full_name ) ) {
+				$full_name = trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() );
+			}
+
+			$result[] = [
+				'id'           => $order->get_id(),
+				'order_number' => $order->get_order_number(),
+				'status'       => $order->get_status(),
+				'customer_name'=> $full_name,
+				'country'      => $country,
+				'city'         => $order->get_shipping_city() ?: $order->get_billing_city(),
+				'date_created' => $order->get_date_created() ? $order->get_date_created()->date( 'Y-m-d H:i' ) : '',
+				'item_count'   => (int) $order->get_item_count(),
+				'items'        => $order_items,
+			];
+		}
+
+		return new WP_REST_Response( [
+			'success' => true,
+			'count'   => count( $result ),
+			'orders'  => $result,
+		], 200 );
+	}
+
+	/**
+	 * REST: Create Goorita Domestic Consolidation Order for JNE
+	 */
+	public static function rest_create_consolidation_order( WP_REST_Request $request ): WP_REST_Response {
+		$order_ids = $request->get_param( 'order_ids' );
+		if ( empty( $order_ids ) || ! is_array( $order_ids ) ) {
+			return new WP_REST_Response( [
+				'success' => false,
+				'error'   => 'No orders selected for consolidation.',
+			], 400 );
+		}
+
+		$clean_order_ids = array_map( 'intval', $order_ids );
+		$child_order_numbers = [];
+		$total_child_items   = 0;
+
+		foreach ( $clean_order_ids as $cid ) {
+			$cord = wc_get_order( $cid );
+			if ( $cord ) {
+				$child_order_numbers[] = '#' . $cord->get_order_number();
+				$total_child_items    += (int) $cord->get_item_count();
+			}
+		}
+
+		// Recipient defaults: Jonathan Rio (exacoat) Goorita HQ
+		$recipient = (array) ( $request->get_param( 'recipient' ) ?: [] );
+		$name      = sanitize_text_field( $recipient['name'] ?? 'Jonathan Rio (exacoat)' );
+		$phone     = sanitize_text_field( $recipient['phone'] ?? '081806734618' );
+		$company   = sanitize_text_field( $recipient['company'] ?? 'Goorita HQ' );
+		$address1  = sanitize_text_field( $recipient['address_1'] ?? 'Jl. TB Simatupang No.9, RT.12/RW.5, Rambutan' );
+		$address2  = sanitize_text_field( $recipient['address_2'] ?? '' );
+		$city      = sanitize_text_field( $recipient['city'] ?? 'Ciracas, Jakarta Timur' );
+		$state     = sanitize_text_field( $recipient['state'] ?? 'DKI Jakarta' );
+		$postcode  = sanitize_text_field( $recipient['postcode'] ?? '13830' );
+		$country   = sanitize_text_field( $recipient['country'] ?? 'ID' );
+
+		try {
+			$order = wc_create_order( [
+				'status'        => 'awaiting-pickup',
+				'customer_note' => 'Consolidated Goorita USA Shipments: ' . implode( ', ', $child_order_numbers ),
+			] );
+
+			if ( is_wp_error( $order ) ) {
+				return new WP_REST_Response( [
+					'success' => false,
+					'error'   => $order->get_error_message(),
+				], 500 );
+			}
+
+			// Name splitting
+			$parts      = explode( ' ', $name, 2 );
+			$first_name = $parts[0] ?? 'Jonathan';
+			$last_name  = $parts[1] ?? 'Rio';
+
+			$address_data = [
+				'first_name' => $first_name,
+				'last_name'  => $last_name,
+				'company'    => $company,
+				'address_1'  => $address1,
+				'address_2'  => $address2,
+				'city'       => $city,
+				'state'      => $state,
+				'postcode'   => $postcode,
+				'country'    => $country,
+				'email'      => 'support@exacoat.com',
+				'phone'      => $phone,
+			];
+
+			$order->set_address( $address_data, 'billing' );
+			$order->set_address( $address_data, 'shipping' );
+
+			// Add shipping item (JNE Express - REG)
+			if ( class_exists( 'WC_Order_Item_Shipping' ) ) {
+				$shipping_item = new \WC_Order_Item_Shipping();
+				$shipping_item->set_method_title( 'JNE Express - REG' );
+				$shipping_item->set_method_id( 'jne_shipping' );
+				$shipping_item->set_total( 0 );
+				$order->add_item( $shipping_item );
+			}
+
+			// Add line item summarizing the consolidated package
+			if ( class_exists( 'WC_Order_Item_Fee' ) ) {
+				$item = new \WC_Order_Item_Fee();
+				$item->set_name( sprintf( 'Consolidated Goorita USA Shipments (%d Orders, %d Items)', count( $clean_order_ids ), $total_child_items ) );
+				$item->set_total( 0 );
+				$order->add_item( $item );
+			}
+
+			// Meta tags for JNE export matching
+			$order->update_meta_data( '_is_consolidation_order', 'yes' );
+			$order->update_meta_data( '_goorita_consolidated_orders', $clean_order_ids );
+			$order->update_meta_data( 'carrier_id', 'jne' );
+			$order->update_meta_data( '_carrier_id', 'jne' );
+			$order->update_meta_data( 'courier', 'JNE Express' );
+			$order->update_meta_data( '_billing_district', 'Ciracas' );
+
+			$order->calculate_totals();
+			$order->save();
+
+			$order_id     = $order->get_id();
+			$order_number = $order->get_order_number();
+
+			// Add note to each child order linking to this master domestic order
+			foreach ( $clean_order_ids as $cid ) {
+				$cord = wc_get_order( $cid );
+				if ( $cord ) {
+					$cord->add_order_note( sprintf(
+						__( 'Consolidated into domestic master parcel #%s (JNE Express to Goorita HQ) on %s.', 'exacoat-core' ),
+						$order_number,
+						current_time( 'd M Y H:i' )
+					) );
+					$cord->update_meta_data( '_master_consolidation_order_id', $order_id );
+					$cord->save();
+				}
+			}
+
+			return new WP_REST_Response( [
+				'success'       => true,
+				'order_id'      => $order_id,
+				'order_number'  => $order_number,
+				'orders_count'  => count( $clean_order_ids ),
+				'items_count'   => $total_child_items,
+				'message'       => sprintf( 'Domestic JNE Order #%s created with %d consolidated shipments.', $order_number, count( $clean_order_ids ) ),
+			], 200 );
+		} catch ( \Throwable $e ) {
+			return new WP_REST_Response( [
+				'success' => false,
+				'error'   => $e->getMessage(),
+			], 500 );
+		}
 	}
 
 	/**
