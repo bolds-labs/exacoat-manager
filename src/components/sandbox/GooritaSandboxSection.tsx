@@ -16,6 +16,7 @@ import {
   GOORITA_US_STATES,
   GooritaPackageRate,
   GooritaTrackingEvent,
+  GooritaEnvironment,
 } from '../../lib/gooritaService';
 import {
   Truck,
@@ -57,6 +58,7 @@ export const GooritaSandboxSection: React.FC = () => {
   const [skinCount, setSkinCount] = useState<number>(2);
   const [laptopSkinCount, setLaptopSkinCount] = useState<number>(0);
   const [declaredValueUsd, setDeclaredValueUsd] = useState<number>(30);
+  const [testItemName, setTestItemName] = useState<string>('Phone Skin - Matte Black');
 
   // 2. Destination State
   const [zipcode, setZipcode] = useState<string>('90210');
@@ -69,7 +71,7 @@ export const GooritaSandboxSection: React.FC = () => {
   const [availablePackages, setAvailablePackages] = useState<GooritaPackageRate[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string>('');
 
-  // 4. Order Creation State
+  // 4. Order Creation State (Strictly Staging)
   const [customerName, setCustomerName] = useState<string>('Alex Johnson');
   const [customerEmail, setCustomerEmail] = useState<string>('alex.johnson@example.com');
   const [customerPhone, setCustomerPhone] = useState<string>('+1 415 555 0192');
@@ -77,8 +79,9 @@ export const GooritaSandboxSection: React.FC = () => {
   const [isCreatingOrder, setIsCreatingOrder] = useState<boolean>(false);
   const [createdOrderResult, setCreatedOrderResult] = useState<any>(null);
 
-  // 5. Tracking State
+  // 5. Tracking State (Supports both Staging & Production Read-Only Lookups)
   const [trackOrderId, setTrackOrderId] = useState<string>('');
+  const [trackEnv, setTrackEnv] = useState<GooritaEnvironment>('staging');
   const [isTracking, setIsTracking] = useState<boolean>(false);
   const [trackingEvents, setTrackingEvents] = useState<GooritaTrackingEvent[]>([]);
   const [trackingMessage, setTrackingMessage] = useState<string>('');
@@ -89,10 +92,11 @@ export const GooritaSandboxSection: React.FC = () => {
 
   // 7. Webhook Simulation State
   const [webhookTargetUrl, setWebhookTargetUrl] = useState<string>(
-    'https://cms.exacoat.com/wp-json/exacoat-core/v1/shipping/goorita-webhook'
+    'https://exacoat.com/wp-json/exacoat-core/v1/shipping/goorita-webhook'
   );
-  const [webhookSimStatus, setWebhookSimStatus] = useState<string>('In Transit');
-  const [webhookLocation, setWebhookLocation] = useState<string>('Jakarta Delivery Hub');
+  const [webhookToken, setWebhookToken] = useState<string>(GOORITA_CONFIG.PROD_API_KEY);
+  const [webhookSimStatus, setWebhookSimStatus] = useState<string>('Delivered');
+  const [webhookLocation, setWebhookLocation] = useState<string>('TEXAS CITY, TX, US');
   const [isSimulatingWebhook, setIsSimulatingWebhook] = useState<boolean>(false);
   const [webhookSimResult, setWebhookSimResult] = useState<any>(null);
 
@@ -181,12 +185,13 @@ export const GooritaSandboxSection: React.FC = () => {
         laptopSkinCount,
         declaredValueUsd,
         packageType,
+        itemName: testItemName,
       });
 
       if (res.success) {
         setCreatedOrderResult(res);
         setTrackOrderId(res.orderId || '');
-        showToast('success', 'Test AWB Booked!', `Order Code #${res.orderId}`);
+        showToast('success', 'Test AWB Booked in Staging!', `Order Code #${res.orderId}`);
         loadTransactions();
       } else {
         showToast('error', 'Order Booking Error', res.message || 'Failed to create AWB');
@@ -211,7 +216,7 @@ export const GooritaSandboxSection: React.FC = () => {
     setTrackingMessage('');
 
     try {
-      const res = await trackGooritaOrder(id);
+      const res = await trackGooritaOrder(id, trackEnv);
       if (res.success) {
         setTrackingEvents(res.events);
         setTrackingMessage(res.events.length === 0 ? 'Order registered. No transit scans recorded yet in sandbox.' : '');
@@ -231,7 +236,7 @@ export const GooritaSandboxSection: React.FC = () => {
   const loadTransactions = async () => {
     setIsLoadingTx(true);
     try {
-      const res = await fetchGooritaTransactions();
+      const res = await fetchGooritaTransactions(trackEnv);
       if (res.success) {
         setTransactions(res.orders);
       }
@@ -256,7 +261,7 @@ export const GooritaSandboxSection: React.FC = () => {
     );
 
     try {
-      const res = await simulateGooritaWebhook(webhookTargetUrl, payload);
+      const res = await simulateGooritaWebhook(webhookTargetUrl, payload, webhookToken);
       setWebhookSimResult(res);
       if (res.success) {
         showToast('success', 'Webhook Received (200 OK)', `Goorita webhook handled successfully`);
@@ -455,6 +460,16 @@ export const GooritaSandboxSection: React.FC = () => {
                 <span className="font-bold text-zinc-200">
                   {computedDims.length} × {computedDims.width} × {computedDims.height} cm
                 </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-zinc-400">Item Name:</span>
+                <input
+                  type="text"
+                  value={testItemName}
+                  onChange={(e) => setTestItemName(e.target.value)}
+                  placeholder="Exact item name"
+                  className="w-48 px-2 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-xs font-bold text-white focus:outline-none"
+                />
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-zinc-400">Declared Value:</span>
@@ -749,12 +764,42 @@ export const GooritaSandboxSection: React.FC = () => {
             </div>
 
             <div className="space-y-3 font-mono text-xs">
+              <div className="flex items-center justify-between pb-1">
+                <span className="text-[11px] text-zinc-500">Query Environment:</span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setTrackEnv('staging')}
+                    className={clsx(
+                      "px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition cursor-pointer",
+                      trackEnv === 'staging'
+                        ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                        : "bg-zinc-100 dark:bg-white/[0.04] text-zinc-500 hover:text-zinc-300 border border-transparent"
+                    )}
+                  >
+                    Staging Sandbox
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTrackEnv('production')}
+                    className={clsx(
+                      "px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition cursor-pointer",
+                      trackEnv === 'production'
+                        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                        : "bg-zinc-100 dark:bg-white/[0.04] text-zinc-500 hover:text-zinc-300 border border-transparent"
+                    )}
+                  >
+                    Production API (Read-Only)
+                  </button>
+                </div>
+              </div>
+
               <div className="flex items-center gap-2">
                 <input
                   type="text"
                   value={trackOrderId}
                   onChange={(e) => setTrackOrderId(e.target.value)}
-                  placeholder="Enter Goorita Order Code"
+                  placeholder="Enter Goorita Order Code (e.g. 6953910980)"
                   className="flex-1 px-3 py-2 rounded-xl bg-zinc-100 dark:bg-white/[0.04] border border-zinc-300 dark:border-white/10 font-bold text-zinc-900 dark:text-white focus:outline-none focus:border-sky-500"
                 />
                 <button
@@ -909,6 +954,24 @@ export const GooritaSandboxSection: React.FC = () => {
                 <span className="text-[10px] text-zinc-400 block pt-0.5">
                   Set this URL in Goorita portal: <code className="text-zinc-300">/panel/my-token → Set Webhook</code>
                 </span>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-zinc-500 block text-[11px]">
+                  Simulated Auth Token (Header X-Goorita-Token):
+                </label>
+                <select
+                  value={webhookToken}
+                  onChange={(e) => setWebhookToken(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-100 dark:bg-white/[0.04] border border-zinc-300 dark:border-white/10 text-xs text-zinc-900 dark:text-zinc-200 focus:outline-none"
+                >
+                  <option value={GOORITA_CONFIG.PROD_API_KEY} className="bg-zinc-900">
+                    Production Token ({GOORITA_CONFIG.PROD_API_KEY.substring(0, 12)}...)
+                  </option>
+                  <option value={GOORITA_CONFIG.DEV_API_KEY} className="bg-zinc-900">
+                    Staging Dev Token ({GOORITA_CONFIG.DEV_API_KEY.substring(0, 12)}...)
+                  </option>
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-2 pt-1">

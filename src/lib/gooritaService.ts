@@ -5,6 +5,8 @@
  */
 
 export const GOORITA_CONFIG = {
+  PROD_BASE_URL: 'https://send.goorita.com/api',
+  PROD_API_KEY: 'k4K1ObL2Jpard72nOks7O2Iae5INP7Mo',
   DEV_BASE_URL: 'https://goosend-dev.on-forge.com/api',
   DEV_API_KEY: 'iO9TyZTLFPD9xv1JJpzPLNWO6FPT0QDB',
   ORIGIN_DISTRICT_ID: '9d70d21b-870e-4da9-a284-3905da004bbd', // Bekasi Barat
@@ -28,6 +30,21 @@ export const GOORITA_CONFIG = {
   DEFAULT_ITEM_TYPE_ID: 'e8a11d5a-31ae-4f03-b9da-1ce4cd90f7d2', // Small Package/Envelope (< 2kg)
   DEFAULT_CATEGORY_ID: '9f876651-092e-49e7-919b-c7c220ccdda0', // VINYL (HS: 8523.49.20)
 };
+
+export type GooritaEnvironment = 'production' | 'staging';
+
+export function getGooritaApiConfig(env: GooritaEnvironment = 'production') {
+  if (env === 'staging') {
+    return {
+      baseUrl: GOORITA_CONFIG.DEV_BASE_URL,
+      apiKey: GOORITA_CONFIG.DEV_API_KEY,
+    };
+  }
+  return {
+    baseUrl: GOORITA_CONFIG.PROD_BASE_URL,
+    apiKey: GOORITA_CONFIG.PROD_API_KEY,
+  };
+}
 
 // US State code to Goorita state_id map
 export const GOORITA_US_STATES: Record<string, { id: string; name: string }> = {
@@ -180,10 +197,11 @@ export interface GooritaTrackingEvent {
   event?: string;
 }
 
-async function gooritaFetch(endpoint: string, options: RequestInit = {}) {
-  const url = `${GOORITA_CONFIG.DEV_BASE_URL}${endpoint}`;
+async function gooritaFetch(endpoint: string, options: RequestInit = {}, env: GooritaEnvironment = 'production') {
+  const config = getGooritaApiConfig(env);
+  const url = `${config.baseUrl}${endpoint}`;
   const headers = {
-    Authorization: `Bearer ${GOORITA_CONFIG.DEV_API_KEY}`,
+    Authorization: `Bearer ${config.apiKey}`,
     Accept: 'application/json',
     'Content-Type': 'application/json',
     ...(options.headers || {}),
@@ -206,7 +224,7 @@ async function gooritaFetch(endpoint: string, options: RequestInit = {}) {
 /**
  * Validate & lookup US Zipcode
  */
-export async function lookupGooritaZipcode(zipcode: string): Promise<{
+export async function lookupGooritaZipcode(zipcode: string, env: GooritaEnvironment = 'production'): Promise<{
   success: boolean;
   city?: string;
   state?: string;
@@ -215,7 +233,7 @@ export async function lookupGooritaZipcode(zipcode: string): Promise<{
   error?: string;
 }> {
   try {
-    const res = await gooritaFetch(`/miscellaneous/zipcode?codes=${encodeURIComponent(zipcode.trim())}&country=US`);
+    const res = await gooritaFetch(`/miscellaneous/zipcode?codes=${encodeURIComponent(zipcode.trim())}&country=US`, {}, env);
     if (!res.ok || !res.data) {
       return { success: false, error: res.data?.message || 'Zipcode lookup failed' };
     }
@@ -250,7 +268,9 @@ export async function checkGooritaRates(params: {
   laptopSkinCount: number;
   declaredValueUsd?: number;
   packageType?: 'small' | 'box';
+  env?: GooritaEnvironment;
 }): Promise<GooritaRateResult> {
+  const env = params.env || 'production';
   const weightKg = calculateGooritaShipmentWeight(params.skinCount, params.laptopSkinCount);
   const dims = calculateGooritaDimensions(params.skinCount, params.laptopSkinCount);
   const stateId = params.stateId || GOORITA_US_STATES.CA.id;
@@ -281,7 +301,7 @@ export async function checkGooritaRates(params: {
     const res = await gooritaFetch('/business/order/check-rate', {
       method: 'POST',
       body: JSON.stringify(payload),
-    });
+    }, env);
 
     if (!res.ok || !res.data?.success) {
       return {
@@ -315,7 +335,7 @@ export async function checkGooritaRates(params: {
 }
 
 /**
- * Create Goorita Sandbox Order & Generate AWB
+ * Create Goorita Sandbox Order & Generate AWB (Strictly Sandbox / Staging Only)
  */
 export async function createGooritaSandboxOrder(params: {
   packageId: string;
@@ -332,6 +352,7 @@ export async function createGooritaSandboxOrder(params: {
   declaredValueUsd?: number;
   customTrackingNumber?: string;
   packageType?: 'small' | 'box';
+  itemName?: string;
 }): Promise<GooritaOrderCreationResult> {
   const weightKg = calculateGooritaShipmentWeight(params.skinCount, params.laptopSkinCount);
   const dims = calculateGooritaDimensions(params.skinCount, params.laptopSkinCount);
@@ -344,6 +365,8 @@ export async function createGooritaSandboxOrder(params: {
 
   const cleanPhoneStr = (params.customerPhone || '14155550192').replace(/\D/g, '');
   const phoneNum = parseInt(cleanPhoneStr, 10) || 14155550192;
+  const cleanItemName = (params.itemName || '').trim();
+  const description = cleanItemName || 'Mobile / Laptop Protective Decal Skin';
 
   const payload = {
     package_id: params.packageId,
@@ -377,7 +400,7 @@ export async function createGooritaSandboxOrder(params: {
     },
     content: {
       value: totalValue,
-      description: 'Mobile / Laptop Protective Decal Skin',
+      description,
       category_id: GOORITA_CONFIG.DEFAULT_CATEGORY_ID,
     },
     items: [
@@ -394,10 +417,11 @@ export async function createGooritaSandboxOrder(params: {
   };
 
   try {
+    // Strictly execute order creation against Staging API
     const res = await gooritaFetch('/business/order/create', {
       method: 'POST',
       body: JSON.stringify(payload),
-    });
+    }, 'staging');
 
     if (!res.ok || !res.data?.success) {
       return {
@@ -433,7 +457,7 @@ export async function createGooritaSandboxOrder(params: {
 /**
  * Track an order by Goorita Order Code
  */
-export async function trackGooritaOrder(orderId: string): Promise<{
+export async function trackGooritaOrder(orderId: string, env: GooritaEnvironment = 'production'): Promise<{
   success: boolean;
   message?: string;
   events: GooritaTrackingEvent[];
@@ -443,7 +467,7 @@ export async function trackGooritaOrder(orderId: string): Promise<{
     const res = await gooritaFetch('/business/order/track', {
       method: 'POST',
       body: JSON.stringify({ order_id: orderId.trim() }),
-    });
+    }, env);
 
     if (!res.ok || !res.data?.success) {
       return {
@@ -473,13 +497,13 @@ export async function trackGooritaOrder(orderId: string): Promise<{
 /**
  * List past business transactions / orders
  */
-export async function fetchGooritaTransactions(): Promise<{
+export async function fetchGooritaTransactions(env: GooritaEnvironment = 'production'): Promise<{
   success: boolean;
   orders: any[];
   error?: string;
 }> {
   try {
-    const res = await gooritaFetch('/business/order/transaction');
+    const res = await gooritaFetch('/business/order/transaction', {}, env);
     if (!res.ok || !res.data?.success) {
       return { success: false, orders: [], error: res.data?.message || 'Failed to list transactions' };
     }
@@ -495,11 +519,12 @@ export async function fetchGooritaTransactions(): Promise<{
 /**
  * Download AWB PDF binary using Bearer token and trigger download or view
  */
-export async function downloadGooritaAwbPdf(awbUrl: string, filename = 'goorita-awb.pdf'): Promise<boolean> {
+export async function downloadGooritaAwbPdf(awbUrl: string, filename = 'goorita-awb.pdf', env: GooritaEnvironment = 'production'): Promise<boolean> {
   try {
+    const apiKey = getGooritaApiConfig(env).apiKey;
     const res = await fetch(awbUrl, {
       headers: {
-        Authorization: `Bearer ${GOORITA_CONFIG.DEV_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
       },
     });
 
@@ -524,9 +549,9 @@ export async function downloadGooritaAwbPdf(awbUrl: string, filename = 'goorita-
  */
 export function buildSampleGooritaWebhookPayload(
   orderId: string,
-  status = 'In Transit',
-  location = 'Jakarta Delivery Hub',
-  remarks = 'Package scanned at sorting facility and scheduled for export linehaul'
+  status = 'Delivered',
+  location = 'TEXAS CITY, TX, US',
+  remarks = 'Delivered, In/At Mailbox -> Your item was delivered in or at the mailbox at 1:09 pm on February 11, 2026'
 ) {
   return {
     event: 'tracking.updated',
@@ -540,8 +565,8 @@ export function buildSampleGooritaWebhookPayload(
         datetime: new Date().toISOString().replace('T', ' ').substring(0, 19),
         remarks,
         status,
-        status_code: '103 - Arrive at Hub',
-        event: 'ARRIVAL',
+        status_code: status.toLowerCase() === 'delivered' ? 'DELIVERED' : '507 - Delivery Process',
+        event: status.toLowerCase() === 'delivered' ? 'DELIVERY' : 'TRANSIT',
       },
     ],
   };
@@ -553,7 +578,7 @@ export function buildSampleGooritaWebhookPayload(
 export async function simulateGooritaWebhook(
   targetUrl: string,
   payload: any,
-  token = GOORITA_CONFIG.DEV_API_KEY
+  token = GOORITA_CONFIG.PROD_API_KEY
 ): Promise<{ success: boolean; status: number; data: any }> {
   try {
     let res: Response;
@@ -600,4 +625,5 @@ export async function simulateGooritaWebhook(
     return { success: false, status: 0, data: err.message };
   }
 }
+
 

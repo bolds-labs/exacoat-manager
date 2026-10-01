@@ -58,6 +58,10 @@ class Exacoat_Core {
 			if ( empty( $options['rayspeed_api_key'] ) && ! empty( $env_rayspeed ) ) {
 				$options['rayspeed_api_key'] = trim( (string) $env_rayspeed );
 			}
+			$env_goorita = defined( 'EXA_GOORITA_API_KEY' ) ? EXA_GOORITA_API_KEY : ( defined( 'GOORITA_API_KEY' ) ? GOORITA_API_KEY : getenv( 'EXA_GOORITA_API_KEY' ) );
+			if ( empty( $options['goorita_api_key'] ) && ! empty( $env_goorita ) ) {
+				$options['goorita_api_key'] = trim( (string) $env_goorita );
+			}
 			self::$cached_settings = $options;
 		}
 		return self::$cached_settings;

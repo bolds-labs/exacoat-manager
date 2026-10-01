@@ -639,6 +639,21 @@ class Exacoat_Shipping_Tracker {
 		return ! empty( $secret ) ? $secret : 'wj18rs4h-cdab-3tjy-igxm-pgt48hexlxwd';
 	}
 
+	public static function get_goorita_api_key(): string {
+		$key = '';
+		if ( class_exists( 'Exacoat_Core' ) ) {
+			$settings = Exacoat_Core::get_settings();
+			$key = trim( (string) ( $settings['goorita_api_key'] ?? ( $settings['goorita_api_token'] ?? '' ) ) );
+		}
+		if ( empty( $key ) && defined( 'EXA_GOORITA_API_KEY' ) ) {
+			$key = trim( (string) EXA_GOORITA_API_KEY );
+		}
+		if ( empty( $key ) && defined( 'GOORITA_API_KEY' ) ) {
+			$key = trim( (string) GOORITA_API_KEY );
+		}
+		return ! empty( $key ) ? $key : 'k4K1ObL2Jpard72nOks7O2Iae5INP7Mo';
+	}
+
 	/**
 	 * Backward compatibility alias for 17TRACK API key
 	 */
@@ -2083,10 +2098,21 @@ class Exacoat_Shipping_Tracker {
 		$headers = $request->get_headers();
 		$incoming_token = $request->get_header( 'x-goorita-token' )
 			?: ( $headers['x_goorita_token'][0] ?? ( $request->get_param( 'token' ) ?? ( $request->get_param( 'x_goorita_token' ) ?? '' ) ) );
-		$expected_token = defined( 'EXA_GOORITA_API_KEY' ) ? EXA_GOORITA_API_KEY : 'iO9TyZTLFPD9xv1JJpzPLNWO6FPT0QDB';
+		$valid_tokens = array_filter( array_unique( [
+			self::get_goorita_api_key(),
+			'k4K1ObL2Jpard72nOks7O2Iae5INP7Mo', // Production Goorita token
+			'iO9TyZTLFPD9xv1JJpzPLNWO6FPT0QDB', // Staging dev token
+		] ) );
 
-		if ( ! empty( $expected_token ) && ! empty( $incoming_token ) ) {
-			if ( ! hash_equals( (string) $expected_token, (string) $incoming_token ) ) {
+		if ( ! empty( $incoming_token ) ) {
+			$authorized = false;
+			foreach ( $valid_tokens as $vt ) {
+				if ( hash_equals( (string) $vt, (string) $incoming_token ) ) {
+					$authorized = true;
+					break;
+				}
+			}
+			if ( ! $authorized ) {
 				return new WP_REST_Response( [ 'error' => 'Unauthorized' ], 401 );
 			}
 		}
@@ -2124,7 +2150,7 @@ class Exacoat_Shipping_Tracker {
 		$hpos_table = $wpdb->prefix . 'wc_orders_meta';
 		if ( $wpdb->get_var( "SHOW TABLES LIKE '{$hpos_table}'" ) === $hpos_table ) {
 			$order_id = (int) $wpdb->get_var( $wpdb->prepare(
-				"SELECT order_id FROM {$hpos_table} WHERE meta_key IN ('_goorita_order_id', 'goorita_order_id', 'tracking_number', '_tracking_number') AND meta_value = %s LIMIT 1",
+				"SELECT order_id FROM {$hpos_table} WHERE meta_key IN ('_goorita_order_id', 'goorita_order_id', 'tracking_number', '_tracking_number', '_exacoat_tracking_number') AND meta_value = %s LIMIT 1",
 				$goorita_order_id
 			) );
 		}
@@ -2132,9 +2158,17 @@ class Exacoat_Shipping_Tracker {
 		// 2. Postmeta fallback
 		if ( $order_id <= 0 ) {
 			$order_id = (int) $wpdb->get_var( $wpdb->prepare(
-				"SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key IN ('_goorita_order_id', 'goorita_order_id', 'tracking_number', '_tracking_number') AND meta_value = %s LIMIT 1",
+				"SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key IN ('_goorita_order_id', 'goorita_order_id', 'tracking_number', '_tracking_number', '_exacoat_tracking_number') AND meta_value = %s LIMIT 1",
 				$goorita_order_id
 			) );
+		}
+
+		// 3. Direct WooCommerce Order ID check if order code matches numeric ID
+		if ( $order_id <= 0 && is_numeric( $goorita_order_id ) ) {
+			$candidate = wc_get_order( (int) $goorita_order_id );
+			if ( $candidate ) {
+				$order_id = (int) $goorita_order_id;
+			}
 		}
 
 		if ( $order_id > 0 ) {
@@ -2148,18 +2182,29 @@ class Exacoat_Shipping_Tracker {
 					$latest_loc    = sanitize_text_field( (string) ( $latest['location'] ?? '' ) );
 					$latest_time   = sanitize_text_field( (string) ( $latest['datetime'] ?? '' ) );
 
+					$prev_status = (string) $order->get_meta( '_goorita_latest_status' );
+					$prev_time   = (string) $order->get_meta( '_goorita_latest_datetime' );
+
 					$order->update_meta_data( '_goorita_latest_status', $latest_status );
 					$order->update_meta_data( '_goorita_latest_datetime', $latest_time );
 
-					$order->add_order_note( sprintf(
-						'Goorita Tracking Update: %s (%s) at %s',
-						$latest_status,
-						$latest_loc,
-						$latest_time
-					) );
+					// Log order timeline note once per distinct status update
+					if ( $latest_status !== $prev_status || $latest_time !== $prev_time ) {
+						$order->add_order_note( sprintf(
+							'Goorita Tracking Update: %s (%s) at %s',
+							$latest_status,
+							$latest_loc ?: 'In Transit',
+							$latest_time
+						) );
+					}
 
-					if ( stripos( $latest_status, 'deliver' ) !== false && stripos( $latest_status, 'out for' ) === false ) {
+					// Hardened delivered status check: strictly matches 'delivered' or 'completed'
+					$status_clean = strtolower( trim( $latest_status ) );
+					if ( in_array( $status_clean, [ 'delivered', 'completed' ], true ) ) {
 						$order->update_meta_data( '_goorita_delivered', 1 );
+						if ( ! in_array( $order->get_status(), [ 'completed', 'cancelled', 'refunded' ], true ) ) {
+							$order->update_status( 'completed', sprintf( 'Goorita Tracking: Shipment delivered to recipient (%s).', $goorita_order_id ) );
+						}
 					}
 				}
 				$order->save();
