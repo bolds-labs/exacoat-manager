@@ -62,6 +62,10 @@ class Exacoat_Core {
 			if ( empty( $options['goorita_api_key'] ) && ! empty( $env_goorita ) ) {
 				$options['goorita_api_key'] = trim( (string) $env_goorita );
 			}
+			$env_goorita_env = defined( 'EXA_GOORITA_ENVIRONMENT' ) ? EXA_GOORITA_ENVIRONMENT : ( defined( 'GOORITA_ENVIRONMENT' ) ? GOORITA_ENVIRONMENT : getenv( 'EXA_GOORITA_ENVIRONMENT' ) );
+			if ( empty( $options['goorita_environment'] ) && ! empty( $env_goorita_env ) ) {
+				$options['goorita_environment'] = trim( strtolower( (string) $env_goorita_env ) );
+			}
 			self::$cached_settings = $options;
 		}
 		return self::$cached_settings;

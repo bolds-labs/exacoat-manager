@@ -654,6 +654,22 @@ class Exacoat_Shipping_Tracker {
 		return ! empty( $key ) ? $key : 'k4K1ObL2Jpard72nOks7O2Iae5INP7Mo';
 	}
 
+	public static function get_goorita_environment(): string {
+		if ( defined( 'EXA_GOORITA_ENVIRONMENT' ) ) {
+			return strtolower( trim( (string) EXA_GOORITA_ENVIRONMENT ) );
+		}
+		if ( defined( 'GOORITA_ENVIRONMENT' ) ) {
+			return strtolower( trim( (string) GOORITA_ENVIRONMENT ) );
+		}
+		if ( class_exists( 'Exacoat_Core' ) ) {
+			$settings = Exacoat_Core::get_settings();
+			if ( ! empty( $settings['goorita_environment'] ) ) {
+				return strtolower( trim( (string) $settings['goorita_environment'] ) );
+			}
+		}
+		return 'production';
+	}
+
 	/**
 	 * Backward compatibility alias for 17TRACK API key
 	 */
