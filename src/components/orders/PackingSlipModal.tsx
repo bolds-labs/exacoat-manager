@@ -8,6 +8,7 @@ import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
 import { extractItemSpecs, formatSeparatedItemSpecs, cleanItemTitle } from '../../lib/orderItems';
 import { isStorePickupOrder, resolveOrderCourier } from '../../lib/orderUtils';
 import { resolveCountryName } from '../../lib/countries';
+import { formatCleanText } from '../../lib/utils';
 
 interface PackingSlipModalProps {
   order: Order | null;
@@ -32,10 +33,11 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
   const shipping = order.shipping || {};
   const billing = order.billing || {};
 
-  const customerName =
+  const customerName = formatCleanText(
     order.customer_name ||
     `${shipping.first_name || billing.first_name || ''} ${shipping.last_name || billing.last_name || ''}`.trim() ||
-    'Customer';
+    'Customer'
+  );
   const customerPhone = order.customer_phone || shipping.phone || billing.phone || '-';
 
   const isPickup = isStorePickupOrder(order);
@@ -47,9 +49,9 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
         'Summarecon Bekasi, Kota Bekasi 17142',
       ]
     : [
-        shipping.address_1 || billing.address_1 || 'Address on file',
-        shipping.address_2 || billing.address_2,
-        [shipping.city || billing.city, shipping.state || billing.state, shipping.postcode || billing.postcode]
+        formatCleanText(shipping.address_1 || billing.address_1 || 'Address on file'),
+        formatCleanText(shipping.address_2 || billing.address_2 || ''),
+        [formatCleanText(shipping.city || billing.city || ''), formatCleanText(shipping.state || billing.state || ''), shipping.postcode || billing.postcode]
           .filter(Boolean)
           .join(', '),
         resolveCountryName(shipping.country || billing.country || 'Indonesia'),

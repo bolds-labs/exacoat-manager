@@ -30,7 +30,7 @@ export type { MarketplaceDeviceImageSettings, CustomLabelAddress, CustomLabelSen
 import { renderEmailHtmlLocally, BRAND_LOGO_WHITE_HTML, BRAND_LOGO_HTML } from './emailRenderer';
 import { extractItemSpecs } from './orderItems';
 import { normalizeDeviceName } from './seoUtils';
-import { decodeHtmlEntities, decodeDeep } from './utils';
+import { decodeHtmlEntities, decodeDeep, formatCleanText, cleanAddressObject } from './utils';
 
 
 // ==========================================
@@ -766,6 +766,8 @@ function enrichOrder(order: any): Order {
   const latestStatusMeta = metaList.find(
     (m: any) =>
       m.key === '_biteship_latest_status' ||
+      m.key === '_trackingmore_latest_status' ||
+      m.key === '_exacoat_tracking_latest_status' ||
       m.key === '_exacoat_trackingmore_latest_status' ||
       m.key === '_exacoat_17track_latest_status' ||
       m.key === '_artmatter_trackingmore_latest_status' ||
@@ -804,6 +806,7 @@ function enrichOrder(order: any): Order {
 
     return {
       ...item,
+      name: formatCleanText(item.name),
       image_url: resolvedImg || item.image_url,
       parsed_configurator: parsedConfig,
       specs: itemSpecs,
@@ -855,9 +858,21 @@ function enrichOrder(order: any): Order {
   const rawOrderNumber = order.order_number || order.number || String(order.id);
   const cleanOrderNumber = `#${String(rawOrderNumber).replace(/^#+/, '')}`;
 
+  const cleanedShipping = cleanAddressObject(order.shipping || {});
+  const cleanedBilling = cleanAddressObject(order.billing || {});
+  const resolvedCustomerName = formatCleanText(
+    order.customer_name ||
+    `${cleanedShipping?.first_name || cleanedBilling?.first_name || ''} ${cleanedShipping?.last_name || cleanedBilling?.last_name || ''}`.trim() ||
+    'Customer'
+  );
+
   return {
     ...order,
     order_number: cleanOrderNumber,
+    customer_name: resolvedCustomerName,
+    customer_note: order.customer_note ? decodeHtmlEntities(order.customer_note) : order.customer_note,
+    shipping: cleanedShipping,
+    billing: cleanedBilling,
     items: lineItems,
     line_items: lineItems,
     item_count: lineItems.reduce((acc: number, it: any) => acc + (it.quantity || 1), 0),

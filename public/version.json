@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.151",
+  "version": "0.1.152",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.151.zip?v=0.1.151",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.152.zip?v=0.1.152",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-09-30T10:28:19.838Z",
+  "last_updated": "2026-10-01T09:37:43.415Z",
   "sections": {
-    "changelog": "### Version 0.1.151\n- Add Goorita USA logistics tracking webhook receiver supporting dashboard and openapi event formats\n- Support Small Package/Envelope format for 0.10kg chargeable weight tier\n- Defensive parsing of stdClass and nested layer configurator objects across order and warranty management"
+    "changelog": "### Version 0.1.152\n- Harden POS Indonesia and TrackingMore delivery detection to strictly reflect courier structured status\n- Eliminate false positive delivered states caused by post office acceptance wording (sudah diterima)\n- Add self-healing order restoration to reset prematurely completed orders back to in-transit shipped status"
   }
 }

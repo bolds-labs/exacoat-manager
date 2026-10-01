@@ -1088,7 +1088,7 @@ class Exacoat_Shipping_Tracker {
 	/**
 	 * Smart Dual-Engine Shipping Tracker (Biteship First for ID Couriers, TrackingMore for Goorita/International/Fallback)
 	 */
-	public static function sync_order_tracking( int $order_id ): array {
+	public static function sync_order_tracking( int $order_id, bool $force = false ): array {
 		$order = wc_get_order( $order_id );
 		if ( ! $order ) {
 			return [ 'success' => false, 'message' => 'Order not found' ];
@@ -1125,7 +1125,7 @@ class Exacoat_Shipping_Tracker {
 
 		$carrier = strtolower( trim( $carrier ) );
 
-		// If delivery data is already saved on the order and status is completed/delivered, return cached tracking
+		// If delivery data is already saved on the order and status is completed/delivered, return cached tracking unless $force is requested
 		$saved_delivered = $order->get_meta( '_delivered_at' ) 
 			?: ( $order->get_meta( '_exacoat_delivered_at' ) 
 			?: ( $order->get_meta( '_artmatter_delivered_at' ) 
@@ -1139,7 +1139,7 @@ class Exacoat_Shipping_Tracker {
 			?: ( $order->get_meta( '_exacoat_tracking_latest_status' ) 
 			?: $order->get_meta( '_artmatter_trackingmore_latest_status' ) ) );
 
-		if ( ! empty( $saved_delivered ) && ! empty( $saved_checkpoints ) && ( 'delivered' === $latest_st || 'completed' === $order->get_status() ) ) {
+		if ( ! $force && ! empty( $saved_delivered ) && ! empty( $saved_checkpoints ) && ( 'delivered' === $latest_st || 'completed' === $order->get_status() ) ) {
 			return [
 				'success'        => true,
 				'source'         => 'cache',
@@ -1296,18 +1296,12 @@ class Exacoat_Shipping_Tracker {
 				$seen[ $key ] = true;
 
 				$loc = (string) ( $o['location'] ?? '' );
-				$stg = (string) ( $o['checkpoint_delivery_status'] ?? '' );
+				$stg = strtolower( trim( (string) ( $o['checkpoint_delivery_status'] ?? '' ) ) );
 
-				// Infer stage if generic
-				$desc_lower = strtolower( $desc );
-				if ( empty( $stg ) || 'transit' === $stg ) {
-					if ( strpos( $desc_lower, 'delivered' ) !== false || strpos( $desc_lower, 'berhasil diserahkan' ) !== false ) {
-						$stg = 'delivered';
-					} elseif ( strpos( $desc_lower, 'unsuccessful' ) !== false || strpos( $desc_lower, 'tidak berhasil' ) !== false ) {
-						$stg = 'exception';
-					} elseif ( strpos( $desc_lower, 'out for delivery' ) !== false ) {
-						$stg = 'pickup';
-					}
+				// Hardened: strictly reflect courier's structured status. Default to 'transit' if unspecified.
+				// Do NOT infer or guess 'delivered' from wording.
+				if ( empty( $stg ) ) {
+					$stg = 'transit';
 				}
 
 				$formatted_checkpoints[] = [
@@ -1336,7 +1330,7 @@ class Exacoat_Shipping_Tracker {
 				$seen[ $key ] = true;
 
 				$loc = (string) ( $d['location'] ?? '' );
-				$stg = (string) ( $d['checkpoint_delivery_status'] ?? '' );
+				$stg = strtolower( trim( (string) ( $d['checkpoint_delivery_status'] ?? '' ) ) );
 
 				// Check if origin scan on the same day has precise hour:minute or location
 				if ( ! empty( $orig_trackinfo ) ) {
@@ -1355,10 +1349,10 @@ class Exacoat_Shipping_Tracker {
 					}
 				}
 
-				// Guard: Destination carriers sometimes flag failed delivery attempt as "delivered"
-				$desc_lower = strtolower( $desc );
-				if ( 'delivered' === $stg && ( strpos( $desc_lower, 'couldnt be delivered' ) !== false || strpos( $desc_lower, 'unsuccessful' ) !== false ) ) {
-					$stg = 'exception';
+				// Hardened: strictly reflect courier's structured status. Default to 'transit' if unspecified.
+				// Do NOT infer or guess 'delivered' from wording.
+				if ( empty( $stg ) ) {
+					$stg = 'transit';
 				}
 
 				$formatted_checkpoints[] = [
@@ -1405,17 +1399,23 @@ class Exacoat_Shipping_Tracker {
 			update_post_meta( $order_id, '_exacoat_tracking_checkpoints', $formatted_checkpoints );
 		}
 
-		// 2. Delivery Status handling
-		$delivery_status = strtolower( trim( (string) ( $item['delivery_status'] ?? ( $item['track_info']['latest_status']['status'] ?? '' ) ) ) );
-		$latest_event    = (string) ( $item['latest_event'] ?? ( $item['track_info']['latest_event']['description'] ?? '' ) );
+		// 2. Delivery Status handling: Strictly reflect structured courier status from API
+		// Do NOT infer or detect delivery from unstructured wording like 'sudah diterima'.
+		$raw_delivery_status = strtolower( trim( (string) ( $item['delivery_status'] ?? ( $item['track_info']['latest_status']['status'] ?? '' ) ) ) );
+		$substatus           = strtolower( trim( (string) ( $item['substatus'] ?? ( $item['track_info']['latest_status']['substatus'] ?? '' ) ) ) );
+		$latest_event        = (string) ( $item['latest_event'] ?? ( $item['track_info']['latest_event']['description'] ?? '' ) );
 
-		// Detect delivered status from latest event or newest checkpoint
-		$latest_event_lower = strtolower( $latest_event );
-		if ( strpos( $latest_event_lower, 'sudah diterima' ) !== false || 
-		     strpos( $latest_event_lower, 'berhasil diserahkan' ) !== false ||
-		     strpos( $latest_event_lower, 'handed over to recipient' ) !== false ||
-		     ( ! empty( $formatted_checkpoints[0]['stage'] ) && 'delivered' === $formatted_checkpoints[0]['stage'] ) ) {
+		// Delivery is strictly confirmed ONLY when courier's structured status reports 'delivered'
+		// or when milestone delivery_date is officially populated by the courier.
+		$has_delivery_date = ! empty( $item['origin_info']['milestone_date']['delivery_date'] ) 
+			|| ! empty( $item['destination_info']['milestone_date']['delivery_date'] );
+
+		$delivery_status = $raw_delivery_status;
+
+		if ( 'delivered' === $raw_delivery_status || strpos( $substatus, 'delivered' ) === 0 || $has_delivery_date ) {
 			$delivery_status = 'delivered';
+		} elseif ( empty( $delivery_status ) && ! empty( $formatted_checkpoints[0]['stage'] ) ) {
+			$delivery_status = $formatted_checkpoints[0]['stage'];
 		}
 
 		if ( ! empty( $delivery_status ) ) {
@@ -1426,7 +1426,7 @@ class Exacoat_Shipping_Tracker {
 		}
 
 		// Transition WooCommerce order status:
-		// If TrackingMore reports 'delivered', transition order to 'completed' (Delivered)
+		// If TrackingMore structured status reports 'delivered', transition order to 'completed' (Delivered)
 		if ( 'delivered' === $delivery_status ) {
 			$delivery_time = '';
 			foreach ( $formatted_checkpoints as $cp ) {
@@ -1434,6 +1434,12 @@ class Exacoat_Shipping_Tracker {
 					$delivery_time = $cp['time'];
 					break;
 				}
+			}
+			if ( empty( $delivery_time ) && ! empty( $item['origin_info']['milestone_date']['delivery_date'] ) ) {
+				$delivery_time = $item['origin_info']['milestone_date']['delivery_date'];
+			}
+			if ( empty( $delivery_time ) && ! empty( $item['destination_info']['milestone_date']['delivery_date'] ) ) {
+				$delivery_time = $item['destination_info']['milestone_date']['delivery_date'];
 			}
 			if ( empty( $delivery_time ) && ! empty( $formatted_checkpoints[0]['time'] ) ) {
 				$delivery_time = $formatted_checkpoints[0]['time'];
@@ -1456,6 +1462,17 @@ class Exacoat_Shipping_Tracker {
 			$current_status = $order->get_status();
 			if ( in_array( $current_status, [ 'processing', 'preparing-order', 'ready-to-ship', 'awaiting-pickup' ], true ) ) {
 				$order->update_status( 'shipped', sprintf( 'TrackingMore: Package in transit with courier (%s)', $number ) );
+			} elseif ( 'completed' === $current_status ) {
+				// Self-healing guard: If order was mistakenly marked completed (e.g. from previous false positive)
+				// but courier structured status confirms package is still active in transit, clear erroneous delivered_at
+				// and restore order status to shipped!
+				$order->delete_meta_data( '_delivered_at' );
+				$order->delete_meta_data( '_exacoat_delivered_at' );
+				$order->delete_meta_data( 'delivered_time' );
+				delete_post_meta( $order_id, '_delivered_at' );
+				delete_post_meta( $order_id, '_exacoat_delivered_at' );
+				delete_post_meta( $order_id, 'delivered_time' );
+				$order->update_status( 'shipped', sprintf( 'TrackingMore: Status corrected — package is active in transit with courier (%s)', $number ) );
 			}
 		}
 
@@ -2302,7 +2319,7 @@ class Exacoat_Shipping_Tracker {
 		}
 
 		self::handle_order_save( $order_id );
-		$result = self::sync_order_tracking( $order_id );
+		$result = self::sync_order_tracking( $order_id, true );
 
 		if ( ! empty( $result['success'] ) ) {
 			wp_send_json_success( [
@@ -2345,7 +2362,7 @@ class Exacoat_Shipping_Tracker {
 		// Ensure order is registered if not yet
 		self::handle_order_save( $order_id );
 
-		$result = self::sync_order_tracking( $order_id );
+		$result = self::sync_order_tracking( $order_id, true );
 		if ( ! empty( $result['success'] ) ) {
 			$order = wc_get_order( $order_id );
 			$order_status = $order ? $order->get_status() : '';

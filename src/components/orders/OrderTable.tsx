@@ -12,6 +12,7 @@ import { useToast } from '../../context/ToastContext';
 import { FilterSelect } from '../ui/FilterSelect';
 import { isStorePickupOrder, getOrderCourierDisplay, matchesOrderSearch } from '../../lib/orderUtils';
 import { resolveCountryName } from '../../lib/countries';
+import { formatCleanText } from '../../lib/utils';
 import {
   Search,
   RefreshCw,
@@ -1062,7 +1063,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                           {isPickup ? (
                             <span className="text-[#f3aa18] font-medium">Summarecon Bekasi Store</span>
                           ) : (
-                            `${order.shipping?.city ? `${order.shipping.city}, ` : ''}${resolveCountryName(order.shipping?.country)}`
+                            `${order.shipping?.city ? `${formatCleanText(order.shipping.city)}, ` : ''}${resolveCountryName(order.shipping?.country)}`
                           )}
                         </p>
                       </td>
@@ -1267,10 +1268,10 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                   <div className="flex items-center justify-between text-xs">
                     <div>
                       <p className="font-medium text-zinc-900 dark:text-white">
-                        {order.customer_name || 'Customer'}
+                        {formatCleanText(order.customer_name) || 'Customer'}
                       </p>
                       <p className="text-[11px] text-zinc-500">
-                        {order.shipping?.city ? `${order.shipping.city}, ` : ''}{resolveCountryName(order.shipping?.country)}
+                        {order.shipping?.city ? `${formatCleanText(order.shipping.city)}, ` : ''}{resolveCountryName(order.shipping?.country)}
                       </p>
                     </div>
                     <p className="font-mono font-bold text-zinc-900 dark:text-white text-sm">

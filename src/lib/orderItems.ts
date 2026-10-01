@@ -3,6 +3,8 @@
  * from WooCommerce order items (e.g. Back: Swarm, Camera: Black Camo).
  */
 
+import { decodeHtmlEntities } from './utils';
+
 export interface ItemCustomizationSpec {
   label: string;
   value: string;
@@ -482,6 +484,6 @@ export function formatSeparatedItemSpecs(
 
 export function cleanItemTitle(name?: string): string {
   if (!name) return '';
-  return name.replace(/\[\s*EXACOAT\s*\]\s*/gi, '').trim();
+  return decodeHtmlEntities(name).replace(/\[\s*EXACOAT\s*\]\s*/gi, '').trim();
 }
 

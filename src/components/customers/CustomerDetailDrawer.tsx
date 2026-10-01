@@ -6,6 +6,7 @@ import { Order } from '../../types';
 import { fetchCustomerOrdersDirect } from '../../lib/wordpressBridge';
 import { formatCurrency, formatDateTime } from '../../lib/formatters';
 import { resolveCountryName } from '../../lib/countries';
+import { formatCleanText } from '../../lib/utils';
 import { 
   User, 
   Mail, 
@@ -277,13 +278,13 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
               <p className="text-xs text-neutral-300 font-sans leading-relaxed">
                 {shipping.first_name || shipping.last_name ? (
                   <strong className="text-white block font-medium">
-                    {shipping.first_name} {shipping.last_name}
+                    {formatCleanText(`${shipping.first_name || ''} ${shipping.last_name || ''}`)}
                   </strong>
                 ) : null}
-                {shipping.address_1 && <span>{shipping.address_1}<br /></span>}
-                {shipping.address_2 && <span>{shipping.address_2}<br /></span>}
-                {shipping.city || customer.city ? <span>{shipping.city || customer.city}, </span> : null}
-                {shipping.state ? <span>{shipping.state} </span> : null}
+                {shipping.address_1 && <span>{formatCleanText(shipping.address_1)}<br /></span>}
+                {shipping.address_2 && <span>{formatCleanText(shipping.address_2)}<br /></span>}
+                {shipping.city || customer.city ? <span>{formatCleanText(shipping.city || customer.city)}, </span> : null}
+                {shipping.state ? <span>{formatCleanText(shipping.state)} </span> : null}
                 {shipping.postcode ? <span>{shipping.postcode}<br /></span> : <br />}
                 <span className="font-mono text-neutral-400">{resolveCountryName(shipping.country || customer.country)}</span>
               </p>
@@ -302,13 +303,13 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
               <p className="text-xs text-neutral-300 font-sans leading-relaxed">
                 {billing.first_name || billing.last_name ? (
                   <strong className="text-white block font-medium">
-                    {billing.first_name} {billing.last_name}
+                    {formatCleanText(`${billing.first_name || ''} ${billing.last_name || ''}`)}
                   </strong>
                 ) : null}
-                {billing.address_1 && <span>{billing.address_1}<br /></span>}
-                {billing.address_2 && <span>{billing.address_2}<br /></span>}
-                {billing.city ? <span>{billing.city}, </span> : null}
-                {billing.state ? <span>{billing.state} </span> : null}
+                {billing.address_1 && <span>{formatCleanText(billing.address_1)}<br /></span>}
+                {billing.address_2 && <span>{formatCleanText(billing.address_2)}<br /></span>}
+                {billing.city ? <span>{formatCleanText(billing.city)}, </span> : null}
+                {billing.state ? <span>{formatCleanText(billing.state)} </span> : null}
                 {billing.postcode ? <span>{billing.postcode}<br /></span> : <br />}
                 <span className="font-mono text-neutral-400">{resolveCountryName(billing.country)}</span>
               </p>

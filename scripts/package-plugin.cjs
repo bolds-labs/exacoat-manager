@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Add Goorita USA logistics tracking webhook receiver supporting dashboard and openapi event formats\n- Support Small Package/Envelope format for 0.10kg chargeable weight tier\n- Defensive parsing of stdClass and nested layer configurator objects across order and warranty management`,
+      changelog: `### Version ${version}\n- Harden POS Indonesia and TrackingMore delivery detection to strictly reflect courier structured status\n- Eliminate false positive delivered states caused by post office acceptance wording (sudah diterima)\n- Add self-healing order restoration to reset prematurely completed orders back to in-transit shipped status`,
     },
   };
 

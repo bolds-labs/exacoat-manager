@@ -12,7 +12,7 @@ import {
   SelectItem
 } from '../ui/Select';
 import { Order, OrderItem, OrderStatus, OrderNote, OrderReview, OrderReviewMedia, getOrderRma, getOrderGuarantee } from '../../types';
-import { formatCurrency, formatDateTime, formatDate, formatFeeLabel } from '../../lib/formatters';
+import { formatCurrency, formatDateTime, formatDate, formatFeeLabel, getOrderStatusInfo } from '../../lib/formatters';
 import { 
   Package, 
   Truck, 
@@ -89,6 +89,7 @@ import { EditOrderAddressModal } from './EditOrderAddressModal';
 import { EditOrderItemModal } from './EditOrderItemModal';
 import { WhatsAppContactModal, WhatsAppIcon } from './WhatsAppContactModal';
 import { clsx } from 'clsx';
+import { formatCleanText, decodeHtmlEntities } from '../../lib/utils';
 
 interface OrderDetailDrawerProps {
   order: Order | null;
@@ -202,6 +203,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   // A6 Shipping Label, Customer Invoice & Packing Slip modal state
   const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
   const [showPreparingPromptModal, setShowPreparingPromptModal] = useState(false);
+  const [showShippedPromptModal, setShowShippedPromptModal] = useState(false);
   const [isMarkingPreparingFromDrawer, setIsMarkingPreparingFromDrawer] = useState(false);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [isPackingSlipModalOpen, setIsPackingSlipModalOpen] = useState(false);
@@ -558,13 +560,8 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
     }
   };
 
-  const handleSaveTracking = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!trackingNumber.trim()) {
-      showToast('error', 'Missing tracking number', 'Please enter a tracking number.');
-      return;
-    }
-
+  const executeSaveTracking = async (targetStatus: 'none' | 'shipped') => {
+    if (!order) return;
     const finalCarrier = courier === 'custom' ? (customCourierName.trim() || 'Custom Courier') : courier;
     const finalUrl = courier === 'custom' && customTrackingUrl.trim()
       ? (customTrackingUrl.includes('%s') 
@@ -578,12 +575,20 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         courier: finalCarrier,
         tracking_number: trackingNumber.trim(),
         tracking_url: finalUrl,
-        status: 'none', // Save tracking without changing status
-        notify_customer: false,
+        status: targetStatus,
+        notify_customer: targetStatus === 'shipped',
       } as any);
 
       if (res.success) {
-        showToast('success', 'Tracking saved', `Tracking code saved for Order #${order.id}`);
+        setShowShippedPromptModal(false);
+        const orderNum = cleanOrderNumber(order.id);
+        const currentStatusInfo = getOrderStatusInfo(order.status);
+        if (targetStatus === 'shipped') {
+          showToast('success', 'Order Shipped', `Order #${orderNum} marked as Shipped with tracking code.`);
+          order.status = 'shipped' as OrderStatus;
+        } else {
+          showToast('success', 'Tracking Saved', `Tracking code saved for Order #${orderNum}. Status kept as ${currentStatusInfo.label}.`);
+        }
         if (res.order) {
           Object.assign(order, res.order);
         } else if ((res as any).tracking_info) {
@@ -598,6 +603,25 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
       showToast('error', 'Failed to save tracking', err.message);
     } finally {
       setIsFulfilling(false);
+    }
+  };
+
+  const handleSaveTracking = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!trackingNumber.trim()) {
+      showToast('error', 'Missing tracking number', 'Please enter a tracking number.');
+      return;
+    }
+    if (courier === 'custom' && !customCourierName.trim()) {
+      showToast('error', 'Missing courier name', 'Please enter a custom courier name.');
+      return;
+    }
+
+    const cleanStatus = String(order?.status || '').replace('wc-', '').toLowerCase();
+    if (['shipped', 'completed', 'delivered'].includes(cleanStatus)) {
+      executeSaveTracking('none');
+    } else {
+      setShowShippedPromptModal(true);
     }
   };
 
@@ -1228,20 +1252,20 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   title="View customer profile and past orders"
                 >
                   <span className="w-4 h-4 rounded-full bg-[#f3aa18]/20 text-[#f3aa18] text-[9px] font-bold flex items-center justify-center font-mono">
-                    {order.customer_name ? order.customer_name.charAt(0).toUpperCase() : 'C'}
+                    {order.customer_name ? formatCleanText(order.customer_name).charAt(0).toUpperCase() : 'C'}
                   </span>
                   <span className="font-semibold text-white group-hover:text-[#f3aa18] transition-colors truncate max-w-[140px] sm:max-w-[200px]">
-                    {order.customer_name || (order.customer_id ? `Customer #${order.customer_id}` : 'Guest Customer')}
+                    {formatCleanText(order.customer_name) || (order.customer_id ? `Customer #${order.customer_id}` : 'Guest Customer')}
                   </span>
                   <ExternalLink className="w-3 h-3 text-neutral-400 group-hover:text-[#f3aa18] transition-colors shrink-0" />
                 </button>
               ) : (
                 <div className="px-2.5 py-1 rounded-lg bg-white/[0.04] text-neutral-200 border border-white/10 text-xs font-sans font-medium flex items-center gap-1.5">
                   <span className="w-4 h-4 rounded-full bg-[#f3aa18]/20 text-[#f3aa18] text-[9px] font-bold flex items-center justify-center font-mono">
-                    {order.customer_name ? order.customer_name.charAt(0).toUpperCase() : 'C'}
+                    {order.customer_name ? formatCleanText(order.customer_name).charAt(0).toUpperCase() : 'C'}
                   </span>
                   <span className="font-semibold text-white truncate max-w-[140px] sm:max-w-[200px]">
-                    {order.customer_name || (order.customer_id ? `Customer #${order.customer_id}` : 'Guest Customer')}
+                    {formatCleanText(order.customer_name) || (order.customer_id ? `Customer #${order.customer_id}` : 'Guest Customer')}
                   </span>
                 </div>
               )}
@@ -1253,7 +1277,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
             <div className="space-y-2.5">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block mb-0.5">Recipient Name</span>
-                <p className="text-sm font-semibold text-white font-sans">{order.customer_name}</p>
+                <p className="text-sm font-semibold text-white font-sans">{formatCleanText(order.customer_name)}</p>
               </div>
 
               {order.customer_email && (
@@ -1370,9 +1394,9 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                 </p>
               ) : (
                 <p className="text-xs text-neutral-300 font-sans leading-relaxed">
-                  {order.shipping?.address_1 || order.billing?.address_1 || 'No address provided'}
-                  {order.shipping?.address_2 ? `, ${order.shipping.address_2}` : (order.billing?.address_2 ? `, ${order.billing.address_2}` : '')}<br />
-                  {order.shipping?.city || order.billing?.city || ''}, {order.shipping?.state || order.billing?.state || ''} {order.shipping?.postcode || order.billing?.postcode || ''}<br />
+                  {formatCleanText(order.shipping?.address_1 || order.billing?.address_1 || 'No address provided')}
+                  {order.shipping?.address_2 ? `, ${formatCleanText(order.shipping.address_2)}` : (order.billing?.address_2 ? `, ${formatCleanText(order.billing.address_2)}` : '')}<br />
+                  {formatCleanText(order.shipping?.city || order.billing?.city || '')}, {formatCleanText(order.shipping?.state || order.billing?.state || '')} {order.shipping?.postcode || order.billing?.postcode || ''}<br />
                   <strong className="text-white">{resolveCountryName(order.shipping?.country || order.billing?.country)}</strong>
                 </p>
               )}
@@ -1381,7 +1405,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
 
           {(() => {
             const rawNote = String(order.customer_note || '');
-            const cleanNote = rawNote
+            const cleanNote = decodeHtmlEntities(rawNote)
               .replace(/(?:shipping courier|jasa kirim|courier)\s*:\s*[^\r\n]+/gi, '')
               .trim();
             if (!cleanNote) return null;
@@ -3188,6 +3212,65 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
               from <span className="text-emerald-400 font-semibold">Confirmed</span> to{' '}
               <span className="text-cyan-400 font-semibold">Preparing order</span>?
             </p>
+          </div>
+        </Modal>
+      )}
+
+      {/* Post-Tracking Manual Entry Advance to Shipped Confirmation Modal */}
+      {order && (
+        <Modal
+          isOpen={showShippedPromptModal}
+          onClose={() => {
+            if (!isFulfilling) setShowShippedPromptModal(false);
+          }}
+          maxWidth="md"
+          title={
+            <div className="flex items-center gap-2 text-white font-sans">
+              <Truck className="w-5 h-5 text-[#f3aa18]" />
+              <span className="text-base font-bold">Mark order as "Shipped"?</span>
+            </div>
+          }
+          subtitle="Tracking number has been entered. Advance order status to begin delivery?"
+          footer={
+            <div className="flex items-center justify-end gap-2.5 w-full font-sans">
+              <button
+                type="button"
+                disabled={isFulfilling}
+                onClick={() => executeSaveTracking('none')}
+                className="px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-zinc-300 hover:text-white text-xs font-semibold border border-white/10 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Keep as {getOrderStatusInfo(order.status).label}
+              </button>
+              <button
+                type="button"
+                disabled={isFulfilling}
+                onClick={() => executeSaveTracking('shipped')}
+                className="px-4 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50 shadow-xs active:scale-95"
+              >
+                {isFulfilling && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>{isFulfilling ? 'Updating...' : 'Mark as Shipped'}</span>
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-3 font-sans text-xs">
+            <p className="text-zinc-400">
+              Do you want to update order{' '}
+              <strong className="text-white font-mono">
+                #{String(order.order_number || order.id).replace(/^#+/, '')}
+              </strong>{' '}
+              from{' '}
+              <span className={clsx("font-semibold", getOrderStatusInfo(order.status).color)}>
+                {getOrderStatusInfo(order.status).label}
+              </span>{' '}
+              to <span className="text-indigo-400 font-semibold">Shipped</span>?
+            </p>
+            <div className="p-3 rounded-xl bg-zinc-900 border border-white/[0.08] flex items-center justify-between text-xs font-mono">
+              <span className="text-neutral-400 font-sans">
+                {courier === 'custom' ? (customCourierName.trim() || 'Custom Courier') : (COURIER_PRESETS.find(p => p.value === courier)?.label || courier)}
+              </span>
+              <span className="font-bold text-white tracking-wider">{trackingNumber.trim()}</span>
+            </div>
           </div>
         </Modal>
       )}

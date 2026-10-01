@@ -7,6 +7,7 @@ import { useToast } from '../../context/ToastContext';
 import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
 import { cleanItemTitle } from '../../lib/orderItems';
 import { resolveCountryName } from '../../lib/countries';
+import { formatCleanText } from '../../lib/utils';
 
 interface CustomerInvoiceModalProps {
   order: Order | null;
@@ -31,21 +32,21 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
   const shipping = order.shipping || {};
   const billing = order.billing || {};
 
-  const customerName = order.customer_name || `${billing.first_name || shipping.first_name || ''} ${billing.last_name || shipping.last_name || ''}`.trim() || 'Customer';
+  const customerName = formatCleanText(order.customer_name || `${billing.first_name || shipping.first_name || ''} ${billing.last_name || shipping.last_name || ''}`.trim() || 'Customer');
   const customerEmail = order.customer_email || billing.email || '-';
   const customerPhone = order.customer_phone || billing.phone || shipping.phone || '-';
 
   const billingAddress = [
-    billing.address_1 || shipping.address_1,
-    billing.address_2 || shipping.address_2,
-    [billing.city || shipping.city, billing.state || shipping.state, billing.postcode || shipping.postcode].filter(Boolean).join(', '),
+    formatCleanText(billing.address_1 || shipping.address_1),
+    formatCleanText(billing.address_2 || shipping.address_2),
+    [formatCleanText(billing.city || shipping.city), formatCleanText(billing.state || shipping.state), billing.postcode || shipping.postcode].filter(Boolean).join(', '),
     resolveCountryName(billing.country || shipping.country || 'Indonesia'),
   ].filter(Boolean);
 
   const shippingAddress = [
-    shipping.address_1 || 'Address on file',
-    shipping.address_2,
-    [shipping.city, shipping.state, shipping.postcode].filter(Boolean).join(', '),
+    formatCleanText(shipping.address_1 || 'Address on file'),
+    formatCleanText(shipping.address_2),
+    [formatCleanText(shipping.city), formatCleanText(shipping.state), shipping.postcode].filter(Boolean).join(', '),
     resolveCountryName(shipping.country || billing.country || 'Indonesia'),
   ].filter(Boolean);
 

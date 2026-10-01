@@ -15,6 +15,7 @@ import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
 import { formatSeparatedItemSpecs, cleanItemTitle } from '../../lib/orderItems';
 import { resolveOrderCourier, isStorePickupOrder } from '../../lib/orderUtils';
 import { resolveCountryName } from '../../lib/countries';
+import { formatCleanText } from '../../lib/utils';
 
 export { isStorePickupOrder };
 
@@ -158,12 +159,12 @@ function renderSinglePageHtml(
   const isPickup = isStorePickupOrder(ord);
   const cOrderNum = String(ord.order_number || ord.id || '').replace(/^#+/, '');
   const shp = ord.shipping || {};
-  const rName = ord.customer_name || `${shp.first_name || ''} ${shp.last_name || ''}`.trim() || 'Customer';
+  const rName = formatCleanText(ord.customer_name || `${shp.first_name || ''} ${shp.last_name || ''}`.trim() || 'Customer');
   const rPhone = ord.customer_phone || shp.phone || '-';
   const rAddrLines = [
-    shp.address_1 || 'Address on file',
-    shp.address_2 || shp.address_2_extra || '',
-    [shp.city || '', shp.state || '', shp.postcode || ''].filter(Boolean).join(', '),
+    formatCleanText(shp.address_1 || 'Address on file'),
+    formatCleanText(shp.address_2 || shp.address_2_extra || ''),
+    [formatCleanText(shp.city || ''), formatCleanText(shp.state || ''), shp.postcode || ''].filter(Boolean).join(', '),
     resolveCountryName(shp.country || ord.billing?.country || 'Indonesia'),
   ].filter(Boolean);
 
@@ -598,11 +599,11 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
 
   // Format recipient address for chunking calculations
   const shipping = activeOrder.shipping || {};
-  const recipientName = activeOrder.customer_name || `${shipping.first_name || ''} ${shipping.last_name || ''}`.trim() || 'Customer';
-  const addressLine1 = shipping.address_1 || 'Address on file';
-  const addressLine2 = shipping.address_2 || shipping.address_2_extra || '';
-  const city = shipping.city || '';
-  const state = shipping.state || '';
+  const recipientName = formatCleanText(activeOrder.customer_name || `${shipping.first_name || ''} ${shipping.last_name || ''}`.trim() || 'Customer');
+  const addressLine1 = formatCleanText(shipping.address_1 || 'Address on file');
+  const addressLine2 = formatCleanText(shipping.address_2 || shipping.address_2_extra || '');
+  const city = formatCleanText(shipping.city || '');
+  const state = formatCleanText(shipping.state || '');
   const postcode = shipping.postcode || '';
   const country = resolveCountryName(shipping.country || activeOrder.billing?.country || 'Indonesia');
 

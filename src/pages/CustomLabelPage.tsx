@@ -19,6 +19,7 @@ import {
 } from '../lib/wordpressBridge';
 import { EXACOAT_LOGO_BASE64 } from '../lib/assets/logo';
 import { resolveCountryName } from '../lib/countries';
+import { formatCleanText } from '../lib/utils';
 import {
   Printer,
   Copy,
@@ -262,14 +263,14 @@ export const CustomLabelPage: React.FC = () => {
 
   // Apply a saved address
   const handleApplyAddress = (addr: CustomLabelAddress) => {
-    setRecipientName(addr.name || '');
+    setRecipientName(formatCleanText(addr.name || ''));
     setRecipientPhone(addr.phone || '');
-    setRecipientCompany(addr.company || '');
+    setRecipientCompany(formatCleanText(addr.company || ''));
     setRecipientEmail(addr.email || '');
-    setRecipientAddress1(addr.address_1 || '');
-    setRecipientAddress2(addr.address_2 || '');
-    setRecipientCity(addr.city || '');
-    setRecipientState(addr.state || '');
+    setRecipientAddress1(formatCleanText(addr.address_1 || ''));
+    setRecipientAddress2(formatCleanText(addr.address_2 || ''));
+    setRecipientCity(formatCleanText(addr.city || ''));
+    setRecipientState(formatCleanText(addr.state || ''));
     setRecipientPostcode(addr.postcode || '');
     setRecipientCountry(addr.country || 'Indonesia');
     if (addr.courier) {
@@ -1446,10 +1447,10 @@ export const CustomLabelPage: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="text-zinc-300 font-medium">{addr.name} &bull; {addr.phone}</div>
+                    <div className="text-zinc-300 font-medium">{formatCleanText(addr.name)} &bull; {addr.phone}</div>
 
                     <div className="text-zinc-400 text-[11px] leading-relaxed">
-                      {[addr.address_1, addr.address_2, addr.city, addr.state, addr.postcode, addr.country]
+                      {[formatCleanText(addr.address_1), formatCleanText(addr.address_2), formatCleanText(addr.city), formatCleanText(addr.state), addr.postcode, addr.country]
                         .filter(Boolean)
                         .join(', ')}
                     </div>

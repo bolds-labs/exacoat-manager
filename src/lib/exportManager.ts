@@ -7,6 +7,7 @@
 import { Order } from '../types';
 import { getWordPressBaseUrl } from './env';
 import { authenticatedFetch, fetchPluginSettings, savePluginSettings } from './wordpressBridge';
+import { formatCleanText } from './utils';
 
 export interface ExportStatus {
   jne: {
@@ -52,17 +53,17 @@ export interface ExportGenerationResult {
  */
 export function formatGooritaShipmentText(order: Order): string {
   const orderNumber = order.order_number || order.number || String(order.id);
-  const fullName = [
+  const fullName = formatCleanText([
     order.shipping?.first_name || order.billing?.first_name || '',
     order.shipping?.last_name || order.billing?.last_name || ''
-  ].join(' ').trim() || 'Customer';
+  ].join(' ').trim()) || 'Customer';
 
   const addressParts = [
-    order.shipping?.address_1 || order.billing?.address_1 || '',
-    order.shipping?.address_2 || order.billing?.address_2 || '',
-    order.shipping?.city || order.billing?.city || '',
-    order.shipping?.state || order.billing?.state || '',
-    order.shipping?.country || order.billing?.country || '',
+    formatCleanText(order.shipping?.address_1 || order.billing?.address_1 || ''),
+    formatCleanText(order.shipping?.address_2 || order.billing?.address_2 || ''),
+    formatCleanText(order.shipping?.city || order.billing?.city || ''),
+    formatCleanText(order.shipping?.state || order.billing?.state || ''),
+    formatCleanText(order.shipping?.country || order.billing?.country || ''),
     order.shipping?.postcode || order.billing?.postcode || '',
   ].filter(Boolean);
   const address = addressParts.join(', ');

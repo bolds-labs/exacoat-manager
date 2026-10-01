@@ -1300,15 +1300,22 @@ class Exacoat_Order_Manager {
 			update_field( 'carrier_id', $carrier_id, $order_id );
 		}
 
-		// Update order status: default to 'shipped' on fulfillment
-		$requested_status = sanitize_text_field( $params['status'] ?? '' );
-		$new_status       = ! empty( $requested_status ) && 'none' !== $requested_status ? $requested_status : 'shipped';
-		if ( 'completed' === $new_status ) {
-			$new_status = 'shipped';
-		}
+		// Update order status if explicitly requested and not 'none'
+		$requested_status     = sanitize_text_field( $params['status'] ?? 'none' );
+		$should_update_status = ! empty( $requested_status ) && 'none' !== $requested_status;
+		$new_status           = 'none';
 
-		$clean_status = str_replace( 'wc-', '', $new_status );
-		$order->update_status( $clean_status, "Order tracking updated with {$carrier_display} #{$tracking_number}" );
+		if ( $should_update_status ) {
+			$new_status = $requested_status;
+			if ( 'completed' === $new_status ) {
+				$new_status = 'shipped';
+			}
+			$clean_status = str_replace( 'wc-', '', $new_status );
+			$order->update_status( $clean_status, "Order tracking updated with {$carrier_display} #{$tracking_number}" );
+		} else {
+			$current_status_name = wc_get_order_status_name( $order->get_status() );
+			$order->add_order_note( "Order tracking updated with {$carrier_display} #{$tracking_number} (status retained as {$current_status_name})" );
+		}
 
 		// Automatically register tracking: Biteship for SiCepat/JNE; TrackingMore for POS Indonesia/international
 		$is_domestic = in_array( strtolower( trim( $carrier_id ) ), [ 'sicepat', 'jne', 'jne express' ], true );
@@ -1336,7 +1343,8 @@ class Exacoat_Order_Manager {
 
 		// Send customized dark-mode tracking email if enabled or if order is now shipped
 		$current_status = str_replace( 'wc-', '', $order->get_status() );
-		if ( ( $notify_customer || in_array( $current_status, [ 'shipped', 'completed' ], true ) ) && class_exists( 'Artmatter_Email_Engine' ) && 'none' !== $new_status ) {
+		$has_email_engine = class_exists( 'Exacoat_Email_Engine' ) || class_exists( 'Artmatter_Email_Engine' );
+		if ( 'none' !== $new_status && ( $notify_customer || in_array( $current_status, [ 'shipped', 'completed' ], true ) ) && $has_email_engine ) {
 			self::send_customer_shipping_email( $order, $tracking_info );
 		}
 
@@ -2217,8 +2225,8 @@ class Exacoat_Order_Manager {
 		// Order Notes & Timeline history
 		$notes_data = self::get_formatted_order_notes( $order_id );
 
-		$shipping = $order->get_address( 'shipping' );
-		$billing  = $order->get_address( 'billing' );
+		$shipping = self::clean_address_data( $order->get_address( 'shipping' ) );
+		$billing  = self::clean_address_data( $order->get_address( 'billing' ) );
 
 		$cust_id = $order->get_customer_id();
 		$store_credit_balance = 0;
@@ -2314,7 +2322,14 @@ class Exacoat_Order_Manager {
 			'customer_name'                 => trim( ( $shipping['first_name'] ?? '' ) . ' ' . ( $shipping['last_name'] ?? '' ) ) ?: ( trim( ( $billing['first_name'] ?? '' ) . ' ' . ( $billing['last_name'] ?? '' ) ) ?: 'Store Customer' ),
 			'customer_email'                => $order->get_billing_email(),
 			'customer_phone'                => $order->get_billing_phone(),
-			'customer_note'                 => trim( preg_replace( '/(?:shipping courier|jasa kirim|courier)\s*:\s*[^\r\n]+/i', '', (string) $order->get_customer_note() ) ),
+			'customer_note'                 => ( function() use ( $order ) {
+				$raw_cust_note = trim( preg_replace( '/(?:shipping courier|jasa kirim|courier)\s*:\s*[^\r\n]+/i', '', (string) $order->get_customer_note() ) );
+				$decoded = html_entity_decode( $raw_cust_note, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+				if ( false !== strpos( $decoded, '&' ) ) {
+					$decoded = html_entity_decode( $decoded, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+				}
+				return $decoded;
+			} )(),
 			'payment_method'                => $order->get_payment_method(),
 			'payment_method_title'          => $order->get_payment_method_title(),
 			'shipping'                   => $shipping,
@@ -2333,6 +2348,34 @@ class Exacoat_Order_Manager {
 			'meta_data'                  => $order_meta_data,
 			'rma'                        => $rma_data,
 		];
+	}
+
+	/**
+	 * Decode HTML entities and clean address fields (e.g. &amp; -> &, &#038; -> &, balanced ampersand spacing)
+	 */
+	public static function clean_address_data( $addr ) {
+		if ( ! is_array( $addr ) ) {
+			return $addr;
+		}
+		$cleaned = [];
+		foreach ( $addr as $key => $val ) {
+			if ( is_string( $val ) ) {
+				$decoded = html_entity_decode( $val, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+				if ( false !== strpos( $decoded, '&' ) ) {
+					$decoded = html_entity_decode( $decoded, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+				}
+				$formatted = preg_replace( '/([a-zA-Z0-9]{3,})&([a-zA-Z0-9]{3,})/', '$1 & $2', $decoded );
+				$formatted = preg_replace( '/([a-zA-Z0-9])&(\s+)/', '$1 & ', $formatted );
+				$formatted = preg_replace( '/(\s+)&([a-zA-Z0-9])/', ' & $2', $formatted );
+				$formatted = preg_replace( '/\s+/', ' ', $formatted );
+				$cleaned[ $key ] = trim( $formatted );
+			} elseif ( is_array( $val ) ) {
+				$cleaned[ $key ] = self::clean_address_data( $val );
+			} else {
+				$cleaned[ $key ] = $val;
+			}
+		}
+		return $cleaned;
 	}
 
 	/**
@@ -2565,8 +2608,8 @@ class Exacoat_Order_Manager {
 			];
 		}
 
-		$shipping = $order->get_address( 'shipping' );
-		$billing  = $order->get_address( 'billing' );
+		$shipping = self::clean_address_data( $order->get_address( 'shipping' ) );
+		$billing  = self::clean_address_data( $order->get_address( 'billing' ) );
 
 		$formatted_shipping = trim( implode( "\n", array_filter( [
 			trim( ( $shipping['first_name'] ?? '' ) . ' ' . ( $shipping['last_name'] ?? '' ) ),
