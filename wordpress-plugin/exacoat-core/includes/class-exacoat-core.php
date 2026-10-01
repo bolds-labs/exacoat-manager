@@ -58,9 +58,13 @@ class Exacoat_Core {
 			if ( empty( $options['rayspeed_api_key'] ) && ! empty( $env_rayspeed ) ) {
 				$options['rayspeed_api_key'] = trim( (string) $env_rayspeed );
 			}
-			$env_goorita = defined( 'EXA_GOORITA_API_KEY' ) ? EXA_GOORITA_API_KEY : ( defined( 'GOORITA_API_KEY' ) ? GOORITA_API_KEY : getenv( 'EXA_GOORITA_API_KEY' ) );
+			$env_goorita = defined( 'EXA_GOORITA_PROD_API_KEY' ) ? EXA_GOORITA_PROD_API_KEY : ( defined( 'EXA_GOORITA_API_KEY' ) ? EXA_GOORITA_API_KEY : ( defined( 'GOORITA_API_KEY' ) ? GOORITA_API_KEY : getenv( 'EXA_GOORITA_API_KEY' ) ) );
 			if ( empty( $options['goorita_api_key'] ) && ! empty( $env_goorita ) ) {
 				$options['goorita_api_key'] = trim( (string) $env_goorita );
+			}
+			$env_goorita_dev = defined( 'EXA_GOORITA_DEV_API_KEY' ) ? EXA_GOORITA_DEV_API_KEY : ( defined( 'GOORITA_DEV_API_KEY' ) ? GOORITA_DEV_API_KEY : getenv( 'EXA_GOORITA_DEV_API_KEY' ) );
+			if ( empty( $options['goorita_dev_api_key'] ) && ! empty( $env_goorita_dev ) ) {
+				$options['goorita_dev_api_key'] = trim( (string) $env_goorita_dev );
 			}
 			$env_goorita_env = defined( 'EXA_GOORITA_ENVIRONMENT' ) ? EXA_GOORITA_ENVIRONMENT : ( defined( 'GOORITA_ENVIRONMENT' ) ? GOORITA_ENVIRONMENT : getenv( 'EXA_GOORITA_ENVIRONMENT' ) );
 			if ( empty( $options['goorita_environment'] ) && ! empty( $env_goorita_env ) ) {

@@ -639,19 +639,51 @@ class Exacoat_Shipping_Tracker {
 		return ! empty( $secret ) ? $secret : 'wj18rs4h-cdab-3tjy-igxm-pgt48hexlxwd';
 	}
 
-	public static function get_goorita_api_key(): string {
+	public static function get_goorita_api_key( string $env = '' ): string {
+		$target_env = ! empty( $env ) ? strtolower( trim( $env ) ) : self::get_goorita_environment();
 		$key = '';
-		if ( class_exists( 'Exacoat_Core' ) ) {
+
+		if ( $target_env === 'staging' || $target_env === 'dev' ) {
+			if ( defined( 'EXA_GOORITA_DEV_API_KEY' ) ) {
+				$key = trim( (string) EXA_GOORITA_DEV_API_KEY );
+			} elseif ( defined( 'GOORITA_DEV_API_KEY' ) ) {
+				$key = trim( (string) GOORITA_DEV_API_KEY );
+			} elseif ( class_exists( 'Exacoat_Core' ) ) {
+				$settings = Exacoat_Core::get_settings();
+				$key = trim( (string) ( $settings['goorita_dev_api_key'] ?? '' ) );
+			}
+			return ! empty( $key ) ? $key : 'iO9TyZTLFPD9xv1JJpzPLNWO6FPT0QDB';
+		}
+
+		// Production key resolution
+		if ( defined( 'EXA_GOORITA_PROD_API_KEY' ) ) {
+			$key = trim( (string) EXA_GOORITA_PROD_API_KEY );
+		} elseif ( defined( 'GOORITA_PROD_API_KEY' ) ) {
+			$key = trim( (string) GOORITA_PROD_API_KEY );
+		} elseif ( defined( 'EXA_GOORITA_API_KEY' ) ) {
+			$key = trim( (string) EXA_GOORITA_API_KEY );
+		} elseif ( defined( 'GOORITA_API_KEY' ) ) {
+			$key = trim( (string) GOORITA_API_KEY );
+		} elseif ( class_exists( 'Exacoat_Core' ) ) {
 			$settings = Exacoat_Core::get_settings();
 			$key = trim( (string) ( $settings['goorita_api_key'] ?? ( $settings['goorita_api_token'] ?? '' ) ) );
 		}
-		if ( empty( $key ) && defined( 'EXA_GOORITA_API_KEY' ) ) {
-			$key = trim( (string) EXA_GOORITA_API_KEY );
-		}
-		if ( empty( $key ) && defined( 'GOORITA_API_KEY' ) ) {
-			$key = trim( (string) GOORITA_API_KEY );
-		}
+
 		return ! empty( $key ) ? $key : 'k4K1ObL2Jpard72nOks7O2Iae5INP7Mo';
+	}
+
+	public static function get_goorita_api_url( string $env = '' ): string {
+		$target_env = ! empty( $env ) ? strtolower( trim( $env ) ) : self::get_goorita_environment();
+		if ( $target_env === 'staging' || $target_env === 'dev' ) {
+			if ( defined( 'EXA_GOORITA_DEV_URL' ) ) {
+				return rtrim( (string) EXA_GOORITA_DEV_URL, '/' );
+			}
+			return 'https://goosend-dev.on-forge.com/api';
+		}
+		if ( defined( 'EXA_GOORITA_PROD_URL' ) ) {
+			return rtrim( (string) EXA_GOORITA_PROD_URL, '/' );
+		}
+		return 'https://send.goorita.com/api';
 	}
 
 	public static function get_goorita_environment(): string {
@@ -2115,7 +2147,8 @@ class Exacoat_Shipping_Tracker {
 		$incoming_token = $request->get_header( 'x-goorita-token' )
 			?: ( $headers['x_goorita_token'][0] ?? ( $request->get_param( 'token' ) ?? ( $request->get_param( 'x_goorita_token' ) ?? '' ) ) );
 		$valid_tokens = array_filter( array_unique( [
-			self::get_goorita_api_key(),
+			self::get_goorita_api_key( 'production' ),
+			self::get_goorita_api_key( 'staging' ),
 			'k4K1ObL2Jpard72nOks7O2Iae5INP7Mo', // Production Goorita token
 			'iO9TyZTLFPD9xv1JJpzPLNWO6FPT0QDB', // Staging dev token
 		] ) );
