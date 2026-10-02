@@ -41,6 +41,23 @@ class Exacoat_Affiliate_Manager {
 		return (bool) get_option( 'exacoat_affiliate_auto_approve', false );
 	}
 
+	/**
+	 * Helper: Resolve accurate client IP address supporting Cloudflare and reverse proxies.
+	 */
+	public static function get_client_ip(): string {
+		if ( ! empty( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ) {
+			return sanitize_text_field( wp_unslash( $_SERVER['HTTP_CF_CONNECTING_IP'] ) );
+		}
+		if ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
+			$parts = explode( ',', wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) );
+			return sanitize_text_field( trim( $parts[0] ) );
+		}
+		if ( ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
+			return sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
+		}
+		return '';
+	}
+
 	public static function init(): void {
 		// Defer table initialization and role registration until WordPress and WooCommerce are fully booted
 		add_action( 'init', [ __CLASS__, 'on_init' ], 20 );
@@ -57,6 +74,7 @@ class Exacoat_Affiliate_Manager {
 
 		// WooCommerce order integration hooks
 		add_action( 'woocommerce_checkout_order_processed', [ __CLASS__, 'attach_referral_to_order' ], 10, 3 );
+		add_action( 'woocommerce_store_api_checkout_order_processed', [ __CLASS__, 'attach_referral_to_store_api_order' ], 10, 1 );
 		add_action( 'woocommerce_order_status_processing', [ __CLASS__, 'handle_order_processing' ], 20, 1 );
 		add_action( 'woocommerce_order_status_completed', [ __CLASS__, 'handle_order_delivery_confirmed' ], 20, 1 );
 		add_action( 'woocommerce_order_status_delivered', [ __CLASS__, 'handle_order_delivery_confirmed' ], 20, 1 );
@@ -323,7 +341,7 @@ class Exacoat_Affiliate_Manager {
 		$req_uri      = ! empty( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/';
 		$referrer     = ! empty( $_SERVER['HTTP_REFERER'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_REFERER'] ) ) : '';
 		$user_agent   = ! empty( $_SERVER['HTTP_USER_AGENT'] ) ? substr( sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ), 0, 255 ) : '';
-		$remote_ip    = ! empty( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+		$remote_ip    = self::get_client_ip();
 
 		$wpdb->insert(
 			$table_clicks,
@@ -438,6 +456,13 @@ class Exacoat_Affiliate_Manager {
 		// 3. Fallback to 30-day Cookie
 		if ( empty( $ref_slug ) && ! empty( $_COOKIE[ self::COOKIE_NAME ] ) ) {
 			$ref_slug = sanitize_text_field( wp_unslash( $_COOKIE[ self::COOKIE_NAME ] ) );
+		}
+
+		// 4. Fallback to HTTP request headers from headless storefront proxy
+		if ( empty( $ref_slug ) && ! empty( $_SERVER['HTTP_X_EXACOAT_AFF_REF'] ) ) {
+			$ref_slug = sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_EXACOAT_AFF_REF'] ) );
+		} elseif ( empty( $ref_slug ) && ! empty( $_SERVER['HTTP_X_AFF_REF'] ) ) {
+			$ref_slug = sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_AFF_REF'] ) );
 		}
 
 		if ( empty( $ref_slug ) ) {
@@ -744,6 +769,18 @@ class Exacoat_Affiliate_Manager {
 		$order->update_meta_data( '_exacoat_creator_name', $creator_name );
 		$order->update_meta_data( '_exacoat_creator_discount_rate', $discount_rate );
 		$order->save();
+	}
+
+	/**
+	 * Attach referral to order during headless WooCommerce Store API checkout.
+	 *
+	 * @param WC_Order $order
+	 */
+	public static function attach_referral_to_store_api_order( WC_Order $order ): void {
+		if ( ! $order instanceof WC_Order ) {
+			return;
+		}
+		self::attach_referral_to_order( (int) $order->get_id(), [], $order );
 	}
 
 	/**
@@ -2631,6 +2668,7 @@ class Exacoat_Affiliate_Manager {
 		return rest_ensure_response( [
 			'success'         => true,
 			'found'           => true,
+			'id'              => (int) $affiliate->id,
 			'slug'            => $affiliate->slug,
 			'creator_name'    => $creator_name,
 			'discount_rate'   => $discount_rate,
@@ -2723,8 +2761,8 @@ class Exacoat_Affiliate_Manager {
 		$remote_ip    = sanitize_text_field( $request->get_param( 'ip_address' ) ?: '' );
 		$user_agent   = substr( sanitize_text_field( $request->get_param( 'user_agent' ) ?: '' ), 0, 255 );
 
-		if ( empty( $remote_ip ) && ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
-			$remote_ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
+		if ( empty( $remote_ip ) ) {
+			$remote_ip = self::get_client_ip();
 		}
 		if ( empty( $user_agent ) && ! empty( $_SERVER['HTTP_USER_AGENT'] ) ) {
 			$user_agent = substr( sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ), 0, 255 );
@@ -2751,15 +2789,16 @@ class Exacoat_Affiliate_Manager {
 		$table_affiliates = $wpdb->prefix . 'exacoat_affiliates';
 		$table_clicks     = $wpdb->prefix . 'exacoat_affiliate_clicks';
 
-		// Deduplicate: avoid recording duplicate visits from same IP + affiliate within 15 minutes
+		// Deduplicate: avoid recording duplicate visits from same IP + affiliate + landing URL within 5 minutes
 		if ( ! empty( $remote_ip ) ) {
 			$recent_click = $wpdb->get_var(
 				$wpdb->prepare(
 					"SELECT id FROM {$table_clicks} 
-					WHERE affiliate_id = %d AND ip_address = %s AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE) 
+					WHERE affiliate_id = %d AND ip_address = %s AND landing_url = %s AND created_at > DATE_SUB(NOW(), INTERVAL 5 MINUTE) 
 					LIMIT 1",
 					$affiliate->id,
-					$remote_ip
+					$remote_ip,
+					$landing_url
 				)
 			);
 			if ( $recent_click ) {
@@ -2818,14 +2857,21 @@ class Exacoat_Affiliate_Manager {
 		$where_sql = '';
 		$params    = [];
 		if ( $affiliate_id > 0 ) {
-			$where_sql = 'WHERE c.affiliate_id = %d';
-			$params[]  = $affiliate_id;
+			$aff = self::get_affiliate_by_id( $affiliate_id );
+			if ( ! $aff ) {
+				$aff = self::get_affiliate_by_user_id( $affiliate_id );
+			}
+			$target_id      = $aff ? (int) $aff->id : $affiliate_id;
+			$target_user_id = $aff ? (int) $aff->user_id : $affiliate_id;
+			$where_sql      = 'WHERE (c.affiliate_id = %d OR c.affiliate_id = %d)';
+			$params[]       = $target_id;
+			$params[]       = $target_user_id;
 		}
 
 		$sql = "SELECT c.id, c.affiliate_id, c.landing_url, c.referrer_url, c.ip_address, c.created_at,
-		               a.slug, a.display_name, a.creator_display_name
+		               a.slug, a.display_name, a.display_name AS creator_display_name
 		        FROM {$table_clicks} c
-		        LEFT JOIN {$table_affiliates} a ON c.affiliate_id = a.id
+		        LEFT JOIN {$table_affiliates} a ON (c.affiliate_id = a.id OR c.affiliate_id = a.user_id)
 		        {$where_sql}
 		        ORDER BY c.id DESC
 		        LIMIT %d";

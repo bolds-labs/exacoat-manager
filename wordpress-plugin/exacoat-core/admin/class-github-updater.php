@@ -58,6 +58,7 @@ class Exacoat_Plugin_Updater {
 		// 5. AJAX Endpoints for Explicit Manual Check & 1-Click Update
 		add_action( 'wp_ajax_exacoat_check_plugin_update', [ $this, 'ajax_check_plugin_update' ] );
 		add_action( 'wp_ajax_exacoat_run_one_click_update', [ $this, 'ajax_run_one_click_update' ] );
+		add_action( 'rest_api_init', [ $this, 'register_rest_routes' ] );
 	}
 
 	/**
@@ -625,6 +626,152 @@ class Exacoat_Plugin_Updater {
 			'message' => 'Exacoat Core successfully updated and reactivated to v' . $manifest->version . '!',
 			'version' => $manifest->version,
 		] );
+	}
+
+	public function register_rest_routes(): void {
+		register_rest_route( 'exacoat-core/v1', '/plugin/update', [
+			'methods'             => 'POST',
+			'callback'            => [ $this, 'rest_run_one_click_update' ],
+			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
+		] );
+	}
+
+	public function rest_run_one_click_update( WP_REST_Request $request ) {
+		require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+		require_once ABSPATH . 'wp-admin/includes/plugin-install.php';
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/plugin.php';
+
+		delete_transient( 'exacoat_core_remote_version_manifest' );
+		delete_transient( 'artmatter_core_remote_version_manifest' );
+		delete_site_transient( 'update_plugins' );
+		self::$cached_manifest = null;
+
+		$manifest = $this->get_remote_manifest( true );
+		if ( ! $manifest || empty( $manifest->download_url ) ) {
+			return new WP_REST_Response( [
+				'success' => false,
+				'message' => 'Invalid update manifest: unable to resolve download URL.',
+			], 500 );
+		}
+
+		$current_transient = get_site_transient( 'update_plugins' );
+		if ( ! is_object( $current_transient ) ) {
+			$current_transient = new stdClass();
+		}
+		$current_transient = $this->check_for_plugin_update( $current_transient );
+		set_site_transient( 'update_plugins', $current_transient );
+
+		WP_Filesystem();
+
+		$package_url = $manifest->download_url;
+		$package_url .= ( strpos( $package_url, '?' ) !== false ? '&' : '?' ) . 't=' . time();
+
+		$temp_file = download_url( $package_url, 300 );
+		if ( is_wp_error( $temp_file ) ) {
+			return new WP_REST_Response( [
+				'success' => false,
+				'message' => 'Download failed: ' . $temp_file->get_error_message(),
+			], 500 );
+		}
+
+		$plugins_dir        = WP_PLUGIN_DIR;
+		$extraction_success = false;
+
+		if ( class_exists( 'ZipArchive' ) ) {
+			$zip = new ZipArchive();
+			if ( true === $zip->open( $temp_file ) ) {
+				for ( $i = 0; $i < $zip->numFiles; $i++ ) {
+					$filename = $zip->getNameIndex( $i );
+					if ( strpos( $filename, '../' ) !== false || strpos( $filename, '..\\' ) !== false ) {
+						continue;
+					}
+					$target_path = $plugins_dir . '/' . $filename;
+					if ( substr( $filename, -1 ) === '/' ) {
+						if ( ! is_dir( $target_path ) ) {
+							@mkdir( $target_path, 0777, true );
+						}
+					} else {
+						$dir = dirname( $target_path );
+						if ( ! is_dir( $dir ) ) {
+							@mkdir( $dir, 0777, true );
+						}
+						$content = $zip->getFromIndex( $i );
+						if ( false !== $content ) {
+							@file_put_contents( $target_path, $content );
+							@chmod( $target_path, 0666 );
+						}
+					}
+				}
+				$zip->close();
+				$extraction_success = true;
+			}
+		}
+
+		if ( ! $extraction_success ) {
+			$unzip_result = unzip_file( $temp_file, $plugins_dir );
+			if ( is_wp_error( $unzip_result ) ) {
+				@unlink( $temp_file );
+				return new WP_REST_Response( [
+					'success' => false,
+					'message' => 'Unzip failed: ' . $unzip_result->get_error_message(),
+				], 500 );
+			}
+		}
+
+		@unlink( $temp_file );
+
+		$maintenance_file = ABSPATH . '.maintenance';
+		if ( file_exists( $maintenance_file ) ) {
+			@unlink( $maintenance_file );
+		}
+
+		$active_plugins = (array) get_option( 'active_plugins', [] );
+		if ( ! in_array( $this->basename, $active_plugins, true ) ) {
+			$active_plugins[] = $this->basename;
+			update_option( 'active_plugins', array_values( array_unique( $active_plugins ) ) );
+		}
+
+		if ( function_exists( 'wp_clean_plugins_cache' ) ) {
+			wp_clean_plugins_cache( false );
+		}
+
+		if ( function_exists( 'opcache_invalidate' ) ) {
+			try {
+				$plugin_full_dir = $plugins_dir . '/' . $this->slug;
+				if ( is_dir( $plugin_full_dir ) ) {
+					$iterator = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $plugin_full_dir ) );
+					foreach ( $iterator as $file ) {
+						if ( $file->isFile() && $file->getExtension() === 'php' ) {
+							@opcache_invalidate( $file->getPathname(), true );
+						}
+					}
+				}
+			} catch ( \Throwable $e ) {}
+		}
+
+		if ( function_exists( 'opcache_reset' ) ) {
+			@opcache_reset();
+		}
+		if ( function_exists( 'wp_cache_flush' ) ) {
+			@wp_cache_flush();
+		}
+		clearstatcache( true );
+
+		if ( has_action( 'litespeed_purge_all' ) || defined( 'LSCWP_V' ) ) {
+			do_action( 'litespeed_purge_all' );
+		}
+
+		delete_transient( 'exacoat_core_remote_version_manifest' );
+		delete_transient( 'artmatter_core_remote_version_manifest' );
+		delete_site_transient( 'update_plugins' );
+		self::$cached_manifest = null;
+
+		return new WP_REST_Response( [
+			'success' => true,
+			'message' => 'Exacoat Core updated to v' . $manifest->version,
+			'version' => $manifest->version,
+		], 200 );
 	}
 
 	/**
