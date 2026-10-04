@@ -23,6 +23,18 @@ export function isGooritaOrder(order?: Order | null): boolean {
 }
 
 /**
+ * Check if the order has an existing booked Goorita AWB
+ */
+export function isOrderGooritaBooked(order?: Order | null): boolean {
+  if (!order) return false;
+  return Boolean(
+    getOrderGooritaAwbUrl(order) ||
+    order.goorita_order_id ||
+    (order.meta_data || []).some((m: any) => (m.key === '_goorita_order_id' || m.key === 'goorita_order_id') && m.value)
+  );
+}
+
+/**
  * Get resolved Goorita AWB URL from order properties or meta_data
  */
 export function getOrderGooritaAwbUrl(order?: Order | null): string | null {
@@ -57,7 +69,6 @@ export async function loadGooritaAwbImage(order: Order): Promise<string | null> 
       const response = await fetch(awbUrl, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
-          Accept: 'application/pdf, */*',
         },
       });
 
@@ -66,6 +77,8 @@ export async function loadGooritaAwbImage(order: Order): Promise<string | null> 
         const dataUrl = await renderPdfFirstPageToImage(arrayBuffer, cacheKey);
         awbImageCache.set(cacheKey, dataUrl);
         return dataUrl;
+      } else {
+        console.warn(`Direct Goorita AWB fetch returned HTTP ${response.status}`);
       }
     } catch (err) {
       console.warn('Direct Goorita AWB fetch failed, attempting proxy fallback:', err);
@@ -81,6 +94,8 @@ export async function loadGooritaAwbImage(order: Order): Promise<string | null> 
       const dataUrl = await renderPdfFirstPageToImage(arrayBuffer, cacheKey);
       awbImageCache.set(cacheKey, dataUrl);
       return dataUrl;
+    } else {
+      console.warn(`Proxy Goorita AWB fetch returned HTTP ${response.status}`);
     }
   } catch (err) {
     console.warn('Proxy Goorita AWB fetch failed:', err);

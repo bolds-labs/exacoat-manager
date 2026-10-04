@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.158",
+  "version": "0.1.159",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.158.zip?v=0.1.158",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.159.zip?v=0.1.159",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-04T21:00:24.242Z",
+  "last_updated": "2026-10-04T21:10:54.425Z",
   "sections": {
-    "changelog": "### Version 0.1.158\n- Add manual Goorita Production booking preview modal with live rates and service selection\n- Permanently disable automated Goorita booking generation in favor of operator confirmation\n- Remove legacy copy form and WhatsApp shortcuts from Goorita dispatch panel\n- Reconnect order #542507 to active Goorita AWB #7089105044"
+    "changelog": "### Version 0.1.159\n- Fix PDF.js worker resolution so Goorita USPS airwaybills render reliably for 2-page thermal printing\n- Distinguish booked orders from pending rendering in thermal label print modal with retry capability\n- Add manual Goorita Production booking preview modal with live rates and service selection\n- Permanently disable automated Goorita booking generation in favor of operator confirmation\n- Remove legacy copy form and WhatsApp shortcuts from Goorita dispatch panel\n- Reconnect order #542507 to active Goorita AWB #7089105044"
   }
 }

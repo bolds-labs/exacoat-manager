@@ -9,7 +9,8 @@ import {
   ChevronRight,
   Layers,
   Plane,
-  Loader2
+  Loader2,
+  RefreshCw
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useToast } from '../../context/ToastContext';
@@ -18,7 +19,7 @@ import { formatSeparatedItemSpecs, cleanItemTitle } from '../../lib/orderItems';
 import { resolveOrderCourier, isStorePickupOrder } from '../../lib/orderUtils';
 import { resolveCountryName } from '../../lib/countries';
 import { formatCleanText } from '../../lib/utils';
-import { isGooritaOrder, loadGooritaAwbImage } from '../../lib/gooritaAwbRenderer';
+import { isGooritaOrder, isOrderGooritaBooked, loadGooritaAwbImage } from '../../lib/gooritaAwbRenderer';
 
 export { isStorePickupOrder };
 
@@ -573,7 +574,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
     if (!isOpen || activeOrdersList.length === 0) return;
 
     const gooritaOrdersToLoad = activeOrdersList.filter(
-      o => isGooritaOrder(o) && !gooritaAwbImages[o.id]
+      o => (isGooritaOrder(o) || isOrderGooritaBooked(o)) && !gooritaAwbImages[o.id]
     );
 
     if (gooritaOrdersToLoad.length === 0) return;
@@ -587,7 +588,8 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
         try {
           const img = await loadGooritaAwbImage(ord);
           return { id: ord.id, img };
-        } catch {
+        } catch (err) {
+          console.error(`Failed loading Goorita AWB for order #${ord.id}:`, err);
           return { id: ord.id, img: null };
         }
       })
@@ -603,6 +605,20 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
 
     return () => { isMounted = false; };
   }, [isOpen, activeOrdersList]);
+
+  const retryLoadAwb = async (ord: Order) => {
+    setLoadingAwbOrderIds(prev => Array.from(new Set([...prev, ord.id])));
+    try {
+      const img = await loadGooritaAwbImage(ord);
+      if (img) {
+        setGooritaAwbImages(prev => ({ ...prev, [ord.id]: img }));
+      }
+    } catch (err) {
+      console.error('Failed retry loading AWB image:', err);
+    } finally {
+      setLoadingAwbOrderIds(prev => prev.filter(id => id !== ord.id));
+    }
+  };
 
   // Reset indices when orders list changes
   useEffect(() => {
@@ -678,6 +694,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
   );
 
   const isCurrentGoorita = isGooritaOrder(activeOrder);
+  const isCurrentGooritaBooked = isOrderGooritaBooked(activeOrder);
   const currentGooritaAwbImage = gooritaAwbImages[activeOrder.id];
   const hasActiveGooritaAwb = Boolean(currentGooritaAwbImage);
   const isCurrentAwbLoading = loadingAwbOrderIds.includes(activeOrder.id);
@@ -914,8 +931,17 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                   </span>
                 ) : isCurrentAwbLoading ? (
                   <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30 flex items-center gap-1">
-                    <Loader2 className="w-2.5 h-2.5 animate-spin" /> Fetching
+                    <Loader2 className="w-2.5 h-2.5 animate-spin" /> Rendering AWB
                   </span>
+                ) : isCurrentGooritaBooked ? (
+                  <button
+                    type="button"
+                    onClick={() => retryLoadAwb(activeOrder)}
+                    className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1 hover:bg-amber-500/30 transition-colors cursor-pointer"
+                  >
+                    <RefreshCw className="w-2.5 h-2.5" />
+                    <span>Retry AWB Image</span>
+                  </button>
                 ) : (
                   <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                     AWB Not Booked
@@ -925,6 +951,10 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
               <p className="text-[11px] text-zinc-300 leading-snug">
                 {hasActiveGooritaAwb
                   ? 'Thermal printing produces 2 pages: Sheet 1 is the official Goorita USPS airwaybill, and Sheet 2 is the Exacoat dispatch packing slip.'
+                  : isCurrentAwbLoading
+                  ? 'Rendering official Goorita USPS airwaybill for 2-page thermal printing...'
+                  : isCurrentGooritaBooked
+                  ? 'AWB is booked, but the airwaybill image is being rendered. Click Retry AWB Image if it does not load.'
                   : 'Order does not have a Goorita AWB yet. Internal dispatch label only will be printed until booked.'}
               </p>
             </div>
