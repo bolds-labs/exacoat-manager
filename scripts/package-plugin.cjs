@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Harden POS Indonesia and TrackingMore delivery detection to strictly reflect courier structured status\n- Eliminate false positive delivered states caused by post office acceptance wording (sudah diterima)\n- Add self-healing order restoration to reset prematurely completed orders back to in-transit shipped status`,
+      changelog: `### Version ${version}\n- Add conditional 2-page thermal printing for Goorita shipments (Sheet 1: USPS AWB, Sheet 2: Exacoat dispatch manifest)\n- Ensure single page packing slip prints for unbooked international orders\n- Guard automated Goorita booking behind exacoat_goorita_auto_booking_enabled filter`,
     },
   };
 
