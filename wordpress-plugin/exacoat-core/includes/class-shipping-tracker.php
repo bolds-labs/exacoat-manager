@@ -219,6 +219,9 @@ class Exacoat_Shipping_Tracker {
 		}
 
 		$tracking_number = trim( $tracking_number );
+		if ( $tracking_number === '⚠️' || str_starts_with( $tracking_number, 'field_' ) || $tracking_number === 'N/A' || $tracking_number === '-' ) {
+			$tracking_number = '';
+		}
 
 		// 2. Resolve Carrier
 		$carrier = '';
@@ -812,8 +815,8 @@ class Exacoat_Shipping_Tracker {
 			return [ 'success' => false, 'message' => 'Domestic shipments (SiCepat/JNE) are tracked via Biteship' ];
 		}
 		$tracking_number = trim( $tracking_number );
-		if ( empty( $tracking_number ) ) {
-			return [ 'success' => false, 'message' => 'Missing tracking number' ];
+		if ( empty( $tracking_number ) || $tracking_number === '⚠️' || str_starts_with( $tracking_number, 'field_' ) || $tracking_number === 'N/A' || $tracking_number === '-' ) {
+			return [ 'success' => false, 'message' => 'Missing or invalid tracking number' ];
 		}
 
 		$api_key = self::get_trackingmore_api_key();

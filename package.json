@@ -52,6 +52,7 @@
     "lucide-react": "^1.31.0",
     "mjml-browser": "^5.4.1",
     "motion": "^13.2.0",
+    "pdfjs-dist": "^6.4.299",
     "pg": "^8.23.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

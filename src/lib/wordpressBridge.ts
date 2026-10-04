@@ -823,6 +823,7 @@ function enrichOrder(order: any): Order {
     };
   } else {
     const trackingKeys = [
+      '_goorita_order_id',
       'tracking_number',
       '_tracking_number',
       '_exacoat_tracking_number',
@@ -866,6 +867,11 @@ function enrichOrder(order: any): Order {
     'Customer'
   );
 
+  const gooritaOrderIdMeta = metaList.find((m: any) => m.key === '_goorita_order_id' || m.key === 'goorita_order_id');
+  const gooritaAwbUrlMeta = metaList.find((m: any) => m.key === '_goorita_awb_url' || m.key === 'goorita_awb_url');
+  const gooritaAwbImageMeta = metaList.find((m: any) => m.key === '_goorita_awb_image' || m.key === 'goorita_awb_image');
+  const gooritaServiceMeta = metaList.find((m: any) => m.key === '_goorita_service' || m.key === 'goorita_service');
+
   return {
     ...order,
     order_number: cleanOrderNumber,
@@ -880,6 +886,10 @@ function enrichOrder(order: any): Order {
     shipping_district: districtMeta?.value ? String(districtMeta.value) : (order.shipping_district || undefined),
     shipping_subdistrict: subdistrictMeta?.value ? String(subdistrictMeta.value) : (order.shipping_subdistrict || undefined),
     formatted_phone: phoneMeta?.value ? String(phoneMeta.value) : (order.formatted_phone || undefined),
+    goorita_order_id: gooritaOrderIdMeta?.value ? String(gooritaOrderIdMeta.value) : order.goorita_order_id,
+    goorita_awb_url: gooritaAwbUrlMeta?.value ? String(gooritaAwbUrlMeta.value) : order.goorita_awb_url,
+    goorita_awb_image: gooritaAwbImageMeta?.value ? String(gooritaAwbImageMeta.value) : order.goorita_awb_image,
+    goorita_service: gooritaServiceMeta?.value ? String(gooritaServiceMeta.value) : order.goorita_service,
   };
 }
 
@@ -9991,5 +10001,54 @@ export async function trackRayspeedAwbDirect(awb: string): Promise<{
     return { success: false, error: err?.message || 'Network error fetching Rayspeed tracking' };
   }
 }
+
+export async function createGooritaAwbDirect(
+  orderId: number | string,
+  options: { force_rebook?: boolean; environment?: string } = {}
+): Promise<{
+  success: boolean;
+  order_id?: string;
+  tracking_number?: string;
+  awb_url?: string;
+  awb_image?: string;
+  service?: string;
+  environment?: string;
+  message?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const wcCreds = getWcCredentials();
+  const query = new URLSearchParams({
+    consumer_key: wcCreds.key || '',
+    consumer_secret: wcCreds.secret || '',
+  }).toString();
+
+  try {
+    const res = await authenticatedFetch(`${base}/wp-json/exacoat-core/v1/shipping/goorita/create-awb?${query}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ order_id: Number(orderId), ...options }),
+    });
+    const data = await res.json();
+    return data;
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Network error creating Goorita AWB' };
+  }
+}
+
+export function getGooritaAwbDocumentUrl(orderId: number | string): string {
+  const base = getWordPressBaseUrl();
+  const wcCreds = getWcCredentials();
+  const query = new URLSearchParams({
+    order_id: String(orderId),
+    consumer_key: wcCreds.key || '',
+    consumer_secret: wcCreds.secret || '',
+  }).toString();
+  return `${base}/wp-json/exacoat-core/v1/shipping/goorita/awb-document?${query}`;
+}
+
 
 

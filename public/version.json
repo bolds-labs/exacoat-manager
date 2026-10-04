@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.155",
+  "version": "0.1.156",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.155.zip?v=0.1.155",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.156.zip?v=0.1.156",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-02T22:03:57.346Z",
+  "last_updated": "2026-10-04T20:37:18.480Z",
   "sections": {
-    "changelog": "### Version 0.1.155\n- Harden POS Indonesia and TrackingMore delivery detection to strictly reflect courier structured status\n- Eliminate false positive delivered states caused by post office acceptance wording (sudah diterima)\n- Add self-healing order restoration to reset prematurely completed orders back to in-transit shipped status"
+    "changelog": "### Version 0.1.156\n- Harden POS Indonesia and TrackingMore delivery detection to strictly reflect courier structured status\n- Eliminate false positive delivered states caused by post office acceptance wording (sudah diterima)\n- Add self-healing order restoration to reset prematurely completed orders back to in-transit shipped status"
   }
 }

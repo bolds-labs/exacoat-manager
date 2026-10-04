@@ -7,7 +7,9 @@ import {
   ShieldAlert,
   ChevronLeft,
   ChevronRight,
-  Layers
+  Layers,
+  Plane,
+  Loader2
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useToast } from '../../context/ToastContext';
@@ -16,6 +18,7 @@ import { formatSeparatedItemSpecs, cleanItemTitle } from '../../lib/orderItems';
 import { resolveOrderCourier, isStorePickupOrder } from '../../lib/orderUtils';
 import { resolveCountryName } from '../../lib/countries';
 import { formatCleanText } from '../../lib/utils';
+import { isGooritaOrder, loadGooritaAwbImage } from '../../lib/gooritaAwbRenderer';
 
 export { isStorePickupOrder };
 
@@ -147,6 +150,16 @@ interface LabelPageConfig {
   handlingNote: string;
   isLastPageOfDoc: boolean;
   totalUnitsCount: number;
+  isGooritaWithAwb?: boolean;
+}
+
+function renderGooritaAwbPageHtml(imageBase64: string, isLastPageOfDoc: boolean): string {
+  const pageBreakClass = isLastPageOfDoc ? '' : 'page-break';
+  return `
+    <div class="label-container ${pageBreakClass}" style="padding: 0; margin: 0; width: 4in; height: 6in; display: flex; align-items: center; justify-content: center; background: #ffffff; box-sizing: border-box; overflow: hidden;">
+      <img src="${imageBase64}" alt="Goorita USPS Airwaybill" style="width: 100%; height: 100%; object-fit: contain; display: block;" />
+    </div>
+  `;
 }
 
 function renderSinglePageHtml(
@@ -245,7 +258,7 @@ function renderSinglePageHtml(
               <img src="${EXACOAT_LOGO_BASE64}" alt="EXACOAT" style="height: 19px; max-width: 140px; object-fit: contain; display: block;" />
             </div>
             <div style="text-align: right; display: flex; align-items: center; gap: 6px;">
-              ${totalPages > 1 ? `<span style="font-size: 10px; font-weight: 900; border: 1.5px solid #000; padding: 1px 5px; border-radius: 2px; font-variant-numeric: tabular-nums;">1/${totalPages}</span>` : ''}
+              ${config.isGooritaWithAwb ? `<span style="font-size: 10px; font-weight: 900; border: 1.5px solid #000; padding: 1px 5px; border-radius: 2px; font-variant-numeric: tabular-nums;">2/${totalPages + 1}</span>` : (totalPages > 1 ? `<span style="font-size: 10px; font-weight: 900; border: 1.5px solid #000; padding: 1px 5px; border-radius: 2px; font-variant-numeric: tabular-nums;">1/${totalPages}</span>` : '')}
               <span style="font-size: 13.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">
                 ${isPickup ? 'STORE PICKUP (SMB)' : cCourier.toUpperCase()}
               </span>
@@ -318,7 +331,7 @@ function renderSinglePageHtml(
             <span style="font-size: 11px; font-weight: 900; font-variant-numeric: tabular-nums;">ORDER REF #${cOrderNum}</span>
           </div>
           <div style="text-align: right; display: flex; align-items: center; gap: 6px;">
-            <span style="font-size: 10px; font-weight: 900; border: 1.5px solid #000; padding: 1px 5px; border-radius: 2px; font-variant-numeric: tabular-nums;">${pageIdx + 1}/${totalPages}</span>
+            <span style="font-size: 10px; font-weight: 900; border: 1.5px solid #000; padding: 1px 5px; border-radius: 2px; font-variant-numeric: tabular-nums;">${config.isGooritaWithAwb ? `${pageIdx + 2}/${totalPages + 1}` : `${pageIdx + 1}/${totalPages}`}</span>
             <span style="font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${isPickup ? 'STORE PICKUP' : cCourier.toUpperCase()}</span>
           </div>
         </div>
@@ -551,6 +564,46 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
   // Active current order
   const activeOrder = activeOrdersList[currentIndex] || activeOrdersList[0] || null;
 
+  // Goorita AWB rendered images map and loading tracker
+  const [gooritaAwbImages, setGooritaAwbImages] = useState<Record<number, string>>({});
+  const [loadingAwbOrderIds, setLoadingAwbOrderIds] = useState<number[]>([]);
+
+  // Fetch Goorita AWB images for all Goorita orders in the active list
+  useEffect(() => {
+    if (!isOpen || activeOrdersList.length === 0) return;
+
+    const gooritaOrdersToLoad = activeOrdersList.filter(
+      o => isGooritaOrder(o) && !gooritaAwbImages[o.id]
+    );
+
+    if (gooritaOrdersToLoad.length === 0) return;
+
+    const targetIds = gooritaOrdersToLoad.map(o => o.id);
+    setLoadingAwbOrderIds(prev => Array.from(new Set([...prev, ...targetIds])));
+
+    let isMounted = true;
+    Promise.all(
+      gooritaOrdersToLoad.map(async ord => {
+        try {
+          const img = await loadGooritaAwbImage(ord);
+          return { id: ord.id, img };
+        } catch {
+          return { id: ord.id, img: null };
+        }
+      })
+    ).then(results => {
+      if (!isMounted) return;
+      const updates: Record<number, string> = {};
+      results.forEach(r => {
+        if (r.img) updates[r.id] = r.img;
+      });
+      setGooritaAwbImages(prev => ({ ...prev, ...updates }));
+      setLoadingAwbOrderIds(prev => prev.filter(id => !targetIds.includes(id)));
+    });
+
+    return () => { isMounted = false; };
+  }, [isOpen, activeOrdersList]);
+
   // Reset indices when orders list changes
   useEffect(() => {
     setCurrentIndex(0);
@@ -624,20 +677,39 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
     Boolean(trackingNo)
   );
 
-  const safePreviewPageIndex = Math.min(previewPageIndex, Math.max(0, activeTotalPages - 1));
+  const isCurrentGoorita = isGooritaOrder(activeOrder);
+  const currentGooritaAwbImage = gooritaAwbImages[activeOrder.id];
+  const hasActiveGooritaAwb = Boolean(currentGooritaAwbImage);
+  const isCurrentAwbLoading = loadingAwbOrderIds.includes(activeOrder.id);
+
+  // If order has Goorita AWB: Sheet 1 is USPS AWB, Sheet 2+ is Exacoat packing manifest
+  const totalSheetsForOrder = hasActiveGooritaAwb ? 1 + activeTotalPages : activeTotalPages;
+  const safePreviewPageIndex = Math.min(previewPageIndex, Math.max(0, totalSheetsForOrder - 1));
   const activeUnitsCount = activeOrder.item_count || activeOrderItems.reduce((acc: number, it: any) => acc + (it.quantity || 1), 0);
 
-  const previewPageItems = activePages[safePreviewPageIndex] || [];
-  const previewHtml = generateDocumentHtml(
-    renderSinglePageHtml(activeOrder, previewPageItems, safePreviewPageIndex, activeTotalPages, {
-      courierName,
-      trackingNo,
-      handlingNote,
-      isLastPageOfDoc: true,
-      totalUnitsCount: activeUnitsCount,
-    }),
-    { autoPrint: false }
-  );
+  let previewHtml = '';
+  if (hasActiveGooritaAwb && safePreviewPageIndex === 0) {
+    // Sheet 1: Official Goorita USPS AWB
+    previewHtml = generateDocumentHtml(
+      renderGooritaAwbPageHtml(currentGooritaAwbImage, true),
+      { autoPrint: false }
+    );
+  } else {
+    // Exacoat Dispatch Manifest Sheet
+    const exacoatPageIdx = hasActiveGooritaAwb ? safePreviewPageIndex - 1 : safePreviewPageIndex;
+    const previewPageItems = activePages[exacoatPageIdx] || [];
+    previewHtml = generateDocumentHtml(
+      renderSinglePageHtml(activeOrder, previewPageItems, exacoatPageIdx, activeTotalPages, {
+        courierName,
+        trackingNo,
+        handlingNote,
+        isLastPageOfDoc: true,
+        totalUnitsCount: activeUnitsCount,
+        isGooritaWithAwb: hasActiveGooritaAwb,
+      }),
+      { autoPrint: false }
+    );
+  }
 
   const handlePrint = () => {
     const printedIds = activeOrdersList.map(o => o.id).filter(Boolean);
@@ -684,17 +756,33 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
       const { pages, totalPages } = chunkOrderItems(ordItems, rAddrLines.length, Boolean(cTrack));
       const totalUnitsCount = ord.item_count || ordItems.reduce((acc: number, it: any) => acc + (it.quantity || 1), 0);
 
-      return pages.map((pageItems, pageIdx) => {
+      const ordAwbImg = gooritaAwbImages[ord.id];
+      const ordHasAwb = Boolean(ordAwbImg);
+      const isLastOrderInBatch = ordIdx === activeOrdersList.length - 1;
+
+      let orderSheetsHtml = '';
+
+      // Sheet 1 for Goorita: Official USPS AWB
+      if (ordHasAwb) {
+        orderSheetsHtml += renderGooritaAwbPageHtml(ordAwbImg, false);
+      }
+
+      // Subsequent sheet(s): Exacoat Dispatch Manifest
+      const exacoatSheets = pages.map((pageItems, pageIdx) => {
         const isLastSheetOfOrder = pageIdx === pages.length - 1;
-        const isAbsoluteLastSheet = (ordIdx === activeOrdersList.length - 1) && isLastSheetOfOrder;
+        const isAbsoluteLastSheet = isLastOrderInBatch && isLastSheetOfOrder;
         return renderSinglePageHtml(ord, pageItems, pageIdx, totalPages, {
           courierName: cCourier,
           trackingNo: cTrack,
           handlingNote: isCurrentActiveOrder ? handlingNote : 'FRAGILE • DO NOT BEND • KEEP DRY',
           isLastPageOfDoc: isAbsoluteLastSheet,
           totalUnitsCount,
+          isGooritaWithAwb: ordHasAwb,
         });
       }).join('');
+
+      orderSheetsHtml += exacoatSheets;
+      return orderSheetsHtml;
     }).join('');
 
     const fullPrintHtml = generateDocumentHtml(allLabelsHtml, { autoPrint: true });
@@ -718,11 +806,19 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
           <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/20">
             4&times;6" Thermal
           </span>
+          {hasActiveGooritaAwb && (
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20 flex items-center gap-1">
+              <Plane className="w-3 h-3" />
+              2-Page (USPS AWB + Internal Slip)
+            </span>
+          )}
         </div>
       }
       subtitle={
         activeOrdersList.length > 1
           ? `Batch printing ${activeOrdersList.length} shipping labels formatted for 4×6" thermal printers.`
+          : hasActiveGooritaAwb
+          ? 'Goorita international shipment: Prints Sheet 1 (USPS Airwaybill) and Sheet 2 (Exacoat Manifest).'
           : 'Courier dispatch label formatted for 4×6 inch thermal printers or A6 sheet printers.'
       }
       footer={
@@ -746,7 +842,11 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
             >
               <Printer className="w-4 h-4" />
               <span>
-                {activeOrdersList.length > 1 ? `Print All (${activeOrdersList.length}) Labels` : 'Print 4×6 Label'}
+                {activeOrdersList.length > 1
+                  ? `Print All (${activeOrdersList.length}) Labels`
+                  : hasActiveGooritaAwb
+                  ? 'Print 2-Page Thermal Label'
+                  : 'Print 4×6 Label'}
               </span>
             </button>
           </div>
@@ -798,6 +898,35 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                 <span className="font-mono font-bold text-white">#{cleanOrderNum}</span>
                 <span className="text-neutral-400 truncate max-w-[150px]">{recipientName}</span>
               </div>
+            </div>
+          )}
+
+          {isCurrentGoorita && (
+            <div className="p-3 rounded-xl bg-sky-950/30 border border-sky-500/25 space-y-1.5 font-sans">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-sky-300 font-bold text-[11px] uppercase tracking-wider">
+                  <Plane className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Goorita USA Dispatch</span>
+                </div>
+                {hasActiveGooritaAwb ? (
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    2-Page Ready
+                  </span>
+                ) : isCurrentAwbLoading ? (
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30 flex items-center gap-1">
+                    <Loader2 className="w-2.5 h-2.5 animate-spin" /> Fetching
+                  </span>
+                ) : (
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    AWB Not Booked
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-zinc-300 leading-snug">
+                {hasActiveGooritaAwb
+                  ? 'Thermal printing produces 2 pages: Sheet 1 is the official Goorita USPS airwaybill, and Sheet 2 is the Exacoat dispatch packing slip.'
+                  : 'Order does not have a Goorita AWB yet. Internal dispatch label only will be printed until booked.'}
+              </p>
             </div>
           )}
 
@@ -869,7 +998,43 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
               <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 font-sans">
                 Print Preview {activeOrdersList.length > 1 ? `(${currentIndex + 1} of ${activeOrdersList.length})` : '(4×6" Thermal)'}
               </span>
-              {activeTotalPages > 1 && (
+              {hasActiveGooritaAwb ? (
+                <div className="flex items-center gap-1.5 ml-2">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewPageIndex(0)}
+                    className={clsx(
+                      "px-2.5 py-0.5 rounded text-[10px] font-sans font-bold flex items-center gap-1 transition-all cursor-pointer",
+                      safePreviewPageIndex === 0
+                        ? "bg-sky-500 text-zinc-950 shadow-sm"
+                        : "bg-white/[0.06] hover:bg-white/[0.12] text-neutral-300"
+                    )}
+                  >
+                    <Plane className="w-3 h-3" />
+                    <span>Sheet 1: USPS AWB</span>
+                  </button>
+                  {activePages.map((_, pIdx) => (
+                    <button
+                      key={pIdx}
+                      type="button"
+                      onClick={() => setPreviewPageIndex(pIdx + 1)}
+                      className={clsx(
+                        "px-2.5 py-0.5 rounded text-[10px] font-sans font-bold transition-all cursor-pointer",
+                        safePreviewPageIndex === pIdx + 1
+                          ? "bg-[#f3aa18] text-zinc-950 shadow-sm"
+                          : "bg-white/[0.06] hover:bg-white/[0.12] text-neutral-300"
+                      )}
+                    >
+                      <span>Sheet {pIdx + 2}: Packing Slip{activeTotalPages > 1 ? ` (${pIdx + 1}/${activeTotalPages})` : ''}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : isCurrentAwbLoading ? (
+                <div className="flex items-center gap-1.5 text-sky-400 font-mono text-[10px] ml-2">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>Loading Goorita AWB...</span>
+                </div>
+              ) : activeTotalPages > 1 ? (
                 <div className="flex items-center gap-1 ml-2">
                   {activePages.map((_, pIdx) => (
                     <button
@@ -887,7 +1052,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                     </button>
                   ))}
                 </div>
-              )}
+              ) : null}
             </div>
             <span className="text-[10px] font-mono text-neutral-500">
               100mm &times; 150mm &bull; 1:1 Thermal Output
@@ -906,7 +1071,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
               className="shadow-2xl rounded-sm overflow-hidden bg-white border border-neutral-300 dark:border-neutral-700 shrink-0"
             >
               <iframe
-                key={`${activeOrder.id}-${safePreviewPageIndex}-${courierName}-${trackingNo}-${handlingNote}-${activeOrderItems.length}`}
+                key={`${activeOrder.id}-${hasActiveGooritaAwb ? 'awb-' : ''}${safePreviewPageIndex}-${courierName}-${trackingNo}-${handlingNote}-${activeOrderItems.length}`}
                 title="4x6 Thermal Label Print Preview"
                 srcDoc={previewHtml}
                 className="w-[384px] h-[576px] border-none block pointer-events-none select-none bg-white"

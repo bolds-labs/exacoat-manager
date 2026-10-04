@@ -665,17 +665,45 @@ class Exacoat_Tracking_Pool {
 					return true;
 				}
 			}
-		} elseif ( in_array( $carrier, [ 'pos', 'goorita' ], true ) ) {
-			// Manual couriers: flag with warning symbol if tracking number is empty
-			if ( empty( $current_tracking ) ) {
-				$order->update_meta_data( 'carrier_id', $carrier );
-				$order->update_meta_data( 'tracking_number', '⚠️' );
-				$order->save();
+		} elseif ( 'goorita' === $carrier ) {
+			// Goorita US shipments: assign carrier metadata and delegate to Exacoat_Goorita_Service
+			$order->update_meta_data( 'carrier_id', 'goorita' );
+			$order->update_meta_data( '_carrier_id', 'goorita' );
+			update_post_meta( $order_id, 'carrier_id', 'goorita' );
+			update_post_meta( $order_id, '_carrier_id', 'goorita' );
 
-				update_post_meta( $order_id, 'carrier_id', $carrier );
-				update_post_meta( $order_id, 'tracking_number', '⚠️' );
-				return true;
+			// Clear legacy warning symbol if present
+			if ( $order->get_meta( 'tracking_number' ) === '⚠️' || get_post_meta( $order_id, 'tracking_number', true ) === '⚠️' ) {
+				$order->delete_meta_data( 'tracking_number' );
+				$order->delete_meta_data( '_tracking_number' );
+				$order->delete_meta_data( '_exacoat_tracking_number' );
+				delete_post_meta( $order_id, 'tracking_number' );
+				delete_post_meta( $order_id, '_tracking_number' );
+				delete_post_meta( $order_id, '_exacoat_tracking_number' );
 			}
+			$order->save();
+
+			if ( class_exists( 'Exacoat_Goorita_Service' ) ) {
+				Exacoat_Goorita_Service::handle_auto_booking( $order_id, $order );
+			}
+			return true;
+		} elseif ( 'pos' === $carrier ) {
+			// POS Indonesia manual courier: ensure carrier metadata is set without corrupting tracking number
+			$order->update_meta_data( 'carrier_id', 'pos' );
+			$order->update_meta_data( '_carrier_id', 'pos' );
+			if ( $order->get_meta( 'tracking_number' ) === '⚠️' || get_post_meta( $order_id, 'tracking_number', true ) === '⚠️' ) {
+				$order->delete_meta_data( 'tracking_number' );
+				$order->delete_meta_data( '_tracking_number' );
+				$order->delete_meta_data( '_exacoat_tracking_number' );
+				delete_post_meta( $order_id, 'tracking_number' );
+				delete_post_meta( $order_id, '_tracking_number' );
+				delete_post_meta( $order_id, '_exacoat_tracking_number' );
+			}
+			$order->save();
+
+			update_post_meta( $order_id, 'carrier_id', 'pos' );
+			update_post_meta( $order_id, '_carrier_id', 'pos' );
+			return true;
 		}
 
 		return false;

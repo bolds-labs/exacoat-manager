@@ -291,6 +291,10 @@ export interface Order {
   shipping_lines?: Array<{ id?: any; method_id?: string; method_title?: string; total?: string }>;
   meta_data?: Array<{ id?: number; key: string; value: any }>;
   rma?: OrderRmaDetails | null;
+  goorita_order_id?: string;
+  goorita_awb_url?: string;
+  goorita_awb_image?: string;
+  goorita_service?: string;
 }
 
 export interface OrderRmaDetails {

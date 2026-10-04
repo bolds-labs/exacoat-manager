@@ -64,6 +64,7 @@ import { isStorePickupOrder, toggleLocalStorePickupOrder, resolveOrderCourier, g
 import { resolveCountryName } from '../../lib/countries';
 import { getWpBaseUrl } from '../../lib/wordpressBridge';
 import { formatGooritaShipmentText, openGooritaWhatsApp } from '../../lib/exportManager';
+import { downloadGooritaAwbPdf } from '../../lib/gooritaService';
 import { 
   updateOrderStatusDirect, 
   cancelOrderDirect,
@@ -78,7 +79,8 @@ import {
   processGuaranteeActionDirect,
   assignTrackingNumberFromPool,
   resendOrderEmail,
-  createRayspeedAwbDirect
+  createRayspeedAwbDirect,
+  createGooritaAwbDirect
 } from '../../lib/wordpressBridge';
 import { ShippingLabelA6Modal } from './ShippingLabelA6Modal';
 import { CustomerInvoiceModal } from './CustomerInvoiceModal';
@@ -297,6 +299,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   );
 
   const [isBookingRayspeed, setIsBookingRayspeed] = useState(false);
+  const [isBookingGoorita, setIsBookingGoorita] = useState(false);
 
   const handleBookRayspeed = async () => {
     if (!order) return;
@@ -315,6 +318,27 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
       showToast('error', 'Rayspeed Error', err.message || 'Error communicating with Rayspeed API');
     } finally {
       setIsBookingRayspeed(false);
+    }
+  };
+
+  const handleBookGoorita = async (forceRebook = false) => {
+    if (!order) return;
+    setIsBookingGoorita(true);
+    try {
+      const res = await createGooritaAwbDirect(order.id, { force_rebook: forceRebook });
+      if (res.success && (res.order_id || res.tracking_number)) {
+        const trackingCode = res.order_id || res.tracking_number || '';
+        showToast('success', 'Goorita AWB Booked', `Airwaybill ${trackingCode} booked with Goorita Send.`);
+        setTrackingNumber(trackingCode);
+        setCourier('goorita');
+        if (onOrderUpdated) onOrderUpdated();
+      } else {
+        showToast('error', 'Goorita Booking Failed', res.error || res.message || 'Failed to book Goorita shipment');
+      }
+    } catch (err: any) {
+      showToast('error', 'Goorita Error', err.message || 'Error communicating with Goorita API');
+    } finally {
+      setIsBookingGoorita(false);
     }
   };
 
@@ -1775,71 +1799,130 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
           </form>
 
           {/* Goorita US Shipment Quick Actions (US Orders & Goorita Courier) */}
-          {isUsOrder && (
-            <div className="p-4 rounded-xl bg-sky-950/20 border border-sky-500/25 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Plane className="w-4 h-4 text-sky-400" />
-                  <span className="text-xs font-bold text-white font-sans uppercase tracking-wider">
-                    Goorita US Shipment
-                  </span>
-                  <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                    US Destination
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowGooritaPreview(!showGooritaPreview)}
-                  className="text-[11px] text-sky-400 hover:text-sky-300 font-mono transition-colors cursor-pointer"
-                >
-                  {showGooritaPreview ? 'Hide Form Text' : 'View Form Text'}
-                </button>
-              </div>
+          {isUsOrder && (() => {
+            const gooritaOrderId = order.goorita_order_id || (courier === 'goorita' ? trackingNumber : null) || (order.meta_data || []).find((m: any) => m.key === '_goorita_order_id')?.value;
+            const gooritaAwbUrl = order.goorita_awb_url || (order.meta_data || []).find((m: any) => m.key === '_goorita_awb_url' || m.key === 'goorita_awb_url')?.value;
+            const gooritaService = order.goorita_service || 'Saver (USPS)';
+            const isBooked = Boolean(gooritaOrderId || (courier === 'goorita' && trackingNumber));
 
-              {showGooritaPreview && (
-                <pre className="p-3 rounded-lg bg-zinc-950 border border-white/10 text-[11px] font-mono text-zinc-300 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto select-all">
-                  {formatGooritaShipmentText(order)}
-                </pre>
-              )}
-
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={handleCopyGooritaText}
-                  className={clsx(
-                    "px-3.5 py-2 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm cursor-pointer",
-                    isGooritaCopied
-                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                      : "bg-white/[0.08] hover:bg-white/[0.14] text-white border border-white/[0.1]"
-                  )}
-                >
-                  {isGooritaCopied ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Copied to Clipboard</span>
-                    </>
+            return (
+              <div className="p-4 rounded-xl bg-sky-950/20 border border-sky-500/25 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Plane className="w-4 h-4 text-sky-400" />
+                    <span className="text-xs font-bold text-white font-sans uppercase tracking-wider">
+                      Goorita US Shipment
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                      {order.shipping?.state ? `${order.shipping.state}, USA` : 'US Destination'}
+                    </span>
+                    {isBooked && (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">
+                        {gooritaService}
+                      </span>
+                    )}
+                  </div>
+                  {gooritaOrderId ? (
+                    <span className="text-[11px] font-mono font-bold text-sky-400">
+                      #{gooritaOrderId}
+                    </span>
                   ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copy Goorita Shipment</span>
-                    </>
+                    <button
+                      type="button"
+                      onClick={() => setShowGooritaPreview(!showGooritaPreview)}
+                      className="text-[11px] text-sky-400 hover:text-sky-300 font-mono transition-colors cursor-pointer"
+                    >
+                      {showGooritaPreview ? 'Hide Form Text' : 'View Form Text'}
+                    </button>
                   )}
-                </button>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    openGooritaWhatsApp(order);
-                    showToast('success', 'WhatsApp Launched', 'Opened WhatsApp chat with pre-filled Goorita shipment form.');
-                  }}
-                  className="px-3.5 py-2 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-zinc-950 text-xs font-bold font-sans flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                >
-                  <MessageSquare className="w-3.5 h-3.5 text-zinc-950" />
-                  <span>Send WhatsApp</span>
-                </button>
+                {showGooritaPreview && (
+                  <pre className="p-3 rounded-lg bg-zinc-950 border border-white/10 text-[11px] font-mono text-zinc-300 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto select-all">
+                    {formatGooritaShipmentText(order)}
+                  </pre>
+                )}
+
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleBookGoorita(isBooked)}
+                    disabled={isBookingGoorita}
+                    className={clsx(
+                      "px-3.5 py-2 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50",
+                      isBooked
+                        ? "bg-white/[0.08] hover:bg-white/[0.14] text-white border border-white/[0.1]"
+                        : "bg-sky-500 hover:bg-sky-400 text-zinc-950"
+                    )}
+                  >
+                    <Send className={clsx("w-3.5 h-3.5", isBookingGoorita && "animate-spin")} />
+                    <span>
+                      {isBookingGoorita
+                        ? 'Booking Goorita AWB...'
+                        : isBooked
+                        ? 'Re-generate Goorita AWB'
+                        : 'Book Goorita Production AWB'}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsLabelModalOpen(true)}
+                    className="px-3.5 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#d9940c] text-zinc-950 text-xs font-bold font-sans flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>{isBooked ? 'Print 2-Page A6 Label' : 'Print A6 Thermal Label'}</span>
+                  </button>
+
+                  {gooritaAwbUrl && (
+                    <button
+                      type="button"
+                      onClick={() => downloadGooritaAwbPdf(gooritaAwbUrl)}
+                      className="px-3.5 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-white text-xs font-bold font-sans flex items-center gap-1.5 border border-white/[0.1] transition-all cursor-pointer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-sky-400" />
+                      <span>View Official AWB PDF</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleCopyGooritaText}
+                    className={clsx(
+                      "px-3.5 py-2 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm cursor-pointer",
+                      isGooritaCopied
+                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                        : "bg-white/[0.08] hover:bg-white/[0.14] text-white border border-white/[0.1]"
+                    )}
+                  >
+                    {isGooritaCopied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy Form</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      openGooritaWhatsApp(order);
+                      showToast('success', 'WhatsApp Launched', 'Opened WhatsApp chat with pre-filled Goorita shipment form.');
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-zinc-950 text-xs font-bold font-sans flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-zinc-950" />
+                    <span>WhatsApp</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {isRayspeedOrder && (
             <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 space-y-3">
