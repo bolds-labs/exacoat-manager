@@ -683,9 +683,6 @@ class Exacoat_Tracking_Pool {
 			}
 			$order->save();
 
-			if ( class_exists( 'Exacoat_Goorita_Service' ) ) {
-				Exacoat_Goorita_Service::handle_auto_booking( $order_id, $order );
-			}
 			return true;
 		} elseif ( 'pos' === $carrier ) {
 			// POS Indonesia manual courier: ensure carrier metadata is set without corrupting tracking number

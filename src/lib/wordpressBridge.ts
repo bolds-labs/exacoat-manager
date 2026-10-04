@@ -10004,7 +10004,7 @@ export async function trackRayspeedAwbDirect(awb: string): Promise<{
 
 export async function createGooritaAwbDirect(
   orderId: number | string,
-  options: { force_rebook?: boolean; environment?: string } = {}
+  options: { force_rebook?: boolean; environment?: string; package_id?: string } = {}
 ): Promise<{
   success: boolean;
   order_id?: string;
@@ -10036,6 +10036,59 @@ export async function createGooritaAwbDirect(
     return data;
   } catch (err: any) {
     return { success: false, error: err?.message || 'Network error creating Goorita AWB' };
+  }
+}
+
+export async function getGooritaOrderRatesDirect(
+  orderId: number | string,
+  environment?: string
+): Promise<{
+  success: boolean;
+  order_id?: number;
+  recipient?: {
+    name: string;
+    address: string;
+    city: string;
+    state: string;
+    postcode: string;
+    country: string;
+    phone: string;
+  };
+  calculation?: {
+    weight_kg: number;
+    dimensions: { length: number; width: number; height: number };
+    item_type: string;
+    declared_value_usd: number;
+    skin_count: number;
+    laptop_count: number;
+  };
+  packages?: Array<{
+    id: string;
+    name: string;
+    price: { raw: number; format: string };
+    basic_rate?: { raw: number; format: string };
+    surcharges?: Array<{ key?: string; description: string; amount: number | string }>;
+    delivery_time?: { raw?: number; format: string };
+    pickup_time?: { raw?: number; format: string };
+  }>;
+  environment?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const wcCreds = getWcCredentials();
+  const query = new URLSearchParams({
+    order_id: String(orderId),
+    consumer_key: wcCreds.key || '',
+    consumer_secret: wcCreds.secret || '',
+    ...(environment ? { environment } : {}),
+  }).toString();
+
+  try {
+    const res = await authenticatedFetch(`${base}/wp-json/exacoat-core/v1/shipping/goorita/order-rates?${query}`);
+    const data = await res.json();
+    return data;
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed fetching Goorita rates' };
   }
 }
 

@@ -63,7 +63,7 @@ import { extractItemSpecs } from '../../lib/orderItems';
 import { isStorePickupOrder, toggleLocalStorePickupOrder, resolveOrderCourier, getOrderCourierDisplay, formatOrderNumber, cleanOrderNumber } from '../../lib/orderUtils';
 import { resolveCountryName } from '../../lib/countries';
 import { getWpBaseUrl } from '../../lib/wordpressBridge';
-import { formatGooritaShipmentText, openGooritaWhatsApp } from '../../lib/exportManager';
+import { GooritaBookingModal } from './GooritaBookingModal';
 import { downloadGooritaAwbPdf } from '../../lib/gooritaService';
 import { 
   updateOrderStatusDirect, 
@@ -228,8 +228,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   const [previewReviewMedia, setPreviewReviewMedia] = useState<OrderReviewMedia | null>(null);
 
   // Goorita US Shipment Quick Actions State
-  const [isGooritaCopied, setIsGooritaCopied] = useState(false);
-  const [showGooritaPreview, setShowGooritaPreview] = useState(false);
+  const [isGooritaBookingModalOpen, setIsGooritaBookingModalOpen] = useState(false);
 
   // Track Order timeline modal state
   const [isTrackOrderModalOpen, setIsTrackOrderModalOpen] = useState(false);
@@ -299,7 +298,6 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   );
 
   const [isBookingRayspeed, setIsBookingRayspeed] = useState(false);
-  const [isBookingGoorita, setIsBookingGoorita] = useState(false);
 
   const handleBookRayspeed = async () => {
     if (!order) return;
@@ -319,37 +317,6 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
     } finally {
       setIsBookingRayspeed(false);
     }
-  };
-
-  const handleBookGoorita = async (forceRebook = false) => {
-    if (!order) return;
-    setIsBookingGoorita(true);
-    try {
-      const res = await createGooritaAwbDirect(order.id, { force_rebook: forceRebook });
-      if (res.success && (res.order_id || res.tracking_number)) {
-        const trackingCode = res.order_id || res.tracking_number || '';
-        showToast('success', 'Goorita AWB Booked', `Airwaybill ${trackingCode} booked with Goorita Send.`);
-        setTrackingNumber(trackingCode);
-        setCourier('goorita');
-        if (onOrderUpdated) onOrderUpdated();
-      } else {
-        showToast('error', 'Goorita Booking Failed', res.error || res.message || 'Failed to book Goorita shipment');
-      }
-    } catch (err: any) {
-      showToast('error', 'Goorita Error', err.message || 'Error communicating with Goorita API');
-    } finally {
-      setIsBookingGoorita(false);
-    }
-  };
-
-  const handleCopyGooritaText = () => {
-    if (!order) return;
-    const text = formatGooritaShipmentText(order);
-    navigator.clipboard.writeText(text).then(() => {
-      setIsGooritaCopied(true);
-      showToast('success', 'Shipment Copied', 'Goorita shipment form copied to clipboard.');
-      setTimeout(() => setIsGooritaCopied(false), 2500);
-    });
   };
 
   // Sync tracking form, reviews and notes when order changes
@@ -1822,44 +1789,27 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                       </span>
                     )}
                   </div>
-                  {gooritaOrderId ? (
+                  {gooritaOrderId && (
                     <span className="text-[11px] font-mono font-bold text-sky-400">
                       #{gooritaOrderId}
                     </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setShowGooritaPreview(!showGooritaPreview)}
-                      className="text-[11px] text-sky-400 hover:text-sky-300 font-mono transition-colors cursor-pointer"
-                    >
-                      {showGooritaPreview ? 'Hide Form Text' : 'View Form Text'}
-                    </button>
                   )}
                 </div>
-
-                {showGooritaPreview && (
-                  <pre className="p-3 rounded-lg bg-zinc-950 border border-white/10 text-[11px] font-mono text-zinc-300 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto select-all">
-                    {formatGooritaShipmentText(order)}
-                  </pre>
-                )}
 
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={() => handleBookGoorita(isBooked)}
-                    disabled={isBookingGoorita}
+                    onClick={() => setIsGooritaBookingModalOpen(true)}
                     className={clsx(
-                      "px-3.5 py-2 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50",
+                      "px-3.5 py-2 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 shadow-sm transition-all cursor-pointer",
                       isBooked
                         ? "bg-white/[0.08] hover:bg-white/[0.14] text-white border border-white/[0.1]"
                         : "bg-sky-500 hover:bg-sky-400 text-zinc-950"
                     )}
                   >
-                    <Send className={clsx("w-3.5 h-3.5", isBookingGoorita && "animate-spin")} />
+                    <Send className="w-3.5 h-3.5" />
                     <span>
-                      {isBookingGoorita
-                        ? 'Booking Goorita AWB...'
-                        : isBooked
+                      {isBooked
                         ? 'Re-generate Goorita AWB'
                         : 'Book Goorita Production AWB'}
                     </span>
@@ -1884,41 +1834,6 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                       <span>View Official AWB PDF</span>
                     </button>
                   )}
-
-                  <button
-                    type="button"
-                    onClick={handleCopyGooritaText}
-                    className={clsx(
-                      "px-3.5 py-2 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm cursor-pointer",
-                      isGooritaCopied
-                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                        : "bg-white/[0.08] hover:bg-white/[0.14] text-white border border-white/[0.1]"
-                    )}
-                  >
-                    {isGooritaCopied ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Copied</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>Copy Form</span>
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      openGooritaWhatsApp(order);
-                      showToast('success', 'WhatsApp Launched', 'Opened WhatsApp chat with pre-filled Goorita shipment form.');
-                    }}
-                    className="px-3.5 py-2 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-zinc-950 text-xs font-bold font-sans flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                  >
-                    <MessageSquare className="w-3.5 h-3.5 text-zinc-950" />
-                    <span>WhatsApp</span>
-                  </button>
                 </div>
               </div>
             );
@@ -3604,6 +3519,39 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
           customerName={order.customer_name || `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`.trim()}
           orderNumber={order.order_number || order.id}
           trackingNumber={order.tracking?.tracking_number}
+        />
+      )}
+
+      {/* Goorita Production Booking Preview & Confirmation Modal */}
+      {order && isGooritaBookingModalOpen && (
+        <GooritaBookingModal
+          order={order}
+          isOpen={isGooritaBookingModalOpen}
+          onClose={() => setIsGooritaBookingModalOpen(false)}
+          onSuccess={(res) => {
+            const trackingCode = res.order_id || res.tracking_number || '';
+            setTrackingNumber(trackingCode);
+            setCourier('goorita');
+            if (order) {
+              order.goorita_order_id = res.order_id;
+              order.goorita_awb_url = res.awb_url;
+              order.goorita_service = res.service;
+              if (!order.tracking) {
+                order.tracking = {
+                  carrier_id: 'goorita',
+                  courier: 'Goorita Send USA',
+                  tracking_number: trackingCode,
+                  tracking_url: '',
+                  latest_status: 'processing',
+                };
+              } else {
+                order.tracking.tracking_number = trackingCode;
+                order.tracking.carrier_id = 'goorita';
+              }
+            }
+            if (onOrderUpdated) onOrderUpdated();
+            loadNotes(order.id);
+          }}
         />
       )}
     </SlideDrawer>

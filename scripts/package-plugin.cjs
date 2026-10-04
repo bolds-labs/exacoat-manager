@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Add conditional 2-page thermal printing for Goorita shipments (Sheet 1: USPS AWB, Sheet 2: Exacoat dispatch manifest)\n- Ensure single page packing slip prints for unbooked international orders\n- Guard automated Goorita booking behind exacoat_goorita_auto_booking_enabled filter`,
+      changelog: `### Version ${version}\n- Add manual Goorita Production booking preview modal with live rates and service selection\n- Permanently disable automated Goorita booking generation in favor of operator confirmation\n- Remove legacy copy form and WhatsApp shortcuts from Goorita dispatch panel\n- Reconnect order #542507 to active Goorita AWB #7089105044`,
     },
   };
 

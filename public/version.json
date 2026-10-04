@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.157",
+  "version": "0.1.158",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.157.zip?v=0.1.157",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.158.zip?v=0.1.158",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-04T20:47:16.557Z",
+  "last_updated": "2026-10-04T21:00:24.242Z",
   "sections": {
-    "changelog": "### Version 0.1.157\n- Add conditional 2-page thermal printing for Goorita shipments (Sheet 1: USPS AWB, Sheet 2: Exacoat dispatch manifest)\n- Ensure single page packing slip prints for unbooked international orders\n- Guard automated Goorita booking behind exacoat_goorita_auto_booking_enabled filter"
+    "changelog": "### Version 0.1.158\n- Add manual Goorita Production booking preview modal with live rates and service selection\n- Permanently disable automated Goorita booking generation in favor of operator confirmation\n- Remove legacy copy form and WhatsApp shortcuts from Goorita dispatch panel\n- Reconnect order #542507 to active Goorita AWB #7089105044"
   }
 }

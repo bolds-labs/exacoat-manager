@@ -81,9 +81,9 @@ class Exacoat_Goorita_Service {
 	public static function init(): void {
 		add_action( 'rest_api_init', [ __CLASS__, 'register_rest_routes' ] );
 
-		// Automatic Goorita AWB creation when an order enters processing or confirmed
-		add_action( 'woocommerce_order_status_processing', [ __CLASS__, 'handle_auto_booking' ], 25, 2 );
-		add_action( 'woocommerce_order_status_confirmed', [ __CLASS__, 'handle_auto_booking' ], 25, 2 );
+		// Automated booking is permanently disabled. Manual preview and confirmation is required via Manager ERP.
+		// add_action( 'woocommerce_order_status_processing', [ __CLASS__, 'handle_auto_booking' ], 25, 2 );
+		// add_action( 'woocommerce_order_status_confirmed', [ __CLASS__, 'handle_auto_booking' ], 25, 2 );
 	}
 
 	public static function get_environment(): string {
@@ -395,11 +395,19 @@ class Exacoat_Goorita_Service {
 
 		$packages = $rates_res['packages'];
 
-		// Match selected service: if shipping method specifies Express, pick Express, else prefer Saver
-		$shipping_method_name = strtolower( (string) $order->get_shipping_method() );
+		// Match selected service: if explicit package_id passed, use it, else match shipping method
 		$selected_pkg = null;
 
-		if ( strpos( $shipping_method_name, 'express' ) !== false ) {
+		if ( ! empty( $override_args['package_id'] ) ) {
+			foreach ( $packages as $pkg ) {
+				if ( (string) $pkg['id'] === (string) $override_args['package_id'] ) {
+					$selected_pkg = $pkg;
+					break;
+				}
+			}
+		}
+
+		if ( ! $selected_pkg && strpos( $shipping_method_name, 'express' ) !== false ) {
 			foreach ( $packages as $pkg ) {
 				if ( stripos( $pkg['name'], 'express' ) !== false ) {
 					$selected_pkg = $pkg;
@@ -563,36 +571,10 @@ class Exacoat_Goorita_Service {
 
 	/**
 	 * Automatically execute booking when an order enters processing/confirmed
+	 * Permanently disabled per operational guidelines (warehouse operator must preview & confirm manually).
 	 */
 	public static function handle_auto_booking( $order_id, $order = null ): void {
-		if ( ! $order ) {
-			$order = wc_get_order( $order_id );
-		}
-		if ( ! $order instanceof WC_Order ) {
-			return;
-		}
-
-		if ( ! self::is_goorita_order( $order ) ) {
-			return;
-		}
-
-		// Strictly guard auto-booking behind explicit opt-in setting (defaults to no until Saver Lite is active)
-		if ( ! apply_filters( 'exacoat_goorita_auto_booking_enabled', get_option( 'exacoat_goorita_auto_booking_enabled', 'no' ) === 'yes' ) ) {
-			return;
-		}
-
-		// Avoid duplicate booking if already booked
-		$existing_code = (string) $order->get_meta( '_goorita_order_id' );
-		if ( ! empty( $existing_code ) ) {
-			return;
-		}
-
-		$current_tracking = (string) $order->get_meta( 'tracking_number' );
-		if ( ! empty( $current_tracking ) && $current_tracking !== '⚠️' && ! str_starts_with( $current_tracking, 'field_' ) ) {
-			return;
-		}
-
-		self::create_airwaybill( (int) $order_id );
+		return;
 	}
 
 	/**
@@ -659,7 +641,14 @@ class Exacoat_Goorita_Service {
 				'permission_callback' => '__return_true',
 			] );
 
-			// 3. Status health check
+			// 3. Preview Order Rates & Service Breakdown
+			register_rest_route( $ns, '/shipping/goorita/order-rates', [
+				'methods'             => 'GET',
+				'callback'            => [ __CLASS__, 'rest_get_order_rates' ],
+				'permission_callback' => [ __CLASS__, 'rest_permission_check' ],
+			] );
+
+			// 4. Status health check
 			register_rest_route( $ns, '/shipping/goorita/status', [
 				'methods'             => 'GET',
 				'callback'            => [ __CLASS__, 'rest_status' ],
@@ -696,12 +685,79 @@ class Exacoat_Goorita_Service {
 		}
 
 		$force_rebook = (bool) $request->get_param( 'force_rebook' );
+		$package_id   = sanitize_text_field( (string) $request->get_param( 'package_id' ) );
 		$env          = sanitize_text_field( (string) $request->get_param( 'environment' ) );
 
-		$res = self::create_airwaybill( $order_id, [ 'force_rebook' => $force_rebook ], $env );
+		$res = self::create_airwaybill( $order_id, [
+			'force_rebook' => $force_rebook,
+			'package_id'   => $package_id,
+		], $env );
 		$status = $res['success'] ? 200 : 400;
 
 		return new WP_REST_Response( $res, $status );
+	}
+
+	public static function rest_get_order_rates( WP_REST_Request $request ): WP_REST_Response {
+		$order_id = (int) $request->get_param( 'order_id' );
+		if ( $order_id <= 0 ) {
+			return new WP_REST_Response( [ 'success' => false, 'error' => 'Missing valid order_id' ], 400 );
+		}
+
+		$order = wc_get_order( $order_id );
+		if ( ! $order ) {
+			return new WP_REST_Response( [ 'success' => false, 'error' => 'Order not found' ], 404 );
+		}
+
+		$state_code = trim( (string) ( $order->get_shipping_state() ?: $order->get_billing_state() ) );
+		$postcode   = trim( (string) ( $order->get_shipping_postcode() ?: $order->get_billing_postcode() ) );
+		$city       = trim( (string) ( $order->get_shipping_city() ?: $order->get_billing_city() ) );
+		$state_id   = self::resolve_state_id( $state_code );
+
+		$calc       = self::calculate_weight_and_dims( $order );
+		$weight_kg  = $calc['weight_kg'];
+		$dims       = $calc['dimensions'];
+		$env        = sanitize_text_field( (string) $request->get_param( 'environment' ) );
+
+		$order_total_usd = (float) $order->get_total();
+		if ( $order->get_currency() === 'IDR' ) {
+			$order_total_usd = round( $order_total_usd / 16000, 2 );
+		}
+		$declared_val = ( $order_total_usd > 5 && $order_total_usd < 800 ) ? round( $order_total_usd, 2 ) : 25.0;
+
+		$rates_res = self::check_rates( $postcode, $state_id, $weight_kg, $dims, $declared_val, $env );
+		if ( ! $rates_res['success'] ) {
+			return new WP_REST_Response( [
+				'success' => false,
+				'error'   => $rates_res['error'] ?? 'Rate calculation failed',
+			], 400 );
+		}
+
+		$shipping_name = trim( (string) ( $order->get_shipping_first_name() . ' ' . $order->get_shipping_last_name() ) ) ?: 'Customer';
+		$shipping_addr = trim( (string) $order->get_shipping_address_1() . ( $order->get_shipping_address_2() ? ' ' . $order->get_shipping_address_2() : '' ) );
+
+		return new WP_REST_Response( [
+			'success'     => true,
+			'order_id'    => $order_id,
+			'recipient'   => [
+				'name'     => $shipping_name,
+				'address'  => $shipping_addr,
+				'city'     => $city,
+				'state'    => $state_code,
+				'postcode' => $postcode,
+				'country'  => 'United States',
+				'phone'    => (string) ( $order->get_shipping_phone() ?: $order->get_billing_phone() ),
+			],
+			'calculation' => [
+				'weight_kg'          => $weight_kg,
+				'dimensions'         => $dims,
+				'item_type'          => ( $calc['laptop_count'] > 0 || $weight_kg > 2.0 ) ? 'box' : 'small',
+				'declared_value_usd' => $declared_val,
+				'skin_count'         => $calc['skin_count'],
+				'laptop_count'       => $calc['laptop_count'],
+			],
+			'packages'    => $rates_res['packages'],
+			'environment' => ! empty( $env ) ? $env : self::get_environment(),
+		], 200 );
 	}
 
 	public static function rest_stream_awb( WP_REST_Request $request ) {
