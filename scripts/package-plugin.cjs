@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Add customer confirmation auto-reply email for website contact form submissions\n- Expand contact topic mapping and enhance staff notification email template\n- Remove Headquarters & Lab section and synchronize contact submission pipeline with Next.js storefront`,
+      changelog: `### Version ${version}\n- Enforce support@exacoat.com as sender for contact inquiry customer confirmation emails\n- Add support for custom from_email and from_name overrides in ZeptoMail and wp_mail delivery pipeline`,
     },
   };
 

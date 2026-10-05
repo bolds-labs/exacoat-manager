@@ -2295,6 +2295,8 @@ class Exacoat_Core {
 		$support_result = $email_class ? $email_class::send_email( 'website_contact', 'support@exacoat.com', 'Exacoat Support', [
 			'subject'    => $email_title,
 			'htmlbody'   => $staff_html,
+			'from_email' => 'support@exacoat.com',
+			'from_name'  => 'Exacoat Website',
 			'reply_to'   => $email,
 			'reply_name' => $name,
 		] ) : [ 'success' => true ];
@@ -2318,8 +2320,10 @@ class Exacoat_Core {
 			$email_class::send_email( 'website_contact_confirmation', $email, $name, [
 				'subject'    => $customer_subject,
 				'htmlbody'   => $customer_html,
+				'from_email' => 'support@exacoat.com',
+				'from_name'  => 'Exacoat Support',
 				'reply_to'   => 'support@exacoat.com',
-				'reply_name' => 'Exacoat Care',
+				'reply_name' => 'Exacoat Support',
 			] );
 		}
 

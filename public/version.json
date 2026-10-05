@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.162",
+  "version": "0.1.163",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.162.zip?v=0.1.162",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.163.zip?v=0.1.163",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-05T12:03:21.096Z",
+  "last_updated": "2026-10-05T12:51:56.883Z",
   "sections": {
-    "changelog": "### Version 0.1.162\n- Add customer confirmation auto-reply email for website contact form submissions\n- Expand contact topic mapping and enhance staff notification email template\n- Remove Headquarters & Lab section and synchronize contact submission pipeline with Next.js storefront"
+    "changelog": "### Version 0.1.163\n- Enforce support@exacoat.com as sender for contact inquiry customer confirmation emails\n- Add support for custom from_email and from_name overrides in ZeptoMail and wp_mail delivery pipeline"
   }
 }

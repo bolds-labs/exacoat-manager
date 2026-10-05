@@ -3089,7 +3089,10 @@ class Exacoat_Email_Engine {
 			return [ 'success' => false, 'message' => 'Invalid recipient email address' ];
 		}
 
-		$config = self::get_config();
+		$config     = self::get_config();
+		$from_email = ! empty( $data['from_email'] ) && is_email( $data['from_email'] ) ? sanitize_email( $data['from_email'] ) : $config['from_email'];
+		$from_name  = ! empty( $data['from_name'] ) ? sanitize_text_field( $data['from_name'] ) : $config['from_name'];
+
 		if ( ! empty( $data['htmlbody'] ) || ! empty( $data['html'] ) ) {
 			$html    = $data['htmlbody'] ?? $data['html'];
 			$subject = $data['subject'] ?? 'Exacoat Update';
@@ -3104,8 +3107,8 @@ class Exacoat_Email_Engine {
 			$api_url = 'https://api.zeptomail.com/v1.1/email';
 			$payload = [
 				'from'     => [
-					'address' => $config['from_email'],
-					'name'    => $config['from_name'],
+					'address' => $from_email,
+					'name'    => $from_name,
 				],
 				'to'       => [
 					[
@@ -3252,13 +3255,22 @@ class Exacoat_Email_Engine {
 		}
 
 		// Fallback to WordPress standard wp_mail()
-		$headers  = [ 'Content-Type: text/html; charset=UTF-8', "From: {$config['from_name']} <{$config['from_email']}>" ];
+		$headers  = [ 'Content-Type: text/html; charset=UTF-8', "From: {$from_name} <{$from_email}>" ];
 		$reply_to = sanitize_email( $data['reply_to'] ?? '' );
 		if ( is_email( $reply_to ) ) {
 			$reply_name = sanitize_text_field( $data['reply_name'] ?? '' );
 			$headers[]  = "Reply-To: {$reply_name} <{$reply_to}>";
 		}
+
+		$from_filter = function() use ( $from_email ) { return $from_email; };
+		$name_filter = function() use ( $from_name ) { return $from_name; };
+		add_filter( 'wp_mail_from', $from_filter, 999 );
+		add_filter( 'wp_mail_from_name', $name_filter, 999 );
+
 		$sent = wp_mail( $recipient_email, $subject, $html, $headers );
+
+		remove_filter( 'wp_mail_from', $from_filter, 999 );
+		remove_filter( 'wp_mail_from_name', $name_filter, 999 );
 
 		if ( class_exists( 'Exacoat_Logger' ) ) {
 			Exacoat_Logger::log(
