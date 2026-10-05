@@ -2209,6 +2209,17 @@ class Exacoat_Core {
 			}
 		}
 
+		global $wpdb;
+		$email_options = [
+			'admin_email'                    => get_option( 'admin_email' ),
+			'woocommerce_email_from_address' => get_option( 'woocommerce_email_from_address' ),
+			'woocommerce_email_from_name'    => get_option( 'woocommerce_email_from_name' ),
+		];
+		$noreply_options = $wpdb->get_results(
+			"SELECT option_name, option_value FROM {$wpdb->options} WHERE option_value LIKE '%noreply@exacoat.com%' LIMIT 20",
+			ARRAY_A
+		);
+
 		$mock_mailer = (object) [
 			'Host' => '',
 			'Port' => '',
@@ -2218,6 +2229,10 @@ class Exacoat_Core {
 			'Mailer' => '',
 		];
 		do_action_ref_array( 'phpmailer_init', [ &$mock_mailer ] );
+
+		// Check what happens during a real wp_mail filter pass
+		$test_from_in  = apply_filters( 'wp_mail_from', 'support@exacoat.com' );
+		$test_from_out = apply_filters( 'wp_mail_from_name', 'Exacoat Support' );
 
 		return rest_ensure_response( [
 			'post_type_exists' => post_type_exists( 'shop_coupon' ),
@@ -2236,9 +2251,12 @@ class Exacoat_Core {
 			'user_checks' => $user_checks,
 			'filter_checks' => $filter_checks,
 			'mock_mailer' => $mock_mailer,
-			'admin_email' => get_option( 'admin_email' ),
-			'wc_from_email' => get_option( 'woocommerce_email_from_address' ),
-			'wc_from_name' => get_option( 'woocommerce_email_from_name' ),
+			'noreply_options' => $noreply_options,
+			'email_options' => $email_options,
+			'test_filter' => [
+				'from' => $test_from_in,
+				'name' => $test_from_out,
+			],
 			'htaccess_snippet' => $htaccess_snippet,
 			'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
 		] );
